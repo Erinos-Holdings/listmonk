@@ -37,6 +37,15 @@
       <div v-if="activity.campaignViews && activity.campaignViews.length > 0">
         <b-table :data="activity.campaignViews" hoverable default-sort="lastViewedAt" default-sort-direction="desc"
           paginated :per-page="10" :pagination-simple="false" class="campaign-views-table">
+          <b-table-column v-slot="props" cell-class="campaign-preview" width="1">
+            <a v-if="props.row.uuid" :href="campaignURL(props.row.uuid)" target="_blank" rel="noopener noreferrer"
+              :aria-label="$t('campaigns.preview')">
+              <b-tooltip :label="$t('campaigns.preview')" type="is-dark">
+                <b-icon icon="file-find-outline" size="is-small" />
+              </b-tooltip>
+            </a>
+          </b-table-column>
+
           <b-table-column v-slot="props" field="subject" :label="$tc('globals.terms.campaign', 1)" sortable>
             <div v-if="props.row.uuid">
               <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
@@ -112,11 +121,17 @@
 
 <script>
 import Vue from 'vue';
+import { mapState } from 'vuex';
 
 export default Vue.extend({
   props: {
     subscriberId: {
       type: Number,
+      required: true,
+    },
+
+    subscriberUuid: {
+      type: String,
       required: true,
     },
   },
@@ -132,6 +147,8 @@ export default Vue.extend({
   },
 
   computed: {
+    ...mapState(['serverConfig']),
+
     totalViews() {
       if (!this.activity.campaignViews) return 0;
       return this.activity.campaignViews.reduce((sum, v) => sum + (v.viewCount || 0), 0);
@@ -148,6 +165,12 @@ export default Vue.extend({
   },
 
   methods: {
+    // Public "view in browser" URL for a campaign rendered for this subscriber.
+    // Same URL that the {{ MessageURL }} template tag emits in e-mail campaigns.
+    campaignURL(campUUID) {
+      return `${this.serverConfig.root_url}/campaign/${campUUID}/${this.subscriberUuid}`;
+    },
+
     getActivity() {
       this.isLoading = true;
       this.$api.getSubscriberActivity(this.subscriberId).then((data) => {

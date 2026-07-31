@@ -141,7 +141,8 @@
           </b-tab-item><!-- bounces -->
 
           <b-tab-item :label="$t('subscribers.activity')" class="activity" :disabled="!isEditing">
-            <subscriber-activity v-if="isEditing && data.id" :subscriber-id="data.id" />
+            <subscriber-activity v-if="isEditing && data.id" :subscriber-id="data.id"
+              :subscriber-uuid="data.uuid" />
           </b-tab-item><!-- activity -->
         </b-tabs>
 
