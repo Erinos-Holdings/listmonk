@@ -63,6 +63,11 @@
       <b-menu-item v-if="$can('settings:get')" :to="{ name: 'logs' }" tag="router-link" :active="activeItem.logs"
         data-cy="logs" icon="format-list-bulleted-square" :label="$t('menu.logs')" />
     </b-menu-item><!-- settings -->
+
+    <!-- Upstream links to the docs contextually from individual screens, but never
+         from the menu. Marketing users do not know which screen owns which topic. -->
+    <b-menu-item tag="a" href="https://listmonk.app/docs" target="_blank" rel="noopener noreferrer"
+      data-cy="docs" icon="file-question-outline" label="Documentation" /><!-- docs -->
   </b-menu-list>
 </template>
 
