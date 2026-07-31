@@ -267,25 +267,6 @@ section {
     .icon {
       margin-right: 8px;
     }
-
-    // The Documentation item uses an image, not a font glyph — listmonk's fontello
-    // build is a 45-glyph subset of only the icons upstream uses, so any other mdi
-    // name renders as an empty box. Flex centring puts the image on the same vertical
-    // axis as the glyph icons (which are baseline-aligned text), and the 16px box
-    // matches a 1em glyph sitting inside Bulma's 1.5rem .icon.
-    .docs-link {
-      display: flex;
-      align-items: center;
-      color: $menu-item-color;
-
-      // Height-locked, width auto: the source glyph is 57x66, so forcing a square
-      // box would squash it. 16px tall matches the cap height of the font glyphs.
-      .icon img {
-        display: block;
-        height: 16px;
-        width: auto;
-      }
-    }
   }
 }
 

@@ -66,30 +66,19 @@
 
     <!-- Upstream links to the docs contextually from individual screens, but never
          from the menu. Marketing users do not know which screen owns which topic.
-         The icon is an image rather than the `icon` prop: listmonk's fontello build
-         is a 45-glyph subset of only the icons upstream uses, so any other mdi name
-         renders as an empty box. See .docs-link in style.scss for the sizing that
-         matches it to the glyph icons. -->
+         The icon must come from listmonk's fontello build, which is a 45-glyph subset
+         of only the icons upstream uses — any other mdi name renders as an empty box,
+         and the subset contains no help/question/book glyph at all. -->
     <b-menu-item tag="a" href="https://listmonk.app/docs" target="_blank" rel="noopener noreferrer"
-      data-cy="docs" class="docs-link">
-      <template #label>
-        <span class="icon"><img :src="docsGlyph" alt="" /></span>
-        <span>Documentation</span>
-      </template>
-    </b-menu-item><!-- docs -->
+      data-cy="docs" icon="file-multiple-outline" label="Documentation" /><!-- docs -->
   </b-menu-list>
 </template>
 
 <script>
 import { mapState } from 'vuex';
-import docsGlyph from '../assets/docs-glyph.png';
 
 export default {
   name: 'Navigation',
-
-  data() {
-    return { docsGlyph };
-  },
 
   props: {
     activeItem: { type: Object, default: () => { } },
