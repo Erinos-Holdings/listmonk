@@ -2,11 +2,10 @@ import React from 'react';
 import { z } from 'zod';
 
 import { Avatar, AvatarPropsSchema } from '@usewaypoint/block-avatar';
-import { Button, ButtonPropsSchema } from '@usewaypoint/block-button';
 import { Divider, DividerPropsSchema } from '@usewaypoint/block-divider';
 import { Heading, HeadingPropsSchema } from '@usewaypoint/block-heading';
 import { Html, HtmlPropsSchema } from '@usewaypoint/block-html';
-import { Image, ImagePropsSchema } from '@usewaypoint/block-image';
+import { Image } from '@usewaypoint/block-image';
 import { Spacer, SpacerPropsSchema } from '@usewaypoint/block-spacer';
 import { Text, TextPropsSchema } from '@usewaypoint/block-text';
 import {
@@ -15,6 +14,8 @@ import {
   buildBlockConfigurationSchema,
 } from '@usewaypoint/document-core';
 
+import Button from '../blocks/Button/Button';
+import ButtonPropsSchema from '../blocks/Button/ButtonPropsSchema';
 import ColumnsContainerEditor from '../blocks/ColumnsContainer/ColumnsContainerEditor';
 import ColumnsContainerPropsSchema from '../blocks/ColumnsContainer/ColumnsContainerPropsSchema';
 import ContainerEditor from '../blocks/Container/ContainerEditor';
@@ -22,22 +23,13 @@ import ContainerPropsSchema from '../blocks/Container/ContainerPropsSchema';
 import EmailLayoutEditor from '../blocks/EmailLayout/EmailLayoutEditor';
 import EmailLayoutPropsSchema from '../blocks/EmailLayout/EmailLayoutPropsSchema';
 import EditorBlockWrapper from '../blocks/helpers/block-wrappers/EditorBlockWrapper';
+import { ImgPropsSchema } from '../blocks/Img/ImgPropsSchema';
 
-// Adds an opt-in `embed` flag to the upstream Image props. The renderer
-// (frontend/email-builder/src/utils.tsx) re-tags marked <img>s with
-// `data-embed` and the backend resolves the src filename to a media item.
-export const ImgPropsSchema = ImagePropsSchema.extend({
-  props: z.object({
-    width: z.number().nullable().optional(),
-    height: z.number().nullable().optional(),
-    url: z.string().nullable().optional(),
-    alt: z.string().nullable().optional(),
-    linkHref: z.string().nullable().optional(),
-    contentAlignment: z.enum(['top', 'middle', 'bottom']).nullable().optional(),
-    embed: z.boolean().nullable().optional(),
-  }).nullable().optional(),
-});
-export type ListmonkImageProps = z.infer<typeof ImgPropsSchema>;
+// Re-exported for the sidebar panels, which import it from here. The schema
+// itself lives beside the other block schemas so that the reader can use it
+// without pulling the editor's zustand store into the render path.
+export { ImgPropsSchema };
+export type { ListmonkImageProps } from '../blocks/Img/ImgPropsSchema';
 
 const EDITOR_DICTIONARY = buildBlockConfigurationDictionary({
   Avatar: {

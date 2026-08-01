@@ -351,9 +351,15 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
     ].join('');
   }
 
+  // The Button block's "Custom button width/height" sliders emit real px on the
+  // anchor. Where they are set, VML gets the actual box instead of the guess
+  // below — which is the difference between Outlook matching every other client
+  // and merely approximating it.
+  const explicitWidth = getPixelValue(anchorStyleMap.width);
+  const explicitHeight = getPixelValue(anchorStyleMap.height);
   const estimatedTextWidth = Math.max(1, Math.round(text.length * fontSize * (fontWeight.toLowerCase() === 'bold' ? 0.68 : 0.62)));
-  const estimatedWidth = Math.max(40, estimatedTextWidth + paddingValues.left + paddingValues.right);
-  const estimatedHeight = Math.max(lineHeight + paddingValues.top + paddingValues.bottom, 32);
+  const estimatedWidth = explicitWidth ?? Math.max(40, estimatedTextWidth + paddingValues.left + paddingValues.right);
+  const estimatedHeight = explicitHeight ?? Math.max(lineHeight + paddingValues.top + paddingValues.bottom, 32);
   const arcsize = Math.max(0, Math.min(50, Math.round((borderRadius / estimatedHeight) * 100)));
   const cleanAnchorStyle = anchor.getAttribute('style') || '';
   const msoStart = makeSafeTemplate('<!--[if mso]>');

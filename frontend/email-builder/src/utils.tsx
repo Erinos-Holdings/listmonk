@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from '@usewaypoint/email-builder';
+import renderToStaticMarkup from './documents/reader/renderToStaticMarkup';
 import { TEditorConfiguration } from './documents/editor/core';
 import { postProcessForOutlook } from './outlook';
 

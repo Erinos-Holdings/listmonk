@@ -13,6 +13,7 @@ type SliderInputProps = {
   units: string;
   min?: number;
   max?: number;
+  zeroLabel?: string;
 
   defaultValue: number;
   onChange: (v: number) => void;
