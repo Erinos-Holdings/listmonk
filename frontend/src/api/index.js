@@ -79,7 +79,12 @@ http.interceptors.response.use((resp) => {
 
   if (!err.config.disableToast) {
     Toast.open({
-      message: msg,
+      // ESCAPE. Buefy's toast body is `<div v-html="message" />`, so anything angle-bracketed in
+      // an error is parsed as an unknown HTML tag and silently dropped -- the admin UI truncating
+      // its own errors. A From-mismatch error naming `Curated <hello@curatedfor.you>` rendered as
+      // "Curated ", which reads like a bug in the validation rather than the message it is.
+      // $utils.toast escapes everywhere else; this interceptor was the one path that did not.
+      message: utils.escapeHTML(msg),
       type: 'is-danger',
       queue: false,
       position: 'is-top',

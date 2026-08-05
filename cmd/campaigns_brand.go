@@ -156,7 +156,7 @@ func (a *App) resolveBrandMapping(listIDs []int) (brandMapping, error) {
 	// field is routing input upstream, so treating an empty one as "nothing is allowed" would
 	// break every install that has not opted in.
 	if allowed := configuredFromAddresses(); len(allowed) > 0 {
-		if _, ok := allowed[email.NormalizeAddr(addrs[0])]; !ok {
+		if _, ok := allowed[email.NormalizeAddr(bareAddress(addrs[0]))]; !ok {
 			return out, errors.New(a.i18n.Ts("campaigns.brandFromUnknownAddress", "from", addrs[0], "list", found[0].name))
 		}
 	}
@@ -256,6 +256,23 @@ func configuredFromAddresses() map[string]struct{} {
 	}
 
 	return out
+}
+
+// bareAddress extracts `local@domain` from a `Display Name <local@domain>` From value, and
+// returns the input unchanged when it is already bare.
+//
+// The `from:` tag carries the FULL From header, display name included, because that is what the
+// recipient's inbox shows: with a bare address, Gmail falls back to the local part, so every brand
+// sending from hello@ appeared identically as "hello". The tag stays the single source of truth
+// and the campaign comparison stays an exact string match — this exists only so the
+// from_addresses allowlist, which holds addresses, can be checked against a From that may carry a
+// name. reFromAddress is listmonk's own pattern for this shape (cmd/campaigns.go).
+func bareAddress(from string) string {
+	if m := reFromAddress.FindStringSubmatch(from); len(m) == 5 {
+		return m[3] + "@" + m[4]
+	}
+
+	return strings.TrimSpace(from)
 }
 
 func contains(hay []string, needle string) bool {

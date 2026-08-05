@@ -750,9 +750,15 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 
 	// A tagged list constrains the From address to exactly its `from:` value.
 	//
-	// An exact comparison is correct BECAUSE THE FROM FORMAT IS A BARE ADDRESS BY DECISION, so a
-	// client passing `Liyorá <hello@liyorahair.com>` on a tagged list is rejected ON PURPOSE. That
-	// 400 is this rule working, not a display-name bug to go and "fix" with an address parser.
+	// The tag carries the FULL From header -- `Curated <hello@curatedfor.you>`, not a bare address
+	// -- because that is what the recipient's inbox actually shows. A bare address made every
+	// brand appear as "hello" in Gmail, which falls back to the local part when no display name
+	// is present.
+	//
+	// An exact comparison is still correct: the tag is the single source of truth, and anything
+	// that differs from it was hand-typed, which is the thing this removes. So a client passing a
+	// bare address on a tagged list is rejected ON PURPOSE, and so is one passing a different
+	// display name. That 400 is this rule working.
 	if brand.mapped && c.FromEmail != brand.fromEmail {
 		return c, errors.New(a.i18n.Ts("campaigns.brandFromMismatch",
 			"from", c.FromEmail, "expected", brand.fromEmail, "list", brand.listName))
