@@ -553,6 +553,9 @@ func (a *App) TestCampaign(c echo.Context) error {
 		return err
 	}
 
+	// Count BEFORE the permission filter below, which reuses this slice's backing array.
+	numResolved := len(subs)
+
 	// Exclude subscribers from lists that the user doesn't have access to.
 	user := auth.GetUser(c)
 	validSubs := subs[:0]
@@ -562,6 +565,23 @@ func (a *App) TestCampaign(c echo.Context) error {
 		}
 	}
 	subs = validSubs
+
+	// A test send drops recipients silently, and NOTHING server-side records it. Confirmed twice:
+	// once as the total case (a UI test send produced no send at all, while the same campaign and
+	// recipient driven over the API delivered normally) and once as the partial case (a UI test
+	// send to TWO addresses produced exactly ONE send). The loop below is synchronous and its only
+	// log statement sits in the failure branch, so a successful send is never recorded and a
+	// shortened recipient list leaves no trace whatsoever.
+	//
+	// The DISCREPANCY BETWEEN THESE THREE COUNTS IS THE DIAGNOSIS: requested is what the browser
+	// actually posted (a Buefy taginput only commits an address on Enter/comma/Tab, so "typed two,
+	// sent one" shows up here), resolved is what existed in `subscribers`, and permitted is what
+	// survived list permissions.
+	//
+	// Bounded on purpose: fine for a handful of test addresses, not a PII firehose at audience
+	// scale. Test sends are the only caller.
+	a.log.Printf("campaign %d test send: requested=%d resolved=%d permitted=%d addresses=%s",
+		id, len(req.SubscriberEmails), numResolved, len(subs), truncateList(req.SubscriberEmails, 10))
 
 	// No subscribers.
 	if len(subs) == 0 {
@@ -596,13 +616,27 @@ func (a *App) TestCampaign(c echo.Context) error {
 		sub := s
 
 		if err := a.sendTestMessage(sub, &camp); err != nil {
-			a.log.Printf("error sending test message: %v", err)
+			a.log.Printf("error sending test message to %s: %v", sub.Email, err)
 			return echo.NewHTTPError(http.StatusInternalServerError,
 				a.i18n.Ts("campaigns.errorSendTest", "error", err.Error()))
 		}
+
+		// Per-recipient success. Without this only failures are recorded, so a send that
+		// silently never happened is indistinguishable from one that worked.
+		a.log.Printf("campaign %d test send: sent to %s (subscriber %d)", id, sub.Email, sub.ID)
 	}
 
 	return c.JSON(http.StatusOK, okResp{true})
+}
+
+// truncateList renders at most n items of a string slice for logging, reporting how many were
+// elided. Keeps the test-send diagnostics above bounded.
+func truncateList(items []string, n int) string {
+	if len(items) <= n {
+		return strings.Join(items, ", ")
+	}
+
+	return fmt.Sprintf("%s (+%d more)", strings.Join(items[:n], ", "), len(items)-n)
 }
 
 // GetCampaignViewAnalytics retrieves view counts for a campaign.
