@@ -81,8 +81,12 @@
                      that ever yields empty. -->
                 <b-field :label="$t('campaigns.fromAddress')" label-position="on-border"
                   :type="brandDerivation.error ? 'is-danger' : ''" :message="brandFromMessage">
+                  <!-- custom-class, NOT class: in Vue 2 a `class` on a component lands on its ROOT
+                       element, which for b-input is the wrapping div.control -- so the styling
+                       would never reach the <input>. Buefy's customClass prop is applied directly
+                       to the input alongside its own classes. -->
                   <b-input :maxlength="200" v-model="form.fromEmail" name="from_email" :disabled="!canEdit" readonly
-                    class="is-derived" :placeholder="$t('campaigns.fromAddressPlaceholder')" required />
+                    custom-class="is-derived" :placeholder="$t('campaigns.fromAddressPlaceholder')" required />
                 </b-field>
 
                 <list-selector v-model="form.lists" :selected="form.lists" :all="lists.results" :disabled="!canEdit"
