@@ -887,6 +887,21 @@ section.import {
   }
 }
 
+/* A field whose value is DERIVED and can never be typed into -- currently the campaign From
+   address, which follows the selected lists' `from:` tag. `readonly` alone renders identically to
+   an editable input, so nothing on screen explains why typing does nothing.
+   Deliberately NOT [disabled] styling: a disabled input is skipped by browser validation, and
+   `required` is the backstop for a derivation that ever yields empty. */
+.input.is-derived,
+.input.is-derived:hover,
+.input.is-derived:focus,
+.input.is-derived:active {
+  background-color: $grey-lighter;
+  border-color: $grey-light;
+  box-shadow: none;
+  cursor: default;
+}
+
 /* Campaigns page */
 section.campaigns {
   table tbody {

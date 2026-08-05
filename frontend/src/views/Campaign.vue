@@ -82,7 +82,7 @@
                 <b-field :label="$t('campaigns.fromAddress')" label-position="on-border"
                   :type="brandDerivation.error ? 'is-danger' : ''" :message="brandFromMessage">
                   <b-input :maxlength="200" v-model="form.fromEmail" name="from_email" :disabled="!canEdit" readonly
-                    :placeholder="$t('campaigns.fromAddressPlaceholder')" required />
+                    class="is-derived" :placeholder="$t('campaigns.fromAddressPlaceholder')" required />
                 </b-field>
 
                 <list-selector v-model="form.lists" :selected="form.lists" :all="lists.results" :disabled="!canEdit"
@@ -174,12 +174,20 @@
                   {{ $t('campaigns.sendTest') }}
                 </h3>
                 <b-field :message="$t('campaigns.sendTestHelp')">
-                  <b-taginput v-model="form.testEmails" :before-adding="$utils.validateEmail" :disabled="isNew" ellipsis
-                    icon="email-outline" :placeholder="$t('campaigns.testEmails')" />
+                  <b-taginput ref="testEmails" v-model="form.testEmails" :before-adding="$utils.validateEmail"
+                    :disabled="isNew" ellipsis icon="email-outline" :placeholder="$t('campaigns.testEmails')" />
                 </b-field>
                 <b-field>
-                  <b-button @click="() => onSubmit('test')" :loading="loading.campaigns" :disabled="isNew"
-                    type="is-primary" icon-left="email-outline">
+                  <!-- SEND MUST MEAN SEND. Without the mousedown guard the first click is lost:
+                       clicking blurs the taginput, Buefy's customOnBlur commits the pending text
+                       as a chip SYNCHRONOUSLY, the field grows taller, this button moves down
+                       between mousedown and mouseup, and the browser never dispatches a click. The
+                       send silently does not happen, with no request and so no server-side trace.
+                       Preventing the default on mousedown stops the blur, so nothing reflows and
+                       the click lands. Keyboard users are unaffected -- Enter/Space fires click
+                       with no mousedown. -->
+                  <b-button @mousedown.native.prevent @click="() => onSubmit('test')"
+                    :loading="loading.campaigns" :disabled="isNew" type="is-primary" icon-left="email-outline">
                     {{ $t('campaigns.send') }}
                   </b-button>
                 </b-field>
@@ -707,6 +715,17 @@ export default Vue.extend({
     },
 
     sendTest() {
+      // Commit whatever is still sitting uncommitted in the test-address field. A b-taginput only
+      // moves text into the bound array on Enter/comma/Tab/blur, so "type one address, click Send"
+      // would otherwise post an empty recipient list. addTag() emits `input` synchronously, so
+      // form.testEmails is up to date by the time the payload is built below, and it still honours
+      // :before-adding (validateEmail) -- a malformed address is dropped and the server's
+      // "no subscribers to target" error is shown rather than nothing happening.
+      const ti = this.$refs.testEmails;
+      if (ti && ti.newTag && ti.newTag.trim() !== '') {
+        ti.addTag();
+      }
+
       const data = {
         id: this.data.id,
         name: this.form.name,
