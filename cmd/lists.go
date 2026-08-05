@@ -102,6 +102,9 @@ func (a *App) CreateList(c echo.Context) error {
 	if !strHasLen(l.Name, 1, stdInputMaxLen) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.invalidName"))
 	}
+	if err := a.validateBrandTags(l); err != nil {
+		return err
+	}
 
 	out, err := a.core.CreateList(l)
 	if err != nil {
@@ -132,6 +135,9 @@ func (a *App) UpdateList(c echo.Context) error {
 	// Validate.
 	if !strHasLen(l.Name, 1, stdInputMaxLen) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.invalidName"))
+	}
+	if err := a.validateBrandTags(l); err != nil {
+		return err
 	}
 
 	// Update the list in the DB.
