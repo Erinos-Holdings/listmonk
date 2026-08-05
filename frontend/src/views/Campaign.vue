@@ -27,19 +27,20 @@
           <b-field grouped v-if="isEditing && canEdit">
             <b-field v-if="canManage" expanded>
               <b-button expanded @click="() => onSubmit('update')" :loading="loading.campaigns" type="is-primary"
-                icon-left="content-save-outline" data-cy="btn-save" aria-keyshortcuts="ctrl+s">
+                :disabled="isBrandBlocked" icon-left="content-save-outline" data-cy="btn-save"
+                aria-keyshortcuts="ctrl+s">
                 <span class="has-kbd">{{ $t('globals.buttons.saveChanges') }} <span class="kbd">Ctrl+S</span></span>
               </b-button>
             </b-field>
             <b-field expanded v-if="canSend && canStart">
               <b-button expanded @click="startCampaign" :loading="loading.campaigns" type="is-primary"
-                icon-left="rocket-launch-outline" data-cy="btn-start">
+                :disabled="isBrandBlocked" icon-left="rocket-launch-outline" data-cy="btn-start">
                 {{ $t('campaigns.start') }}
               </b-button>
             </b-field>
             <b-field expanded v-if="canSend && canSchedule">
               <b-button expanded @click="startCampaign" :loading="loading.campaigns" type="is-primary"
-                icon-left="clock-start" data-cy="btn-schedule">
+                :disabled="isBrandBlocked" icon-left="clock-start" data-cy="btn-schedule">
                 {{ $t('campaigns.schedule') }}
               </b-button>
             </b-field>
@@ -73,8 +74,14 @@
                     :placeholder="$t('campaigns.subject')" required />
                 </b-field>
 
-                <b-field :label="$t('campaigns.fromAddress')" label-position="on-border">
-                  <b-input :maxlength="200" v-model="form.fromEmail" name="from_email" :disabled="!canEdit"
+                <!-- READ-ONLY BY DESIGN: the From address is a property of the brand, derived from
+                     the selected lists' `from:` tag. The escape hatch is editing the list, not the
+                     campaign. `readonly` rather than `disabled` on purpose -- a disabled input is
+                     skipped by browser validation, and `required` is the backstop for a derivation
+                     that ever yields empty. -->
+                <b-field :label="$t('campaigns.fromAddress')" label-position="on-border"
+                  :type="brandDerivation.error ? 'is-danger' : ''" :message="brandFromMessage">
+                  <b-input :maxlength="200" v-model="form.fromEmail" name="from_email" :disabled="!canEdit" readonly
                     :placeholder="$t('campaigns.fromAddressPlaceholder')" required />
                 </b-field>
 
@@ -153,7 +160,8 @@
                 <hr />
 
                 <b-field v-if="isNew">
-                  <b-button native-type="submit" type="is-primary" :loading="loading.campaigns" data-cy="btn-continue">
+                  <b-button native-type="submit" type="is-primary" :loading="loading.campaigns"
+                    :disabled="isBrandBlocked" data-cy="btn-continue">
                     {{ $t('campaigns.continue') }}
                   </b-button>
                 </b-field>
@@ -332,6 +340,60 @@ import Editor from '../components/Editor.vue';
 import ListSelector from '../components/ListSelector.vue';
 import Media from './Media.vue';
 
+// --- List-scoped From address and brand tag -------------------------------------------------
+// A list carries its brand mapping as two tags, `brand:<slug>` and `from:<address>`. Both the
+// campaign's From address and its `brand` SES message tag are derived from them, so neither is
+// hand-typed. This is the convenience half; cmd/campaigns.go enforces the same rules server-side
+// and is the actual control (this file is disposable at listmonk v7, that one is not).
+const BRAND_TAG_PREFIX = 'brand:';
+const FROM_TAG_PREFIX = 'from:';
+// Canonical casing, folded at the comparison — mirrors `sesTagHeader` in cmd/campaigns_brand.go,
+// which is the half that actually enforces this. The header name should exist exactly once per
+// implementation; the two implementations have to agree, which is the whole reason both exist.
+const SES_TAG_HEADER = 'X-SES-MESSAGE-TAGS';
+const BRAND_TAG_KEY = 'brand';
+
+// The mapping for a list carrying neither tag. `curated` pairs with app.from_email — an unmapped
+// campaign gets the DEFAULT slug, never no tag at all, so the `unattributed` CloudWatch dimension
+// stays reserved for genuine mistakes and the alarm on it stays trustworthy.
+//
+// MUST MATCH `defaultBrandSlug` in cmd/campaigns_brand.go, which is what actually enforces it.
+// Nothing checks that these agree; if they diverge, the editor shows one brand and the backend
+// stores another.
+const DEFAULT_BRAND = 'curated';
+
+// SES message tag values accept only alphanumerics, - and _. List tags are stored verbatim with no
+// normalisation anywhere, so `brand:Thirsty Girl` would otherwise reach SES and be rejected at SEND
+// time, on a campaign nobody touched, weeks after someone edited a list tag.
+const reBrandSlug = /^[A-Za-z0-9_-]+$/;
+
+// Rewrite the `brand=` pair inside an "a=b, c=d" SES message-tag value, leaving any other pair
+// alone. Replacing the whole value would silently drop a second tag someone added by hand.
+const setBrandInTagValue = (value, slug) => {
+  const out = [];
+  let replaced = false;
+
+  String(value || '').split(',').map((p) => p.trim()).filter((p) => p !== '')
+    .forEach((pair) => {
+      const eq = pair.indexOf('=');
+      const key = (eq === -1 ? pair : pair.slice(0, eq)).trim().toLowerCase();
+      if (key === BRAND_TAG_KEY) {
+        if (!replaced) {
+          out.push(`${BRAND_TAG_KEY}=${slug}`);
+          replaced = true;
+        }
+        return;
+      }
+      out.push(pair);
+    });
+
+  if (!replaced) {
+    out.unshift(`${BRAND_TAG_KEY}=${slug}`);
+  }
+
+  return out.join(', ');
+};
+
 export default Vue.extend({
   components: {
     ListSelector,
@@ -363,6 +425,11 @@ export default Vue.extend({
 
       // IDs from ?list_id query param.
       selListIDs: [],
+
+      // True between loading an existing campaign and the first settled derivation, so the
+      // repoint TOAST fires once per load rather than on every subsequent list edit. The
+      // persistent inline notice is the `brandFromRepointed` computed, which is self-clearing.
+      brandFromLoadPending: false,
 
       // Binds form input values.
       form: {
@@ -442,6 +509,93 @@ export default Vue.extend({
         || this.data.contentType !== this.form.content.contentType;
     },
 
+    // Push the derived From address and `brand` message tag into the form.
+    //
+    // THE DERIVED VALUE IS FORM STATE ONLY UNTIL THE USER SAVES, and it is deliberately allowed to
+    // mark the form dirty. Do NOT suppress that by rebasing `this.data` to match: the campaign goes
+    // on sending with its STORED From until a save lands, so a "clean" form displaying a derived
+    // address would show one address while another goes out -- the exact wrong-brand failure this
+    // feature exists to prevent, wearing a fix's clothing.
+    syncBrandDerivation() {
+      // Never rewrite a campaign that cannot be edited anyway (canEditCampaign makes `finished`
+      // terminal server-side); and never act before the lists store has loaded, or every campaign
+      // would momentarily derive the default mapping and falsely announce a repoint.
+      if (!this.canEdit || !this.lists.results || this.lists.results.length === 0) {
+        return;
+      }
+
+      // Wait for a SETTLED derivation. An empty fromEmail means serverConfig has not loaded yet
+      // (App.vue fetches it independently of the lists, so either can win the race) -- acting on
+      // it would blank the field AND fire a spurious "updated to undefined" toast, which would
+      // also consume the one-shot brandFromLoadPending flag so the REAL repoint never announces
+      // itself. Not assigning a falsy value also keeps `required` a genuine backstop rather than
+      // something this code trips by itself.
+      const d = this.brandDerivation;
+      if (d.error || !d.fromEmail) {
+        return;
+      }
+
+      const stored = this.data.fromEmail || '';
+      if (this.brandFromLoadPending) {
+        this.brandFromLoadPending = false;
+
+        if (stored !== '' && stored !== d.fromEmail) {
+          this.$utils.toast(this.$t('campaigns.brandFromRepointed', { from: stored, to: d.fromEmail }), 'is-warning', 6000);
+        }
+      }
+
+      if (this.form.fromEmail !== d.fromEmail) {
+        this.form.fromEmail = d.fromEmail;
+      }
+
+      // Headers is a free-text JSON array carrying other headers too, so replace ONLY the
+      // X-SES-MESSAGE-TAGS entry. Malformed JSON is left alone -- onSubmit already reports it.
+      const merged = this.mergeBrandHeader(this.form.headersStr, d.brand);
+      if (merged !== null && merged !== this.form.headersStr) {
+        this.form.headersStr = merged;
+      }
+    },
+
+    // Merge `brand=<slug>` into the campaign's headers array, preserving every other entry and
+    // every other key within the X-SES-MESSAGE-TAGS entry itself. Returns null if the textarea
+    // does not currently hold a JSON array.
+    mergeBrandHeader(headersStr, slug) {
+      let arr = null;
+      try {
+        arr = JSON.parse(headersStr && headersStr.trim() !== '' ? headersStr : '[]');
+      } catch (e) {
+        return null;
+      }
+
+      if (!Array.isArray(arr)) {
+        return null;
+      }
+
+      let found = false;
+      const next = arr.map((entry) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          return entry;
+        }
+
+        const out = {};
+        Object.keys(entry).forEach((k) => {
+          if (k.toLowerCase() === SES_TAG_HEADER.toLowerCase()) {
+            found = true;
+            out[k] = setBrandInTagValue(entry[k], slug);
+          } else {
+            out[k] = entry[k];
+          }
+        });
+        return out;
+      });
+
+      if (!found) {
+        next.push({ [SES_TAG_HEADER]: `${BRAND_TAG_KEY}=${slug}` });
+      }
+
+      return JSON.stringify(next, null, 4);
+    },
+
     onTab(tab) {
       if (tab === 'content' && window.tinymce && window.tinymce.editors.length > 0) {
         this.$nextTick(() => {
@@ -459,6 +613,13 @@ export default Vue.extend({
     },
 
     onSubmit(typ) {
+      // The controls are disabled while a derivation is blocked, but Ctrl+S and a native form
+      // submit reach here regardless.
+      if (this.isBrandBlocked) {
+        this.$utils.toast(this.brandDerivation.error, 'is-danger');
+        return;
+      }
+
       // Validate custom JSON headers.
       if (this.form.headersStr && this.form.headersStr !== '[]') {
         try {
@@ -530,6 +691,11 @@ export default Vue.extend({
           },
         };
         this.isAttachFieldVisible = this.form.media.length > 0;
+
+        // Re-derive against the loaded campaign, announcing a repoint if the stored From
+        // disagrees with what its lists now say.
+        this.brandFromLoadPending = true;
+        this.syncBrandDerivation();
 
         this.form.media = this.form.media.map((f) => {
           if (!f.id) {
@@ -727,6 +893,122 @@ export default Vue.extend({
       return this.lists.results.filter((l) => this.selListIDs.indexOf(l.id) > -1);
     },
 
+    // The campaign API returns its lists as {id, name} ONLY -- `get-campaign` in
+    // queries/campaigns.sql aggregates JSON_BUILD_OBJECT('id', …, 'name', …), with no tags. So the
+    // tags have to come from the lists store, which App.vue loads with minimal=true (`SELECT *
+    // FROM lists`, tags included). Resolving by id covers both a freshly-picked list and a loaded
+    // campaign; deriving off form.lists directly would silently find no tags on load.
+    resolvedLists() {
+      const all = this.lists.results || [];
+      return (this.form.lists || []).map((l) => all.find((x) => x.id === l.id) || l);
+    },
+
+    // Resolve the selected lists to one brand + From pair, or to the reason it cannot be done.
+    // Returns { error, brand, fromEmail, unmapped }.
+    brandDerivation() {
+      const err = (error) => ({
+        error, brand: null, fromEmail: null, unmapped: false,
+      });
+
+      const mapped = [];
+      const halfTagged = [];
+
+      this.resolvedLists.forEach((l) => {
+        const tags = l.tags || [];
+        const brandTag = tags.find((t) => t.startsWith(BRAND_TAG_PREFIX));
+        const fromTag = tags.find((t) => t.startsWith(FROM_TAG_PREFIX));
+
+        if (!brandTag && !fromTag) {
+          return;
+        }
+
+        // A list carrying one tag but not the other is a misconfiguration, not an unmapped list:
+        // it is how a brand ends up attributed but wrongly addressed, or vice versa.
+        if (!brandTag || !fromTag) {
+          halfTagged.push(l.name);
+          return;
+        }
+
+        mapped.push({
+          name: l.name,
+          brand: brandTag.slice(BRAND_TAG_PREFIX.length),
+          fromEmail: fromTag.slice(FROM_TAG_PREFIX.length),
+        });
+      });
+
+      if (halfTagged.length > 0) {
+        return err(this.$t('campaigns.brandFromHalfTagged', { lists: halfTagged.join(', ') }));
+      }
+
+      // No tagged list at all -> the default mapping. Not an error: the internal seed list and the
+      // bounce simulator are deliberately unmapped and must keep working.
+      if (mapped.length === 0) {
+        return {
+          error: null,
+          brand: DEFAULT_BRAND,
+          fromEmail: this.serverConfig.from_email,
+          unmapped: true,
+        };
+      }
+
+      // Multi-brand campaigns are blocked by decision, not deferred -- a cross-brand send has no
+      // valid single From. Name both brands rather than silently picking the first.
+      const brands = [...new Set(mapped.map((m) => m.brand))];
+      if (brands.length > 1) {
+        return err(this.$t('campaigns.brandFromConflict', { brands: brands.join(', ') }));
+      }
+
+      const addrs = [...new Set(mapped.map((m) => m.fromEmail))];
+      if (addrs.length > 1) {
+        return err(this.$t('campaigns.brandFromAddressConflict', { addresses: addrs.join(', ') }));
+      }
+
+      if (!reBrandSlug.test(brands[0])) {
+        return err(this.$t('campaigns.brandFromInvalidSlug', { brand: brands[0], list: mapped[0].name }));
+      }
+
+      return {
+        error: null, brand: brands[0], fromEmail: addrs[0], unmapped: false,
+      };
+    },
+
+    // Blocks save/start/schedule/continue. A test send is blocked too, via onSubmit: testing with
+    // an unresolvable brand proves nothing about what the audience would receive.
+    isBrandBlocked() {
+      return this.brandDerivation.error !== null;
+    },
+
+    // True while the derived From differs from what is STORED on the campaign — i.e. while there
+    // is a repoint the user has not saved yet. Computed rather than a sticky flag so it clears
+    // itself the instant a save lands (updateCampaign refreshes this.data), instead of telling
+    // someone to save a change they already saved. A notice that says "not yet applied" when it
+    // has been applied is the same class of lie this feature exists to remove, and it trains
+    // people to ignore the one message that matters.
+    brandFromRepointed() {
+      return this.isEditing
+        && !this.brandDerivation.error
+        && !!this.data.fromEmail
+        && this.data.fromEmail !== this.form.fromEmail;
+    },
+
+    brandFromMessage() {
+      if (this.brandDerivation.error) {
+        return this.brandDerivation.error;
+      }
+
+      if (this.brandFromRepointed) {
+        return this.$t('campaigns.brandFromRepointed', {
+          from: this.data.fromEmail, to: this.form.fromEmail,
+        });
+      }
+
+      if (this.brandDerivation.unmapped) {
+        return this.$t('campaigns.brandFromDefault', { brand: this.brandDerivation.brand });
+      }
+
+      return this.$t('campaigns.brandFromDerived', { brand: this.brandDerivation.brand });
+    },
+
     emailMessengers() {
       return ['email', ...this.serverConfig.messengers.filter((m) => m.startsWith('email-'))];
     },
@@ -747,6 +1029,22 @@ export default Vue.extend({
   watch: {
     selectedLists() {
       this.form.lists = this.selectedLists;
+    },
+
+    // Re-derive on every list change, and again when the lists store finishes loading (which is
+    // what carries the tags -- see the resolvedLists computed).
+    brandDerivation: {
+      handler() {
+        this.syncBrandDerivation();
+      },
+      immediate: true,
+    },
+
+    // A campaign with no lists derives the same default mapping before and after load, so
+    // brandDerivation never changes and its watcher never fires. Watching the store's arrival
+    // covers that case.
+    'lists.results': function watchListsResults() {
+      this.syncBrandDerivation();
     },
 
     // eslint-disable-next-line func-names
