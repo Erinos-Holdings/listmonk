@@ -20,6 +20,9 @@ export default defineConfig(({ _, mode }) => {
       assetsDir: 'static',
     },
     server: {
+      // Opt-in bind address for containerized dev (vite defaults to localhost,
+      // which is unreachable through a published docker port).
+      host: env.LISTMONK_FRONTEND_HOST || false,
       port: env.LISTMONK_FRONTEND_PORT || 8080,
       proxy: {
         '^/$': {
