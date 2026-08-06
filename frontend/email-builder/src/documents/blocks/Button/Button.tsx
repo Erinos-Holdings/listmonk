@@ -68,9 +68,9 @@ export default function Button({ style, props }: ButtonProps) {
   const borderSize = props?.borderSize ?? 0;
   const borderColor = props?.borderColor ?? BUTTON_BORDER_COLOR_DEFAULT;
 
-  // Size drives the padding until a custom dimension takes over that axis: with
-  // an explicit box the text is centred inside it instead of being spaced out by
-  // padding, which is what keeps the label at its own font size either way.
+  // Size drives the padding until a custom dimension takes over that axis: the
+  // width axis centres the label inside the explicit box, and the height axis
+  // re-derives its own padding from the requested height further down.
   const [sizePaddingV, sizePaddingH] = getButtonSizePadding(props);
   const paddingV = customHeight > 0 ? 0 : sizePaddingV;
   const paddingH = customWidth > 0 ? 0 : sizePaddingH;
@@ -91,9 +91,11 @@ export default function Button({ style, props }: ButtonProps) {
     padding: getPadding(style?.padding),
   };
 
+  const fontSize = style?.fontSize ?? 16;
+
   const linkStyle: CSSProperties = {
     color: buttonTextColor,
-    fontSize: style?.fontSize ?? 16,
+    fontSize,
     fontFamily: getFontFamily(style?.fontFamily),
     fontWeight: style?.fontWeight ?? 'bold',
     backgroundColor: buttonBackgroundColor,
@@ -110,11 +112,18 @@ export default function Button({ style, props }: ButtonProps) {
   }
 
   if (customHeight > 0) {
-    // line-height matching the box height is what vertically centres a
-    // single-line label in Outlook and Gmail alike; flexbox is not an option.
-    linkStyle.height = `${customHeight}px`;
-    linkStyle.lineHeight = `${customHeight}px`;
-    linkStyle.boxSizing = 'border-box';
+    // The height is built from vertical padding around an explicit line-height,
+    // not `height`/`line-height: <height>`: a fixed line box can only ever hold
+    // one line, so a label that wraps on a narrow viewport would escape the
+    // coloured area. Padding gives the same box when the label fits on one line
+    // and grows the background with the text when it wraps. The explicit
+    // line-height also feeds outlook.ts's VML height estimate, which keeps
+    // Outlook within a border width of the requested box.
+    const lineHeight = Math.round(fontSize * 1.2);
+    const spareV = Math.max(0, customHeight - lineHeight - 2 * borderSize);
+    const padTop = Math.floor(spareV / 2);
+    linkStyle.lineHeight = `${lineHeight}px`;
+    linkStyle.padding = `${padTop}px ${paddingH}px ${spareV - padTop}px ${paddingH}px`;
   }
 
   if (borderSize > 0) {
@@ -122,20 +131,13 @@ export default function Button({ style, props }: ButtonProps) {
     // it follows the Style corner treatment (rectangle/rounded/pill) on its
     // own.
     linkStyle.border = `${borderSize}px solid ${borderColor}`;
-    if (customHeight > 0) {
-      // With a custom height the box is border-box, so the content area loses
-      // the border on both edges — shrink the centring line box to match or
-      // the label sits below centre.
-      linkStyle.lineHeight = `${Math.max(0, customHeight - 2 * borderSize)}px`;
-    }
   }
 
-  if (customWidth > 0 || customHeight > 0) {
-    // A fixed box only holds one line: two line boxes at line-height:<height>
-    // overflow a height:<height> button, and the background sits on the <a>, so
-    // the text escapes the coloured area. Keeping it on one line turns that into
-    // a horizontal overrun, which is visible on the canvas rather than only in
-    // whichever client resolves a wider font from the stack.
+  if (customWidth > 0) {
+    // A fixed width keeps its label on one line so an overrun is a horizontal
+    // overflow visible on the canvas, rather than only in whichever client
+    // resolves a wider font from the stack. A custom height no longer forces
+    // this — its padding grows with wrapped lines instead.
     linkStyle.whiteSpace = 'nowrap';
   }
 
