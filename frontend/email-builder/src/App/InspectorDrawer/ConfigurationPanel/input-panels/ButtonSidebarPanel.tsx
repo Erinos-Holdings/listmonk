@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 
-import { HeightOutlined, SwapHorizOutlined } from '@mui/icons-material';
+import { HeightOutlined, LineWeightOutlined, SwapHorizOutlined } from '@mui/icons-material';
 import { ToggleButton } from '@mui/material';
 import { ButtonPropsDefaults } from '@usewaypoint/block-button';
 
-import ButtonPropsSchema, { ButtonProps } from '../../../../documents/blocks/Button/ButtonPropsSchema';
+import ButtonPropsSchema, {
+  BUTTON_BORDER_COLOR_DEFAULT,
+  ButtonProps,
+} from '../../../../documents/blocks/Button/ButtonPropsSchema';
 import BaseSidebarPanel from './helpers/BaseSidebarPanel';
 import ColorInput from './helpers/inputs/ColorInput';
 import RadioGroupInput from './helpers/inputs/RadioGroupInput';
@@ -40,6 +43,10 @@ export default function ButtonSidebarPanel({ data, setData }: ButtonSidebarPanel
   // before these props existed does.
   const customWidth = data.props?.customWidth ?? 0;
   const customHeight = data.props?.customHeight ?? 0;
+  // 0 means "no border", which is what every document saved before these props
+  // existed does.
+  const borderSize = data.props?.borderSize ?? 0;
+  const borderColor = data.props?.borderColor ?? BUTTON_BORDER_COLOR_DEFAULT;
 
   return (
     <BaseSidebarPanel title="Button block">
@@ -119,7 +126,28 @@ export default function ButtonSidebarPanel({ data, setData }: ButtonSidebarPanel
         onChange={(buttonBackgroundColor) => updateData({ ...data, props: { ...data.props, buttonBackgroundColor } })}
       />
       <MultiStylePropertyPanel
-        names={['backgroundColor', 'fontFamily', 'fontSize', 'fontWeight', 'textAlign', 'padding']}
+        names={['backgroundColor']}
+        value={data.style}
+        onChange={(style) => updateData({ ...data, style })}
+      />
+      <ColorInput
+        label="Button border color"
+        defaultValue={borderColor}
+        onChange={(borderColor) => updateData({ ...data, props: { ...data.props, borderColor } })}
+      />
+      <SliderInput
+        label="Button border size"
+        iconLabel={<LineWeightOutlined sx={{ fontSize: 16 }} />}
+        units="px"
+        step={1}
+        min={0}
+        max={10}
+        zeroLabel="None"
+        defaultValue={borderSize}
+        onChange={(borderSize) => updateData({ ...data, props: { ...data.props, borderSize } })}
+      />
+      <MultiStylePropertyPanel
+        names={['fontFamily', 'fontSize', 'fontWeight', 'textAlign', 'padding']}
         value={data.style}
         onChange={(style) => updateData({ ...data, style })}
       />

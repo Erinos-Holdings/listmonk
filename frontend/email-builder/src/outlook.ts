@@ -328,6 +328,11 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   const fontWeight = anchorStyleMap['font-weight'] || 'bold';
   const fontFamily = anchorStyleMap['font-family'] || 'Arial, sans-serif';
   const borderRadius = getPixelValue(anchorStyleMap['border-radius']) || 0;
+  // The Button block's "Button border size/color" controls emit a
+  // `border: <n>px solid <color>` shorthand on the anchor.
+  const borderMatch = (anchorStyleMap.border || '').match(/^(\d+(?:\.\d+)?)px\s+solid\s+(.+)$/i);
+  const borderColor = borderMatch ? borderMatch[2] : null;
+  const borderWidth = borderMatch ? Math.round(Number(borderMatch[1])) : 0;
   const paddingValues = getPaddingValues(anchorStyleMap);
   const lineHeight = getPixelValue(anchorStyleMap['line-height']) || Math.round(fontSize * 1.2);
   const display = (anchorStyleMap.display || '').toLowerCase();
@@ -336,10 +341,12 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   const targetAttr = target ? ` target="${escapeAttribute(target)}"` : '';
 
   if (fullWidth) {
+    // A real border from the Button block wins; the hairline in the button
+    // colour is only a fallback that keeps Outlook from drawing a white seam.
     const anchorStyle = setStyleValues(anchor.getAttribute('style'), [
       ['display', 'block'],
       ['text-align', 'center'],
-      ['border', '1px solid ' + buttonColor],
+      ['border', anchorStyleMap.border || '1px solid ' + buttonColor],
     ]);
 
     return [
@@ -358,13 +365,20 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   const explicitWidth = getPixelValue(anchorStyleMap.width);
   const explicitHeight = getPixelValue(anchorStyleMap.height);
   const estimatedTextWidth = Math.max(1, Math.round(text.length * fontSize * (fontWeight.toLowerCase() === 'bold' ? 0.68 : 0.62)));
-  const estimatedWidth = explicitWidth ?? Math.max(40, estimatedTextWidth + paddingValues.left + paddingValues.right);
-  const estimatedHeight = explicitHeight ?? Math.max(lineHeight + paddingValues.top + paddingValues.bottom, 32);
+  // An auto-sized CSS button grows by the border on every edge, while a VML
+  // strokeweight straddles the shape edge — half in, half out — so adding one
+  // border width per axis is what matches the drawn outer size. Explicit boxes
+  // are border-box in CSS and need no adjustment.
+  const estimatedWidth = explicitWidth ?? Math.max(40, estimatedTextWidth + paddingValues.left + paddingValues.right) + borderWidth;
+  const estimatedHeight = explicitHeight ?? Math.max(lineHeight + paddingValues.top + paddingValues.bottom, 32) + borderWidth;
   const arcsize = Math.max(0, Math.min(50, Math.round((borderRadius / estimatedHeight) * 100)));
   const cleanAnchorStyle = anchor.getAttribute('style') || '';
+  const strokeAttrs = borderColor
+    ? `strokecolor="${escapeAttribute(borderColor)}" strokeweight="${borderWidth}px"`
+    : `strokecolor="${escapeAttribute(buttonColor)}"`;
   const msoStart = makeSafeTemplate('<!--[if mso]>');
   const msoEnd = makeSafeTemplate('<![endif]-->');
-  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${estimatedHeight}px;v-text-anchor:middle;width:${estimatedWidth}px;" arcsize="${arcsize}%" strokecolor="${escapeAttribute(buttonColor)}" fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${fontSize}px;font-weight:${escapeAttribute(fontWeight)};">${escapeHtml(text)}</center></v:roundrect>`;
+  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${estimatedHeight}px;v-text-anchor:middle;width:${estimatedWidth}px;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${fontSize}px;font-weight:${escapeAttribute(fontWeight)};">${escapeHtml(text)}</center></v:roundrect>`;
   const nonMsoStart = makeSafeTemplate('<!--[if !mso]><!-->');
   const nonMsoEnd = makeSafeTemplate('<!--<![endif]-->');
 

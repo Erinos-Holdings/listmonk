@@ -3,7 +3,7 @@ import React, { CSSProperties } from 'react';
 import { ButtonPropsDefaults } from '@usewaypoint/block-button';
 
 import { FONT_FAMILIES } from '../helpers/fontFamily';
-import { ButtonProps } from './ButtonPropsSchema';
+import { BUTTON_BORDER_COLOR_DEFAULT, ButtonProps } from './ButtonPropsSchema';
 
 /**
  * A local fork of @usewaypoint/block-button's renderer (MIT, (c) 2024 Waypoint
@@ -13,9 +13,9 @@ import { ButtonProps } from './ButtonPropsSchema';
  * is reachable neither from the editor dictionary nor from the packaged Reader,
  * so a custom prop could be stored but never rendered.
  *
- * With customWidth and customHeight unset this emits byte-identical markup to
- * upstream, which is what keeps already-saved Button blocks rendering unchanged.
- * Keep it that way when rebasing.
+ * With customWidth, customHeight and borderSize unset this emits byte-identical
+ * markup to upstream, which is what keeps already-saved Button blocks rendering
+ * unchanged. Keep it that way when rebasing.
  */
 
 function getFontFamily(fontFamily: NonNullable<ButtonProps['style']>['fontFamily']) {
@@ -65,6 +65,8 @@ export default function Button({ style, props }: ButtonProps) {
   // already stretches the button to its container.
   const customWidth = fullWidth ? 0 : props?.customWidth ?? 0;
   const customHeight = props?.customHeight ?? 0;
+  const borderSize = props?.borderSize ?? 0;
+  const borderColor = props?.borderColor ?? BUTTON_BORDER_COLOR_DEFAULT;
 
   // Size drives the padding until a custom dimension takes over that axis: with
   // an explicit box the text is centred inside it instead of being spaced out by
@@ -113,6 +115,19 @@ export default function Button({ style, props }: ButtonProps) {
     linkStyle.height = `${customHeight}px`;
     linkStyle.lineHeight = `${customHeight}px`;
     linkStyle.boxSizing = 'border-box';
+  }
+
+  if (borderSize > 0) {
+    // The border sits on the same <a> as the background and border-radius, so
+    // it follows the Style corner treatment (rectangle/rounded/pill) on its
+    // own.
+    linkStyle.border = `${borderSize}px solid ${borderColor}`;
+    if (customHeight > 0) {
+      // With a custom height the box is border-box, so the content area loses
+      // the border on both edges — shrink the centring line box to match or
+      // the label sits below centre.
+      linkStyle.lineHeight = `${Math.max(0, customHeight - 2 * borderSize)}px`;
+    }
   }
 
   if (customWidth > 0 || customHeight > 0) {
