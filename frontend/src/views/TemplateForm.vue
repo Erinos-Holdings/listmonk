@@ -112,7 +112,11 @@ export default Vue.extend({
       form: {
         name: '',
         subject: '',
-        type: 'campaign',
+        // Dead in practice — mounted() replaces the form with the data prop
+        // (Templates.vue showNewForm() holds the live default). Kept aligned
+        // with it so a refactor of that spread cannot silently revert the
+        // visual-first default.
+        type: 'campaign_visual',
         optin: '',
         body: null,
         bodySource: null,

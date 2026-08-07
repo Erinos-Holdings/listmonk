@@ -151,9 +151,11 @@ export default Vue.extend({
       this.isEditing = true;
     },
 
-    // Show the new form.
+    // Show the new form. We only build visual templates, so default the type
+    // (TemplateForm's own data() default is dead — mounted() replaces the form
+    // with this object).
     showNewForm() {
-      this.curItem = { type: 'campaign' };
+      this.curItem = { type: 'campaign_visual' };
       this.isFormVisible = true;
       this.isEditing = false;
     },

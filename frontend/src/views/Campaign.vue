@@ -457,7 +457,9 @@ export default Vue.extend({
         tags: [],
         sendAt: null,
         content: {
-          contentType: 'richtext',
+          // We only send visual campaigns; a null bodySource makes the builder
+          // start from its empty document (Outlook compatibility ON).
+          contentType: 'visual',
           body: '',
           bodySource: null,
           templateId: null,

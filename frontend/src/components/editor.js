@@ -65,7 +65,10 @@ const markdownToVisualBlock = (markdown) => {
   return {
     root: {
       type: 'EmailLayout',
-      data: { childrenIds: blocks.map((b) => b.id) },
+      // A document converted to visual is newly created at that moment, so it
+      // gets the new-document Outlook default (same as EMPTY_EMAIL_MESSAGE in
+      // the email-builder). Stored visual documents never pass through here.
+      data: { childrenIds: blocks.map((b) => b.id), outlook: true },
     },
     ...Object.fromEntries(blocks.map((b) => [b.id, { type: b.type, data: b.data }])),
   };
