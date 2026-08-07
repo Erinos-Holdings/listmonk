@@ -403,6 +403,286 @@ function transformButtonBlocks(doc: Document) {
   });
 }
 
+function getBorderWidths(styleMap: TStyleMap): Pick<TPaddingValues, 'top' | 'right' | 'bottom' | 'left'> {
+  const shorthand = styleMap.border?.trim() || '';
+  const shorthandMatch = shorthand.match(/^(-?\d+(?:\.\d+)?)px\b/i);
+  const fromShorthand = shorthandMatch ? Math.round(Number(shorthandMatch[1])) : 0;
+  const all = getPixelValue(styleMap['border-width']) ?? fromShorthand;
+
+  return {
+    top: getPixelValue(styleMap['border-top-width']) ?? all,
+    right: getPixelValue(styleMap['border-right-width']) ?? all,
+    bottom: getPixelValue(styleMap['border-bottom-width']) ?? all,
+    left: getPixelValue(styleMap['border-left-width']) ?? all,
+  };
+}
+
+function getHorizontalInset(styleMap: TStyleMap) {
+  const padding = getPaddingValues(styleMap);
+  const border = getBorderWidths(styleMap);
+  return padding.left + padding.right + border.left + border.right;
+}
+
+function formatPaddingShorthand(padding: TPaddingValues) {
+  return `${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px`;
+}
+
+function clearPaddingStyles(style: string | null) {
+  return setStyleValues(style, [
+    ['padding', null],
+    ['padding-top', null],
+    ['padding-right', null],
+    ['padding-bottom', null],
+    ['padding-left', null],
+  ]);
+}
+
+function getCellColspan(cell: Element) {
+  const raw = cell.getAttribute('colspan');
+  if (!raw || !/^\d+$/.test(raw)) {
+    return 1;
+  }
+
+  return Math.max(1, Number(raw));
+}
+
+function stripInlineEventHandlers(element: Element) {
+  Array.from(element.attributes).forEach((attr) => {
+    if (/^on/i.test(attr.name)) {
+      element.removeAttribute(attr.name);
+    }
+  });
+
+  Array.from(element.children).forEach((child) => stripInlineEventHandlers(child));
+}
+
+function findCanvasTable(doc: Document): { table: HTMLTableElement; width: number } | null {
+  // Prefer the EmailLayout shape: body > backdrop div > canvas table.
+  // Avoids mistaking an earlier Html-block table that happens to use width=100% + max-width.
+  const candidates: HTMLTableElement[] = [];
+
+  const body = doc.body;
+  if (body) {
+    Array.from(body.children).forEach((child) => {
+      if (child.tagName !== 'DIV') {
+        return;
+      }
+
+      Array.from(child.children).forEach((grandChild) => {
+        if (grandChild.tagName === 'TABLE') {
+          candidates.push(grandChild as HTMLTableElement);
+        }
+      });
+    });
+  }
+
+  const tables = candidates.length > 0
+    ? candidates
+    : Array.from(doc.querySelectorAll('table')) as HTMLTableElement[];
+
+  for (const table of tables) {
+    if (table.getAttribute('width') !== '100%') {
+      continue;
+    }
+
+    const width = getPixelValue(parseStyleMap(table.getAttribute('style'))['max-width']);
+    if (width !== null) {
+      return { table, width };
+    }
+  }
+
+  return null;
+}
+
+function constrainCanvasForOutlook(doc: Document) {
+  const found = findCanvasTable(doc);
+  if (!found) {
+    return;
+  }
+
+  const { table: canvas, width: canvasWidth } = found;
+
+  // Word ignores max-width, so without this the white canvas table spans the
+  // full reading pane. Pin it to its real width with a conditional ghost table.
+  const ghostStart = makeSafeTemplate(
+    `<!--[if mso]><table role="presentation" align="center" width="${canvasWidth}" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tr><td><![endif]-->`
+  );
+  const ghostEnd = makeSafeTemplate('<!--[if mso]></td></tr></table><![endif]-->');
+
+  const backdrop = canvas.parentElement;
+  if (backdrop && backdrop.tagName === 'DIV' && backdrop.parentElement?.tagName === 'BODY') {
+    // Word drops div padding and the 100%-wide canvas hides the backdrop
+    // color entirely, so move both onto a real table + td around the canvas.
+    // This wrapper is intentional for all clients (not mso-only): keep visual
+    // parity with the original backdrop padding/background outside Outlook.
+    const styleMap = parseStyleMap(backdrop.getAttribute('style'));
+    const backgroundColor = styleMap['background-color'];
+    const padding = getPaddingValues(styleMap);
+    const hasPadding = padding.top !== 0 || padding.right !== 0 || padding.bottom !== 0 || padding.left !== 0;
+    const bgcolorAttr = backgroundColor ? ` bgcolor="${escapeAttribute(backgroundColor)}"` : '';
+    const tdStyle = [
+      backgroundColor ? `background-color:${backgroundColor}` : '',
+      hasPadding ? `padding:${formatPaddingShorthand(padding)}` : '',
+    ].filter(Boolean).join(';');
+
+    backdrop.setAttribute('style', clearPaddingStyles(backdrop.getAttribute('style')));
+
+    replaceNodeWithHtml(canvas, buildPresentationTable(
+      `<tbody><tr><td align="center"${bgcolorAttr} style="${escapeAttribute(tdStyle)}">${ghostStart}${canvas.outerHTML}${ghostEnd}</td></tr></tbody>`
+    ));
+    return;
+  }
+
+  replaceNodeWithHtml(canvas, `${ghostStart}${canvas.outerHTML}${ghostEnd}`);
+}
+
+function getDirectRows(table: Element) {
+  const rows: Element[] = [];
+  Array.from(table.children).forEach((section) => {
+    if (section.tagName === 'TR') {
+      rows.push(section);
+    } else if (section.tagName === 'TBODY' || section.tagName === 'THEAD' || section.tagName === 'TFOOT') {
+      rows.push(...Array.from(section.children).filter((row) => row.tagName === 'TR'));
+    }
+  });
+  return rows;
+}
+
+function clampImageWidths(node: Element, available: number) {
+  if (available <= 0) {
+    return;
+  }
+
+  if (node.tagName === 'IMG') {
+    const img = node as HTMLImageElement;
+    const width = getPixelWidthFromImage(img);
+    if (width && Number(width) > available) {
+      const originalWidth = Number(width);
+      const clampedWidth = Math.floor(available);
+      const clamped = String(clampedWidth);
+      const clampedImage = img.cloneNode(true) as HTMLImageElement;
+      const originalImage = img.cloneNode(true) as HTMLImageElement;
+      // Dual-emitting multiplies any inline handlers; strip them from both
+      // copies. Rendering (src/size/styles) stays the same for non-MSO.
+      stripInlineEventHandlers(clampedImage);
+      stripInlineEventHandlers(originalImage);
+      clampedImage.setAttribute('width', clamped);
+
+      const styleMap = parseStyleMap(clampedImage.getAttribute('style'));
+      const heightAttr = clampedImage.getAttribute('height');
+      const originalHeight = (heightAttr && /^\d+$/.test(heightAttr))
+        ? Number(heightAttr)
+        : getPixelValue(styleMap.height);
+      // Word honors the height ATTRIBUTE; the style stays height:auto (the
+      // trailing hardenImages pass enforces it anyway). Scale the attribute
+      // when we know both axes; otherwise drop it so width clamping is not
+      // distorted.
+      const styleUpdates: Array<[string, string | null]> = [['width', `${clamped}px`]];
+      if (originalHeight && originalWidth > 0) {
+        const scaledHeight = String(Math.max(1, Math.round(originalHeight * (clampedWidth / originalWidth))));
+        clampedImage.setAttribute('height', scaledHeight);
+      } else {
+        clampedImage.removeAttribute('height');
+      }
+      styleUpdates.push(['height', 'auto']);
+
+      clampedImage.setAttribute('style', setStyleValues(clampedImage.getAttribute('style'), styleUpdates));
+
+      replaceNodeWithHtml(img, [
+        makeSafeTemplate('<!--[if mso]>'),
+        clampedImage.outerHTML,
+        makeSafeTemplate('<![endif]-->'),
+        makeSafeTemplate('<!--[if !mso]><!-->'),
+        originalImage.outerHTML,
+        makeSafeTemplate('<!--<![endif]-->'),
+      ].join(''));
+    }
+    return;
+  }
+
+  if (node.tagName === 'TABLE') {
+    const widthAttr = node.getAttribute('width');
+    const tableWidth = widthAttr && /^\d+$/.test(widthAttr)
+      ? Math.min(available, Number(widthAttr))
+      : available;
+    // Only the builder's ColumnsContainer tables (table-layout:fixed) use the
+    // content-box + gap-padding column model below. Other tables (image
+    // wrappers, Html-block markup, the canvas itself) pass their full share of
+    // the canvas through unchanged — no per-cell content-box subtraction — so
+    // user markup is not rewritten from a model it does not follow.
+    const isFixedLayout = (parseStyleMap(node.getAttribute('style'))['table-layout'] || '').toLowerCase() === 'fixed';
+
+    if (!isFixedLayout) {
+      // No column-share model: each cell gets the full table width budget.
+      // Still walk through the cell node so TD/TH padding is subtracted once
+      // (image-block wrappers put padding on the td).
+      getDirectRows(node).forEach((row) => {
+        Array.from(row.children)
+          .filter((cell) => cell.tagName === 'TD' || cell.tagName === 'TH')
+          .forEach((cell) => clampImageWidths(cell, tableWidth));
+      });
+      return;
+    }
+
+    getDirectRows(node).forEach((row) => {
+      const cells = Array.from(row.children)
+        .filter((cell) => cell.tagName === 'TD' || cell.tagName === 'TH')
+        .map((cell) => {
+          const styleMap = parseStyleMap(cell.getAttribute('style'));
+          return {
+            cell,
+            padding: getPaddingValues(styleMap),
+            explicit: getPixelValue(styleMap.width),
+            colspan: getCellColspan(cell),
+          };
+        });
+      // Cells are content-box: an explicit width IS the content width and the
+      // gap padding sits outside it. Under table-layout:fixed the remaining
+      // width is split evenly across auto column tracks (colspan counts as N).
+      const fixedTotal = cells.reduce(
+        (sum, { padding, explicit }) => (explicit !== null ? sum + explicit + padding.left + padding.right : sum),
+        0
+      );
+      const autoTracks = cells.reduce(
+        (sum, { explicit, colspan }) => (explicit === null ? sum + colspan : sum),
+        0
+      );
+      const trackShare = autoTracks > 0 ? Math.floor(Math.max(0, tableWidth - fixedTotal) / autoTracks) : 0;
+
+      cells.forEach(({ cell, padding, explicit, colspan }) => {
+        const innerWidth = explicit !== null
+          ? explicit
+          : trackShare * colspan - padding.left - padding.right;
+        Array.from(cell.children).forEach((child) => clampImageWidths(child, innerWidth));
+      });
+    });
+    return;
+  }
+
+  let innerWidth = available;
+  if (node.tagName === 'DIV' || node.tagName === 'TD' || node.tagName === 'TH') {
+    const padding = getPaddingValues(parseStyleMap(node.getAttribute('style')));
+    innerWidth = available - padding.left - padding.right;
+  }
+
+  Array.from(node.children).forEach((child) => clampImageWidths(child, innerWidth));
+}
+
+function clampImagesToCanvas(doc: Document) {
+  const found = findCanvasTable(doc);
+  if (!found) {
+    return;
+  }
+
+  // Word ignores the max-width:100% shrink-to-fit on images, so a fixed-width
+  // image wider than its column blows the column out. Clamp each image's width
+  // to its column's share of the canvas content box (max-width minus canvas
+  // border/padding).
+  const canvasStyle = parseStyleMap(found.table.getAttribute('style'));
+  const contentWidth = Math.max(0, found.width - getHorizontalInset(canvasStyle));
+  clampImageWidths(found.table, contentWidth);
+}
+
 export function postProcessForOutlook(html: string) {
   if (typeof DOMParser === 'undefined') {
     return html;
@@ -415,6 +695,8 @@ export function postProcessForOutlook(html: string) {
   transformButtonBlocks(doc);
   transformImageBlocks(doc);
   transformSimpleDivBlocks(doc);
+  clampImagesToCanvas(doc);
+  constrainCanvasForOutlook(doc);
   addTableDefaults(doc);
   hardenImages(doc);
 
