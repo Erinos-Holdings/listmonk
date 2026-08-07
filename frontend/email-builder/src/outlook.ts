@@ -386,7 +386,12 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   // re-run the matrix (campaign 22 method) before loosening.
   const wordMinHeight = fontSize * 2;
   const cssHeight = lineHeightPx !== null ? measuredHeight : Math.max(measuredHeight, 32);
-  const estimatedHeight = explicitHeight ?? Math.max(cssHeight, wordMinHeight) + borderWidth;
+  // The floor applies to explicit heights too (border-box, so no border
+  // adjustment): a sub-floor shape renders NO label at all in Word, which is
+  // strictly worse than a taller-than-specified button.
+  const estimatedHeight = explicitHeight !== null
+    ? Math.max(explicitHeight, wordMinHeight)
+    : Math.max(cssHeight, wordMinHeight) + borderWidth;
   const arcsize = Math.max(0, Math.min(50, Math.round((borderRadius / estimatedHeight) * 100)));
   const cleanAnchorStyle = anchor.getAttribute('style') || '';
   // All VML dimensions are emitted in POINTS, not pixels. Word scales pt with
@@ -398,7 +403,12 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   const strokeAttrs = borderColor
     ? `strokecolor="${escapeAttribute(borderColor)}" strokeweight="${pt(borderWidth)}pt"`
     : `strokecolor="${escapeAttribute(buttonColor)}"`;
-  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${pt(estimatedHeight)}pt;v-text-anchor:middle;width:${pt(estimatedWidth)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><v:textbox inset="0,0,0,0"><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${pt(fontSize)}pt;font-weight:${escapeAttribute(fontWeight)};mso-line-height-rule:exactly;line-height:${pt(estimatedHeight - borderWidth)}pt;">${escapeHtml(text)}</center></v:textbox></v:roundrect>`;
+  // Canonical shape: anchorlock + center, vertical centering via
+  // v-text-anchor:middle alone. A v:textbox with an exact line-height was
+  // tried for tight shapes and rides the text HIGH in real Word (seen live
+  // 2026-08-07); the matrix-verified canonical form centers correctly at
+  // heights >= the 2x-font floor above, which makes tight shapes impossible.
+  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${pt(estimatedHeight)}pt;v-text-anchor:middle;width:${pt(estimatedWidth)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${pt(fontSize)}pt;font-weight:${escapeAttribute(fontWeight)};">${escapeHtml(text)}</center></v:roundrect>`;
   // The VML must ride inside the Safe template WITH its conditional markers:
   // emitted raw, the fragment parser rewrites <w:anchorlock/> into an OPEN tag
   // that swallows <center> (self-closing syntax is ignored on unknown
