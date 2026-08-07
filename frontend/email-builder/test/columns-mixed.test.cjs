@@ -31,5 +31,5 @@ let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 check('fixed 200px column dual-emits: mso 200 + original 240', JSON.stringify(byAlt.a) === '[200,240]', `a=${JSON.stringify(byAlt.a)}`);
 check('auto column gets remainder 388 -> 380px image untouched (single copy)', JSON.stringify(byAlt.b) === '[380]', `b=${JSON.stringify(byAlt.b)}`);
-check('no outlook-mobile style injected when no buttons are pinned', !/lm-btn-pin/.test(out));
+check('no Gmail pin style injected when no buttons exist', !/lm-gm-pin/.test(out) && !/u \+ \.body/.test(out));
 process.exit(failed ? 1 : 0);

@@ -27,9 +27,12 @@ const rendered = out.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
 const gmailVisible = rendered.replace(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/g, '');
 const gmailButtons = [...gmailVisible.matchAll(/<a href="https:\/\/listmonk.app"[^>]*style="[^"]*display:block[^"]*"/g)];
 check('8 original CSS buttons in gmail-visible content', gmailButtons.length === 8, `count=${gmailButtons.length}`);
-const gmailTables = [...gmailVisible.matchAll(/<table role="presentation" width="(\d+)"[^>]*style="[^"]*width:\1px;max-width:100%;margin:0 auto[^"]*" class="lm-btn-pin"><tbody><tr><td data-lm-full-width-button/g)];
-check('8 pinned originals: class + px width + max-width + margin auto', gmailTables.length === 8, `count=${gmailTables.length} w=${[...new Set(gmailTables.map((m) => m[1]))]}`);
-check('outlook-mobile revert style injected in head', /<style>\[data-outlook-cycle\] table\.lm-btn-pin\{width:100%!important;max-width:100%!important;min-width:0!important\}<\/style>/.test(out));
+const gmailTables = [...gmailVisible.matchAll(/<table role="presentation" width="100%"[^>]*class="lm-gm-pin-(\d+)"><tbody><tr><td data-lm-full-width-button/g)];
+check('8 originals stay fluid (width=100%) with per-width Gmail class', gmailTables.length === 8, `count=${gmailTables.length} w=${[...new Set(gmailTables.map((m) => m[1]))]}`);
+check('no px pin on the original style', !/lm-gm-pin[^>]*style="[^"]*width:244px/.test(gmailVisible));
+check('Gmail-only pin rule injected behind u + .body', /<style>u \+ \.body table\.lm-gm-pin-244\{width:244px!important;max-width:100%!important;margin:0 auto!important\}<\/style>/.test(out));
+check('body carries the .body class for the Gmail selector', /<body class="[^"]*body[^"]*">/.test(out));
+check('dead data-outlook-cycle rule is gone', !/data-outlook-cycle/.test(out.replace(/data-lm-full-width-button/g, '')));
 check('no explicit-width button tables leak into gmail-visible content', !/width="2\d\d"[^>]*><tbody><tr><td bgcolor="#999999" align="center"/.test(gmailVisible));
 // Negative: an unmarked lookalike (user HTML) must NOT be transformed
 const lookalike = `<!doctype html><html><body><div style="margin:0;min-height:100%;width:100%"><table align="center" width="100%" style="max-width:600px"><tbody><tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tbody><tr><td bgcolor="#336699"><a href="https://x.test" style="background-color:#336699;display:block;padding:10px;color:#fff">FAKE</a></td></tr></tbody></table></td></tr></tbody></table></div></body></html>`;

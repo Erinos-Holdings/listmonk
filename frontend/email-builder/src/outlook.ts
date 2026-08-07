@@ -381,10 +381,16 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
     ?? (lineHeightPx !== null ? Math.max(measuredHeight, lineHeight + 2) : Math.max(measuredHeight, 32)) + borderWidth;
   const arcsize = Math.max(0, Math.min(50, Math.round((borderRadius / estimatedHeight) * 100)));
   const cleanAnchorStyle = anchor.getAttribute('style') || '';
+  // All VML dimensions are emitted in POINTS, not pixels. Word scales pt with
+  // the Windows display-scaling factor exactly like text, while px shapes stay
+  // fixed — at 125/150 % scaling a px-sized shape is smaller than its own
+  // label and Word clips or hides the text (verified on a real client
+  // 2026-08-07 via the rendering-matrix campaign).
+  const pt = (px: number) => String(Math.round(px * 0.75 * 100) / 100);
   const strokeAttrs = borderColor
-    ? `strokecolor="${escapeAttribute(borderColor)}" strokeweight="${borderWidth}px"`
+    ? `strokecolor="${escapeAttribute(borderColor)}" strokeweight="${pt(borderWidth)}pt"`
     : `strokecolor="${escapeAttribute(buttonColor)}"`;
-  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${estimatedHeight}px;v-text-anchor:middle;width:${estimatedWidth}px;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><v:textbox inset="0,0,0,0"><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${fontSize}px;font-weight:${escapeAttribute(fontWeight)};mso-line-height-rule:exactly;line-height:${estimatedHeight - borderWidth}px;">${escapeHtml(text)}</center></v:textbox></v:roundrect>`;
+  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${pt(estimatedHeight)}pt;v-text-anchor:middle;width:${pt(estimatedWidth)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><v:textbox inset="0,0,0,0"><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${pt(fontSize)}pt;font-weight:${escapeAttribute(fontWeight)};mso-line-height-rule:exactly;line-height:${pt(estimatedHeight - borderWidth)}pt;">${escapeHtml(text)}</center></v:textbox></v:roundrect>`;
   // The VML must ride inside the Safe template WITH its conditional markers:
   // emitted raw, the fragment parser rewrites <w:anchorlock/> into an OPEN tag
   // that swallows <center> (self-closing syntax is ignored on unknown
@@ -636,21 +642,14 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
 
   const msoButton = `<table role="presentation" width="${width}" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tbody><tr><td bgcolor="${escapeAttribute(buttonColor)}" align="center" style="${escapeAttribute(msoTdStyle)}"><a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(msoAnchorStyle)}">${escapeHtml(text)}</a></td></tr></tbody></table>`;
 
-  // The non-mso copy gets the same computed width as a determinate px value.
-  // A width="100%" table inside an auto-sized column cell is circular, and the
-  // Gmail app resolves it by shrinking to content — the button collapses to a
-  // text-width pill (seen 2026-08-07). Where % resolution works the table was
-  // already exactly this many px, so nothing changes there; max-width:100%
-  // keeps narrow-viewport clients able to shrink it.
-  table.setAttribute('width', String(width));
-  table.setAttribute('class', `${table.getAttribute('class') || ''} lm-btn-pin`.trim());
-  table.setAttribute('style', setStyleValues(table.getAttribute('style'), [
-    ['width', `${width}px`],
-    ['max-width', '100%'],
-    // Centering fallback for reflow clients that widen the cell past the
-    // pinned width — td align=center does not center a block table.
-    ['margin', '0 auto'],
-  ]));
+  // The non-mso copy stays width="100%" — the fluid form is the only one
+  // Outlook mobile handles (a px-pinned table flipped its whole-email layout
+  // into overflow, seen 2026-08-07). The Gmail app is the one client that
+  // shrink-wraps a width=100% table in an auto-sized column cell into a
+  // text-width pill, so the computed width is applied to Gmail ONLY, via a
+  // per-width class and a head rule behind Gmail's `u + .body` selector hook
+  // (see addGmailButtonPinStyles).
+  table.setAttribute('class', `${table.getAttribute('class') || ''} lm-gm-pin-${width}`.trim());
 
   replaceNodeWithHtml(table, [
     makeSafeTemplate('<!--[if mso]>'),
@@ -803,18 +802,35 @@ function clampImagesToCanvas(doc: Document) {
   clampImageWidths(found.table, contentWidth);
 }
 
-function addOutlookMobileStyles(doc: Document) {
-  if (!doc.querySelector('table.lm-btn-pin') || !doc.head) {
+function addGmailButtonPinStyles(doc: Document) {
+  const widths = new Set<string>();
+  doc.querySelectorAll('table[class*="lm-gm-pin-"]').forEach((table) => {
+    const match = (table.getAttribute('class') || '').match(/lm-gm-pin-(\d+)/);
+    if (match) {
+      widths.add(match[1]);
+    }
+  });
+
+  if (widths.size === 0 || !doc.head || !doc.body) {
     return;
   }
 
-  // Outlook's mobile apps render the non-mso path, REFLOW the layout, and
-  // ignore max-width — a px-pinned button forces the columns wider than the
-  // screen. Their preprocessor stamps data-outlook-cycle on the body, so this
-  // reverts pinned buttons to fluid only there. Other clients either honor
-  // the pin (Gmail) or never see this path (desktop Outlook renders mso).
+  // Gmail's renderer replaces <body> with a div carrying its class, preceded
+  // by a <u> sibling — `u + .body` therefore matches in Gmail and nowhere
+  // else. It is the only client that shrink-wraps the fluid button, so it is
+  // the only client that gets the computed width. The body needs the .body
+  // class for the selector to have something to match.
+  // (Outlook mobile's data-outlook-cycle hook was tried first and is NOT
+  // stamped in our tenant's app — verified 2026-08-07 via the matrix
+  // campaign; do not reintroduce it.)
+  doc.body.setAttribute('class', `${doc.body.getAttribute('class') || ''} body`.trim());
+
+  const rules = Array.from(widths).sort((a, b) => Number(a) - Number(b)).map((w) =>
+    `u + .body table.lm-gm-pin-${w}{width:${w}px!important;max-width:100%!important;margin:0 auto!important}`
+  ).join('');
+
   const style = doc.createElement('style');
-  style.textContent = '[data-outlook-cycle] table.lm-btn-pin{width:100%!important;max-width:100%!important;min-width:0!important}';
+  style.textContent = rules;
   doc.head.appendChild(style);
 }
 
@@ -832,7 +848,7 @@ export function postProcessForOutlook(html: string) {
   transformSimpleDivBlocks(doc);
   clampImagesToCanvas(doc);
   constrainCanvasForOutlook(doc);
-  addOutlookMobileStyles(doc);
+  addGmailButtonPinStyles(doc);
   addTableDefaults(doc);
   hardenImages(doc);
 
