@@ -334,7 +334,8 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   const borderColor = borderMatch ? borderMatch[2] : null;
   const borderWidth = borderMatch ? Math.round(Number(borderMatch[1])) : 0;
   const paddingValues = getPaddingValues(anchorStyleMap);
-  const lineHeight = getPixelValue(anchorStyleMap['line-height']) || Math.round(fontSize * 1.2);
+  const lineHeightPx = getPixelValue(anchorStyleMap['line-height']);
+  const lineHeight = lineHeightPx ?? Math.round(fontSize * 1.2);
   const display = (anchorStyleMap.display || '').toLowerCase();
   const fullWidth = display === 'block' || anchorStyleMap.width === '100%';
 
@@ -370,20 +371,28 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   // border width per axis is what matches the drawn outer size. Explicit boxes
   // are border-box in CSS and need no adjustment.
   const estimatedWidth = explicitWidth ?? Math.max(40, estimatedTextWidth + paddingValues.left + paddingValues.right) + borderWidth;
-  const estimatedHeight = explicitHeight ?? Math.max(lineHeight + paddingValues.top + paddingValues.bottom, 32) + borderWidth;
+  // The 32px floor guards the text-length guess when no line-height is
+  // available; a real line-height + padding is the actual CSS box and must not
+  // be inflated, or short custom-height buttons render taller in Outlook.
+  const measuredHeight = lineHeight + paddingValues.top + paddingValues.bottom;
+  const estimatedHeight = explicitHeight ?? (lineHeightPx !== null ? measuredHeight : Math.max(measuredHeight, 32)) + borderWidth;
   const arcsize = Math.max(0, Math.min(50, Math.round((borderRadius / estimatedHeight) * 100)));
   const cleanAnchorStyle = anchor.getAttribute('style') || '';
   const strokeAttrs = borderColor
     ? `strokecolor="${escapeAttribute(borderColor)}" strokeweight="${borderWidth}px"`
     : `strokecolor="${escapeAttribute(buttonColor)}"`;
-  const msoStart = makeSafeTemplate('<!--[if mso]>');
-  const msoEnd = makeSafeTemplate('<![endif]-->');
   const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${estimatedHeight}px;v-text-anchor:middle;width:${estimatedWidth}px;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${fontSize}px;font-weight:${escapeAttribute(fontWeight)};">${escapeHtml(text)}</center></v:roundrect>`;
+  // The VML must ride inside the Safe template WITH its conditional markers:
+  // emitted raw, the fragment parser rewrites <w:anchorlock/> into an OPEN tag
+  // that swallows <center> (self-closing syntax is ignored on unknown
+  // elements), and Word then drops the vertical text anchoring — the label
+  // renders clipped. Upstream PR #2978 has this latent.
+  const msoBlock = makeSafeTemplate(`<!--[if mso]>${vml}<![endif]-->`);
   const nonMsoStart = makeSafeTemplate('<!--[if !mso]><!-->');
   const nonMsoEnd = makeSafeTemplate('<!--<![endif]-->');
 
   return buildPresentationTable(
-    `<tbody><tr><td align="${escapeAttribute(align)}" style="${escapeAttribute(wrapperStyle)}">${msoStart}${vml}${msoEnd}${nonMsoStart}<a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(cleanAnchorStyle)}">${escapeHtml(text)}</a>${nonMsoEnd}</td></tr></tbody>`
+    `<tbody><tr><td align="${escapeAttribute(align)}" style="${escapeAttribute(wrapperStyle)}">${msoBlock}${nonMsoStart}<a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(cleanAnchorStyle)}">${escapeHtml(text)}</a>${nonMsoEnd}</td></tr></tbody>`
   );
 }
 
@@ -623,6 +632,21 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   ]);
 
   const msoButton = `<table role="presentation" width="${width}" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tbody><tr><td bgcolor="${escapeAttribute(buttonColor)}" align="center" style="${escapeAttribute(msoTdStyle)}"><a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(msoAnchorStyle)}">${escapeHtml(text)}</a></td></tr></tbody></table>`;
+
+  // The non-mso copy gets the same computed width as a determinate px value.
+  // A width="100%" table inside an auto-sized column cell is circular, and the
+  // Gmail app resolves it by shrinking to content — the button collapses to a
+  // text-width pill (seen 2026-08-07). Where % resolution works the table was
+  // already exactly this many px, so nothing changes there; max-width:100%
+  // keeps narrow-viewport clients able to shrink it.
+  table.setAttribute('width', String(width));
+  table.setAttribute('style', setStyleValues(table.getAttribute('style'), [
+    ['width', `${width}px`],
+    ['max-width', '100%'],
+    // Centering fallback for reflow clients that widen the cell past the
+    // pinned width — td align=center does not center a block table.
+    ['margin', '0 auto'],
+  ]));
 
   replaceNodeWithHtml(table, [
     makeSafeTemplate('<!--[if mso]>'),
