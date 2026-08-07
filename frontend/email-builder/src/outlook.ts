@@ -331,6 +331,79 @@ function transformSimpleDivBlocks(doc: Document) {
   });
 }
 
+// The Button block emits `border: <n>px solid <color>`, but user-authored
+// markup may use any token order (`solid 5px red`), other line styles, or
+// `!important` — parse tokens independently so a valid border never silently
+// loses its stroke in the VML copy. Non-solid styles draw solid (VML has no
+// 1:1 mapping; a visible stroke beats a missing one).
+function parseButtonBorder(styleMap: TStyleMap): { color: string | null; width: number } {
+  const raw = (styleMap.border || '').replace(/!important/gi, '').trim();
+  if (!raw) {
+    return { color: null, width: 0 };
+  }
+
+  const tokens = raw.split(/\s+/);
+  const styleKeywords = /^(solid|dashed|dotted|double|groove|ridge|inset|outset|none|hidden)$/i;
+  let width = 0;
+  const colorTokens: string[] = [];
+  tokens.forEach((token) => {
+    const px = getPixelValue(token);
+    if (px !== null) {
+      width = px;
+      return;
+    }
+    if (!styleKeywords.test(token)) {
+      colorTokens.push(token);
+    }
+  });
+
+  const color = colorTokens.join(' ') || null;
+  if (!color || width <= 0 || /^(none|hidden)$/i.test(tokens.find((t) => styleKeywords.test(t)) || '')) {
+    return { color: null, width: 0 };
+  }
+
+  return { color, width };
+}
+
+function estimateTextWidth(text: string, fontSize: number, fontWeight: string) {
+  return Math.max(1, Math.round(text.length * fontSize * (fontWeight.toLowerCase() === 'bold' ? 0.68 : 0.62)));
+}
+
+type TVmlButtonOptions = {
+  href: string;
+  text: string;
+  buttonColor: string;
+  textColor: string;
+  fontSize: number;
+  fontWeight: string;
+  fontFamily: string;
+  borderColor: string | null;
+  borderWidth: number;
+  borderRadius: number;
+  width: number;
+  height: number;
+};
+
+// Canonical bulletproof VML button — the WHOLE shape is the link (href on the
+// roundrect + anchorlock), unlike a td-based button where Word makes only the
+// text run clickable (seen live 2026-08-07). Vertical centering is
+// v-text-anchor:middle alone: a v:textbox with an exact line-height rides the
+// text HIGH in real Word; the canonical form centers correctly at heights >=
+// the 2x-font floor the callers apply, which makes tight shapes impossible.
+// All dimensions are emitted in POINTS, not pixels — Word scales pt with the
+// Windows display-scaling factor exactly like text, while px shapes stay
+// fixed and clip or hide their own label at 125/150 % scaling
+// (matrix-verified 2026-08-07). Width/height are border-box px.
+function buildVmlButton(options: TVmlButtonOptions) {
+  const pt = (px: number) => String(Math.round(px * 0.75 * 100) / 100);
+  const arcsize = Math.max(0, Math.min(50, Math.round((options.borderRadius / options.height) * 100)));
+  const strokeAttrs = options.borderColor
+    ? `strokecolor="${escapeAttribute(options.borderColor)}" strokeweight="${pt(options.borderWidth)}pt"`
+    : `strokecolor="${escapeAttribute(options.buttonColor)}"`;
+
+  return `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(options.href)}" style="height:${pt(options.height)}pt;v-text-anchor:middle;width:${pt(options.width)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(options.textColor)};font-family:${escapeAttribute(options.fontFamily)};font-size:${pt(options.fontSize)}pt;font-weight:${escapeAttribute(options.fontWeight)};">${escapeHtml(options.text)}</center></v:roundrect>`;
+}
+
 function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string) {
   const anchorStyleMap = parseStyleMap(anchor.getAttribute('style'));
   const wrapperStyleMap = parseStyleMap(wrapperStyle);
@@ -344,11 +417,7 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   const fontWeight = anchorStyleMap['font-weight'] || 'bold';
   const fontFamily = anchorStyleMap['font-family'] || 'Arial, sans-serif';
   const borderRadius = getPixelValue(anchorStyleMap['border-radius']) || 0;
-  // The Button block's "Button border size/color" controls emit a
-  // `border: <n>px solid <color>` shorthand on the anchor.
-  const borderMatch = (anchorStyleMap.border || '').match(/^(\d+(?:\.\d+)?)px\s+solid\s+(.+)$/i);
-  const borderColor = borderMatch ? borderMatch[2] : null;
-  const borderWidth = borderMatch ? Math.round(Number(borderMatch[1])) : 0;
+  const { color: borderColor, width: borderWidth } = parseButtonBorder(anchorStyleMap);
   const paddingValues = getPaddingValues(anchorStyleMap);
   const lineHeightPx = getPixelValue(anchorStyleMap['line-height']);
   const lineHeight = lineHeightPx ?? Math.round(fontSize * 1.2);
@@ -381,7 +450,7 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   // and merely approximating it.
   const explicitWidth = getPixelValue(anchorStyleMap.width);
   const explicitHeight = getPixelValue(anchorStyleMap.height);
-  const estimatedTextWidth = Math.max(1, Math.round(text.length * fontSize * (fontWeight.toLowerCase() === 'bold' ? 0.68 : 0.62)));
+  const estimatedTextWidth = estimateTextWidth(text, fontSize, fontWeight);
   // An auto-sized CSS button grows by the border on every edge, while a VML
   // strokeweight straddles the shape edge — half in, half out — so adding one
   // border width per axis is what matches the drawn outer size. Explicit boxes
@@ -408,23 +477,21 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   const estimatedHeight = explicitHeight !== null
     ? Math.max(explicitHeight, wordMinHeight)
     : Math.max(cssHeight, wordMinHeight) + borderWidth;
-  const arcsize = Math.max(0, Math.min(50, Math.round((borderRadius / estimatedHeight) * 100)));
   const cleanAnchorStyle = anchor.getAttribute('style') || '';
-  // All VML dimensions are emitted in POINTS, not pixels. Word scales pt with
-  // the Windows display-scaling factor exactly like text, while px shapes stay
-  // fixed — at 125/150 % scaling a px-sized shape is smaller than its own
-  // label and Word clips or hides the text (verified on a real client
-  // 2026-08-07 via the rendering-matrix campaign).
-  const pt = (px: number) => String(Math.round(px * 0.75 * 100) / 100);
-  const strokeAttrs = borderColor
-    ? `strokecolor="${escapeAttribute(borderColor)}" strokeweight="${pt(borderWidth)}pt"`
-    : `strokecolor="${escapeAttribute(buttonColor)}"`;
-  // Canonical shape: anchorlock + center, vertical centering via
-  // v-text-anchor:middle alone. A v:textbox with an exact line-height was
-  // tried for tight shapes and rides the text HIGH in real Word (seen live
-  // 2026-08-07); the matrix-verified canonical form centers correctly at
-  // heights >= the 2x-font floor above, which makes tight shapes impossible.
-  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${pt(estimatedHeight)}pt;v-text-anchor:middle;width:${pt(estimatedWidth)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${pt(fontSize)}pt;font-weight:${escapeAttribute(fontWeight)};">${escapeHtml(text)}</center></v:roundrect>`;
+  const vml = buildVmlButton({
+    href,
+    text,
+    buttonColor,
+    textColor,
+    fontSize,
+    fontWeight,
+    fontFamily,
+    borderColor,
+    borderWidth,
+    borderRadius,
+    width: estimatedWidth,
+    height: estimatedHeight,
+  });
   // The VML must ride inside the Safe template WITH its conditional markers:
   // emitted raw, the fragment parser rewrites <w:anchorlock/> into an OPEN tag
   // that swallows <center> (self-closing syntax is ignored on unknown
@@ -647,34 +714,45 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   const anchorStyleMap = parseStyleMap(anchor.getAttribute('style'));
   const width = Math.floor(available);
   const buttonColor = td.getAttribute('bgcolor') || anchorStyleMap['background-color'] || '#0055d4';
-  const padding = getPaddingValues(anchorStyleMap);
-  const border = anchorStyleMap.border;
   const href = anchor.getAttribute('href') || '#';
-  const target = anchor.getAttribute('target');
-  const targetAttr = target ? ` target="${escapeAttribute(target)}"` : '';
   const text = anchor.textContent?.replace(/\s+/g, ' ').trim() || '';
 
-  // Word ignores display:block, padding, text-align and borders on an inline
-  // anchor, which collapses the CSS button to left-aligned text width. In the
-  // mso copy the TD is the button — explicit px table width, td-level
-  // centering/padding/border — and the anchor keeps only text styling.
-  const msoTdStyle = [
-    `background-color:${buttonColor}`,
-    'text-align:center',
-    `padding:${formatPaddingShorthand(padding)}`,
-    border ? `border:${border}` : '',
-  ].filter(Boolean).join(';');
-  const msoAnchorStyle = setStyleValues(anchor.getAttribute('style'), [
-    ['display', null],
-    ['padding', null],
-    ['border', null],
-    ['border-radius', null],
-    ['background-color', null],
-    ['width', null],
-    ['text-align', null],
-  ]);
+  // The mso copy is a VML shape so the WHOLE surface is clickable — a
+  // td-based button leaves only the text run as the link in Word (seen live
+  // 2026-08-07). Height mirrors the CSS box (line-height + padding + border)
+  // under the same 2x-font floor as the custom-size branch; width is the
+  // column budget, border-box.
+  const fontSize = getPixelValue(anchorStyleMap['font-size']) || 16;
+  const fontWeight = anchorStyleMap['font-weight'] || 'bold';
+  const { color: borderColor, width: borderWidth } = parseButtonBorder(anchorStyleMap);
+  const padding = getPaddingValues(anchorStyleMap);
+  const lineHeightPx = getPixelValue(anchorStyleMap['line-height']);
+  const lineHeight = lineHeightPx ?? Math.round(fontSize * 1.2);
+  // A full-width CSS button WRAPS long labels (no nowrap on this path) while
+  // a VML shape clips what does not fit — estimate the wrapped line count at
+  // the column width with the same calibrated heuristic the custom-size
+  // branch uses. Overestimating degrades safely (a slightly taller button,
+  // text still centered); underestimating hides text in Word.
+  const contentWidth = Math.max(1, width - padding.left - padding.right - borderWidth * 2);
+  const lines = Math.max(1, Math.ceil(estimateTextWidth(text, fontSize, fontWeight) / contentWidth));
+  const measuredHeight = lineHeight * lines + padding.top + padding.bottom;
+  const cssHeight = lineHeightPx !== null ? measuredHeight : Math.max(measuredHeight, 32);
+  const height = Math.max(cssHeight, fontSize * 2) + borderWidth;
 
-  const msoButton = `<table role="presentation" width="${width}" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tbody><tr><td bgcolor="${escapeAttribute(buttonColor)}" align="center" style="${escapeAttribute(msoTdStyle)}"><a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(msoAnchorStyle)}">${escapeHtml(text)}</a></td></tr></tbody></table>`;
+  const vml = buildVmlButton({
+    href,
+    text,
+    buttonColor,
+    textColor: anchorStyleMap.color || '#ffffff',
+    fontSize,
+    fontWeight,
+    fontFamily: anchorStyleMap['font-family'] || 'Arial, sans-serif',
+    borderColor,
+    borderWidth,
+    borderRadius: getPixelValue(anchorStyleMap['border-radius']) || 0,
+    width,
+    height,
+  });
 
   // The non-mso copy stays width="100%" — the fluid form is the only one
   // Outlook mobile handles (a px-pinned table flipped its whole-email layout
@@ -686,9 +764,7 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   table.setAttribute('class', `${table.getAttribute('class') || ''} lm-gm-pin-${width}`.trim());
 
   replaceNodeWithHtml(table, [
-    makeSafeTemplate('<!--[if mso]>'),
-    msoButton,
-    makeSafeTemplate('<![endif]-->'),
+    makeSafeTemplate(`<!--[if mso]>${vml}<![endif]-->`),
     makeSafeTemplate('<!--[if !mso]><!-->'),
     table.outerHTML,
     makeSafeTemplate('<!--<![endif]-->'),

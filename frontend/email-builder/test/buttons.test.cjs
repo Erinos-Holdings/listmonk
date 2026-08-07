@@ -14,12 +14,16 @@ const out = postProcessForOutlook(input);
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 
-// 8 full-width buttons in campaign 10 -> 8 mso copies
-const msoButtons = [...out.matchAll(/<table role="presentation" width="(\d+)"[^>]*><tbody><tr><td bgcolor="#999999" align="center" style="([^"]*)"><a href="[^"]*"[^>]*style="([^"]*)">([^<]+)<\/a>/g)];
-check('8 mso button copies with explicit px width', msoButtons.length === 8, `count=${msoButtons.length} widths=${[...new Set(msoButtons.map((m) => m[1]))]}`);
-check('mso td centers and carries padding + border', msoButtons.every((m) => m[2].includes('text-align:center') && /padding:\d+px \d+px \d+px \d+px/.test(m[2]) && /border:\d+px solid/.test(m[2])), msoButtons.map((m) => m[2]).find((s2) => !/text-align:center/.test(s2)));
-check('mso anchor stripped of block/padding/border/bg', msoButtons.every((m) => !/display:block|padding:|border:|background-color/.test(m[3])), msoButtons[0] && msoButtons[0][3]);
-check('mso anchor keeps text styling', msoButtons.every((m) => /color:#220258/.test(m[3]) && /font-size:20px/.test(m[3])));
+// 8 full-width buttons in campaign 10 -> 8 mso VML copies (whole surface clickable)
+const msoVml = [...out.matchAll(/\{\{ Safe "[^}]*?v:roundrect[^}]*?href=\\"https:\/\/listmonk\.app[^}]*?\}\}/g)];
+check('8 mso VML button copies with href on the shape', msoVml.length === 8, `count=${msoVml.length}`);
+check('all sized to the column budget 244px -> 183pt', msoVml.every((m) => /width:183pt/.test(m[0])));
+const h3675 = msoVml.filter((m) => /height:36.75pt/.test(m[0])).length;
+const h3375 = msoVml.filter((m) => /height:33.75pt/.test(m[0])).length;
+check('7 standard shapes at 49px -> 36.75pt', h3675 === 7, `count=${h3675}`);
+check('EYES shape floored to 40px + 5 border -> 33.75pt', h3375 === 1, `count=${h3375}`);
+check('7 strokes #999999 + 1 stroke #e01d1d', msoVml.filter((m) => /strokecolor=\\"#999999\\"/.test(m[0])).length === 7 && msoVml.filter((m) => /strokecolor=\\"#e01d1d\\"/.test(m[0])).length === 1);
+check('all fills #999999', msoVml.every((m) => /fillcolor=\\"#999999\\"/.test(m[0])));
 
 // originals preserved and only visible outside mso
 const rendered = out.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
