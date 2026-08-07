@@ -3,16 +3,15 @@ import React from 'react';
 
 import { TEditorConfiguration } from '../documents/editor/core';
 import { setDocument, subscribeDocument, useInspectorDrawerOpen, useSamplesDrawerOpen } from '../documents/editor/EditorContext';
+import EMPTY_EMAIL_MESSAGE from '../getConfiguration/sample/empty-email-message';
 import { renderHtmlWithMeta } from '../utils';
 import InspectorDrawer, { INSPECTOR_DRAWER_WIDTH } from './InspectorDrawer';
 import TemplatePanel from './TemplatePanel';
 
-export const DEFAULT_SOURCE: TEditorConfiguration = {
-  "root": {
-    "type": "EmailLayout",
-    "data": {}
-  }
-}
+// The one canonical empty document. setDocument() merges top-level keys, so a
+// bare root here would REPLACE the initial document and drop its defaults
+// (outlook, colors) on the no-data embed path.
+export const DEFAULT_SOURCE: TEditorConfiguration = EMPTY_EMAIL_MESSAGE;
 
 function useDrawerTransition(cssProperty: 'margin-left' | 'margin-right', open: boolean) {
   const { transitions } = useTheme();
