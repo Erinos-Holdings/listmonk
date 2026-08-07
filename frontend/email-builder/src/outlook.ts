@@ -375,13 +375,16 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   // available; a real line-height + padding is the actual CSS box and must not
   // be inflated, or short custom-height buttons render taller in Outlook.
   const measuredHeight = lineHeight + paddingValues.top + paddingValues.bottom;
-  const estimatedHeight = explicitHeight ?? (lineHeightPx !== null ? measuredHeight : Math.max(measuredHeight, 32)) + borderWidth;
+  // Even with a real line-height, keep 2px of slack over the text line: Word
+  // HIDES a text line that does not fit the shape (it does not clip glyphs).
+  const estimatedHeight = explicitHeight
+    ?? (lineHeightPx !== null ? Math.max(measuredHeight, lineHeight + 2) : Math.max(measuredHeight, 32)) + borderWidth;
   const arcsize = Math.max(0, Math.min(50, Math.round((borderRadius / estimatedHeight) * 100)));
   const cleanAnchorStyle = anchor.getAttribute('style') || '';
   const strokeAttrs = borderColor
     ? `strokecolor="${escapeAttribute(borderColor)}" strokeweight="${borderWidth}px"`
     : `strokecolor="${escapeAttribute(buttonColor)}"`;
-  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${estimatedHeight}px;v-text-anchor:middle;width:${estimatedWidth}px;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${fontSize}px;font-weight:${escapeAttribute(fontWeight)};">${escapeHtml(text)}</center></v:roundrect>`;
+  const vml = `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(href)}" style="height:${estimatedHeight}px;v-text-anchor:middle;width:${estimatedWidth}px;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(buttonColor)}"><w:anchorlock/><v:textbox inset="0,0,0,0"><center style="color:${escapeAttribute(textColor)};font-family:${escapeAttribute(fontFamily)};font-size:${fontSize}px;font-weight:${escapeAttribute(fontWeight)};mso-line-height-rule:exactly;line-height:${estimatedHeight - borderWidth}px;">${escapeHtml(text)}</center></v:textbox></v:roundrect>`;
   // The VML must ride inside the Safe template WITH its conditional markers:
   // emitted raw, the fragment parser rewrites <w:anchorlock/> into an OPEN tag
   // that swallows <center> (self-closing syntax is ignored on unknown
@@ -640,6 +643,7 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   // already exactly this many px, so nothing changes there; max-width:100%
   // keeps narrow-viewport clients able to shrink it.
   table.setAttribute('width', String(width));
+  table.setAttribute('class', `${table.getAttribute('class') || ''} lm-btn-pin`.trim());
   table.setAttribute('style', setStyleValues(table.getAttribute('style'), [
     ['width', `${width}px`],
     ['max-width', '100%'],
@@ -799,6 +803,21 @@ function clampImagesToCanvas(doc: Document) {
   clampImageWidths(found.table, contentWidth);
 }
 
+function addOutlookMobileStyles(doc: Document) {
+  if (!doc.querySelector('table.lm-btn-pin') || !doc.head) {
+    return;
+  }
+
+  // Outlook's mobile apps render the non-mso path, REFLOW the layout, and
+  // ignore max-width — a px-pinned button forces the columns wider than the
+  // screen. Their preprocessor stamps data-outlook-cycle on the body, so this
+  // reverts pinned buttons to fluid only there. Other clients either honor
+  // the pin (Gmail) or never see this path (desktop Outlook renders mso).
+  const style = doc.createElement('style');
+  style.textContent = '[data-outlook-cycle] table.lm-btn-pin{width:100%!important;max-width:100%!important;min-width:0!important}';
+  doc.head.appendChild(style);
+}
+
 export function postProcessForOutlook(html: string) {
   if (typeof DOMParser === 'undefined') {
     return html;
@@ -813,6 +832,7 @@ export function postProcessForOutlook(html: string) {
   transformSimpleDivBlocks(doc);
   clampImagesToCanvas(doc);
   constrainCanvasForOutlook(doc);
+  addOutlookMobileStyles(doc);
   addTableDefaults(doc);
   hardenImages(doc);
 
