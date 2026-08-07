@@ -279,21 +279,37 @@ function transformSimpleDivBlocks(doc: Document) {
       return false;
     }
 
-    if (div.children.length > 0) {
-      const firstChild = div.children[0];
-      if (firstChild.tagName === 'A' || firstChild.tagName === 'IMG' || firstChild.tagName === 'TABLE') {
-        return false;
-      }
-    }
-
     if (styleMap['min-height'] && styleMap.width === '100%') {
       return false;
+    }
+
+    if (div.children.length > 0) {
+      const firstChild = div.children[0];
+      if (firstChild.tagName === 'A' || firstChild.tagName === 'IMG') {
+        return false;
+      }
+      if (firstChild.tagName === 'TABLE') {
+        // Every builder block arrives wrapped in a padded div, and Word drops
+        // div padding and backgrounds — which silently strips the spacing the
+        // author set in the editor (seen live on an Html icons block,
+        // 2026-08-07). Convert table-wrapping divs too, but only when they
+        // carry a real box, so zero-padding structural wrappers stay divs.
+        const padding = getPaddingValues(styleMap);
+        return padding.top > 0 || padding.right > 0 || padding.bottom > 0 || padding.left > 0
+          || Boolean(styleMap['background-color']);
+      }
     }
 
     return true;
   }) as HTMLDivElement[];
 
   wrappers.forEach((div) => {
+    // An ancestor converted in this same pass re-parses its subtree, leaving
+    // this snapshot reference detached; nested padded wrappers keep their div
+    // form for the round (rare, and strictly no worse than before).
+    if (!div.isConnected) {
+      return;
+    }
     const { styleValue, styleMap, align, bgcolorAttr } = getWrapperOptions(div.getAttribute('style'));
     const height = getPixelValue(styleMap.height);
     const isSpacer = div.children.length === 0 && (div.textContent || '').trim() === '' && height !== null;

@@ -9,6 +9,7 @@ const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outloo
 const input = `<!doctype html><html><body>
 <div style="background-color:#eee;margin:0;padding:20px 0;min-height:100%;width:100%">
 <table align="center" width="100%" style="margin:0 auto;max-width:600px;background-color:#fff"><tbody><tr><td>
+<div style="background-color:#ececec;padding:12px 8px 12px 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tbody><tr><td>band content</td></tr></tbody></table></div>
 <div style="padding:0px 0px 0px 0px">
 <table align="center" width="100%" cellpadding="0" border="0" style="table-layout:fixed;border-collapse:collapse"><tbody><tr>
 <td style="box-sizing:content-box;vertical-align:middle;padding-left:0;padding-right:6px;width:200px">
@@ -31,5 +32,6 @@ let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 check('fixed 200px column dual-emits: mso 200 + original 240', JSON.stringify(byAlt.a) === '[200,240]', `a=${JSON.stringify(byAlt.a)}`);
 check('auto column gets remainder 388 -> 380px image untouched (single copy)', JSON.stringify(byAlt.b) === '[380]', `b=${JSON.stringify(byAlt.b)}`);
+check('bg-carrying table wrapper converts to bgcolor td', /<td align="left" bgcolor="#ececec" style="background-color:#ececec;padding:12px 8px 12px 8px">/.test(out));
 check('no Gmail pin style injected when no buttons exist', !/lm-gm-pin/.test(out) && !/u \+ \.body/.test(out));
 process.exit(failed ? 1 : 0);

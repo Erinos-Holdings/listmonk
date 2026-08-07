@@ -61,6 +61,10 @@ check('clamped copy style width:270px', /<img[^>]*width="270"[^>]*style="[^"]*wi
 check('original copy keeps style width:300px', /<img[^>]*width="300"[^>]*style="[^"]*width:300px/.test(output));
 check('original copy keeps max-width:100%', /<img[^>]*width="300"[^>]*style="[^"]*max-width:100%/.test(output));
 
+// 5b. Padded table-wrapping divs convert to td-carried boxes (Word drops div padding)
+check('grid-row wrapper div converted to padded td', /<td align="left" style="padding:16px 24px 8px 24px">/.test(output));
+check('zero-padding structural wrappers stay divs', /<div style="padding:0px 0px 0px 0px"><table align="center"/.test(output));
+
 // 6. Structure sanity
 check('canvas max-width:600px still present once', (output.match(/max-width:600px/g) || []).length === 1);
 check('button markup preserved', /border:1px solid #999999">COLLABS<\/a>/.test(output));
