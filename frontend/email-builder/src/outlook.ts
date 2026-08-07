@@ -375,10 +375,18 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   // available; a real line-height + padding is the actual CSS box and must not
   // be inflated, or short custom-height buttons render taller in Outlook.
   const measuredHeight = lineHeight + paddingValues.top + paddingValues.bottom;
-  // Even with a real line-height, keep 2px of slack over the text line: Word
-  // HIDES a text line that does not fit the shape (it does not clip glyphs).
-  const estimatedHeight = explicitHeight
-    ?? (lineHeightPx !== null ? Math.max(measuredHeight, lineHeight + 2) : Math.max(measuredHeight, 32)) + borderWidth;
+  // Word cannot render a shape as tight as CSS renders a cramped line-height:
+  // browsers let glyphs overflow the line box, Word clips them to the shape.
+  // Matrix-verified 2026-08-07 (150 % display scaling): a 26px-equivalent
+  // shape clips a 16px label even in pt, 32px renders clean — so the shape
+  // never goes below 2× the font size. Outlook buttons render slightly taller
+  // than a deliberately-cramped CSS design; that is the achievable fidelity.
+  // Calibrated at 16px font (the only matrix-tested size); for much larger
+  // fonts 2× over-floors and ~1.4×font + slack is the likely true bound —
+  // re-run the matrix (campaign 22 method) before loosening.
+  const wordMinHeight = fontSize * 2;
+  const cssHeight = lineHeightPx !== null ? measuredHeight : Math.max(measuredHeight, 32);
+  const estimatedHeight = explicitHeight ?? Math.max(cssHeight, wordMinHeight) + borderWidth;
   const arcsize = Math.max(0, Math.min(50, Math.round((borderRadius / estimatedHeight) * 100)));
   const cleanAnchorStyle = anchor.getAttribute('style') || '';
   // All VML dimensions are emitted in POINTS, not pixels. Word scales pt with

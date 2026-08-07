@@ -23,7 +23,7 @@ check('VML rides inside a Safe template (no raw v:roundrect in stored body)', !/
 check('anchorlock stays self-closing inside the Safe payload', /\\x3cw:anchorlock\/\\x3e\\x3cv:textbox/.test(out), (out.match(/anchorlock[^\\]*/) || [])[0]);
 check('conditional markers and VML in ONE Safe block', /\{\{ Safe "\\x3c!--\[if mso\]\\x3e\\x3cv:roundrect[^}]*\\x3c!\[endif\]--\\x3e" \}\}/.test(out));
 const h = out.match(/height:([\d.]+)pt;v-text-anchor/);
-check('height in pt: 26px -> 19.5pt', h && h[1] === '19.5', h && `h=${h[1]}`);
+check('height floored at 2x font: 32px + 5 border = 37px -> 27.75pt', h && h[1] === '27.75', h && `h=${h[1]}`);
 const w = out.match(/v-text-anchor:middle;width:([\d.]+)pt/);
 check('explicit width 200px -> 150pt', w && w[1] === '150', w && `w=${w[1]}`);
 
@@ -32,7 +32,7 @@ const rendered = out.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
   s.replace(/\\x3c/g, '<').replace(/\\x3e/g, '>').replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
 check('rendered VML has self-closing anchorlock then zero-inset textbox', /<w:anchorlock\/><v:textbox inset="0,0,0,0"><center/.test(rendered));
 check('textbox closes before roundrect', /<\/center><\/v:textbox><\/v:roundrect>/.test(rendered));
-check('center pins line-height exactly: 21px -> 15.75pt', /mso-line-height-rule:exactly;line-height:15.75pt/.test(rendered));
+check('center pins line-height to inner 32px -> 24pt', /mso-line-height-rule:exactly;line-height:24pt/.test(rendered));
 check('stroke in pt: 5px -> 3.75pt', /strokeweight="3.75pt"/.test(rendered));
 check('font in pt: 16px -> 12pt', /font-size:12pt/.test(rendered));
 check('rendered VML inside one [if mso] conditional', /<!--\[if mso\]><v:roundrect[\s\S]*?<\/v:roundrect><!\[endif\]-->/.test(rendered));
