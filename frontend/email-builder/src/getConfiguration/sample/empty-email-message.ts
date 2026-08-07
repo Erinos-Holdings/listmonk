@@ -8,6 +8,9 @@ const EMPTY_EMAIL_MESSAGE: TEditorConfiguration = {
       canvasColor: '#FFFFFF',
       textColor: '#262626',
       fontFamily: 'MODERN_SANS',
+      // Newly created documents opt into Outlook compatibility; stored documents
+      // load via resetDocument() and keep whatever they saved.
+      outlook: true,
       childrenIds: [],
     },
   },
