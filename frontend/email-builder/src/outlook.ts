@@ -352,7 +352,7 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
     return [
       buildPresentationTable(
         `<tbody><tr><td align="${escapeAttribute(align)}" style="${escapeAttribute(wrapperStyle)}">${buildPresentationTable(
-          `<tbody><tr><td bgcolor="${escapeAttribute(buttonColor)}" style="background-color:${escapeAttribute(buttonColor)};border-radius:${borderRadius}px;"><a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(anchorStyle)}">${escapeHtml(text)}</a></td></tr></tbody>`
+          `<tbody><tr><td data-lm-full-width-button="true" bgcolor="${escapeAttribute(buttonColor)}" style="background-color:${escapeAttribute(buttonColor)};border-radius:${borderRadius}px;"><a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(anchorStyle)}">${escapeHtml(text)}</a></td></tr></tbody>`
         )}</td></tr></tbody>`
       ),
     ].join('');
@@ -548,6 +548,92 @@ function getDirectRows(table: Element) {
   return rows;
 }
 
+function getSingleButtonCell(table: Element) {
+  const rows = getDirectRows(table);
+  if (rows.length !== 1) {
+    return null;
+  }
+
+  const cells = Array.from(rows[0].children).filter((cell) => cell.tagName === 'TD');
+  if (cells.length !== 1) {
+    return null;
+  }
+
+  const td = cells[0];
+  const children = Array.from(td.children);
+  if (children.length !== 1 || children[0].tagName !== 'A' || children[0].querySelector('img')) {
+    return null;
+  }
+
+  return { td, anchor: children[0] as HTMLAnchorElement };
+}
+
+function isFullWidthButtonTable(table: Element) {
+  // The fullWidth branch of buildBulletproofButton: a 100%-wide presentation
+  // table whose single td carries bgcolor and whose single child is a
+  // display:block anchor styled as the button.
+  if (table.getAttribute('width') !== '100%' || table.getAttribute('role') !== 'presentation') {
+    return false;
+  }
+
+  const found = getSingleButtonCell(table);
+  if (!found || found.td.getAttribute('data-lm-full-width-button') !== 'true') {
+    return false;
+  }
+
+  const styleMap = parseStyleMap(found.anchor.getAttribute('style'));
+  return (styleMap.display || '').toLowerCase() === 'block' && Boolean(styleMap['background-color']);
+}
+
+function transformFullWidthButtonForMso(table: Element, available: number) {
+  const found = getSingleButtonCell(table);
+  if (!found || available <= 0) {
+    return;
+  }
+
+  const { td, anchor } = found;
+  const anchorStyleMap = parseStyleMap(anchor.getAttribute('style'));
+  const width = Math.floor(available);
+  const buttonColor = td.getAttribute('bgcolor') || anchorStyleMap['background-color'] || '#0055d4';
+  const padding = getPaddingValues(anchorStyleMap);
+  const border = anchorStyleMap.border;
+  const href = anchor.getAttribute('href') || '#';
+  const target = anchor.getAttribute('target');
+  const targetAttr = target ? ` target="${escapeAttribute(target)}"` : '';
+  const text = anchor.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+  // Word ignores display:block, padding, text-align and borders on an inline
+  // anchor, which collapses the CSS button to left-aligned text width. In the
+  // mso copy the TD is the button — explicit px table width, td-level
+  // centering/padding/border — and the anchor keeps only text styling.
+  const msoTdStyle = [
+    `background-color:${buttonColor}`,
+    'text-align:center',
+    `padding:${formatPaddingShorthand(padding)}`,
+    border ? `border:${border}` : '',
+  ].filter(Boolean).join(';');
+  const msoAnchorStyle = setStyleValues(anchor.getAttribute('style'), [
+    ['display', null],
+    ['padding', null],
+    ['border', null],
+    ['border-radius', null],
+    ['background-color', null],
+    ['width', null],
+    ['text-align', null],
+  ]);
+
+  const msoButton = `<table role="presentation" width="${width}" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tbody><tr><td bgcolor="${escapeAttribute(buttonColor)}" align="center" style="${escapeAttribute(msoTdStyle)}"><a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(msoAnchorStyle)}">${escapeHtml(text)}</a></td></tr></tbody></table>`;
+
+  replaceNodeWithHtml(table, [
+    makeSafeTemplate('<!--[if mso]>'),
+    msoButton,
+    makeSafeTemplate('<![endif]-->'),
+    makeSafeTemplate('<!--[if !mso]><!-->'),
+    table.outerHTML,
+    makeSafeTemplate('<!--<![endif]-->'),
+  ].join(''));
+}
+
 function clampImageWidths(node: Element, available: number) {
   if (available <= 0) {
     return;
@@ -605,6 +691,12 @@ function clampImageWidths(node: Element, available: number) {
     const tableWidth = widthAttr && /^\d+$/.test(widthAttr)
       ? Math.min(available, Number(widthAttr))
       : available;
+
+    if (isFullWidthButtonTable(node)) {
+      transformFullWidthButtonForMso(node, tableWidth);
+      return;
+    }
+
     // Only the builder's ColumnsContainer tables (table-layout:fixed) use the
     // content-box + gap-padding column model below. Other tables (image
     // wrappers, Html-block markup, the canvas itself) pass their full share of
