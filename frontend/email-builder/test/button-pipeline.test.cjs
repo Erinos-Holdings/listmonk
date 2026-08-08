@@ -23,7 +23,7 @@ check('pipeline: mso VML copy emitted', !!mso, mso && `w=${mso[1]}pt`);
 check('pipeline: width = (600 - 48 td padding = 552px) -> 414pt', mso && mso[1] === '414');
 check('pipeline: height 43px + 1px fallback border -> 33pt', mso && /height:33pt/.test(mso[0]));
 check('pipeline: marker only on the non-mso original', (out.match(/data-lm-full-width-button/g) || []).length === 1);
-check('pipeline: original CSS anchor preserved', /display:block/.test(out) && (out.match(/SHOP NOW/g) || []).length === 2);
+check('pipeline: original CSS anchor preserved', /display:block/.test(out) && (out.match(/SHOP NOW/g) || []).length === 1 && (out.match(/SHOP\\x20NOW/g) || []).length === 1);
 // Long label wraps in the CSS button -> VML height must cover the wrapped lines
 const longLabel = 'Discover Everything New In The August Collection Now';
 const wrapInput = input.replace('SHOP NOW', longLabel);

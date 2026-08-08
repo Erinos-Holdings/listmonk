@@ -21,7 +21,7 @@ function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS'
 
 check('VML rides inside a Safe template (no raw v:roundrect in stored body)', !/<v:roundrect/.test(out));
 check('anchorlock stays self-closing inside the Safe payload', /\\x3cw:anchorlock\/\\x3e\\x3ccenter/.test(out), (out.match(/anchorlock[^\\]*/) || [])[0]);
-check('conditional markers and VML in ONE Safe block', /\{\{ Safe "\\x3c!--\[if mso\]\\x3e\\x3cv:roundrect[^}]*\\x3c!\[endif\]--\\x3e" \}\}/.test(out));
+check('conditional markers and VML in ONE Safe block', /\{\{ Safe "\\x3c!--\[if\\x20mso\]\\x3e\\x3cv:roundrect[^}]*\\x3c!\[endif\]--\\x3e" \}\}/.test(out));
 const h = out.match(/height:([\d.]+)pt;v-text-anchor/);
 check('height floored at 2x font: 32px + 5 border = 37px -> 27.75pt', h && h[1] === '27.75', h && `h=${h[1]}`);
 const w = out.match(/v-text-anchor:middle;width:([\d.]+)pt/);
@@ -29,7 +29,7 @@ check('explicit width 200px -> 150pt', w && w[1] === '150', w && `w=${w[1]}`);
 
 // Simulated Go render: VML must decode intact
 const rendered = out.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
-  s.replace(/\\x3c/g, '<').replace(/\\x3e/g, '>').replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
+  s.replace(/\\x3c/g, '<').replace(/\\x3e/g, '>').replace(/\\x20/g, ' ').replace(/\\x09/g, '\t').replace(/\\x26/g, '&').replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
 check('canonical: anchorlock then center, NO textbox', /<w:anchorlock\/><center/.test(rendered) && !/v:textbox/.test(rendered));
 check('canonical: no line-height pin on the center', !/mso-line-height-rule/.test(rendered));
 check('v-text-anchor:middle present for vertical centering', /v-text-anchor:middle/.test(rendered));

@@ -16,15 +16,15 @@ function check(name, ok, detail) {
   checks.push({ name, ok, detail });
 }
 
-const MSO_OPEN = '{{ Safe "\\x3c!--[if mso]\\x3e" }}';
+const MSO_OPEN = '{{ Safe "\\x3c!--[if\\x20mso]\\x3e" }}';
 const MSO_CLOSE = '{{ Safe "\\x3c![endif]--\\x3e" }}';
-const NONMSO_OPEN = '{{ Safe "\\x3c!--[if !mso]\\x3e\\x3c!--\\x3e" }}';
+const NONMSO_OPEN = '{{ Safe "\\x3c!--[if\\x20!mso]\\x3e\\x3c!--\\x3e" }}';
 const NONMSO_CLOSE = '{{ Safe "\\x3c!--\\x3c![endif]--\\x3e" }}';
 
 // 1. Ghost table wraps the canvas
-const ghostOpen = output.match(/\{\{ Safe "\\x3c!--\[if mso\]\\x3e\\x3ctable [^}]*width=\\"600\\"[^}]*\}\}/);
+const ghostOpen = output.match(/\{\{ Safe "\\x3c!--\[if\\x20mso\]\\x3e\\x3ctable\\x20[^}]*width=\\"600\\"[^}]*\}\}/);
 check('mso ghost table opener (width=600) present', !!ghostOpen);
-check('mso ghost table closer present', /\{\{ Safe "\\x3c!--\[if mso\]\\x3e\\x3c\/td\\x3e\\x3c\/tr\\x3e\\x3c\/table\\x3e\\x3c!\[endif\]--\\x3e" \}\}/.test(output));
+check('mso ghost table closer present', /\{\{ Safe "\\x3c!--\[if\\x20mso\]\\x3e\\x3c\/td\\x3e\\x3c\/tr\\x3e\\x3c\/table\\x3e\\x3c!\[endif\]--\\x3e" \}\}/.test(output));
 
 // 2. Backdrop table carries bgcolor and padding
 check('backdrop td with bgcolor #edd8d8 + padding', /<td align="center" bgcolor="#edd8d8" style="background-color:#edd8d8;padding:32px 0px 32px 0px">/.test(output));
@@ -72,7 +72,7 @@ check('only the head [if mso] block is a literal comment', (output.match(/<!--\[
 
 // 7. Go-render simulation: substitute Safe blocks, then confirm balanced conditionals
 const rendered = output.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
-  s.replace(/\\x3c/g, '<').replace(/\\x3e/g, '>').replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
+  s.replace(/\\x3c/g, '<').replace(/\\x3e/g, '>').replace(/\\x20/g, ' ').replace(/\\x09/g, '\t').replace(/\\x26/g, '&').replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
 const opens = (rendered.match(/<!--\[if mso\]>/g) || []).length;
 const closes = (rendered.match(/<!\[endif\]-->/g) || []).length;
 const nonMsoOpens = (rendered.match(/<!--\[if !mso\]><!-->/g) || []).length;

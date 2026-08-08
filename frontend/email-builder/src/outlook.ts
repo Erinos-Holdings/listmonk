@@ -142,10 +142,25 @@ function escapeTemplateString(value: string) {
 
 function makeSafeTemplate(raw: string) {
   // Encode angle brackets so DOMParser does not consume Outlook conditional comments
-  // before the Go template expression is evaluated.
+  // before the Go template expression is evaluated. Encode spaces/tabs too: the
+  // payload must be a single unbreakable token, because listmonk's format-switch
+  // beautifier (Editor.vue convertContentType -> js-beautify) line-wraps long
+  // text nodes at whitespace, and a raw newline inside a Go template string is
+  // a parse error at campaign save ("unexpected ... in operand").
+  // Encode & as well: the payload rides the fragment-parser round trip as a
+  // text node, where entities DECODE — an &quot; (e.g. escapeAttribute'd font
+  // names like "Noto Sans") becomes a raw quote that terminates the Go string
+  // ("unexpected ... in operand" at save; hit live 2026-08-08 on the first
+  // VML button with a quoted font stack). With & encoded, nothing in the
+  // payload is an entity and the round trip is a no-op.
   const escaped = escapeTemplateString(raw)
+    .replace(/&/g, '\\x26')
     .replace(/</g, '\\x3c')
-    .replace(/>/g, '\\x3e');
+    .replace(/>/g, '\\x3e')
+    .replace(/ /g, '\\x20')
+    .replace(/\t/g, '\\x09')
+    .replace(/\n/g, '\\x0a')
+    .replace(/\r/g, '\\x0d');
 
   return `{{ Safe "${escaped}" }}`;
 }
