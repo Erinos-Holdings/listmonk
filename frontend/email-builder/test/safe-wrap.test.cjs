@@ -83,8 +83,15 @@ check('every Safe payload is whitespace- and entity-free', count > 0 && raw === 
 lexActions(out, 'raw pipeline output');
 
 // 2. js-beautify round trip, replicating Editor.vue beautifyHTML: tag-padding
-// regex, then js-beautify with the same options.
-const beautify = frontendRequire('js-beautify').html;
+// regex, then js-beautify with the same options. Editor.vue's copy (frontend/)
+// is preferred when installed; CI only installs the builder's own devDep.
+let jsBeautify;
+try {
+  jsBeautify = frontendRequire('js-beautify');
+} catch {
+  jsBeautify = builderRequire('js-beautify');
+}
+const beautify = jsBeautify.html;
 const padded = out.replace(/(<(?!(\/)?a|span)([^>]+)>)/ig, '\n$1\n').replace(/\n+/g, '\n');
 const beautified = beautify(padded, {
   indent_size: 4,
