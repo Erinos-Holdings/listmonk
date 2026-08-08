@@ -63,6 +63,32 @@ r = fmt.applyEnclose('hello world', 0, 5, '<u>', '</u>');
 check('underline wraps the selection', r.text === '<u>hello</u> world', r.text);
 check('underline keeps the wrapped text selected', selected(r) === 'hello', selected(r));
 
+// Whitespace-edged selections (Windows double-click grabs the trailing space):
+// markers must hug the text or CommonMark treats them as literal. This exact
+// case shipped broken in erinos.27 — "**bold **text" rendered unformatted.
+r = fmt.applyWrap('My new bold text block', 7, 12, '**');
+check('trailing-space selection wraps only the word', r.text === 'My new **bold** text block', r.text);
+check('trimmed wrap keeps the word selected', selected(r) === 'bold', selected(r));
+
+r = fmt.applyWrap('a bc d', 1, 4, '_');
+check('leading-space selection wraps only the word', r.text === 'a _bc_ d', r.text);
+
+r = fmt.applyWrap('a  b', 1, 3, '**');
+check('whitespace-only selection degrades to collapsed markers',
+  r.text === 'a  ****b' && r.selectionStart === 5 && r.selectionEnd === 5,
+  `${r.text} @${r.selectionStart},${r.selectionEnd}`);
+
+r = fmt.applyLink('visit google now', 6, 13);
+check('link trims the trailing space out of the label', r.text === 'visit [google](https://) now', r.text);
+
+r = fmt.applyColor('x red y', 2, 6, '#f00');
+check('color trims the trailing space out of the span',
+  r.text === 'x <span style="color: #f00">red</span> y', r.text);
+
+r = fmt.applyEnclose('one \n\ntwo', 0, 9, '**', '**');
+check('per-segment wrap keeps segment-edge whitespace outside the markers',
+  r.text === '**one** \n\n**two**', r.text);
+
 // Cross-paragraph selections: each paragraph segment gets its own tag pair so
 // no pair ever crosses a markdown paragraph break (invalid HTML in Outlook).
 r = fmt.applyEnclose('one\n\ntwo', 0, 8, '<u>', '</u>');
