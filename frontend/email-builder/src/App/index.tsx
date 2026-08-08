@@ -5,7 +5,7 @@ import { TEditorConfiguration } from '../documents/editor/core';
 import { setDocument, subscribeDocument, useInspectorDrawerOpen, useSamplesDrawerOpen } from '../documents/editor/EditorContext';
 import EMPTY_EMAIL_MESSAGE from '../getConfiguration/sample/empty-email-message';
 import { renderHtmlWithMeta } from '../utils';
-import InspectorDrawer, { INSPECTOR_DRAWER_WIDTH } from './InspectorDrawer';
+import InspectorDrawer, { INSPECTOR_DRAWER_WIDTH_CSS } from './InspectorDrawer';
 import TemplatePanel from './TemplatePanel';
 
 // The one canonical empty document. setDocument() merges top-level keys, so a
@@ -58,7 +58,7 @@ export default function App(props: AppProps) {
 
       <Stack
         sx={{
-          marginRight: inspectorDrawerOpen ? `${INSPECTOR_DRAWER_WIDTH}px` : 0,
+          marginRight: inspectorDrawerOpen ? INSPECTOR_DRAWER_WIDTH_CSS : 0,
           transition: [marginLeftTransition, marginRightTransition].join(', '),
           height: props.height ? props.height : 'auto',
         }}

@@ -5,7 +5,7 @@ import { Box, Stack, SxProps } from '@mui/material';
 
 import Swatch from './Swatch';
 
-const DEFAULT_PRESET_COLORS = [
+export const DEFAULT_PRESET_COLORS = [
   '#E11D48',
   '#DB2777',
   '#C026D3',
