@@ -12,7 +12,10 @@ import (
 )
 
 var (
-	regexpSpaces = regexp.MustCompile(`[\s]+`)
+	// \s in Go regexp is ASCII-only; \p{Zs} additionally catches Unicode
+	// spaces such as the narrow no-break space (U+202F) that macOS puts
+	// in screenshot filenames.
+	regexpSpaces = regexp.MustCompile(`[\s\p{Zs}]+`)
 )
 
 // inArray checks if a string is present in a list of strings.

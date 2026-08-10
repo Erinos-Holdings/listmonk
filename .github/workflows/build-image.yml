@@ -47,6 +47,11 @@ jobs:
       - name: Install stuffbin
         run: go install github.com/knadh/stuffbin/...@latest
 
+      # Backend Go tests (fork deltas, e.g. the media upload optimizer).
+      # cmd/ is untestable (package init reads config), so target internal/.
+      - name: Go tests
+        run: go test ./internal/...
+
       # Structural tests for the Outlook post-processor (fork delta). These
       # gate the image: a broken conditional/dual-emit structure must never
       # ship. They do NOT replace the four-client rendering verification —

@@ -2,12 +2,13 @@ package main
 
 import (
 	"bytes"
-	"mime/multipart"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 
 	"github.com/disintegration/imaging"
+	"github.com/knadh/listmonk/internal/media/optimizer"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 )
@@ -52,8 +53,38 @@ func (a *App) UploadMedia(c echo.Context) error {
 		}
 	}
 
-	// Sanitize the filename.
+	raw, err := io.ReadAll(src)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			a.i18n.Ts("media.errorReadingFile", "error", err.Error()))
+	}
+
+	// Optimize raster images for e-mail delivery (downsize to
+	// maxImageWidth, recompress, possibly convert format). The original
+	// bytes are kept whenever optimization cannot produce a smaller file.
+	var width, height int
+	isImage := inArray(ext, imageExts)
+	if isImage {
+		opt, err := optimizer.Optimize(raw, ext)
+		if err != nil {
+			a.log.Printf("error optimizing image: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError,
+				a.i18n.Ts("media.errorResizing", "error", err.Error()))
+		}
+		raw = opt.Data
+		contentType = opt.ContentType
+		width, height = opt.Width, opt.Height
+		if opt.Ext != ext {
+			ext = opt.Ext
+		}
+	}
+
+	// Sanitize the filename and make its extension reflect the stored
+	// format (an optimized PNG may have become a JPEG).
 	fName := makeFilename(file.Filename)
+	if e := strings.TrimPrefix(strings.ToLower(filepath.Ext(fName)), "."); e != ext {
+		fName = strings.TrimSuffix(fName, filepath.Ext(fName)) + "." + ext
+	}
 
 	// If the filename already exists in the DB, make it unique by adding a random suffix.
 	if _, err := a.core.GetMedia(0, "", fName, a.media); err == nil {
@@ -67,7 +98,7 @@ func (a *App) UploadMedia(c echo.Context) error {
 	}
 
 	// Upload the file to the media store.
-	fName, err = a.media.Put(fName, contentType, src)
+	fName, err = a.media.Put(fName, contentType, bytes.NewReader(raw))
 	if err != nil {
 		a.log.Printf("error uploading file: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,
@@ -90,21 +121,15 @@ func (a *App) UploadMedia(c echo.Context) error {
 		}
 	}()
 
-	// Thumbnail width and height.
-	var width, height int
-
-	// Create thumbnail from file for non-vector formats.
-	isImage := inArray(ext, imageExts)
+	// Create thumbnail from the stored (optimized) bytes for non-vector formats.
 	if isImage {
-		thumbFile, wi, he, err := processImage(file)
+		thumbFile, err := makeThumbnail(raw, ext)
 		if err != nil {
 			cleanUp = true
 			a.log.Printf("error resizing image: %v", err)
 			return echo.NewHTTPError(http.StatusInternalServerError,
 				a.i18n.Ts("media.errorResizing", "error", err.Error()))
 		}
-		width = wi
-		height = he
 
 		// Upload thumbnail.
 		tf, err := a.media.Put(thumbPrefix+fName, contentType, thumbFile)
@@ -207,29 +232,28 @@ func (a *App) ServeS3Media(c echo.Context) error {
 	return c.Stream(http.StatusOK, http.DetectContentType(b), bytes.NewReader(b))
 }
 
-// processImage reads the image file and returns thumbnail bytes and
-// the original image's width, and height.
-func processImage(file *multipart.FileHeader) (*bytes.Reader, int, int, error) {
-	src, err := file.Open()
+// makeThumbnail renders a thumbnail from the stored image bytes, encoded
+// in the stored image's own format so the thumbnail's bytes match its
+// filename extension and content type.
+func makeThumbnail(raw []byte, ext string) (*bytes.Reader, error) {
+	img, err := imaging.Decode(bytes.NewReader(raw))
 	if err != nil {
-		return nil, 0, 0, err
-	}
-	defer src.Close()
-
-	img, err := imaging.Decode(src)
-	if err != nil {
-		return nil, 0, 0, err
+		return nil, err
 	}
 
-	// Encode the image into a byte slice as PNG.
 	var (
-		thumb = imaging.Resize(img, thumbnailSize, 0, imaging.Lanczos)
-		out   bytes.Buffer
+		thumb  = imaging.Resize(img, thumbnailSize, 0, imaging.Lanczos)
+		format = imaging.PNG
+		out    bytes.Buffer
 	)
-	if err := imaging.Encode(&out, thumb, imaging.PNG); err != nil {
-		return nil, 0, 0, err
+	switch ext {
+	case "jpg", "jpeg":
+		format = imaging.JPEG
+	case "gif":
+		format = imaging.GIF
 	}
-
-	b := img.Bounds().Max
-	return bytes.NewReader(out.Bytes()), b.X, b.Y, nil
+	if err := imaging.Encode(&out, thumb, format); err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(out.Bytes()), nil
 }
