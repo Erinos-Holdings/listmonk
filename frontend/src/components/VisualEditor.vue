@@ -17,6 +17,11 @@
 <script>
 import Media from '../views/Media.vue';
 
+// Fixed per SPA page load: the first editor open after a reload always fetches
+// a fresh builder (how a new image roll gets picked up), while campaign
+// switches within one session reuse the browser cache.
+const BUILDER_CACHE_BUST = Date.now();
+
 export default {
   components: {
     Media,
@@ -44,7 +49,12 @@ export default {
 
         const script = document.createElement('script');
         script.id = 'email-builder-script';
-        script.src = '/admin/static/email-builder/email-builder.umd.js';
+        // Cache-bust per SPA load: this script is injected after page load, so
+        // a hard refresh never revalidates it, the server sends no cache
+        // validators, and the filename (unlike the SPA's hashed chunks) never
+        // changes across image rolls. A stale builder silently saves campaigns
+        // through an outdated Outlook pipeline (observed live 2026-08-10).
+        script.src = `/admin/static/email-builder/email-builder.umd.js?v=${BUILDER_CACHE_BUST}`;
         script.onload = () => {
           resolve();
         };
