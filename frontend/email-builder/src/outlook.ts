@@ -286,6 +286,34 @@ function transformImageBlocks(doc: Document) {
   });
 }
 
+const EDGE_MARGIN_TAGS = /^(P|H[1-6]|UL|OL|BLOCKQUOTE)$/;
+
+// Client-default <p>/<h*> margins (≈1em of the governing font size) supply
+// vertical spacing in every browser-engined client but die at Word's
+// table-cell edges. Estimate what Word loses at a converted cell's top or
+// bottom edge so the conversion can graft it back via mso-padding-alt —
+// which Word reads in place of padding and every other client ignores as an
+// unknown property. The value is an estimate of a client default, so Outlook
+// lands within a few px of Gmail here, not byte-exact.
+function estimateEdgeMarginPx(container: Element, side: 'first' | 'last', inheritedSize: number): number {
+  const child = side === 'first' ? container.firstElementChild : container.lastElementChild;
+  if (!child) {
+    return 0;
+  }
+
+  const size = getPixelValue(parseStyleMap(child.getAttribute('style'))['font-size']) || inheritedSize;
+  if (EDGE_MARGIN_TAGS.test(child.tagName)) {
+    return size;
+  }
+  // An unconverted wrapper div (rhythm text block, structural zero-box div)
+  // is transparent in flow — its own edge decides. User-authored Html content
+  // is never guessed at.
+  if (child.tagName === 'DIV' && !child.getAttribute('data-lm-user-html')) {
+    return estimateEdgeMarginPx(child, side, size);
+  }
+  return 0;
+}
+
 function transformSimpleDivBlocks(doc: Document) {
   const wrappers = Array.from(doc.querySelectorAll('div')).filter((div) => {
     // Anything strictly inside an Html block's wrapper (marked by the reader,
@@ -312,19 +340,31 @@ function transformSimpleDivBlocks(doc: Document) {
       if (firstChild.tagName === 'A' || firstChild.tagName === 'IMG') {
         return false;
       }
-      if (firstChild.tagName === 'TABLE') {
+      if (firstChild.tagName === 'TABLE' || firstChild.tagName === 'DIV') {
         // Every builder block arrives wrapped in a padded div, and Word drops
         // div padding and backgrounds — which silently strips the spacing the
         // author set in the editor (seen live on an Html icons block,
-        // 2026-08-07). Convert table-wrapping divs too, but only when they
-        // carry a real box, so zero-padding structural wrappers stay divs.
+        // 2026-08-07). Convert block-wrapping divs (tables and nested block
+        // wrappers alike) when they carry a real box, so zero-padding
+        // structural wrappers stay divs.
         const padding = getPaddingValues(styleMap);
         return padding.top > 0 || padding.right > 0 || padding.bottom > 0 || padding.left > 0
           || Boolean(styleMap['background-color']);
       }
     }
 
-    return true;
+    // Text-flow content (markdown paragraphs, headings) gets its vertical
+    // rhythm from client-default <p>/<h*> margins — Word drops those margins
+    // at table-cell edges, so converting a rhythm-only block destroys more
+    // spacing than it preserves (campaign 28, 2026-08-10: inter-block gaps
+    // vanished in Outlook desktop). Convert only when the div carries a box
+    // Word would otherwise drop: vertical padding, a background, or a height.
+    // Horizontal-only padding is the accepted loss — Word renders the text
+    // uninset, which beats collapsing the rhythm.
+    const padding = getPaddingValues(styleMap);
+    return padding.top > 0 || padding.bottom > 0
+      || Boolean(styleMap['background-color'])
+      || Boolean(styleMap.height);
   }) as HTMLDivElement[];
 
   // Innermost-first: converting an ancestor re-parses its subtree, which
@@ -352,8 +392,20 @@ function transformSimpleDivBlocks(doc: Document) {
       return;
     }
 
+    // Graft the edge margins Word drops back onto the cell, Word-only. Fenced
+    // user content gets no guessing. Children already converted (button/image/
+    // nested-container tables) resolve to 0 — no double counting.
+    const ownSize = getPixelValue(styleMap['font-size']) || 16;
+    const extraTop = div.getAttribute('data-lm-user-html') ? 0 : estimateEdgeMarginPx(div, 'first', ownSize);
+    const extraBottom = div.getAttribute('data-lm-user-html') ? 0 : estimateEdgeMarginPx(div, 'last', ownSize);
+    let tdStyle = styleValue;
+    if (extraTop > 0 || extraBottom > 0) {
+      const padding = getPaddingValues(styleMap);
+      tdStyle = `${styleValue.replace(/;+\s*$/, '')};mso-padding-alt:${padding.top + extraTop}px ${padding.right}px ${padding.bottom + extraBottom}px ${padding.left}px`;
+    }
+
     const blockHtml = buildPresentationTable(
-      `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(styleValue)}">${div.innerHTML}</td></tr></tbody>`
+      `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(tdStyle)}">${div.innerHTML}</td></tr></tbody>`
     );
 
     replaceNodeWithHtml(div, blockHtml);

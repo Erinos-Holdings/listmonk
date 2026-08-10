@@ -17,7 +17,7 @@ const input = `<!doctype html><html><body>
 <div style="height:20px;padding:1px 0 1px 0"></div>
 </div>
 <div style="background-color:#CCD6E9;padding:16px 0px 16px 0px">
-<div style="text-align:center;padding:0px 24px 0px 24px">builder text</div>
+<div style="text-align:center;padding:8px 24px 8px 24px"><p>builder text</p></div>
 </div>
 </td></tr></tbody></table>
 </div>
@@ -40,13 +40,17 @@ check(
   'html wrapper converts to td with bgcolor + padding',
   /<td[^>]*bgcolor="#FFF8F0"[^>]*style="[^"]*padding:16px 24px 16px 24px/.test(out)
 );
+check(
+  'fenced wrapper gets no edge-margin graft (no guessing at user content)',
+  !/bgcolor="#FFF8F0"[^>]*style="[^"]*mso-padding-alt/.test(out)
+);
 
 // Builder blocks outside the fence still convert (nested-container behavior).
 check(
   'builder container outside fence converts',
   /<td[^>]*bgcolor="#CCD6E9"[^>]*style="[^"]*padding:16px 0px 16px 0px/.test(out)
 );
-check('builder text wrapper converts', /<td align="center"[^>]*style="[^"]*padding:0px 24px 0px 24px/.test(out));
+check('builder text wrapper converts', /<td align="center"[^>]*style="[^"]*padding:8px 24px 8px 24px/.test(out));
 
 let failed = 0;
 for (const { name, ok, detail } of checks) {

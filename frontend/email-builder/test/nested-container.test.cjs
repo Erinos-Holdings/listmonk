@@ -14,8 +14,9 @@ const input = `<!doctype html><html><body>
 <table align="center" width="100%" style="margin:0 auto;max-width:600px;background-color:#FFFFFF" role="presentation" cellspacing="0" cellpadding="0" border="0"><tbody><tr style="width:100%"><td>
 <div style="max-width:100%;border-radius:0;padding:48px 48px 48px 48px;border:1px solid #FAFAFA">
 <div style="background-color:#CCD6E9;padding:16px 0px 16px 0px">
-<div style="font-size:17px;font-weight:normal;text-align:center;padding:0px 24px 0px 24px">FOR OUR CREATOR COMMUNITY</div>
-<div style="font-size:16px;font-weight:normal;text-align:center;padding:0px 24px 0px 24px">Try the AirLuxe for yourself.</div>
+<div style="font-size:17px;font-weight:normal;text-align:center;padding:0px 24px 0px 24px"><p>FOR OUR CREATOR COMMUNITY</p></div>
+<div style="font-size:16px;font-weight:normal;text-align:center;padding:0px 24px 0px 24px"><p>Try the AirLuxe for yourself.</p></div>
+<div style="font-size:16px;font-weight:normal;text-align:center;padding:8px 24px 8px 24px"><p>RSVP TODAY</p></div>
 <div style="font-size:21px;text-align:center;padding:4px 24px 16px 24px"><a href="https://example.com/airluxe" style="color:#FFFFFF;font-size:21px;font-weight:normal;background-color:#0A0A0A;border-radius:4px;display:inline-block;padding:12px 20px;text-decoration:none" target="_blank">GET YOUR AIRLUXE</a></div>
 </div>
 </div>
@@ -37,11 +38,36 @@ check(
   /<td[^>]*bgcolor="#CCD6E9"[^>]*style="[^"]*background-color:#CCD6E9[^"]*padding:16px 0px 16px 0px/.test(out)
 );
 
-// Its Text wrappers must convert too (they were equally detached before).
-check('text wrapper divs are gone', !/<div[^>]*padding:0px 24px 0px 24px/.test(out));
+// Rhythm-only Text wrappers (zero vertical padding) must STAY divs — their
+// spacing comes from client-default <p> margins, which Word drops at
+// table-cell edges if they are boxed into per-block tables.
 check(
-  'text wrappers are tds with their padding',
-  (out.match(/<td align="center"[^>]*style="[^"]*padding:0px 24px 0px 24px/g) || []).length === 2
+  'rhythm-only text wrappers remain divs',
+  (out.match(/<div style="font-size:1[67]px[^"]*padding:0px 24px 0px 24px">/g) || []).length === 2
+);
+check('rhythm-only text wrappers not converted to tds', !/<td[^>]*style="[^"]*padding:0px 24px 0px 24px/.test(out));
+
+// A text wrapper with real vertical padding carries an authored box — convert.
+check(
+  'vertically padded text wrapper converts to td',
+  /<td align="center"[^>]*style="[^"]*padding:8px 24px 8px 24px/.test(out)
+);
+
+// Word-only edge-margin grafts (mso-padding-alt): the blue container's first
+// flow content is a 17px rhythm block (p margin ≈ 1em → 16+17 top); its last
+// child is the converted button table (no margin → bottom stays 16). The
+// converted 16px text block grafts 1em on both its own edges (8+16).
+check(
+  'container td grafts top edge margin via mso-padding-alt',
+  /bgcolor="#CCD6E9"[^>]*style="[^"]*mso-padding-alt:33px 0px 16px 0px/.test(out)
+);
+check(
+  'converted text td grafts both edges via mso-padding-alt',
+  /style="[^"]*padding:8px 24px 8px 24px[^"]*mso-padding-alt:24px 24px 24px 24px/.test(out)
+);
+check(
+  'outer container (table-edged) gets no graft',
+  !/padding:48px 48px 48px 48px[^"]*mso-padding-alt/.test(out)
 );
 
 // The outer container still converts as before.
