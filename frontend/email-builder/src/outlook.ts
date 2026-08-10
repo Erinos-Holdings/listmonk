@@ -288,6 +288,15 @@ function transformImageBlocks(doc: Document) {
 
 function transformSimpleDivBlocks(doc: Document) {
   const wrappers = Array.from(doc.querySelectorAll('div')).filter((div) => {
+    // Anything strictly inside an Html block's wrapper (marked by the reader,
+    // see HtmlReader in documents/reader/core.tsx) is user-authored markup —
+    // rewriting its divs into table cells drops div-only semantics (auto
+    // margins, inline-block, floats) in EVERY client. The marked wrapper
+    // itself carries builder-owned padding and stays convertible.
+    if (div.parentElement?.closest('[data-lm-user-html]')) {
+      return false;
+    }
+
     const { styleMap } = getWrapperOptions(div.getAttribute('style'));
 
     if (!styleMap.padding && !styleMap.height) {
@@ -318,10 +327,15 @@ function transformSimpleDivBlocks(doc: Document) {
     return true;
   }) as HTMLDivElement[];
 
-  wrappers.forEach((div) => {
-    // An ancestor converted in this same pass re-parses its subtree, leaving
-    // this snapshot reference detached; nested padded wrappers keep their div
-    // form for the round (rare, and strictly no worse than before).
+  // Innermost-first: converting an ancestor re-parses its subtree, which
+  // detaches every not-yet-converted descendant in this snapshot — an embedded
+  // Container then shipped as a raw padded div and Word dropped its padding
+  // and background (campaign 28, 2026-08-10). querySelectorAll is document
+  // order (ancestors first), so the reverse converts children before their
+  // ancestor snapshots them into innerHTML.
+  [...wrappers].reverse().forEach((div) => {
+    // Safety net only — with innermost-first ordering nothing here should be
+    // detached; skip rather than corrupt the document if one ever is.
     if (!div.isConnected) {
       return;
     }

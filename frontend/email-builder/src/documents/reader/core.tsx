@@ -6,7 +6,7 @@ import { ColumnsContainer as BaseColumnsContainer } from '@usewaypoint/block-col
 import { Container as BaseContainer } from '@usewaypoint/block-container';
 import { Divider, DividerPropsSchema } from '@usewaypoint/block-divider';
 import { Heading, HeadingPropsSchema } from '@usewaypoint/block-heading';
-import { Html, HtmlPropsSchema } from '@usewaypoint/block-html';
+import { HtmlPropsSchema } from '@usewaypoint/block-html';
 import { Image } from '@usewaypoint/block-image';
 import { Spacer, SpacerPropsSchema } from '@usewaypoint/block-spacer';
 import { Text, TextPropsSchema } from '@usewaypoint/block-text';
@@ -68,6 +68,29 @@ function ContainerReader({ style, props }: z.infer<typeof ContainerPropsSchema>)
 function getFontFamily(fontFamily: EmailLayoutProps['fontFamily']) {
   const f = fontFamily ?? 'MODERN_SANS';
   return FONT_FAMILIES.find((font) => font.key === f)?.value;
+}
+
+// Transcription of upstream's Html component with one addition: the marker
+// attribute. It fences the block's user-authored contents off from the Outlook
+// post-processor (outlook.ts transformSimpleDivBlocks), which must not rewrite
+// user divs into table cells — td has no margin, no inline-block, no floats.
+// The marker rides the padding wrapper itself so the WRAPPER stays convertible
+// (its padding is builder-owned); only strict descendants are fenced.
+function HtmlReader({ style, props }: z.infer<typeof HtmlPropsSchema>) {
+  const contents = props?.contents;
+  const padding = style?.padding;
+  const cssStyle: React.CSSProperties = {
+    color: style?.color ?? undefined,
+    backgroundColor: style?.backgroundColor ?? undefined,
+    fontFamily: getFontFamily(style?.fontFamily),
+    fontSize: style?.fontSize ?? undefined,
+    textAlign: style?.textAlign ?? undefined,
+    padding: padding ? `${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px` : undefined,
+  };
+  if (!contents) {
+    return <div data-lm-user-html="true" style={cssStyle} />;
+  }
+  return <div data-lm-user-html="true" style={cssStyle} dangerouslySetInnerHTML={{ __html: contents }} />;
 }
 
 function getBorder({ borderColor }: EmailLayoutProps) {
@@ -156,7 +179,7 @@ const READER_DICTIONARY = buildBlockConfigurationDictionary({
   },
   Html: {
     schema: HtmlPropsSchema,
-    Component: Html,
+    Component: HtmlReader,
   },
   Image: {
     schema: ImgPropsSchema,
