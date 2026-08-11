@@ -4,10 +4,12 @@ import {
   VerticalAlignTopOutlined,
 } from '@mui/icons-material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import WarningAmberOutlined from '@mui/icons-material/WarningAmberOutlined';
 import { Checkbox, FormControlLabel, Stack, ToggleButton } from '@mui/material';
 import { ImageProps } from '@usewaypoint/block-image';
 import React, { useState } from 'react';
 
+import { isAltMissing } from '../../../../documents/blocks/Img/altText';
 import { ImgPropsSchema, ListmonkImageProps } from '../../../../documents/editor/core';
 import BaseSidebarPanel from './helpers/BaseSidebarPanel';
 import RadioGroupInput from './helpers/inputs/RadioGroupInput';
@@ -58,6 +60,19 @@ export default function ImageSidebarPanel({ data, setData }: ImageSidebarPanelPr
         defaultValue={data.props?.alt ?? ''}
         onChange={(alt) => updateData({ ...data, props: { ...data.props, alt } })}
       />
+      {isAltMissing(data.props) && (
+        <div style={{
+          display: 'flex', gap: '0.4rem', alignItems: 'flex-start',
+          color: '#b45309', fontSize: '0.75rem', lineHeight: 1.4,
+        }}>
+          <WarningAmberOutlined style={{ fontSize: '1rem', flexShrink: 0 }} />
+          <span>
+            No alt text. Outlook blocks remote images by default, so until the reader
+            loads images the alt text IS the email — and screen readers need it. Type a
+            description, or type-and-clear to mark the image decorative (empty alt).
+          </span>
+        </div>
+      )}
       <TextInput
         label="Click through URL"
         defaultValue={data.props?.linkHref ?? ''}

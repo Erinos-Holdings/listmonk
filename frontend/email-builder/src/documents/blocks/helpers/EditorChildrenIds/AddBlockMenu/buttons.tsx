@@ -73,7 +73,9 @@ export const BUTTONS: TButtonProps[] = [
       data: {
         props: {
           url: 'https://upload.wikimedia.org/wikipedia/commons/3/3f/Placeholder_view_vector.svg',
-          alt: 'Sample product',
+          // No alt on purpose: a fresh block starts in the "never set" state so
+          // the sidebar alt-text nudge shows, instead of shipping placeholder
+          // alt text into real mail. See Img/altText.ts.
           contentAlignment: 'middle',
           linkHref: null,
         },
