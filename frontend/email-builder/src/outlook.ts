@@ -379,7 +379,7 @@ function transformSimpleDivBlocks(doc: Document) {
     if (!div.isConnected) {
       return;
     }
-    const { styleValue, styleMap, align, bgcolorAttr } = getWrapperOptions(div.getAttribute('style'));
+    const { styleValue, styleMap, bgcolorAttr } = getWrapperOptions(div.getAttribute('style'));
     const height = getPixelValue(styleMap.height);
     const isSpacer = div.children.length === 0 && (div.textContent || '').trim() === '' && height !== null;
 
@@ -404,8 +404,31 @@ function transformSimpleDivBlocks(doc: Document) {
       tdStyle = `${styleValue.replace(/;+\s*$/, '')};mso-padding-alt:${padding.top + extraTop}px ${padding.right}px ${padding.bottom + extraBottom}px ${padding.left}px`;
     }
 
+    // Never fabricate alignment. An explicit text-align becomes the td
+    // attribute; without one the attribute is omitted (left is every client's
+    // default anyway) — a stamped align="left" overrode self-centering user
+    // content in the Gmail app (campaign 10 social icons, 2026-08-11). When
+    // the sole element child is a table that centers itself, encode that
+    // intent as td align="center" — the idiom every client, Word included,
+    // honors.
+    let tdAlign: string | null = styleMap['text-align'] || null;
+    if (!tdAlign && div.children.length === 1 && div.children[0].tagName === 'TABLE') {
+      const childTable = div.children[0];
+      const childStyleMap = parseStyleMap(childTable.getAttribute('style'));
+      // Only a shrink-wrap table can visually center — builder ColumnsContainer
+      // tables carry align="center" as boilerplate while being width:100%.
+      const fullWidth = childTable.getAttribute('width') === '100%' || childStyleMap.width === '100%';
+      const selfCentering = (childTable.getAttribute('align') || '').toLowerCase() === 'center'
+        || /\bauto\b/i.test(childStyleMap.margin || '')
+        || (/^auto$/i.test(childStyleMap['margin-left'] || '') && /^auto$/i.test(childStyleMap['margin-right'] || ''));
+      if (!fullWidth && selfCentering) {
+        tdAlign = 'center';
+      }
+    }
+    const alignAttr = tdAlign ? ` align="${escapeAttribute(tdAlign)}"` : '';
+
     const blockHtml = buildPresentationTable(
-      `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(tdStyle)}">${div.innerHTML}</td></tr></tbody>`
+      `<tbody><tr><td${alignAttr}${bgcolorAttr} style="${escapeAttribute(tdStyle)}">${div.innerHTML}</td></tr></tbody>`
     );
 
     replaceNodeWithHtml(div, blockHtml);
