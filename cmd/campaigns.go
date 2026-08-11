@@ -604,6 +604,11 @@ func (a *App) TestCampaign(c echo.Context) error {
 	camp.Messenger = req.Messenger
 	camp.ContentType = req.ContentType
 	camp.Headers = req.Headers
+	// Attribs carry the preheader, which should test-send as edited (like the subject),
+	// not as last saved. nil-guarded so API callers that omit attribs keep the DB value.
+	if req.Attribs != nil {
+		camp.Attribs = req.Attribs
+	}
 	camp.TemplateID = req.TemplateID
 	for _, id := range req.MediaIDs {
 		if id > 0 {

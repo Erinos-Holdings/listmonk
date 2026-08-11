@@ -455,6 +455,8 @@ export default Vue.extend({
         body_source: bodySource,
         altbody: c.altbody,
         headers: c.headers,
+        // attribs carry the preheader; without them a clone silently loses it.
+        attribs: c.attribs,
         send_later: sendLater,
         send_at: sendAt,
         archive: c.archive,

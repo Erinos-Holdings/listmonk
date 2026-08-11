@@ -65,6 +65,7 @@ type Campaign struct {
 	ArchiveTemplateBody string             `db:"archive_template_body" json:"-"`
 	Tpl                 *template.Template `json:"-"`
 	SubjectTpl          *txttpl.Template   `json:"-"`
+	PreheaderTpl        *txttpl.Template   `json:"-"`
 	AltBodyTpl          *template.Template `json:"-"`
 
 	// HeaderTpls is holds optionally {{ templated }} campaign headers.
@@ -154,6 +155,20 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 		c.SubjectTpl = subjTpl
 	}
 
+	// If the preheader has a template string, compile it like the subject.
+	if p := c.Preheader(); hasTplExpr(p) {
+		for _, r := range regTplFuncs {
+			p = r.regExp.ReplaceAllString(p, r.replace)
+		}
+
+		var txtFuncs map[string]any = f
+		phTpl, err := txttpl.New(ContentTpl).Funcs(txtFuncs).Parse(p)
+		if err != nil {
+			return fmt.Errorf("error compiling preheader: %v", err)
+		}
+		c.PreheaderTpl = phTpl
+	}
+
 	// Compile the base template.
 	body := c.TemplateBody
 
@@ -239,6 +254,14 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 	}
 
 	return nil
+}
+
+// Preheader returns the campaign's preheader (inbox preview) text. It is stored under the
+// "preheader" key in the attribs JSON rather than a dedicated column, so the fork carries
+// no schema change; attribs already round-trips through the API and every campaign query.
+func (c *Campaign) Preheader() string {
+	s, _ := c.Attribs["preheader"].(string)
+	return strings.TrimSpace(s)
 }
 
 // hasTplExpr checks whether a given string has a Go template expression with {{ and  }}.

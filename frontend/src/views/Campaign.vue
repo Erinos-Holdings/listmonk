@@ -74,6 +74,12 @@
                     :placeholder="$t('campaigns.subject')" required />
                 </b-field>
 
+                <b-field :label="$t('campaigns.preheader')" label-position="on-border"
+                  :message="$t('campaigns.preheaderHelp')">
+                  <b-input :maxlength="500" v-model="form.preheader" name="preheader" :disabled="!canEdit"
+                    :placeholder="$t('campaigns.preheader')" />
+                </b-field>
+
                 <!-- READ-ONLY BY DESIGN: the From address is a property of the brand, derived from
                      the selected lists' `from:` tag. The escape hatch is editing the list, not the
                      campaign. `readonly` rather than `disabled` on purpose -- a disabled input is
@@ -448,6 +454,7 @@ export default Vue.extend({
         archiveSlug: null,
         name: '',
         subject: '',
+        preheader: '',
         fromEmail: '',
         headersStr: '[]',
         headers: [],
@@ -671,6 +678,18 @@ export default Vue.extend({
           return;
         }
       }
+
+      // Fold the preheader field into attribs — it lives under attribs.preheader rather
+      // than a dedicated column (no fork schema change). A non-empty field wins over any
+      // preheader key typed into the raw attribs JSON. An empty field deletes the key only
+      // when the server had one (the user actually cleared the field) — so a key managed
+      // directly in the JSON tab survives saves where the field was simply left untouched.
+      const preheader = (this.form.preheader || '').trim();
+      if (preheader) {
+        attribs = { ...(attribs || {}), preheader };
+      } else if (attribs && this.data.attribs && this.data.attribs.preheader) {
+        delete attribs.preheader;
+      }
       this.form.attribs = attribs;
 
       switch (typ) {
@@ -695,6 +714,7 @@ export default Vue.extend({
           headersStr: JSON.stringify(data.headers, null, 4),
           archiveMetaStr: data.archiveMeta ? JSON.stringify(data.archiveMeta, null, 4) : '{}',
           attribsStr: data.attribs ? JSON.stringify(data.attribs, null, 4) : '{}',
+          preheader: (data.attribs && data.attribs.preheader) || '',
 
           // The structure that is populated by editor input event.
           content: {
@@ -742,6 +762,10 @@ export default Vue.extend({
         type: 'regular',
         headers: this.form.headers,
         tags: this.form.tags,
+        // Always an object, never null: the server only overrides the stored attribs (and
+        // so the preheader) when the request carries a non-null value, and a test send
+        // should reflect the editor's current state — including a cleared preheader.
+        attribs: this.form.attribs || {},
         template_id: this.form.content.templateId,
         content_type: this.form.content.contentType,
         body: this.form.content.body,
@@ -818,6 +842,9 @@ export default Vue.extend({
           this.data = d;
           this.form.archiveSlug = d.archiveSlug;
           this.form.attribsStr = d.attribs ? JSON.stringify(d.attribs, null, 4) : '{}';
+          // Keep the field mirroring stored state so the cleared-field detection in
+          // onSubmit compares against the right baseline on the next save.
+          this.form.preheader = (d.attribs && d.attribs.preheader) || '';
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
           resolve();

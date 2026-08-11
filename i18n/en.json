@@ -78,6 +78,8 @@
     "campaigns.onlyScheduledAsDraft": "Only scheduled campaigns can be saved as drafts.",
     "campaigns.pause": "Pause",
     "campaigns.plainText": "Plain text",
+    "campaigns.preheader": "Preheader text",
+    "campaigns.preheaderHelp": "Hidden preview text shown after the subject in inboxes. Optional.",
     "campaigns.preview": "Preview",
     "campaigns.progress": "Progress",
     "campaigns.queryPlaceholder": "Name or subject",

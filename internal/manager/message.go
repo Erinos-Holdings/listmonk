@@ -3,6 +3,7 @@ package manager
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/knadh/listmonk/models"
 )
@@ -47,6 +48,23 @@ func (m *CampaignMessage) render() error {
 		return err
 	}
 	m.body = out.Bytes()
+
+	// Inject the hidden preheader (inbox preview) text, if the campaign has one. A fresh
+	// buffer, not `out` — m.body aliases out's backing array, so a Reset+reuse would
+	// corrupt it.
+	if m.Campaign.Messenger == "email" && m.Campaign.ContentType != models.CampaignContentTypePlain {
+		text := m.Campaign.Preheader()
+		if m.Campaign.PreheaderTpl != nil {
+			b := bytes.Buffer{}
+			if err := m.Campaign.PreheaderTpl.ExecuteTemplate(&b, models.ContentTpl, m); err != nil {
+				return fmt.Errorf("error rendering preheader: %v", err)
+			}
+			text = strings.TrimSpace(b.String())
+		}
+		if text != "" {
+			m.body = injectPreheader(m.body, text)
+		}
+	}
 
 	// Is there an alt body?
 	if m.Campaign.ContentType != models.CampaignContentTypePlain && m.Campaign.AltBody.Valid {
