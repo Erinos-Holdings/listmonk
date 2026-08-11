@@ -418,8 +418,12 @@ export default Vue.extend({
     },
 
     changeCampaignStatus(c, status) {
-      this.$api.changeCampaignStatus(c.id, status).then(() => {
+      this.$api.changeCampaignStatus(c.id, status).then((d) => {
         this.$utils.toast(this.$t('campaigns.statusChanged', { name: c.name, status }));
+        // Ephemeral send-quality warnings computed server-side on start/schedule.
+        (d.warnings || []).forEach((w) => {
+          this.$utils.toast(w, 'is-warning', 10000, false);
+        });
         this.getCampaigns();
         this.pollStats();
       });

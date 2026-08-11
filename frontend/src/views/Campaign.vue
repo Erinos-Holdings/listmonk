@@ -740,6 +740,15 @@ export default Vue.extend({
       });
     },
 
+    // Ephemeral send-quality warnings (Gmail clip size, embed lint, missing
+    // preheader) computed server-side on save/Start/test responses. Never
+    // persisted — recomputed fresh each time, so there is nothing to clear.
+    showWarnings(warnings) {
+      (warnings || []).forEach((w) => {
+        this.$utils.toast(w, 'is-warning', 10000, false);
+      });
+    },
+
     sendTest() {
       // Commit whatever is still sitting uncommitted in the test-address field. A b-taginput only
       // moves text into the bound array on Enter/comma/Tab/blur, so "type one address, click Send"
@@ -774,8 +783,9 @@ export default Vue.extend({
         media: this.form.media.map((m) => m.id),
       };
 
-      this.$api.testCampaign(data).then(() => {
+      this.$api.testCampaign(data).then((d) => {
         this.$utils.toast(this.$t('campaigns.testSent'));
+        this.showWarnings(d.warnings);
       });
       return false;
     },
@@ -847,6 +857,7 @@ export default Vue.extend({
           this.form.preheader = (d.attribs && d.attribs.preheader) || '';
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
+          this.showWarnings(d.warnings);
           resolve();
         });
       });
@@ -890,7 +901,9 @@ export default Vue.extend({
               return;
             }
 
-            this.$api.changeCampaignStatus(this.data.id, status).then(() => {
+            this.$api.changeCampaignStatus(this.data.id, status).then((d) => {
+              // Toasts are global, so they survive the route change below.
+              this.showWarnings(d.warnings);
               this.$router.push({ name: 'campaigns' });
             });
           });

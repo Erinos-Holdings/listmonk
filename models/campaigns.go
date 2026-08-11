@@ -81,6 +81,13 @@ type Campaign struct {
 	// Pseudofield for getting the total number of subscribers
 	// in searches and queries.
 	Total int `db:"total" json:"-"`
+
+	// Warnings are ephemeral send-quality notices (Gmail clip size, embedded-image
+	// lint, missing preheader) computed fresh in the save/status/test handlers and
+	// embedded in the response campaign object. Never persisted — deliberately NOT
+	// stored in Attribs, which is client-owned round-tripped data; a client that
+	// round-trips warnings back is harmlessly ignored.
+	Warnings []string `db:"-" json:"warnings,omitempty"`
 }
 
 // CampaignMeta contains fields tracking a campaign's progress.

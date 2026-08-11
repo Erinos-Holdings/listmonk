@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/internal/notifs"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
@@ -345,6 +346,9 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		return err
 	}
 
+	// Ephemeral send-quality warnings on the saved state (Gmail clip size, embed lint).
+	out.Warnings = a.campaignWarningsByID(id)
+
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
@@ -374,6 +378,17 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 	// If the campaign is being stopped, send the signal to the manager to stop it in flight.
 	if req.Status == models.CampaignStatusPaused || req.Status == models.CampaignStatusCancelled {
 		a.manager.StopCampaign(id)
+	}
+
+	// Ephemeral send-quality warnings when the campaign is actually being dispatched
+	// (started or scheduled): the render checks, plus the preheader adoption nudge —
+	// empty stays allowed (transactional-style sends may not want one), it just warns.
+	if req.Status == models.CampaignStatusRunning || req.Status == models.CampaignStatusScheduled {
+		w := a.campaignWarningsByID(id)
+		if out.Preheader() == "" {
+			w = append(w, manager.WarnNoPreheader)
+		}
+		out.Warnings = w
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})
@@ -616,6 +631,12 @@ func (a *App) TestCampaign(c echo.Context) error {
 		}
 	}
 
+	// Ephemeral send-quality warnings on the posted payload, computed BEFORE the send
+	// loop — sendTestMessage's LoadInlineImages rewrites data-embed imgs to cid: in
+	// place, which would hide them from the embed lint. The test send is the earliest
+	// point a campaign is rendered on the real payload, so this is the earliest catch.
+	warnings := a.renderWarnings(camp)
+
 	// Send the test messages.
 	for _, s := range subs {
 		sub := s
@@ -631,7 +652,9 @@ func (a *App) TestCampaign(c echo.Context) error {
 		a.log.Printf("campaign %d test send: sent to %s (subscriber %d)", id, sub.Email, sub.ID)
 	}
 
-	return c.JSON(http.StatusOK, okResp{true})
+	return c.JSON(http.StatusOK, okResp{struct {
+		Warnings []string `json:"warnings"`
+	}{warnings}})
 }
 
 // truncateList renders at most n items of a string slice for logging, reporting how many were
@@ -690,6 +713,43 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// renderWarnings renders the campaign the way preview does — dummy subscriber, and
+// the campaign UUID swapped for a dummy so {{ TrackView }}/{{ TrackLink }} register
+// nothing — and returns non-blocking send-quality warnings (Gmail clip size measured
+// on the QP-encoded output, embedded-image lint) for embedding in API responses.
+// camp is taken by value so the caller's copy keeps its real UUID and compiled state.
+// Never fails the calling request: render errors just skip the warnings.
+func (a *App) renderWarnings(camp models.Campaign) []string {
+	if camp.Messenger != "email" || camp.ContentType == models.CampaignContentTypePlain {
+		return nil
+	}
+
+	camp.UUID = dummySubscriber.UUID
+	if err := camp.CompileTemplate(a.manager.TemplateFuncs(&camp)); err != nil {
+		a.log.Printf("error compiling campaign %d for warnings: %v", camp.ID, err)
+		return nil
+	}
+
+	msg, err := a.manager.NewCampaignMessage(&camp, dummySubscriber)
+	if err != nil {
+		a.log.Printf("error rendering campaign %d for warnings: %v", camp.ID, err)
+		return nil
+	}
+
+	return manager.RenderWarnings(msg.Body())
+}
+
+// campaignWarningsByID fetches a stored campaign with its template body (the same
+// query preview uses) and computes renderWarnings for it.
+func (a *App) campaignWarningsByID(id int) []string {
+	camp, err := a.core.GetCampaignForPreview(id, 0)
+	if err != nil {
+		a.log.Printf("error fetching campaign %d for warnings: %v", id, err)
+		return nil
+	}
+	return a.renderWarnings(camp)
 }
 
 // sendTestMessage takes a campaign and a subscriber and sends out a sample campaign message.
