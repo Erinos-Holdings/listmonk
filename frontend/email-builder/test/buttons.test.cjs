@@ -34,7 +34,11 @@ check('8 original CSS buttons in gmail-visible content', gmailButtons.length ===
 const gmailTables = [...gmailVisible.matchAll(/<table role="presentation" width="100%"[^>]*class="lm-gm-pin-(\d+)"><tbody><tr><td data-lm-full-width-button/g)];
 check('8 originals stay fluid (width=100%) with per-width Gmail class', gmailTables.length === 8, `count=${gmailTables.length} w=${[...new Set(gmailTables.map((m) => m[1]))]}`);
 check('no px pin on the original style', !/lm-gm-pin[^>]*style="[^"]*width:244px/.test(gmailVisible));
-check('Gmail-only pin rule injected behind u + .body', /<style>u \+ \.body table\.lm-gm-pin-244\{width:244px!important;max-width:100%!important;margin:0 auto!important\}<\/style>/.test(out));
+check('Gmail-only pin rule injected behind u + .body', /<style>u \+ \.body table\.lm-gm-pin-244\{width:244px!important;max-width:100%!important;margin:0 auto!important\}/.test(out));
+// Gmail apps honor px-only widths and iOS ignores the max-width cap, so the
+// desktop-budget pin overlaps phone columns without this phone-share rescale
+// (campaign 29 matrix, 2026-08-11). 244 * 320/600 = 130.
+check('phone breakpoint rescales the pin (244 -> 130)', /@media \(max-width:480px\)\{u \+ \.body table\.lm-gm-pin-244\{width:130px!important\}\}<\/style>/.test(out));
 check('body carries the .body class for the Gmail selector', /<body class="[^"]*body[^"]*">/.test(out));
 check('dead data-outlook-cycle rule is gone', !/data-outlook-cycle/.test(out.replace(/data-lm-full-width-button/g, '')));
 check('no explicit-width button tables leak into gmail-visible content', !/width="2\d\d"[^>]*><tbody><tr><td bgcolor="#999999" align="center"/.test(gmailVisible));

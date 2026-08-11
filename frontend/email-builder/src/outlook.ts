@@ -1039,12 +1039,26 @@ function addGmailButtonPinStyles(doc: Document) {
   // campaign; do not reintroduce it.)
   doc.body.setAttribute('class', `${doc.body.getAttribute('class') || ''} body`.trim());
 
-  const rules = Array.from(widths).sort((a, b) => Number(a) - Number(b)).map((w) =>
+  const sorted = Array.from(widths).sort((a, b) => Number(a) - Number(b));
+  const rules = sorted.map((w) =>
     `u + .body table.lm-gm-pin-${w}{width:${w}px!important;max-width:100%!important;margin:0 auto!important}`
   ).join('');
 
+  // The pinned width is the DESKTOP column budget (canvas-relative). The
+  // Gmail apps honor only absolute px widths — % in any form (attr, inline,
+  // !important head rule), table-layout:fixed, and display:block anchors are
+  // all ignored/shrink-wrapped — and Gmail iOS additionally ignores the
+  // max-width:100% cap, so the desktop px overflows and overlaps phone-width
+  // columns (campaign 29 matrix, rounds 1-5, 2026-08-11). Both apps DO honor
+  // @media, so phones get the pin rescaled to its share of the narrowest
+  // real viewport (320px vs the 600px canvas). Buttons render slightly
+  // inset on larger phones; margin:0 auto keeps them centered.
+  const phoneRules = sorted.map((w) =>
+    `u + .body table.lm-gm-pin-${w}{width:${Math.max(1, Math.floor(Number(w) * 320 / 600))}px!important}`
+  ).join('');
+
   const style = doc.createElement('style');
-  style.textContent = rules;
+  style.textContent = `${rules}@media (max-width:480px){${phoneRules}}`;
   doc.head.appendChild(style);
 }
 
