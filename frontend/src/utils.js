@@ -186,6 +186,16 @@ export default class Utils {
     });
   };
 
+  // Ephemeral send-quality warnings computed server-side on campaign
+  // save/status/test responses (never persisted — recomputed fresh each time,
+  // so there is nothing to clear). One canonical display treatment, shared by
+  // the campaign editor and the campaigns list.
+  showWarnings = (warnings) => {
+    (warnings || []).forEach((w) => {
+      this.toast(w, 'is-warning', 10000, false);
+    });
+  };
+
   // Takes a props.row from a Buefy b-column <td> template and
   // returns a `data-id` attribute which Buefy then applies to the td.
   tdID = (row) => ({ 'data-id': row.id.toString() });

@@ -740,15 +740,6 @@ export default Vue.extend({
       });
     },
 
-    // Ephemeral send-quality warnings (Gmail clip size, embed lint, missing
-    // preheader) computed server-side on save/Start/test responses. Never
-    // persisted — recomputed fresh each time, so there is nothing to clear.
-    showWarnings(warnings) {
-      (warnings || []).forEach((w) => {
-        this.$utils.toast(w, 'is-warning', 10000, false);
-      });
-    },
-
     sendTest() {
       // Commit whatever is still sitting uncommitted in the test-address field. A b-taginput only
       // moves text into the bound array on Enter/comma/Tab/blur, so "type one address, click Send"
@@ -785,7 +776,7 @@ export default Vue.extend({
 
       this.$api.testCampaign(data).then((d) => {
         this.$utils.toast(this.$t('campaigns.testSent'));
-        this.showWarnings(d.warnings);
+        this.$utils.showWarnings(d.warnings);
       });
       return false;
     },
@@ -813,7 +804,11 @@ export default Vue.extend({
       return false;
     },
 
-    async updateCampaign(typ) {
+    // suppressWarnings: the editor Start flow saves and then changes status, and BOTH
+    // responses carry the same computed render warnings — the save leg stays quiet there
+    // so each Start surfaces them exactly once (from the status response, which also
+    // carries the preheader nudge).
+    async updateCampaign(typ, suppressWarnings = false) {
       const data = {
         archive_slug: this.form.archiveSlug,
         name: this.form.name,
@@ -857,7 +852,9 @@ export default Vue.extend({
           this.form.preheader = (d.attribs && d.attribs.preheader) || '';
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
-          this.showWarnings(d.warnings);
+          if (!suppressWarnings) {
+            this.$utils.showWarnings(d.warnings);
+          }
           resolve();
         });
       });
@@ -889,8 +886,9 @@ export default Vue.extend({
       this.$utils.confirm(
         null,
         () => {
-          // First save the campaign.
-          this.updateCampaign().then(() => {
+          // First save the campaign. Warnings are suppressed on this save leg —
+          // the status response below re-computes and shows the same set once.
+          this.updateCampaign(null, true).then(() => {
             // Then start/schedule it.
             let status = '';
             if (this.canStart) {
@@ -903,7 +901,7 @@ export default Vue.extend({
 
             this.$api.changeCampaignStatus(this.data.id, status).then((d) => {
               // Toasts are global, so they survive the route change below.
-              this.showWarnings(d.warnings);
+              this.$utils.showWarnings(d.warnings);
               this.$router.push({ name: 'campaigns' });
             });
           });

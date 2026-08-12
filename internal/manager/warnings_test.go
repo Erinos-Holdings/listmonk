@@ -81,6 +81,13 @@ func TestEmbedLint(t *testing.T) {
 			`<img src="https://email.curatedfor.you/uploads/logo.png" data-embed="true" alt="logo">`,
 			"embed inline (CID)",
 		},
+		{
+			// \b would treat data-alt as alt (boundary between '-' and 'a') and mislabel
+			// the image; the delimiter-anchored regex must fall back to naming it by src.
+			"hyphenated data-alt attribute is NOT mistaken for alt",
+			`<img data-alt="hero" src="data:image/png;base64,AAAA">`,
+			`(src "data:image/png;base64,AAAA") uses a data: URI`,
+		},
 	}
 
 	for _, c := range cases {

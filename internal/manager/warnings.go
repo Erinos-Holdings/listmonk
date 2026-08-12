@@ -25,7 +25,9 @@ const WarnNoPreheader = "No preheader text is set — inboxes will preview whate
 var reImgTagWarn = regexp.MustCompile(`(?is)<img\b[^>]*>`)
 
 // reAltAttr extracts an alt attribute so lint messages can name the offending image.
-var reAltAttr = regexp.MustCompile(`(?is)\balt\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+// The leading delimiter class (not \b) keeps hyphenated attributes like data-alt from
+// matching — \b sees a boundary between '-' and 'a'.
+var reAltAttr = regexp.MustCompile(`(?is)(?:^|[\s"'])alt\s*=\s*(?:"([^"]*)"|'([^']*)')`)
 
 // countingWriter tallies bytes written; used to size QP output without buffering it.
 type countingWriter int
