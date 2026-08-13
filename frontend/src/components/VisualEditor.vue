@@ -132,6 +132,36 @@ export default {
       }
     },
 
+    // Rebrand sweep: run the builder's pure remap on a document JSON string and, when
+    // anything was rewritten, push the result through resetDocument — whose onChange then
+    // regenerates bodySource + HTML up the existing chain. Returns the replacement count,
+    // or null when there is nothing to sweep with: builder not loaded yet, a stale cached
+    // bundle that predates the remapColors export, or an unparseable source. The caller
+    // owns the prompt, the provenance state, and reporting a null/zero outcome.
+    remapColors(sourceStr, oldPalette, newPalette) {
+      const iframe = this.$refs.visualEditor;
+      const em = iframe && iframe.contentWindow && iframe.contentWindow.EmailBuilder;
+      if (!em || !em.remapColors || !em.isRendered('visual-editor-container')) {
+        return null;
+      }
+
+      let doc = null;
+      try {
+        doc = JSON.parse(sourceStr);
+      } catch (e) {
+        return null;
+      }
+      if (!doc || typeof doc !== 'object') {
+        return null;
+      }
+
+      const { document: next, replaced } = em.remapColors(doc, oldPalette, newPalette);
+      if (replaced > 0) {
+        em.resetDocument(next);
+      }
+      return replaced;
+    },
+
     // Inject media URL into the image URL input field in the visual edior sidebar.
     onMediaSelect(media) {
       const iframe = this.$refs.visualEditor;

@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App, { AppProps, DEFAULT_SOURCE } from './App';
 import { setDocument, resetDocument, setBrandPalettes } from './documents/editor/EditorContext';
+import { remapColors } from './remapColors';
 
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import theme from './theme';
@@ -31,4 +32,4 @@ function render(containerId: string, props: AppProps, force: boolean = false) {
   }
 }
 
-export { App, setDocument, resetDocument, setBrandPalettes, render, isRendered, DEFAULT_SOURCE };
+export { App, setDocument, resetDocument, setBrandPalettes, remapColors, render, isRendered, DEFAULT_SOURCE };

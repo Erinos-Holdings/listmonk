@@ -208,8 +208,8 @@
       </b-tab-item><!-- campaign -->
 
       <b-tab-item :label="$t('campaigns.content')" icon="text" :disabled="isNew" value="content">
-        <editor v-if="data.id" v-model="form.content" :id="data.id" :title="data.name" :disabled="!canEdit"
-          :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes" />
+        <editor v-if="data.id" ref="editor" v-model="form.content" :id="data.id" :title="data.name"
+          :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes" />
 
         <div class="columns">
           <div class="column is-6">
@@ -447,6 +447,26 @@ export default Vue.extend({
       brandPalettes: [],
       brandThemeSlug: null,
 
+      // The latest fetched palette (or null), cached so a sweep deferred by an error-transit
+      // derivation can be re-evaluated without refetching.
+      brandThemePalette: null,
+
+      // DOCUMENT COLOR PROVENANCE — which brand's palette this design's colors are presumed
+      // to carry; the rebrand sweep's mapping source. While no document exists it follows
+      // each clean found:true derivation silently; once one does, it updates in exactly two
+      // places: the first clean found:true derivation (initial load), and an Apply that
+      // actually rewrote colors. On Keep it deliberately stays put — the doc still carries
+      // the old hexes, so
+      // a later swap to a third brand must map from the palette actually in the document.
+      // Session-scoped by design (nothing is persisted); the zero-match Apply toast is the
+      // mitigation for a reload mislabeling it.
+      heldBrandPalette: null,
+
+      // The brand slug the sweep prompt was last offered for, so the derivation watcher
+      // (which refires on every unrelated list edit) offers once per brand arrival, while a
+      // deliberate re-swap back and forth offers again.
+      brandSweepOffered: null,
+
       // Binds form input values.
       form: {
         archiveSlug: null,
@@ -592,9 +612,16 @@ export default Vue.extend({
       // same-slug guard and the row label consistent for a merely mis-cased `brand:` tag.
       const slug = d.brand.toLowerCase();
       if (slug === this.brandThemeSlug) {
+        // Same brand, no refetch — but a sweep may have been deferred: a theme response that
+        // arrived while the derivation was transiting an error offers nothing, so re-evaluate
+        // against the cached palette on every clean derivation.
+        this.maybeOfferBrandSweep(this.brandThemePalette);
         return;
       }
       this.brandThemeSlug = slug;
+      // A newly arriving brand may offer the sweep again — the once-only latch is per
+      // arrival, not per campaign (a deliberate re-swap back and forth should re-prompt).
+      this.brandSweepOffered = null;
 
       this.$api.getBrandTheme(slug).then((data) => {
         if (slug !== this.brandThemeSlug) {
@@ -602,15 +629,88 @@ export default Vue.extend({
         }
 
         const p = data.found ? brandThemePalette(slug, data.theme) : null;
+        this.brandThemePalette = p;
         this.brandPalettes = p ? [p] : [];
+        this.maybeOfferBrandSweep(p);
       }).catch(() => {
         // Soft-fail by design: a brand with no page (or a catalog outage past the proxy's
         // stale-serving) means no row, never an editor error. Clear rather than leave a
         // previous brand's row lingering.
         if (slug === this.brandThemeSlug) {
+          this.brandThemePalette = null;
           this.brandPalettes = [];
         }
       });
+    },
+
+    // Rebrand sweep (confirm-prompted). Seeds held provenance on the first clean found:true
+    // derivation; prompts when a later clean derivation's palette differs from it. The fetch's
+    // stale guard covers the REQUEST — the derivation is re-read here because it may have
+    // changed (to an error, or unmapped) while the response was in flight, and error/unmapped
+    // states must neither seed, nor clear, nor prompt.
+    maybeOfferBrandSweep(palette) {
+      const d = this.brandDerivation;
+      if (!palette || d.error || d.unmapped || !d.brand
+        || d.brand.toLowerCase() !== palette.label) {
+        return;
+      }
+
+      // No document yet (an unsaved campaign — the editor is v-if="data.id" — or a campaign
+      // whose design was never built): there is nothing to sweep and nothing whose provenance
+      // could be pinned, so held provenance silently follows the current brand — the design
+      // built from here will carry these colors. Prompting here would offer to re-map a
+      // design that does not exist, and Apply's null path would misdiagnose it as "editor
+      // isn't ready".
+      if (!this.data.id || !this.form.content.bodySource) {
+        this.heldBrandPalette = palette;
+        return;
+      }
+
+      if (!this.heldBrandPalette) {
+        this.heldBrandPalette = palette;
+        return;
+      }
+      if (this.heldBrandPalette.label === palette.label) {
+        return;
+      }
+
+      // The sweep only means anything on a visual campaign, and is offered once per brand
+      // arrival (the derivation watcher refires on every unrelated list edit).
+      if (this.form.content.contentType !== 'visual' || this.brandSweepOffered === palette.label) {
+        return;
+      }
+      this.brandSweepOffered = palette.label;
+
+      this.$buefy.dialog.confirm({
+        scroll: 'keep',
+        message: this.$utils.escapeHTML(this.$t('campaigns.brandSweepPrompt', {
+          old: this.heldBrandPalette.label, new: palette.label,
+        })),
+        confirmText: this.$t('campaigns.brandSweepApply'),
+        cancelText: this.$t('campaigns.brandSweepKeep'),
+        onConfirm: () => this.applyBrandSweep(palette),
+        // Keep (cancel/dismiss) is deliberately a no-op: provenance stays with the palette
+        // actually in the document.
+      });
+    },
+
+    applyBrandSweep(newPalette) {
+      const replaced = this.$refs.editor
+        ? this.$refs.editor.remapBrandColors(this.form.content.bodySource, this.heldBrandPalette, newPalette)
+        : null;
+
+      if (replaced === null) {
+        this.$utils.toast(this.$t('campaigns.brandSweepUnavailable'), 'is-warning');
+        return;
+      }
+      if (replaced === 0) {
+        // Session-scoped provenance can mislabel a design after a Keep-then-save-then-reload;
+        // a mute no-op Apply would hide exactly that. Report it, and leave provenance where
+        // it was — nothing was rewritten, so nothing changed hands.
+        this.$utils.toast(this.$t('campaigns.brandSweepNoMatches'), 'is-warning');
+        return;
+      }
+      this.heldBrandPalette = newPalette;
     },
 
     // Merge `brand=<slug>` into the campaign's headers array, preserving every other entry and
