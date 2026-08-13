@@ -66,8 +66,9 @@
             </div>
 
             <b-field v-if="form.type === 'campaign_visual'" label-position="on-border" class="mb-1">
-              <visual-editor v-if="form.type === 'campaign_visual'" name="body" :source="form.bodySource"
-                @change="onChangeVisualEditor" height="70vh" :brand-palettes="brandPalettes" />
+              <visual-editor v-if="form.type === 'campaign_visual'" ref="visualEditor" name="body"
+                :source="form.bodySource" @change="onChangeVisualEditor" height="70vh"
+                :brand-palettes="brandPalettes" />
             </b-field>
 
             <b-field v-else :label="$t('templates.rawHTML')" label-position="on-border">
@@ -151,6 +152,16 @@ export default Vue.extend({
       // (brandNoPage), and a failed fetch says that instead (brandFetchFailed) rather than
       // misdiagnosing a transport error as a missing catalog page.
       brandNote: null,
+
+      // DOCUMENT COLOR PROVENANCE, exactly as in Campaign.vue: the rebrand sweep's mapping
+      // source — it follows every found:true pick while the template has no content, then is
+      // seeded by the first found:true pick, moved only by an Apply that rewrote
+      // colors, pinned on Keep. A fresh template open has none (nothing is persisted), so the
+      // rebrand gesture is two-step by design: pick the template's ORIGINAL brand first
+      // (seeds provenance, and the swatches visibly matching the design confirms it), then
+      // the target brand — which prompts. A pageless or None pick in between neither clears
+      // provenance nor suppresses the later prompt.
+      heldBrandPalette: null,
     };
   },
 
@@ -233,12 +244,66 @@ export default Vue.extend({
         const p = data.found ? brandThemePalette(slug, data.theme) : null;
         this.brandPalettes = p ? [p] : [];
         this.brandNote = p ? null : 'templates.brandNoPage';
+        this.maybeOfferBrandSweep(p);
       }).catch(() => {
         if (slug === this.brandSlug) {
           this.brandPalettes = [];
           this.brandNote = 'templates.brandFetchFailed';
         }
       });
+    },
+
+    // Rebrand sweep, same held-provenance rules as Campaign.vue with a simpler trigger: an
+    // explicit dropdown pick, no error transit, no re-offer latch (one pick, one evaluation).
+    maybeOfferBrandSweep(palette) {
+      if (!palette) {
+        return;
+      }
+
+      // No document yet (a brand-new template with no edits): nothing to sweep, so held
+      // provenance silently follows each pick until content exists. A freshly opened CLONE
+      // has a document, so the two-step rebrand gesture is unaffected.
+      if (!this.form.bodySource) {
+        this.heldBrandPalette = palette;
+        return;
+      }
+
+      if (!this.heldBrandPalette) {
+        this.heldBrandPalette = palette;
+        return;
+      }
+      if (this.heldBrandPalette.label === palette.label) {
+        return;
+      }
+
+      this.$buefy.dialog.confirm({
+        scroll: 'keep',
+        message: this.$utils.escapeHTML(this.$t('templates.brandSweepPrompt', {
+          old: this.heldBrandPalette.label, new: palette.label,
+        })),
+        confirmText: this.$t('campaigns.brandSweepApply'),
+        cancelText: this.$t('campaigns.brandSweepKeep'),
+        onConfirm: () => this.applyBrandSweep(palette),
+        // Keep (cancel/dismiss) is deliberately a no-op: provenance stays with the palette
+        // actually in the document.
+      });
+    },
+
+    applyBrandSweep(newPalette) {
+      const ve = this.$refs.visualEditor;
+      const replaced = ve ? ve.remapColors(this.form.bodySource, this.heldBrandPalette, newPalette) : null;
+
+      if (replaced === null) {
+        this.$utils.toast(this.$t('campaigns.brandSweepUnavailable'), 'is-warning');
+        return;
+      }
+      if (replaced === 0) {
+        // Identical toast to the campaign editor, by decision — and provenance stays put:
+        // nothing was rewritten, so nothing changed hands.
+        this.$utils.toast(this.$t('campaigns.brandSweepNoMatches'), 'is-warning');
+        return;
+      }
+      this.heldBrandPalette = newPalette;
     },
   },
 

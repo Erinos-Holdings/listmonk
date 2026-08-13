@@ -264,6 +264,13 @@ export default {
       this.self.bodySource = source;
     },
 
+    // Rebrand sweep passthrough: Campaign.vue owns the prompt and the provenance state, the
+    // visual editor owns the iframe. Returns null when there is no visual editor to sweep.
+    remapBrandColors(sourceStr, oldPalette, newPalette) {
+      const ve = this.$refs.visualEditor;
+      return ve ? ve.remapColors(sourceStr, oldPalette, newPalette) : null;
+    },
+
     beautifyHTML(str) {
       // Pad all tags with linebreaks.
       let s = this.trimLines(str.replace(/(<(?!(\/)?a|span)([^>]+)>)/ig, '\n$1\n'), true);
