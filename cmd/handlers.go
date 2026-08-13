@@ -175,6 +175,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.DELETE("/api/campaigns", pm(a.DeleteCampaigns, "campaigns:manage", "campaigns:manage_all"))
 		g.DELETE("/api/campaigns/:id", pm(hasID(a.DeleteCampaign), "campaigns:manage_all", "campaigns:manage"))
 
+		// Fork: brand theme proxy for the visual editor's brand swatch row (brand_theme.go).
+		// No pm() — public catalog data, any authenticated user; same posture as GetLists.
+		g.GET("/api/brands/:slug/theme", a.GetBrandTheme)
+
 		g.GET("/api/media", pm(a.GetAllMedia, "media:get"))
 		g.GET("/api/media/:id", pm(hasID(a.GetMedia), "media:get"))
 		g.POST("/api/media", pm(a.UploadMedia, "media:manage"))
