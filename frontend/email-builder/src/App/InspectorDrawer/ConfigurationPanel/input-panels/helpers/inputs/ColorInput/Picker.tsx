@@ -3,6 +3,9 @@ import { HexColorInput, HexColorPicker } from 'react-colorful';
 
 import { Box, Stack, SxProps } from '@mui/material';
 
+import { useBrandPalettes } from '../../../../../../../documents/editor/EditorContext';
+
+import BrandSwatches from './BrandSwatches';
 import Swatch from './Swatch';
 
 export const DEFAULT_PRESET_COLORS = [
@@ -74,9 +77,11 @@ type Props = {
   onChange: (v: string) => void;
 };
 export default function Picker({ value, onChange }: Props) {
+  const brandPalettes = useBrandPalettes();
   return (
     <Stack spacing={1} sx={SX}>
       <HexColorPicker color={value} onChange={onChange} />
+      <BrandSwatches palettes={brandPalettes} value={value} onChange={onChange} />
       <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={value} onChange={onChange} />
       <Box pt={1}>
         <HexColorInput prefixed color={value} onChange={onChange} />
