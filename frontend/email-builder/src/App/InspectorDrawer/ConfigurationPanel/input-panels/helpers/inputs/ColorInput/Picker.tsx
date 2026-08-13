@@ -76,16 +76,19 @@ type Props = {
   value: string;
   onChange: (v: string) => void;
 };
+// Section order is a decision (brand-centric picker): brand rows first, then the hex input,
+// then the gradient refiners, with the generic preset grid demoted to the bottom. Keep the
+// markdown toolbar's color popover (MarkdownContentInput) in the same order.
 export default function Picker({ value, onChange }: Props) {
   const brandPalettes = useBrandPalettes();
   return (
     <Stack spacing={1} sx={SX}>
-      <HexColorPicker color={value} onChange={onChange} />
       <BrandSwatches palettes={brandPalettes} value={value} onChange={onChange} />
-      <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={value} onChange={onChange} />
-      <Box pt={1}>
+      <Box>
         <HexColorInput prefixed color={value} onChange={onChange} />
       </Box>
+      <HexColorPicker color={value} onChange={onChange} />
+      <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={value} onChange={onChange} />
     </Stack>
   );
 }

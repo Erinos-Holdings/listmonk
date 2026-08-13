@@ -8,9 +8,12 @@ import {
   FormatUnderlinedOutlined,
   InsertLinkOutlined,
 } from '@mui/icons-material';
-import { Box, Button, IconButton, Menu, Stack, TextField, Tooltip } from '@mui/material';
+import { Box, IconButton, Menu, Stack, TextField, Tooltip } from '@mui/material';
 import { HexColorInput, HexColorPicker } from 'react-colorful';
 
+import { useBrandPalettes } from '../../../../../../documents/editor/EditorContext';
+
+import BrandSwatches from './ColorInput/BrandSwatches';
 import { DEFAULT_PRESET_COLORS } from './ColorInput/Picker';
 import Swatch from './ColorInput/Swatch';
 import { applyBulletList, applyColor, applyEnclose, applyLink, applyWrap, FormatResult } from './markdownFormat';
@@ -45,6 +48,7 @@ type Props = {
 
 export default function MarkdownContentInput({ label, rows, defaultValue, markdownEnabled, onChange }: Props) {
   const [value, setValue] = useState(defaultValue);
+  const brandPalettes = useBrandPalettes();
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
 
@@ -53,6 +57,11 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
   // Captured when the color menu opens — the menu steals focus, so the
   // textarea's live selection is gone by the time a color is chosen.
   const colorSelection = useRef({ start: 0, end: 0 });
+  // True once any picker interaction staged a color this open. Unlike the style-chip picker
+  // (which writes the style live and where closing merely dismisses), this popover performs
+  // a ONE-SHOT text edit, so it stages everything and commits exactly once on close-by-
+  // click-off. Esc cancels; opening and clicking off untouched inserts nothing.
+  const colorDirty = useRef(false);
 
   useEffect(() => {
     const sel = pendingSelection.current;
@@ -89,11 +98,18 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
     onChange(result.text);
   };
 
-  const applyColorAndClose = (color: string) => {
+  const stageColor = (color: string) => {
     setPickColor(color);
+    colorDirty.current = true;
+  };
+
+  const closeColorMenu = (reason?: string) => {
     setColorAnchor(null);
+    if (reason === 'escapeKeyDown' || !colorDirty.current) {
+      return;
+    }
     const { start, end } = colorSelection.current;
-    applyResult(applyColor(value, start, end, color));
+    applyResult(applyColor(value, start, end, pickColor));
   };
 
   // Toolbar buttons must not take focus, or the textarea selection collapses
@@ -135,6 +151,7 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
         })}
         {toolbarButton('Text color', <FormatColorTextOutlined fontSize="small" />, (ev) => {
           colorSelection.current = currentSelection();
+          colorDirty.current = false;
           setColorAnchor(ev.currentTarget);
         })}
         {toolbarButton('Bullet list', <FormatListBulletedOutlined fontSize="small" />, () => {
@@ -159,23 +176,19 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
       <Menu
         anchorEl={colorAnchor}
         open={Boolean(colorAnchor)}
-        onClose={() => setColorAnchor(null)}
+        onClose={(ev, reason) => closeColorMenu(reason)}
         MenuListProps={{
           sx: { height: 'auto', padding: 0 },
         }}
       >
+        {/* Section order mirrors ColorInput/Picker.tsx — keep the two in sync. */}
         <Stack spacing={1} sx={PICKER_SX}>
-          {/* Swatches apply immediately; the wheel/hex input stage a color that
-              the Apply button commits. */}
-          <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={pickColor} onChange={applyColorAndClose} />
-          <HexColorPicker color={pickColor} onChange={setPickColor} />
+          <BrandSwatches palettes={brandPalettes} value={pickColor} onChange={stageColor} />
           <Box>
-            <HexColorInput prefixed color={pickColor} onChange={setPickColor} />
+            <HexColorInput prefixed color={pickColor} onChange={stageColor} />
           </Box>
-          <Button fullWidth size="small" variant="contained" onClick={() => applyColorAndClose(pickColor)}>
-            Apply
-            <Box component="span" sx={{ ml: 1, width: 14, height: 14, borderRadius: '3px', bgcolor: pickColor, border: '1px solid rgba(255,255,255,0.6)' }} />
-          </Button>
+          <HexColorPicker color={pickColor} onChange={stageColor} />
+          <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={pickColor} onChange={stageColor} />
         </Stack>
       </Menu>
     </Box>
