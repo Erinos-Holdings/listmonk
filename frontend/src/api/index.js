@@ -163,6 +163,13 @@ export const deleteLists = (params) => http.delete(
   { params, loading: models.lists },
 );
 
+// Brand theme (visual editor swatches). The swatch row is a convenience, so a failed fetch
+// must never surface as an editor error toast.
+export const getBrandTheme = (slug) => http.get(
+  `/api/brands/${encodeURIComponent(slug)}/theme`,
+  { disableToast: true },
+);
+
 // Subscribers.
 export const getSubscribers = async (params) => http.get(
   '/api/subscribers',
