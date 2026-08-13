@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App, { AppProps, DEFAULT_SOURCE } from './App';
-import { setDocument, resetDocument } from './documents/editor/EditorContext';
+import { setDocument, resetDocument, setBrandPalettes } from './documents/editor/EditorContext';
 
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import theme from './theme';
@@ -31,4 +31,4 @@ function render(containerId: string, props: AppProps, force: boolean = false) {
   }
 }
 
-export { App, setDocument, resetDocument, render, isRendered, DEFAULT_SOURCE };
+export { App, setDocument, resetDocument, setBrandPalettes, render, isRendered, DEFAULT_SOURCE };
