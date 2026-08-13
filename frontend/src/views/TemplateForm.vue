@@ -51,9 +51,23 @@
           </div>
 
           <template v-if="form.body !== null">
+            <!-- Brand swatch picker: no list selection exists here to derive a brand from,
+                 so the brand is picked explicitly. No selection -> no brand row. -->
+            <div class="columns" v-if="form.type === 'campaign_visual'">
+              <div class="column is-4">
+                <b-field :label="$t('templates.brandSwatches')" label-position="on-border"
+                  :message="brandNote ? $t(brandNote, { brand: brandSlug }) : ''">
+                  <b-select v-model="brandSlug" name="brand-swatches" expanded>
+                    <option value="">{{ $t('templates.brandSwatchesNone') }}</option>
+                    <option v-for="b in brandRoster" :key="b" :value="b">{{ b }}</option>
+                  </b-select>
+                </b-field>
+              </div>
+            </div>
+
             <b-field v-if="form.type === 'campaign_visual'" label-position="on-border" class="mb-1">
               <visual-editor v-if="form.type === 'campaign_visual'" name="body" :source="form.bodySource"
-                @change="onChangeVisualEditor" height="70vh" />
+                @change="onChangeVisualEditor" height="70vh" :brand-palettes="brandPalettes" />
             </b-field>
 
             <b-field v-else :label="$t('templates.rawHTML')" label-position="on-border">
@@ -92,6 +106,7 @@ import CampaignPreview from '../components/CampaignPreview.vue';
 import CodeEditor from '../components/CodeEditor.vue';
 import VisualEditor from '../components/VisualEditor.vue';
 import CopyText from '../components/CopyText.vue';
+import { BRAND_TAG_PREFIX, brandThemePalette, reBrandSlug } from '../brand';
 
 export default Vue.extend({
   components: {
@@ -123,6 +138,19 @@ export default Vue.extend({
       },
       previewItem: null,
       egPlaceholder: '{{ template "content" . }}',
+
+      // Brand swatch picker state. brandSlug is the dropdown selection (roster entries are
+      // lowercase-folded, so it is always canonical); it doubles as the stale-response guard:
+      // rapid dropdown flips leave several theme fetches in flight and an older response can
+      // resolve last, so a response is discarded unless it answers the current selection.
+      brandSlug: '',
+      brandPalettes: [],
+      // The i18n key of the inline note under the dropdown, or null for none. A deliberate
+      // gesture that visibly does nothing reads as broken — unlike the campaign editor, where
+      // passive absence is the designed behavior — so a pick resolving to no palette says so
+      // (brandNoPage), and a failed fetch says that instead (brandFetchFailed) rather than
+      // misdiagnosing a transport error as a missing catalog page.
+      brandNote: null,
     };
   },
 
@@ -185,10 +213,66 @@ export default Vue.extend({
       this.form.body = body;
       this.form.bodySource = source;
     },
+
+    // Fetch the picked brand's theme and drive the swatch row. found:false and fetch failure
+    // each land on their own inline note (never a toast — disableToast on the endpoint);
+    // either way there is no row (no palette overrides, by design).
+    onBrandPick(slug) {
+      this.brandNote = null;
+      if (!slug) {
+        this.brandPalettes = [];
+        return;
+      }
+
+      this.$api.getBrandTheme(slug).then((data) => {
+        // Stale-response guard: only the response for the current selection may act.
+        if (slug !== this.brandSlug) {
+          return;
+        }
+
+        const p = data.found ? brandThemePalette(slug, data.theme) : null;
+        this.brandPalettes = p ? [p] : [];
+        this.brandNote = p ? null : 'templates.brandNoPage';
+      }).catch(() => {
+        if (slug === this.brandSlug) {
+          this.brandPalettes = [];
+          this.brandNote = 'templates.brandFetchFailed';
+        }
+      });
+    },
   },
 
   computed: {
-    ...mapState(['loading']),
+    ...mapState(['loading', 'lists']),
+
+    // Distinct brand slugs from the vuex lists store's `brand:` tags, lowercase-folded before
+    // dedupe — mixed-case tags are valid on the send path and the theme proxy folds, so
+    // `brand:Liyora` and `brand:liyora` are one brand, not two dropdown entries. The store is
+    // the roster's source of truth (App.vue loads it once, globally — the same store campaign
+    // derivation reads, so the two editors agree by construction); there is no catalog brand
+    // index to consult. Slugs failing reBrandSlug are omitted: a bare `brand:` tag would
+    // otherwise render an empty option colliding with the None sentinel, and a slug the proxy
+    // rejects (e.g. embedded space) would 400 and misdiagnose the tag as a missing catalog
+    // page. The campaign editor is where that misconfiguration errors loudly.
+    brandRoster() {
+      const out = new Set();
+      ((this.lists && this.lists.results) || []).forEach((l) => {
+        const t = (l.tags || []).find((x) => x.startsWith(BRAND_TAG_PREFIX));
+        if (t) {
+          const slug = t.slice(BRAND_TAG_PREFIX.length).toLowerCase();
+          if (reBrandSlug.test(slug)) {
+            out.add(slug);
+          }
+        }
+      });
+      return [...out].sort();
+    },
+  },
+
+  watch: {
+    brandSlug(slug) {
+      this.onBrandPick(slug);
+    },
   },
 
   mounted() {
