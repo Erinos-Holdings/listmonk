@@ -1,6 +1,26 @@
-// Shared brand helpers for the visual editor's brand color swatches (campaign and template
-// editors both consume these; the tag-prefix constants move here from Campaign.vue in the
-// template-editor changeset so the two editors import one copy).
+// Shared brand helpers for the visual editor's brand color swatches, imported by both the
+// campaign editor (Campaign.vue, which derives the brand from selected lists) and the
+// template editor (TemplateForm.vue, which picks it from a dropdown).
+
+// --- List-scoped From address and brand tag -------------------------------------------------
+// A list carries its brand mapping as two tags, `brand:<slug>` and `from:<address>`. Both the
+// campaign's From address and its `brand` SES message tag are derived from them, so neither is
+// hand-typed. This is the convenience half; cmd/campaigns.go enforces the same rules server-side
+// and is the actual control (this file is disposable at listmonk v7, that one is not).
+//
+// MUST MATCH `brandTagPrefix`/`fromTagPrefix` in cmd/campaigns_brand.go — nothing checks that
+// they agree; if they diverge, the editors derive one mapping and the backend enforces another.
+export const BRAND_TAG_PREFIX = 'brand:';
+export const FROM_TAG_PREFIX = 'from:';
+
+// SES message tag values accept only alphanumerics, - and _. List tags are stored verbatim with no
+// normalisation anywhere, so `brand:Thirsty Girl` would otherwise reach SES and be rejected at SEND
+// time, on a campaign nobody touched, weeks after someone edited a list tag. The campaign editor
+// surfaces a failing slug as a loud derivation error; the template editor's dropdown roster simply
+// omits it (the roster is a convenience list, not the enforcement point).
+//
+// MUST MATCH `reBrandSlug` in cmd/campaigns_brand.go — same coupling as the prefixes above.
+export const reBrandSlug = /^[A-Za-z0-9_-]+$/;
 
 // The catalog theme's color roles, in the order the swatch row renders them. Font entries
 // (fontBody, fontHeading) are deliberately excluded — web fonts are unreliable in email

@@ -357,15 +357,10 @@ import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
 import ListSelector from '../components/ListSelector.vue';
 import Media from './Media.vue';
-import { brandThemePalette } from '../brand';
+import {
+  BRAND_TAG_PREFIX, FROM_TAG_PREFIX, brandThemePalette, reBrandSlug,
+} from '../brand';
 
-// --- List-scoped From address and brand tag -------------------------------------------------
-// A list carries its brand mapping as two tags, `brand:<slug>` and `from:<address>`. Both the
-// campaign's From address and its `brand` SES message tag are derived from them, so neither is
-// hand-typed. This is the convenience half; cmd/campaigns.go enforces the same rules server-side
-// and is the actual control (this file is disposable at listmonk v7, that one is not).
-const BRAND_TAG_PREFIX = 'brand:';
-const FROM_TAG_PREFIX = 'from:';
 // Canonical casing, folded at the comparison — mirrors `sesTagHeader` in cmd/campaigns_brand.go,
 // which is the half that actually enforces this. The header name should exist exactly once per
 // implementation; the two implementations have to agree, which is the whole reason both exist.
@@ -380,11 +375,6 @@ const BRAND_TAG_KEY = 'brand';
 // Nothing checks that these agree; if they diverge, the editor shows one brand and the backend
 // stores another.
 const DEFAULT_BRAND = 'curated';
-
-// SES message tag values accept only alphanumerics, - and _. List tags are stored verbatim with no
-// normalisation anywhere, so `brand:Thirsty Girl` would otherwise reach SES and be rejected at SEND
-// time, on a campaign nobody touched, weeks after someone edited a list tag.
-const reBrandSlug = /^[A-Za-z0-9_-]+$/;
 
 // Rewrite the `brand=` pair inside an "a=b, c=d" SES message-tag value, leaving any other pair
 // alone. Replacing the whole value would silently drop a second tag someone added by hand.
