@@ -209,7 +209,7 @@
 
       <b-tab-item :label="$t('campaigns.content')" icon="text" :disabled="isNew" value="content">
         <editor v-if="data.id" v-model="form.content" :id="data.id" :title="data.name" :disabled="!canEdit"
-          :templates="templates" :content-types="contentTypes" />
+          :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes" />
 
         <div class="columns">
           <div class="column is-6">
@@ -357,6 +357,7 @@ import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
 import ListSelector from '../components/ListSelector.vue';
 import Media from './Media.vue';
+import { brandThemePalette } from '../brand';
 
 // --- List-scoped From address and brand tag -------------------------------------------------
 // A list carries its brand mapping as two tags, `brand:<slug>` and `from:<address>`. Both the
@@ -448,6 +449,13 @@ export default Vue.extend({
       // repoint TOAST fires once per load rather than on every subsequent list edit. The
       // persistent inline notice is the `brandFromRepointed` computed, which is self-clearing.
       brandFromLoadPending: false,
+
+      // The brand swatch row(s) currently pushed into the visual editor's color picker, and
+      // the slug of the latest theme request. The slug doubles as the stale-response guard:
+      // rapid list changes leave several theme fetches in flight and an older response can
+      // resolve last, so a response is discarded unless it answers the latest request.
+      brandPalettes: [],
+      brandThemeSlug: null,
 
       // Binds form input values.
       form: {
@@ -575,6 +583,44 @@ export default Vue.extend({
       if (merged !== null && merged !== this.form.headersStr) {
         this.form.headersStr = merged;
       }
+    },
+
+    // Keep the visual editor's brand swatch row in sync with the derived brand. Display-only:
+    // the row follows every CLEAN derivation (mapped or the unmapped default — if `curated`
+    // ever publishes a catalog page, unmapped campaigns showing its swatches is intended),
+    // while error transits (the add-then-remove list swap passes through a conflict error)
+    // leave the current row alone; the next clean derivation refreshes it. Held provenance
+    // for the rebrand sweep is separate state with its own rules.
+    syncBrandTheme() {
+      const d = this.brandDerivation;
+      if (d.error || !d.brand) {
+        return;
+      }
+
+      // Lowercase-fold before fetch and compare: the proxy folds anyway (catalog slugs are
+      // canonically lowercase and its API is case-sensitive), and folding here keeps the
+      // same-slug guard and the row label consistent for a merely mis-cased `brand:` tag.
+      const slug = d.brand.toLowerCase();
+      if (slug === this.brandThemeSlug) {
+        return;
+      }
+      this.brandThemeSlug = slug;
+
+      this.$api.getBrandTheme(slug).then((data) => {
+        if (slug !== this.brandThemeSlug) {
+          return;
+        }
+
+        const p = data.found ? brandThemePalette(slug, data.theme) : null;
+        this.brandPalettes = p ? [p] : [];
+      }).catch(() => {
+        // Soft-fail by design: a brand with no page (or a catalog outage past the proxy's
+        // stale-serving) means no row, never an editor error. Clear rather than leave a
+        // previous brand's row lingering.
+        if (slug === this.brandThemeSlug) {
+          this.brandPalettes = [];
+        }
+      });
     },
 
     // Merge `brand=<slug>` into the campaign's headers array, preserving every other entry and
@@ -1099,6 +1145,7 @@ export default Vue.extend({
     brandDerivation: {
       handler() {
         this.syncBrandDerivation();
+        this.syncBrandTheme();
       },
       immediate: true,
     },
@@ -1108,6 +1155,7 @@ export default Vue.extend({
     // covers that case.
     'lists.results': function watchListsResults() {
       this.syncBrandDerivation();
+      this.syncBrandTheme();
     },
 
     // eslint-disable-next-line func-names

@@ -30,6 +30,18 @@ export default {
   props: {
     source: { type: String, default: '' },
     height: { type: String, default: 'auto' },
+
+    // Brand swatch rows for the color picker. Delivered into the iframe'd builder via its
+    // zustand store setter (EmailBuilder.setBrandPalettes) — the same channel setDocument/
+    // resetDocument use — NEVER by re-rendering with the `force` flag, which double-roots
+    // the container and stacks onChange subscriptions.
+    brandPalettes: { type: Array, default: () => [] },
+  },
+
+  watch: {
+    brandPalettes() {
+      this.applyBrandPalettes();
+    },
   },
 
   data() {
@@ -107,6 +119,19 @@ export default {
       }, 100);
     },
 
+    // Push the current brand palettes into the builder's store. Safe to call any time after
+    // the builder script has loaded (the store is module-level, independent of the React
+    // root); before that, the mounted() load chain applies them once the script resolves.
+    // The setBrandPalettes existence check also guards against a stale cached builder bundle
+    // that predates the export.
+    applyBrandPalettes() {
+      const iframe = this.$refs.visualEditor;
+      const em = iframe && iframe.contentWindow && iframe.contentWindow.EmailBuilder;
+      if (em && em.setBrandPalettes) {
+        em.setBrandPalettes(this.brandPalettes);
+      }
+    },
+
     // Inject media URL into the image URL input field in the visual edior sidebar.
     onMediaSelect(media) {
       const iframe = this.$refs.visualEditor;
@@ -165,6 +190,7 @@ export default {
         }
 
         this.render(source);
+        this.applyBrandPalettes();
       }).catch((error) => {
         /* eslint-disable-next-line no-console */
         console.error('Failed to load email-builer script:', error);

@@ -62,7 +62,7 @@
 
     <!-- visual editor //-->
     <visual-editor v-if="self.contentType === 'visual'" :source="self.bodySource" @change="onVisualEditorChange"
-      height="65vh" ref="visualEditor" />
+      height="65vh" :brand-palettes="brandPalettes" ref="visualEditor" />
 
     <!-- raw html editor //-->
     <code-editor lang="html" v-if="self.contentType === 'html'" v-model="self.body" key="editor-html" />
@@ -107,6 +107,9 @@ export default {
     title: { type: String, default: '' },
     disabled: { type: Boolean, default: false },
     templates: { type: Array, default: null },
+
+    // Brand swatch rows for the visual editor's color picker (passed through untouched).
+    brandPalettes: { type: Array, default: () => [] },
 
     // value is provided by the parent component.
     // Throught the editor, `this.self` (a mutable clone of `value`) is used,
