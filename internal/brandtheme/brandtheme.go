@@ -34,6 +34,22 @@ type Resp struct {
 	Theme map[string]string `json:"theme"`
 }
 
+// Pinned themes served without consulting the catalog. `curated` is the company's own brand,
+// not a catalog brand — it will never have a brand page, so its palette is pinned here by
+// decision (2026-08-13, brand guide: black/white primary, yellow accent, cream secondary).
+// The bg/fg/accent roles mirror catalog themes so the rebrand sweep maps across brands;
+// `cream` has no counterpart role and the sweep's missing-role rule leaves it alone. This is
+// NOT an override mechanism for catalog brands — their no-page state soft-fails to no row by
+// design, and pinning one here would mask the page publish that is supposed to light it up.
+var Pinned = map[string]Resp{
+	"curated": {Found: true, Theme: map[string]string{
+		"bg":     "#FFFFFF",
+		"fg":     "#000000",
+		"accent": "#FBF00B",
+		"cream":  "#FDFCF8",
+	}},
+}
+
 // Fetch fetches a brand page from the catalog API and extracts its theme. The slug is
 // interpolated into a URL path, so callers MUST validate it first (cmd uses reBrandSlug,
 // [A-Za-z0-9_-] only) or this becomes an open path proxy into the catalog host.

@@ -3,6 +3,7 @@ package brandtheme
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 )
 
@@ -91,4 +92,30 @@ func TestFetchBrandTheme(t *testing.T) {
 			t.Fatal("expected error on HTTP 500")
 		}
 	})
+}
+
+// The pinned themes never touch the catalog, so all that can rot is the data itself:
+// every entry must be servable (Found=true) and carry only well-formed hex colors, and
+// `curated` must stay pinned — cmd/campaigns_brand.go's defaultBrandSlug derives it for
+// every unmapped campaign.
+func TestPinned(t *testing.T) {
+	reHex := regexp.MustCompile(`^#[0-9a-fA-F]{3,8}$`)
+
+	if _, ok := Pinned["curated"]; !ok {
+		t.Fatal("curated must remain pinned (defaultBrandSlug derives it)")
+	}
+
+	for slug, resp := range Pinned {
+		if !resp.Found {
+			t.Errorf("pinned %q must have Found=true", slug)
+		}
+		if len(resp.Theme) == 0 {
+			t.Errorf("pinned %q has an empty theme", slug)
+		}
+		for role, v := range resp.Theme {
+			if !reHex.MatchString(v) {
+				t.Errorf("pinned %q role %q: %q is not a hex color", slug, role, v)
+			}
+		}
+	}
 }

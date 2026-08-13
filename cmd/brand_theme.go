@@ -61,6 +61,11 @@ func (a *App) GetBrandTheme(c echo.Context) error {
 	// found=false on a tag that is merely mis-cased. Same precedent as the ZMA registry lookup.
 	slug = strings.ToLower(slug)
 
+	// Pinned themes (the company's own `curated` brand) bypass catalog and cache entirely.
+	if pinned, ok := brandtheme.Pinned[slug]; ok {
+		return c.JSON(http.StatusOK, okResp{pinned})
+	}
+
 	brandThemeMu.Lock()
 	cached, ok := brandThemeCache[slug]
 	brandThemeMu.Unlock()
