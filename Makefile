@@ -30,7 +30,8 @@ FRONTEND_EMAIL_BUILDER_DEPS = \
 	$(FRONTEND_EMAIL_BUILDER)/package.json \
 	$(FRONTEND_EMAIL_BUILDER)/tsconfig.json \
 	$(FRONTEND_EMAIL_BUILDER)/vite.config.ts \
-	$(shell find $(FRONTEND_EMAIL_BUILDER)/src -type f)
+	$(shell find $(FRONTEND_EMAIL_BUILDER)/src -type f) \
+	$(shell find $(FRONTEND_EMAIL_BUILDER)/patches -type f)
 
 BIN := listmonk
 STATIC := config.toml.sample \
@@ -53,7 +54,7 @@ $(FRONTEND_YARN_MODULES): frontend/package.json frontend/yarn.lock
 	cd frontend && $(YARN) install
 	touch -c $(FRONTEND_YARN_MODULES)
 
-$(FRONTEND_EMAIL_BUILDER_YARN_MODULES): frontend/package.json frontend/yarn.lock
+$(FRONTEND_EMAIL_BUILDER_YARN_MODULES): $(FRONTEND_EMAIL_BUILDER)/package.json $(FRONTEND_EMAIL_BUILDER)/yarn.lock
 	cd $(FRONTEND_EMAIL_BUILDER) && $(YARN) install
 	touch -c $(FRONTEND_EMAIL_BUILDER_YARN_MODULES)
 
@@ -71,8 +72,10 @@ $(FRONTEND_DIST): $(FRONTEND_DEPS)
 	export VUE_APP_VERSION="${VERSION}" && cd frontend && $(YARN) build
 	touch -c $(FRONTEND_DIST)
 
-# Build the JS email-builder dist.
+# Build the JS email-builder dist. patch-package re-applies patches/ first: postinstall
+# only runs on install, so an edited patch would otherwise not reach an existing node_modules.
 $(FRONTEND_EMAIL_BUILDER_DIST): $(FRONTEND_EMAIL_BUILDER_DEPS)
+	cd $(FRONTEND_EMAIL_BUILDER) && $(YARN) patch-package
 	export VUE_APP_VERSION="${VERSION}" && cd $(FRONTEND_EMAIL_BUILDER) && $(YARN) build
 	touch -c $(FRONTEND_EMAIL_BUILDER_DIST)
 

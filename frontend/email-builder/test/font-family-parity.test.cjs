@@ -14,6 +14,9 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const { Text, TextPropsSchema } = require('@usewaypoint/block-text');
 const { Heading, HeadingPropsSchema } = require('@usewaypoint/block-heading');
+const { HtmlPropsSchema } = require('@usewaypoint/block-html');
+const { ButtonPropsSchema } = require('@usewaypoint/block-button');
+const emailBuilder = require('@usewaypoint/email-builder');
 
 let failed = 0;
 function check(name, ok, detail) {
@@ -57,6 +60,31 @@ for (const { key, value } of fonts) {
     React.createElement(Heading, { style: { fontFamily: key }, props: { text: 'x' } }),
   );
   check(`block-heading renders ${key} stack`, headingHtml.includes(expected));
+
+  // 3. The other three patched packages. block-html and block-button ship schemas the fork
+  // validates through (HtmlPropsSchema directly; ButtonPropsSchema as the base of the fork's
+  // own), so an unpatched enum rejects the key. Their npm renderers are NOT the shipped
+  // render path (the fork's local HtmlReader/Button resolve from fontFamily.ts), so schema
+  // acceptance is the whole contract here.
+  const htmlParse = HtmlPropsSchema.safeParse({ style: { fontFamily: key }, props: { contents: 'x' } });
+  check(`block-html schema accepts ${key}`, htmlParse.success);
+  const buttonParse = ButtonPropsSchema.safeParse({
+    style: { fontFamily: key },
+    props: { text: 'x', url: 'https://example.com' },
+  });
+  check(`block-button schema accepts ${key}`, buttonParse.success);
+
+  // email-builder's bundled copy renders the TemplatePanel preview (schema + resolver),
+  // so it gets the full render check like text/heading.
+  const previewHtml = emailBuilder.renderToStaticMarkup(
+    { root: { type: 'Text', data: { style: { fontFamily: key }, props: { text: 'x' } } } },
+    { rootBlockId: 'root' },
+  );
+  check(
+    `email-builder renders ${key} stack`,
+    previewHtml.includes(expected),
+    `expected ${expected} in ${previewHtml}`,
+  );
 }
 
 if (failed) {
