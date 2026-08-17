@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/run.cjs"
+    "test": "node test/run.cjs",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@emotion/react": "^11.11.3",
@@ -46,6 +47,7 @@
     "eslint-plugin-simple-import-sort": "^12.0.0",
     "js-beautify": "^1.15.1",
     "jsdom": "^24.1.3",
+    "patch-package": "^8.0.1",
     "terser": "^5.34.1",
     "typescript": "^5.2.2",
     "vite": "^6.4.2"

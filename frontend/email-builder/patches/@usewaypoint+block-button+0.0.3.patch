@@ -1,0 +1,112 @@
+diff --git a/node_modules/@usewaypoint/block-button/dist/index.js b/node_modules/@usewaypoint/block-button/dist/index.js
+index 4098693..76ea89d 100644
+--- a/node_modules/@usewaypoint/block-button/dist/index.js
++++ b/node_modules/@usewaypoint/block-button/dist/index.js
+@@ -46,7 +46,19 @@ var FONT_FAMILY_SCHEMA = import_zod.z.enum([
+   "ROUNDED_SANS",
+   "MODERN_SERIF",
+   "BOOK_SERIF",
+-  "MONOSPACE"
++  "MONOSPACE",
++  "SYSTEM_UI",
++  "SLAB_SERIF",
++  "ANTIQUE_SERIF",
++  "DIDONE_SERIF",
++  "HANDWRITTEN",
++  "ARIAL",
++  "VERDANA",
++  "TAHOMA",
++  "TREBUCHET_MS",
++  "GEORGIA",
++  "TIMES_NEW_ROMAN",
++  "COURIER_NEW"
+ ]).nullable().optional();
+ function getFontFamily(fontFamily) {
+   switch (fontFamily) {
+@@ -68,6 +80,30 @@ function getFontFamily(fontFamily) {
+       return '"Iowan Old Style", "Palatino Linotype", "URW Palladio L", P052, serif';
+     case "MONOSPACE":
+       return '"Nimbus Mono PS", "Courier New", "Cutive Mono", monospace';
++    case "SYSTEM_UI":
++      return 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
++    case "SLAB_SERIF":
++      return 'Rockwell, "Rockwell Nova", "Roboto Slab", "DejaVu Serif", "Sitka Small", serif';
++    case "ANTIQUE_SERIF":
++      return 'Superclarendon, "Bookman Old Style", "URW Bookman", "URW Bookman L", "Georgia Pro", Georgia, serif';
++    case "DIDONE_SERIF":
++      return 'Didot, "Bodoni MT", "Noto Serif Display", "URW Palladio L", P052, Sylfaen, serif';
++    case "HANDWRITTEN":
++      return '"Segoe Print", "Bradley Hand", Chilanka, TSCu_Comic, casual, cursive';
++    case "ARIAL":
++      return 'Arial, "Helvetica Neue", Helvetica, sans-serif';
++    case "VERDANA":
++      return 'Verdana, Geneva, "DejaVu Sans", sans-serif';
++    case "TAHOMA":
++      return 'Tahoma, Verdana, Geneva, sans-serif';
++    case "TREBUCHET_MS":
++      return '"Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", sans-serif';
++    case "GEORGIA":
++      return 'Georgia, "Times New Roman", Times, serif';
++    case "TIMES_NEW_ROMAN":
++      return '"Times New Roman", Times, "Liberation Serif", serif';
++    case "COURIER_NEW":
++      return '"Courier New", Courier, "Liberation Mono", monospace';
+   }
+   return void 0;
+ }
+diff --git a/node_modules/@usewaypoint/block-button/dist/index.mjs b/node_modules/@usewaypoint/block-button/dist/index.mjs
+index d4ee5aa..b8a952a 100644
+--- a/node_modules/@usewaypoint/block-button/dist/index.mjs
++++ b/node_modules/@usewaypoint/block-button/dist/index.mjs
+@@ -10,7 +10,19 @@ var FONT_FAMILY_SCHEMA = z.enum([
+   "ROUNDED_SANS",
+   "MODERN_SERIF",
+   "BOOK_SERIF",
+-  "MONOSPACE"
++  "MONOSPACE",
++  "SYSTEM_UI",
++  "SLAB_SERIF",
++  "ANTIQUE_SERIF",
++  "DIDONE_SERIF",
++  "HANDWRITTEN",
++  "ARIAL",
++  "VERDANA",
++  "TAHOMA",
++  "TREBUCHET_MS",
++  "GEORGIA",
++  "TIMES_NEW_ROMAN",
++  "COURIER_NEW"
+ ]).nullable().optional();
+ function getFontFamily(fontFamily) {
+   switch (fontFamily) {
+@@ -32,6 +44,30 @@ function getFontFamily(fontFamily) {
+       return '"Iowan Old Style", "Palatino Linotype", "URW Palladio L", P052, serif';
+     case "MONOSPACE":
+       return '"Nimbus Mono PS", "Courier New", "Cutive Mono", monospace';
++    case "SYSTEM_UI":
++      return 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
++    case "SLAB_SERIF":
++      return 'Rockwell, "Rockwell Nova", "Roboto Slab", "DejaVu Serif", "Sitka Small", serif';
++    case "ANTIQUE_SERIF":
++      return 'Superclarendon, "Bookman Old Style", "URW Bookman", "URW Bookman L", "Georgia Pro", Georgia, serif';
++    case "DIDONE_SERIF":
++      return 'Didot, "Bodoni MT", "Noto Serif Display", "URW Palladio L", P052, Sylfaen, serif';
++    case "HANDWRITTEN":
++      return '"Segoe Print", "Bradley Hand", Chilanka, TSCu_Comic, casual, cursive';
++    case "ARIAL":
++      return 'Arial, "Helvetica Neue", Helvetica, sans-serif';
++    case "VERDANA":
++      return 'Verdana, Geneva, "DejaVu Sans", sans-serif';
++    case "TAHOMA":
++      return 'Tahoma, Verdana, Geneva, sans-serif';
++    case "TREBUCHET_MS":
++      return '"Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", sans-serif';
++    case "GEORGIA":
++      return 'Georgia, "Times New Roman", Times, serif';
++    case "TIMES_NEW_ROMAN":
++      return '"Times New Roman", Times, "Liberation Serif", serif';
++    case "COURIER_NEW":
++      return '"Courier New", Courier, "Liberation Mono", monospace';
+   }
+   return void 0;
+ }
