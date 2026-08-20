@@ -102,7 +102,12 @@ SELECT campaigns.*,
 -- name: get-archived-campaigns
 SELECT COUNT(*) OVER () AS total, campaigns.*,
     -- Fork (template freeze): archived campaigns rendering through their sending
-    -- template show the frozen snapshot; a dedicated archive template stays live.
+    -- template ($3 = 'default') would show the frozen snapshot; a dedicated archive
+    -- template stays live. NOTE: today's only caller (core.GetArchivedCampaigns) always
+    -- passes the archive selector, so the freeze branch here is currently unreachable —
+    -- public archive pages always render live. Kept for symmetry with get-campaign and
+    -- for any future default-selector caller; the frozen in-browser view is
+    -- {{ MessageURL }} (ViewCampaignMessage), which fetches with the default type.
     COALESCE(CASE WHEN $3 = 'default' THEN campaigns.frozen_template_body END, templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
     FROM campaigns
     LEFT JOIN templates ON (
@@ -157,7 +162,11 @@ ORDER BY ARRAY_POSITION($1, id);
 -- name: get-campaign-for-preview
 -- Fork (template freeze): with no explicit template override ($2 = 0), preview what
 -- recipients actually get — the frozen snapshot once the campaign has run. An explicit
--- $2 is the user deliberately previewing another template; honor it live.
+-- $2 is honored live. NOTE the Vue editor ALWAYS passes the campaign's template_id on
+-- in-editor preview and test sends (Editor.vue / Campaign.vue), so those show the LIVE
+-- template even for a started campaign; only the campaigns-list preview (no templateId)
+-- renders the snapshot. Accepted bound, recorded in LISTMONK-RUNBOOK Message fidelity —
+-- the send path is what the freeze guarantees.
 SELECT campaigns.*, COALESCE(CASE WHEN $2 = 0 THEN campaigns.frozen_template_body END, templates.body, '') AS template_body,
 (
 	SELECT COALESCE(ARRAY_TO_JSON(ARRAY_AGG(l)), '[]') FROM (
