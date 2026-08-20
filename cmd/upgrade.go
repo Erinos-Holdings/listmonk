@@ -45,6 +45,8 @@ var migList = []migFunc{
 	{"v6.0.0", migrations.V6_0_0},
 	{"v6.1.0", migrations.V6_1_0},
 	{"v6.2.0", migrations.V6_2_0},
+	// Fork migration (erinos): campaigns.frozen_template_body — see internal/migrations/v6.2.1.go.
+	{"v6.2.1", migrations.V6_2_1},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

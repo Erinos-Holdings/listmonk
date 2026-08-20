@@ -83,8 +83,11 @@ WHERE ($1 = 0 OR id = $1)
 ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 
 -- name: get-campaign
+-- Fork (template freeze): a campaign that has run renders its frozen_template_body
+-- snapshot, not the live template — but only for the sending template; an archive
+-- template ($4 != 'default') is a display concern and stays live.
 SELECT campaigns.*,
-    COALESCE(templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
+    COALESCE(CASE WHEN $4 = 'default' THEN campaigns.frozen_template_body END, templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
     FROM campaigns
     LEFT JOIN templates ON (
         CASE WHEN $4 = 'default' THEN templates.id = campaigns.template_id
@@ -98,7 +101,9 @@ SELECT campaigns.*,
 
 -- name: get-archived-campaigns
 SELECT COUNT(*) OVER () AS total, campaigns.*,
-    COALESCE(templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
+    -- Fork (template freeze): archived campaigns rendering through their sending
+    -- template show the frozen snapshot; a dedicated archive template stays live.
+    COALESCE(CASE WHEN $3 = 'default' THEN campaigns.frozen_template_body END, templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
     FROM campaigns
     LEFT JOIN templates ON (
         CASE WHEN $3 = 'default' THEN templates.id = campaigns.template_id
@@ -150,7 +155,10 @@ LEFT JOIN bounces AS b ON (b.campaign_id = id)
 ORDER BY ARRAY_POSITION($1, id);
 
 -- name: get-campaign-for-preview
-SELECT campaigns.*, COALESCE(templates.body, '') AS template_body,
+-- Fork (template freeze): with no explicit template override ($2 = 0), preview what
+-- recipients actually get — the frozen snapshot once the campaign has run. An explicit
+-- $2 is the user deliberately previewing another template; honor it live.
+SELECT campaigns.*, COALESCE(CASE WHEN $2 = 0 THEN campaigns.frozen_template_body END, templates.body, '') AS template_body,
 (
 	SELECT COALESCE(ARRAY_TO_JSON(ARRAY_AGG(l)), '[]') FROM (
 		SELECT COALESCE(campaign_lists.list_id, 0) AS id,
@@ -180,7 +188,10 @@ SELECT EXISTS (
 -- a campaign. This is used to fetch and slice subscribers for the campaign in next-campaign-subscribers.
 WITH camps AS (
     -- Get all running campaigns and their template bodies (if the template's deleted, the default template body instead)
-    SELECT campaigns.*, COALESCE(templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
+    -- Fork (template freeze): a previously-frozen campaign renders its snapshot; a
+    -- first-time claim reads the live template here and the u CTE below snapshots
+    -- exactly this value (same statement snapshot), so what is sent = what is frozen.
+    SELECT campaigns.*, COALESCE(campaigns.frozen_template_body, templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
     FROM campaigns
     LEFT JOIN templates ON (templates.id = campaigns.template_id)
     WHERE (status='running' OR (status='scheduled' AND NOW() >= campaigns.send_at))
@@ -225,7 +236,11 @@ u AS (
     SET to_send = co.to_send,
         status = (CASE WHEN status != 'running' THEN 'running' ELSE status END),
         max_subscriber_id = co.max_subscriber_id,
-        started_at=(CASE WHEN ca.started_at IS NULL THEN NOW() ELSE ca.started_at END)
+        started_at=(CASE WHEN ca.started_at IS NULL THEN NOW() ELSE ca.started_at END),
+        -- Fork (template freeze): first claim snapshots the resolved template body
+        -- (camps.template_body — the exact value this claim renders). IS NULL guard:
+        -- pause/resume must never overwrite the original snapshot.
+        frozen_template_body = COALESCE(ca.frozen_template_body, (SELECT camps.template_body FROM camps WHERE camps.id = ca.id))
     FROM (SELECT * FROM counts) co
     WHERE ca.id = co.campaign_id
 )
@@ -441,11 +456,24 @@ UPDATE campaigns SET
 WHERE id=$1;
 
 -- name: update-campaign-status
+-- Fork (template freeze): a direct start (effective status 'running' — no send_at)
+-- snapshots the resolved template body once (IS NULL guard; pause/resume keeps the
+-- original). A scheduled start freezes later, at claim time in next-campaigns.
 UPDATE campaigns SET
     status=(
         CASE
             WHEN send_at IS NOT NULL AND $2 = 'running' THEN 'scheduled'
             ELSE $2::campaign_status
+        END
+    ),
+    frozen_template_body=(
+        CASE
+            WHEN $2 = 'running' AND send_at IS NULL AND frozen_template_body IS NULL
+            THEN COALESCE(
+                (SELECT body FROM templates WHERE id = campaigns.template_id),
+                (SELECT body FROM templates WHERE is_default = true LIMIT 1),
+                '')
+            ELSE frozen_template_body
         END
     ),
     updated_at=NOW()

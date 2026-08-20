@@ -60,6 +60,13 @@ type Campaign struct {
 	ArchiveTemplateID null.Int        `db:"archive_template_id" json:"archive_template_id"`
 	ArchiveMeta       json.RawMessage `db:"archive_meta" json:"archive_meta"`
 
+	// FrozenTemplateBody (fork, erinos template freeze) is the resolved template body
+	// snapshotted onto the row on the campaign's first transition to 'running'; NULL
+	// until then. The fetch queries COALESCE it ahead of the live template body, so a
+	// started campaign renders what was approved even if the shared template is later
+	// edited. Never client-writable (json:"-"; update-campaign does not set it).
+	FrozenTemplateBody null.String `db:"frozen_template_body" json:"-"`
+
 	// TemplateBody is joined in from templates by the next-campaigns query.
 	TemplateBody        string             `db:"template_body" json:"-"`
 	ArchiveTemplateBody string             `db:"archive_template_body" json:"-"`

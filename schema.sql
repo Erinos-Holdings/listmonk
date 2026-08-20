@@ -130,7 +130,12 @@ CREATE TABLE campaigns (
 
     started_at       TIMESTAMP WITH TIME ZONE,
     created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Fork (erinos template freeze): the resolved template body snapshotted on the
+    -- campaign's first transition to 'running'. NULL = never ran (render the live
+    -- template). Set once, never overwritten (pause/resume keeps the original).
+    frozen_template_body TEXT NULL
 );
 DROP INDEX IF EXISTS idx_camps_status; CREATE INDEX idx_camps_status ON campaigns(status);
 DROP INDEX IF EXISTS idx_camps_name; CREATE INDEX idx_camps_name ON campaigns(name);
