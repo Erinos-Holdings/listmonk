@@ -112,6 +112,7 @@
 <script>
 import Vue from 'vue';
 import { mapState } from 'vuex';
+import { clearAllDrafts } from './drafts';
 import { uris } from './constants';
 
 import Navigation from './components/Navigation.vue';
@@ -125,6 +126,8 @@ export default Vue.extend({
 
   data() {
     return {
+      // Fork (session expiry): throttle for checkSessionOnFocus.
+      lastSessionCheck: 0,
       activeItem: {},
       activeGroup: {},
       windowWidth: window.innerWidth,
@@ -171,9 +174,59 @@ export default Vue.extend({
     },
 
     doLogout() {
+      // Fork (session expiry): a stashed draft must not survive into the next login on
+      // a shared browser. The restore path also checks userId for a logout that never ran.
+      clearAllDrafts();
       this.$api.logout().then(() => {
         document.location.href = uris.root;
       });
+    },
+
+    // Fork (session expiry): explain before leaving. This listener is registered at app
+    // mount, BEFORE any view's, so it runs first in the synchronous dispatch — the dialog is
+    // therefore deferred one tick, by which time the campaign editor's stash listener has
+    // run and settled detail.stashed. The dialog cannot be dismissed any other way — Esc or
+    // click-outside would strand the admin on a page whose every request will fail.
+    onSessionExpired(e) {
+      const d = e.detail;
+      if (!d) {
+        return;
+      }
+      d.handled = true;
+      setTimeout(() => {
+        let msgKey = 'users.sessionExpiredPlain';
+        if (d.stashed) {
+          msgKey = 'users.sessionExpiredStashed';
+        } else if (d.skipped) {
+          msgKey = 'users.sessionExpiredSkipped';
+        }
+        this.$buefy.dialog.alert({
+          title: this.$t('users.sessionExpiredTitle'),
+          message: this.$t(msgKey),
+          confirmText: this.$t('users.sessionExpiredSignIn'),
+          type: 'is-primary',
+          hasIcon: true,
+          icon: 'clock-alert-outline',
+          canCancel: false,
+          scroll: 'keep',
+          onConfirm: () => d.proceed(),
+        });
+      }, 0);
+    },
+
+    // Fork (session expiry): a tab returning to the foreground checks its session before
+    // the admin starts typing. A dead session fails through the api interceptor, which
+    // stashes and redirects; success is a no-op and doubles as the keep-alive touch.
+    checkSessionOnFocus() {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      const now = Date.now();
+      if (now - this.lastSessionCheck < 60000) {
+        return;
+      }
+      this.lastSessionCheck = now;
+      this.$api.pingSession().catch(() => {});
     },
 
     listenEvents() {
@@ -225,6 +278,10 @@ export default Vue.extend({
     });
 
     this.listenEvents();
+
+    this.lastSessionCheck = Date.now();
+    document.addEventListener('visibilitychange', this.checkSessionOnFocus);
+    window.addEventListener('listmonk:session-expired', this.onSessionExpired);
   },
 });
 </script>

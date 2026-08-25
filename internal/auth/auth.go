@@ -70,11 +70,23 @@ type Auth struct {
 	provider  *oidc.Provider
 	sess      *simplesessions.Manager
 	sessStore *postgres.Store
+	sessTouch *sql.Stmt
 	cb        *Callbacks
 	log       *log.Logger
 }
 
 var sessPruneInterval = time.Hour * 12
+
+// Fork (session expiry). Upstream left the store's TTL at its 24h default while issuing a
+// 7d cookie, so a browser kept presenting a cookie the server had already expired and the
+// admin found out at Save, losing the edits. Both lifetimes now share one constant, and the
+// session is sliding (Middleware touches created_at at most hourly and re-issues the cookie)
+// up to an absolute cap counted from login_at.
+const (
+	sessTTL         = time.Hour * 24 * 7
+	sessTouchAfter  = time.Hour
+	sessAbsoluteMax = time.Hour * 24 * 30
+)
 
 // New returns an initialize Auth instance.
 func New(cfg Config, db *sql.DB, cb *Callbacks, lo *log.Logger) (*Auth, error) {
@@ -92,10 +104,10 @@ func New(cfg Config, db *sql.DB, cb *Callbacks, lo *log.Logger) (*Auth, error) {
 		SessionIDLength:  64,
 		Cookie: simplesessions.CookieOptions{
 			IsHTTPOnly: true,
-			MaxAge:     time.Hour * 24 * 7,
+			MaxAge:     sessTTL,
 		},
 	})
-	st, err := postgres.New(postgres.Opt{}, db)
+	st, err := postgres.New(postgres.Opt{TTL: sessTTL}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +115,25 @@ func New(cfg Config, db *sql.DB, cb *Callbacks, lo *log.Logger) (*Auth, error) {
 	a.sess.UseStore(st)
 	a.sess.SetCookieHooks(cb.GetCookie, cb.SetCookie)
 
+	// Fork (session expiry). The store exposes no touch, so the sliding window is a direct
+	// statement on the sessions table. The WHERE makes it idempotent under concurrent
+	// requests and bounds writes to one per session per hour.
+	touch, err := db.Prepare(`UPDATE sessions SET created_at = NOW()
+		WHERE id = $1 AND created_at < NOW() - INTERVAL '1 second' * $2`)
+	if err != nil {
+		return nil, err
+	}
+	a.sessTouch = touch
+
 	// Prune dead sessions from the DB periodically.
+	// Fork (session expiry). Upstream ran this once at boot (no loop); rows only died at restart.
 	go func() {
-		if err := st.Prune(); err != nil {
-			lo.Printf("error pruning login sessions: %v", err)
+		for {
+			if err := st.Prune(); err != nil {
+				lo.Printf("error pruning login sessions: %v", err)
+			}
+			time.Sleep(sessPruneInterval)
 		}
-		time.Sleep(sessPruneInterval)
 	}()
 
 	return a, nil
@@ -327,6 +352,9 @@ func (o *Auth) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return next(c)
 		}
 
+		// Fork (session expiry): sliding window + absolute cap. See sessTTL.
+		o.touchSession(sess)
+
 		// Set the user details on the handler context.
 		c.Set(UserHTTPCtxKey, user)
 		c.Set(SessionKey, sess)
@@ -376,12 +404,36 @@ func (o *Auth) SaveSession(u User, oidcToken string, c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "error creating session")
 	}
 
-	if err := sess.SetMulti(map[string]any{"user_id": u.ID, "oidc_token": oidcToken}); err != nil {
+	// Fork (session expiry): login_at anchors the absolute cap. created_at on the row is
+	// "last touched" once the sliding window has moved it, so it cannot serve that role.
+	if err := sess.SetMulti(map[string]any{"user_id": u.ID, "oidc_token": oidcToken, "login_at": time.Now().Unix()}); err != nil {
 		o.log.Printf("error setting login session: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "error creating session")
 	}
 
 	return nil
+}
+
+// touchSession slides the session's server-side window forward (at most once per
+// sessTouchAfter) and, when it did, re-issues the cookie so the browser's expiry slides
+// with it. Failures are logged and ignored: a keep-alive that did not land must never fail
+// an otherwise authenticated request.
+func (o *Auth) touchSession(sess *simplesessions.Session) {
+	res, err := o.sessTouch.Exec(sess.ID(), int(sessTouchAfter.Seconds()))
+	if err != nil {
+		o.log.Printf("error touching session: %v", err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return
+	}
+
+	// WriteCookie rebuilds the cookie from the manager's CookieOptions (name, Path=/,
+	// HttpOnly, fresh MaxAge) and routes through the SetCookie hook. Never rebuild it from
+	// the request cookie, which carries only name=value and would land with Path="".
+	if err := sess.WriteCookie(sess.ID()); err != nil {
+		o.log.Printf("error re-issuing session cookie: %v", err)
+	}
 }
 
 // GetSessionID returns the current session ID from the echo context.
@@ -412,6 +464,27 @@ func (o *Auth) validateSession(c echo.Context) (*simplesessions.Session, User, e
 	vars, err := sess.GetMulti("user_id", "oidc_token")
 	if err != nil {
 		return nil, User{}, echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	// Fork (session expiry): absolute cap. A session older than sessAbsoluteMax since login
+	// is destroyed regardless of activity, so a leaked cookie cannot be kept alive forever.
+	// A session created before login_at existed gets stamped on first sight, so it is capped
+	// from here on rather than never. Read separately from the keys above — the postgres
+	// store's GetMulti returns a nil map when ANY requested key is absent, which would fail
+	// the user_id read for every pre-deploy session.
+	loginAt := 0
+	if v, err := sess.Get("login_at"); err == nil {
+		loginAt, _ = o.sessStore.Int(v, nil)
+	}
+	if loginAt <= 0 {
+		if err := sess.Set("login_at", time.Now().Unix()); err != nil {
+			o.log.Printf("error stamping session login_at: %v", err)
+		}
+	} else if time.Since(time.Unix(int64(loginAt), 0)) > sessAbsoluteMax {
+		if err := sess.Destroy(); err != nil {
+			o.log.Printf("error destroying expired session: %v", err)
+		}
+		return nil, User{}, echo.NewHTTPError(http.StatusForbidden, "session expired")
 	}
 
 	// Validate the user ID in the session.

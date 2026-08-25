@@ -208,7 +208,7 @@
       </b-tab-item><!-- campaign -->
 
       <b-tab-item :label="$t('campaigns.content')" icon="text" :disabled="isNew" value="content">
-        <editor v-if="data.id" ref="editor" v-model="form.content" :id="data.id" :title="data.name"
+        <editor v-if="data.id" ref="editor" :key="editorKey" v-model="form.content" :id="data.id" :title="data.name"
           :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes" />
 
         <div class="columns">
@@ -351,6 +351,9 @@ import dayjs from 'dayjs';
 import htmlToPlainText from 'textversionjs';
 import Vue from 'vue';
 import { mapState } from 'vuex';
+import {
+  readDraft, writeDraft, deleteDraft, DRAFT_MAX_AGE_MS,
+} from '../drafts';
 
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
@@ -467,6 +470,12 @@ export default Vue.extend({
       // deliberate re-swap back and forth offers again.
       brandSweepOffered: null,
 
+      // Fork (session expiry): when the campaign finished loading, so a stash written by
+      // another tab after that is not clobbered by this one.
+      loadedAt: 0,
+      // Bumped by applyDraft to re-mount the editor on the restored content.
+      editorKey: 0,
+
       // Binds form input values.
       form: {
         archiveSlug: null,
@@ -543,9 +552,175 @@ export default Vue.extend({
       this.form.media.push(o);
     },
 
+    // Fork (session expiry): upstream compared body/contentType only, so a changed subject
+    // or list never armed the leave guard. Now a real diff over the stashable fields, so
+    // beforeRouteLeave / onbeforeunload and the draft stash all agree on "dirty".
     isUnsaved() {
-      return this.data.body !== this.form.content.body
-        || this.data.contentType !== this.form.content.contentType;
+      if (!this.isEditing || !this.data.id) {
+        return false;
+      }
+      return JSON.stringify(this.draftFromForm()) !== JSON.stringify(this.draftFromCampaign(this.data));
+    },
+
+    // The whitelisted, JSON-safe view of the editor state, from the form ...
+    draftFromForm() {
+      const f = this.form;
+      return this.draftShape({
+        name: f.name,
+        subject: f.subject,
+        preheader: f.preheader,
+        altbody: f.altbody,
+        tags: f.tags,
+        headersStr: f.headersStr,
+        attribsStr: f.attribsStr,
+        archive: f.archive,
+        archiveSlug: f.archiveSlug,
+        archiveMetaStr: f.archiveMetaStr,
+        archiveTemplateId: f.archiveTemplateId,
+        lists: f.lists,
+        sendAtDate: f.sendAtDate,
+        content: f.content,
+      });
+    },
+
+    // ... and the same shape from the loaded campaign, so the two compare as equals.
+    draftFromCampaign(c) {
+      return this.draftShape({
+        name: c.name,
+        subject: c.subject,
+        preheader: (c.attribs && c.attribs.preheader) || '',
+        altbody: c.altbody,
+        tags: c.tags,
+        headersStr: JSON.stringify(c.headers, null, 4),
+        attribsStr: c.attribs ? JSON.stringify(c.attribs, null, 4) : '{}',
+        archive: c.archive,
+        archiveSlug: c.archiveSlug,
+        archiveMetaStr: c.archiveMeta ? JSON.stringify(c.archiveMeta, null, 4) : '{}',
+        archiveTemplateId: c.archiveTemplateId,
+        lists: c.lists,
+        sendAtDate: c.sendAt ? dayjs(c.sendAt).toDate() : null,
+        content: {
+          body: c.body,
+          bodySource: c.bodySource,
+          contentType: c.contentType,
+          templateId: c.templateId,
+        },
+      });
+    },
+
+    draftShape(f) {
+      const d = f.sendAtDate;
+      const validDate = d instanceof Date && !Number.isNaN(d.getTime());
+      return {
+        name: f.name || '',
+        subject: f.subject || '',
+        preheader: f.preheader || '',
+        altbody: f.altbody || null,
+        tags: f.tags || [],
+        headersStr: f.headersStr,
+        attribsStr: f.attribsStr,
+        archive: !!f.archive,
+        archiveSlug: f.archiveSlug || null,
+        archiveMetaStr: f.archiveMetaStr,
+        archiveTemplateId: f.archiveTemplateId || null,
+        listIds: (f.lists || []).map((l) => l.id).sort((a, b) => a - b),
+        sendAtDate: validDate ? d.toISOString() : null,
+        content: {
+          // Visual content: the builder re-renders `body` from `bodySource` on load and the
+          // HTML it emits need not byte-match what was stored, which made every untouched
+          // visual campaign read as dirty ("Discard changes?" on navigation). The document
+          // is the source of truth there; body is compared only for hand-written content.
+          body: f.content.contentType === 'visual' ? '' : (f.content.body || ''),
+          bodySource: f.content.bodySource || null,
+          contentType: f.content.contentType,
+          templateId: f.content.templateId || null,
+        },
+      };
+    },
+
+    // Stash the editor state before the session-expiry redirect. Only when dirty, and never
+    // over another tab's stash for the same campaign unless it predates this tab's load.
+    stashDraft(e) {
+      if (!this.isEditing || !this.data.id || !this.isUnsaved()) {
+        return;
+      }
+      const existing = readDraft(this.data.id);
+      if (existing && existing.savedAt > this.loadedAt) {
+        // Another tab already kept edits for this campaign; say so rather than "none".
+        if (e && e.detail) {
+          e.detail.skipped = true;
+        }
+        return;
+      }
+      writeDraft(this.data.id, {
+        savedAt: Date.now(),
+        userId: this.profile.id,
+        campaignUpdatedAt: this.data.updatedAt,
+        ...this.draftFromForm(),
+      });
+      if (e && e.detail) {
+        e.detail.stashed = true;
+      }
+    },
+
+    // Offer a stash back after the campaign has loaded and the editor has mounted.
+    offerDraftRestore() {
+      const { id } = this.data;
+      const d = readDraft(id);
+      if (!d) {
+        return;
+      }
+      if (Date.now() - d.savedAt > DRAFT_MAX_AGE_MS || d.userId !== this.profile.id || !this.canEdit) {
+        deleteDraft(id);
+        return;
+      }
+
+      const at = dayjs(d.savedAt).format('HH:mm');
+      const msg = d.campaignUpdatedAt === this.data.updatedAt
+        ? this.$t('campaigns.draftRestore', { at })
+        : this.$t('campaigns.draftRestoreChanged', { at, changedAt: dayjs(this.data.updatedAt).format('HH:mm') });
+
+      // Buefy directly rather than $utils.confirm, which HTML-escapes the message; the
+      // strings carry markup and no user-supplied text ({at} is a formatted time).
+      this.$buefy.dialog.confirm({
+        scroll: 'keep',
+        message: msg,
+        confirmText: this.$t('globals.buttons.ok'),
+        cancelText: this.$t('globals.buttons.cancel'),
+        onConfirm: () => {
+          deleteDraft(id);
+          this.applyDraft(d);
+        },
+        onCancel: () => deleteDraft(id),
+      });
+    },
+
+    applyDraft(d) {
+      this.form = {
+        ...this.form,
+        name: d.name,
+        subject: d.subject,
+        preheader: d.preheader,
+        altbody: d.altbody,
+        tags: d.tags,
+        headersStr: d.headersStr,
+        attribsStr: d.attribsStr,
+        archive: d.archive,
+        archiveSlug: d.archiveSlug,
+        archiveMetaStr: d.archiveMetaStr,
+        archiveTemplateId: d.archiveTemplateId,
+        lists: (this.lists.results || []).filter((l) => d.listIds.indexOf(l.id) > -1),
+        sendAtDate: d.sendAtDate ? new Date(d.sendAtDate) : null,
+        sendLater: !!d.sendAtDate,
+        content: { ...d.content },
+      };
+
+      // The editor clones its value ONCE (Editor.vue `self`, no watcher on value) and the
+      // visual builder reads its source once at iframe load, so a form.content assignment
+      // alone leaves both showing the server copy while the form holds the restore — the
+      // next input event would silently overwrite it. Re-mount the editor instead: it
+      // re-clones from the restored content, and the iframe reloads with it as its source.
+      this.editorKey += 1;
     },
 
     // Push the derived From address and `brand` message tag into the form.
@@ -1053,7 +1228,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['serverConfig', 'loading', 'lists', 'templates']),
+    ...mapState(['serverConfig', 'loading', 'lists', 'templates', 'profile']),
 
     canManage() {
       return this.$can('campaigns:manage_all', 'campaigns:manage');
@@ -1308,6 +1483,9 @@ export default Vue.extend({
         if (this.$route.hash !== '') {
           this.activeTab = this.$route.hash.replace('#', '');
         }
+        this.loadedAt = Date.now();
+        // Editor mounts on data.id; offer the stash once it exists.
+        this.$nextTick(() => this.offerDraftRestore());
       });
     } else {
       this.form.messenger = 'email';
@@ -1320,10 +1498,14 @@ export default Vue.extend({
     this.$events.$on('campaign.update', () => {
       this.onSubmit('update');
     });
+
+    // Fork (session expiry): the api interceptor dispatches this before redirecting to login.
+    window.addEventListener('listmonk:session-expired', this.stashDraft);
   },
 
   beforeDestroy() {
     this.$events.$off('campaign.update');
+    window.removeEventListener('listmonk:session-expired', this.stashDraft);
   },
 });
 </script>

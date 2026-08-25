@@ -17,6 +17,49 @@ const http = axios.create({
 
 const utils = new Utils();
 
+// Fork (session expiry). The backend's only cookie-auth failure on API routes is this exact
+// 403 body (internal/auth/auth.go Middleware). Every other 403 is a permissions error and
+// must stay a toast. On match, one DOM event carries the whole hand-off (a DOM event rather
+// than the Vue $events bus: that bus is the root app instance, which this module cannot
+// import without a cycle):
+//   - the campaign editor stashes its work synchronously and sets detail.stashed (or
+//     detail.skipped when another tab already holds a newer stash for the campaign);
+//   - App.vue sets detail.handled and shows a blocking dialog whose only exit calls
+//     detail.proceed(), which drops the page's own beforeunload guard (so the navigation
+//     cannot be cancelled into a dead page) and goes through the real login with next=.
+// With no listener (nothing mounted yet), proceed() runs immediately.
+const INVALID_SESSION = 'invalid session';
+let redirectingToLogin = false;
+
+function isInvalidSession(err) {
+  return err.response && err.response.status === 403
+    && err.response.data && err.response.data.message === INVALID_SESSION;
+}
+
+function goToLogin() {
+  window.onbeforeunload = null;
+  const next = encodeURIComponent(window.location.pathname);
+  // Trailing slashes stripped: a ROOT_URL of '/' would otherwise yield '//admin/login',
+  // which browsers resolve as protocol-relative to a host named 'admin'.
+  const root = (import.meta.env.VUE_APP_ROOT_URL || '').replace(/\/+$/, '');
+  window.location.href = `${root}/admin/login?next=${next}`;
+}
+
+function redirectToLogin() {
+  if (redirectingToLogin) {
+    return;
+  }
+  redirectingToLogin = true;
+
+  const detail = {
+    stashed: false, skipped: false, handled: false, proceed: goToLogin,
+  };
+  window.dispatchEvent(new CustomEvent('listmonk:session-expired', { detail }));
+  if (!detail.handled) {
+    goToLogin();
+  }
+}
+
 // Intercept requests to set the 'loading' state of a model.
 http.interceptors.request.use((config) => {
   if ('loading' in config) {
@@ -75,6 +118,11 @@ http.interceptors.response.use((resp) => {
     msg = err.response.data.message;
   } else {
     msg = err.toString();
+  }
+
+  if (isInvalidSession(err)) {
+    redirectToLogin();
+    return Promise.reject(err);
   }
 
   if (!err.config.disableToast) {
@@ -431,6 +479,11 @@ export const getServerConfig = async () => http.get(
   '/api/config',
   { loading: models.serverConfig, store: models.serverConfig, camelCase: false },
 );
+
+// Fork (session expiry): the focus-time session check. No store/loading keys (it must not
+// touch Vuex state) and no toast — a dead session is handled by the interceptor's redirect,
+// and any other failure (offline, VPN reconnect) is nothing to page the admin about.
+export const pingSession = async () => http.get('/api/config', { disableToast: true });
 
 export const getSettings = async () => http.get(
   '/api/settings',
