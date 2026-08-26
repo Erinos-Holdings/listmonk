@@ -774,7 +774,7 @@ func (a *App) processSubForm(c echo.Context) (bool, error) {
 		Name:   req.Name,
 		Email:  req.Email,
 		Status: models.SubscriberStatusEnabled,
-	}, nil, listUUIDs, false, true)
+	}, nil, listUUIDs, false, true, false)
 	if err == nil {
 		return hasOptin, nil
 	}

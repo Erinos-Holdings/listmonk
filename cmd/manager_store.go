@@ -66,6 +66,15 @@ func (s *store) NextSubscribers(campID, limit int) ([]models.Subscriber, error) 
 	return out, err
 }
 
+// NextEvergreenSubscribers retrieves the next batch of eligible subscribers for an
+// evergreen campaign, recording the batch in campaign_sends in the same statement.
+// Fork (evergreen) -- see queries/evergreen.sql.
+func (s *store) NextEvergreenSubscribers(campID, limit int) ([]models.Subscriber, error) {
+	var out []models.Subscriber
+	err := s.queries.NextEvergreenSubscribers.Select(&out, campID, limit)
+	return out, err
+}
+
 // GetCampaign fetches a campaign from the database.
 func (s *store) GetCampaign(campID int) (*models.Campaign, error) {
 	var out = &models.Campaign{}

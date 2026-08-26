@@ -291,7 +291,8 @@ func (c *Core) ExportSubscribers(searchStr, query string, subIDs, listIDs []int,
 // InsertSubscriber inserts a subscriber and returns the ID. The first bool indicates if
 // it was a new subscriber, and the second bool indicates if the subscriber was sent an optin confirmation.
 // bool = optinSent?
-func (c *Core) InsertSubscriber(sub models.Subscriber, listIDs []int, listUUIDs []string, preconfirm, assertOptin bool) (models.Subscriber, bool, error) {
+// backfill (fork, evergreen) marks the subscriber as not new -- see backfillStmt.
+func (c *Core) InsertSubscriber(sub models.Subscriber, listIDs []int, listUUIDs []string, preconfirm, assertOptin, backfill bool) (models.Subscriber, bool, error) {
 	uu, err := uuid.NewV4()
 	if err != nil {
 		c.log.Printf("error generating UUID: %v", err)
@@ -316,7 +317,13 @@ func (c *Core) InsertSubscriber(sub models.Subscriber, listIDs []int, listUUIDs 
 		listUUIDs = []string{}
 	}
 
-	if err = c.q.InsertSubscriber.Get(&sub.ID,
+	stmt, done, err := c.backfillStmt(c.q.InsertSubscriber, backfill)
+	if err != nil {
+		c.log.Printf("error preparing subscriber insert: %v", err)
+		return models.Subscriber{}, false, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorCreating", "name", "{globals.terms.subscriber}", "error", pqErrMsg(err)))
+	}
+	if err = done(stmt.Get(&sub.ID,
 		sub.UUID,
 		sub.Email,
 		strings.TrimSpace(sub.Name),
@@ -324,7 +331,7 @@ func (c *Core) InsertSubscriber(sub models.Subscriber, listIDs []int, listUUIDs 
 		sub.Attribs,
 		pq.Array(listIDs),
 		pq.Array(listUUIDs),
-		subStatus); err != nil {
+		subStatus)); err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Constraint == "subscribers_email_key" {
 			return models.Subscriber{}, false, echo.NewHTTPError(http.StatusConflict, c.i18n.T("subscribers.emailExists"))
 		} else {

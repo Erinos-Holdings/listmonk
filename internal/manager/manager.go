@@ -49,6 +49,8 @@ const (
 type Store interface {
 	NextCampaigns(currentIDs []int64, sentCounts []int64) ([]*models.Campaign, error)
 	NextSubscribers(campID, limit int) ([]models.Subscriber, error)
+	// Fork (evergreen) -- see internal/manager/evergreen.go.
+	NextEvergreenSubscribers(campID, limit int) ([]models.Subscriber, error)
 	GetCampaign(campID int) (*models.Campaign, error)
 	GetAttachment(mediaID int) (models.Attachment, error)
 	GetInlineAttachmentByFilename(filename string) (models.Attachment, string, error)
@@ -76,6 +78,10 @@ type CampStats struct {
 // Manager handles the scheduling, processing, and queuing of campaigns
 // and message pushes.
 type Manager struct {
+	// Fork (evergreen) -- idle throttle, see evergreen.go.
+	evergreenMut       sync.Mutex
+	evergreenIdleUntil map[int]time.Time
+
 	cfg        Config
 	store      Store
 	i18n       *i18n.I18n
@@ -149,6 +155,9 @@ type Config struct {
 	RootURL               string
 	UnsubHeader           bool
 
+	// Fork (evergreen) -- the app.evergreen_enable setting. Off, evergreen campaigns are never piped.
+	EvergreenEnabled bool
+
 	// Interval to scan the DB for active campaign checkpoints.
 	ScanInterval time.Duration
 
@@ -181,15 +190,16 @@ func New(cfg Config, store Store, i *i18n.I18n, l *log.Logger) *Manager {
 		fnNotify: func(subject string, data any) error {
 			return notifs.NotifySystem(subject, notifs.TplCampaignStatus, data, nil)
 		},
-		log:          l,
-		messengers:   make(map[string]Messenger),
-		pipes:        make(map[int]*pipe),
-		tpls:         make(map[int]*models.Template),
-		links:        make(map[string]string),
-		nextPipes:    make(chan *pipe, 1000),
-		campMsgQ:     make(chan CampaignMessage, cfg.Concurrency*cfg.MessageRate*2),
-		msgQ:         make(chan models.Message, cfg.Concurrency*cfg.MessageRate*2),
-		slidingStart: time.Now(),
+		log:                l,
+		messengers:         make(map[string]Messenger),
+		pipes:              make(map[int]*pipe),
+		evergreenIdleUntil: make(map[int]time.Time),
+		tpls:               make(map[int]*models.Template),
+		links:              make(map[string]string),
+		nextPipes:          make(chan *pipe, 1000),
+		campMsgQ:           make(chan CampaignMessage, cfg.Concurrency*cfg.MessageRate*2),
+		msgQ:               make(chan models.Message, cfg.Concurrency*cfg.MessageRate*2),
+		slidingStart:       time.Now(),
 	}
 	m.tplFuncs = m.makeGnericFuncMap()
 
@@ -458,6 +468,11 @@ func (m *Manager) scanCampaigns(tick time.Duration) {
 		}
 
 		for _, c := range campaigns {
+			// Fork (evergreen) -- flag off or idle-throttled evergreens are not piped this tick.
+			if c.Evergreen && !m.shouldPipeEvergreen(c) {
+				continue
+			}
+
 			// Create a new pipe that'll handle this campaign's states.
 			p, err := m.newPipe(c)
 			if err != nil {

@@ -45,6 +45,12 @@
           {{ $t('settings.general.enablePublicSubPage') }}
         </b-switch>
       </b-field>
+      <!-- Fork (evergreen) -->
+      <b-field :message="$t('settings.general.evergreenEnableHelp')">
+        <b-switch v-model="data['app.evergreen_enable']" name="app.evergreen_enable">
+          {{ $t('settings.general.evergreenEnable') }}
+        </b-switch>
+      </b-field>
       <b-field :message="$t('settings.general.sendOptinConfirmHelp')">
         <b-switch v-model="data['app.send_optin_confirmation']" name="app.send_optin_confirmation">
           {{ $t('settings.general.sendOptinConfirm') }}

@@ -67,6 +67,15 @@ type Campaign struct {
 	// edited. Never client-writable (json:"-"; update-campaign does not set it).
 	FrozenTemplateBody null.String `db:"frozen_template_body" json:"-"`
 
+	// Fork (evergreen) -- once started, an evergreen campaign never finishes and keeps
+	// sending to subscribers who join its target list after started_at, SendDelaySecs
+	// after they join. The three reserved fields are read-only null in this milestone.
+	Evergreen        bool        `db:"evergreen" json:"evergreen"`
+	SendDelaySecs    int64       `db:"send_delay_secs" json:"send_delay_secs"`
+	ParentCampaignID null.Int    `db:"parent_campaign_id" json:"parent_campaign_id"`
+	VariantGroupID   null.String `db:"variant_group_id" json:"variant_group_id"`
+	VariantIndex     null.Int    `db:"variant_index" json:"variant_index"`
+
 	// TemplateBody is joined in from templates by the next-campaigns query.
 	TemplateBody        string             `db:"template_body" json:"-"`
 	ArchiveTemplateBody string             `db:"archive_template_body" json:"-"`

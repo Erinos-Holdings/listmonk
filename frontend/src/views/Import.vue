@@ -69,6 +69,17 @@
             </div>
           </div>
 
+          <!-- Fork (evergreen) -- imported people are not new; keep automatic campaigns off them. -->
+          <div class="columns" v-if="form.mode === 'subscribe'">
+            <div class="column">
+              <b-field :label="$t('subscribers.backfill')" :message="$t('subscribers.backfillHelp')">
+                <div>
+                  <b-switch v-model="form.backfill" name="backfill" data-cy="backfill" />
+                </div>
+              </b-field>
+            </div>
+          </div>
+
           <list-selector v-if="form.mode === 'subscribe'" :label="$t('globals.terms.lists')"
             :placeholder="$t('import.listSubHelp')" :message="$t('import.listSubHelp')" v-model="form.lists"
             :selected="form.lists" :all="lists.results" />
@@ -170,6 +181,8 @@ export default Vue.extend({
         lists: [],
         overwriteUserInfo: false,
         overwriteSubStatus: false,
+        // Fork (evergreen) -- imported subscribers are not new; default ON.
+        backfill: true,
         file: null,
         example: '',
       },
@@ -301,6 +314,7 @@ export default Vue.extend({
       this.form.mode = 'subscribe';
       this.form.overwriteUserInfo = false;
       this.form.overwriteSubStatus = false;
+      this.form.backfill = true;
       this.form.file = null;
       this.form.lists = [];
       this.form.subStatus = 'unconfirmed';
@@ -328,6 +342,7 @@ export default Vue.extend({
         lists: this.form.lists.map((l) => l.id),
         overwrite_userinfo: this.form.overwriteUserInfo,
         overwrite_subscription_status: this.form.overwriteSubStatus,
+        backfill: this.form.backfill,
       }));
       params.set('file', this.form.file);
 

@@ -80,9 +80,12 @@ type Queries struct {
 	ExportCampaignViews        *sqlx.Stmt `query:"export-campaign-views"`
 	ExportCampaignLinkClicks   *sqlx.Stmt `query:"export-campaign-link-clicks"`
 
-	NextCampaigns            *sqlx.Stmt `query:"next-campaigns"`
-	GetRunningCampaign       *sqlx.Stmt `query:"get-running-campaign"`
-	NextCampaignSubscribers  *sqlx.Stmt `query:"next-campaign-subscribers"`
+	NextCampaigns           *sqlx.Stmt `query:"next-campaigns"`
+	GetRunningCampaign      *sqlx.Stmt `query:"get-running-campaign"`
+	NextCampaignSubscribers *sqlx.Stmt `query:"next-campaign-subscribers"`
+	// Fork (evergreen) -- see queries/evergreen.sql.
+	NextEvergreenSubscribers *sqlx.Stmt `query:"next-evergreen-subscribers"`
+	GetEvergreenCollision    *sqlx.Stmt `query:"get-evergreen-collision"`
 	GetOneCampaignSubscriber *sqlx.Stmt `query:"get-one-campaign-subscriber"`
 	UpdateCampaign           *sqlx.Stmt `query:"update-campaign"`
 	UpdateCampaignStatus     *sqlx.Stmt `query:"update-campaign-status"`

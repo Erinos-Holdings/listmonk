@@ -35,6 +35,8 @@ type subQueryReq struct {
 	Status             string `json:"status"`
 	SubscriptionStatus string `json:"subscription_status"`
 	All                bool   `json:"all"`
+	// Fork (evergreen) -- see subimporter.SessionOpt.Backfill.
+	Backfill bool `json:"backfill"`
 }
 
 // subOptin contains the data that's passed to the double opt-in e-mail template.
@@ -247,7 +249,7 @@ func (a *App) CreateSubscriber(c echo.Context) error {
 	}
 
 	// Insert the subscriber into the DB.
-	sub, _, err := a.core.InsertSubscriber(req.Subscriber, listIDs, nil, req.PreconfirmSubs, false)
+	sub, _, err := a.core.InsertSubscriber(req.Subscriber, listIDs, nil, req.PreconfirmSubs, false, req.Backfill)
 	if err != nil {
 		return err
 	}
@@ -500,7 +502,7 @@ func (a *App) ManageSubscriberLists(c echo.Context) error {
 	var err error
 	switch req.Action {
 	case "add":
-		err = a.core.AddSubscriptions(subIDs, listIDs, req.Status)
+		err = a.core.AddSubscriptions(subIDs, listIDs, req.Status, req.Backfill)
 	case "remove":
 		err = a.core.DeleteSubscriptions(subIDs, listIDs)
 	case "unsubscribe":

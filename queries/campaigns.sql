@@ -25,7 +25,8 @@ WITH tpl AS (
 camp AS (
     INSERT INTO campaigns (uuid, type, name, subject, from_email, body, altbody,
         content_type, send_at, headers, attribs, tags, messenger, template_id, to_send,
-        max_subscriber_id, archive, archive_slug, archive_template_id, archive_meta, body_source)
+        max_subscriber_id, archive, archive_slug, archive_template_id, archive_meta, body_source,
+        evergreen, send_delay_secs)
         SELECT $1, $2, $3, $4, $5,
             -- body
             COALESCE(NULLIF($6, ''), (SELECT body FROM tpl), ''),
@@ -40,7 +41,9 @@ camp AS (
             $18,
             $19,
             -- body_source
-            COALESCE($21, (SELECT body_source FROM tpl))
+            COALESCE($21, (SELECT body_source FROM tpl)),
+            -- Fork (evergreen)
+            $22, $23
         RETURNING id
 ),
 med AS (
@@ -231,6 +234,11 @@ counts AS (
             END
         )
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+    -- Fork (evergreen) -- an evergreen campaign is discovered by this query (it is
+    -- returned below so the manager pipes it) but never CLAIMED. Its to_send,
+    -- max_subscriber_id, status and freeze are not this query's business; its
+    -- started_at is stamped by update-campaign-status at the API start instead.
+    WHERE NOT camps.evergreen
     GROUP BY camps.id
 ),
 updateCounts AS (
@@ -436,6 +444,9 @@ WITH camp AS (
         archive_template_id=(CASE WHEN $7::content_type = 'visual' THEN NULL ELSE $17::INT END),
         archive_meta=$18,
         body_source=$20,
+        -- Fork (evergreen)
+        evergreen=$21,
+        send_delay_secs=$22,
         updated_at=NOW()
     WHERE id = $1 RETURNING id
 ),
@@ -468,6 +479,10 @@ WHERE id=$1;
 -- Fork (template freeze) — a direct start (effective status 'running' — no send_at)
 -- snapshots the resolved template body once (IS NULL guard; pause/resume keeps the
 -- original). A scheduled start freezes later, at claim time in next-campaigns.
+-- Fork (evergreen) -- an evergreen is never claimed by next-campaigns, so its
+-- started_at (the eligibility watermark) is stamped HERE on the first start and
+-- preserved after that. Its template snapshot is re-taken on every start, including
+-- a resume, so pause / edit / resume is how a running welcome is changed.
 UPDATE campaigns SET
     status=(
         CASE
@@ -475,9 +490,15 @@ UPDATE campaigns SET
             ELSE $2::campaign_status
         END
     ),
+    started_at=(
+        CASE
+            WHEN $2 = 'running' AND evergreen THEN COALESCE(started_at, NOW())
+            ELSE started_at
+        END
+    ),
     frozen_template_body=(
         CASE
-            WHEN $2 = 'running' AND send_at IS NULL AND frozen_template_body IS NULL
+            WHEN $2 = 'running' AND send_at IS NULL AND (frozen_template_body IS NULL OR evergreen)
             THEN COALESCE(
                 (SELECT body FROM templates WHERE id = campaigns.template_id),
                 (SELECT body FROM templates WHERE is_default = true LIMIT 1),

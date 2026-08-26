@@ -79,15 +79,17 @@ type UrlConfig struct {
 
 // Config contains static, constant config values required by arbitrary handlers and functions.
 type Config struct {
-	SiteName                      string   `koanf:"site_name"`
-	FromEmail                     string   `koanf:"from_email"`
-	NotifyEmails                  []string `koanf:"notify_emails"`
-	EnablePublicSubPage           bool     `koanf:"enable_public_subscription_page"`
-	EnablePublicArchive           bool     `koanf:"enable_public_archive"`
-	EnablePublicArchiveRSSContent bool     `koanf:"enable_public_archive_rss_content"`
-	ShowOptinPage                 bool     `koanf:"show_optin_page"`
-	Lang                          string   `koanf:"lang"`
-	DBBatchSize                   int      `koanf:"batch_size"`
+	SiteName            string   `koanf:"site_name"`
+	FromEmail           string   `koanf:"from_email"`
+	NotifyEmails        []string `koanf:"notify_emails"`
+	EnablePublicSubPage bool     `koanf:"enable_public_subscription_page"`
+	// Fork (evergreen) -- app.evergreen_enable.
+	EvergreenEnabled              bool   `koanf:"evergreen_enable"`
+	EnablePublicArchive           bool   `koanf:"enable_public_archive"`
+	EnablePublicArchiveRSSContent bool   `koanf:"enable_public_archive_rss_content"`
+	ShowOptinPage                 bool   `koanf:"show_optin_page"`
+	Lang                          string `koanf:"lang"`
+	DBBatchSize                   int    `koanf:"batch_size"`
 	Privacy                       struct {
 		IndividualTracking bool            `koanf:"individual_tracking"`
 		DisableTracking    bool            `koanf:"disable_tracking"`
@@ -569,6 +571,7 @@ func initCore(fnNotify func(sub models.Subscriber, listIDs []int) (int, error), 
 		Constants: core.Constants{
 			SendOptinConfirmation: ko.Bool("app.send_optin_confirmation"),
 			CacheSlowQueries:      ko.Bool("app.cache_slow_queries"),
+			EvergreenEnabled:      ko.Bool("app.evergreen_enable"),
 		},
 		Queries: queries,
 		DB:      db,
@@ -612,6 +615,7 @@ func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlCon
 		SlidingWindow:         ko.Bool("app.message_sliding_window"),
 		SlidingWindowDuration: ko.Duration("app.message_sliding_window_duration"),
 		SlidingWindowRate:     ko.Int("app.message_sliding_window_rate"),
+		EvergreenEnabled:      ko.Bool("app.evergreen_enable"),
 		ScanInterval:          time.Second * 5,
 		ScanCampaigns:         !ko.Bool("passive"),
 	}, newManagerStore(q, co, md), i, lo)

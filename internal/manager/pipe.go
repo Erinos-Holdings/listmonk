@@ -80,7 +80,16 @@ func (m *Manager) newPipe(c *models.Campaign) (*pipe, error) {
 // have been processed, or that a campaign has been paused or cancelled.
 func (p *pipe) NextSubscribers() (bool, error) {
 	// Fetch the next batch of subscribers from a 'running' campaign.
-	subs, err := p.m.store.NextSubscribers(p.camp.ID, p.m.cfg.BatchSize)
+	var (
+		subs []models.Subscriber
+		err  error
+	)
+	if p.camp.Evergreen {
+		// Fork (evergreen) -- join-time eligibility instead of the id checkpoint.
+		subs, err = p.nextEvergreenSubscribers()
+	} else {
+		subs, err = p.m.store.NextSubscribers(p.camp.ID, p.m.cfg.BatchSize)
+	}
 	if err != nil {
 		return false, fmt.Errorf("error fetching campaign subscribers (%s): %v", p.camp.Name, err)
 	}
@@ -216,6 +225,12 @@ func (p *pipe) cleanup() {
 	// The campaign was manually stopped (pause, cancel).
 	if p.stopped.Load() {
 		p.m.log.Printf("stop processing campaign (%s)", p.camp.Name)
+		return
+	}
+
+	// Fork (evergreen) -- an empty batch is "nothing to send right now", not the end.
+	// The campaign stays 'running' and is re-piped after the idle interval.
+	if p.evergreenCleanup() {
 		return
 	}
 

@@ -24,6 +24,15 @@
 
       <div class="column is-6">
         <div v-if="canManage || canSend" class="buttons">
+          <!-- Fork (evergreen) -- a running evergreen is edited by pausing it first. -->
+          <b-field grouped v-if="isEditing && data.evergreen && data.status === 'running' && canSend">
+            <b-field expanded>
+              <b-button expanded @click="$utils.confirm(null, pauseCampaign)" :loading="loading.campaigns"
+                type="is-primary" icon-left="pause-circle-outline" data-cy="btn-pause-evergreen">
+                {{ $t('campaigns.pause') }}
+              </b-button>
+            </b-field>
+          </b-field>
           <b-field grouped v-if="isEditing && canEdit">
             <b-field v-if="canManage" expanded>
               <b-button expanded @click="() => onSubmit('update')" :loading="loading.campaigns" type="is-primary"
@@ -56,6 +65,10 @@
     </header>
 
     <b-loading :active="loading.campaigns" />
+
+    <b-message v-if="isEditing && data.evergreen && data.status === 'running'" type="is-info" class="mb-4">
+      {{ $t('campaigns.evergreenPauseToEdit') }}
+    </b-message>
 
     <b-tabs type="is-boxed" :animated="false" v-model="activeTab" @input="onTab">
       <b-tab-item :label="$tc('globals.terms.campaign')" label-position="on-border" value="campaign"
@@ -139,7 +152,7 @@
                 <div class="columns">
                   <div class="column is-4">
                     <b-field :label="$t('campaigns.sendLater')" data-cy="btn-send-later">
-                      <b-switch v-model="form.sendLater" :disabled="!canEdit" />
+                      <b-switch v-model="form.sendLater" :disabled="!canEdit || form.evergreen" />
                     </b-field>
                   </div>
                   <div class="column">
@@ -150,6 +163,25 @@
                         position="is-top-right" :placeholder="$t('campaigns.dateAndTime')" icon="calendar-clock"
                         :timepicker="{ hourFormat: '24' }" :datetime-formatter="formatDateTime"
                         horizontal-time-picker />
+                    </b-field>
+                  </div>
+                </div>
+
+                <!-- Fork (evergreen) -- an evergreen campaign never finishes; it keeps sending to
+                     subscribers who join its (single) list after it is started. -->
+                <div class="columns" v-if="serverConfig.evergreen_enabled || form.evergreen">
+                  <div class="column is-4">
+                    <b-field :label="$t('campaigns.evergreen')" data-cy="btn-evergreen"
+                      :message="form.evergreen ? $t('campaigns.evergreenHelp') : ''">
+                      <b-switch v-model="form.evergreen" :disabled="!canEdit || form.sendLater" />
+                    </b-field>
+                  </div>
+                  <div class="column">
+                    <br />
+                    <b-field v-if="form.evergreen" :label="$t('campaigns.evergreenDelay')" label-position="on-border"
+                      data-cy="evergreen-delay">
+                      <b-numberinput v-model="form.sendDelayDays" :min="0" :max="365" :disabled="!canEdit"
+                        controls-position="compact" />
                     </b-field>
                   </div>
                 </div>
@@ -504,6 +536,9 @@ export default Vue.extend({
         // Parsed Date() version of send_at from the API.
         sendAtDate: null,
         sendLater: false,
+        // Fork (evergreen) -- "send automatically to new subscribers", delay in days.
+        evergreen: false,
+        sendDelayDays: 0,
         archive: false,
         archiveMetaStr: '{}',
         archiveMeta: {},
@@ -579,6 +614,8 @@ export default Vue.extend({
         archiveTemplateId: f.archiveTemplateId,
         lists: f.lists,
         sendAtDate: f.sendAtDate,
+        evergreen: f.evergreen,
+        sendDelayDays: f.sendDelayDays,
         content: f.content,
       });
     },
@@ -599,6 +636,8 @@ export default Vue.extend({
         archiveTemplateId: c.archiveTemplateId,
         lists: c.lists,
         sendAtDate: c.sendAt ? dayjs(c.sendAt).toDate() : null,
+        evergreen: c.evergreen,
+        sendDelayDays: Math.round((c.sendDelaySecs || 0) / 86400),
         content: {
           body: c.body,
           bodySource: c.bodySource,
@@ -625,6 +664,8 @@ export default Vue.extend({
         archiveTemplateId: f.archiveTemplateId || null,
         listIds: (f.lists || []).map((l) => l.id).sort((a, b) => a - b),
         sendAtDate: validDate ? d.toISOString() : null,
+        evergreen: !!f.evergreen,
+        sendDelayDays: Number(f.sendDelayDays) || 0,
         content: {
           // Visual content: the builder re-renders `body` from `bodySource` on load and the
           // HTML it emits need not byte-match what was stored, which made every untouched
@@ -712,6 +753,8 @@ export default Vue.extend({
         lists: (this.lists.results || []).filter((l) => d.listIds.indexOf(l.id) > -1),
         sendAtDate: d.sendAtDate ? new Date(d.sendAtDate) : null,
         sendLater: !!d.sendAtDate,
+        evergreen: !!d.evergreen,
+        sendDelayDays: Number(d.sendDelayDays) || 0,
         content: { ...d.content },
       };
 
@@ -1016,6 +1059,14 @@ export default Vue.extend({
       }
     },
 
+    // Fork (evergreen) -- pause from the editor so a running welcome can be edited.
+    pauseCampaign() {
+      return this.$api.changeCampaignStatus(this.data.id, 'paused').then(() => {
+        this.$utils.toast(this.$t('campaigns.statusChanged', { name: this.data.name, status: 'paused' }));
+        return this.getCampaign(this.data.id);
+      });
+    },
+
     getCampaign(id) {
       return this.$api.getCampaign(id).then((data) => {
         this.data = data;
@@ -1026,6 +1077,8 @@ export default Vue.extend({
           archiveMetaStr: data.archiveMeta ? JSON.stringify(data.archiveMeta, null, 4) : '{}',
           attribsStr: data.attribs ? JSON.stringify(data.attribs, null, 4) : '{}',
           preheader: (data.attribs && data.attribs.preheader) || '',
+          evergreen: !!data.evergreen,
+          sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
 
           // The structure that is populated by editor input event.
           content: {
@@ -1107,6 +1160,8 @@ export default Vue.extend({
         headers: this.form.headers,
         attribs: this.form.attribs,
         media: this.form.media.map((m) => m.id),
+        evergreen: !!this.form.evergreen,
+        send_delay_secs: this.form.evergreen ? Math.max(0, Number(this.form.sendDelayDays) || 0) * 86400 : 0,
       };
 
       this.$api.createCampaign(data).then((d) => {
@@ -1141,6 +1196,8 @@ export default Vue.extend({
         archive_template_id: this.form.archiveTemplateId,
         archive_meta: this.form.archiveMeta,
         media: this.form.media.map((m) => m.id),
+        evergreen: !!this.form.evergreen,
+        send_delay_secs: this.form.evergreen ? Math.max(0, Number(this.form.sendDelayDays) || 0) * 86400 : 0,
       };
 
       let typMsg = 'globals.messages.updated';

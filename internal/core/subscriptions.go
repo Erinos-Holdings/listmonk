@@ -23,8 +23,15 @@ func (c *Core) GetSubscriptions(subID int, subUUID string, allLists bool) ([]mod
 }
 
 // AddSubscriptions adds list subscriptions to subscribers.
-func (c *Core) AddSubscriptions(subIDs, listIDs []int, status string) error {
-	if _, err := c.q.AddSubscribersToLists.Exec(pq.Array(subIDs), pq.Array(listIDs), status); err != nil {
+// backfill (fork, evergreen) marks the subscribers as not new -- see backfillStmt.
+func (c *Core) AddSubscriptions(subIDs, listIDs []int, status string, backfill bool) error {
+	stmt, done, err := c.backfillStmt(c.q.AddSubscribersToLists, backfill)
+	if err != nil {
+		c.log.Printf("error preparing subscriptions write: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.subscribers}", "error", err.Error()))
+	}
+	if _, err := stmt.Exec(pq.Array(subIDs), pq.Array(listIDs), status); done(err) != nil {
 		c.log.Printf("error adding subscriptions: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.subscribers}", "error", err.Error()))

@@ -270,6 +270,9 @@ func installCampaign(campTplID, archiveTplID int, q *models.Queries) {
 		`{"name": "Subscriber"}`,
 		nil,
 		nil,
+		// Fork (evergreen) -- evergreen, send_delay_secs.
+		false,
+		0,
 	); err != nil {
 		lo.Fatalf("error creating sample campaign: %v", err)
 	}

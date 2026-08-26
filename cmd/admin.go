@@ -35,17 +35,20 @@ type serverConfig struct {
 	Update        *AppUpdate      `json:"update"`
 	NeedsRestart  bool            `json:"needs_restart"`
 	HasLegacyUser bool            `json:"has_legacy_user"`
-	Version       string          `json:"version"`
+	// Fork (evergreen) -- app.evergreen_enable, gates the campaign form checkbox.
+	EvergreenEnabled bool   `json:"evergreen_enabled"`
+	Version          string `json:"version"`
 }
 
 // GetServerConfig returns general server config.
 func (a *App) GetServerConfig(c echo.Context) error {
 	out := serverConfig{
-		RootURL:       a.urlCfg.RootURL,
-		FromEmail:     a.cfg.FromEmail,
-		Lang:          a.cfg.Lang,
-		Permissions:   a.cfg.PermissionsRaw,
-		HasLegacyUser: a.cfg.HasLegacyUser,
+		RootURL:          a.urlCfg.RootURL,
+		FromEmail:        a.cfg.FromEmail,
+		Lang:             a.cfg.Lang,
+		Permissions:      a.cfg.PermissionsRaw,
+		HasLegacyUser:    a.cfg.HasLegacyUser,
+		EvergreenEnabled: a.cfg.EvergreenEnabled,
 		Privacy: struct {
 			DisableTracking    bool `json:"disable_tracking"`
 			IndividualTracking bool `json:"individual_tracking"`

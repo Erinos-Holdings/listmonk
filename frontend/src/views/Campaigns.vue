@@ -86,6 +86,9 @@
             <b-tag v-if="props.row.type === 'optin'" class="is-small">
               {{ $t('lists.optin') }}
             </b-tag>
+            <b-tag v-if="props.row.evergreen" class="is-small is-info" data-cy="tag-evergreen">
+              {{ $t('campaigns.evergreenTag') }}
+            </b-tag>
             <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
               {{ props.row.name }}
               <copy-text :text="props.row.name" hide-text />
@@ -144,7 +147,10 @@
           </p>
           <p>
             <label for="#">{{ $t('campaigns.sent') }}</label>
-            <span>
+            <span v-if="props.row.evergreen">
+              {{ $utils.formatNumber(stats.sent) }}
+            </span>
+            <span v-else>
               {{ $utils.formatNumber(stats.sent) }} /
               {{ $utils.formatNumber(stats.toSend) }}
             </span>
@@ -167,7 +173,7 @@
               </b-tooltip>
             </span>
           </p>
-          <p v-if="isRunning(props.row.id)">
+          <p v-if="isRunning(props.row.id) && !props.row.evergreen">
             <label for="#">
               {{ $t('campaigns.progress') }}
               <span class="spinner is-tiny">
@@ -464,6 +470,10 @@ export default Vue.extend({
         archive_template_id: c.archiveTemplateId,
         archive_meta: c.archiveMeta,
         media: c.media.map((m) => m.id),
+        // Fork (evergreen) -- a clone keeps the flag; starting it while the original runs
+        // is refused server-side (same list + same delay).
+        evergreen: !!c.evergreen,
+        send_delay_secs: c.sendDelaySecs || 0,
       };
 
       if (c.archive) {

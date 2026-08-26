@@ -95,8 +95,11 @@ type SessionOpt struct {
 	Overwrite          bool   `json:"overwrite"`
 	OverwriteUserInfo  bool   `json:"overwrite_userinfo"`
 	OverwriteSubStatus bool   `json:"overwrite_subscription_status"`
-	Delim              string `json:"delim"`
-	ListIDs            []int  `json:"lists"`
+	// Fork (evergreen) -- these subscribers are not new. Rows written under this flag
+	// get no confirmed_at, so no evergreen campaign ever welcomes them.
+	Backfill bool   `json:"backfill"`
+	Delim    string `json:"delim"`
+	ListIDs  []int  `json:"lists"`
 }
 
 // Status represents statistics from an ongoing import session.
@@ -114,6 +117,8 @@ type SubReq struct {
 	Lists          []int    `json:"lists"`
 	ListUUIDs      []string `json:"list_uuids"`
 	PreconfirmSubs bool     `json:"preconfirm_subscriptions"`
+	// Fork (evergreen) -- this subscriber is not new; see SessionOpt.Backfill.
+	Backfill bool `json:"backfill"`
 }
 
 type importStatusTpl struct {
@@ -296,6 +301,15 @@ func (s *Session) Start() {
 				stmt = tx.Stmt(s.im.opt.UpsertStmt)
 			} else {
 				stmt = tx.Stmt(s.im.opt.BlocklistStmt)
+			}
+
+			// Fork (evergreen) -- see SessionOpt.Backfill. SET LOCAL is transaction-scoped.
+			if s.opt.Backfill {
+				if _, err := tx.Exec("SET LOCAL listmonk.backfill = 'true'"); err != nil {
+					s.log.Printf("error setting backfill flag: %v", err)
+					tx.Rollback()
+					break
+				}
 			}
 		}
 

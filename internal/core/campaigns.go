@@ -192,6 +192,8 @@ func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int) 
 		o.ArchiveMeta,
 		pq.Array(mediaIDs),
 		o.BodySource,
+		o.Evergreen,
+		o.SendDelaySecs,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.noSubs"))
@@ -231,7 +233,9 @@ func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs
 		o.ArchiveTemplateID,
 		o.ArchiveMeta,
 		pq.Array(mediaIDs),
-		o.BodySource)
+		o.BodySource,
+		o.Evergreen,
+		o.SendDelaySecs)
 	if err != nil {
 		c.log.Printf("error updating campaign: %v", err)
 		return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
@@ -283,6 +287,21 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 
 	if len(errMsg) > 0 {
 		return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest, errMsg)
+	}
+
+	// Fork (evergreen) -- starting (or resuming) an evergreen is gated on the feature
+	// flag and refused when another running evergreen on the same list and delay would
+	// send a second welcome per signup (unless both are in one variant group).
+	if status == models.CampaignStatusRunning && cm.Evergreen {
+		if !c.consts.EvergreenEnabled {
+			return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.evergreenDisabled"))
+		}
+		if name, ok, err := c.evergreenCollision(cm); err != nil {
+			return models.Campaign{}, err
+		} else if ok {
+			return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest,
+				c.i18n.Ts("campaigns.evergreenCollision", "name", name))
+		}
 	}
 
 	res, err := c.q.UpdateCampaignStatus.Exec(cm.ID, status)

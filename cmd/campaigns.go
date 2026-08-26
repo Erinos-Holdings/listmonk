@@ -872,6 +872,24 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 		return c, errors.New(a.i18n.T("campaigns.fieldInvalidListIDs"))
 	}
 
+	// Fork (evergreen) -- one list (join-time semantics are per list), never scheduled
+	// (an evergreen is not claimed by next-campaigns, so a scheduled one would never
+	// start), never opt-in, non-negative delay.
+	if c.Evergreen {
+		if c.Type == models.CampaignTypeOptin {
+			return c, errors.New(a.i18n.T("campaigns.evergreenNotOptin"))
+		}
+		if len(c.ListIDs) != 1 {
+			return c, errors.New(a.i18n.T("campaigns.evergreenOneList"))
+		}
+		if c.SendAt.Valid {
+			return c, errors.New(a.i18n.T("campaigns.evergreenNoSchedule"))
+		}
+		if c.SendDelaySecs < 0 {
+			return c, errors.New(a.i18n.T("campaigns.evergreenInvalidDelay"))
+		}
+	}
+
 	if !a.manager.HasMessenger(c.Messenger) {
 		// If it's a specific SMTP, but it's no longer available (removed/disabled), fall back to general email messenger.
 		if strings.HasPrefix(c.Messenger, "email-") {

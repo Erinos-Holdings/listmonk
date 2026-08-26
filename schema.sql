@@ -67,10 +67,35 @@ CREATE TABLE subscriber_lists (
     created_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
+    -- Fork (erinos evergreen campaigns): when this row last transitioned INTO
+    -- 'confirmed' (trigger below). NULL = never confirmed, or confirmed under the
+    -- listmonk.backfill session setting (bulk import / replay of people who are
+    -- not new) — never eligible for an evergreen send.
+    confirmed_at       TIMESTAMP WITH TIME ZONE NULL,
+
     PRIMARY KEY(subscriber_id, list_id)
 );
 DROP INDEX IF EXISTS idx_sub_lists_sub_id; CREATE INDEX idx_sub_lists_sub_id ON subscriber_lists(subscriber_id);
 DROP INDEX IF EXISTS idx_sub_lists_list_id; CREATE INDEX idx_sub_lists_list_id ON subscriber_lists(list_id);
+DROP INDEX IF EXISTS idx_sub_lists_confirmed_at; CREATE INDEX idx_sub_lists_confirmed_at ON subscriber_lists(list_id, confirmed_at) WHERE confirmed_at IS NOT NULL;
+
+-- Fork (erinos evergreen campaigns): stamp confirmed_at only on the transition into
+-- 'confirmed' — never on an overwrite of an already-confirmed row (CSV re-import,
+-- bulk add) and never while listmonk.backfill = 'true' for the transaction.
+CREATE OR REPLACE FUNCTION subscriber_lists_stamp_confirmed_at() RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status = 'confirmed'
+        AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'confirmed')
+        AND COALESCE(current_setting('listmonk.backfill', true), '') <> 'true' THEN
+        NEW.confirmed_at := NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS subscriber_lists_confirmed_at ON subscriber_lists;
+CREATE TRIGGER subscriber_lists_confirmed_at
+    BEFORE INSERT OR UPDATE OF status ON subscriber_lists
+    FOR EACH ROW EXECUTE FUNCTION subscriber_lists_stamp_confirmed_at();
 DROP INDEX IF EXISTS idx_sub_lists_status; CREATE INDEX idx_sub_lists_status ON subscriber_lists(status);
 
 -- templates
@@ -135,9 +160,32 @@ CREATE TABLE campaigns (
     -- Fork (erinos template freeze): the resolved template body snapshotted on the
     -- campaign's first transition to 'running'. NULL = never ran (render the live
     -- template). Set once, never overwritten (pause/resume keeps the original).
-    frozen_template_body TEXT NULL
+    frozen_template_body TEXT NULL,
+
+    -- Fork (erinos evergreen campaigns): once started, an evergreen campaign never
+    -- finishes and keeps sending to subscribers who join its target list after
+    -- started_at (the watermark), send_delay_secs after they join. The three
+    -- nullable columns below are RESERVED for step chaining and A/B variants.
+    -- See internal/migrations/v6.2.2.go and queries/evergreen.sql.
+    evergreen          BOOLEAN NOT NULL DEFAULT false,
+    send_delay_secs    BIGINT NOT NULL DEFAULT 0,
+    parent_campaign_id INTEGER NULL REFERENCES campaigns(id) ON DELETE SET NULL,
+    variant_group_id   UUID NULL,
+    variant_index      INTEGER NULL
 );
 DROP INDEX IF EXISTS idx_camps_status; CREATE INDEX idx_camps_status ON campaigns(status);
+
+-- Fork (erinos evergreen campaigns): append-only send history. The evergreen
+-- eligibility query reads MAX(sent_at) per (campaign, subscriber); nothing updates
+-- or deletes rows except campaign deletion. No FK to subscribers on purpose — a
+-- deleted-and-recreated subscriber is a new id.
+CREATE TABLE IF NOT EXISTS campaign_sends (
+    campaign_id   INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    subscriber_id INTEGER NOT NULL,
+    sent_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+DROP INDEX IF EXISTS idx_campaign_sends_camp_sub; CREATE INDEX idx_campaign_sends_camp_sub ON campaign_sends(campaign_id, subscriber_id, sent_at DESC);
+DROP INDEX IF EXISTS idx_campaign_sends_sub_camp; CREATE INDEX idx_campaign_sends_sub_camp ON campaign_sends(subscriber_id, campaign_id);
 DROP INDEX IF EXISTS idx_camps_name; CREATE INDEX idx_camps_name ON campaigns(name);
 DROP INDEX IF EXISTS idx_camps_created_at; CREATE INDEX idx_camps_created_at ON campaigns(created_at);
 DROP INDEX IF EXISTS idx_camps_updated_at; CREATE INDEX idx_camps_updated_at ON campaigns(updated_at);
@@ -252,6 +300,7 @@ INSERT INTO settings (key, value) VALUES
     ('app.enable_public_archive_rss_content', 'true'),
     ('app.send_optin_confirmation', 'true'),
     ('app.check_updates', 'true'),
+    ('app.evergreen_enable', 'false'),
     ('app.notify_emails', '[]'),
     ('app.lang', '"en"'),
     ('privacy.individual_tracking', 'false'),

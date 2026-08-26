@@ -47,6 +47,8 @@ type Constants struct {
 		Action string
 	}
 	CacheSlowQueries bool
+	// Fork (evergreen) -- app.evergreen_enable. Off, an evergreen campaign cannot be started.
+	EvergreenEnabled bool
 }
 
 // Hooks contains external function hooks that are required by the core package.
