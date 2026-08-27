@@ -356,10 +356,13 @@ export const getCampaign = async (id) => http.get(`/api/campaigns/${id}`, {
 
 export const getCampaignStats = async () => http.get('/api/campaigns/running/stats', {});
 
+// Fork: the create/update responses carry the campaign's headers too; camelCasing them
+// (X-SES-MESSAGE-TAGS -> xSESMESSAGETAGS) made the post-save campaign differ from the form
+// and armed the "Discard changes?" guard after every Save. Same exemption as getCampaign.
 export const createCampaign = async (data) => http.post(
   '/api/campaigns',
   data,
-  { loading: models.campaigns },
+  { loading: models.campaigns, camelCase: (keyPath) => !keyPath.startsWith('.headers') },
 );
 
 export const getCampaignViewCounts = async (params) => http.get(
@@ -397,14 +400,16 @@ export const testCampaign = async (data) => http.post(
 export const updateCampaign = async (id, data) => http.put(
   `/api/campaigns/${id}`,
   data,
-  { loading: models.campaigns },
+  { loading: models.campaigns, camelCase: (keyPath) => !keyPath.startsWith('.headers') },
 );
 
 export const changeCampaignStatus = async (id, status) => http.put(
   `/api/campaigns/${id}/status`,
   { status },
 
-  { loading: models.campaigns },
+  // Fork: the editor assigns this response to its campaign (unschedule), so headers must
+  // keep their names here too -- see createCampaign.
+  { loading: models.campaigns, camelCase: (keyPath) => !keyPath.startsWith('.headers') },
 );
 
 export const updateCampaignArchive = async (id, data) => http.put(
