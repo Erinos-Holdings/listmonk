@@ -61,21 +61,30 @@ jobs:
           yarn --cwd frontend/email-builder install --frozen-lockfile
           yarn --cwd frontend/email-builder test
 
+      # The image tag AND the version the app reports (Settings header, /api/config,
+      # the boot log) — `<upstream tag>-erinos.<run number>`, so the UI shows exactly
+      # which fork build is running. The Makefile honours LISTMONK_VERSION; the app's
+      # update checker strips the -suffix before comparing, so upstream releases are
+      # still detected. Resolved BEFORE the build steps so ldflags carry it.
+      - name: Resolve version
+        id: ver
+        run: |
+          base="$(git describe --tags --abbrev=0)"
+          echo "base=${base}" >> "$GITHUB_OUTPUT"
+          echo "full=${base}-erinos.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
       - name: Build frontend
+        env:
+          LISTMONK_VERSION: ${{ steps.ver.outputs.full }}
         run: make build-frontend
 
       - name: Build arm64 binary and pack static assets into it
         env:
+          LISTMONK_VERSION: ${{ steps.ver.outputs.full }}
           GOOS: linux
           GOARCH: arm64
           CGO_ENABLED: 0
         run: make build pack-bin
-
-      # The upstream tag this branch is based on, so the image tag survives a
-      # rebase onto a newer upstream release.
-      - name: Resolve base version
-        id: ver
-        run: echo "base=$(git describe --tags --abbrev=0)" >> "$GITHUB_OUTPUT"
 
       # QEMU is needed because the Dockerfile has RUN steps (apk add, chmod)
       # that execute inside the arm64 image.
@@ -95,7 +104,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha,format=short
-            type=raw,value=${{ steps.ver.outputs.base }}-erinos.${{ github.run_number }}
+            type=raw,value=${{ steps.ver.outputs.full }}
 
       - uses: docker/build-push-action@v6
         with:
