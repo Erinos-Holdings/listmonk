@@ -75,6 +75,9 @@ type Campaign struct {
 	ParentCampaignID null.Int    `db:"parent_campaign_id" json:"parent_campaign_id"`
 	VariantGroupID   null.String `db:"variant_group_id" json:"variant_group_id"`
 	VariantIndex     null.Int    `db:"variant_index" json:"variant_index"`
+	// Prepared is set by the manager once inline images, the template and media have
+	// been resolved on this instance (evergreen re-pipe cache). Never persisted.
+	Prepared bool `db:"-" json:"-"`
 
 	// TemplateBody is joined in from templates by the next-campaigns query.
 	TemplateBody        string             `db:"template_body" json:"-"`

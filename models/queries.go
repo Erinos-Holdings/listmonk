@@ -86,6 +86,8 @@ type Queries struct {
 	// Fork (evergreen) -- see queries/evergreen.sql.
 	NextEvergreenSubscribers *sqlx.Stmt `query:"next-evergreen-subscribers"`
 	GetEvergreenCollision    *sqlx.Stmt `query:"get-evergreen-collision"`
+	MarkEvergreenSent        *sqlx.Stmt `query:"mark-evergreen-sent"`
+	ReleaseEvergreenClaim    *sqlx.Stmt `query:"release-evergreen-claim"`
 	GetOneCampaignSubscriber *sqlx.Stmt `query:"get-one-campaign-subscriber"`
 	UpdateCampaign           *sqlx.Stmt `query:"update-campaign"`
 	UpdateCampaignStatus     *sqlx.Stmt `query:"update-campaign-status"`
@@ -174,6 +176,13 @@ func (q *Queries) compileSubscriberQueryTpl(searchStr, queryExp string, db *sqlx
 // query template that depends on the filter (eg: delete by query, blocklist by query etc.)
 // combines and executes them.
 func (q *Queries) ExecSubQueryTpl(searchStr, queryExp, baseQueryTpl string, listIDs []int, db *sqlx.DB, subStatus string, args ...any) error {
+	return q.ExecSubQueryTplWith(searchStr, queryExp, baseQueryTpl, listIDs, db, db, subStatus, args...)
+}
+
+// ExecSubQueryTplWith is ExecSubQueryTpl with the final write run on an arbitrary
+// executor (a transaction). Fork (evergreen) -- lets by-query list writes carry the
+// backfill session setting.
+func (q *Queries) ExecSubQueryTplWith(searchStr, queryExp, baseQueryTpl string, listIDs []int, db *sqlx.DB, exec sqlx.Execer, subStatus string, args ...any) error {
 	// Perform a dry run.
 	filterExp, err := q.compileSubscriberQueryTpl(searchStr, queryExp, db, subStatus)
 	if err != nil {
@@ -191,7 +200,7 @@ func (q *Queries) ExecSubQueryTpl(searchStr, queryExp, baseQueryTpl string, list
 	a := append([]any{false, pq.Array(listIDs), subStatus, searchStr}, args...)
 
 	// Execute the query on the DB.
-	if _, err := db.Exec(stmt, a...); err != nil {
+	if _, err := exec.Exec(stmt, a...); err != nil {
 		return err
 	}
 	return nil

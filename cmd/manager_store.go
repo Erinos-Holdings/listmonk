@@ -75,6 +75,18 @@ func (s *store) NextEvergreenSubscribers(campID, limit int) ([]models.Subscriber
 	return out, err
 }
 
+// MarkEvergreenSent records a delivery attempt on a claimed evergreen send.
+func (s *store) MarkEvergreenSent(campID, subID int) error {
+	_, err := s.queries.MarkEvergreenSent.Exec(campID, subID)
+	return err
+}
+
+// ReleaseEvergreenClaim gives back a claim whose message was dropped unattempted.
+func (s *store) ReleaseEvergreenClaim(campID, subID int) error {
+	_, err := s.queries.ReleaseEvergreenClaim.Exec(campID, subID)
+	return err
+}
+
 // GetCampaign fetches a campaign from the database.
 func (s *store) GetCampaign(campID int) (*models.Campaign, error) {
 	var out = &models.Campaign{}

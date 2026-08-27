@@ -29,6 +29,7 @@ const evergreenTestDB = "listmonk_evergreen_test"
 type evergreenHarness struct {
 	t     *testing.T
 	db    *sqlx.DB
+	qs    goyesql.Queries
 	next  *sqlx.Stmt // next-evergreen-subscribers
 	coll  *sqlx.Stmt // get-evergreen-collision
 	stat  *sqlx.Stmt // update-campaign-status
@@ -110,7 +111,7 @@ func newEvergreenHarness(t *testing.T) *evergreenHarness {
 		return st
 	}
 
-	h := &evergreenHarness{t: t, db: db,
+	h := &evergreenHarness{t: t, db: db, qs: qs,
 		next: prep("next-evergreen-subscribers"),
 		coll: prep("get-evergreen-collision"),
 		stat: prep("update-campaign-status"),
@@ -210,6 +211,7 @@ func eq(t *testing.T, name string, got, want []int) {
 
 func TestEvergreenTriggerAndEligibility(t *testing.T) {
 	h := newEvergreenHarness(t)
+	qs := h.qs
 	L := h.listA
 	welcome := h.campaign("welcome", true, 0, L)
 
@@ -353,22 +355,23 @@ func TestEvergreenTriggerAndEligibility(t *testing.T) {
 	eq(t, "delay elapsed, after watermark", h.batch(day3, 100), []int{d})
 
 	// --- Collision: same list + same delay = collision; different delay is not; same variant group is not.
+	draft := h.campaign("draft-dup", true, 0, L)
 	if h.collides(welcome, 0, []int{L}, nil) {
 		t.Fatal("welcome must not collide with itself")
 	}
-	if !h.collides(0, 0, []int{L}, nil) {
+	if !h.collides(draft, 0, []int{L}, nil) {
 		t.Fatal("a new delay-0 evergreen on L must collide with the running welcome")
 	}
-	if h.collides(0, 86400, []int{L}, nil) {
+	if h.collides(draft, 86400, []int{L}, nil) {
 		t.Fatal("a different delay must not collide")
 	}
 	vg := "11111111-1111-1111-1111-111111111111"
 	h.db.MustExec(`UPDATE campaigns SET variant_group_id=$2 WHERE id=$1`, welcome, vg)
-	if h.collides(0, 0, []int{L}, &vg) {
+	if h.collides(draft, 0, []int{L}, &vg) {
 		t.Fatal("same variant group must not collide")
 	}
 	other := "22222222-2222-2222-2222-222222222222"
-	if !h.collides(0, 0, []int{L}, &other) {
+	if !h.collides(draft, 0, []int{L}, &other) {
 		t.Fatal("a different variant group must collide")
 	}
 
@@ -381,6 +384,31 @@ func TestEvergreenTriggerAndEligibility(t *testing.T) {
 	h.join(e, L, "confirmed")
 	eq(t, "variant A sends", h.batch(welcome, 100), []int{e})
 	eq(t, "variant B excluded", h.batch(vb, 100), nil)
+
+	// --- Claims (review C1): a fetched row is claimed with no sent_at; a recent unattempted
+	// claim excludes the subscriber; a released claim (dropped unattempted) makes them
+	// eligible again; a claim older than an hour with no attempt is abandoned; an attempted
+	// claim (sent_at set, success or failure) is final.
+	mark := func(camp, sub int) { h.db.MustExec(qs["mark-evergreen-sent"].Query, camp, sub) }
+	release := func(camp, sub int) { h.db.MustExec(qs["release-evergreen-claim"].Query, camp, sub) }
+	cl := h.subscriber("claim@x")
+	h.join(cl, L, "confirmed")
+	eq(t, "claimed", h.batch(welcome, 100), []int{cl})
+	var sentNull bool
+	h.db.Get(&sentNull, `SELECT sent_at IS NULL FROM campaign_sends WHERE campaign_id=$1 AND subscriber_id=$2`, welcome, cl)
+	if !sentNull {
+		t.Fatal("a fetch must claim (sent_at NULL), not mark sent")
+	}
+	eq(t, "recent claim excludes", h.batch(welcome, 100), nil)
+	release(welcome, cl)
+	eq(t, "released claim re-eligible", h.batch(welcome, 100), []int{cl})
+	h.db.MustExec(`UPDATE campaign_sends SET claimed_at = NOW() - INTERVAL '2 hours' WHERE campaign_id=$1 AND subscriber_id=$2`, welcome, cl)
+	eq(t, "abandoned claim re-eligible", h.batch(welcome, 100), []int{cl})
+	mark(welcome, cl)
+	h.db.MustExec(`UPDATE campaign_sends SET claimed_at = NOW() - INTERVAL '2 hours' WHERE campaign_id=$1 AND subscriber_id=$2`, welcome, cl)
+	eq(t, "attempted claim is final", h.batch(welcome, 100), nil)
+	release(welcome, cl)
+	eq(t, "release never touches an attempted row", h.batch(welcome, 100), nil)
 
 	// --- Cancel is terminal for eligibility: a cancelled evergreen returns nothing.
 	h.setStatus(welcome, "cancelled")

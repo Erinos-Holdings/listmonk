@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/internal/notifs"
 	"github.com/knadh/listmonk/models"
@@ -339,6 +340,13 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	} else {
 		o = c
+	}
+
+	// Fork (evergreen) -- once a campaign has started, its evergreen flag and its lists
+	// are frozen (a paused evergreen flipped to regular would blast the whole list on
+	// resume; a swapped list would welcome its whole post-watermark membership).
+	if core.EvergreenLockedChange(cm, o.Evergreen, o.ListIDs) {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.evergreenLocked"))
 	}
 
 	out, err := a.core.UpdateCampaign(id, o.Campaign, o.ListIDs, o.MediaIDs)
@@ -885,9 +893,9 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 		if c.SendAt.Valid {
 			return c, errors.New(a.i18n.T("campaigns.evergreenNoSchedule"))
 		}
-		if c.SendDelaySecs < 0 {
-			return c, errors.New(a.i18n.T("campaigns.evergreenInvalidDelay"))
-		}
+	}
+	if c.SendDelaySecs < 0 {
+		return c, errors.New(a.i18n.T("campaigns.evergreenInvalidDelay"))
 	}
 
 	if !a.manager.HasMessenger(c.Messenger) {

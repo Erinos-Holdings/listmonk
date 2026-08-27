@@ -30,6 +30,13 @@
             {{ $t('subscribers.preconfirm') }}
           </b-checkbox>
         </b-field>
+
+        <!-- Fork (evergreen) -->
+        <b-field v-if="form.action === 'add'" :message="$t('subscribers.backfillHelp')">
+          <b-checkbox v-model="form.backfill" data-cy="backfill" :native-value="true">
+            {{ $t('subscribers.backfill') }}
+          </b-checkbox>
+        </b-field>
       </section>
 
       <footer class="modal-card-foot has-text-right">
@@ -65,13 +72,14 @@ export default Vue.extend({
         action: 'add',
         lists: [],
         preconfirm: false,
+        backfill: false,
       },
     };
   },
 
   methods: {
     onSubmit() {
-      this.$emit('finished', this.form.action, this.form.preconfirm, this.form.lists);
+      this.$emit('finished', this.form.action, this.form.preconfirm, this.form.lists, this.form.backfill);
       this.$parent.close();
     },
   },

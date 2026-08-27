@@ -51,6 +51,8 @@ type Store interface {
 	NextSubscribers(campID, limit int) ([]models.Subscriber, error)
 	// Fork (evergreen) -- see internal/manager/evergreen.go.
 	NextEvergreenSubscribers(campID, limit int) ([]models.Subscriber, error)
+	MarkEvergreenSent(campID, subID int) error
+	ReleaseEvergreenClaim(campID, subID int) error
 	GetCampaign(campID int) (*models.Campaign, error)
 	GetAttachment(mediaID int) (models.Attachment, error)
 	GetInlineAttachmentByFilename(filename string) (models.Attachment, string, error)
@@ -78,9 +80,12 @@ type CampStats struct {
 // Manager handles the scheduling, processing, and queuing of campaigns
 // and message pushes.
 type Manager struct {
-	// Fork (evergreen) -- idle throttle, see evergreen.go.
+	// Fork (evergreen) -- idle throttle, per-campaign error counter (outlives the
+	// per-tick pipe) and the prepared-campaign cache. See evergreen.go.
 	evergreenMut       sync.Mutex
 	evergreenIdleUntil map[int]time.Time
+	evergreenErrors    map[int]int
+	evergreenPrepared  map[int]*models.Campaign
 
 	cfg        Config
 	store      Store
@@ -194,6 +199,8 @@ func New(cfg Config, store Store, i *i18n.I18n, l *log.Logger) *Manager {
 		messengers:         make(map[string]Messenger),
 		pipes:              make(map[int]*pipe),
 		evergreenIdleUntil: make(map[int]time.Time),
+		evergreenErrors:    make(map[int]int),
+		evergreenPrepared:  make(map[int]*models.Campaign),
 		tpls:               make(map[int]*models.Template),
 		links:              make(map[string]string),
 		nextPipes:          make(chan *pipe, 1000),
@@ -469,8 +476,11 @@ func (m *Manager) scanCampaigns(tick time.Duration) {
 
 		for _, c := range campaigns {
 			// Fork (evergreen) -- flag off or idle-throttled evergreens are not piped this tick.
-			if c.Evergreen && !m.shouldPipeEvergreen(c) {
-				continue
+			if c.Evergreen {
+				if !m.shouldPipeEvergreen(c) {
+					continue
+				}
+				c = m.reuseEvergreen(c)
 			}
 
 			// Create a new pipe that'll handle this campaign's states.
@@ -512,6 +522,9 @@ func (m *Manager) worker() {
 
 			// If the campaign has ended or stopped, ignore the message.
 			if msg.pipe != nil && msg.pipe.stopped.Load() {
+				// Fork (evergreen) -- dropped unattempted; give the claim back.
+				m.evergreenDropped(msg)
+
 				// Reduce the message counter on the pipe.
 				msg.pipe.wg.Done()
 				continue
@@ -562,6 +575,10 @@ func (m *Manager) worker() {
 			if err != nil {
 				m.log.Printf("error sending message in campaign %s: subscriber %d: %v", msg.Campaign.Name, msg.Subscriber.ID, err)
 			}
+
+			// Fork (evergreen) -- the attempt is what "sent" means; success resets the
+			// campaign's error streak.
+			m.evergreenAttempted(msg, err)
 
 			// Increment the send rate or the error counter if there was an error.
 			if msg.pipe != nil {

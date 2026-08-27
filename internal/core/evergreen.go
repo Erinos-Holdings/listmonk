@@ -85,3 +85,41 @@ func (c *Core) backfillStmt(stmt *sqlx.Stmt, backfill bool) (stmtRunner, func(er
 		return tx.Commit()
 	}, nil
 }
+
+// EvergreenLockedChange reports whether an update would change a started campaign's
+// evergreen flag or its target lists. Both are frozen once started_at is set: a paused
+// evergreen flipped to regular is claimed by next-campaigns on resume and mails the
+// whole list; a swapped list makes its entire post-watermark membership "new".
+func EvergreenLockedChange(cm models.Campaign, evergreen bool, listIDs []int) bool {
+	if !cm.StartedAt.Valid {
+		return false
+	}
+	if cm.Evergreen != evergreen {
+		return true
+	}
+	if !cm.Evergreen {
+		return false
+	}
+
+	var lists []struct {
+		ID int `json:"id"`
+	}
+	if len(cm.Lists) > 0 {
+		if err := json.Unmarshal(cm.Lists, &lists); err != nil {
+			return true // unreadable = do not risk it
+		}
+	}
+	have := map[int]bool{}
+	for _, l := range lists {
+		have[l.ID] = true
+	}
+	if len(have) != len(listIDs) {
+		return true
+	}
+	for _, id := range listIDs {
+		if !have[id] {
+			return true
+		}
+	}
+	return false
+}

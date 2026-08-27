@@ -539,6 +539,9 @@ export default Vue.extend({
         // Fork (evergreen) -- "send automatically to new subscribers", delay in days.
         evergreen: false,
         sendDelayDays: 0,
+        // Raw seconds as loaded; sent back unchanged when the days field is untouched so an
+        // API-set sub-day delay is not silently rounded to 0 by a UI save.
+        sendDelaySecs: 0,
         archive: false,
         archiveMetaStr: '{}',
         archiveMeta: {},
@@ -1059,6 +1062,19 @@ export default Vue.extend({
       }
     },
 
+    // Fork (evergreen) -- days field untouched: send the raw seconds back unchanged.
+    sendDelaySecsPayload() {
+      if (!this.form.evergreen) {
+        return 0;
+      }
+      const days = Math.max(0, Number(this.form.sendDelayDays) || 0);
+      const raw = Number(this.form.sendDelaySecs) || 0;
+      if (Math.round(raw / 86400) === days) {
+        return raw;
+      }
+      return days * 86400;
+    },
+
     // Fork (evergreen) -- pause from the editor so a running welcome can be edited.
     pauseCampaign() {
       return this.$api.changeCampaignStatus(this.data.id, 'paused').then(() => {
@@ -1079,6 +1095,7 @@ export default Vue.extend({
           preheader: (data.attribs && data.attribs.preheader) || '',
           evergreen: !!data.evergreen,
           sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
+          sendDelaySecs: data.sendDelaySecs || 0,
 
           // The structure that is populated by editor input event.
           content: {
@@ -1161,7 +1178,7 @@ export default Vue.extend({
         attribs: this.form.attribs,
         media: this.form.media.map((m) => m.id),
         evergreen: !!this.form.evergreen,
-        send_delay_secs: this.form.evergreen ? Math.max(0, Number(this.form.sendDelayDays) || 0) * 86400 : 0,
+        send_delay_secs: this.sendDelaySecsPayload(),
       };
 
       this.$api.createCampaign(data).then((d) => {
@@ -1197,7 +1214,7 @@ export default Vue.extend({
         archive_meta: this.form.archiveMeta,
         media: this.form.media.map((m) => m.id),
         evergreen: !!this.form.evergreen,
-        send_delay_secs: this.form.evergreen ? Math.max(0, Number(this.form.sendDelayDays) || 0) * 86400 : 0,
+        send_delay_secs: this.sendDelaySecsPayload(),
       };
 
       let typMsg = 'globals.messages.updated';

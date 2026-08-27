@@ -77,6 +77,7 @@
     "campaigns.evergreenDisabled": "Automatic campaigns are disabled in Settings.",
     "campaigns.evergreenCollision": "Another automatic campaign ({name}) is already running on this list with the same delay. Cancel it first.",
     "campaigns.evergreenPauseToEdit": "This automatic campaign is running. Pause it to edit.",
+    "campaigns.evergreenLocked": "The automatic setting and the target lists cannot be changed once a campaign has started. Cancel it and create a new one.",
     "subscribers.backfill": "These subscribers are not new (skip automatic campaigns)",
     "subscribers.backfillHelp": "Leave on for imports of existing subscribers. Turn off only when the file contains genuinely new signups that should receive automatic (welcome) campaigns.",
     "settings.general.evergreenEnable": "Enable automatic campaigns",

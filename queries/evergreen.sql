@@ -6,8 +6,11 @@
 -- subscribers who joined its target list after the campaign's started_at watermark
 -- (subscriber_lists.confirmed_at, stamped on the transition into 'confirmed'), whose
 -- send delay has elapsed, and who have not been sent this campaign (or any campaign
--- in its variant group) since that join. The batch is recorded in campaign_sends in
--- the same statement, so a crash between fetch and send can never double-send.
+-- in its variant group) since that join. The batch is CLAIMED in campaign_sends in the
+-- same statement (claimed_at), so a crash between fetch and send can never double-send.
+-- The worker marks sent_at on the delivery attempt and deletes a claim it drops
+-- unattempted; a claim with no attempt after one hour is treated as abandoned (process
+-- died mid-batch) and the subscriber is eligible again -- fails toward one late send.
 -- Two expressions are contractually isolated for later milestones -- the ANCHOR
 -- (today the list join; step chaining will offer the parent campaign's sent_at) and
 -- the EXCLUSION SET (today self + variant group). Change only those.
@@ -37,8 +40,9 @@ elig AS (
       AND sl.confirmed_at > camp.started_at
       AND sl.confirmed_at + MAKE_INTERVAL(secs => camp.send_delay_secs) <= NOW()
       AND sl.confirmed_at > COALESCE(
-            (SELECT MAX(cs.sent_at) FROM campaign_sends cs
-             WHERE cs.subscriber_id = sl.subscriber_id AND cs.campaign_id IN (SELECT id FROM excl)),
+            (SELECT MAX(COALESCE(cs.sent_at, cs.claimed_at)) FROM campaign_sends cs
+             WHERE cs.subscriber_id = sl.subscriber_id AND cs.campaign_id IN (SELECT id FROM excl)
+               AND (cs.sent_at IS NOT NULL OR cs.claimed_at > NOW() - INTERVAL '1 hour')),
             '-infinity')
     ORDER BY sl.subscriber_id, sl.confirmed_at
 ),
@@ -62,3 +66,14 @@ WHERE c.evergreen AND c.status = 'running' AND c.id != $1
   AND cl.list_id = ANY($3::INT[])
   AND NOT (c.variant_group_id IS NOT NULL AND $4::UUID IS NOT NULL AND c.variant_group_id = $4::UUID)
 LIMIT 1;
+
+-- name: mark-evergreen-sent
+-- The worker attempted delivery (success or failure -- a failed attempt counts as sent,
+-- the campaign's error threshold handles outages).
+UPDATE campaign_sends SET sent_at = NOW()
+WHERE campaign_id = $1 AND subscriber_id = $2 AND sent_at IS NULL;
+
+-- name: release-evergreen-claim
+-- The worker dropped the queued message unattempted (pipe stopped by pause/cancel).
+DELETE FROM campaign_sends
+WHERE campaign_id = $1 AND subscriber_id = $2 AND sent_at IS NULL;

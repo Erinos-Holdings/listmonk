@@ -175,16 +175,21 @@ CREATE TABLE campaigns (
 );
 DROP INDEX IF EXISTS idx_camps_status; CREATE INDEX idx_camps_status ON campaigns(status);
 
--- Fork (erinos evergreen campaigns): append-only send history. The evergreen
--- eligibility query reads MAX(sent_at) per (campaign, subscriber); nothing updates
--- or deletes rows except campaign deletion. No FK to subscribers on purpose — a
+-- Fork (erinos evergreen campaigns): per-(campaign, subscriber) send history. A row is
+-- CLAIMED when the eligibility query fetches the subscriber (claimed_at) and marked
+-- SENT when the worker attempts delivery (sent_at, success or failure). A claim that is
+-- dropped unattempted (pause/cancel while queued) is DELETED by the worker; a claim
+-- older than one hour with no attempt (process died mid-batch) is ignored by the
+-- eligibility query and the subscriber becomes eligible again. Fails toward one late
+-- send, never toward a double send. Nothing else updates or deletes rows. No FK to subscribers on purpose — a
 -- deleted-and-recreated subscriber is a new id.
 CREATE TABLE IF NOT EXISTS campaign_sends (
     campaign_id   INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
     subscriber_id INTEGER NOT NULL,
-    sent_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    claimed_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    sent_at       TIMESTAMP WITH TIME ZONE NULL
 );
-DROP INDEX IF EXISTS idx_campaign_sends_camp_sub; CREATE INDEX idx_campaign_sends_camp_sub ON campaign_sends(campaign_id, subscriber_id, sent_at DESC);
+DROP INDEX IF EXISTS idx_campaign_sends_camp_sub; CREATE INDEX idx_campaign_sends_camp_sub ON campaign_sends(campaign_id, subscriber_id, claimed_at DESC);
 DROP INDEX IF EXISTS idx_campaign_sends_sub_camp; CREATE INDEX idx_campaign_sends_sub_camp ON campaign_sends(subscriber_id, campaign_id);
 DROP INDEX IF EXISTS idx_camps_name; CREATE INDEX idx_camps_name ON campaigns(name);
 DROP INDEX IF EXISTS idx_camps_created_at; CREATE INDEX idx_camps_created_at ON campaigns(created_at);

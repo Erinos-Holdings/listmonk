@@ -42,12 +42,28 @@ func (c *Core) AddSubscriptions(subIDs, listIDs []int, status string, backfill b
 
 // AddSubscriptionsByQuery adds list subscriptions to subscribers by a given arbitrary query expression.
 // sourceListIDs is the list of list IDs to filter the subscriber query with.
-func (c *Core) AddSubscriptionsByQuery(searchStr, queryExp string, sourceListIDs, targetListIDs []int, status string, subStatus string) error {
+// backfill (fork, evergreen) marks the subscribers as not new -- see backfillStmt.
+func (c *Core) AddSubscriptionsByQuery(searchStr, queryExp string, sourceListIDs, targetListIDs []int, status string, subStatus string, backfill bool) error {
 	if sourceListIDs == nil {
 		sourceListIDs = []int{}
 	}
 
-	err := c.q.ExecSubQueryTpl(searchStr, queryExp, c.q.AddSubscribersToListsByQuery, sourceListIDs, c.db, subStatus, pq.Array(targetListIDs), status)
+	var err error
+	if backfill {
+		tx, txErr := c.db.Beginx()
+		if txErr != nil {
+			err = txErr
+		} else if _, txErr := tx.Exec("SET LOCAL listmonk.backfill = 'true'"); txErr != nil {
+			tx.Rollback()
+			err = txErr
+		} else if err = c.q.ExecSubQueryTplWith(searchStr, queryExp, c.q.AddSubscribersToListsByQuery, sourceListIDs, c.db, tx, subStatus, pq.Array(targetListIDs), status); err != nil {
+			tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	} else {
+		err = c.q.ExecSubQueryTpl(searchStr, queryExp, c.q.AddSubscribersToListsByQuery, sourceListIDs, c.db, subStatus, pq.Array(targetListIDs), status)
+	}
 	if err != nil {
 		c.log.Printf("error adding subscriptions by query: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,

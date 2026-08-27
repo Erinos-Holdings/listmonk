@@ -473,13 +473,15 @@ export default Vue.extend({
       this.$utils.confirm(this.$t('subscribers.confirmDelete', { num: this.numSelectedSubscribers }), fn);
     },
 
-    bulkChangeLists(action, preconfirm, lists) {
+    bulkChangeLists(action, preconfirm, lists, backfill = false) {
       const data = {
         action,
         query: this.fullQueryExp,
         search: this.queryParams.search,
         list_ids: this.queryParams.listID ? [this.queryParams.listID] : null,
         target_list_ids: lists.map((l) => l.id),
+        // Fork (evergreen) -- see the bulk modal's checkbox.
+        backfill: action === 'add' && !!backfill,
       };
 
       if (preconfirm) {

@@ -19,8 +19,9 @@ import (
 //     into 'confirmed' — never on an overwrite of an already-confirmed row, and never
 //     while the session setting listmonk.backfill is 'true' (bulk imports, replays).
 //     A NULL confirmed_at is never eligible for an evergreen send.
-//   - campaign_sends, the append-only per-(campaign, subscriber) send history the
-//     eligibility query reads via MAX(sent_at).
+//   - campaign_sends, the per-(campaign, subscriber) send history -- claimed_at at
+//     fetch, sent_at at the delivery attempt, deleted only when a queued message is
+//     dropped unattempted (see schema.sql).
 //   - the app.evergreen_enable setting (default false).
 //
 // Existing confirmed rows get confirmed_at := updated_at — they all predate any
@@ -60,9 +61,10 @@ func V6_2_2(db *sqlx.DB, fs stuffbin.FileSystem, ko *koanf.Koanf, lo *log.Logger
 		CREATE TABLE IF NOT EXISTS campaign_sends (
 			campaign_id   INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
 			subscriber_id INTEGER NOT NULL,
-			sent_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+			claimed_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			sent_at       TIMESTAMP WITH TIME ZONE NULL
 		);
-		CREATE INDEX IF NOT EXISTS idx_campaign_sends_camp_sub ON campaign_sends(campaign_id, subscriber_id, sent_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_campaign_sends_camp_sub ON campaign_sends(campaign_id, subscriber_id, claimed_at DESC);
 		CREATE INDEX IF NOT EXISTS idx_campaign_sends_sub_camp ON campaign_sends(subscriber_id, campaign_id);
 		CREATE INDEX IF NOT EXISTS idx_sub_lists_confirmed_at ON subscriber_lists(list_id, confirmed_at) WHERE confirmed_at IS NOT NULL;
 

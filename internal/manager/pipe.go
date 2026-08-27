@@ -31,19 +31,24 @@ func (m *Manager) newPipe(c *models.Campaign) (*pipe, error) {
 		return nil, fmt.Errorf("unknown messenger %s on campaign %s", c.Messenger, c.Name)
 	}
 
-	// Resolve any inline images before compiling the template.
-	if err := m.LoadInlineImages(c); err != nil {
-		return nil, err
-	}
+	// Fork (evergreen) -- a re-piped evergreen whose content is unchanged is already
+	// prepared (see reuseEvergreen); skip the image resolve / compile / attach.
+	if !c.Prepared {
+		// Resolve any inline images before compiling the template.
+		if err := m.LoadInlineImages(c); err != nil {
+			return nil, err
+		}
 
-	// Load the template.
-	if err := c.CompileTemplate(m.TemplateFuncs(c)); err != nil {
-		return nil, err
-	}
+		// Load the template.
+		if err := c.CompileTemplate(m.TemplateFuncs(c)); err != nil {
+			return nil, err
+		}
 
-	// Load any media/attachments.
-	if err := m.attachMedia(c); err != nil {
-		return nil, err
+		// Load any media/attachments.
+		if err := m.attachMedia(c); err != nil {
+			return nil, err
+		}
+		c.Prepared = true
 	}
 
 	// Add the campaign to the active map.
@@ -155,7 +160,14 @@ func (p *pipe) OnError() {
 	}
 
 	// If the error threshold is met, pause the campaign.
-	count := p.errors.Add(1)
+	// Fork (evergreen) -- an evergreen gets a fresh pipe every tick, so its streak is
+	// counted on the manager, not the pipe.
+	var count uint64
+	if p.camp.Evergreen {
+		count = p.m.evergreenErrorInc(p.camp.ID)
+	} else {
+		count = p.errors.Add(1)
+	}
 	if int(count) < p.m.cfg.MaxSendErrors {
 		return
 	}
@@ -206,7 +218,14 @@ func (p *pipe) cleanup() {
 	}()
 
 	// Update campaign's 'sent count.
-	if err := p.m.store.UpdateCampaignCounts(p.camp.ID, 0, int(p.sent.Load()), int(p.lastID.Load())); err != nil {
+	// Fork (evergreen) -- last_subscriber_id is the checkpoint of the regular send loop
+	// and means nothing for an evergreen; never write it (a later evergreen->regular
+	// flip would otherwise resume from a bogus checkpoint).
+	lastID := int(p.lastID.Load())
+	if p.camp.Evergreen {
+		lastID = 0
+	}
+	if err := p.m.store.UpdateCampaignCounts(p.camp.ID, 0, int(p.sent.Load()), lastID); err != nil {
 		p.m.log.Printf("error updating campaign counts (%s): %v", p.camp.Name, err)
 	}
 
@@ -219,12 +238,14 @@ func (p *pipe) cleanup() {
 		}
 
 		_ = p.m.sendNotif(p.camp, models.CampaignStatusPaused, "Too many errors")
+		p.evergreenStopped()
 		return
 	}
 
 	// The campaign was manually stopped (pause, cancel).
 	if p.stopped.Load() {
 		p.m.log.Printf("stop processing campaign (%s)", p.camp.Name)
+		p.evergreenStopped()
 		return
 	}
 
