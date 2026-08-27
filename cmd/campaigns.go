@@ -80,8 +80,14 @@ func (a *App) GetCampaigns(c echo.Context) error {
 		noBody, _ = strconv.ParseBool(c.QueryParam("no_body"))
 	)
 
+	// Fork (evergreen) -- optional scope on the campaign kind (absent = no filter).
+	evergreen, err := a.parseEvergreenParam(c)
+	if err != nil {
+		return err
+	}
+
 	// Query and retrieve campaigns from the DB.
-	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, evergreen, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}
@@ -455,6 +461,21 @@ func (a *App) DeleteCampaign(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{true})
 }
 
+// parseEvergreenParam reads the fork's optional `evergreen` query param on
+// GET/DELETE /api/campaigns. "" (absent) returns nil (no filter); any other
+// value must parse as a bool, otherwise a 400 is returned.
+func (a *App) parseEvergreenParam(c echo.Context) (*bool, error) {
+	v := c.QueryParam("evergreen")
+	if v == "" {
+		return nil, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
+	}
+	return &b, nil
+}
+
 // DeleteCampaigns deletes multiple campaigns by IDs or by query.
 func (a *App) DeleteCampaigns(c echo.Context) error {
 	// Get the authenticated user.
@@ -497,8 +518,15 @@ func (a *App) DeleteCampaigns(c echo.Context) error {
 			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", "id or query required"))
 	}
 
+	// Fork (evergreen) -- the by-query delete carries the list page's scope so a
+	// "select all" on Broadcasts never deletes the automations (or vice versa).
+	evergreen, err := a.parseEvergreenParam(c)
+	if err != nil {
+		return err
+	}
+
 	// Delete the campaigns from the DB.
-	if err := a.core.DeleteCampaigns(ids, query, hasAllPerm, permittedLists); err != nil {
+	if err := a.core.DeleteCampaigns(ids, query, hasAllPerm, permittedLists, evergreen); err != nil {
 		return err
 	}
 

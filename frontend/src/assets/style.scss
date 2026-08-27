@@ -572,6 +572,15 @@ body.is-noscroll {
   }
 }
 
+// Fork (evergreen) -- b-radio-button renders as .b-radio.radio.button, and Buefy's
+// .b-radio.radio sets line-height 1.25 while .button uses 1.5. With the height: auto
+// override above, that makes the Campaigns scope pill 3.75px shorter than the
+// adjacent search input/button. Restore the button line-height so they match.
+// Scoped to the Campaigns page so no other b-radio-button (the Users form) changes.
+section.campaigns .b-radio.radio.button {
+  line-height: 1.5;
+}
+
 .button.is-primary[disabled] {
   border-color: $grey-light;
 }

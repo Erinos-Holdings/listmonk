@@ -83,6 +83,8 @@ WHERE ($1 = 0 OR id = $1)
             SELECT 1 FROM campaign_lists WHERE campaign_id = c.id AND list_id = ANY($6::INT[])
         )
     )
+    -- Fork (evergreen). Scope to automations (true) or broadcasts (false). NULL applies no filter.
+    AND ($9::BOOLEAN IS NULL OR c.evergreen = $9)
 ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 
 -- name: get-campaign
@@ -534,7 +536,10 @@ AND (
     $3 OR EXISTS (
         SELECT 1 FROM campaign_lists WHERE campaign_id = c.id AND list_id = ANY($4::INT[])
     )
-);
+)
+-- Fork (evergreen). The by-query delete is scoped to automations (true) or broadcasts (false).
+-- NULL applies no filter, and an explicit id list is never scoped.
+AND (CARDINALITY($1::INT[]) > 0 OR $5::BOOLEAN IS NULL OR c.evergreen = $5);
 
 -- name: register-campaign-view
 WITH view AS (

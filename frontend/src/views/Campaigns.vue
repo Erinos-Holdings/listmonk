@@ -36,6 +36,24 @@
               </div>
             </form>
           </div>
+          <div class="column is-narrow">
+            <!-- Fork (evergreen) -- Broadcasts | Automations scope pill. Server-side filter;
+                 switching resets the page and the bulk selection (bulk delete is scoped too).
+                 Disabled while a fetch is in flight so two quick clicks cannot leave the table
+                 showing one kind while the pill (and a bulk delete) is on the other. -->
+            <b-field>
+              <b-radio-button v-model="queryParams.evergreen" :native-value="false" type="is-primary"
+                :disabled="loading.campaigns"
+                data-cy="scope-broadcasts" @input="onScopeChange">
+                {{ $t('campaigns.typeBroadcasts') }}
+              </b-radio-button>
+              <b-radio-button v-model="queryParams.evergreen" :native-value="true" type="is-primary"
+                :disabled="loading.campaigns"
+                data-cy="scope-automations" @input="onScopeChange">
+                {{ $t('campaigns.typeAutomations') }}
+              </b-radio-button>
+            </b-field>
+          </div>
         </div>
 
         <div class="actions" v-if="bulk.checked.length > 0">
@@ -85,9 +103,6 @@
           <p>
             <b-tag v-if="props.row.type === 'optin'" class="is-small">
               {{ $t('lists.optin') }}
-            </b-tag>
-            <b-tag v-if="props.row.evergreen" class="is-small is-info" data-cy="tag-evergreen">
-              {{ $t('campaigns.evergreenTag') }}
             </b-tag>
             <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
               {{ props.row.name }}
@@ -304,6 +319,8 @@ export default Vue.extend({
         query: '',
         orderBy: 'created_at',
         order: 'desc',
+        // Fork (evergreen) -- false = Broadcasts (default), true = Automations.
+        evergreen: false,
       },
       pollID: null,
       campaignStatsData: {},
@@ -374,12 +391,22 @@ export default Vue.extend({
       this.previewItem = null;
     },
 
+    // Fork (evergreen) -- the scope pill. Resets the page and clears any bulk
+    // selection (a stale selection would carry rows of the other kind), then refetches.
+    onScopeChange() {
+      this.queryParams.page = 1;
+      this.bulk.checked = [];
+      this.bulk.all = false;
+      this.getCampaigns();
+    },
+
     getCampaigns() {
       this.$api.getCampaigns({
         page: this.queryParams.page,
         query: this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' '),
         order_by: this.queryParams.orderBy,
         order: this.queryParams.order,
+        evergreen: this.queryParams.evergreen,
         no_body: true,
       });
     },
@@ -516,6 +543,8 @@ export default Vue.extend({
           // 'All' is selected, delete by query.
           params.query = this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' ');
           params.all = this.bulk.all;
+          // Fork (evergreen) -- scope the by-query delete to the kind shown on the page.
+          params.evergreen = this.queryParams.evergreen;
         }
 
         this.$api.deleteCampaigns(params)
