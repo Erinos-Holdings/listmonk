@@ -1435,3 +1435,8 @@ th.role-toggle-select a {
     width: auto;
   }
 }
+
+/* Fork (evergreen) -- keep the campaign form's "Send automatically to new subscribers" label on one line. */
+.evergreen-field .label {
+  white-space: nowrap;
+}

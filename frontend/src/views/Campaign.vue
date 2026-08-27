@@ -170,8 +170,8 @@
                 <!-- Fork (evergreen) -- an evergreen campaign never finishes; it keeps sending to
                      subscribers who join its (single) list after it is started. -->
                 <div class="columns" v-if="serverConfig.evergreen_enabled || form.evergreen">
-                  <div class="column is-4">
-                    <b-field :label="$t('campaigns.evergreen')" data-cy="btn-evergreen"
+                  <div class="column is-6">
+                    <b-field :label="$t('campaigns.evergreen')" data-cy="btn-evergreen" class="evergreen-field"
                       :message="form.evergreen ? $t('campaigns.evergreenHelp') : ''">
                       <b-switch v-model="form.evergreen" :disabled="!canEdit || form.sendLater" />
                     </b-field>
