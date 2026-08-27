@@ -90,23 +90,26 @@ WITH sub AS (
     RETURNING id, status
 ),
 listIDs AS (
-    SELECT id FROM lists WHERE
+    SELECT id, optin FROM lists WHERE
         (CASE WHEN CARDINALITY($6::INT[]) > 0 THEN id=ANY($6)
               ELSE uuid=ANY($7::UUID[]) END)
 ),
 subs AS (
     INSERT INTO subscriber_lists (subscriber_id, list_id, status)
-    VALUES(
-        (SELECT id FROM sub),
-        UNNEST(ARRAY(SELECT id FROM listIDs)),
-        (CASE WHEN $4='blocklisted' THEN 'unsubscribed'::subscription_status ELSE $8::subscription_status END)
-    )
+    -- Fork (evergreen). A single opt-in list has nothing to confirm, so a membership on one
+    -- is stored confirmed unless the caller says otherwise. The welcome trigger fires on the
+    -- transition into confirmed, so this is what makes every writer welcome a new joiner.
+    SELECT (SELECT id FROM sub), l.id,
+        (CASE WHEN $4='blocklisted' THEN 'unsubscribed'::subscription_status
+              WHEN l.optin='single' THEN 'confirmed'::subscription_status
+              ELSE $8::subscription_status END)
+    FROM listIDs l
     ON CONFLICT (subscriber_id, list_id) DO UPDATE
         SET updated_at=NOW(),
             status=(
                 CASE WHEN $4='blocklisted' OR (SELECT status FROM sub)='blocklisted'
                 THEN 'unsubscribed'::subscription_status
-                ELSE $8::subscription_status END
+                ELSE EXCLUDED.status END
             )
 )
 SELECT id from sub;
@@ -167,10 +170,10 @@ WITH s AS (
         status=(CASE WHEN $4 != '' THEN $4::subscriber_status ELSE status END),
         attribs=(CASE WHEN $5 != '' THEN $5::JSONB ELSE attribs END),
         updated_at=NOW()
-    WHERE id = $1 RETURNING id
+    WHERE id = $1 RETURNING id, status
 ),
 listIDs AS (
-    SELECT id FROM lists WHERE
+    SELECT id, optin FROM lists WHERE
         (CASE WHEN CARDINALITY($6::INT[]) > 0 THEN id=ANY($6)
               ELSE uuid=ANY($7::UUID[]) END)
 ),
@@ -180,19 +183,22 @@ d AS (
         AND (CARDINALITY($10::INT[]) = 0 OR list_id = ANY($10::INT[]))
 )
 INSERT INTO subscriber_lists (subscriber_id, list_id, status)
-    VALUES(
-        (SELECT id FROM s),
-        UNNEST(ARRAY(SELECT id FROM listIDs)),
-        (CASE WHEN $4='blocklisted' THEN 'unsubscribed'::subscription_status ELSE $8::subscription_status END)
-    )
+    -- Fork (evergreen). A NEW membership on a single opt-in list is stored confirmed (see
+    -- insert-subscriber). A blocklisted subscriber never gets a confirmed row. An EXISTING row
+    -- keeps upstream's rules below, so an unrelated edit never promotes a legacy unconfirmed row.
+    SELECT (SELECT id FROM s), l.id,
+        (CASE WHEN $4='blocklisted' OR (SELECT status FROM s)='blocklisted' THEN 'unsubscribed'::subscription_status
+              WHEN l.optin='single' THEN 'confirmed'::subscription_status
+              ELSE $8::subscription_status END)
+    FROM listIDs l
     ON CONFLICT (subscriber_id, list_id) DO UPDATE
     SET status = (
         CASE
-            WHEN $4='blocklisted' THEN 'unsubscribed'::subscription_status
+            WHEN $4='blocklisted' OR (SELECT status FROM s)='blocklisted' THEN 'unsubscribed'::subscription_status
             -- When $11 (allow resubscribe) is true, override existing statuses except confirmed (used by
             -- public subscription form).
             WHEN subscriber_lists.status = 'confirmed' THEN 'confirmed'
-            WHEN $11 = TRUE THEN $8::subscription_status
+            WHEN $11 = TRUE THEN EXCLUDED.status
             -- When subscriber is edited from the admin form, retain the status. Otherwise, a blocklisted
             -- subscriber when being re-enabled, their subscription statuses change.
             WHEN subscriber_lists.status = 'unsubscribed' THEN 'unsubscribed'::subscription_status
@@ -220,8 +226,19 @@ UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW()
     WHERE subscriber_id = ANY($1::INT[]);
 
 -- name: add-subscribers-to-lists
+-- Fork (evergreen). With no explicit status, a NEW membership on a single opt-in list is
+-- stored confirmed (see insert-subscriber) unless the subscriber is blocklisted. An existing
+-- row keeps its status unless a status is given (upstream rule). The LEFT JOIN keeps an
+-- unknown list id failing on the foreign key exactly as before.
 INSERT INTO subscriber_lists (subscriber_id, list_id, status)
-    (SELECT a, b, (CASE WHEN $3 != '' THEN $3::subscription_status ELSE 'unconfirmed' END) FROM UNNEST($1::INT[]) a, UNNEST($2::INT[]) b)
+    (SELECT a, b,
+        (CASE WHEN $3 != '' THEN $3::subscription_status
+              WHEN sub.status = 'blocklisted' THEN 'unsubscribed'::subscription_status
+              WHEN l.optin = 'single' THEN 'confirmed'::subscription_status
+              ELSE 'unconfirmed' END)
+     FROM UNNEST($1::INT[]) a CROSS JOIN UNNEST($2::INT[]) b
+     LEFT JOIN lists l ON l.id = b
+     LEFT JOIN subscribers sub ON sub.id = a)
     ON CONFLICT (subscriber_id, list_id) DO UPDATE SET status=(CASE WHEN $3 != '' THEN $3::subscription_status ELSE subscriber_lists.status END);
 
 -- name: delete-subscriptions
@@ -384,7 +401,15 @@ UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW()
 -- raw: true
 WITH subs AS (%query%)
 INSERT INTO subscriber_lists (subscriber_id, list_id, status)
-    (SELECT a, b, (CASE WHEN $6 != '' THEN $6::subscription_status ELSE 'unconfirmed' END) FROM UNNEST(ARRAY(SELECT id FROM subs)) a, UNNEST($5::INT[]) b)
+    -- Fork (evergreen). Same default as add-subscribers-to-lists.
+    (SELECT a, b,
+        (CASE WHEN $6 != '' THEN $6::subscription_status
+              WHEN sub.status = 'blocklisted' THEN 'unsubscribed'::subscription_status
+              WHEN l.optin = 'single' THEN 'confirmed'::subscription_status
+              ELSE 'unconfirmed' END)
+     FROM UNNEST(ARRAY(SELECT id FROM subs)) a CROSS JOIN UNNEST($5::INT[]) b
+     LEFT JOIN lists l ON l.id = b
+     LEFT JOIN subscribers sub ON sub.id = a)
     ON CONFLICT (subscriber_id, list_id) DO NOTHING;
 
 -- name: delete-subscriptions-by-query
