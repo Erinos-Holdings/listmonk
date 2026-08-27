@@ -177,8 +177,7 @@
                     </b-field>
                   </div>
                   <div class="column">
-                    <br />
-                    <b-field v-if="form.evergreen" :label="$t('campaigns.evergreenDelay')" label-position="on-border"
+                    <b-field v-if="form.evergreen" :label="$t('campaigns.evergreenDelay')" class="evergreen-delay"
                       data-cy="evergreen-delay">
                       <b-numberinput v-model="form.sendDelayDays" :min="0" :max="365" :disabled="!canEdit"
                         controls-position="compact" />

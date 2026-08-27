@@ -581,6 +581,17 @@ section.campaigns .b-radio.radio.button {
   line-height: 1.5;
 }
 
+// Fork (evergreen) -- the "Days after joining" label sits above its compact number input,
+// centred over the +/- controls, instead of floating on the border where it collided with them.
+.field.evergreen-delay {
+  > label.label {
+    text-align: center;
+  }
+  .b-numberinput {
+    justify-content: center;
+  }
+}
+
 .button.is-primary[disabled] {
   border-color: $grey-light;
 }
