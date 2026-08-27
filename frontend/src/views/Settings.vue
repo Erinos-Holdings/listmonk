@@ -211,8 +211,16 @@ export default Vue.extend({
       this.isLoading = true;
       try {
         const data = await this.$api.updateSettings(form);
+        // Fork -- the save has landed, so the form is clean from here on. Two windows
+        // follow in which formCopy would otherwise still be the pre-save baseline and
+        // leaving the page would prompt "Discard changes?" for edits already saved:
+        // the awaitRestart poll (reachable only via browser Back / the address bar,
+        // as the full-page loading overlay covers the sidebar) and the getSettings()
+        // fetch after it (click-reachable if that fetch is not awaited, because the
+        // finally below drops the overlay). Re-baseline before both; await the reload.
+        this.formCopy = JSON.stringify(this.form);
         await this.$root.awaitRestart(data);
-        this.getSettings();
+        await this.getSettings();
       } finally {
         this.isLoading = false;
       }
@@ -222,7 +230,7 @@ export default Vue.extend({
 
     getSettings() {
       this.isLoading = true;
-      this.$api.getSettings().then((data) => {
+      return this.$api.getSettings().then((data) => {
         let d = {};
         try {
           // Create a deep-copy of the settings hierarchy.
