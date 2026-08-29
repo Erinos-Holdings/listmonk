@@ -104,6 +104,11 @@
             <b-tag v-if="props.row.type === 'optin'" class="is-small">
               {{ $t('lists.optin') }}
             </b-tag>
+            <!-- Fork (multi-language campaigns) -- absent lang is "All", one word everywhere. -->
+            <b-tag v-if="serverConfig.lang_enabled || (props.row.attribs && props.row.attribs.lang)" class="is-small lang"
+              data-cy="lang-chip">
+              {{ props.row.attribs && props.row.attribs.lang ? props.row.attribs.lang.toUpperCase() : $t('campaigns.langAll') }}
+            </b-tag>
             <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
               {{ props.row.name }}
               <copy-text :text="props.row.name" hide-text />
@@ -567,7 +572,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['campaigns', 'loading']),
+    ...mapState(['campaigns', 'loading', 'serverConfig']),
 
     numSelectedCampaigns() {
       return this.bulk.all ? this.campaigns.total : this.bulk.checked.length;

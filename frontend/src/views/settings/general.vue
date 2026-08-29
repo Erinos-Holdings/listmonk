@@ -51,6 +51,12 @@
           {{ $t('settings.general.evergreenEnable') }}
         </b-switch>
       </b-field>
+      <!-- Fork (multi-language campaigns) -->
+      <b-field :message="$t('settings.general.langEnableHelp')">
+        <b-switch v-model="data['app.lang_enable']" name="app.lang_enable">
+          {{ $t('settings.general.langEnable') }}
+        </b-switch>
+      </b-field>
       <b-field :message="$t('settings.general.sendOptinConfirmHelp')">
         <b-switch v-model="data['app.send_optin_confirmation']" name="app.send_optin_confirmation">
           {{ $t('settings.general.sendOptinConfirm') }}

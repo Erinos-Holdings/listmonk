@@ -76,7 +76,7 @@
 
     <!-- campaign preview //-->
     <campaign-preview v-if="isPreviewing" is-post @close="onTogglePreview" type="campaign" :id="id" :title="title"
-      :content-type="self.contentType" :template-id="templateId" :body="self.body" />
+      :content-type="self.contentType" :template-id="templateId" :body="self.body" :attribs="attribs" />
   </section>
 </template>
 
@@ -110,6 +110,9 @@ export default {
 
     // Brand swatch rows for the visual editor's color picker (passed through untouched).
     brandPalettes: { type: Array, default: () => [] },
+
+    // Fork (multi-language campaigns) -- JSON attribs (lang, preheader) the preview posts.
+    attribs: { type: String, default: '' },
 
     // value is provided by the parent component.
     // Throught the editor, `this.self` (a mutable clone of `value`) is used,

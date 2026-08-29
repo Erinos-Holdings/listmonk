@@ -15,6 +15,7 @@
             <input v-if="templateType" type="hidden" name="template_type" :value="templateType" />
             <input v-if="archiveMeta" type="hidden" name="archive_meta" :value="archiveMeta" />
             <input v-if="body" type="hidden" name="body" :value="body" />
+            <input v-if="attribs" type="hidden" name="attribs" :value="attribs" />
           </form>
 
           <iframe id="iframe" name="iframe" ref="iframe" :title="title" :src="isPost ? 'about:blank' : previewURL"
@@ -52,6 +53,8 @@ export default {
     archiveMeta: { type: String, default: null },
 
     body: { type: String, default: '' },
+    // Fork (multi-language campaigns) -- JSON attribs to render with (lang, preheader).
+    attribs: { type: String, default: '' },
     contentType: { type: String, default: '' },
     templateId: { type: [Number, null], default: null },
     isArchive: { type: Boolean, default: false },

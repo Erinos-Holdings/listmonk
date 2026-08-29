@@ -188,6 +188,13 @@ func TestReuseEvergreen(t *testing.T) {
 	if m.reuseEvergreen(c) != c {
 		t.Fatal("changed content must not reuse")
 	}
+	// Fork (multi-language campaigns) -- attribs are part of the prepared content.
+	d := evergreenCamp(9)
+	d.Body = "v1"
+	d.Attribs = models.JSON{"lang": "fr"}
+	if m.reuseEvergreen(d) != d {
+		t.Fatal("changed attribs must not reuse")
+	}
 	m.forgetEvergreen(9)
 	if _, ok := m.evergreenPrepared[9]; ok {
 		t.Fatal("forget must drop the cache")

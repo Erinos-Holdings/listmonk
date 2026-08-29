@@ -93,6 +93,17 @@
                     :placeholder="$t('campaigns.preheader')" />
                 </b-field>
 
+                <!-- Fork (multi-language campaigns) -- attribs.lang. Hidden behind app.lang_enable
+                  until subscribers carry a language; a campaign that already has one always
+                  shows it. Locked once started (server-enforced too). -->
+                <b-field :label="$t('campaigns.lang')" label-position="on-border" :message="$t('campaigns.langHelp')"
+                  v-if="serverConfig.lang_enabled || form.lang">
+                  <b-select v-model="form.lang" name="lang" :disabled="!canEdit || isStarted" expanded data-cy="lang">
+                    <option value="">{{ $t('campaigns.langAll') }}</option>
+                    <option v-for="l in langOptions" :key="l.code" :value="l.code">{{ l.label }}</option>
+                  </b-select>
+                </b-field>
+
                 <!-- READ-ONLY BY DESIGN: the From address is a property of the brand, derived from
                      the selected lists' `from:` tag. The escape hatch is editing the list, not the
                      campaign. `readonly` rather than `disabled` on purpose -- a disabled input is
@@ -240,7 +251,8 @@
 
       <b-tab-item :label="$t('campaigns.content')" icon="text" :disabled="isNew" value="content">
         <editor v-if="data.id" ref="editor" :key="editorKey" v-model="form.content" :id="data.id" :title="data.name"
-          :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes" />
+          :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes"
+          :attribs="previewAttribs" />
 
         <div class="columns">
           <div class="column is-6">
@@ -513,6 +525,7 @@ export default Vue.extend({
         name: '',
         subject: '',
         preheader: '',
+        lang: '',
         fromEmail: '',
         headersStr: '[]',
         headers: [],
@@ -606,6 +619,7 @@ export default Vue.extend({
         name: f.name,
         subject: f.subject,
         preheader: f.preheader,
+        lang: f.lang,
         altbody: f.altbody,
         tags: f.tags,
         headersStr: f.headersStr,
@@ -628,6 +642,7 @@ export default Vue.extend({
         name: c.name,
         subject: c.subject,
         preheader: (c.attribs && c.attribs.preheader) || '',
+        lang: (c.attribs && c.attribs.lang) || '',
         altbody: c.altbody,
         tags: c.tags,
         headersStr: JSON.stringify(c.headers, null, 4),
@@ -656,6 +671,7 @@ export default Vue.extend({
         name: f.name || '',
         subject: f.subject || '',
         preheader: f.preheader || '',
+        lang: f.lang || '',
         altbody: f.altbody || null,
         tags: f.tags || [],
         headersStr: f.headersStr,
@@ -744,6 +760,7 @@ export default Vue.extend({
         name: d.name,
         subject: d.subject,
         preheader: d.preheader,
+        lang: d.lang || '',
         altbody: d.altbody,
         tags: d.tags,
         headersStr: d.headersStr,
@@ -1019,32 +1036,10 @@ export default Vue.extend({
         }
       }
 
-      // Validate custom JSON attribs.
-      let attribs = null;
-      if (this.form.attribsStr && this.form.attribsStr.trim()) {
-        try {
-          attribs = JSON.parse(this.form.attribsStr);
-        } catch (e) {
-          this.$utils.toast(
-            `${this.$t('subscribers.invalidJSON')}: ${e.toString()}`,
-            'is-danger',
-
-            3000,
-          );
-          return;
-        }
-      }
-
-      // Fold the preheader field into attribs — it lives under attribs.preheader rather
-      // than a dedicated column (no fork schema change). A non-empty field wins over any
-      // preheader key typed into the raw attribs JSON. An empty field deletes the key only
-      // when the server had one (the user actually cleared the field) — so a key managed
-      // directly in the JSON tab survives saves where the field was simply left untouched.
-      const preheader = (this.form.preheader || '').trim();
-      if (preheader) {
-        attribs = { ...(attribs || {}), preheader };
-      } else if (attribs && this.data.attribs && this.data.attribs.preheader) {
-        delete attribs.preheader;
+      // ONE buildAttribs() for Save, Test and Start -- see the method.
+      const attribs = this.buildAttribs();
+      if (attribs === false) {
+        return;
       }
       this.form.attribs = attribs;
 
@@ -1059,6 +1054,52 @@ export default Vue.extend({
           this.updateCampaign();
           break;
       }
+    },
+
+    // Fold the form's owned attribs keys (preheader, lang) into a parsed attribs object.
+    // preheader: a non-empty field wins over any preheader key typed into the raw attribs
+    // JSON; an empty field deletes the key only when the server had one (the user actually
+    // cleared the field), so a key managed directly in the JSON tab survives saves where
+    // the field was simply left untouched. lang (fork, multi-language): the select is the
+    // single owner -- "All" (empty) always removes the key.
+    foldAttribs(base) {
+      let attribs = base;
+      const preheader = (this.form.preheader || '').trim();
+      if (preheader) {
+        attribs = { ...(attribs || {}), preheader };
+      } else if (attribs && this.data.attribs && this.data.attribs.preheader) {
+        delete attribs.preheader;
+      }
+      const lang = this.form.lang || '';
+      if (lang) {
+        attribs = { ...(attribs || {}), lang };
+      } else if (attribs && 'lang' in attribs) {
+        delete attribs.lang;
+      }
+      return attribs;
+    },
+
+    // The attribs payload for Save, Test AND the Start path's save leg -- one builder, so
+    // Start-without-Save can never send a stale or missing attribs (which used to wipe the
+    // preheader: Go bound nil -> JSONB null). Returns false (after a toast) on invalid JSON.
+    buildAttribs() {
+      let attribs = null;
+      if (this.form.attribsStr && this.form.attribsStr.trim()) {
+        try {
+          attribs = JSON.parse(this.form.attribsStr);
+        } catch (e) {
+          this.$utils.toast(
+            `${this.$t('subscribers.invalidJSON')}: ${e.toString()}`,
+            'is-danger',
+
+            3000,
+          );
+          return false;
+        }
+      }
+      // Always an object: since the server keeps stored attribs on a NULL bind (fork,
+      // update-campaign COALESCE), a null here could never clear them from the JSON tab.
+      return this.foldAttribs(attribs || {});
     },
 
     // Fork (evergreen) -- days field untouched: send the raw seconds back unchanged.
@@ -1092,6 +1133,7 @@ export default Vue.extend({
           archiveMetaStr: data.archiveMeta ? JSON.stringify(data.archiveMeta, null, 4) : '{}',
           attribsStr: data.attribs ? JSON.stringify(data.attribs, null, 4) : '{}',
           preheader: (data.attribs && data.attribs.preheader) || '',
+          lang: (data.attribs && data.attribs.lang) || '',
           evergreen: !!data.evergreen,
           sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
           sendDelaySecs: data.sendDelaySecs || 0,
@@ -1132,6 +1174,12 @@ export default Vue.extend({
         ti.addTag();
       }
 
+      // Fork (multi-language campaigns) -- the same builder as Save/Start, so a test send
+      // renders the on-screen language and preheader, never the last saved ones.
+      const attribs = this.buildAttribs();
+      if (attribs === false) {
+        return false;
+      }
       const data = {
         id: this.data.id,
         name: this.form.name,
@@ -1145,7 +1193,7 @@ export default Vue.extend({
         // Always an object, never null: the server only overrides the stored attribs (and
         // so the preheader) when the request carries a non-null value, and a test send
         // should reflect the editor's current state — including a cleared preheader.
-        attribs: this.form.attribs || {},
+        attribs: attribs || {},
         template_id: this.form.content.templateId,
         content_type: this.form.content.contentType,
         body: this.form.content.body,
@@ -1191,6 +1239,12 @@ export default Vue.extend({
     // so each Start surfaces them exactly once (from the status response, which also
     // carries the preheader nudge).
     async updateCampaign(typ, suppressWarnings = false) {
+      const attribs = this.buildAttribs();
+      if (attribs === false) {
+        throw new Error('invalid attribs');
+      }
+      this.form.attribs = attribs;
+
       const data = {
         archive_slug: this.form.archiveSlug,
         name: this.form.name,
@@ -1234,6 +1288,7 @@ export default Vue.extend({
           // Keep the field mirroring stored state so the cleared-field detection in
           // onSubmit compares against the right baseline on the next save.
           this.form.preheader = (d.attribs && d.attribs.preheader) || '';
+          this.form.lang = (d.attribs && d.attribs.lang) || '';
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
           if (!suppressWarnings) {
@@ -1302,6 +1357,35 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['serverConfig', 'loading', 'lists', 'templates', 'profile']),
+
+    // Fork (multi-language campaigns).
+    isStarted() {
+      return !!(this.data && this.data.startedAt);
+    },
+
+    langOptions() {
+      return [
+        { code: 'en', label: 'English' },
+        { code: 'es', label: 'Español' },
+        { code: 'fr', label: 'Français' },
+        { code: 'de', label: 'Deutsch' },
+        { code: 'it', label: 'Italiano' },
+      ];
+    },
+
+    // What the in-editor preview posts as attribs -- the on-screen preheader and language,
+    // not the last saved ones. Invalid raw JSON falls back to the form-owned keys only.
+    previewAttribs() {
+      let base = null;
+      if (this.form.attribsStr && this.form.attribsStr.trim()) {
+        try {
+          base = JSON.parse(this.form.attribsStr);
+        } catch (e) {
+          base = null;
+        }
+      }
+      return JSON.stringify(this.foldAttribs(base) || {});
+    },
 
     canManage() {
       return this.$can('campaigns:manage_all', 'campaigns:manage');

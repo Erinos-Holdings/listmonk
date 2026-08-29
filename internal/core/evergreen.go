@@ -39,7 +39,9 @@ func (c *Core) evergreenCollision(cm models.Campaign) (string, bool, error) {
 			Name string `db:"name"`
 		}
 	)
-	err := c.q.GetEvergreenCollision.Get(&row, cm.ID, cm.SendDelaySecs, pq.Array(listIDs), vg)
+	// Fork (multi-language campaigns) -- NULL when the campaign targets everyone.
+	lang := sql.NullString{String: cm.Lang(), Valid: cm.Lang() != ""}
+	err := c.q.GetEvergreenCollision.Get(&row, cm.ID, cm.SendDelaySecs, pq.Array(listIDs), vg, lang)
 	if err == sql.ErrNoRows {
 		return "", false, nil
 	}

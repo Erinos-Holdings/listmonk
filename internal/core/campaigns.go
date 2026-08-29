@@ -215,6 +215,13 @@ func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int) 
 
 // UpdateCampaign updates a campaign.
 func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs []int) (models.Campaign, error) {
+	// Fork -- a nil Attribs means "not sent"; bind a driver NULL so update-campaign's
+	// COALESCE keeps the stored value. models.JSON(nil).Value() marshals to the BYTES
+	// `null`, a valid JSONB value that COALESCE would happily store (wiping preheader/lang).
+	var attribs any
+	if o.Attribs != nil {
+		attribs = o.Attribs
+	}
 	_, err := c.q.UpdateCampaign.Exec(id,
 		o.Name,
 		o.Subject,
@@ -224,7 +231,7 @@ func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs
 		o.ContentType,
 		o.SendAt,
 		o.Headers,
-		o.Attribs,
+		attribs,
 		pq.StringArray(normalizeTags(o.Tags)),
 		o.Messenger,
 		o.TemplateID,
@@ -320,6 +327,17 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 
 	cm.Status = status
 	return cm, nil
+}
+
+// CampaignLangAudience (fork, multi-language campaigns) counts the subscribers a campaign
+// would send to under its lists' opt-in rules AND its attribs.lang -- the same predicate
+// next-campaigns uses for to_send. Used for the zero-audience warning at start.
+func (c *Core) CampaignLangAudience(id int) (int, error) {
+	var n int
+	if err := c.q.GetCampaignLangAudience.Get(&n, id); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // UpdateCampaignArchive updates a campaign's archive properties.

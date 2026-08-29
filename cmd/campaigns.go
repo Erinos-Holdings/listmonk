@@ -172,6 +172,16 @@ func (a *App) PreviewCampaign(c echo.Context) error {
 		camp.ContentType = contentType
 		camp.Body = c.FormValue("body")
 
+		// Fork (multi-language campaigns) -- preview the attribs on screen (lang, preheader),
+		// not the last saved ones; the footer conditional reads .Campaign.Attribs.lang.
+		if raw := c.FormValue("attribs"); raw != "" {
+			var attribs models.JSON
+			if err := json.Unmarshal([]byte(raw), &attribs); err != nil {
+				return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("subscribers.invalidJSON"))
+			}
+			camp.Attribs = attribs
+		}
+
 		// For visual campaigns, template body from the DB shouldn't be used.
 		if contentType == models.CampaignContentTypeVisual {
 			camp.TemplateBody = ""
@@ -325,9 +335,13 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.cantUpdate"))
 	}
 
+	// Fork (multi-language campaigns) -- the stored language, read before attribs are cleared
+	// below, for the started-campaign lock after binding.
+	prevLang := cm.Lang()
+
 	// Clear attribs to avoid merging old and new values as json.Unmarshal in JSON.scan() merges maps,
-	// merging values already in the DB and incoming values. If this is nil, then DB values remain
-	// unchanged.
+	// merging values already in the DB and incoming values. If this is nil, the DB value is kept
+	// (fork -- update-campaign COALESCEs a NULL bind; upstream wrote JSON null and wiped it).
 	cm.Attribs = nil
 
 	// Read the incoming params into the existing campaign fields from the DB.
@@ -353,6 +367,11 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 	// resume; a swapped list would welcome its whole post-watermark membership).
 	if core.EvergreenLockedChange(cm, o.Evergreen, o.ListIDs) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.evergreenLocked"))
+	}
+	// Fork (multi-language campaigns) -- the language is frozen once started (the checkpoint
+	// window was computed for the old population). Clone to change it.
+	if core.LangLockedChange(cm, prevLang, o.Attribs) {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.langLocked"))
 	}
 
 	out, err := a.core.UpdateCampaign(id, o.Campaign, o.ListIDs, o.MediaIDs)
@@ -401,6 +420,16 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		w := a.campaignWarningsByID(id)
 		if out.Preheader() == "" {
 			w = append(w, manager.WarnNoPreheader)
+		}
+		// Fork (multi-language campaigns) -- a language-scoped broadcast with nobody to send
+		// to would otherwise finish instantly with sent 0 and nothing saying why. Warns, never
+		// blocks. Evergreens are skipped (their audience is future joiners).
+		if lang := out.Lang(); lang != "" && !out.Evergreen {
+			if n, err := a.core.CampaignLangAudience(id); err != nil {
+				a.log.Printf("error counting language audience for campaign %d: %v", id, err)
+			} else if n == 0 {
+				w = append(w, a.i18n.Ts("campaigns.warnNoLangAudience", "lang", strings.ToUpper(lang)))
+			}
 		}
 		out.Warnings = w
 	}
@@ -949,6 +978,10 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 		if _, err := json.Marshal(c.Attribs); err != nil {
 			return c, errors.New(a.i18n.T("subscribers.invalidJSON"))
 		}
+	}
+	// Fork (multi-language campaigns) -- attribs.lang is absent or one of models.CampaignLangs.
+	if !models.NormalizeLang(c.Attribs) {
+		return c, errors.New(a.i18n.Ts("campaigns.fieldInvalidLang", "langs", strings.Join(models.CampaignLangs, ", ")))
 	}
 
 	if len(c.ArchiveMeta) == 0 {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"github.com/gofrs/uuid/v5"
 	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/internal/manager"
@@ -23,6 +24,8 @@ type runningCamp struct {
 	LastSubscriberID int    `db:"last_subscriber_id"`
 	MaxSubscriberID  int    `db:"max_subscriber_id"`
 	ListID           int    `db:"list_id"`
+	// Fork (multi-language campaigns) -- attribs.lang, NULL = everyone.
+	Lang sql.NullString `db:"lang"`
 }
 
 func newManagerStore(q *models.Queries, c *core.Core, m media.Store) *store {
@@ -62,7 +65,7 @@ func (s *store) NextSubscribers(campID, limit int) ([]models.Subscriber, error) 
 	}
 
 	var out []models.Subscriber
-	err := s.queries.NextCampaignSubscribers.Select(&out, camps[0].CampaignID, camps[0].CampaignType, camps[0].LastSubscriberID, camps[0].MaxSubscriberID, pq.Array(listIDs), limit)
+	err := s.queries.NextCampaignSubscribers.Select(&out, camps[0].CampaignID, camps[0].CampaignType, camps[0].LastSubscriberID, camps[0].MaxSubscriberID, pq.Array(listIDs), limit, camps[0].Lang)
 	return out, err
 }
 

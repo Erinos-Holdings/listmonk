@@ -84,7 +84,9 @@ type Config struct {
 	NotifyEmails        []string `koanf:"notify_emails"`
 	EnablePublicSubPage bool     `koanf:"enable_public_subscription_page"`
 	// Fork (evergreen) -- app.evergreen_enable.
-	EvergreenEnabled              bool   `koanf:"evergreen_enable"`
+	EvergreenEnabled bool `koanf:"evergreen_enable"`
+	// Fork (multi-language campaigns) -- app.lang_enable, gates the campaign form Language select.
+	LangEnabled                   bool   `koanf:"lang_enable"`
 	EnablePublicArchive           bool   `koanf:"enable_public_archive"`
 	EnablePublicArchiveRSSContent bool   `koanf:"enable_public_archive_rss_content"`
 	ShowOptinPage                 bool   `koanf:"show_optin_page"`

@@ -236,6 +236,11 @@ counts AS (
             END
         )
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+        -- Fork (multi-language campaigns) -- a campaign carrying attribs.lang counts only
+        -- subscribers of that language. Absent = everyone. A subscriber with no lang is
+        -- English (COALESCE), so the EN campaign reaches the unknowns too. The subscriber
+        -- value is normalised (LOWER, primary subtag) so an imported 'FR' or 'fr-CA' counts.
+        AND (camps.attribs->>'lang' IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camps.attribs->>'lang')
     -- Fork (evergreen) -- an evergreen campaign is discovered by this query (it is
     -- returned below so the manager pipes it) but never CLAIMED. Its to_send,
     -- max_subscriber_id, status and freeze are not this query's business; its
@@ -343,7 +348,9 @@ SELECT link_clicks.campaign_id,
 -- name: get-running-campaign
 -- Returns the metadata for a running campaign that is required by next-campaign-subscribers to retrieve
 -- a batch of campaign subscribers for processing.
-SELECT campaigns.id AS campaign_id, campaigns.type as campaign_type, last_subscriber_id, max_subscriber_id, lists.id AS list_id
+-- Fork (multi-language campaigns) -- lang is read from the row on EVERY batch, never cached in Go.
+SELECT campaigns.id AS campaign_id, campaigns.type as campaign_type, last_subscriber_id, max_subscriber_id, lists.id AS list_id,
+    campaigns.attribs->>'lang' AS lang
     FROM campaigns
     JOIN campaign_lists ON (campaign_lists.campaign_id = campaigns.id)
     JOIN lists ON (lists.id = campaign_lists.list_id)
@@ -381,6 +388,8 @@ subs AS (
             AND s.id <= $4
              -- Subscriber should not be blacklisted.
             AND s.status != 'blocklisted'
+            -- Fork (multi-language campaigns) -- same predicate as the next-campaigns count.
+            AND ($7::TEXT IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = $7::TEXT)
             AND (
                 -- If it's an optin campaign and the list is double-optin, only pick unconfirmed subscribers.
                 ($2 = 'optin' AND sl.status = 'unconfirmed' AND campLists.optin = 'double')
@@ -404,6 +413,32 @@ u AS (
     WHERE (SELECT COUNT(id) FROM subs) > 0 AND id=$1
 )
 SELECT * FROM subs;
+
+-- name: get-campaign-lang-audience
+-- Fork (multi-language campaigns). The number of subscribers campaign $1 would send to
+-- under its lists' opt-in rules AND its attribs.lang -- the next-campaigns count, for one
+-- campaign, without the side effects. Drives the zero-audience warning at start.
+WITH camp AS (
+    SELECT id, type, attribs->>'lang' AS lang FROM campaigns WHERE id = $1
+),
+campLists AS (
+    SELECT lists.id AS list_id, optin FROM lists
+    INNER JOIN campaign_lists ON (campaign_lists.list_id = lists.id)
+    WHERE campaign_lists.campaign_id = $1
+)
+SELECT COUNT(DISTINCT sl.subscriber_id)
+    FROM camp
+    JOIN campLists cl ON TRUE
+    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
+        AND (
+            CASE
+                WHEN camp.type = 'optin' THEN sl.status = 'unconfirmed' AND cl.optin = 'double'
+                WHEN cl.optin = 'double' THEN sl.status = 'confirmed'
+                ELSE sl.status != 'unsubscribed'
+            END
+        )
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+        AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang);
 
 -- name: delete-campaign-views
 DELETE FROM campaign_views WHERE created_at < $1;
@@ -436,7 +471,9 @@ WITH camp AS (
             END
         ),
         headers=$9,
-        attribs=$10,
+        -- Fork -- a NULL bind (attribs not sent) keeps the stored value. JSON null is a
+        -- value, not NULL, so the Go side must bind a driver NULL, never a nil map.
+        attribs=COALESCE($10::JSONB, attribs),
         tags=$11::VARCHAR(100)[],
         messenger=$12,
         -- template_id shouldn't be saved for visual campaigns.

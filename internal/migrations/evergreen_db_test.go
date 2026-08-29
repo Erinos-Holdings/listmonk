@@ -81,6 +81,10 @@ func newEvergreenHarness(t *testing.T) *evergreenHarness {
 		if err := V6_2_2(db, nil, nil, lo); err != nil {
 			t.Fatalf("V6_2_2 run %d: %v", i+1, err)
 		}
+		// Fork (multi-language campaigns) -- v6.2.3 is idempotent too.
+		if err := V6_2_3(db, nil, nil, lo); err != nil {
+			t.Fatalf("V6_2_3 run %d: %v", i+1, err)
+		}
 	}
 
 	// Parse every shipped query file exactly as the app does and prepare the ones under test.
@@ -179,6 +183,11 @@ func (h *evergreenHarness) batch(camp, limit int) []int {
 }
 
 func (h *evergreenHarness) collides(camp int, delay int64, lists []int, vg *string) bool {
+	return h.collidesLang(camp, delay, lists, vg, "")
+}
+
+// collidesLang -- lang "" is an everyone (no attribs.lang) campaign. Fork (multi-language).
+func (h *evergreenHarness) collidesLang(camp int, delay int64, lists []int, vg *string, lang string) bool {
 	var row struct {
 		ID   int    `db:"id"`
 		Name string `db:"name"`
@@ -187,7 +196,7 @@ func (h *evergreenHarness) collides(camp int, delay int64, lists []int, vg *stri
 	if vg != nil {
 		vgv = sql.NullString{String: *vg, Valid: true}
 	}
-	err := h.coll.Get(&row, camp, delay, pq.Array(lists), vgv)
+	err := h.coll.Get(&row, camp, delay, pq.Array(lists), vgv, sql.NullString{String: lang, Valid: lang != ""})
 	if err == sql.ErrNoRows {
 		return false
 	}

@@ -17,6 +17,7 @@ type Settings struct {
 	SendOptinConfirmation         bool     `json:"app.send_optin_confirmation"`
 	CheckUpdates                  bool     `json:"app.check_updates"`
 	EvergreenEnable               bool     `json:"app.evergreen_enable"`
+	LangEnable                    bool     `json:"app.lang_enable"`
 	AppLang                       string   `json:"app.lang"`
 
 	AppBatchSize             int    `json:"app.batch_size"`

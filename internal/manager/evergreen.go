@@ -24,6 +24,7 @@ package manager
 //   - the feature flag and the idle throttle decide whether scanCampaigns pipes it.
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"strconv"
@@ -100,6 +101,13 @@ func evergreenContentHash(c *models.Campaign) string {
 			h.Write([]byte(k + "=" + v))
 			h.Write([]byte{0})
 		}
+	}
+	// Fork (multi-language campaigns) -- attribs (lang, preheader, anything the footer
+	// conditional reads at render time) are part of the prepared content. json.Marshal
+	// sorts map keys, so the hash is stable.
+	if b, err := json.Marshal(c.Attribs); err == nil {
+		h.Write(b)
+		h.Write([]byte{0})
 	}
 	return strconv.FormatUint(h.Sum64(), 16)
 }

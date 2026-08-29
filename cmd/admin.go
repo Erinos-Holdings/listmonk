@@ -36,8 +36,10 @@ type serverConfig struct {
 	NeedsRestart  bool            `json:"needs_restart"`
 	HasLegacyUser bool            `json:"has_legacy_user"`
 	// Fork (evergreen) -- app.evergreen_enable, gates the campaign form checkbox.
-	EvergreenEnabled bool   `json:"evergreen_enabled"`
-	Version          string `json:"version"`
+	EvergreenEnabled bool `json:"evergreen_enabled"`
+	// Fork (multi-language campaigns) -- app.lang_enable, gates the campaign form Language select.
+	LangEnabled bool   `json:"lang_enabled"`
+	Version     string `json:"version"`
 }
 
 // GetServerConfig returns general server config.
@@ -49,6 +51,7 @@ func (a *App) GetServerConfig(c echo.Context) error {
 		Permissions:      a.cfg.PermissionsRaw,
 		HasLegacyUser:    a.cfg.HasLegacyUser,
 		EvergreenEnabled: a.cfg.EvergreenEnabled,
+		LangEnabled:      a.cfg.LangEnabled,
 		Privacy: struct {
 			DisableTracking    bool `json:"disable_tracking"`
 			IndividualTracking bool `json:"individual_tracking"`

@@ -290,6 +290,45 @@ func (c *Campaign) Preheader() string {
 	return strings.TrimSpace(s)
 }
 
+// CampaignLangs (fork, erinos multi-language campaigns) is the closed set a campaign's
+// attribs.lang may take. Absent = the campaign targets everyone (the pre-fork behaviour).
+// The send-time predicates read the value from the campaign row in SQL, so this set must
+// agree with what those queries accept — they compare strings, so any value here works.
+var CampaignLangs = []string{"en", "es", "fr", "de", "it"}
+
+// Lang returns the campaign's language code from attribs.lang, or "" for everyone.
+func (c *Campaign) Lang() string {
+	s, _ := c.Attribs["lang"].(string)
+	return s
+}
+
+// NormalizeLang validates attribs.lang in place. An absent or empty value removes the key
+// (the form's "All" option posts ""); anything else must be one of CampaignLangs, exactly
+// (lowercase), or ok is false. Attribs may be nil.
+func NormalizeLang(attribs JSON) (ok bool) {
+	if attribs == nil {
+		return true
+	}
+	v, present := attribs["lang"]
+	if !present {
+		return true
+	}
+	s, isStr := v.(string)
+	if !isStr {
+		return false
+	}
+	if s == "" {
+		delete(attribs, "lang")
+		return true
+	}
+	for _, l := range CampaignLangs {
+		if s == l {
+			return true
+		}
+	}
+	return false
+}
+
 // hasTplExpr checks whether a given string has a Go template expression with {{ and  }}.
 func hasTplExpr(s string) bool {
 	_, after, ok := strings.Cut(s, "{{")
