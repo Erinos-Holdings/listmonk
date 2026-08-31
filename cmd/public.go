@@ -571,6 +571,19 @@ func (a *App) LinkRedirect(c echo.Context) error {
 		subUUID = ""
 	}
 
+	// Fork (visual tracking) -- exclude dummy hits (template previews, archive
+	// pages) from click registration, mirroring RegisterCampaignView's exclusion:
+	// the individual-tracking reassignment above runs first, so with tracking OFF
+	// an anonymous archive click still records — upstream parity with the pixel.
+	if campUUID == dummyUUID || subUUID == dummyUUID {
+		url, err := a.core.GetLinkURL(linkUUID)
+		if err != nil {
+			e := err.(*echo.HTTPError)
+			return c.Render(e.Code, tplMessage, makeMsgTpl(a.i18n.T("public.errorTitle"), "", e.Error()))
+		}
+		return c.Redirect(http.StatusTemporaryRedirect, url)
+	}
+
 	url, err := a.core.RegisterCampaignLinkClick(linkUUID, campUUID, subUUID)
 	if err != nil {
 		e := err.(*echo.HTTPError)

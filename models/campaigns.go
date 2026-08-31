@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"regexp"
 	"strings"
 	txttpl "text/template"
 
@@ -200,6 +201,15 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 
 	if body == "" || c.ContentType == CampaignContentTypeVisual {
 		body = `{{ template "content" . }}`
+
+		// Fork (visual tracking) -- the visual builder emits no {{ TrackView }}
+		// (and template_id is NULL by construction), so append the open pixel to
+		// the base. The live-tag guard keeps a document that already carries the
+		// marker (upstream's default visual footer) from double-pixelling; the
+		// bare string "TrackView" in prose or a URL must not suppress it.
+		if c.ContentType == CampaignContentTypeVisual && !regLiveTrackView.MatchString(c.Body) {
+			body += `{{ TrackView }}`
+		}
 	}
 
 	for _, r := range regTplFuncs {
@@ -220,6 +230,14 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 		body = b.String()
 	} else {
 		body = c.Body
+	}
+
+	// Fork (visual tracking) -- the visual builder has no tracking affordance and
+	// emits plain double-quoted hrefs; wrap them in {{ TrackLink }} at compile so
+	// clicks register. Local variable only: stored fields must stay unmutated (the
+	// evergreen prepared-cache hash reads them).
+	if c.ContentType == CampaignContentTypeVisual {
+		body = rewriteVisualTrackLinks(body)
 	}
 
 	// Compile the campaign message.
@@ -280,6 +298,40 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 	}
 
 	return nil
+}
+
+// Fork (visual tracking) -- regexps for CompileTemplate's visual-campaign transform.
+var (
+	// A live {{ TrackView }} tag (any spacing) already in the document body. Deliberately
+	// narrower than a bare strings.Contains: the word "TrackView" in prose, a URL fragment
+	// or a Safe payload must not suppress the base pixel.
+	regLiveTrackView = regexp.MustCompile(`{{\s*TrackView`)
+
+	// A plain double-quoted absolute href, the only form the builder's
+	// renderToStaticMarkup emits. Safe payloads escape their quotes (href=\"...\"), so
+	// nothing inside one can match; single-quoted or spaced hrefs miss (not corrupt).
+	regVisualHref = regexp.MustCompile(`href="(https?://[^"]*)"`)
+)
+
+// rewriteVisualTrackLinks wraps plain absolute hrefs in a visual campaign body with
+// full {{ TrackLink "<url>" . }} calls (not the @TrackLink shorthand, whose narrower
+// RFC-3986 character class would truncate unusual URLs). Skipped (left plain, never
+// corrupted): URLs carrying the @TrackLink token anywhere (suffix is the shorthand,
+// left to the existing regTplFuncs pass; mid-URL would let that pass match inside the
+// emitted quoted string and nest actions), template expressions, and URLs containing
+// a character illegal inside a Go template string literal — backslash, or any control
+// character ([^"]* matches newlines, and a raw LF makes the whole template
+// uncompilable, which for a stored body means a dead campaign, not a bad link).
+func rewriteVisualTrackLinks(body string) string {
+	return regVisualHref.ReplaceAllStringFunc(body, func(match string) string {
+		url := match[len(`href="`) : len(match)-1]
+		if strings.Contains(url, "@TrackLink") || strings.Contains(url, "{{") ||
+			strings.Contains(url, `\`) ||
+			strings.IndexFunc(url, func(r rune) bool { return r < 0x20 }) >= 0 {
+			return match
+		}
+		return `href="{{ TrackLink "` + url + `" . }}"`
+	})
 }
 
 // Preheader returns the campaign's preheader (inbox preview) text. It is stored under the

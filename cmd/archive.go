@@ -256,6 +256,15 @@ func (a *App) compileArchiveCampaigns(camps []models.Campaign) ([]manager.Campai
 			return nil, echo.NewHTTPError(http.StatusInternalServerError, a.i18n.T("public.errorFetchingCampaign"))
 		}
 
+		// Fork (visual tracking) -- archive_meta typically carries no uuid, and an
+		// empty Subscriber.UUID renders {{ TrackLink }} URLs with an empty segment
+		// that the /link/:linkUUID/:campUUID/:subUUID route can never match. Use the
+		// dummy UUID so archive links resolve; LinkRedirect excludes dummy hits from
+		// click registration.
+		if sub.UUID == "" {
+			sub.UUID = dummyUUID
+		}
+
 		m := manager.CampaignMessage{
 			Campaign:   &camp,
 			Subscriber: sub,
