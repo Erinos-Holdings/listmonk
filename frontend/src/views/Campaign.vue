@@ -1603,6 +1603,12 @@ export default Vue.extend({
     if (id === 'new') {
       this.isNew = true;
 
+      // Fork (evergreen) -- the Campaigns list's New button carries the Automations
+      // scope, pre-enabling "send to new subscribers"; still editable before save.
+      if (this.$route.query.evergreen === '1') {
+        this.form.evergreen = true;
+      }
+
       if (this.$route.query.list_id) {
         // Multiple list_id query params.
         let strIds = [];

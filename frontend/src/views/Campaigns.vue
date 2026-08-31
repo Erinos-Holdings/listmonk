@@ -9,7 +9,7 @@
       </div>
       <div class="column has-text-right">
         <b-field v-if="$can('campaigns:manage')" expanded>
-          <b-button expanded :to="{ name: 'campaign', params: { id: 'new' } }" tag="router-link" class="btn-new"
+          <b-button expanded :to="newCampaignRoute" tag="router-link" class="btn-new"
             type="is-primary" icon-left="plus" data-cy="btn-new">
             {{ $t('globals.buttons.new') }}
           </b-button>
@@ -575,6 +575,16 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['campaigns', 'loading', 'serverConfig']),
+
+    // Fork (evergreen) -- New from the Automations scope pre-enables the evergreen
+    // toggle on the create form (Campaign.vue reads the query param).
+    newCampaignRoute() {
+      const r = { name: 'campaign', params: { id: 'new' } };
+      if (this.queryParams.evergreen) {
+        r.query = { evergreen: '1' };
+      }
+      return r;
+    },
 
     numSelectedCampaigns() {
       return this.bulk.all ? this.campaigns.total : this.bulk.checked.length;
