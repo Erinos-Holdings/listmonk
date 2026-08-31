@@ -325,7 +325,8 @@ export default Vue.extend({
         orderBy: 'created_at',
         order: 'desc',
         // Fork (evergreen) -- false = Broadcasts (default), true = Automations.
-        evergreen: false,
+        // Sticky across refresh/navigation via the shared localStorage pref.
+        evergreen: this.$utils.getPref('campaigns.scopeAutomations') === true,
       },
       pollID: null,
       campaignStatsData: {},
@@ -399,6 +400,7 @@ export default Vue.extend({
     // Fork (evergreen) -- the scope pill. Resets the page and clears any bulk
     // selection (a stale selection would carry rows of the other kind), then refetches.
     onScopeChange() {
+      this.$utils.setPref('campaigns.scopeAutomations', this.queryParams.evergreen);
       this.queryParams.page = 1;
       this.bulk.checked = [];
       this.bulk.all = false;

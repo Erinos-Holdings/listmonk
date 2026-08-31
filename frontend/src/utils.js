@@ -241,22 +241,32 @@ export default class Utils {
     return obj;
   };
 
+  // Fork -- prefs must never break a page: storage access can throw (blocked site
+  // data) and the blob can be corrupt, so failures read as "no pref" / no-op.
   getPref = (key) => {
-    if (localStorage.getItem(prefKey) === null) {
+    try {
+      if (localStorage.getItem(prefKey) === null) {
+        return null;
+      }
+
+      const p = JSON.parse(localStorage.getItem(prefKey));
+      return p && key in p ? p[key] : null;
+    } catch (e) {
       return null;
     }
-
-    const p = JSON.parse(localStorage.getItem(prefKey));
-    return key in p ? p[key] : null;
   };
 
   setPref = (key, val) => {
-    let p = {};
-    if (localStorage.getItem(prefKey) !== null) {
-      p = JSON.parse(localStorage.getItem(prefKey));
-    }
+    try {
+      let p = {};
+      if (localStorage.getItem(prefKey) !== null) {
+        p = JSON.parse(localStorage.getItem(prefKey)) || {};
+      }
 
-    p[key] = val;
-    localStorage.setItem(prefKey, JSON.stringify(p));
+      p[key] = val;
+      localStorage.setItem(prefKey, JSON.stringify(p));
+    } catch (e) {
+      // Ignore -- the pref simply doesn't stick.
+    }
   };
 }
