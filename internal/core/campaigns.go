@@ -24,7 +24,8 @@ const (
 // QueryCampaigns retrieves paginated campaigns optionally filtering them by the given arbitrary
 // query expression. It also returns the total number of records in the DB.
 // evergreen (fork) scopes the result to automations (true) or broadcasts (false); nil applies no filter.
-func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, offset, limit int) (models.Campaigns, int, error) {
+// listIDs (fork) scopes the result to campaigns targeting any of the given lists; empty applies no filter.
+func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs []int, offset, limit int) (models.Campaigns, int, error) {
 	queryStr, stmt := makeSearchQuery(searchStr, orderBy, order, c.q.QueryCampaigns, campQuerySortFields)
 
 	if statuses == nil {
@@ -35,9 +36,15 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 		tags = []string{}
 	}
 
+	// Fork (list filter) -- must bind '{}' and never NULL. CARDINALITY(NULL) is NULL, which
+	// would make the whole predicate NULL for every campaign not on the (absent) list.
+	if listIDs == nil {
+		listIDs = []int{}
+	}
+
 	// Unsafe to ignore scanning fields not present in models.Campaigns.
 	var out models.Campaigns
-	if err := c.db.Select(&out, stmt, 0, pq.StringArray(statuses), pq.StringArray(tags), queryStr, getAll, pq.Array(permittedLists), offset, limit, evergreen); err != nil {
+	if err := c.db.Select(&out, stmt, 0, pq.StringArray(statuses), pq.StringArray(tags), queryStr, getAll, pq.Array(permittedLists), offset, limit, evergreen, pq.Array(listIDs)); err != nil {
 		c.log.Printf("error fetching campaigns: %v", err)
 		return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))

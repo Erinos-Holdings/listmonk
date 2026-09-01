@@ -86,8 +86,16 @@ func (a *App) GetCampaigns(c echo.Context) error {
 		return err
 	}
 
+	// Fork (list filter) -- optional, repeatable list_id (absent = no filter). Intersects
+	// with the permitted-list scoping above; it never widens what a user may see.
+	listIDs, err := parseStringIDs(c.QueryParams()["list_id"])
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
+	}
+
 	// Query and retrieve campaigns from the DB.
-	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, evergreen, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, evergreen, listIDs, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}
@@ -374,6 +382,16 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.langLocked"))
 	}
 
+	// Fork (footer guard) -- a scheduled or paused campaign sends again with no further
+	// guarded status transition, so the edit itself is the guarded event. Pre-persist:
+	// a refusal leaves the last compliant version stored. Checked on the INCOMING body,
+	// not the stored one.
+	if manager.FooterGuardOnUpdate(cm.Status) {
+		if err := a.footerGuardOnEdit(id, o); err != nil {
+			return err
+		}
+	}
+
 	out, err := a.core.UpdateCampaign(id, o.Campaign, o.ListIDs, o.MediaIDs)
 	if err != nil {
 		return err
@@ -399,6 +417,14 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		Status string `json:"status"`
 	}{}
 	if err := c.Bind(&req); err != nil {
+		return err
+	}
+
+	// Fork (footer guard) -- refuse a start or a schedule whose rendered body carries no
+	// unsubscribe link (or is missing required footer content). BEFORE the DB write: the
+	// refusal must leave the campaign in its previous status, not merely report on one
+	// already dispatched. Resumes and automation restarts are never guarded.
+	if err := a.footerGuardOnStatus(id, req.Status); err != nil {
 		return err
 	}
 
@@ -804,6 +830,75 @@ func (a *App) renderWarnings(camp models.Campaign) []string {
 	}
 
 	return manager.RenderWarnings(msg.Body())
+}
+
+// footerGuardOnStatus applies the blocking footer guard to a campaign status change.
+// It is a no-op for every transition but draft|scheduled -> running|scheduled, so a
+// resume (paused -> running) and an automation restart are never blocked.
+func (a *App) footerGuardOnStatus(id int, next string) error {
+	// Cheap bail before any fetch or render -- pause, cancel and save-as-draft pay nothing.
+	if next != models.CampaignStatusRunning && next != models.CampaignStatusScheduled {
+		return nil
+	}
+
+	camp, err := a.core.GetCampaignForPreview(id, 0)
+	if err != nil {
+		return err
+	}
+
+	if !manager.FooterGuardOnStatus(camp.Status, next) {
+		return nil
+	}
+
+	return a.footerGuard(camp)
+}
+
+// footerGuardOnEdit applies the blocking footer guard to the INCOMING campaign of an
+// update, rendered against the template it is being saved with.
+func (a *App) footerGuardOnEdit(id int, o campReq) error {
+	// The template the campaign is being saved with, not the stored one. For visual
+	// campaigns the template body is irrelevant (CompileTemplate ignores it), same as
+	// in preview.
+	tplID := 0
+	if o.ContentType != models.CampaignContentTypeVisual && o.TemplateID.Int > 0 {
+		tplID = o.TemplateID.Int
+	}
+
+	camp, err := a.core.GetCampaignForPreview(id, tplID)
+	if err != nil {
+		return err
+	}
+
+	// Overlay the incoming payload the way the test send does -- the guard must judge
+	// what is about to be stored, not what is stored.
+	camp.Subject = o.Subject
+	camp.Body = o.Body
+	camp.AltBody = o.AltBody
+	camp.ContentType = o.ContentType
+	camp.Messenger = o.Messenger
+	if o.Attribs != nil {
+		camp.Attribs = o.Attribs
+	}
+
+	return a.footerGuard(camp)
+}
+
+// footerGuard renders camp and turns any footer problem -- including a body that fails
+// to compile or render, which is a refusal and never a pass -- into a 400.
+func (a *App) footerGuard(camp models.Campaign) error {
+	problems, err := a.manager.CheckFooter(camp, dummySubscriber, a.cfg.RequiredFooterMarkers)
+	if err != nil {
+		a.log.Printf("footer guard could not render campaign %d: %v", camp.ID, err)
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("campaigns.footerMissing", "error", err.Error()))
+	}
+
+	if len(problems) > 0 {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("campaigns.footerMissing", "error", strings.Join(problems, "; ")))
+	}
+
+	return nil
 }
 
 // campaignWarningsByID fetches a stored campaign with its template body (the same

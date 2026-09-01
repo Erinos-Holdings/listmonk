@@ -18,6 +18,7 @@ type Settings struct {
 	CheckUpdates                  bool     `json:"app.check_updates"`
 	EvergreenEnable               bool     `json:"app.evergreen_enable"`
 	LangEnable                    bool     `json:"app.lang_enable"`
+	RequiredFooterMarkers         []string `json:"app.required_footer_markers"`
 	AppLang                       string   `json:"app.lang"`
 
 	AppBatchSize             int    `json:"app.batch_size"`

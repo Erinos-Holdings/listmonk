@@ -37,6 +37,18 @@
             </form>
           </div>
           <div class="column is-narrow">
+            <!-- Fork (list filter) -- server-side list_id filter on GET /api/campaigns.
+                 Single-select (the API param is repeatable); "All lists" sends no param.
+                 Deliberately NOT sticky, unlike the scope pill. -->
+            <b-field>
+              <b-select v-model="queryParams.listID" :disabled="loading.campaigns" @input="onListChange"
+                name="list_id" data-cy="filter-list">
+                <option :value="null">{{ $t('campaigns.allLists') }}</option>
+                <option v-for="l in (lists.results || [])" :key="l.id" :value="l.id">{{ l.name }}</option>
+              </b-select>
+            </b-field>
+          </div>
+          <div class="column is-narrow">
             <!-- Fork (evergreen) -- Broadcasts | Automations scope pill. Server-side filter;
                  switching resets the page and the bulk selection (bulk delete is scoped too).
                  Disabled while a fetch is in flight so two quick clicks cannot leave the table
@@ -62,7 +74,11 @@
           </a>
           <span class="a">
             {{ $tc('globals.messages.numSelected', numSelectedCampaigns, { num: numSelectedCampaigns }) }}
-            <span v-if="!bulk.all && campaigns.total > campaigns.perPage">
+            <!-- Fork (list filter) -- "select all N" selects the whole QUERY, and the
+                 by-query bulk delete carries only query + evergreen, never list_id, so
+                 offering it under a list filter would delete campaigns the page is not
+                 showing. Page-level checkboxes stay available. -->
+            <span v-if="!bulk.all && campaigns.total > campaigns.perPage && queryParams.listID === null">
               &mdash;
               <a href="#" @click.prevent="onSelectAll" data-cy="select-all-campaigns">
                 {{ $tc('globals.messages.selectAll', campaigns.total, { num: campaigns.total }) }}
@@ -327,6 +343,8 @@ export default Vue.extend({
         // Fork (evergreen) -- false = Broadcasts (default), true = Automations.
         // Sticky across refresh/navigation via the shared localStorage pref.
         evergreen: this.$utils.getPref('campaigns.scopeAutomations') === true,
+        // Fork (list filter) -- null = all lists (no param sent). In-page state only.
+        listID: null,
       },
       pollID: null,
       campaignStatsData: {},
@@ -407,15 +425,31 @@ export default Vue.extend({
       this.getCampaigns();
     },
 
+    // Fork (list filter) -- same selection hygiene as the scope pill: a stale selection
+    // would carry rows that are no longer shown.
+    onListChange() {
+      this.queryParams.page = 1;
+      this.bulk.checked = [];
+      this.bulk.all = false;
+      this.getCampaigns();
+    },
+
     getCampaigns() {
-      this.$api.getCampaigns({
+      const params = {
         page: this.queryParams.page,
         query: this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' '),
         order_by: this.queryParams.orderBy,
         order: this.queryParams.order,
         evergreen: this.queryParams.evergreen,
         no_body: true,
-      });
+      };
+
+      // Fork (list filter) -- "All lists" sends no param at all.
+      if (this.queryParams.listID !== null) {
+        params.list_id = this.queryParams.listID;
+      }
+
+      this.$api.getCampaigns(params);
     },
 
     // Stats returns the campaign object with stats (sent, toSend etc.)
@@ -574,7 +608,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['campaigns', 'loading', 'serverConfig']),
+    ...mapState(['campaigns', 'lists', 'loading', 'serverConfig']),
 
     // Fork (evergreen) -- New from the Automations scope pre-enables the evergreen
     // toggle on the create form (Campaign.vue reads the query param).

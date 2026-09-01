@@ -85,6 +85,14 @@ WHERE ($1 = 0 OR id = $1)
     )
     -- Fork (evergreen). Scope to automations (true) or broadcasts (false). NULL applies no filter.
     AND ($9::BOOLEAN IS NULL OR c.evergreen = $9)
+    -- Fork (list filter). Scope to campaigns targeting any of the given list IDs.
+    -- CARDINALITY, never an IS NULL guard -- the handler binds a non-nil empty slice
+    -- ('{}'), so IS NULL would never be true and the page would come up empty.
+    AND (
+        CARDINALITY($10::INT[]) = 0 OR EXISTS (
+            SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($10)
+        )
+    )
 ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 
 -- name: get-campaign

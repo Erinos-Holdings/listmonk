@@ -33,6 +33,12 @@
       <b-taginput v-model="data['app.notify_emails']" name="app.notify_emails"
         :before-adding="(v) => v.match(/(.+?)@(.+?)/)" placeholder="you@yoursite.com" />
     </b-field>
+    <!-- Fork (footer guard) -- empty list = marker check skipped (unsubscribe link only). -->
+    <b-field :label="$t('settings.general.requiredFooterMarkers')" label-position="on-border"
+      :message="$t('settings.general.requiredFooterMarkersHelp')">
+      <b-taginput v-model="data['app.required_footer_markers']" name="app.required_footer_markers"
+        data-cy="required-footer-markers" />
+    </b-field>
 
     <hr />
 

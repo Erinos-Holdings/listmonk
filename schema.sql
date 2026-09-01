@@ -307,6 +307,7 @@ INSERT INTO settings (key, value) VALUES
     ('app.check_updates', 'true'),
     ('app.evergreen_enable', 'false'),
     ('app.lang_enable', 'false'),
+    ('app.required_footer_markers', '[]'),
     ('app.notify_emails', '[]'),
     ('app.lang', '"en"'),
     ('privacy.individual_tracking', 'false'),

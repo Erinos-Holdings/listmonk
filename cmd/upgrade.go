@@ -51,6 +51,8 @@ var migList = []migFunc{
 	{"v6.2.2", migrations.V6_2_2},
 	// Fork migration (erinos): app.lang_enable — see internal/migrations/v6.2.3.go.
 	{"v6.2.3", migrations.V6_2_3},
+	// Fork migration (erinos): app.required_footer_markers — see internal/migrations/v6.2.4.go.
+	{"v6.2.4", migrations.V6_2_4},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

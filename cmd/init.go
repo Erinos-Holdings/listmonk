@@ -86,12 +86,16 @@ type Config struct {
 	// Fork (evergreen) -- app.evergreen_enable.
 	EvergreenEnabled bool `koanf:"evergreen_enable"`
 	// Fork (multi-language campaigns) -- app.lang_enable, gates the campaign form Language select.
-	LangEnabled                   bool   `koanf:"lang_enable"`
-	EnablePublicArchive           bool   `koanf:"enable_public_archive"`
-	EnablePublicArchiveRSSContent bool   `koanf:"enable_public_archive_rss_content"`
-	ShowOptinPage                 bool   `koanf:"show_optin_page"`
-	Lang                          string `koanf:"lang"`
-	DBBatchSize                   int    `koanf:"batch_size"`
+	LangEnabled bool `koanf:"lang_enable"`
+	// Fork (footer guard) -- app.required_footer_markers. Strings that must appear in a
+	// campaign's rendered body before it may be started or scheduled. Empty (the seeded
+	// value) skips the marker check entirely, leaving only the unsubscribe-link rule.
+	RequiredFooterMarkers         []string `koanf:"required_footer_markers"`
+	EnablePublicArchive           bool     `koanf:"enable_public_archive"`
+	EnablePublicArchiveRSSContent bool     `koanf:"enable_public_archive_rss_content"`
+	ShowOptinPage                 bool     `koanf:"show_optin_page"`
+	Lang                          string   `koanf:"lang"`
+	DBBatchSize                   int      `koanf:"batch_size"`
 	Privacy                       struct {
 		IndividualTracking bool            `koanf:"individual_tracking"`
 		DisableTracking    bool            `koanf:"disable_tracking"`
