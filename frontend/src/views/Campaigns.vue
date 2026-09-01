@@ -23,6 +23,18 @@
       :per-page="campaigns.perPage" :total="campaigns.total" hoverable checkable backend-sorting @sort="onSort">
       <template #top-left>
         <div class="columns">
+          <div class="column is-narrow">
+            <!-- Fork (list filter) -- server-side list_id filter on GET /api/campaigns.
+                 Single-select (the API param is repeatable); "All lists" sends no param.
+                 Deliberately NOT sticky, unlike the scope pill. -->
+            <b-field>
+              <b-select v-model="queryParams.listID" :disabled="loading.campaigns" @input="onListChange"
+                name="list_id" data-cy="filter-list">
+                <option :value="null">{{ $t('campaigns.allLists') }}</option>
+                <option v-for="l in (lists.results || [])" :key="l.id" :value="l.id">{{ l.name }}</option>
+              </b-select>
+            </b-field>
+          </div>
           <div class="column is-6">
             <form @submit.prevent="getCampaigns">
               <div>
@@ -35,18 +47,6 @@
                 </b-field>
               </div>
             </form>
-          </div>
-          <div class="column is-narrow">
-            <!-- Fork (list filter) -- server-side list_id filter on GET /api/campaigns.
-                 Single-select (the API param is repeatable); "All lists" sends no param.
-                 Deliberately NOT sticky, unlike the scope pill. -->
-            <b-field>
-              <b-select v-model="queryParams.listID" :disabled="loading.campaigns" @input="onListChange"
-                name="list_id" data-cy="filter-list">
-                <option :value="null">{{ $t('campaigns.allLists') }}</option>
-                <option v-for="l in (lists.results || [])" :key="l.id" :value="l.id">{{ l.name }}</option>
-              </b-select>
-            </b-field>
           </div>
           <div class="column is-narrow">
             <!-- Fork (evergreen) -- Broadcasts | Automations scope pill. Server-side filter;

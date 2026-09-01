@@ -24,15 +24,25 @@ import (
 const unsubMarker = "/subscription/"
 
 // FooterGuardOnStatus reports whether a campaign status change must be footer-guarded.
-// Only the draft|scheduled -> running|scheduled transitions are: a resume
-// (paused -> running) and an automation restart must never be blocked, or every
-// campaign carrying an older frozen footer copy becomes unresumable the day the
-// marker list is populated.
+// EVERY transition into running|scheduled is -- resume (paused -> running) and
+// paused -> scheduled included. Compliance beats convenience: no button may put a
+// non-compliant campaign on the wire, and a refused resume is forced remediation, not a
+// dead end (edit the footer in -- that save is guarded by FooterGuardOnUpdate -- then
+// resume).
+//
+// stored is deliberately ignored, so the guard also fires on transitions core will
+// reject anyway (e.g. finished -> running). Since the guard runs before core's legality
+// check, such a transition on a non-compliant campaign 400s with the footer error rather
+// than the transition error -- accepted: both are 400s, the UI never offers illegal
+// transitions, and mirroring core's legality table here is worse than the mislabeled
+// error.
+//
+// This guard is HTTP-handler-only. Evergreen ticking, claims and internal restarts are
+// pure SQL inside the manager and MUST stay unguarded -- blocking them would be a silent
+// send-path outage rather than a UI refusal.
 func FooterGuardOnStatus(stored, next string) bool {
-	if next != models.CampaignStatusRunning && next != models.CampaignStatusScheduled {
-		return false
-	}
-	return stored == models.CampaignStatusDraft || stored == models.CampaignStatusScheduled
+	_ = stored
+	return next == models.CampaignStatusRunning || next == models.CampaignStatusScheduled
 }
 
 // FooterGuardOnUpdate reports whether saving a campaign in the given stored status must

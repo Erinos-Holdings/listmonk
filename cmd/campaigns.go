@@ -833,8 +833,9 @@ func (a *App) renderWarnings(camp models.Campaign) []string {
 }
 
 // footerGuardOnStatus applies the blocking footer guard to a campaign status change.
-// It is a no-op for every transition but draft|scheduled -> running|scheduled, so a
-// resume (paused -> running) and an automation restart are never blocked.
+// It is a no-op for every transition but those INTO running|scheduled, which are all
+// guarded regardless of the stored status (resume included). Internal automation
+// restarts are unaffected: they are pure SQL in the manager and never reach this handler.
 func (a *App) footerGuardOnStatus(id int, next string) error {
 	// Cheap bail before any fetch or render -- pause, cancel and save-as-draft pay nothing.
 	if next != models.CampaignStatusRunning && next != models.CampaignStatusScheduled {

@@ -36,32 +36,43 @@ func footerCampaign(body, contentType string) models.Campaign {
 	return c
 }
 
-// The guard trigger matrix. Only draft|scheduled -> running|scheduled is guarded; a
-// resume (paused -> running) and an automation restart never are, or every campaign
-// carrying an older frozen footer becomes unresumable when markers are populated.
+// The guard trigger matrix. EVERY transition into running|scheduled is guarded,
+// regardless of the stored status -- resume (paused -> running) and paused -> scheduled
+// included (2026-09-01 amendment: compliance over convenience; a refused resume is
+// forced remediation via the equally guarded save). Transitions to any other status are
+// never guarded. Internal automation restarts are pure SQL and never reach this guard.
 func TestFooterGuardOnStatus(t *testing.T) {
-	cases := []struct {
-		stored, next string
-		want         bool
-	}{
-		{models.CampaignStatusDraft, models.CampaignStatusRunning, true},
-		{models.CampaignStatusDraft, models.CampaignStatusScheduled, true},
-		{models.CampaignStatusScheduled, models.CampaignStatusRunning, true},
-		{models.CampaignStatusScheduled, models.CampaignStatusScheduled, true},
-
-		// Resume and restart -- never guarded.
-		{models.CampaignStatusPaused, models.CampaignStatusRunning, false},
-		{models.CampaignStatusPaused, models.CampaignStatusScheduled, false},
-
-		// Everything that is not a dispatch.
-		{models.CampaignStatusRunning, models.CampaignStatusPaused, false},
-		{models.CampaignStatusRunning, models.CampaignStatusCancelled, false},
-		{models.CampaignStatusScheduled, models.CampaignStatusDraft, false},
-		{models.CampaignStatusFinished, models.CampaignStatusRunning, false},
+	stored := []string{
+		models.CampaignStatusDraft,
+		models.CampaignStatusRunning,
+		models.CampaignStatusScheduled,
+		models.CampaignStatusPaused,
+		models.CampaignStatusCancelled,
+		models.CampaignStatusFinished,
 	}
-	for _, c := range cases {
-		if got := FooterGuardOnStatus(c.stored, c.next); got != c.want {
-			t.Fatalf("FooterGuardOnStatus(%q, %q) = %v, want %v", c.stored, c.next, got, c.want)
+
+	// Every next in {running, scheduled} is guarded from every stored status --
+	// including ones core will reject anyway (finished -> running), which is accepted:
+	// the guard runs before core's legality check.
+	for _, st := range stored {
+		for _, next := range []string{models.CampaignStatusRunning, models.CampaignStatusScheduled} {
+			if got := FooterGuardOnStatus(st, next); !got {
+				t.Fatalf("FooterGuardOnStatus(%q, %q) = false, want true", st, next)
+			}
+		}
+	}
+
+	// Everything that is not a dispatch stays unguarded.
+	for _, st := range stored {
+		for _, next := range []string{
+			models.CampaignStatusDraft,
+			models.CampaignStatusPaused,
+			models.CampaignStatusCancelled,
+			models.CampaignStatusFinished,
+		} {
+			if got := FooterGuardOnStatus(st, next); got {
+				t.Fatalf("FooterGuardOnStatus(%q, %q) = true, want false", st, next)
+			}
 		}
 	}
 }
