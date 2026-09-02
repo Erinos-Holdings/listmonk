@@ -1,0 +1,16 @@
+{{ define "unsubscribed" }}
+{{ template "header" .}}
+<section class="section unsubscribed">
+    <h2>{{ L.T "public.unsubbedTitle" }}</h2>
+    {{ if .Data.Email }}<p class="sub-email">{{ .Data.Email }}</p>{{ end }}
+    {{ if .Data.Lists }}
+        <p class="tagline">{{ L.T "public.unsubbedFromLists" }}</p>
+        <ul class="unsub-lists">
+            {{ range .Data.Lists }}<li>{{ . }}</li>{{ end }}
+        </ul>
+    {{ else }}
+        <p class="tagline">{{ L.T "public.unsubbedInfo" }}</p>
+    {{ end }}
+</section>
+{{ template "footer" .}}
+{{ end }}

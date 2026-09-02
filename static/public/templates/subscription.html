@@ -3,6 +3,15 @@
 <section class="section">
     {{ if not .Data.ShowManage }}
         <h2>{{ L.T "public.unsubTitle" }}</h2>
+        {{ if .Data.Subscriber.Email }}<p class="sub-email">{{ .Data.Subscriber.Email }}</p>{{ end }}
+        {{ if .Data.Lists }}
+            <p class="tagline">{{ L.Tc "public.unsubFromLists" (len .Data.Lists) }}</p>
+            <ul class="unsub-lists">
+                {{ range .Data.Lists }}<li>{{ . }}</li>{{ end }}
+            </ul>
+        {{ else }}
+            <p class="tagline">{{ L.T "public.unsubFromAll" }}</p>
+        {{ end }}
         <form method="post" class="unsub-form">
             <div>
                 {{ if .Data.AllowBlocklist }}

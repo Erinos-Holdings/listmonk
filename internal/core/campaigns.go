@@ -132,6 +132,20 @@ func (c *Core) getCampaign(id int, uuid, archiveSlug string, tplType string) (mo
 	return out[0], nil
 }
 
+// GetCampaignListNames returns the names of the (non-private) lists that an
+// unsubscribe-by-campaign for the given subscriber acts on, for display on the public
+// unsubscribe pages. An unknown campaign UUID yields an empty slice, not an error, so old
+// or synthetic links still render.
+func (c *Core) GetCampaignListNames(campUUID, subUUID string) ([]string, error) {
+	out := []string{}
+	if err := c.q.GetCampaignListNames.Select(&out, campUUID, subUUID); err != nil {
+		c.log.Printf("error fetching campaign list names: %s", pqErrMsg(err))
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
 // GetCampaignForPreview retrieves a campaign with a template body. If the optional tplID is > 0
 // that particular template is used, otherwise, the template saved on the campaign is.
 func (c *Core) GetCampaignForPreview(id, tplID int) (models.Campaign, error) {

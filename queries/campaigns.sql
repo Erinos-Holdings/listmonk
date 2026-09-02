@@ -292,6 +292,20 @@ uniqIDs AS (
 SELECT COUNT(*) AS "count", campaign_id, "timestamp"
     FROM uniqIDs GROUP BY campaign_id, "timestamp" ORDER BY "timestamp" ASC;
 
+-- name: get-campaign-list-names
+-- Names of the lists the unsubscribe-by-campaign for subscriber $2 acts on, for the public
+-- unsubscribe pages. That is the campaign's lists intersected with the subscriber's own
+-- memberships (any status, so a repeat click still names the list), which is exactly the
+-- set unsubscribe-by-campaign updates. A list deleted after the send has a NULL list_id
+-- and drops out, as it does there. Private lists are hidden, as on the preferences page.
+SELECT campaign_lists.list_name FROM campaign_lists
+    JOIN campaigns ON campaigns.id = campaign_lists.campaign_id
+    JOIN lists ON lists.id = campaign_lists.list_id
+    JOIN subscriber_lists ON subscriber_lists.list_id = campaign_lists.list_id
+    JOIN subscribers ON subscribers.id = subscriber_lists.subscriber_id
+    WHERE campaigns.uuid = $1 AND subscribers.uuid = $2 AND lists.type != 'private'
+    ORDER BY campaign_lists.list_name;
+
 -- name: get-campaign-analytics-counts
 -- raw: true
 WITH intval AS (

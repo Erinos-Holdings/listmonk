@@ -68,6 +68,17 @@ type unsubTpl struct {
 	AllowWipe        bool
 	AllowPreferences bool
 	ShowManage       bool
+
+	// Names of the lists the campaign in the URL targeted (empty when the campaign is
+	// unknown), shown on the simple unsubscribe form.
+	Lists []string
+}
+
+// unsubbedTpl is the post-unsubscribe confirmation page.
+type unsubbedTpl struct {
+	publicTpl
+	Email string
+	Lists []string
 }
 
 type optinReq struct {
@@ -196,6 +207,7 @@ func (a *App) ViewCampaignMessage(c echo.Context) error {
 // This is the view that {{ UnsubscribeURL }} in campaigns link to.
 func (a *App) SubscriptionPage(c echo.Context) error {
 	var (
+		campUUID      = c.Param("campUUID")
 		subUUID       = c.Param("subUUID")
 		showManage, _ = strconv.ParseBool(c.FormValue("manage"))
 	)
@@ -221,6 +233,12 @@ func (a *App) SubscriptionPage(c echo.Context) error {
 	// If the subscriber is blocklisted, throw an error.
 	if s.Status == models.SubscriberStatusBlockListed {
 		return c.Render(http.StatusOK, tplMessage, makeMsgTpl(a.i18n.T("public.noSubTitle"), "", a.i18n.Ts("public.blocklisted")))
+	}
+
+	// Name the lists the unsubscribe will act on. Best effort, the page renders without
+	// them on a lookup failure rather than turning an unsubscribe link into an error.
+	if names, err := a.core.GetCampaignListNames(campUUID, subUUID); err == nil {
+		out.Lists = names
 	}
 
 	// Only show preference management if it's enabled in settings.
@@ -275,8 +293,21 @@ func (a *App) SubscriptionPrefs(c echo.Context) error {
 				makeMsgTpl(a.i18n.T("public.errorTitle"), "", a.i18n.T("public.errorProcessingRequest")))
 		}
 
-		return c.Render(http.StatusOK, tplMessage,
-			makeMsgTpl(a.i18n.T("public.unsubbedTitle"), "", a.i18n.T("public.unsubbedInfo")))
+		// Confirmation names the subscriber and the lists acted on. Both lookups are best
+		// effort. The unsubscribe has already happened, so a failure here must still
+		// confirm it, just with less detail. A blocklist opt-out acted on every list, not
+		// the campaign's, so it keeps the generic confirmation rather than naming a subset.
+		out := unsubbedTpl{publicTpl: publicTpl{Title: a.i18n.T("public.unsubbedTitle")}}
+		if s, err := a.core.GetSubscriber(0, subUUID, ""); err == nil {
+			out.Email = s.Email
+		}
+		if !blocklist {
+			if names, err := a.core.GetCampaignListNames(campUUID, subUUID); err == nil {
+				out.Lists = names
+			}
+		}
+
+		return c.Render(http.StatusOK, "unsubscribed", out)
 	}
 
 	// Is preference management enabled?
