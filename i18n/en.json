@@ -651,6 +651,7 @@
     "subscribers.advancedQuery": "Advanced",
     "subscribers.advancedQueryHelp": "Partial SQL expression to query subscriber attributes",
     "subscribers.attribsHelp": "Attributes are defined as a JSON map, for example:",
+    "subscribers.blocklist": "Blocklist",
     "subscribers.blocklistedHelp": "Blocklisted subscribers will never receive any e-mails.",
     "subscribers.confirmBlocklist": "Blocklist {num} subscriber(s)?",
     "subscribers.confirmDelete": "Delete {num} subscriber(s)?",

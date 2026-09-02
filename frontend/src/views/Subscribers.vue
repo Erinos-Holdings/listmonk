@@ -159,19 +159,35 @@
               <b-icon icon="cloud-download-outline" size="is-small" />
             </b-tooltip>
           </a>
+          <!-- Fork: per-row Manage lists — the same modal as the bulk toolbar's, scoped to this
+               one subscriber (ids path, so Preconfirm can re-subscribe an unsubscribed row). -->
+          <a v-if="$can('subscribers:manage')" href="#" @click.prevent="showRowListForm(props.row)"
+            data-cy="btn-row-manage-lists" :aria-label="$t('subscribers.manageLists')">
+            <b-tooltip :label="$t('subscribers.manageLists')" type="is-dark">
+              <b-icon icon="format-list-bulleted-square" size="is-small" />
+            </b-tooltip>
+          </a>
           <!-- Fork: opens the customer's manage-preferences page as that subscriber. The UUID is
                the page's authorization (listmonk-footer link form), so a save from here is a
                consent write attributed to the customer. -->
           <a v-if="$can('subscribers:manage')" :href="managePrefsUrl(props.row)" target="_blank" rel="noopener" data-cy="btn-manage-prefs"
             :aria-label="$t('subscribers.managePrefs')">
             <b-tooltip :label="$t('subscribers.managePrefs')" type="is-dark">
-              <b-icon icon="format-list-bulleted-square" size="is-small" />
+              <b-icon icon="arrow-top-right" size="is-small" />
             </b-tooltip>
           </a>
           <a v-if="$can('subscribers:manage')" :href="`/subscribers/${props.row.id}`"
             @click.prevent="showEditForm(props.row)" data-cy="btn-edit" :aria-label="$t('globals.buttons.edit')">
             <b-tooltip :label="$t('globals.buttons.edit')" type="is-dark">
               <b-icon icon="pencil-outline" size="is-small" />
+            </b-tooltip>
+          </a>
+          <!-- Fork: per-row Blocklist — the bulk toolbar's action for this one subscriber. -->
+          <a v-if="$can('subscribers:manage') && props.row.status !== 'blocklisted'" href="#"
+            @click.prevent="blocklistSubscriber(props.row)" data-cy="btn-row-blocklist"
+            :aria-label="$t('subscribers.blocklist')">
+            <b-tooltip :label="$t('subscribers.blocklist')" type="is-dark">
+              <b-icon icon="account-off-outline" size="is-small" />
             </b-tooltip>
           </a>
           <a v-if="$can('subscribers:manage')" href="#" @click.prevent="deleteSubscriber(props.row)"
@@ -190,7 +206,7 @@
 
     <!-- Manage list modal -->
     <b-modal scroll="keep" :aria-modal="true" :active.sync="isBulkListFormVisible" :width="500" class="has-overflow">
-      <subscriber-bulk-list :num-subscribers="this.numSelectedSubscribers" @finished="bulkChangeLists" />
+      <subscriber-bulk-list :num-subscribers="listFormTarget ? 1 : numSelectedSubscribers" @finished="bulkChangeLists" />
     </b-modal>
 
     <!-- Add / edit form modal -->
@@ -225,6 +241,9 @@ export default Vue.extend({
       isEditing: false,
       isFormVisible: false,
       isBulkListFormVisible: false,
+      // Fork: set when the Manage lists modal was opened from a row action; the submit then
+      // targets only this subscriber instead of the bulk selection.
+      listFormTarget: null,
 
       // Table bulk row selection states.
       bulk: {
@@ -313,7 +332,20 @@ export default Vue.extend({
     },
 
     showBulkListForm() {
+      this.listFormTarget = null;
       this.isBulkListFormVisible = true;
+    },
+
+    showRowListForm(sub) {
+      this.listFormTarget = sub;
+      this.isBulkListFormVisible = true;
+    },
+
+    blocklistSubscriber(sub) {
+      this.$utils.confirm(this.$t('subscribers.confirmBlocklist', { num: 1 }), () => {
+        this.$api.blocklistSubscribers({ ids: [sub.id] })
+          .then(() => this.querySubscribers());
+      });
     },
 
     onFormClose() {
@@ -502,7 +534,12 @@ export default Vue.extend({
       }
 
       let fn = null;
-      if (!this.bulk.all && this.bulk.checked.length > 0) {
+      if (this.listFormTarget) {
+        // Fork: opened from a row action -- this one subscriber, by ID.
+        fn = this.$api.addSubscribersToLists;
+        data.ids = [this.listFormTarget.id];
+        this.listFormTarget = null;
+      } else if (!this.bulk.all && this.bulk.checked.length > 0) {
         // If 'all' is not selected, perform by IDs.
         fn = this.$api.addSubscribersToLists;
         data.ids = this.bulk.checked.map((s) => s.id);
@@ -517,6 +554,15 @@ export default Vue.extend({
         this.querySubscribers();
         this.$utils.toast(this.$t('subscribers.listChangeApplied'));
       });
+    },
+  },
+
+  watch: {
+    // Fork: a row-opened Manage lists modal dismissed without saving must not leave its target behind.
+    isBulkListFormVisible(visible) {
+      if (!visible) {
+        this.listFormTarget = null;
+      }
     },
   },
 

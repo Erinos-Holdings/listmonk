@@ -422,6 +422,10 @@ body.is-noscroll {
     margin: 0 10px;
     display: inline-block;
   }
+  // Fork: the subscribers table carries six row actions; keep them on one line.
+  td.actions {
+    white-space: nowrap;
+  }
   .actions a[data-disabled],
   .actions .icon[data-disabled] {
     pointer-events: none;
