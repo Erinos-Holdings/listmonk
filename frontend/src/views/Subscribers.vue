@@ -159,6 +159,15 @@
               <b-icon icon="cloud-download-outline" size="is-small" />
             </b-tooltip>
           </a>
+          <!-- Fork: opens the customer's manage-preferences page as that subscriber. The UUID is
+               the page's authorization (listmonk-footer link form), so a save from here is a
+               consent write attributed to the customer. -->
+          <a v-if="$can('subscribers:manage')" :href="managePrefsUrl(props.row)" target="_blank" rel="noopener" data-cy="btn-manage-prefs"
+            :aria-label="$t('subscribers.managePrefs')">
+            <b-tooltip :label="$t('subscribers.managePrefs')" type="is-dark">
+              <b-icon icon="format-list-bulleted-square" size="is-small" />
+            </b-tooltip>
+          </a>
           <a v-if="$can('subscribers:manage')" :href="`/subscribers/${props.row.id}`"
             @click.prevent="showEditForm(props.row)" data-cy="btn-edit" :aria-label="$t('globals.buttons.edit')">
             <b-tooltip :label="$t('globals.buttons.edit')" type="is-dark">
@@ -195,7 +204,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
-import { uris } from '../constants';
+import { uris, MANAGE_PREFS_URL } from '../constants';
 import SubscriberBulkList from './SubscriberBulkList.vue';
 import SubscriberForm from './SubscriberForm.vue';
 import CopyText from '../components/CopyText.vue';
@@ -366,6 +375,10 @@ export default Vue.extend({
           this.bulk.checked = [];
         });
       });
+    },
+
+    managePrefsUrl(sub) {
+      return `${MANAGE_PREFS_URL}?uuid=${encodeURIComponent(sub.uuid)}&email=${encodeURIComponent(sub.email)}`;
     },
 
     deleteSubscriber(sub) {

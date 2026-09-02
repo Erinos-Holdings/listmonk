@@ -674,6 +674,7 @@
     "subscribers.listsHelp": "Lists from which subscribers have unsubscribed themselves cannot be removed.",
     "subscribers.listsPlaceholder": "Lists to subscribe to",
     "subscribers.manageLists": "Manage lists",
+    "subscribers.managePrefs": "Manage preferences",
     "subscribers.markUnsubscribed": "Mark as unsubscribed",
     "subscribers.newSubscriber": "New subscriber",
     "subscribers.numSelected": "{num} subscriber(s) selected",

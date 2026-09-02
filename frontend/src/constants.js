@@ -51,3 +51,9 @@ export const colors = Object.freeze({
 });
 
 export const regDuration = '[0-9]+(ms|s|m|h|d)';
+
+// Fork: the customer-facing manage-preferences page (integrations repo,
+// lambda/integrations/manage-subscriptions). The subscribers table links each row to it in
+// the listmonk-footer link form (?uuid=&email=); the same host is hardcoded in the campaign
+// footer template.
+export const MANAGE_PREFS_URL = 'https://manage-preferences.curatedfor.you/';
