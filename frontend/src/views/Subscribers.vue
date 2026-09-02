@@ -153,10 +153,10 @@
 
       <b-table-column v-slot="props" cell-class="actions" align="right">
         <div>
-          <a :href="`/api/subscribers/${props.row.id}/export`" data-cy="btn-download"
-            :aria-label="$t('subscribers.downloadData')">
-            <b-tooltip :label="$t('subscribers.downloadData')" type="is-dark">
-              <b-icon icon="cloud-download-outline" size="is-small" />
+          <a v-if="$can('subscribers:manage')" :href="`/subscribers/${props.row.id}`"
+            @click.prevent="showEditForm(props.row)" data-cy="btn-edit" :aria-label="$t('globals.buttons.edit')">
+            <b-tooltip :label="$t('globals.buttons.edit')" type="is-dark">
+              <b-icon icon="pencil-outline" size="is-small" />
             </b-tooltip>
           </a>
           <!-- Fork: per-row Manage lists — the same modal as the bulk toolbar's, scoped to this
@@ -176,10 +176,10 @@
               <b-icon icon="arrow-top-right" size="is-small" />
             </b-tooltip>
           </a>
-          <a v-if="$can('subscribers:manage')" :href="`/subscribers/${props.row.id}`"
-            @click.prevent="showEditForm(props.row)" data-cy="btn-edit" :aria-label="$t('globals.buttons.edit')">
-            <b-tooltip :label="$t('globals.buttons.edit')" type="is-dark">
-              <b-icon icon="pencil-outline" size="is-small" />
+          <a :href="`/api/subscribers/${props.row.id}/export`" data-cy="btn-download"
+            :aria-label="$t('subscribers.downloadData')">
+            <b-tooltip :label="$t('subscribers.downloadData')" type="is-dark">
+              <b-icon icon="cloud-download-outline" size="is-small" />
             </b-tooltip>
           </a>
           <!-- Fork: per-row Blocklist — the bulk toolbar's action for this one subscriber. -->
