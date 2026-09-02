@@ -25,8 +25,12 @@
         <list-selector label="Target lists" placeholder="Lists to apply to" v-model="form.lists" :selected="form.lists"
           :all="lists.results" />
 
+        <!-- Fork: enabled for every list, not only double opt-in. Sending status=confirmed is the
+             only way the ids path's ON CONFLICT re-subscribes a row a subscriber unsubscribed
+             (add-subscribers-to-lists); on single opt-in lists that is the checkbox's sole effect. -->
         <b-field :message="$t('subscribers.preconfirmHelp')">
-          <b-checkbox v-model="form.preconfirm" data-cy="preconfirm" :native-value="true" :disabled="!hasOptinList">
+          <b-checkbox v-model="form.preconfirm" data-cy="preconfirm" :native-value="true"
+            :disabled="form.action !== 'add' || form.lists.length === 0">
             {{ $t('subscribers.preconfirm') }}
           </b-checkbox>
         </b-field>
@@ -86,10 +90,6 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['lists', 'loading']),
-
-    hasOptinList() {
-      return this.form.lists.some((l) => l.optin === 'double');
-    },
   },
 });
 </script>

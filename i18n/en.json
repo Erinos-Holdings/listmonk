@@ -680,7 +680,7 @@
     "subscribers.numSelected": "{num} subscriber(s) selected",
     "subscribers.optinSubject": "Confirm subscription",
     "subscribers.preconfirm": "Preconfirm subscriptions",
-    "subscribers.preconfirmHelp": "Don't send opt-in e-mails and mark all list subscriptions as 'subscribed'.",
+    "subscribers.preconfirmHelp": "Don't send opt-in e-mails and mark all list subscriptions as 'subscribed' — including re-subscribing anyone who had unsubscribed from the target lists.",
     "subscribers.query": "Query",
     "subscribers.queryPlaceholder": "E-mail or name",
     "subscribers.reset": "Reset",
