@@ -29,10 +29,17 @@ function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS'
 const clampedH = out.match(/<img[^>]*alt="h"[^>]*width="270"[^>]*>/);
 check('clamped copy exists at 270', !!clampedH);
 check('clamped copy height attr scaled to 180', clampedH && /height="180"/.test(clampedH[0]), clampedH && clampedH[0].replace(/src="[^"]*"/,''));
+// IMAGE-WIDTH-SPEC I2: a WIDTH-sized image still gets height:auto on both the clamped
+// and the original copies (the clamp's aspect handling must not regress under Part B's
+// height-only rule).
 const clampedStyle = clampedH && clampedH[0].match(/style="([^"]*)"/);
-check('clamped copy style height (final value)', true, clampedStyle && clampedStyle[1]);
+check('clamped copy style ends with height:auto', clampedStyle && /(^|;)height:auto(;|$)/.test(clampedStyle[1]), clampedStyle && clampedStyle[1]);
+check('clamped copy style has no px height', clampedStyle && !/(^|;)height:\d+px(;|$)/.test(clampedStyle[1]), clampedStyle && clampedStyle[1]);
 const origH = out.match(/<img[^>]*alt="h"[^>]*width="300"[^>]*>/);
 check('original copy keeps height="200"', origH && /height="200"/.test(origH[0]));
+const origStyle = origH && origH[0].match(/style="([^"]*)"/);
+check('original copy style has height:auto', origStyle && /(^|;)height:auto(;|$)/.test(origStyle[1]), origStyle && origStyle[1]);
+check('original copy style does not gain width:auto', origStyle && !/(^|;)width:auto(;|$)/.test(origStyle[1]), origStyle && origStyle[1]);
 const noH = out.match(/<img[^>]*alt="n"[^>]*width="270"[^>]*>/);
 check('no-height image: clamped copy has no height attr', noH && !/height=/.test(noH[0]));
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');

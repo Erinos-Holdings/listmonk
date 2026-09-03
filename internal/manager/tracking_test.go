@@ -94,6 +94,21 @@ func TestVisualPixelExactlyOnce(t *testing.T) {
 	}
 }
 
+// IMAGE-WIDTH-SPEC I8 -- the pixel declares its size (width="1" height="1") so the
+// render-warning size lint stays quiet on every visual campaign and Outlook draws it
+// at 1×1 instead of the file's stored size.
+func TestVisualPixelDeclaresSize(t *testing.T) {
+	m := newTrackingManager(&fakeLinkStore{})
+	out := renderCampaign(t, m, visualCampaign(`<html><body>x</body></html>`), testSub)
+	want := `<img src="https://lm.test/campaign/camp-uuid/sub-uuid/px.png" alt="" width="1" height="1" />`
+	if !strings.Contains(out, want) {
+		t.Fatalf("pixel missing width=\"1\" height=\"1\":\n%s", out)
+	}
+	if w := RenderWarnings([]byte(out)); len(w) != 0 {
+		t.Fatalf("rendered visual body with only the pixel must produce no warnings, got %v", w)
+	}
+}
+
 // §3a -- tail placement: the base pixel lands after the document's closing </html>.
 func TestVisualPixelAfterHTMLClose(t *testing.T) {
 	m := newTrackingManager(&fakeLinkStore{})

@@ -65,6 +65,12 @@ check('fresh Image block carries NO alt key (never-set, no placeholder alt)',
   fresh && JSON.stringify(fresh.data.props));
 check('fresh Image block triggers the nudge',
   fresh && isAltMissing(fresh.data.props) === true);
+// IMAGE-WIDTH-SPEC I6: no literal default width — the sidebar auto-fills Width from the
+// image's natural size on URL set; a literal would stretch anything narrower than the
+// canvas in every client.
+check('fresh Image block carries NO width key (auto-fill, not a literal default)',
+  fresh && !('width' in fresh.data.props),
+  fresh && JSON.stringify(fresh.data.props));
 
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

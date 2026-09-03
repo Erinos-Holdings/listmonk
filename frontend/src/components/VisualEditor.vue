@@ -175,6 +175,14 @@ export default {
 
         const inputEvent = new Event('input', { bubbles: true });
         input.dispatchEvent(inputEvent);
+
+        // React's onChange fires only when the value actually changed, so a same-URL
+        // re-select would never re-run the builder's Width auto-fill. Always follow the
+        // value set with this event; ImageSidebarPanel listens for it and fills Width
+        // from the image's natural size (IMAGE-WIDTH-SPEC §4). Constructed in the
+        // iframe's realm so the listener sees a native CustomEvent.
+        const CE = iframe.contentWindow.CustomEvent || CustomEvent;
+        input.dispatchEvent(new CE('lm-media-selected', { bubbles: true, detail: media.url }));
       }
     },
 

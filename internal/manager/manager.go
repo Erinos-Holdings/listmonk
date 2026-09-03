@@ -409,7 +409,10 @@ func (m *Manager) TemplateFuncs(c *models.Campaign) template.FuncMap {
 				subUUID = dummyUUID
 			}
 
-			return template.HTML(fmt.Sprintf(`<img src="%s" alt="" />`,
+			// width/height declared so the pixel is sized (RenderWarnings' size lint
+			// stays quiet on every visual campaign, which appends this tag at compile)
+			// and Outlook draws it at 1×1 rather than the file's stored size.
+			return template.HTML(fmt.Sprintf(`<img src="%s" alt="" width="1" height="1" />`,
 				fmt.Sprintf(m.cfg.ViewTrackURL, msg.Campaign.UUID, subUUID)))
 		},
 		"UnsubscribeURL": func(msg *CampaignMessage) string {

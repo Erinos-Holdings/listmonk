@@ -95,6 +95,22 @@ function getPixelWidthFromImage(img: HTMLImageElement) {
   return null;
 }
 
+// A resolvable pixel height: the `height` attribute or a px `style.height`.
+// Word reads the attribute; CSS-honoring clients read the style.
+function getPixelHeightFromImage(img: HTMLImageElement) {
+  const attrHeight = img.getAttribute('height');
+  if (attrHeight && /^\d+$/.test(attrHeight)) {
+    return attrHeight;
+  }
+
+  const height = getPixelValue(parseStyleMap(img.getAttribute('style')).height);
+  if (height && height > 0) {
+    return String(height);
+  }
+
+  return null;
+}
+
 function getPaddingValues(styleMap: TStyleMap): TPaddingValues {
   const shorthand = styleMap.padding?.trim().split(/\s+/) || [];
 
@@ -242,9 +258,26 @@ function hardenImages(doc: Document) {
       ['border', '0'],
       ['outline', 'none'],
       ['text-decoration', 'none'],
-      ['height', 'auto'],
-      ['-ms-interpolation-mode', 'bicubic'],
     ];
+
+    // IMAGE-WIDTH-SPEC D3.4. `height:auto` keeps the aspect ratio of a
+    // WIDTH-sized image (the clamp rewrites its width). On a height-only image
+    // it deletes the only sizing there is — every CSS-honoring client then draws
+    // the image at full width — so such an image keeps `height:<h>px`, gains
+    // `width:auto`, and carries the height attribute for Word. An image with
+    // neither dimension is left alone (the render warning names it).
+    if (width) {
+      declarations.push(['height', 'auto']);
+    } else {
+      const height = getPixelHeightFromImage(img);
+      if (height) {
+        if (!img.getAttribute('height')) {
+          img.setAttribute('height', height);
+        }
+        declarations.push(['height', `${height}px`], ['width', 'auto']);
+      }
+    }
+    declarations.push(['-ms-interpolation-mode', 'bicubic']);
 
     if (standaloneImage) {
       declarations.unshift(['display', 'block']);

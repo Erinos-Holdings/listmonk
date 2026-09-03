@@ -29,6 +29,19 @@ var reImgTagWarn = regexp.MustCompile(`(?is)<img\b[^>]*>`)
 // matching — \b sees a boundary between '-' and 'a'.
 var reAltAttr = regexp.MustCompile(`(?is)(?:^|[\s"'])alt\s*=\s*(?:"([^"]*)"|'([^']*)')`)
 
+// Size lint (IMAGE-WIDTH-SPEC §6): an <img> counts as sized when it carries a width
+// attribute, a px width in its inline style, a height attribute, or a px height in its
+// inline style — the forms Word-based Outlook honors. Everything else it draws at the
+// stored pixel size. Attribute regexes are delimiter-anchored like reAltAttr so
+// data-width/data-height do not match.
+var (
+	reWidthAttr  = regexp.MustCompile(`(?is)(?:^|[\s"'])width\s*=\s*(?:"[^"]+"|'[^']+'|[^\s"'>]+)`)
+	reHeightAttr = regexp.MustCompile(`(?is)(?:^|[\s"'])height\s*=\s*(?:"[^"]+"|'[^']+'|[^\s"'>]+)`)
+	reStyleAttr  = regexp.MustCompile(`(?is)(?:^|[\s"'])style\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	reStyleWidth = regexp.MustCompile(`(?i)(?:^|;)\s*width\s*:\s*\d+(?:\.\d+)?px\s*(?:;|$)`)
+	reStyleHght  = regexp.MustCompile(`(?i)(?:^|;)\s*height\s*:\s*\d+(?:\.\d+)?px\s*(?:;|$)`)
+)
+
 // countingWriter tallies bytes written; used to size QP output without buffering it.
 type countingWriter int
 
@@ -67,7 +80,55 @@ func RenderWarnings(rendered []byte) []string {
 	}
 
 	warns = append(warns, embedWarnings(rendered)...)
+	warns = append(warns, sizeWarnings(rendered)...)
 	return warns
+}
+
+// sizeWarnings names every <img> with no resolvable width OR height (attribute or px
+// style), once per src — the Outlook mso/non-mso dual emit shows one image twice.
+// Neutral wording: RenderWarnings also runs for richtext/HTML campaigns, and a
+// hotlinked asset is not bounded by the media optimizer. The tracking pixel passes
+// because TrackView emits width="1" height="1" (D3.7). Html-block images the visual
+// builder never rewrites are named here too — that is the backstop's job.
+func sizeWarnings(rendered []byte) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, tag := range reImgTagWarn.FindAllString(string(rendered), -1) {
+		if imgHasSize(tag) {
+			continue
+		}
+		src := extractSrc(tag)
+		key := src
+		if key == "" {
+			key = tag
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, fmt.Sprintf(
+			"Image %s has no width or height — Outlook draws it at its stored pixel size, which can be wider than "+
+				"the 600px canvas. Give it a width (in the visual builder: open the block and set Width, or re-select "+
+				"the image and the builder fills it in).", imgName(tag, src)))
+	}
+	return out
+}
+
+// imgHasSize reports whether an <img> tag carries a width or height attribute, or a
+// px width/height in its inline style.
+func imgHasSize(tag string) bool {
+	if reWidthAttr.MatchString(tag) || reHeightAttr.MatchString(tag) {
+		return true
+	}
+	m := reStyleAttr.FindStringSubmatch(tag)
+	if m == nil {
+		return false
+	}
+	style := m[1]
+	if style == "" {
+		style = m[2]
+	}
+	return reStyleWidth.MatchString(style) || reStyleHght.MatchString(style)
 }
 
 // embedWarnings lints the rendered body for images that bypass hosted media URLs:

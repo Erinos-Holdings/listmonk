@@ -23,6 +23,7 @@ import ContainerPropsSchema from '../blocks/Container/ContainerPropsSchema';
 import EmailLayoutPropsSchema, { EmailLayoutProps } from '../blocks/EmailLayout/EmailLayoutPropsSchema';
 import { FONT_FAMILIES } from '../blocks/helpers/fontFamily';
 import { ImgPropsSchema } from '../blocks/Img/ImgPropsSchema';
+import { CANVAS_WIDTH } from '../canvasWidth';
 
 /**
  * A local fork of @usewaypoint/email-builder's Reader (MIT, (c) 2024 Waypoint
@@ -123,7 +124,7 @@ function EmailLayoutReader(props: EmailLayoutProps) {
         width="100%"
         style={{
           margin: '0 auto',
-          maxWidth: '600px',
+          maxWidth: `${CANVAS_WIDTH}px`,
           backgroundColor: props.canvasColor ?? '#FFFFFF',
           borderRadius: props.borderRadius ?? undefined,
           border: getBorder(props),
