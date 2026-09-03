@@ -191,10 +191,11 @@ function getWrapperOptions(style: string | null) {
   return { styleValue, styleMap, align, bgcolorAttr };
 }
 
-function buildPresentationTable(contents: string, width: string = '100%') {
+function buildPresentationTable(contents: string, width: string = '100%', align: string | null = null) {
   const widthAttr = width && width !== 'auto' ? ` width="${escapeAttribute(width)}"` : '';
+  const alignAttr = align ? ` align="${escapeAttribute(align)}"` : '';
 
-  return `<table role="presentation"${widthAttr} cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}">${contents}</table>`;
+  return `<table role="presentation"${widthAttr}${alignAttr} cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}">${contents}</table>`;
 }
 
 function hasSingleChildMatching(div: HTMLDivElement, predicate: (child: Element) => boolean) {
@@ -310,7 +311,17 @@ function transformImageBlocks(doc: Document) {
     const { styleValue, align, bgcolorAttr } = getWrapperOptions(div.getAttribute('style'));
     const content = div.innerHTML;
 
-    const innerTable = buildPresentationTable(`<tbody><tr><td align="${escapeAttribute(align)}">${content}</td></tr></tbody>`, 'auto');
+    // The inner table is shrink-wrap (no width). A parent td's align/text-align only
+    // positions INLINE content; Gmail (web and both apps) and Outlook mobile lay a nested
+    // table out as a block and leave it at the left edge — only Word centers it from the
+    // parent cell. A centered/right image therefore needs the table to align ITSELF, the
+    // same self-aligning idiom converted wrappers already recognize (campaign 48 footer
+    // logo, 2026-09-03). `left` is the default flow; never stamp it.
+    const innerTable = buildPresentationTable(
+      `<tbody><tr><td align="${escapeAttribute(align)}">${content}</td></tr></tbody>`,
+      'auto',
+      align === 'center' || align === 'right' ? align : null
+    );
     const html = buildPresentationTable(
       `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(styleValue)}">${innerTable}</td></tr></tbody>`
     );
