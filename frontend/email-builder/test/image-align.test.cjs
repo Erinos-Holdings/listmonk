@@ -9,8 +9,13 @@ const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outloo
 // block's text-align became `align` on both TDs only. Word centers a nested table from
 // the parent cell, but Gmail web, both Gmail apps and Outlook mobile lay the inner table
 // out as a block at the left edge. Pins:
-//   center/right  → the inner (shrink-wrap) table carries align="<value>" itself, and the
-//                   outer td keeps align="<value>" for Word;
+//   center        → the inner (shrink-wrap) table carries align="center" itself, and the
+//                   outer td keeps align="center" for Word;
+//   right         → the DOM inner table carries NO align (table align="right" is a float and
+//                   Word drew the campaign 51 curling iron at the LEFT); the outer td keeps
+//                   align="right" for Word, and a non-mso-only self-aligning wrapper table
+//                   (align="right", in conditional Safe payloads) surrounds the inner table
+//                   for Gmail web/apps and Outlook mobile;
 //   left/unset    → no align attribute on the inner table (left is the default flow, and a
 //                   stamped align="left" is the hazard commit a138c8f6 removed);
 //   scope guards  → an oversized centered image still dual-emits inside the aligned table,
@@ -42,6 +47,12 @@ function imageTables(out, alt) {
   return { img, inner, outerTd, innerAlign: inner && inner.getAttribute('align'), innerWidth: inner && inner.getAttribute('width') };
 }
 
+// Conditional markers ride in `{{ Safe "..." }}` payloads (same decoder as vml-button.test.cjs).
+function decodeSafe(out) {
+  return out.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
+    s.replace(/\\x3c/g, '<').replace(/\\x3e/g, '>').replace(/\\x20/g, ' ').replace(/\\x09/g, '\t').replace(/\\x26/g, '&').replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
+}
+
 const logo = '<img alt="logo" src="x://logo.png" height="62" style="max-width:100%;height:62px">';
 const linked = `<a href="https://x.test" style="text-decoration:none;display:inline-block;border:0" target="_blank">${logo}</a>`;
 
@@ -51,9 +62,15 @@ for (const [label, inner] of [['bare img', logo], ['linked img', linked]]) {
   check(`${label} center: inner table aligns itself (align="center")`, c && c.innerAlign === 'center', c && String(c.innerAlign));
   check(`${label} center: outer td still carries align="center" for Word`, c && c.outerTd && c.outerTd.getAttribute('align') === 'center');
 
-  const r = imageTables(render(block('padding:0px;text-align:right', inner)), 'logo');
-  check(`${label} right: inner table aligns itself (align="right")`, r && r.innerAlign === 'right', r && String(r.innerAlign));
+  const rightOut = render(block('padding:0px;text-align:right', inner));
+  const r = imageTables(rightOut, 'logo');
+  check(`${label} right: DOM inner table carries NO align (Word positions it from the td)`, r && r.innerAlign === null, r && String(r.innerAlign));
   check(`${label} right: outer td carries align="right"`, r && r.outerTd && r.outerTd.getAttribute('align') === 'right');
+  check(`${label} right: no table in the DOM carries align="right"`, !/<table role="presentation"[^>]* align="right"/.test(rightOut));
+  const decoded = decodeSafe(rightOut);
+  const wrapperRe = /<!--\[if !mso\]><!--><table role="presentation" align="right" cellpadding="0" cellspacing="0" border="0" style="[^"]*"><tr><td align="right"><!--<!\[endif\]--><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="[^"]*"><tbody><tr><td align="right">[\s\S]*?<\/td><\/tr><\/tbody><\/table><!--\[if !mso\]><!--><\/td><\/tr><\/table><!--<!\[endif\]-->/;
+  check(`${label} right: non-mso self-aligning wrapper (in Safe payloads) surrounds the inner table`, wrapperRe.test(decoded));
+  check(`${label} right: the mso branch sees only td align="right" + plain inner table`, /<td align="right" style="[^"]*"><!--\[if !mso\]><!-->/.test(decoded));
 
   const l = imageTables(render(block('padding:0px;text-align:left', inner)), 'logo');
   check(`${label} left: inner table carries NO align attribute`, l && l.innerAlign === null, l && String(l.innerAlign));

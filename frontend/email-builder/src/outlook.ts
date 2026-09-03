@@ -317,13 +317,23 @@ function transformImageBlocks(doc: Document) {
     // parent cell. A centered/right image therefore needs the table to align ITSELF, the
     // same self-aligning idiom converted wrappers already recognize (campaign 48 footer
     // logo, 2026-09-03). `left` is the default flow; never stamp it.
+    // `right` is different: table align="right" is a FLOAT, and Word does not float a
+    // nested table to the cell's right edge — it drew the campaign 51 curling iron at the
+    // LEFT (Inspect Twr4n4ot, 2026-09-03) while every CSS client honored it. So Word keeps
+    // the pre-.78 shape (a plain inner table positioned by the outer td align="right") and
+    // only the non-mso branch gets a self-aligning wrapper, through the same conditional
+    // Safe payloads the button uses. The real DOM never carries align="right" on a table.
     const innerTable = buildPresentationTable(
       `<tbody><tr><td align="${escapeAttribute(align)}">${content}</td></tr></tbody>`,
       'auto',
-      align === 'center' || align === 'right' ? align : null
+      align === 'center' ? 'center' : null
     );
+    const rightStart = align === 'right'
+      ? makeSafeTemplate(`<!--[if !mso]><!--><table role="presentation" align="right" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tr><td align="right"><!--<![endif]-->`)
+      : '';
+    const rightEnd = align === 'right' ? makeSafeTemplate('<!--[if !mso]><!--></td></tr></table><!--<![endif]-->') : '';
     const html = buildPresentationTable(
-      `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(styleValue)}">${innerTable}</td></tr></tbody>`
+      `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(styleValue)}">${rightStart}${innerTable}${rightEnd}</td></tr></tbody>`
     );
 
     replaceNodeWithHtml(div, html);
