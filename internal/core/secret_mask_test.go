@@ -8,7 +8,7 @@ import (
 
 // The invariant these pin: a settings save can never store the display mask as a secret,
 // whatever client sent it. 2026-09-03: a full-blob PUT /api/settings stored 44 mask runes
-// as the SES SMTP password and every campaign send failed 535 (LISTMONK-RUNBOOK hazard 49).
+// as the SES SMTP password and every campaign send failed 535 (LISTMONK-RUNBOOK hazard 50).
 func TestResolveSecret(t *testing.T) {
 	const stored = "AbCd/EfGh+IjKl0123456789abcdefghijklmnopqrst" // 44 chars, like an SES SMTP password
 
