@@ -138,21 +138,7 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		// This is a common mistake when copy-pasting SMTP settings.
 		set.SMTP[i].Host = strings.TrimSpace(s.Host)
 
-		// If there's no password coming in from the frontend -- or only the display mask
-		// GET /api/settings returned (fork, 2026-09-03: a full-blob PUT round-tripped it and
-		// stored 44 mask runes as the live SES credential) -- copy the existing password by
-		// matching the UUID. A value merely containing the mask is refused.
-		var curPwd string
-		for _, c := range cur.SMTP {
-			if s.UUID == c.UUID {
-				curPwd = c.Password
-			}
-		}
-		pwd, err := core.ResolveSecret(s.Password, curPwd)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("SMTP #%d password: %v", i+1, err))
-		}
-		set.SMTP[i].Password = pwd
+		// Passwords are resolved against the stored ones in resolveSettingsSecrets below.
 	}
 	if !has {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("settings.errorNoSMTP"))
@@ -196,19 +182,6 @@ func (a *App) UpdateSettings(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("settings.bounces.invalidScanInterval"))
 		}
 
-		// If there's no password (or only the display mask) coming in from the frontend,
-		// copy the existing password by matching the UUID. See the SMTP loop above.
-		var curPwd string
-		for _, c := range cur.BounceBoxes {
-			if s.UUID == c.UUID {
-				curPwd = c.Password
-			}
-		}
-		pwd, err := core.ResolveSecret(s.Password, curPwd)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("bounce mailbox #%d password: %v", i+1, err))
-		}
-		set.BounceBoxes[i].Password = pwd
 	}
 
 	for i, m := range set.Messengers {
@@ -216,18 +189,6 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		if m.UUID == "" {
 			set.Messengers[i].UUID = uuid.Must(uuid.NewV4()).String()
 		}
-
-		var curPwd string
-		for _, c := range cur.Messengers {
-			if m.UUID == c.UUID {
-				curPwd = c.Password
-			}
-		}
-		pwd, err := core.ResolveSecret(m.Password, curPwd)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("messenger #%d password: %v", i+1, err))
-		}
-		set.Messengers[i].Password = pwd
 
 		name := reAlphaNum.ReplaceAllString(strings.ToLower(m.Name), "")
 		if _, ok := names[name]; ok {
@@ -242,27 +203,10 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		names[name] = true
 	}
 
-	// Flat secrets: empty or display-mask incoming values keep the stored secret; a value
-	// that merely contains the mask is refused (fork, 2026-09-03 -- see core.ResolveSecret).
-	for _, f := range []struct {
-		label string
-		dst   *string
-		cur   string
-	}{
-		{"upload.s3.aws_secret_access_key", &set.UploadS3AwsSecretAccessKey, cur.UploadS3AwsSecretAccessKey},
-		{"bounce.sendgrid_key", &set.SendgridKey, cur.SendgridKey},
-		{"bounce.azure.shared_secret", &set.BounceAzure.SharedSecret, cur.BounceAzure.SharedSecret},
-		{"bounce.postmark.password", &set.BouncePostmark.Password, cur.BouncePostmark.Password},
-		{"bounce.forwardemail.key", &set.BounceForwardEmail.Key, cur.BounceForwardEmail.Key},
-		{"bounce.lettermint.key", &set.BounceLettermint.Key, cur.BounceLettermint.Key},
-		{"security.captcha.hcaptcha.secret", &set.SecurityCaptcha.HCaptcha.Secret, cur.SecurityCaptcha.HCaptcha.Secret},
-		{"security.oidc.client_secret", &set.OIDC.ClientSecret, cur.OIDC.ClientSecret},
-	} {
-		v, err := core.ResolveSecret(*f.dst, f.cur)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("%s: %v", f.label, err))
-		}
-		*f.dst = v
+	// Every secret field: empty or display-mask incoming values keep the stored secret; a
+	// value merely containing the mask is refused (fork, 2026-09-03).
+	if err := resolveSettingsSecrets(&set, cur); err != nil {
+		return err
 	}
 
 	// OIDC user auto-creation is enabled. Validate.
@@ -340,6 +284,17 @@ func (a *App) UpdateSettingsByKey(c echo.Context) error {
 	var b json.RawMessage
 	if err := c.Bind(&b); err != nil {
 		return err
+	}
+
+	// Fork (2026-09-03): a key that carries secrets goes through the same resolution as the
+	// full PUT. Without this, PUT /api/settings/smtp with the array GET returned stores the
+	// display mask as the SES password -- the same failure the full-PUT guard closes.
+	if secretSettingKeys[key] {
+		resolved, err := a.resolveSecretSettingKey(key, b)
+		if err != nil {
+			return err
+		}
+		b = resolved
 	}
 
 	// Update the value in the DB.
@@ -444,4 +399,150 @@ func (a *App) GetAboutInfo(c echo.Context) error {
 	out.System.OSMB = mem.Sys / 1024 / 1024
 
 	return c.JSON(http.StatusOK, out)
+}
+
+// secretSettingKeys are the settings keys whose values carry secrets. PUT /api/settings/:key on
+// any of them is resolved against the stored settings exactly like the full PUT (fork,
+// 2026-09-03), so no client can persist the display mask through either route.
+var secretSettingKeys = map[string]bool{
+	"smtp":                            true,
+	"bounce.mailboxes":                true,
+	"messengers":                      true,
+	"upload.s3.aws_secret_access_key": true,
+	"bounce.sendgrid_key":             true,
+	"bounce.azure":                    true,
+	"bounce.postmark":                 true,
+	"bounce.forwardemail":             true,
+	"bounce.lettermint":               true,
+	"security.captcha":                true,
+	"security.oidc":                   true,
+}
+
+// resolveSecretSettingKey overlays one incoming settings key onto the stored settings, runs
+// resolveSettingsSecrets over the result, and returns the resolved value of that key.
+func (a *App) resolveSecretSettingKey(key string, incoming json.RawMessage) (json.RawMessage, error) {
+	cur, err := a.core.GetSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	// Stored settings -> map, overlay the key, -> models.Settings.
+	curB, err := json.Marshal(cur)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(curB, &m); err != nil {
+		return nil, err
+	}
+	m[key] = incoming
+	merged, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	var set models.Settings
+	if err := json.Unmarshal(merged, &set); err != nil {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
+	}
+
+	if err := resolveSettingsSecrets(&set, cur); err != nil {
+		return nil, err
+	}
+
+	// Resolved settings -> map, pick the key back out. A flat secret that resolved to ""
+	// is omitted by its `omitempty` tag; "" is then the value to store.
+	outB, err := json.Marshal(set)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]json.RawMessage
+	if err := json.Unmarshal(outB, &out); err != nil {
+		return nil, err
+	}
+	v, ok := out[key]
+	if !ok {
+		v = json.RawMessage(`""`)
+	}
+	return v, nil
+}
+
+// resolveSettingsSecrets replaces every secret field in set with core.ResolveSecret's
+// verdict against the stored value in cur (matched by UUID for the block arrays): empty or
+// display-mask incoming keeps the stored secret, a value merely containing the mask is a
+// 400, anything else is the new secret. An enabled SMTP/bounce block that authenticates,
+// whose incoming password is the mask, and for which there is NO stored secret to keep
+// (a new block, or a UUID that matches nothing) is refused rather than saved with an empty
+// password -- the mask refers to a secret that does not exist.
+func resolveSettingsSecrets(set *models.Settings, cur models.Settings) error {
+	for i, s := range set.SMTP {
+		var curPwd string
+		for _, c := range cur.SMTP {
+			if s.UUID == c.UUID {
+				curPwd = c.Password
+			}
+		}
+		pwd, err := core.ResolveSecret(s.Password, curPwd)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("SMTP #%d password: %v", i+1, err))
+		}
+		if pwd == "" && s.Enabled && s.AuthProtocol != "none" && core.IsSecretMask(s.Password) {
+			return echo.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("SMTP #%d password: the masked value refers to no stored secret for this block; enter the password", i+1))
+		}
+		set.SMTP[i].Password = pwd
+	}
+
+	for i, s := range set.BounceBoxes {
+		var curPwd string
+		for _, c := range cur.BounceBoxes {
+			if s.UUID == c.UUID {
+				curPwd = c.Password
+			}
+		}
+		pwd, err := core.ResolveSecret(s.Password, curPwd)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("bounce mailbox #%d password: %v", i+1, err))
+		}
+		if pwd == "" && s.Enabled && s.AuthProtocol != "none" && core.IsSecretMask(s.Password) {
+			return echo.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("bounce mailbox #%d password: the masked value refers to no stored secret for this block; enter the password", i+1))
+		}
+		set.BounceBoxes[i].Password = pwd
+	}
+
+	for i, m := range set.Messengers {
+		var curPwd string
+		for _, c := range cur.Messengers {
+			if m.UUID == c.UUID {
+				curPwd = c.Password
+			}
+		}
+		pwd, err := core.ResolveSecret(m.Password, curPwd)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("messenger #%d password: %v", i+1, err))
+		}
+		set.Messengers[i].Password = pwd
+	}
+
+	for _, f := range []struct {
+		label string
+		dst   *string
+		cur   string
+	}{
+		{"upload.s3.aws_secret_access_key", &set.UploadS3AwsSecretAccessKey, cur.UploadS3AwsSecretAccessKey},
+		{"bounce.sendgrid_key", &set.SendgridKey, cur.SendgridKey},
+		{"bounce.azure.shared_secret", &set.BounceAzure.SharedSecret, cur.BounceAzure.SharedSecret},
+		{"bounce.postmark.password", &set.BouncePostmark.Password, cur.BouncePostmark.Password},
+		{"bounce.forwardemail.key", &set.BounceForwardEmail.Key, cur.BounceForwardEmail.Key},
+		{"bounce.lettermint.key", &set.BounceLettermint.Key, cur.BounceLettermint.Key},
+		{"security.captcha.hcaptcha.secret", &set.SecurityCaptcha.HCaptcha.Secret, cur.SecurityCaptcha.HCaptcha.Secret},
+		{"security.oidc.client_secret", &set.OIDC.ClientSecret, cur.OIDC.ClientSecret},
+	} {
+		v, err := core.ResolveSecret(*f.dst, f.cur)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("%s: %v", f.label, err))
+		}
+		*f.dst = v
+	}
+	return nil
 }

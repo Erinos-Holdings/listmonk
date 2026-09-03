@@ -45,6 +45,10 @@ func ResolveSecret(incoming, current string) (string, error) {
 	return incoming, nil
 }
 
-func isAllMask(s string) bool {
+// IsSecretMask reports whether s is a non-empty string made only of SecretMask runes -- the
+// display form of some stored secret, never a secret itself.
+func IsSecretMask(s string) bool {
 	return s != "" && strings.Trim(s, SecretMask) == ""
 }
+
+func isAllMask(s string) bool { return IsSecretMask(s) }

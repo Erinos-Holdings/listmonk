@@ -65,3 +65,11 @@ func TestMaskSecretRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestIsSecretMask(t *testing.T) {
+	for in, want := range map[string]bool{"": false, SecretMask: true, strings.Repeat(SecretMask, 44): true, SecretMask + "x": false, "x": false, " ": false} {
+		if got := IsSecretMask(in); got != want {
+			t.Fatalf("IsSecretMask(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
