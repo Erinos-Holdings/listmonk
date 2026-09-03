@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -11,7 +12,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gdgvda/cron"
 	"github.com/gofrs/uuid/v5"
@@ -20,13 +20,12 @@ import (
 	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/v2"
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/internal/messenger/email"
 	"github.com/knadh/listmonk/internal/notifs"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 )
-
-const pwdMask = "•"
 
 type aboutHost struct {
 	OS       string `json:"os"`
@@ -61,25 +60,26 @@ func (a *App) GetSettings(c echo.Context) error {
 		return err
 	}
 
-	// Empty out passwords.
+	// Empty out passwords. core.MaskSecret is the display form UpdateSettings refuses to
+	// store (fork, 2026-09-03) -- keep the two in the same package so they cannot diverge.
 	for i := range s.SMTP {
-		s.SMTP[i].Password = strings.Repeat(pwdMask, utf8.RuneCountInString(s.SMTP[i].Password))
+		s.SMTP[i].Password = core.MaskSecret(s.SMTP[i].Password)
 	}
 	for i := range s.BounceBoxes {
-		s.BounceBoxes[i].Password = strings.Repeat(pwdMask, utf8.RuneCountInString(s.BounceBoxes[i].Password))
+		s.BounceBoxes[i].Password = core.MaskSecret(s.BounceBoxes[i].Password)
 	}
 	for i := range s.Messengers {
-		s.Messengers[i].Password = strings.Repeat(pwdMask, utf8.RuneCountInString(s.Messengers[i].Password))
+		s.Messengers[i].Password = core.MaskSecret(s.Messengers[i].Password)
 	}
 
-	s.UploadS3AwsSecretAccessKey = strings.Repeat(pwdMask, utf8.RuneCountInString(s.UploadS3AwsSecretAccessKey))
-	s.SendgridKey = strings.Repeat(pwdMask, utf8.RuneCountInString(s.SendgridKey))
-	s.BounceAzure.SharedSecret = strings.Repeat(pwdMask, utf8.RuneCountInString(s.BounceAzure.SharedSecret))
-	s.BouncePostmark.Password = strings.Repeat(pwdMask, utf8.RuneCountInString(s.BouncePostmark.Password))
-	s.BounceForwardEmail.Key = strings.Repeat(pwdMask, utf8.RuneCountInString(s.BounceForwardEmail.Key))
-	s.BounceLettermint.Key = strings.Repeat(pwdMask, utf8.RuneCountInString(s.BounceLettermint.Key))
-	s.SecurityCaptcha.HCaptcha.Secret = strings.Repeat(pwdMask, utf8.RuneCountInString(s.SecurityCaptcha.HCaptcha.Secret))
-	s.OIDC.ClientSecret = strings.Repeat(pwdMask, utf8.RuneCountInString(s.OIDC.ClientSecret))
+	s.UploadS3AwsSecretAccessKey = core.MaskSecret(s.UploadS3AwsSecretAccessKey)
+	s.SendgridKey = core.MaskSecret(s.SendgridKey)
+	s.BounceAzure.SharedSecret = core.MaskSecret(s.BounceAzure.SharedSecret)
+	s.BouncePostmark.Password = core.MaskSecret(s.BouncePostmark.Password)
+	s.BounceForwardEmail.Key = core.MaskSecret(s.BounceForwardEmail.Key)
+	s.BounceLettermint.Key = core.MaskSecret(s.BounceLettermint.Key)
+	s.SecurityCaptcha.HCaptcha.Secret = core.MaskSecret(s.SecurityCaptcha.HCaptcha.Secret)
+	s.OIDC.ClientSecret = core.MaskSecret(s.OIDC.ClientSecret)
 
 	return c.JSON(http.StatusOK, okResp{s})
 }
@@ -138,15 +138,21 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		// This is a common mistake when copy-pasting SMTP settings.
 		set.SMTP[i].Host = strings.TrimSpace(s.Host)
 
-		// If there's no password coming in from the frontend, copy the existing
-		// password by matching the UUID.
-		if s.Password == "" {
-			for _, c := range cur.SMTP {
-				if s.UUID == c.UUID {
-					set.SMTP[i].Password = c.Password
-				}
+		// If there's no password coming in from the frontend -- or only the display mask
+		// GET /api/settings returned (fork, 2026-09-03: a full-blob PUT round-tripped it and
+		// stored 44 mask runes as the live SES credential) -- copy the existing password by
+		// matching the UUID. A value merely containing the mask is refused.
+		var curPwd string
+		for _, c := range cur.SMTP {
+			if s.UUID == c.UUID {
+				curPwd = c.Password
 			}
 		}
+		pwd, err := core.ResolveSecret(s.Password, curPwd)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("SMTP #%d password: %v", i+1, err))
+		}
+		set.SMTP[i].Password = pwd
 	}
 	if !has {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("settings.errorNoSMTP"))
@@ -190,15 +196,19 @@ func (a *App) UpdateSettings(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("settings.bounces.invalidScanInterval"))
 		}
 
-		// If there's no password coming in from the frontend, copy the existing
-		// password by matching the UUID.
-		if s.Password == "" {
-			for _, c := range cur.BounceBoxes {
-				if s.UUID == c.UUID {
-					set.BounceBoxes[i].Password = c.Password
-				}
+		// If there's no password (or only the display mask) coming in from the frontend,
+		// copy the existing password by matching the UUID. See the SMTP loop above.
+		var curPwd string
+		for _, c := range cur.BounceBoxes {
+			if s.UUID == c.UUID {
+				curPwd = c.Password
 			}
 		}
+		pwd, err := core.ResolveSecret(s.Password, curPwd)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("bounce mailbox #%d password: %v", i+1, err))
+		}
+		set.BounceBoxes[i].Password = pwd
 	}
 
 	for i, m := range set.Messengers {
@@ -207,13 +217,17 @@ func (a *App) UpdateSettings(c echo.Context) error {
 			set.Messengers[i].UUID = uuid.Must(uuid.NewV4()).String()
 		}
 
-		if m.Password == "" {
-			for _, c := range cur.Messengers {
-				if m.UUID == c.UUID {
-					set.Messengers[i].Password = c.Password
-				}
+		var curPwd string
+		for _, c := range cur.Messengers {
+			if m.UUID == c.UUID {
+				curPwd = c.Password
 			}
 		}
+		pwd, err := core.ResolveSecret(m.Password, curPwd)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("messenger #%d password: %v", i+1, err))
+		}
+		set.Messengers[i].Password = pwd
 
 		name := reAlphaNum.ReplaceAllString(strings.ToLower(m.Name), "")
 		if _, ok := names[name]; ok {
@@ -228,30 +242,27 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		names[name] = true
 	}
 
-	// S3 password?
-	if set.UploadS3AwsSecretAccessKey == "" {
-		set.UploadS3AwsSecretAccessKey = cur.UploadS3AwsSecretAccessKey
-	}
-	if set.SendgridKey == "" {
-		set.SendgridKey = cur.SendgridKey
-	}
-	if set.BounceAzure.SharedSecret == "" {
-		set.BounceAzure.SharedSecret = cur.BounceAzure.SharedSecret
-	}
-	if set.BouncePostmark.Password == "" {
-		set.BouncePostmark.Password = cur.BouncePostmark.Password
-	}
-	if set.BounceForwardEmail.Key == "" {
-		set.BounceForwardEmail.Key = cur.BounceForwardEmail.Key
-	}
-	if set.BounceLettermint.Key == "" {
-		set.BounceLettermint.Key = cur.BounceLettermint.Key
-	}
-	if set.SecurityCaptcha.HCaptcha.Secret == "" {
-		set.SecurityCaptcha.HCaptcha.Secret = cur.SecurityCaptcha.HCaptcha.Secret
-	}
-	if set.OIDC.ClientSecret == "" {
-		set.OIDC.ClientSecret = cur.OIDC.ClientSecret
+	// Flat secrets: empty or display-mask incoming values keep the stored secret; a value
+	// that merely contains the mask is refused (fork, 2026-09-03 -- see core.ResolveSecret).
+	for _, f := range []struct {
+		label string
+		dst   *string
+		cur   string
+	}{
+		{"upload.s3.aws_secret_access_key", &set.UploadS3AwsSecretAccessKey, cur.UploadS3AwsSecretAccessKey},
+		{"bounce.sendgrid_key", &set.SendgridKey, cur.SendgridKey},
+		{"bounce.azure.shared_secret", &set.BounceAzure.SharedSecret, cur.BounceAzure.SharedSecret},
+		{"bounce.postmark.password", &set.BouncePostmark.Password, cur.BouncePostmark.Password},
+		{"bounce.forwardemail.key", &set.BounceForwardEmail.Key, cur.BounceForwardEmail.Key},
+		{"bounce.lettermint.key", &set.BounceLettermint.Key, cur.BounceLettermint.Key},
+		{"security.captcha.hcaptcha.secret", &set.SecurityCaptcha.HCaptcha.Secret, cur.SecurityCaptcha.HCaptcha.Secret},
+		{"security.oidc.client_secret", &set.OIDC.ClientSecret, cur.OIDC.ClientSecret},
+	} {
+		v, err := core.ResolveSecret(*f.dst, f.cur)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("%s: %v", f.label, err))
+		}
+		*f.dst = v
 	}
 
 	// OIDC user auto-creation is enabled. Validate.
