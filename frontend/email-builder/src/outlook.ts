@@ -317,12 +317,14 @@ function transformImageBlocks(doc: Document) {
     // parent cell. A centered/right image therefore needs the table to align ITSELF, the
     // same self-aligning idiom converted wrappers already recognize (campaign 48 footer
     // logo, 2026-09-03). `left` is the default flow; never stamp it.
-    // `right` is different: table align="right" is a FLOAT, and Word does not float a
-    // nested table to the cell's right edge — it drew the campaign 51 curling iron at the
-    // LEFT (Inspect Twr4n4ot, 2026-09-03) while every CSS client honored it. So Word keeps
-    // the pre-.78 shape (a plain inner table positioned by the outer td align="right") and
-    // only the non-mso branch gets a self-aligning wrapper, through the same conditional
-    // Safe payloads the button uses. The real DOM never carries align="right" on a table.
+    // `right` takes the conservative shape: table align="right" is a FLOAT in HTML, so Word
+    // keeps the pre-.78 structure (a plain inner table positioned by the outer td
+    // align="right") and only the non-mso branch gets a self-aligning wrapper, through the
+    // same conditional Safe payloads the button uses. The real DOM never carries
+    // align="right" on a table. Verified 2026-09-03 (Inspect LXT7QErb, Outlook 2024): Word
+    // right-aligns BOTH this and the .78 float idiom — the campaign 51 "iron at the left"
+    // that motivated the split was a knock-on of two unsized 1200px images breaking Word's
+    // layout for the whole email (3ZrTvdBS), not a Word alignment limit.
     const innerTable = buildPresentationTable(
       `<tbody><tr><td align="${escapeAttribute(align)}">${content}</td></tr></tbody>`,
       'auto',

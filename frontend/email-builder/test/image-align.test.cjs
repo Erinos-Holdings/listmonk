@@ -11,11 +11,13 @@ const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outloo
 // out as a block at the left edge. Pins:
 //   center        → the inner (shrink-wrap) table carries align="center" itself, and the
 //                   outer td keeps align="center" for Word;
-//   right         → the DOM inner table carries NO align (table align="right" is a float and
-//                   Word drew the campaign 51 curling iron at the LEFT); the outer td keeps
-//                   align="right" for Word, and a non-mso-only self-aligning wrapper table
-//                   (align="right", in conditional Safe payloads) surrounds the inner table
-//                   for Gmail web/apps and Outlook mobile;
+//   right         → the DOM inner table carries NO align (table align="right" is a float);
+//                   the outer td keeps align="right" for Word, and a non-mso-only
+//                   self-aligning wrapper table (align="right", in conditional Safe payloads)
+//                   surrounds the inner table for Gmail web/apps and Outlook mobile. Word
+//                   renders both this and the .78 float idiom right-aligned (Inspect
+//                   LXT7QErb, 2026-09-03); the shape is kept because it is verified in all
+//                   five loop clients;
 //   left/unset    → no align attribute on the inner table (left is the default flow, and a
 //                   stamped align="left" is the hazard commit a138c8f6 removed);
 //   scope guards  → an oversized centered image still dual-emits inside the aligned table,
