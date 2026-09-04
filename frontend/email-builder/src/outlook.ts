@@ -317,25 +317,21 @@ function transformImageBlocks(doc: Document) {
     // parent cell. A centered/right image therefore needs the table to align ITSELF, the
     // same self-aligning idiom converted wrappers already recognize (campaign 48 footer
     // logo, 2026-09-03). `left` is the default flow; never stamp it.
-    // `right` takes the conservative shape: table align="right" is a FLOAT in HTML, so Word
-    // keeps the pre-.78 structure (a plain inner table positioned by the outer td
-    // align="right") and only the non-mso branch gets a self-aligning wrapper, through the
-    // same conditional Safe payloads the button uses. The real DOM never carries
-    // align="right" on a table. Verified 2026-09-03 (Inspect LXT7QErb, Outlook 2024): Word
-    // right-aligns BOTH this and the .78 float idiom — the campaign 51 "iron at the left"
-    // that motivated the split was a knock-on of two unsized 1200px images breaking Word's
-    // layout for the whole email (3ZrTvdBS), not a Word alignment limit.
+    // `right` uses the same self-aligning attribute. It is a float in HTML, but inside a
+    // shrink-wrap cell there is no sibling content for a float to interact with, and Word
+    // right-aligns it (Inspect idiom matrix LXT7QErb, 2026-09-03). erinos.79 briefly split
+    // right into a non-mso-only wrapper (Safe payloads) on a misdiagnosis — the "image at
+    // the left" was two unsized 1200px images breaking Word's layout for the whole email —
+    // and was reverted (blind review F4): the wrapper only existed after Go template
+    // execution, so the DOM never showed what CSS clients received, and a payload that
+    // failed to render would degrade to literal template text plus a left-aligned image.
     const innerTable = buildPresentationTable(
       `<tbody><tr><td align="${escapeAttribute(align)}">${content}</td></tr></tbody>`,
       'auto',
-      align === 'center' ? 'center' : null
+      align === 'center' || align === 'right' ? align : null
     );
-    const rightStart = align === 'right'
-      ? makeSafeTemplate(`<!--[if !mso]><!--><table role="presentation" align="right" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tr><td align="right"><!--<![endif]-->`)
-      : '';
-    const rightEnd = align === 'right' ? makeSafeTemplate('<!--[if !mso]><!--></td></tr></table><!--<![endif]-->') : '';
     const html = buildPresentationTable(
-      `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(styleValue)}">${rightStart}${innerTable}${rightEnd}</td></tr></tbody>`
+      `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(styleValue)}">${innerTable}</td></tr></tbody>`
     );
 
     replaceNodeWithHtml(div, html);

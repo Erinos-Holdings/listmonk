@@ -16,6 +16,11 @@ const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outloo
 const builderRequire = createRequire(path.join(__dirname, '..', 'package.json'));
 const frontendRequire = createRequire(path.join(__dirname, '..', '..', 'package.json'));
 
+// An OVERSIZED right-aligned image block carries clampImageWidths' dual-emit markers inside
+// its align="right" inner table, so the fixture includes one and both producers go through the
+// same round trips. (Bare, not linked: prettier reflows inline content inside <a> and breaks the
+// dual-emit's closing marker for ANY linked oversized image — pre-existing, js-beautify path
+// unaffected; blind review 2026-09-03.)
 // The button carries a QUOTED font stack (BOOK_SANS): escapeAttribute turns
 // the quotes into &quot;, and without &-encoding the fragment-parser round
 // trip decodes them back into raw quotes inside the Go string — the exact
@@ -26,6 +31,7 @@ const input = `<!doctype html><html><body>
 <div style="font-family:Avenir, &quot;Avenir Next LT Pro&quot;, Montserrat;padding:16px 24px 16px 24px">
 <p>Some <strong>text</strong> with <span style="color: #E11D48">color</span>.</p>
 </div>
+<div style="text-align:right;padding:16px 24px 16px 24px"><img alt="right-wide" src="x://wide.jpg" width="900" style="width:900px;max-width:100%"></div>
 <div style="text-align:center;padding:16px 24px 16px 24px">
 <a href="https://x.test/go?a=1&amp;b=2" target="_blank" style="color:#fff;font-size:16px;font-weight:bold;font-family:Optima, Candara, &quot;Noto Sans&quot;, source-sans-pro, sans-serif;background-color:#0055d4;border-radius:4px;display:block;padding:12px 20px 12px 20px;text-decoration:none">SHOP THE NEW COLLECTION</a>
 </div>
