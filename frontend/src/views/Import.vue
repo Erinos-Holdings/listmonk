@@ -24,6 +24,14 @@
           <h4 class="title is-5">{{ preset.active.name }}</h4>
 
           <template v-if="!preset.preview">
+            <p>{{ $t('import.preset.headersHelp') }}</p>
+            <br />
+            <blockquote class="csv-example">
+              <code class="csv-headers">
+                <span v-for="(h, i) in preset.active.headers" :key="h">{{ h }}{{ i < preset.active.headers.length - 1 ? ',' : '' }}</span>
+              </code>
+            </blockquote>
+            <br />
             <b-field>
               <b-upload v-model="preset.file" drag-drop expanded accept=".csv">
                 <div class="has-text-centered section">

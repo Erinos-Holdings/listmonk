@@ -286,6 +286,38 @@ func TestPresetTransformHeaders(t *testing.T) {
 
 // I13 -- the session options come from the preset alone, and a hash mismatch is rejected
 // before anything is touched (PrepareImport never reaches the DB, which is nil here).
+// The UI's "exact column names" line comes from Info().Headers -- role columns in the fixed
+// email, name, locale order, then attribute columns sorted.
+func TestPresetInfoHeaders(t *testing.T) {
+	p := testPreset(t)
+	got := strings.Join(p.Info().Headers, ",")
+	if want := "earner_email,earner_name,earner_locale,earned_from_site_url"; got != want {
+		t.Errorf("headers %q want %q", got, want)
+	}
+	ps, err := ParsePresets([]byte(`[{"key":"k","name":"N","columns":{"email":"e"},"attrib_columns":{"z":"az","a":"aa"},"list_name_pattern":"^(?P<d>.+)\\.csv$","list_name_template":"{d}","merge":"fill"}]`), models.CampaignLangs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ps[0].Info().Headers, ","); got != "e,a,z" {
+		t.Errorf("email-only preset headers %q want e,a,z", got)
+	}
+	// An explicit headers list wins verbatim (the source file's order) and must cover
+	// exactly the mapped columns.
+	ps, err = ParsePresets([]byte(`[{"key":"k","name":"N","columns":{"email":"e","name":"n"},"attrib_columns":{"u":"au"},"headers":["n","e","u"],"list_name_pattern":"^(?P<d>.+)\\.csv$","list_name_template":"{d}","merge":"fill"}]`), models.CampaignLangs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ps[0].Info().Headers, ","); got != "n,e,u" {
+		t.Errorf("explicit headers %q want n,e,u", got)
+	}
+	for _, bad := range []string{`["n","e"]`, `["n","e","u","x"]`, `["n","n","e","u"]`} {
+		js := `[{"key":"k","name":"N","columns":{"email":"e","name":"n"},"attrib_columns":{"u":"au"},"headers":` + bad + `,"list_name_pattern":"^(?P<d>.+)\\.csv$","list_name_template":"{d}","merge":"fill"}]`
+		if _, err := ParsePresets([]byte(js), models.CampaignLangs); err == nil {
+			t.Errorf("headers %s must be rejected", bad)
+		}
+	}
+}
+
 func TestPresetSessionOptAndHash(t *testing.T) {
 	p, im := testPreset(t), testImporter(t)
 	opt := p.SessionOpt("090426_rewards_bundle_list.csv", 42)

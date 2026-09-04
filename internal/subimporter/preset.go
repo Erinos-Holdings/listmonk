@@ -102,7 +102,10 @@ type Preset struct {
 	Backfill           *bool             `json:"backfill"`
 	Merge              string            `json:"merge"`
 	SkipEmailPattern   string            `json:"skip_email_pattern"`
-	Dedupe             PresetDedupe      `json:"dedupe"`
+	// DisplayHeaders is the column list shown to the user as "the exact column names", in
+	// the source file's own order. Optional; when empty it is derived from the mappings.
+	DisplayHeaders []string     `json:"headers"`
+	Dedupe         PresetDedupe `json:"dedupe"`
 
 	listRe *regexp.Regexp
 	skipRe *regexp.Regexp
@@ -113,6 +116,9 @@ type Preset struct {
 type PresetInfo struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
+	// Headers is the exact column-name set the preset reads, in a stable order (email,
+	// name, locale roles first, then attribute columns sorted), for the UI's instructions.
+	Headers []string `json:"headers"`
 }
 
 // ParsePresets parses and validates the app.import_presets JSON. langs is the closed set
@@ -159,6 +165,27 @@ func (p *Preset) validate(langs []string) error {
 		case presetColEmail, presetColName, presetColLocale:
 		default:
 			return fmt.Errorf("unknown column role %q", k)
+		}
+	}
+	// headers, when given, must name exactly the mapped columns (each once) -- it is a
+	// display order, never a second source of truth for what is read.
+	if len(p.DisplayHeaders) > 0 {
+		known := map[string]bool{}
+		for _, h := range p.Columns {
+			known[h] = true
+		}
+		for h := range p.AttribColumns {
+			known[h] = true
+		}
+		seen := map[string]bool{}
+		for _, h := range p.DisplayHeaders {
+			if !known[h] || seen[h] {
+				return fmt.Errorf("headers entry %q is not a mapped column or repeats", h)
+			}
+			seen[h] = true
+		}
+		if len(seen) != len(known) {
+			return errors.New("headers must list every mapped column")
 		}
 	}
 	for hdr, key := range p.AttribColumns {
@@ -273,7 +300,28 @@ func placeholderGroup(ph string) string {
 
 // Info returns the public shape of the preset.
 func (p *Preset) Info() PresetInfo {
-	return PresetInfo{Key: p.Key, Name: p.Name}
+	return PresetInfo{Key: p.Key, Name: p.Name, Headers: p.Headers()}
+}
+
+// Headers returns the CSV column names the preset expects, for the UI's "exact column
+// names" line. The preset's own headers list wins (the source file's order); otherwise
+// role columns in the fixed order email, name, locale, then attribute columns sorted.
+func (p *Preset) Headers() []string {
+	if len(p.DisplayHeaders) > 0 {
+		return append([]string(nil), p.DisplayHeaders...)
+	}
+	out := make([]string, 0, len(p.Columns)+len(p.AttribColumns))
+	for _, role := range []string{presetColEmail, presetColName, presetColLocale} {
+		if h, ok := p.Columns[role]; ok && h != "" {
+			out = append(out, h)
+		}
+	}
+	attribHdrs := make([]string, 0, len(p.AttribColumns))
+	for h := range p.AttribColumns {
+		attribHdrs = append(attribHdrs, h)
+	}
+	sort.Strings(attribHdrs)
+	return append(out, attribHdrs...)
 }
 
 // SessionOpt builds the importer options for this preset. Every option is fixed by the
