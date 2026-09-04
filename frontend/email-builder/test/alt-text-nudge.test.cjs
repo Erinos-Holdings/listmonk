@@ -72,5 +72,17 @@ check('fresh Image block carries NO width key (auto-fill, not a literal default)
   fresh && !('width' in fresh.data.props),
   fresh && JSON.stringify(fresh.data.props));
 
+// Fresh Image blocks are full-bleed by default (2026-09-04): zero padding on all four sides,
+// so stacked marketing images show no seams and the auto-fill cap (canvas − horizontal
+// padding) is the full 600. Only the Image constructor — Text/Heading/Button keep 16/24.
+const pad = fresh && fresh.data.style && fresh.data.style.padding;
+check('fresh Image block has zero padding on all four sides',
+  pad && pad.top === 0 && pad.bottom === 0 && pad.left === 0 && pad.right === 0,
+  JSON.stringify(pad));
+const textButton = BUTTONS.find((b) => b.label === 'Text');
+const textPad = textButton && textButton.block().data.style.padding;
+check('Text block keeps its 16/24 padding (the change is Image-only)',
+  textPad && textPad.left === 24 && textPad.top === 16, JSON.stringify(textPad));
+
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

@@ -79,7 +79,13 @@ export const BUTTONS: TButtonProps[] = [
           contentAlignment: 'middle',
           linkHref: null,
         },
-        style: { padding: { top: 16, bottom: 16, left: 24, right: 24 } },
+        // Zero on purpose (user decision 2026-09-04): marketing mail is stacked full-bleed
+        // images over the templated footer, so a fresh Image block bleeds to the canvas edge
+        // and the Width auto-fill (canvas minus horizontal padding) fills to the full 600 —
+        // emitted once, no Outlook dual copy. Applies wherever the block is added, columns
+        // included (the column clamp still applies at save). Other block types keep 16/24:
+        // text against the card edge reads as a defect.
+        style: { padding: { top: 0, bottom: 0, left: 0, right: 0 } },
       },
     }),
   },

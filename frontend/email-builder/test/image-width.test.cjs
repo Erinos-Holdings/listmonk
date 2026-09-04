@@ -14,7 +14,7 @@ const ts = require(path.join(builderRoot, 'node_modules', 'typescript'));
 function transpile(relSourcePath) {
   const src = fs.readFileSync(path.join(builderRoot, 'src', relSourcePath), 'utf8');
   return ts.transpileModule(src, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true, jsx: ts.JsxEmit.React },
   }).outputText;
 }
 function evaluate(js, requireMap = {}) {
@@ -75,6 +75,19 @@ fixtures['x://nosize.svg'] = { width: 0, delay: 0 };
   check('cap = CANVAS_WIDTH − left − right (24/24 → 552)', autoFillCap({ top: 16, bottom: 16, left: 24, right: 24 }) === 552);
   check('cap with no padding object = CANVAS_WIDTH', autoFillCap(null) === 600 && autoFillCap(undefined) === 600);
   check('cap with asymmetric padding', autoFillCap({ left: 10, right: 40 }) === 550);
+  // The Add-menu's fresh Image block (zero padding, 2026-09-04) must fill to the FULL canvas —
+  // ties the constructor default to the cap formula, so a change to either alone fails here.
+  {
+    const { createRequire } = require('module');
+    const req = createRequire(path.join(builderRoot, 'package.json'));
+    const iconStub = new Proxy({}, { get: () => () => null });
+    const { BUTTONS } = evaluate(
+      transpile(path.join('documents', 'blocks', 'helpers', 'EditorChildrenIds', 'AddBlockMenu', 'buttons.tsx')),
+      { react: req('react'), '@mui/icons-material': iconStub, '../../../../editor/core': {} },
+    );
+    const fresh = BUTTONS.find((b) => b.label === 'Image').block();
+    check('fresh Image block auto-fills to the full canvas (cap 600)', autoFillCap(fresh.data.style.padding) === 600, JSON.stringify(fresh.data.style.padding));
+  }
 
   // I5 — rule
   check('empty width, 1200 measured, cap 552 → 552', decideWidth(null, null, 1200, 552) === 552);
