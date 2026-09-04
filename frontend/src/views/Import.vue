@@ -5,6 +5,155 @@
     </h1>
     <b-loading :active="isLoading" />
 
+    <!-- Fork (import presets) -- disposable at v7 (SPA rewrite). One button per preset from
+         /api/config; a panel with only a file drop and Preview; the preview summary and a
+         Confirm. Everything else about the import is fixed server-side by the preset. -->
+    <section v-if="isFree() && serverConfig.import_presets && serverConfig.import_presets.length" class="wrap">
+      <div class="box import-preset" data-cy="import-presets">
+        <template v-if="!preset.active">
+          <div class="buttons">
+            <b-button v-for="p in serverConfig.import_presets" :key="p.key" type="is-primary" outlined
+              icon-left="file-upload-outline" :data-cy="`import-preset-${p.key}`" @click="openPreset(p)">
+              {{ p.name }}
+            </b-button>
+          </div>
+          <p class="is-size-7 has-text-grey">{{ $t('import.preset.help') }}</p>
+        </template>
+
+        <template v-else>
+          <h4 class="title is-5">{{ preset.active.name }}</h4>
+
+          <template v-if="!preset.preview">
+            <b-field>
+              <b-upload v-model="preset.file" drag-drop expanded accept=".csv">
+                <div class="has-text-centered section">
+                  <p><b-icon icon="file-upload-outline" size="is-large" /></p>
+                  <p>{{ $t('import.preset.fileHelp') }}</p>
+                </div>
+              </b-upload>
+            </b-field>
+            <div class="tags" v-if="preset.file">
+              <b-tag size="is-medium" closable @close="preset.file = null">{{ preset.file.name }}</b-tag>
+            </div>
+            <div class="buttons">
+              <b-button type="is-primary" :disabled="!preset.file" :loading="isProcessing" @click="previewPreset">
+                {{ $t('import.preset.preview') }}
+              </b-button>
+              <b-button @click="closePreset">{{ $t('import.preset.cancel') }}</b-button>
+            </div>
+          </template>
+
+          <template v-else>
+            <table class="table is-fullwidth is-narrow preset-preview">
+              <tbody>
+                <tr>
+                  <th>{{ $t('import.preset.list') }}</th>
+                  <td>
+                    <strong>{{ preset.preview.list.name }}</strong>
+                    <b-tag v-if="preset.preview.list.exists" type="is-light">
+                      {{ $t('import.preset.listExists', { id: preset.preview.list.id, count: preset.preview.list.subscriber_count || 0 }) }}
+                    </b-tag>
+                    <b-tag v-else type="is-success is-light">{{ $t('import.preset.listCreate') }}</b-tag>
+                  </td>
+                </tr>
+                <tr>
+                  <th>{{ $t('import.preset.encoding') }}</th>
+                  <td>
+                    <b-tag :type="preset.preview.encoding === 'utf-8' ? 'is-light' : 'is-warning is-light'">
+                      {{ preset.preview.encoding }}
+                    </b-tag>
+                    <details v-if="preset.preview.non_ascii_names.length" class="preset-details">
+                      <summary>{{ $t('import.preset.nonAsciiNames') }} ({{ preset.preview.non_ascii_names.length }})</summary>
+                      <ul><li v-for="n in preset.preview.non_ascii_names" :key="n">{{ n }}</li></ul>
+                    </details>
+                  </td>
+                </tr>
+                <tr>
+                  <th>{{ $t('import.preset.rows') }}</th>
+                  <td>{{ preset.preview.rows }}</td>
+                </tr>
+                <tr>
+                  <th>{{ $t('import.preset.subscribers') }}</th>
+                  <td>
+                    <strong>{{ preset.preview.subscribers }}</strong>
+                    &nbsp;({{ $t('import.preset.new') }}: {{ preset.preview.new }},
+                    {{ $t('import.preset.existing') }}: {{ preset.preview.existing }})
+                  </td>
+                </tr>
+                <tr>
+                  <th>{{ $t('import.preset.willFillName') }}</th>
+                  <td>
+                    {{ preset.preview.will_fill_name.length }}
+                    <details v-if="preset.preview.will_fill_name.length" class="preset-details">
+                      <summary>&hellip;</summary>
+                      <ul>
+<li v-for="f in preset.preview.will_fill_name" :key="f.email">
+                        {{ f.email }}: <em>{{ f.from || '(empty)' }}</em> &rarr; <strong>{{ f.to }}</strong>
+                      </li>
+</ul>
+                    </details>
+                  </td>
+                </tr>
+                <tr>
+                  <th>{{ $t('import.preset.willFillLang') }}</th>
+                  <td>
+                    {{ preset.preview.will_fill_lang.length }}
+                    <details v-if="preset.preview.will_fill_lang.length" class="preset-details">
+                      <summary>&hellip;</summary>
+                      <ul><li v-for="f in preset.preview.will_fill_lang" :key="f.email">{{ f.email }}: {{ f.lang }}</li></ul>
+                    </details>
+                  </td>
+                </tr>
+                <tr>
+                  <th>{{ $t('import.preset.langLess') }}</th>
+                  <td>
+                    {{ preset.preview.lang_less }}
+                    <details v-if="preset.preview.unmapped_locales.length" class="preset-details">
+                      <summary>{{ $t('import.preset.unmappedLocales') }} ({{ preset.preview.unmapped_locales.length }})</summary>
+                      <ul><li v-for="u in preset.preview.unmapped_locales" :key="u.email">{{ u.email }}: {{ u.locale }}</li></ul>
+                    </details>
+                  </td>
+                </tr>
+                <tr>
+                  <th>{{ $t('import.preset.duplicates') }}</th>
+                  <td>
+                    {{ preset.preview.duplicates.length }}
+                    <details v-if="preset.preview.duplicates.length" class="preset-details">
+                      <summary>&hellip;</summary>
+                      <ul><li v-for="d in preset.preview.duplicates" :key="d.email">{{ d.email }} (rows {{ d.rows.join(', ') }})</li></ul>
+                    </details>
+                  </td>
+                </tr>
+                <tr>
+                  <th>{{ $t('import.preset.skipped') }}</th>
+                  <td>
+                    {{ preset.preview.skipped.length }}
+                    <details v-if="preset.preview.skipped.length" class="preset-details">
+                      <summary>&hellip;</summary>
+                      <ul><li v-for="s in preset.preview.skipped" :key="s.row">row {{ s.row }}: {{ s.email }} &mdash; {{ s.reason }}</li></ul>
+                    </details>
+                  </td>
+                </tr>
+                <tr v-if="preset.preview.warnings.length">
+                  <th>{{ $t('import.preset.warnings') }}</th>
+                  <td class="has-text-danger">
+                    <ul><li v-for="w in preset.preview.warnings" :key="w">{{ w }}</li></ul>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="buttons">
+              <b-button type="is-primary" :disabled="preset.preview.subscribers === 0" :loading="isProcessing"
+                data-cy="import-preset-confirm" @click="confirmPreset">
+                {{ $t('import.preset.confirm') }}
+              </b-button>
+              <b-button @click="closePreset">{{ $t('import.preset.cancel') }}</b-button>
+            </div>
+          </template>
+        </template>
+      </div>
+    </section>
+
     <section v-if="isFree()" class="wrap">
       <form @submit.prevent="onUpload" class="box">
         <div>
@@ -187,6 +336,10 @@ export default Vue.extend({
         example: '',
       },
 
+      // Fork (import presets) -- the active preset panel: which preset, the dropped file,
+      // and the server's preview (null until Preview is clicked).
+      preset: { active: null, file: null, preview: null },
+
       // Initial page load still has to wait for the status API to return
       // to either show the form or the status box.
       isLoading: true,
@@ -214,6 +367,42 @@ export default Vue.extend({
   methods: {
     clearFile() {
       this.form.file = null;
+    },
+
+    // Fork (import presets).
+    openPreset(p) {
+      this.preset = { active: p, file: null, preview: null };
+    },
+
+    closePreset() {
+      this.preset = { active: null, file: null, preview: null };
+      this.isProcessing = false;
+    },
+
+    previewPreset() {
+      this.isProcessing = true;
+      const params = new FormData();
+      params.set('file', this.preset.file, this.preset.file.name);
+      this.$api.previewImportPreset(this.preset.active.key, params).then((data) => {
+        this.isProcessing = false;
+        this.preset.preview = data;
+      }, () => {
+        this.isProcessing = false;
+      });
+    },
+
+    confirmPreset() {
+      this.isProcessing = true;
+      const params = new FormData();
+      params.set('file', this.preset.file, this.preset.file.name);
+      params.set('content_hash', this.preset.preview.content_hash);
+      this.$api.importPreset(this.preset.active.key, params).then(() => {
+        this.$utils.toast(this.$t('import.importStarted'));
+        this.closePreset();
+        this.pollStatus();
+      }, () => {
+        this.isProcessing = false;
+      });
     },
 
     // Returns true if we're free to do an upload.
@@ -361,7 +550,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['lists']),
+    ...mapState(['lists', 'serverConfig']),
 
     // Import progress bar value.
     progress() {
@@ -385,3 +574,21 @@ export default Vue.extend({
   },
 });
 </script>
+
+<style lang="scss" scoped>
+/* Fork (import presets) */
+.preset-preview th {
+  white-space: nowrap;
+  width: 1%;
+}
+.preset-details {
+  margin-top: 0.25rem;
+  summary {
+    cursor: pointer;
+  }
+  ul {
+    margin: 0.25rem 0 0.5rem 1rem;
+    list-style: disc;
+  }
+}
+</style>

@@ -43,15 +43,17 @@ type App struct {
 	messengers []manager.Messenger
 	emailMsgr  manager.Messenger
 	importer   *subimporter.Importer
-	auth       *auth.Auth
-	media      media.Store
-	bounce     *bounce.Manager
-	captcha    *captcha.Captcha
-	i18n       *i18n.I18n
-	pg         *paginator.Paginator
-	events     *events.Events
-	log        *log.Logger
-	bufLog     *buflog.BufLog
+	// Fork (import presets) -- parsed app.import_presets; nil hides the feature.
+	importPresets []subimporter.Preset
+	auth          *auth.Auth
+	media         media.Store
+	bounce        *bounce.Manager
+	captcha       *captcha.Captcha
+	i18n          *i18n.I18n
+	pg            *paginator.Paginator
+	events        *events.Events
+	log           *log.Logger
+	bufLog        *buflog.BufLog
 
 	about         about
 	fnOptinNotify func(models.Subscriber, []int) (int, error)
@@ -218,6 +220,9 @@ func main() {
 		// Bulk importer.
 		importer = initImporter(queries, db, core, i18n, ko)
 
+		// Fork (import presets).
+		importPresets = initImportPresets(ko)
+
 		// Initialize the auth manager.
 		hasUsers, auth = initAuth(core, db.DB, ko)
 
@@ -295,6 +300,7 @@ func main() {
 		fnOptinNotify: fbOptinNotify,
 		about:         initAbout(queries, db),
 		chReload:      chReload,
+		importPresets: importPresets,
 
 		// If there are no users, then the app needs to prompt for new user setup.
 		needsUserSetup: !hasUsers,

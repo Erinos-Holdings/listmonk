@@ -651,6 +651,29 @@ func initTxTemplates(m *manager.Manager, co *core.Core) {
 	}
 }
 
+// initImportPresets loads and validates app.import_presets (Fork, import presets). A
+// malformed value logs and disables the feature; it never prevents boot.
+func initImportPresets(ko *koanf.Koanf) []subimporter.Preset {
+	v := ko.Get("app.import_presets")
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		lo.Printf("error reading app.import_presets, import presets disabled: %v", err)
+		return nil
+	}
+	presets, err := subimporter.ParsePresets(b, models.CampaignLangs)
+	if err != nil {
+		lo.Printf("error loading app.import_presets, import presets disabled: %v", err)
+		return nil
+	}
+	for _, p := range presets {
+		lo.Printf("import preset loaded: %s (%s)", p.Key, p.Name)
+	}
+	return presets
+}
+
 // initImporter initializes the bulk subscriber importer.
 func initImporter(q *models.Queries, db *sqlx.DB, core *core.Core, i *i18n.I18n, ko *koanf.Koanf) *subimporter.Importer {
 	return subimporter.New(
@@ -658,6 +681,7 @@ func initImporter(q *models.Queries, db *sqlx.DB, core *core.Core, i *i18n.I18n,
 			DomainBlocklist:    ko.Strings("privacy.domain_blocklist"),
 			DomainAllowlist:    ko.Strings("privacy.domain_allowlist"),
 			UpsertStmt:         q.UpsertSubscriber.Stmt,
+			UpsertFillStmt:     q.UpsertSubscriberFill.Stmt,
 			BlocklistStmt:      q.UpsertBlocklistSubscriber.Stmt,
 			UpdateListDateStmt: q.UpdateListsDate.Stmt,
 

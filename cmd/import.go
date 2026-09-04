@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/knadh/listmonk/internal/auth"
@@ -134,5 +136,130 @@ func (a *App) GetImportSubscriberStats(c echo.Context) error {
 // is finished, it's state is cleared.
 func (a *App) StopImportSubscribers(c echo.Context) error {
 	a.importer.Stop()
+	return c.JSON(http.StatusOK, okResp{a.importer.GetStats()})
+}
+
+// Fork (import presets). Two endpoints over the generic preset machinery in
+// internal/subimporter/preset.go. Preview parses server-side and writes nothing; the
+// confirm re-uploads, checks the content hash against the previewed bytes, creates the
+// target list when absent and starts a normal importer session with the preset's fixed
+// options. Everything the stock form lets a user choose is fixed by the preset here.
+
+// maxPresetUpload caps a preset upload; the transform holds the file in memory.
+const maxPresetUpload = 32 << 20
+
+// presetByKey returns the loaded preset for the route's :key.
+func (a *App) presetByKey(c echo.Context) (*subimporter.Preset, error) {
+	key := c.Param("key")
+	for i := range a.importPresets {
+		if a.importPresets[i].Key == key {
+			return &a.importPresets[i], nil
+		}
+	}
+	return nil, echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("import.preset.notFound", "key", key))
+}
+
+// readPresetUpload reads the multipart `file` into memory.
+func (a *App) readPresetUpload(c echo.Context) (string, []byte, error) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		return "", nil, echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("import.invalidFile", "error", err.Error()))
+	}
+	src, err := file.Open()
+	if err != nil {
+		return "", nil, err
+	}
+	defer src.Close()
+
+	b, err := io.ReadAll(io.LimitReader(src, maxPresetUpload+1))
+	if err != nil {
+		return "", nil, echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("import.invalidFile", "error", err.Error()))
+	}
+	if len(b) > maxPresetUpload {
+		return "", nil, echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("import.invalidFile", "error", "file too large"))
+	}
+	return filepath.Base(file.Filename), b, nil
+}
+
+// presetError maps the preset package's errors to HTTP responses.
+func (a *App) presetError(err error) error {
+	var fe *subimporter.FilenameError
+	switch {
+	case errors.As(err, &fe):
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("import.preset.badFilename", "name", fe.Filename, "pattern", fe.Pattern))
+	case errors.Is(err, subimporter.ErrHashMismatch):
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("import.preset.hashMismatch"))
+	case errors.Is(err, subimporter.ErrNoValidRows):
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("import.preset.noRows"))
+	case errors.Is(err, subimporter.ErrListAmbiguous):
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("import.preset.listAmbiguous", "error", err.Error()))
+	case errors.Is(err, subimporter.ErrEmailColumnMissing):
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("import.preset.badFile", "error", err.Error()))
+	}
+	var he *echo.HTTPError
+	if errors.As(err, &he) {
+		return err
+	}
+	return echo.NewHTTPError(http.StatusBadRequest,
+		a.i18n.Ts("import.preset.badFile", "error", err.Error()))
+}
+
+// ImportPresetPreview parses an upload against a preset and reports what an import would
+// do. No writes, no importer session.
+func (a *App) ImportPresetPreview(c echo.Context) error {
+	p, err := a.presetByKey(c)
+	if err != nil {
+		return err
+	}
+	name, data, err := a.readPresetUpload(c)
+	if err != nil {
+		return err
+	}
+
+	res, err := subimporter.Preview(c.Request().Context(), a.db.DB, a.importer, p, name, data)
+	if err != nil {
+		return a.presetError(err)
+	}
+	return c.JSON(http.StatusOK, okResp{res})
+}
+
+// ImportPresetStart confirms a previewed preset import. The only accepted inputs are the
+// file and the content_hash of the preview; every import option comes from the preset.
+func (a *App) ImportPresetStart(c echo.Context) error {
+	if a.importer.GetStats().Status == subimporter.StatusImporting {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("import.alreadyRunning"))
+	}
+
+	// The target list may not exist yet, so a per-list manage grant cannot cover it.
+	user := auth.GetUser(c)
+	if !user.HasPerm(auth.PermListManageAll) {
+		return echo.NewHTTPError(http.StatusForbidden,
+			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermListManageAll))
+	}
+
+	p, err := a.presetByKey(c)
+	if err != nil {
+		return err
+	}
+	name, data, err := a.readPresetUpload(c)
+	if err != nil {
+		return err
+	}
+
+	prep, err := subimporter.PrepareImport(c.Request().Context(), a.db.DB, a.importer, p, name, data, c.FormValue("content_hash"))
+	if err != nil {
+		return a.presetError(err)
+	}
+	if err := a.importer.RunPreset(p, name, prep.List.ID, prep.Parsed.Subs); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			a.i18n.Ts("import.errorStarting", "error", err.Error()))
+	}
+
 	return c.JSON(http.StatusOK, okResp{a.importer.GetStats()})
 }

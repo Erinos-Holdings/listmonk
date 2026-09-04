@@ -149,6 +149,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/import/subscribers/logs", pm(a.GetImportSubscriberStats, "subscribers:import"))
 		g.POST("/api/import/subscribers", pm(a.ImportSubscribers, "subscribers:import"))
 		g.DELETE("/api/import/subscribers", pm(a.StopImportSubscribers, "subscribers:import"))
+		// Fork (import presets). The confirm additionally requires lists:manage_all (checked
+		// in the handler) because the target list may not exist yet.
+		g.POST("/api/import/subscribers/preset/:key/preview", pm(a.ImportPresetPreview, "subscribers:import"))
+		g.POST("/api/import/subscribers/preset/:key", pm(a.ImportPresetStart, "subscribers:import"))
 
 		// Individual list permissions are applied directly within handleGetLists.
 		g.GET("/api/lists", a.GetLists)

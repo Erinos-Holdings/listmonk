@@ -162,3 +162,25 @@ func TestEvergreenSingleOptinDefault(t *testing.T) {
 	}
 	want("by-query blocklisted -> unsubscribed", sb, h.listA, "unsubscribed", false)
 }
+
+// Fork (import presets) I6 -- the fill upsert under the backfill flag never stamps
+// confirmed_at, so no evergreen welcome can fire for a preset import.
+func TestEvergreenPresetFillNeverWelcomes(t *testing.T) {
+	h := newPresetHarness(t)
+	h.fillOne("preset.new@example.test", "New", `{"lang":"en"}`, h.listA, "confirmed")
+	if st, stamped := h.membership("preset.new@example.test", h.listA); st != "confirmed" || stamped {
+		t.Errorf("I6 new membership under backfill: %s stamped=%v", st, stamped)
+	}
+	// An existing unconfirmed row is neither promoted nor stamped.
+	old := h.subscriber("preset.old@example.test")
+	h.join(old, h.listA, "unconfirmed")
+	h.db.MustExec(`UPDATE subscriber_lists SET confirmed_at = NULL WHERE subscriber_id = $1`, old)
+	h.fillOne("preset.old@example.test", "Old", `{}`, h.listA, "confirmed")
+	if st, stamped := h.membership("preset.old@example.test", h.listA); st != "unconfirmed" || stamped {
+		t.Errorf("I6 existing row: %s stamped=%v", st, stamped)
+	}
+	// The welcome query sees neither.
+	welcome := h.campaign("welcome", true, 0, h.listA)
+	h.setStatus(welcome, "running")
+	eq(t, "preset rows never welcomed", h.batch(welcome, 100), nil)
+}

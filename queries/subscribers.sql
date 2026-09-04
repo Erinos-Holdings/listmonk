@@ -137,6 +137,41 @@ subs AS (
 )
 SELECT uuid, id from sub;
 
+-- name: upsert-subscriber-fill
+-- Fork (import preset). Like upsert-subscriber but with FILL semantics for an existing
+-- subscriber. name is set only when the stored name is empty or equals the placeholder
+-- listmonk derives from the email ($7, computed in Go by PlaceholderName so the two rules
+-- cannot drift). attribs are MERGED, never replaced, and lang is written only when the
+-- stored value is absent or blank. BOTH sides of || are guarded because a stored attribs of
+-- JSON null (prod has such rows) raises on concatenation and would fail the whole batch.
+-- Membership rows keep their existing status. Parameters are $1 uuid, $2 email, $3 name,
+-- $4 attribs, $5 list ids, $6 subscription status, $7 placeholder name.
+-- The conflict target is LOWER(email) (idx_subs_email), not the plain column, because the
+-- preview matches existing subscribers case-insensitively and the incoming email is always
+-- lowercased -- a stored Mixed.Case address would otherwise miss the plain conflict and
+-- raise on the lower-cased unique index, failing the whole batch.
+WITH sub AS (
+    INSERT INTO subscribers as s (uuid, email, name, attribs, status)
+    VALUES($1, $2, $3, $4, 'enabled')
+    ON CONFLICT (LOWER(email))
+    DO UPDATE SET
+        name = CASE WHEN s.name = '' OR s.name = $7 THEN $3 ELSE s.name END,
+        attribs = (CASE WHEN jsonb_typeof(s.attribs) = 'object' THEN s.attribs ELSE '{}'::JSONB END
+                   || ((CASE WHEN jsonb_typeof($4::JSONB) = 'object' THEN $4::JSONB ELSE '{}'::JSONB END) - 'lang'))
+                  || CASE WHEN COALESCE(s.attribs->>'lang', '') = '' AND ($4::JSONB ? 'lang')
+                          THEN jsonb_build_object('lang', $4::JSONB->'lang') ELSE '{}'::JSONB END,
+        updated_at = NOW()
+    RETURNING uuid, id, status
+),
+subs AS (
+    INSERT INTO subscriber_lists (subscriber_id, list_id, status)
+    SELECT sub.id, listID, CASE WHEN sub.status = 'blocklisted' THEN 'unsubscribed' ELSE $6::subscription_status END
+    FROM sub, UNNEST($5::INT[]) AS listID
+    ON CONFLICT (subscriber_id, list_id) DO UPDATE
+    SET updated_at = NOW()
+)
+SELECT uuid, id from sub;
+
 -- name: upsert-blocklist-subscriber
 -- Upserts a subscriber where the update will only set the status to blocklisted
 -- unlike upsert-subscribers where name and attributes are updated. In addition, all

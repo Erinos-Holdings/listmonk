@@ -335,6 +335,19 @@ export const getImportLogs = async () => http.get(
 
 export const stopImport = () => http.delete('/api/import/subscribers');
 
+// Fork (import presets). Responses keep their snake_case keys (they are shown, not bound).
+export const previewImportPreset = (key, data) => http.post(
+  `/api/import/subscribers/preset/${encodeURIComponent(key)}/preview`,
+  data,
+  { camelCase: false },
+);
+
+export const importPreset = (key, data) => http.post(
+  `/api/import/subscribers/preset/${encodeURIComponent(key)}`,
+  data,
+  { camelCase: false },
+);
+
 // Bounces.
 export const getBounces = async (params) => http.get(
   '/api/bounces',

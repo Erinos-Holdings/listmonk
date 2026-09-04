@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/knadh/listmonk/internal/captcha"
+	"github.com/knadh/listmonk/internal/subimporter"
 	"github.com/labstack/echo/v4"
 	null "gopkg.in/volatiletech/null.v6"
 )
@@ -40,6 +41,8 @@ type serverConfig struct {
 	// Fork (multi-language campaigns) -- app.lang_enable, gates the campaign form Language select.
 	LangEnabled bool   `json:"lang_enabled"`
 	Version     string `json:"version"`
+	// Fork (import presets) -- the {key, name} of every loaded preset; empty hides the buttons.
+	ImportPresets []subimporter.PresetInfo `json:"import_presets"`
 }
 
 // GetServerConfig returns general server config.
@@ -52,6 +55,7 @@ func (a *App) GetServerConfig(c echo.Context) error {
 		HasLegacyUser:    a.cfg.HasLegacyUser,
 		EvergreenEnabled: a.cfg.EvergreenEnabled,
 		LangEnabled:      a.cfg.LangEnabled,
+		ImportPresets:    make([]subimporter.PresetInfo, 0, len(a.importPresets)),
 		Privacy: struct {
 			DisableTracking    bool `json:"disable_tracking"`
 			IndividualTracking bool `json:"individual_tracking"`
@@ -61,6 +65,9 @@ func (a *App) GetServerConfig(c echo.Context) error {
 		},
 	}
 	out.PublicSubscription.Enabled = a.cfg.EnablePublicSubPage
+	for i := range a.importPresets {
+		out.ImportPresets = append(out.ImportPresets, a.importPresets[i].Info())
+	}
 	for _, d := range a.cfg.Security.TrustedURLs {
 		if d == "*" {
 			continue

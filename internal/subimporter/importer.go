@@ -69,7 +69,10 @@ type Importer struct {
 
 // Options represents import options.
 type Options struct {
-	UpsertStmt         *sql.Stmt
+	UpsertStmt *sql.Stmt
+	// Fork (import presets) -- the fill-merge upsert (upsert-subscriber-fill). Used only by
+	// sessions whose Merge is MergeFill; nil disables preset imports.
+	UpsertFillStmt     *sql.Stmt
 	BlocklistStmt      *sql.Stmt
 	UpdateListDateStmt *sql.Stmt
 	PostCB             func(subject string, data any) error
@@ -100,6 +103,9 @@ type SessionOpt struct {
 	Backfill bool   `json:"backfill"`
 	Delim    string `json:"delim"`
 	ListIDs  []int  `json:"lists"`
+	// Fork (import presets) -- "" is the stock overwrite-or-nothing upsert; MergeFill is the
+	// fill-merge upsert. Never client-settable (json "-"), only a Preset sets it.
+	Merge string `json:"-"`
 }
 
 // Status represents statistics from an ongoing import session.
@@ -180,6 +186,11 @@ func (im *Importer) NewSession(opt SessionOpt) (*Session, error) {
 	if opt.Overwrite {
 		opt.OverwriteUserInfo = true
 		opt.OverwriteSubStatus = true
+	}
+
+	// Fork (import presets) -- a fill session needs its statement.
+	if opt.Merge == MergeFill && im.opt.UpsertFillStmt == nil {
+		return nil, errors.New("fill-merge import is not configured")
 	}
 
 	im.Lock()
@@ -298,7 +309,12 @@ func (s *Session) Start() {
 			}
 
 			if s.opt.Mode == ModeSubscribe {
-				stmt = tx.Stmt(s.im.opt.UpsertStmt)
+				// Fork (import presets) -- fill-merge sessions use their own statement.
+				if s.opt.Merge == MergeFill {
+					stmt = tx.Stmt(s.im.opt.UpsertFillStmt)
+				} else {
+					stmt = tx.Stmt(s.im.opt.UpsertStmt)
+				}
 			} else {
 				stmt = tx.Stmt(s.im.opt.BlocklistStmt)
 			}
@@ -320,7 +336,11 @@ func (s *Session) Start() {
 			break
 		}
 
-		if s.opt.Mode == ModeSubscribe {
+		if s.opt.Mode == ModeSubscribe && s.opt.Merge == MergeFill {
+			// Fork (import presets) -- $7 is the placeholder name for this email, so the
+			// statement can tell "no information" from a real stored name.
+			_, err = stmt.Exec(uu, sub.Email, sub.Name, sub.Attribs, pq.Array(listIDs), s.opt.SubStatus, PlaceholderName(sub.Email))
+		} else if s.opt.Mode == ModeSubscribe {
 			_, err = stmt.Exec(uu, sub.Email, sub.Name, sub.Attribs, pq.Array(listIDs), s.opt.SubStatus, s.opt.OverwriteUserInfo, s.opt.OverwriteSubStatus)
 		} else if s.opt.Mode == ModeBlocklist {
 			_, err = stmt.Exec(uu, sub.Email, sub.Name, sub.Attribs)
@@ -666,19 +686,53 @@ func (im *Importer) ValidateFields(s SubReq) (SubReq, error) {
 	s.Email = strings.ToLower(em)
 
 	// If there's no name, use the name part of the e-mail.
+	// Fork (import presets) -- the rule lives in PlaceholderName, shared with the fill upsert.
 	s.Name = strings.TrimSpace(s.Name)
 	if len(s.Name) == 0 {
-		name := strings.ToLower(strings.Split(s.Email, "@")[0])
-
-		parts := strings.Fields(strings.ReplaceAll(name, ".", " "))
-		for n, p := range parts {
-			parts[n] = cases.Title(language.Und).String(p)
-		}
-
-		s.Name = strings.Join(parts, " ")
+		s.Name = PlaceholderName(s.Email)
 	}
 
 	return s, nil
+}
+
+// LoadRows is the Fork (import presets) counterpart of LoadCSV over already-normalised
+// rows. It does what LoadCSV does around the rows -- sets the total up front, honours a
+// Stop() request on every row (Stop pushes into a buffered channel that only the feeder
+// drains, so a feeder that ignored it would leave a stale stop request that ends the NEXT
+// import at row one), and closes the queue when done.
+func (s *Session) LoadRows(subs []SubReq) error {
+	if s.im.isDone() {
+		return ErrIsImporting
+	}
+
+	failed := true
+	defer func() {
+		if failed {
+			s.im.setStatus(StatusFailed)
+		}
+	}()
+
+	s.im.Lock()
+	s.im.status.Total = len(subs)
+	s.im.Unlock()
+
+	for _, sub := range subs {
+		select {
+		case <-s.im.stop:
+			failed = false
+			close(s.subQueue)
+			s.log.Println("stop request received")
+			return nil
+		default:
+		}
+
+		s.subQueue <- sub
+	}
+
+	close(s.subQueue)
+	failed = false
+
+	return nil
 }
 
 // Check the domain against the given map of domains (block/allowlist).
