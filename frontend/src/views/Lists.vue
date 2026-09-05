@@ -27,7 +27,7 @@
     </header>
 
     <b-table :data="lists.results" :loading="loading.listsFull" @check-all="onTableCheck" @check="onTableCheck"
-      :checked-rows.sync="bulk.checked" hoverable default-sort="createdAt" paginated backend-pagination
+      :checked-rows.sync="bulk.checked" hoverable :default-sort="['created_at', 'desc']" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page" :per-page="lists.perPage"
       :total="lists.total" checkable backend-sorting @sort="onSort">
       <template #top-left>
@@ -206,8 +206,10 @@ export default Vue.extend({
       queryParams: {
         page: 1,
         query: '',
-        orderBy: 'id',
-        order: 'asc',
+        // Fork -- must name a column in core.go listQuerySortFields; anything else is
+        // silently replaced by created_at DESC server-side, and must match default-sort.
+        orderBy: 'created_at',
+        order: 'desc',
         status: this.$route.query.status || 'active',
       },
 

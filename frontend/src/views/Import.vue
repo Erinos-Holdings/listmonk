@@ -17,7 +17,6 @@
               {{ p.name }}
             </b-button>
           </div>
-          <p class="is-size-7 has-text-grey">{{ $t('import.preset.help') }}</p>
         </template>
 
         <template v-else>

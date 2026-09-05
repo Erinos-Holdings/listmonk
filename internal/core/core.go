@@ -74,7 +74,7 @@ var (
 	regexpSpaces        = regexp.MustCompile(`[\s]+`)
 	campQuerySortFields = []string{"name", "status", "created_at", "updated_at"}
 	subQuerySortFields  = []string{"email", "status", "name", "created_at", "updated_at"}
-	listQuerySortFields = []string{"name", "status", "created_at", "updated_at", "subscriber_count"}
+	listQuerySortFields = []string{"name", "type", "status", "created_at", "updated_at", "subscriber_count"} // Fork -- type: the Lists page marks it sortable
 )
 
 // New returns a new instance of the core.

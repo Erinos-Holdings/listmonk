@@ -25,7 +25,6 @@ WITH ls AS (
         -- Optional list IDs based on user permission.
         WHEN $8 = TRUE THEN TRUE ELSE id = ANY($9::INT[])
     END
-    OFFSET $10 LIMIT (CASE WHEN $11 < 1 THEN NULL ELSE $11 END)
 ),
 statuses AS (
     SELECT
@@ -35,8 +34,17 @@ statuses AS (
     FROM mat_list_subscriber_stats
     GROUP BY list_id
 )
+-- Fork -- sort the whole result set, THEN paginate. Upstream paginates inside the ls
+-- CTE (no ORDER BY there) and sorts only the page, so a sort by created_at re-ordered
+-- the 20 rows already picked rather than the full set (seen 2026-09-04). The
+-- subscriber_count sort key comes from the join, so the ORDER BY has to live here --
+-- and so must OFFSET/LIMIT. COUNT(*) OVER () in ls still reports the full total.
+-- ls.id is the tiebreaker: every sortable column ties (status, subscriber_count, a
+-- bulk-created created_at), and without a total order a list can appear on two pages
+-- and another on none.
 SELECT ls.*, COALESCE(ss.subscriber_statuses, '{}') AS subscriber_statuses, COALESCE(ss.subscriber_count, 0) AS subscriber_count
-    FROM ls LEFT JOIN statuses ss ON (ls.id = ss.list_id) ORDER BY %order%;
+    FROM ls LEFT JOIN statuses ss ON (ls.id = ss.list_id) ORDER BY %order%, ls.id
+    OFFSET $10 LIMIT (CASE WHEN $11 < 1 THEN NULL ELSE $11 END);
 
 -- name: get-lists-by-optin
 -- Can have a list of IDs or a list of UUIDs.

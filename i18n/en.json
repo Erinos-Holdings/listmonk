@@ -342,7 +342,6 @@
     "import.preset.fileHelp": "Click or drag the export file here",
     "import.preset.hashMismatch": "The file being imported is not the file that was previewed. Preview it again.",
     "import.preset.headersHelp": "The CSV file should have the following headers with the exact column names:",
-    "import.preset.help": "Server-side import with fixed settings. Drop the raw export, review the preview, confirm.",
     "import.preset.langLess": "Subscribers without a language",
     "import.preset.list": "Target list",
     "import.preset.listAmbiguous": "Ambiguous target list: {error}",
