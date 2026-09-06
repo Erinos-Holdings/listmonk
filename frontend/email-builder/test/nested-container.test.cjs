@@ -24,7 +24,8 @@ const input = `<!doctype html><html><body>
 </div>
 </body></html>`;
 
-const out = postProcessForOutlook(input);
+const { foldVmlMarkers } = require(path.join(__dirname, 'vml-marker-fold.cjs'));
+const out = foldVmlMarkers(postProcessForOutlook(input));
 
 const checks = [];
 function check(name, ok, detail) {

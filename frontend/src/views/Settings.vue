@@ -208,6 +208,22 @@ export default Vue.extend({
       form['privacy.domain_blocklist'] = form['privacy.domain_blocklist'].split('\n').map((v) => v.trim().toLowerCase()).filter((v) => v !== '');
       form['privacy.domain_allowlist'] = form['privacy.domain_allowlist'].split('\n').map((v) => v.trim().toLowerCase()).filter((v) => v !== '');
 
+      // Fork (click tracking) -- UTM parameter map from "name=value" lines.
+      if (typeof form['app.utm_params'] === 'string') {
+        const params = {};
+        form['app.utm_params'].split('\n').forEach((line) => {
+          const l = line.trim();
+          if (!l) return;
+          const eq = l.indexOf('=');
+          const k = (eq === -1 ? l : l.slice(0, eq)).trim();
+          if (k) params[k] = eq === -1 ? '' : l.slice(eq + 1).trim();
+        });
+        form['app.utm_params'] = params;
+      }
+      if (!Array.isArray(form['app.utm_hosts'])) {
+        form['app.utm_hosts'] = [];
+      }
+
       this.isLoading = true;
       try {
         const data = await this.$api.updateSettings(form);
@@ -247,6 +263,13 @@ export default Vue.extend({
         // Domain blocklist array to multi-line string.
         d['privacy.domain_blocklist'] = d['privacy.domain_blocklist'].join('\n');
         d['privacy.domain_allowlist'] = d['privacy.domain_allowlist'].join('\n');
+
+        // Fork (click tracking) -- UTM parameter map to "name=value" lines; hosts as a list.
+        const utm = d['app.utm_params'] && typeof d['app.utm_params'] === 'object' ? d['app.utm_params'] : {};
+        d['app.utm_params'] = Object.keys(utm).map((k) => `${k}=${utm[k]}`).join('\n');
+        if (!Array.isArray(d['app.utm_hosts'])) {
+          d['app.utm_hosts'] = [];
+        }
 
         this.key += 1;
         this.form = d;

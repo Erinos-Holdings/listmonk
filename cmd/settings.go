@@ -21,6 +21,7 @@ import (
 	"github.com/knadh/koanf/v2"
 	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/core"
+	"github.com/knadh/listmonk/internal/linkresolve"
 	"github.com/knadh/listmonk/internal/messenger/email"
 	"github.com/knadh/listmonk/internal/notifs"
 	"github.com/knadh/listmonk/models"
@@ -257,6 +258,23 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		}
 	}
 	set.SecurityTrustedURLs = urls
+
+	// Fork (click tracking, CLICK-TRACKING-SPEC §3.4) -- the fallback URL is blank (error
+	// page) or absolute http(s); UTM hosts are normalised; every UTM parameter template must
+	// parse, or it would be silently dropped at click time.
+	set.LinkFallbackURL = strings.TrimSpace(set.LinkFallbackURL)
+	if set.LinkFallbackURL != "" && !linkresolve.IsAbsoluteHTTP(set.LinkFallbackURL) {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("settings.privacy.invalidLinkFallbackURL", "url", set.LinkFallbackURL))
+	}
+	set.UTMHosts = linkresolve.HostUnion(nil, nil, set.UTMHosts)
+	if set.UTMParams == nil {
+		set.UTMParams = map[string]string{}
+	}
+	if key, err := linkresolve.ValidateUTMParams(set.UTMParams); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("settings.privacy.invalidUTMParam", "key", key, "error", err.Error()))
+	}
 
 	// Validate slow query caching cron.
 	if set.CacheSlowQueries {

@@ -1,6 +1,9 @@
 package models
 
 import (
+	"bytes"
+	"fmt"
+	"html/template"
 	"strings"
 	"testing"
 )
@@ -131,5 +134,189 @@ func TestLiveTrackViewGuard(t *testing.T) {
 		if regLiveTrackView.MatchString(s) {
 			t.Fatalf("non-tag string %q must not match the guard", s)
 		}
+	}
+}
+
+// Fork (click tracking) -- CLICK-TRACKING-SPEC T1 (I1, I2, I10, I11): the dynamic-href and
+// VML-marker passes of TransformTrackLinks, and I3 (static hrefs unchanged).
+func TestTransformTrackLinksDynamic(t *testing.T) {
+	const marker = `<span data-lm-vml-href="%s"></span>`
+	cases := []struct {
+		name        string
+		contentType string
+		in          string
+		want        string
+	}{
+		{
+			"dynamic href → TrackLink with the UNEXPANDED text",
+			CampaignContentTypeVisual,
+			`<a href="{{ .Subscriber.Attribs.site }}">x</a>`,
+			`<a href="{{ TrackLink "{{ .Subscriber.Attribs.site }}" . }}">x</a>`,
+		},
+		{
+			"or idiom: &quot; is decoded and escaped as \\\" (I1)",
+			CampaignContentTypeVisual,
+			`<a href="{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}">x</a>`,
+			`<a href="{{ TrackLink "{{ or .Subscriber.Attribs.site \"https://curatedfor.you\" }}" . }}">x</a>`,
+		},
+		{
+			"&amp; and &#39; decode in a dynamic href",
+			CampaignContentTypeVisual,
+			`<a href="https://x.test/?a=1&amp;b={{ .Subscriber.UUID }}&amp;c=&#39;q&#39;">x</a>`,
+			`<a href="{{ TrackLink "https://x.test/?a=1&b={{ .Subscriber.UUID }}&c='q'" . }}">x</a>`,
+		},
+		{
+			"identical expression twice → identical calls (one links row)",
+			CampaignContentTypeVisual,
+			`<a href="{{ .Subscriber.Attribs.site }}">a</a><a href="{{ .Subscriber.Attribs.site }}">b</a>`,
+			`<a href="{{ TrackLink "{{ .Subscriber.Attribs.site }}" . }}">a</a><a href="{{ TrackLink "{{ .Subscriber.Attribs.site }}" . }}">b</a>`,
+		},
+		{
+			"static href still wrapped exactly as before (I3)",
+			CampaignContentTypeVisual,
+			`<a href="https://example.com/page?a=1&amp;b=2">x</a>`,
+			`<a href="{{ TrackLink "https://example.com/page?a=1&amp;b=2" . }}">x</a>`,
+		},
+		{
+			"backslash in a dynamic href → left plain (I2)",
+			CampaignContentTypeVisual,
+			`<a href="{{ .Subscriber.Attribs.site }}\x">x</a>`,
+			`<a href="{{ .Subscriber.Attribs.site }}\x">x</a>`,
+		},
+		{
+			"raw LF in a dynamic href → left plain (I2)",
+			CampaignContentTypeVisual,
+			"<a href=\"{{ .Subscriber.Attribs.site }}\nx\">x</a>",
+			"<a href=\"{{ .Subscriber.Attribs.site }}\nx\">x</a>",
+		},
+		{
+			"@TrackLink inside a dynamic href → left plain (I2)",
+			CampaignContentTypeVisual,
+			`<a href="https://x.test/{{ .Subscriber.UUID }}@TrackLink">x</a>`,
+			`<a href="https://x.test/{{ .Subscriber.UUID }}@TrackLink">x</a>`,
+		},
+		{
+			"listmonk URL function in an href is never wrapped (the resolver cannot evaluate it)",
+			CampaignContentTypeVisual,
+			`<a href="{{ UnsubscribeURL }}">u</a><a href="{{ ManageURL }}">m</a><a href="{{ OptinURL }}">o</a><a href="{{ MessageURL }}">v</a>`,
+			`<a href="{{ UnsubscribeURL }}">u</a><a href="{{ ManageURL }}">m</a><a href="{{ OptinURL }}">o</a><a href="{{ MessageURL }}">v</a>`,
+		},
+		{
+			"hand-typed TrackLink href with raw quotes is not re-wrapped",
+			CampaignContentTypeVisual,
+			`<a href="{{ TrackLink "https://x.test" }}">x</a>`,
+			`<a href="{{ TrackLink "https://x.test" }}">x</a>`,
+		},
+		{
+			"unbalanced braces (attribute split at a raw quote) → left plain",
+			CampaignContentTypeVisual,
+			`<a href="{{ or .Subscriber.Attribs.site "https://x.test" }}">x</a>`,
+			`<a href="{{ or .Subscriber.Attribs.site "https://x.test" }}">x</a>`,
+		},
+		{
+			"VML marker, static value → tracked (I10)",
+			CampaignContentTypeVisual,
+			`{{ Safe "…href=\"" }}` + fmt.Sprintf(marker, "https://x.test/go?a=1&amp;b=2") + `{{ Safe "\"…" }}`,
+			`{{ Safe "…href=\"" }}{{ TrackLink "https://x.test/go?a=1&b=2" . }}{{ Safe "\"…" }}`,
+		},
+		{
+			"VML marker, dynamic value → unexpanded (I10)",
+			CampaignContentTypeVisual,
+			`{{ Safe "…href=\"" }}` + fmt.Sprintf(marker, "{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}") + `{{ Safe "\"…" }}`,
+			`{{ Safe "…href=\"" }}{{ TrackLink "{{ or .Subscriber.Attribs.site \"https://curatedfor.you\" }}" . }}{{ Safe "\"…" }}`,
+		},
+		{
+			"VML marker in a visual→HTML converted document (content_type=html) is still wrapped (I10)",
+			CampaignContentTypeHTML,
+			`{{ Safe "…href=\"" }}` + fmt.Sprintf(marker, "{{ .Subscriber.Attribs.site }}") + `{{ Safe "\"…" }}`,
+			`{{ Safe "…href=\"" }}{{ TrackLink "{{ .Subscriber.Attribs.site }}" . }}{{ Safe "\"…" }}`,
+		},
+		{
+			"VML marker padded by the format-switch beautifier (whitespace around and inside) is consumed",
+			CampaignContentTypeHTML,
+			"{{ Safe \"…href=\\\"\" }}<span data-lm-vml-href=\"https://x.test/go\">\n    </span>\n    {{ Safe \"\\\"…\" }}",
+			`{{ Safe "…href=\"" }}{{ TrackLink "https://x.test/go" . }}{{ Safe "\"…" }}`,
+		},
+		{
+			"richtext and markdown bodies get the marker pass too",
+			CampaignContentTypeRichtext,
+			fmt.Sprintf(marker, "https://x.test/r"),
+			`{{ TrackLink "https://x.test/r" . }}`,
+		},
+		{
+			"skipped marker (backslash) → decoded VALUE, never a literal span (I2)",
+			CampaignContentTypeVisual,
+			fmt.Sprintf(marker, "https://x.test/a\\b&amp;c"),
+			`https://x.test/a\b&c`,
+		},
+		{
+			"skipped marker (static non-http value) → decoded VALUE",
+			CampaignContentTypeVisual,
+			fmt.Sprintf(marker, "#"),
+			`#`,
+		},
+		{
+			"skipped marker (URL function) → decoded VALUE",
+			CampaignContentTypeVisual,
+			fmt.Sprintf(marker, "{{ UnsubscribeURL }}"),
+			`{{ UnsubscribeURL }}`,
+		},
+		{
+			"hostile marker value: quotes cannot terminate the TrackLink literal (I11)",
+			CampaignContentTypeVisual,
+			fmt.Sprintf(marker, "https://x.test/a&quot;b&lt;c&gt;d&amp;e"),
+			`{{ TrackLink "https://x.test/a\"b<c>d&e" . }}`,
+		},
+		{
+			"plain content is untouched",
+			CampaignContentTypePlain,
+			fmt.Sprintf(marker, "https://x.test/r") + ` <a href="https://x.test">x</a>`,
+			fmt.Sprintf(marker, "https://x.test/r") + ` <a href="https://x.test">x</a>`,
+		},
+		{
+			"non-visual static href is NOT wrapped (I3: only the marker pass runs)",
+			CampaignContentTypeHTML,
+			`<a href="https://example.com/page">x</a>`,
+			`<a href="https://example.com/page">x</a>`,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := TransformTrackLinks(c.in, c.contentType); got != c.want {
+				t.Fatalf("transform mismatch:\n got  %s\n want %s", got, c.want)
+			}
+		})
+	}
+}
+
+// I1 -- the compiled dynamic TrackLink call is a valid template: the whole visual body
+// compiles, and rendering with a FuncMap whose TrackLink echoes its argument shows the
+// argument is the unexpanded, entity-decoded expression (quote escapes undone).
+func TestDynamicTrackLinkCompiles(t *testing.T) {
+	var got []string
+	funcs := template.FuncMap{
+		"TrackLink": func(url string, _ any) string { got = append(got, url); return "/link/x" },
+		"TrackView": func(_ any) template.HTML { return "" },
+		"Safe":      func(s string) template.HTML { return template.HTML(s) },
+	}
+	c := &Campaign{
+		Subject:     "s",
+		ContentType: CampaignContentTypeVisual,
+		Body: `<a href="{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}">x</a>` +
+			`{{ Safe "href=\"" }}<span data-lm-vml-href="{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}"></span>{{ Safe "\"" }}`,
+	}
+	if err := c.CompileTemplate(funcs); err != nil {
+		t.Fatalf("CompileTemplate: %v", err)
+	}
+	var b bytes.Buffer
+	if err := c.Tpl.ExecuteTemplate(&b, BaseTpl, map[string]any{}); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	want := `{{ or .Subscriber.Attribs.site "https://curatedfor.you" }}`
+	if len(got) != 2 || got[0] != want || got[1] != want {
+		t.Fatalf("TrackLink received %#v, want two of %q", got, want)
+	}
+	if !strings.Contains(b.String(), `href="/link/x"`) || !strings.Contains(b.String(), `href="/link/x"`) {
+		t.Fatalf("rendered body lacks the tracked hrefs:\n%s", b.String())
 	}
 }

@@ -19,7 +19,12 @@ type Settings struct {
 	EvergreenEnable               bool     `json:"app.evergreen_enable"`
 	LangEnable                    bool     `json:"app.lang_enable"`
 	RequiredFooterMarkers         []string `json:"app.required_footer_markers"`
-	AppLang                       string   `json:"app.lang"`
+	// Fork (click tracking, CLICK-TRACKING-SPEC §3.4).
+	LinkFallbackURL string            `json:"app.link_fallback_url"`
+	UTMEnable       bool              `json:"app.utm_enable"`
+	UTMHosts        []string          `json:"app.utm_hosts"`
+	UTMParams       map[string]string `json:"app.utm_params"`
+	AppLang         string            `json:"app.lang"`
 
 	AppBatchSize             int    `json:"app.batch_size"`
 	AppConcurrency           int    `json:"app.concurrency"`

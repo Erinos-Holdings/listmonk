@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/knadh/listmonk/internal/linkresolve"
 	"github.com/knadh/listmonk/internal/messenger/email"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
@@ -31,6 +32,12 @@ func (a *App) validateBrandTags(l models.List) error {
 		case strings.HasPrefix(t, fromTagPrefix):
 			froms = append(froms, strings.TrimSpace(strings.TrimPrefix(t, fromTagPrefix)))
 		}
+	}
+
+	// Fork (click tracking) -- the optional `site:` tag is refused when malformed, duplicated,
+	// or present without the brand:/from: pair it qualifies.
+	if key := siteTagProblem(l.Tags); key != "" {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T(key))
 	}
 
 	// No mapping tags at all: an unmapped list, valid by design (the internal seed list and the
@@ -97,4 +104,40 @@ func (a *App) validateBrandTags(l models.List) error {
 	}
 
 	return nil
+}
+
+// siteTagProblem (fork, CLICK-TRACKING-SPEC §3.4 / I7a) validates a list's `site:` tags on
+// their own, returning the i18n key of the first problem or "" when the tags are acceptable:
+// a `site:` tag is allowed only alongside the brand:/from: pair (both present -- the
+// half-tagged rule refuses a lone one separately), at most one per list, and its value must
+// be an absolute http(s) URL. Pure, so it is table-tested (T7).
+func siteTagProblem(tags []string) string {
+	var (
+		sites          []string
+		hasBrand, hasF bool
+	)
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		switch {
+		case strings.HasPrefix(t, siteTagPrefix):
+			sites = append(sites, strings.TrimSpace(strings.TrimPrefix(t, siteTagPrefix)))
+		case strings.HasPrefix(t, brandTagPrefix):
+			hasBrand = true
+		case strings.HasPrefix(t, fromTagPrefix):
+			hasF = true
+		}
+	}
+	if len(sites) == 0 {
+		return ""
+	}
+	if len(sites) > 1 {
+		return "lists.siteTagDuplicate"
+	}
+	if !hasBrand || !hasF {
+		return "lists.siteTagNeedsBrand"
+	}
+	if !linkresolve.IsAbsoluteHTTP(sites[0]) {
+		return "lists.siteTagInvalid"
+	}
+	return ""
 }

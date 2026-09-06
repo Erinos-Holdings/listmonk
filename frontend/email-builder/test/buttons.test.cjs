@@ -10,13 +10,19 @@ const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outloo
 const input = fs.readFileSync(path.join(__dirname, 'fixtures', 'campaign10-body.html'), 'utf8')
   .replace(/<td bgcolor="#999999" style="background-color:#999999;border-radius:4px;">/g,
     '<td data-lm-full-width-button="true" bgcolor="#999999" style="background-color:#999999;border-radius:4px;">');
-const out = postProcessForOutlook(input);
+const { foldVmlMarkers } = require(path.join(__dirname, 'vml-marker-fold.cjs'));
+const raw = postProcessForOutlook(input);
+// The VML href rides as a marker between two Safe halves (click tracking); fold it back
+// so the single-payload structural assertions below still read one VML string.
+const out = foldVmlMarkers(raw);
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 
 // 8 full-width buttons in campaign 10 -> 8 mso VML copies (whole surface clickable)
 const msoVml = [...out.matchAll(/\{\{ Safe "[^}]*?v:roundrect[^}]*?href=\\"https:\/\/listmonk\.app[^}]*?\}\}/g)];
 check('8 mso VML button copies with href on the shape', msoVml.length === 8, `count=${msoVml.length}`);
+const markers = [...raw.matchAll(/<span data-lm-vml-href="https:\/\/listmonk\.app"><\/span>/g)];
+check('8 VML href markers emitted outside the Safe payloads', markers.length === 8, `count=${markers.length}`);
 check('all sized to the column budget 244px -> 183pt', msoVml.every((m) => /width:183pt/.test(m[0])));
 const h3675 = msoVml.filter((m) => /height:36.75pt/.test(m[0])).length;
 const h3375 = msoVml.filter((m) => /height:33.75pt/.test(m[0])).length;

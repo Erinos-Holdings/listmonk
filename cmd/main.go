@@ -33,16 +33,18 @@ import (
 
 // App contains the "global" shared components, controllers and fields.
 type App struct {
-	cfg        *Config
-	urlCfg     *UrlConfig
-	fs         stuffbin.FileSystem
-	db         *sqlx.DB
-	queries    *models.Queries
-	core       *core.Core
-	manager    *manager.Manager
-	messengers []manager.Messenger
-	emailMsgr  manager.Messenger
-	importer   *subimporter.Importer
+	cfg     *Config
+	urlCfg  *UrlConfig
+	fs      stuffbin.FileSystem
+	db      *sqlx.DB
+	queries *models.Queries
+	core    *core.Core
+	manager *manager.Manager
+	// Fork (click tracking) -- see cmd/link_fallback.go.
+	linkFallbacks *linkFallbacks
+	messengers    []manager.Messenger
+	emailMsgr     manager.Messenger
+	importer      *subimporter.Importer
 	// Fork (import presets) -- parsed app.import_presets; nil hides the feature.
 	importPresets []subimporter.Preset
 	auth          *auth.Auth
@@ -96,6 +98,14 @@ var (
 )
 
 func init() {
+	// Fork -- `go test ./cmd/` builds this package into a test binary; the runtime init
+	// below (flags, config.toml, the DB connection, schema/upgrade checks, prepared queries)
+	// is the app's, not the tests'. Tests build the pieces they need themselves
+	// (link_redirect_db_test.go). Without this guard, package main hosts no Go tests.
+	if isTestBinary() {
+		return
+	}
+
 	// Initialize commandline flags.
 	initFlags(ko)
 
@@ -211,11 +221,15 @@ func main() {
 		// Crud core.
 		core = initCore(fbOptinNotify, queries, db, i18n, ko)
 
+		// Fork (click tracking) -- brand fallback / UTM host cache, shared by the manager's
+		// send-time branch and the public link redirect.
+		linkFB = newLinkFallbacks(core, i18n, ko, lo)
+
 		// Initialize all messengers, SMTP and postback.
 		msgrs = append(initSMTPMessengers(), initPostbackMessengers(ko)...)
 
 		// Campaign manager.
-		mgr = initCampaignManager(msgrs, queries, urlCfg, core, media, i18n, ko)
+		mgr = initCampaignManager(msgrs, queries, urlCfg, core, media, i18n, ko, linkFB)
 
 		// Bulk importer.
 		importer = initImporter(queries, db, core, i18n, ko)
@@ -269,24 +283,25 @@ func main() {
 	// =========================================================================
 	// Initialize the App{} with all the global shared components, controllers and fields.
 	app := &App{
-		cfg:        cfg,
-		urlCfg:     urlCfg,
-		fs:         fs,
-		db:         db,
-		queries:    queries,
-		core:       core,
-		manager:    mgr,
-		messengers: msgrs,
-		emailMsgr:  emailMsgr,
-		importer:   importer,
-		auth:       auth,
-		media:      media,
-		bounce:     bounce,
-		captcha:    initCaptcha(),
-		i18n:       i18n,
-		log:        lo,
-		events:     evStream,
-		bufLog:     bufLog,
+		cfg:           cfg,
+		urlCfg:        urlCfg,
+		fs:            fs,
+		db:            db,
+		queries:       queries,
+		core:          core,
+		manager:       mgr,
+		linkFallbacks: linkFB,
+		messengers:    msgrs,
+		emailMsgr:     emailMsgr,
+		importer:      importer,
+		auth:          auth,
+		media:         media,
+		bounce:        bounce,
+		captcha:       initCaptcha(),
+		i18n:          i18n,
+		log:           lo,
+		events:        evStream,
+		bufLog:        bufLog,
 
 		pg: paginator.New(paginator.Opt{
 			DefaultPerPage: 20,
@@ -341,4 +356,18 @@ func main() {
 		// Signal the close.
 		closerWait <- true
 	})
+}
+
+// isTestBinary reports whether this process is a `go test` binary: the test runner always
+// passes `-test.*` flags (paniconexit0, timeout) and names the binary `<pkg>.test`.
+func isTestBinary() bool {
+	if strings.HasSuffix(os.Args[0], ".test") {
+		return true
+	}
+	for _, a := range os.Args[1:] {
+		if strings.HasPrefix(a, "-test.") {
+			return true
+		}
+	}
+	return false
 }

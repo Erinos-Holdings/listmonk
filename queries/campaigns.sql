@@ -462,6 +462,36 @@ SELECT COUNT(DISTINCT sl.subscriber_id)
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang);
 
+-- name: get-campaign-attrib-coverage
+-- Fork (click tracking, CLICK-TRACKING-SPEC D11). For campaign $1 and attribute key $2, the
+-- number of targeted subscribers (same opt-in and language predicate as the audience count
+-- above) whose attribs lack the key or hold an empty string, and the total targeted. Drives
+-- the Start-time coverage warning for personalized button URLs.
+WITH camp AS (
+    SELECT id, type, attribs->>'lang' AS lang FROM campaigns WHERE id = $1
+),
+campLists AS (
+    SELECT lists.id AS list_id, optin FROM lists
+    INNER JOIN campaign_lists ON (campaign_lists.list_id = lists.id)
+    WHERE campaign_lists.campaign_id = $1
+),
+audience AS (
+    SELECT DISTINCT s.id, COALESCE(s.attribs->>$2::TEXT, '') = '' AS missing
+    FROM camp
+    JOIN campLists cl ON TRUE
+    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
+        AND (
+            CASE
+                WHEN camp.type = 'optin' THEN sl.status = 'unconfirmed' AND cl.optin = 'double'
+                WHEN cl.optin = 'double' THEN sl.status = 'confirmed'
+                ELSE sl.status != 'unsubscribed'
+            END
+        )
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+        AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
+)
+SELECT COUNT(*) FILTER (WHERE missing) AS missing, COUNT(*) AS total FROM audience;
+
 -- name: delete-campaign-views
 DELETE FROM campaign_views WHERE created_at < $1;
 

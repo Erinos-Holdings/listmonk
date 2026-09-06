@@ -41,6 +41,10 @@ type serverConfig struct {
 	// Fork (multi-language campaigns) -- app.lang_enable, gates the campaign form Language select.
 	LangEnabled bool   `json:"lang_enabled"`
 	Version     string `json:"version"`
+	// Fork (click tracking) -- app.link_fallback_url / app.utm_enable, for the campaign UI's
+	// personalized-link hints.
+	LinkFallbackURL string `json:"link_fallback_url"`
+	UTMEnabled      bool   `json:"utm_enabled"`
 	// Fork (import presets) -- the {key, name} of every loaded preset; empty hides the buttons.
 	ImportPresets []subimporter.PresetInfo `json:"import_presets"`
 }
@@ -55,6 +59,8 @@ func (a *App) GetServerConfig(c echo.Context) error {
 		HasLegacyUser:    a.cfg.HasLegacyUser,
 		EvergreenEnabled: a.cfg.EvergreenEnabled,
 		LangEnabled:      a.cfg.LangEnabled,
+		LinkFallbackURL:  a.cfg.LinkFallbackURL,
+		UTMEnabled:       a.cfg.UTMEnable,
 		ImportPresets:    make([]subimporter.PresetInfo, 0, len(a.importPresets)),
 		Privacy: struct {
 			DisableTracking    bool `json:"disable_tracking"`

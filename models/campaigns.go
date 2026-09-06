@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"regexp"
 	"strings"
@@ -236,9 +237,7 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 	// emits plain double-quoted hrefs; wrap them in {{ TrackLink }} at compile so
 	// clicks register. Local variable only: stored fields must stay unmutated (the
 	// evergreen prepared-cache hash reads them).
-	if c.ContentType == CampaignContentTypeVisual {
-		body = rewriteVisualTrackLinks(body)
-	}
+	body = TransformTrackLinks(body, c.ContentType)
 
 	// Compile the campaign message.
 	for _, r := range regTplFuncs {
@@ -300,7 +299,8 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 	return nil
 }
 
-// Fork (visual tracking) -- regexps for CompileTemplate's visual-campaign transform.
+// Fork (visual tracking + click tracking) -- regexps for CompileTemplate's tracked-link
+// transform (CLICK-TRACKING-SPEC §3.1).
 var (
 	// A live {{ TrackView }} tag (any spacing) already in the document body. Deliberately
 	// narrower than a bare strings.Contains: the word "TrackView" in prose, a URL fragment
@@ -311,7 +311,57 @@ var (
 	// renderToStaticMarkup emits. Safe payloads escape their quotes (href=\"...\"), so
 	// nothing inside one can match; single-quoted or spaced hrefs miss (not corrupt).
 	regVisualHref = regexp.MustCompile(`href="(https?://[^"]*)"`)
+
+	// A double-quoted href whose value carries a template expression — a personalized
+	// button URL (`{{ .Subscriber.Attribs.site }}`, or the `or` idiom with a literal
+	// fallback). Same quoting rule as regVisualHref, so Safe payloads never match.
+	regDynamicHref = regexp.MustCompile(`href="([^"]*{{[^"]*)"`)
+
+	// The builder's VML href marker: outlook.ts emits the mso <v:roundrect> href value
+	// OUTSIDE the Safe string literal as an empty span carrying it in an attribute (the one
+	// shape Editor.vue's beautifier never line-wraps — spec §3.3). Replaced here by a
+	// TrackLink call; the Safe payloads on either side supply the surrounding href="…".
+	// Whitespace around and inside the span is consumed too: Editor.vue's tag-padding regexp
+	// exempts <span but NOT </span>, so a format switch leaves a newline + indent after the
+	// marker (verified 2026-09-05 against js-beautify with Editor.vue's settings) which would
+	// otherwise render INSIDE the VML href value.
+	regVMLHrefMarker = regexp.MustCompile(`\s*<span\s+data-lm-vml-href="([^"]*)"\s*>\s*</span>\s*`)
+
+	// Template functions that own their own semantics and must never be wrapped into a
+	// TrackLink string literal: a TrackLink (nesting), and listmonk's URL functions, which the
+	// D4 resolver (empty FuncMap) cannot evaluate — wrapping `{{ UnsubscribeURL }}` would
+	// turn every unsubscribe link in an Html block into a fallback redirect.
+	regReservedTplFunc = regexp.MustCompile(`{{\s*(TrackLink|TrackView|UnsubscribeURL|ManageURL|OptinURL|MessageURL)\b`)
 )
+
+// TransformTrackLinks applies the compile-time tracked-link rewrites to a campaign body and
+// returns the result. LOCAL VARIABLE ONLY at the call site: stored fields stay unmutated (the
+// evergreen prepared-cache hash reads them). Exported so the Start-time expression check
+// (cmd/campaigns.go, spec §3.5) can run the identical transform on the SOURCE body and read
+// the TrackLink arguments before they become /link/ URLs.
+//
+//   - visual: static absolute hrefs → {{ TrackLink "<url>" . }} (erinos.62, unchanged);
+//     dynamic hrefs (value contains `{{`) → {{ TrackLink "<unexpanded text>" . }} so the
+//     expression registers ONCE as its own text and resolves per click (D1).
+//   - every non-plain type: the builder's <span data-lm-vml-href> marker → a TrackLink call
+//     (static value tracked, dynamic value unexpanded). Not only visual, because Editor.vue's
+//     visual→HTML format switch keeps the compiled body, marker included, under
+//     content_type=html (review F4).
+//   - plain: untouched.
+func TransformTrackLinks(body, contentType string) string {
+	if contentType == CampaignContentTypePlain {
+		return body
+	}
+	// The marker pass runs FIRST: `data-lm-vml-href="…"` ends in `href="…"`, so the two href
+	// regexps below would otherwise match inside the marker's attribute and wrap its value
+	// in place, leaving a literal <span> in the VML href.
+	body = rewriteVMLHrefMarkers(body)
+	if contentType == CampaignContentTypeVisual {
+		body = rewriteVisualTrackLinks(body)
+		body = rewriteDynamicHrefs(body)
+	}
+	return body
+}
 
 // rewriteVisualTrackLinks wraps plain absolute hrefs in a visual campaign body with
 // full {{ TrackLink "<url>" . }} calls (not the @TrackLink shorthand, whose narrower
@@ -332,6 +382,71 @@ func rewriteVisualTrackLinks(body string) string {
 		}
 		return `href="{{ TrackLink "` + url + `" . }}"`
 	})
+}
+
+// rewriteDynamicHrefs wraps a visual body's dynamic hrefs (spec §3.1, first bullet). The
+// value is HTML-entity-decoded first — React entity-escapes attribute values in Button.tsx,
+// so a typed `{{ or .Subscriber.Attribs.x "https://…" }}` is stored with &quot; and would
+// otherwise parse as `unexpected "&" in operand` (review F2) — then quotes are escaped and
+// the text is emitted INSIDE the TrackLink string literal, unexpanded, so TrackLink registers
+// the expression itself, once (D1). Returns the match untouched when trackLinkArg refuses it.
+func rewriteDynamicHrefs(body string) string {
+	return regDynamicHref.ReplaceAllStringFunc(body, func(match string) string {
+		raw := match[len(`href="`) : len(match)-1]
+		arg, ok := trackLinkArg(raw, true)
+		if !ok {
+			return match
+		}
+		return `href="{{ TrackLink "` + arg + `" . }}"`
+	})
+}
+
+// rewriteVMLHrefMarkers replaces every builder VML href marker with a TrackLink call whose
+// argument is the marker's decoded value (static → literal URL, tracked; dynamic → the
+// unexpanded expression). A value the skip rules refuse, or a static value that is not an
+// absolute http(s) URL (`#`, mailto:), is emitted as its decoded text — never left as a
+// literal <span> inside the VML href (I2).
+func rewriteVMLHrefMarkers(body string) string {
+	return regVMLHrefMarker.ReplaceAllStringFunc(body, func(match string) string {
+		m := regVMLHrefMarker.FindStringSubmatch(match)
+		if m == nil {
+			return match
+		}
+		decoded := html.UnescapeString(m[1])
+		arg, ok := trackLinkArg(m[1], strings.Contains(decoded, "{{"))
+		if !ok {
+			return decoded
+		}
+		if !strings.Contains(decoded, "{{") && !regVisualHref.MatchString(`href="`+decoded+`"`) {
+			return decoded
+		}
+		return `{{ TrackLink "` + arg + `" . }}`
+	})
+}
+
+// trackLinkArg turns a raw href/marker attribute value into the string-literal body of a
+// TrackLink call, or reports (ok=false) that the value must be left alone. dynamic says
+// whether the value is expected to carry an expression. Entity-decode first (&quot; &amp;
+// &lt; &gt; &#39; and the rest of the HTML entity table), then refuse anything that cannot
+// live in a Go template string literal or would nest another template function: backslash,
+// control characters, the @TrackLink shorthand, a reserved function name, or an unbalanced
+// `{{`/`}}` (the attribute regexp stopped at a raw quote inside the expression — wrapping the
+// fragment would corrupt it; leaving it plain lets the full FuncMap evaluate it as today).
+func trackLinkArg(raw string, dynamic bool) (string, bool) {
+	s := html.UnescapeString(raw)
+	if strings.Contains(s, "@TrackLink") || strings.Contains(s, `\`) ||
+		strings.IndexFunc(s, func(r rune) bool { return r < 0x20 }) >= 0 {
+		return "", false
+	}
+	if dynamic {
+		if regReservedTplFunc.MatchString(s) {
+			return "", false
+		}
+		if strings.Count(s, "{{") != strings.Count(s, "}}") {
+			return "", false
+		}
+	}
+	return strings.ReplaceAll(s, `"`, `\"`), true
 }
 
 // Preheader returns the campaign's preheader (inbox preview) text. It is stored under the

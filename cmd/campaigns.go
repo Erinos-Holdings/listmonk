@@ -15,6 +15,7 @@ import (
 
 	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/core"
+	"github.com/knadh/listmonk/internal/linkresolve"
 	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/internal/notifs"
 	"github.com/knadh/listmonk/models"
@@ -428,6 +429,18 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		return err
 	}
 
+	// Fork (click tracking, CLICK-TRACKING-SPEC D11) -- personalized-link expression checks,
+	// BEFORE the status changes: a parse failure refuses the start (every click would fall
+	// back); the rest are warnings attached below.
+	var linkWarnings []string
+	if req.Status == models.CampaignStatusRunning || req.Status == models.CampaignStatusScheduled {
+		w, err := a.checkLinkExpressions(id)
+		if err != nil {
+			return err
+		}
+		linkWarnings = w
+	}
+
 	// Update the campaign status in the DB.
 	out, err := a.core.UpdateCampaignStatus(id, req.Status)
 	if err != nil {
@@ -457,6 +470,7 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 				w = append(w, a.i18n.Ts("campaigns.warnNoLangAudience", "lang", strings.ToUpper(lang)))
 			}
 		}
+		w = append(w, linkWarnings...)
 		out.Warnings = w
 	}
 
@@ -900,6 +914,74 @@ func (a *App) footerGuard(camp models.Campaign) error {
 	}
 
 	return nil
+}
+
+// checkLinkExpressions (fork, CLICK-TRACKING-SPEC §3.5) runs the Start-time checks on every
+// dynamic tracked-link expression in a campaign's SOURCE body: the §3.1 transform is applied
+// to the stored body (the rendered body is useless here -- every TrackLink is already a /link/
+// URL), the TrackLink arguments carrying `{{` are extracted, and each is parsed with the D4
+// resolver. A parse failure returns a 400 naming the expression (the campaign is certainly
+// broken: 100% fallback). A field reference outside .Subscriber, and every referenced
+// .Subscriber.Attribs key that some targeted subscribers lack, produce warnings.
+func (a *App) checkLinkExpressions(id int) ([]string, error) {
+	camp, err := a.core.GetCampaignForPreview(id, 0)
+	if err != nil {
+		return nil, err
+	}
+	if camp.Messenger != "email" || camp.ContentType == models.CampaignContentTypePlain {
+		return nil, nil
+	}
+
+	exprs := linkresolve.Expressions(models.TransformTrackLinks(camp.Body, camp.ContentType))
+	if len(exprs) == 0 {
+		return nil, nil
+	}
+
+	var (
+		warnings []string
+		fallback string
+		seenKey  = map[string]struct{}{}
+	)
+	for _, expr := range exprs {
+		others, keys, err := linkresolve.Check(expr)
+		if err != nil {
+			return nil, echo.NewHTTPError(http.StatusBadRequest,
+				a.i18n.Ts("campaigns.linkExprInvalid", "expr", expr, "error", err.Error()))
+		}
+
+		for _, ref := range others {
+			warnings = append(warnings, a.i18n.Ts("campaigns.warnLinkExprNonSubscriber", "expr", expr, "ref", ref))
+		}
+
+		// Coverage is meaningless for an evergreen (its audience is future joiners).
+		if camp.Evergreen {
+			continue
+		}
+		for _, key := range keys {
+			if _, ok := seenKey[key]; ok {
+				continue
+			}
+			seenKey[key] = struct{}{}
+
+			missing, total, err := a.core.CampaignAttribCoverage(id, key)
+			if err != nil {
+				a.log.Printf("error counting attribute coverage for campaign %d key %q: %v", id, key, err)
+				continue
+			}
+			if missing == 0 {
+				continue
+			}
+			if fallback == "" {
+				if fallback = a.linkFallbacks.forCampaign(&camp); fallback == "" {
+					fallback = a.i18n.T("campaigns.linkFallbackErrorPage")
+				}
+			}
+			warnings = append(warnings, a.i18n.Ts("campaigns.warnLinkExprCoverage",
+				"missing", strconv.Itoa(missing), "total", strconv.Itoa(total), "key", key, "fallback", fallback))
+		}
+	}
+
+	return warnings, nil
 }
 
 // campaignWarningsByID fetches a stored campaign with its template body (the same

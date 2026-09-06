@@ -14,6 +14,7 @@ import (
 
 	"github.com/knadh/listmonk/internal/captcha"
 	"github.com/knadh/listmonk/internal/i18n"
+	"github.com/knadh/listmonk/internal/linkresolve"
 	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/internal/notifs"
 	"github.com/knadh/listmonk/models"
@@ -584,44 +585,91 @@ func (a *App) LinkRedirect(c echo.Context) error {
 	var (
 		linkUUID = c.Param("linkUUID")
 		campUUID = c.Param("campUUID")
+		subUUID  = c.Param("subUUID")
+
+		url string
+		err error
 	)
 
+	switch {
 	// If tracking is globally disabled, resolve the URL without recording a click.
-	if a.cfg.Privacy.DisableTracking {
-		url, err := a.core.GetLinkURL(linkUUID)
-		if err != nil {
-			e := err.(*echo.HTTPError)
-			return c.Render(e.Code, tplMessage, makeMsgTpl(a.i18n.T("public.errorTitle"), "", e.Error()))
+	case a.cfg.Privacy.DisableTracking:
+		url, err = a.core.GetLinkURL(linkUUID)
+
+	default:
+		// If individual tracking is disabled, do not record the subscriber ID.
+		if !a.cfg.Privacy.IndividualTracking {
+			subUUID = ""
 		}
-		return c.Redirect(http.StatusTemporaryRedirect, url)
-	}
 
-	// If individual tracking is disabled, do not record the subscriber ID.
-	subUUID := c.Param("subUUID")
-	if !a.cfg.Privacy.IndividualTracking {
-		subUUID = ""
-	}
-
-	// Fork (visual tracking) -- exclude dummy hits (template previews, archive
-	// pages) from click registration, mirroring RegisterCampaignView's exclusion:
-	// the individual-tracking reassignment above runs first, so with tracking OFF
-	// an anonymous archive click still records — upstream parity with the pixel.
-	if campUUID == dummyUUID || subUUID == dummyUUID {
-		url, err := a.core.GetLinkURL(linkUUID)
-		if err != nil {
-			e := err.(*echo.HTTPError)
-			return c.Render(e.Code, tplMessage, makeMsgTpl(a.i18n.T("public.errorTitle"), "", e.Error()))
+		// Fork (visual tracking) -- exclude dummy hits (template previews, archive
+		// pages) from click registration, mirroring RegisterCampaignView's exclusion:
+		// the individual-tracking reassignment above runs first, so with tracking OFF
+		// an anonymous archive click still records — upstream parity with the pixel.
+		if campUUID == dummyUUID || subUUID == dummyUUID {
+			url, err = a.core.GetLinkURL(linkUUID)
+		} else {
+			url, err = a.core.RegisterCampaignLinkClick(linkUUID, campUUID, subUUID)
 		}
-		return c.Redirect(http.StatusTemporaryRedirect, url)
 	}
-
-	url, err := a.core.RegisterCampaignLinkClick(linkUUID, campUUID, subUUID)
 	if err != nil {
 		e := err.(*echo.HTTPError)
 		return c.Render(e.Code, tplMessage, makeMsgTpl(a.i18n.T("public.errorTitle"), "", e.Error()))
 	}
 
-	return c.Redirect(http.StatusTemporaryRedirect, url)
+	// Fork (click tracking, CLICK-TRACKING-SPEC §3.2) -- a dynamic link (stored as its
+	// unexpanded expression) is resolved for the clicking subscriber now; UTM parameters are
+	// appended at redirect time. The click above is already recorded either way.
+	dest := a.resolveLinkDestination(url, linkUUID, campUUID, subUUID)
+	if dest == "" {
+		return c.Render(http.StatusNotFound, tplMessage,
+			makeMsgTpl(a.i18n.T("public.errorTitle"), "", a.i18n.Ts("public.linkUnavailable")))
+	}
+
+	return c.Redirect(http.StatusTemporaryRedirect, dest)
+}
+
+// resolveLinkDestination turns a stored link URL into the redirect destination: a dynamic
+// expression is rendered against the subscriber (D1/D4) and validated (D3), falling back to the
+// campaign's brand site (D2) when it cannot be; then UTM tagging applies (D7). subUUID must
+// already reflect the individual-tracking setting ("" when off). Returns "" only when a
+// dynamic link has no fallback at all (the public error page).
+func (a *App) resolveLinkDestination(url, linkUUID, campUUID, subUUID string) string {
+	camp, haveCamp := a.linkFallbacks.campaignByUUID(campUUID)
+
+	if linkresolve.IsDynamic(url) {
+		dest := ""
+		canResolve := a.cfg.Privacy.IndividualTracking && subUUID != "" && subUUID != dummyUUID
+		if canResolve {
+			if sub, err := a.core.GetSubscriber(0, subUUID, ""); err != nil {
+				a.log.Printf("link %s (campaign %s): subscriber not found for dynamic link, falling back", linkUUID, campUUID)
+			} else if d, err := linkresolve.Resolve(url, &sub); err == nil {
+				dest = d
+			} else if e, ok := err.(*linkresolve.Error); ok && e.Kind == linkresolve.KindEmpty {
+				// The common case: this subscriber has no value for the attribute.
+				a.log.Printf("link %s (campaign %d): dynamic link empty for subscriber, falling back", linkUUID, camp.ID)
+			} else {
+				// Never the subscriber's email -- logs are read more widely than the click.
+				a.log.Printf("warn: link %s (campaign %d): dynamic link could not be resolved: %v", linkUUID, camp.ID, err)
+			}
+		}
+		if dest == "" {
+			if haveCamp {
+				dest = a.linkFallbacks.forCampaign(&camp)
+			} else {
+				dest = a.linkFallbacks.forCampaign(nil)
+			}
+		}
+		if dest == "" {
+			return ""
+		}
+		url = dest
+	}
+
+	if haveCamp {
+		url = a.linkFallbacks.applyUTM(url, camp)
+	}
+	return url
 }
 
 // RegisterCampaignView registers a campaign view which comes in

@@ -361,6 +361,20 @@ func (c *Core) CampaignLangAudience(id int) (int, error) {
 	return n, nil
 }
 
+// CampaignAttribCoverage (fork, click tracking, CLICK-TRACKING-SPEC D11) counts, among the
+// subscribers a campaign would send to, how many lack attribs[key] (absent or empty) and the
+// total — the numbers behind the Start-time "n of total recipients have no 'key'" warning.
+func (c *Core) CampaignAttribCoverage(id int, key string) (missing int, total int, err error) {
+	var row struct {
+		Missing int `db:"missing"`
+		Total   int `db:"total"`
+	}
+	if err := c.q.GetCampaignAttribCoverage.Get(&row, id, key); err != nil {
+		return 0, 0, err
+	}
+	return row.Missing, row.Total, nil
+}
+
 // UpdateCampaignArchive updates a campaign's archive properties.
 func (c *Core) UpdateCampaignArchive(id int, enabled bool, tplID int, meta models.JSON, archiveSlug string) error {
 	if _, err := c.q.UpdateCampaignArchive.Exec(id, enabled, archiveSlug, tplID, meta); err != nil {

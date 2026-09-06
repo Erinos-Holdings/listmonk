@@ -90,12 +90,17 @@ type Config struct {
 	// Fork (footer guard) -- app.required_footer_markers. Strings that must appear in a
 	// campaign's rendered body before it may be started or scheduled. Empty (the seeded
 	// value) skips the marker check entirely, leaving only the unsubscribe-link rule.
-	RequiredFooterMarkers         []string `koanf:"required_footer_markers"`
-	EnablePublicArchive           bool     `koanf:"enable_public_archive"`
-	EnablePublicArchiveRSSContent bool     `koanf:"enable_public_archive_rss_content"`
-	ShowOptinPage                 bool     `koanf:"show_optin_page"`
-	Lang                          string   `koanf:"lang"`
-	DBBatchSize                   int      `koanf:"batch_size"`
+	RequiredFooterMarkers []string `koanf:"required_footer_markers"`
+	// Fork (click tracking, CLICK-TRACKING-SPEC §3.4) -- app.link_fallback_url and app.utm_*.
+	LinkFallbackURL               string            `koanf:"link_fallback_url"`
+	UTMEnable                     bool              `koanf:"utm_enable"`
+	UTMHosts                      []string          `koanf:"utm_hosts"`
+	UTMParams                     map[string]string `koanf:"utm_params"`
+	EnablePublicArchive           bool              `koanf:"enable_public_archive"`
+	EnablePublicArchiveRSSContent bool              `koanf:"enable_public_archive_rss_content"`
+	ShowOptinPage                 bool              `koanf:"show_optin_page"`
+	Lang                          string            `koanf:"lang"`
+	DBBatchSize                   int               `koanf:"batch_size"`
 	Privacy                       struct {
 		IndividualTracking bool            `koanf:"individual_tracking"`
 		DisableTracking    bool            `koanf:"disable_tracking"`
@@ -597,7 +602,7 @@ func initCore(fnNotify func(sub models.Subscriber, listIDs []int) (int, error), 
 }
 
 // initCampaignManager initializes the campaign manager.
-func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlConfig, co *core.Core, md media.Store, i *i18n.I18n, ko *koanf.Koanf) *manager.Manager {
+func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlConfig, co *core.Core, md media.Store, i *i18n.I18n, ko *koanf.Koanf, lf *linkFallbacks) *manager.Manager {
 	if ko.Bool("passive") {
 		lo.Println("running in passive mode. won't process campaigns.")
 	}
@@ -622,6 +627,7 @@ func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlCon
 		SlidingWindowDuration: ko.Duration("app.message_sliding_window_duration"),
 		SlidingWindowRate:     ko.Int("app.message_sliding_window_rate"),
 		EvergreenEnabled:      ko.Bool("app.evergreen_enable"),
+		LinkFallback:          lf.forCampaign,
 		ScanInterval:          time.Second * 5,
 		ScanCampaigns:         !ko.Bool("passive"),
 	}, newManagerStore(q, co, md), i, lo)

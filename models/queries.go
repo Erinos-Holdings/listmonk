@@ -87,6 +87,8 @@ type Queries struct {
 	NextCampaignSubscribers *sqlx.Stmt `query:"next-campaign-subscribers"`
 	// Fork (multi-language campaigns) -- see queries/campaigns.sql.
 	GetCampaignLangAudience *sqlx.Stmt `query:"get-campaign-lang-audience"`
+	// Fork (click tracking) -- see queries/campaigns.sql.
+	GetCampaignAttribCoverage *sqlx.Stmt `query:"get-campaign-attrib-coverage"`
 	// Fork (evergreen) -- see queries/evergreen.sql.
 	NextEvergreenSubscribers *sqlx.Stmt `query:"next-evergreen-subscribers"`
 	GetEvergreenCollision    *sqlx.Stmt `query:"get-evergreen-collision"`

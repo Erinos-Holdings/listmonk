@@ -19,6 +19,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/knadh/listmonk/internal/i18n"
+	"github.com/knadh/listmonk/internal/linkresolve"
 	"github.com/knadh/listmonk/internal/notifs"
 	"github.com/knadh/listmonk/models"
 	"golang.org/x/text/cases"
@@ -162,6 +163,12 @@ type Config struct {
 
 	// Fork (evergreen) -- the app.evergreen_enable setting. Off, evergreen campaigns are never piped.
 	EvergreenEnabled bool
+
+	// Fork (click tracking, CLICK-TRACKING-SPEC D1) -- the brand fallback URL for a campaign,
+	// used when a DYNAMIC link (an unexpanded `{{ … }}` expression) must be evaluated at send
+	// time (tracking disabled, or link registration failed) and cannot be resolved for the
+	// subscriber. nil → "" (an empty href), never the raw expression text.
+	LinkFallback func(c *models.Campaign) string
 
 	// Interval to scan the DB for active campaign checkpoints.
 	ScanInterval time.Duration
@@ -389,7 +396,7 @@ func (m *Manager) TemplateFuncs(c *models.Campaign) template.FuncMap {
 	f := template.FuncMap{
 		"TrackLink": func(url string, msg *CampaignMessage) string {
 			if m.cfg.DisableTracking {
-				return url
+				return m.sendTimeLink(url, msg)
 			}
 
 			subUUID := msg.Subscriber.UUID
@@ -397,7 +404,10 @@ func (m *Manager) TemplateFuncs(c *models.Campaign) template.FuncMap {
 				subUUID = dummyUUID
 			}
 
-			return m.trackLink(url, msg.Campaign.UUID, subUUID)
+			if out, ok := m.trackLink(url, msg.Campaign.UUID, subUUID); ok {
+				return out
+			}
+			return m.sendTimeLink(url, msg)
 		},
 		"TrackView": func(msg *CampaignMessage) template.HTML {
 			if m.cfg.DisableTracking {
@@ -639,11 +649,13 @@ func (m *Manager) getCurrentCampaigns() ([]int64, []int64) {
 	return ids, counts
 }
 
-// trackLink register a URL and return its UUID to be used in message templates
-// for tracking links.
-func (m *Manager) trackLink(url, campUUID, subUUID string) string {
+// trackLink registers a URL and returns its tracking URL to be used in message templates.
+// ok is false when no tracked URL can be produced (tracking disabled, or registration
+// failed) — the caller then falls over to sendTimeLink, which for a static URL is the URL
+// itself and for a dynamic expression is its evaluated destination (D1).
+func (m *Manager) trackLink(url, campUUID, subUUID string) (string, bool) {
 	if m.cfg.DisableTracking {
-		return url
+		return "", false
 	}
 
 	url = strings.ReplaceAll(url, "&amp;", "&")
@@ -651,7 +663,7 @@ func (m *Manager) trackLink(url, campUUID, subUUID string) string {
 	m.linksMut.RLock()
 	if uu, ok := m.links[url]; ok {
 		m.linksMut.RUnlock()
-		return fmt.Sprintf(m.cfg.LinkTrackURL, uu, campUUID, subUUID)
+		return fmt.Sprintf(m.cfg.LinkTrackURL, uu, campUUID, subUUID), true
 	}
 	m.linksMut.RUnlock()
 
@@ -661,14 +673,36 @@ func (m *Manager) trackLink(url, campUUID, subUUID string) string {
 		m.log.Printf("error registering tracking for link '%s': %v", url, err)
 
 		// If the registration fails, fail over to the original URL.
-		return url
+		return "", false
 	}
 
 	m.linksMut.Lock()
 	m.links[url] = uu
 	m.linksMut.Unlock()
 
-	return fmt.Sprintf(m.cfg.LinkTrackURL, uu, campUUID, subUUID)
+	return fmt.Sprintf(m.cfg.LinkTrackURL, uu, campUUID, subUUID), true
+}
+
+// sendTimeLink (fork, CLICK-TRACKING-SPEC D1/I1a) is what a TrackLink call emits when it
+// cannot return a tracked URL: a static URL verbatim; a dynamic expression evaluated NOW with
+// the same resolver the click path uses (`.Subscriber` only, empty FuncMap), and on any
+// failure the campaign's brand fallback. The raw `{{ … }}` text is never emitted — inside an
+// href html/template would ship it as %7b%7b.
+func (m *Manager) sendTimeLink(url string, msg *CampaignMessage) string {
+	if !linkresolve.IsDynamic(url) {
+		return url
+	}
+
+	if dest, err := linkresolve.Resolve(url, &msg.Subscriber); err == nil {
+		return dest
+	} else if e, ok := err.(*linkresolve.Error); !ok || e.Kind != linkresolve.KindEmpty {
+		m.log.Printf("campaign %d: dynamic link could not be resolved at send time: %v", msg.Campaign.ID, err)
+	}
+
+	if m.cfg.LinkFallback != nil {
+		return m.cfg.LinkFallback(msg.Campaign)
+	}
+	return ""
 }
 
 // sendNotif sends a notification to registered admin e-mails.

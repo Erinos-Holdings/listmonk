@@ -18,6 +18,34 @@
       </div>
     </div>
 
+    <!-- Fork (click tracking, CLICK-TRACKING-SPEC §3.4) -->
+    <b-field :label="$t('settings.privacy.linkFallbackURL')" label-position="on-border"
+      :message="$t('settings.privacy.linkFallbackURLHelp')">
+      <b-input v-model="data['app.link_fallback_url']" name="app.link_fallback_url"
+        placeholder="https://curatedfor.you" data-cy="link-fallback-url" />
+    </b-field>
+    <b-field :message="$t('settings.privacy.utmEnableHelp')">
+      <b-switch v-model="data['app.utm_enable']" name="app.utm_enable" data-cy="utm-enable">
+        {{ $t('settings.privacy.utmEnable') }}
+      </b-switch>
+    </b-field>
+    <div class="columns" :class="{ 'is-disabled': !data['app.utm_enable'] }">
+      <div class="column is-6">
+        <b-field :label="$t('settings.privacy.utmHosts')" label-position="on-border"
+          :message="$t('settings.privacy.utmHostsHelp')">
+          <b-taginput v-model="data['app.utm_hosts']" name="app.utm_hosts" data-cy="utm-hosts" />
+        </b-field>
+      </div>
+      <div class="column is-6">
+        <b-field :label="$t('settings.privacy.utmParams')" label-position="on-border"
+          :message="$t('settings.privacy.utmParamsHelp')">
+          <b-input type="textarea" v-model="data['app.utm_params']" name="app.utm_params" data-cy="utm-params" />
+        </b-field>
+      </div>
+    </div>
+
+    <hr />
+
     <b-field :message="$t('settings.privacy.listUnsubHeaderHelp')">
       <b-switch v-model="data['privacy.unsubscribe_header']" name="privacy.unsubscribe_header">
         {{ $t('settings.privacy.listUnsubHeader') }}

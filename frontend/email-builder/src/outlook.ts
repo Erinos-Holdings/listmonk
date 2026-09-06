@@ -550,6 +550,11 @@ type TVmlButtonOptions = {
 // Windows display-scaling factor exactly like text, while px shapes stay
 // fixed and clip or hide their own label at 125/150 % scaling
 // (matrix-verified 2026-08-07). Width/height are border-box px.
+// The VML href value is NOT interpolated into the shape: buildVmlButton leaves this
+// sentinel where it goes and wrapMsoVml splits the Safe payload around it, emitting the
+// value as a marker element between the two halves (see wrapMsoVml).
+const VML_HREF_SENTINEL = '\u0000LM_VML_HREF\u0000';
+
 function buildVmlButton(options: TVmlButtonOptions) {
   const pt = (px: number) => String(Math.round(px * 0.75 * 100) / 100);
   const arcsize = Math.max(0, Math.min(50, Math.round((options.borderRadius / options.height) * 100)));
@@ -557,7 +562,35 @@ function buildVmlButton(options: TVmlButtonOptions) {
     ? `strokecolor="${escapeAttribute(options.borderColor)}" strokeweight="${pt(options.borderWidth)}pt"`
     : `strokecolor="${escapeAttribute(options.buttonColor)}"`;
 
-  return `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttribute(options.href)}" style="height:${pt(options.height)}pt;v-text-anchor:middle;width:${pt(options.width)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(options.textColor)};font-family:${escapeAttribute(options.fontFamily)};font-size:${pt(options.fontSize)}pt;font-weight:${escapeAttribute(options.fontWeight)};">${escapeHtml(options.text)}</center></v:roundrect>`;
+  return `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${VML_HREF_SENTINEL}" style="height:${pt(options.height)}pt;v-text-anchor:middle;width:${pt(options.width)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(options.textColor)};font-family:${escapeAttribute(options.fontFamily)};font-size:${pt(options.fontSize)}pt;font-weight:${escapeAttribute(options.fontWeight)};">${escapeHtml(options.text)}</center></v:roundrect>`;
+}
+
+// Wraps a VML button (with its [if mso] conditional markers) in Safe payloads, emitting the
+// href VALUE outside them as `<span data-lm-vml-href="…"></span>` between two Safe halves:
+//
+//   {{ Safe "…href=\"" }}<span data-lm-vml-href="VALUE"></span>{{ Safe "\"…" }}
+//
+// Why: a Go template action inside a {{ Safe "…" }} string literal is never evaluated, so a
+// personalized href ({{ .Subscriber.Attribs.x }}) inside the payload reached Outlook as the
+// literal tag text, and even a static one was untracked (CLICK-TRACKING-SPEC P2/D5). The Go
+// compile transform (models/campaigns.go) replaces the marker with a {{ TrackLink "VALUE" . }}
+// call — tracked, and resolved per subscriber for a dynamic value. An empty span carrying the
+// value in an ATTRIBUTE is the one shape the admin's format-switch beautifier (Editor.vue,
+// js-beautify) never line-wraps: span is on its inline list, and attribute values are never
+// broken. escapeAttribute keeps a typed quote/ampersand/angle bracket from terminating the
+// marker attribute; the Safe halves carry no part of the value at all.
+function wrapMsoVml(vml: string, href: string) {
+  const at = vml.indexOf(VML_HREF_SENTINEL);
+  if (at === -1) {
+    return makeSafeTemplate(`<!--[if mso]>${vml}<![endif]-->`);
+  }
+  const pre = vml.slice(0, at);
+  const post = vml.slice(at + VML_HREF_SENTINEL.length);
+  return [
+    makeSafeTemplate(`<!--[if mso]>${pre}`),
+    `<span data-lm-vml-href="${escapeAttribute(href)}"></span>`,
+    makeSafeTemplate(`${post}<![endif]-->`),
+  ].join('');
 }
 
 function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string) {
@@ -652,8 +685,9 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   // emitted raw, the fragment parser rewrites <w:anchorlock/> into an OPEN tag
   // that swallows <center> (self-closing syntax is ignored on unknown
   // elements), and Word then drops the vertical text anchoring — the label
-  // renders clipped. Upstream PR #2978 has this latent.
-  const msoBlock = makeSafeTemplate(`<!--[if mso]>${vml}<![endif]-->`);
+  // renders clipped. Upstream PR #2978 has this latent. The href value alone
+  // rides OUTSIDE the payload as a marker (wrapMsoVml).
+  const msoBlock = wrapMsoVml(vml, href);
   const nonMsoStart = makeSafeTemplate('<!--[if !mso]><!-->');
   const nonMsoEnd = makeSafeTemplate('<!--<![endif]-->');
 
@@ -920,7 +954,7 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   table.setAttribute('class', `${table.getAttribute('class') || ''} lm-gm-pin-${width}`.trim());
 
   replaceNodeWithHtml(table, [
-    makeSafeTemplate(`<!--[if mso]>${vml}<![endif]-->`),
+    wrapMsoVml(vml, href),
     makeSafeTemplate('<!--[if !mso]><!-->'),
     table.outerHTML,
     makeSafeTemplate('<!--<![endif]-->'),

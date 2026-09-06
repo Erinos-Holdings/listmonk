@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/knadh/listmonk/internal/core"
+	"github.com/knadh/listmonk/internal/i18n"
 	"github.com/knadh/listmonk/internal/messenger/email"
 )
 
@@ -31,6 +33,13 @@ import (
 const (
 	brandTagPrefix = "brand:"
 	fromTagPrefix  = "from:"
+
+	// Fork (click tracking, CLICK-TRACKING-SPEC D2) -- optional per-list storefront URL for a
+	// brand whose site is not its sending domain. Wins over the `from:`-domain derivation as
+	// the fallback destination of an unresolvable personalized link, and joins the UTM
+	// storefront-host union. Valid only beside the brand:/from: pair, at most one per list,
+	// absolute http(s) (cmd/lists_brand.go).
+	siteTagPrefix = "site:"
 
 	// The SES message-tag header, and the tag key within it that carries the brand. SES reads
 	// message tags off this header; the CloudWatch event destination dimensions on `brand`.
@@ -66,11 +75,19 @@ type brandMapping struct {
 	fromEmail string
 	listName  string
 	mapped    bool
+	// site is the mapped list's `site:` tag value, "" when absent (click-tracking fallback).
+	site string
 }
 
 // resolveBrandMapping resolves a campaign's list IDs to the one brand/From pair their tags
 // describe, or to the reason that cannot be done.
 func (a *App) resolveBrandMapping(listIDs []int) (brandMapping, error) {
+	return resolveBrandMappingWith(a.core, a.i18n, listIDs)
+}
+
+// resolveBrandMappingWith is resolveBrandMapping without the App: the link-fallback cache
+// (cmd/link_fallback.go) runs it from the campaign manager, which exists before the App does.
+func resolveBrandMappingWith(co *core.Core, i *i18n.I18n, listIDs []int) (brandMapping, error) {
 	out := brandMapping{}
 	if len(listIDs) == 0 {
 		return out, nil
@@ -78,12 +95,12 @@ func (a *App) resolveBrandMapping(listIDs []int) (brandMapping, error) {
 
 	// An empty optin type matches every list, so this is "get these lists by ID" -- the only
 	// existing accessor that returns whole list rows (tags included) for a set of IDs.
-	lists, err := a.core.GetListsByOptin(listIDs, "")
+	lists, err := co.GetListsByOptin(listIDs, "")
 	if err != nil {
 		return out, err
 	}
 
-	type mapped struct{ name, brand, from string }
+	type mapped struct{ name, brand, from, site string }
 
 	var (
 		found      []mapped
@@ -100,6 +117,7 @@ func (a *App) resolveBrandMapping(listIDs []int) (brandMapping, error) {
 				from = strings.TrimSpace(strings.TrimPrefix(t, fromTagPrefix))
 			}
 		}
+		site := siteTagOf(l.Tags)
 
 		// Neither tag: an unmapped list. It contributes nothing and constrains nothing.
 		if brand == "" && from == "" {
@@ -113,11 +131,11 @@ func (a *App) resolveBrandMapping(listIDs []int) (brandMapping, error) {
 			continue
 		}
 
-		found = append(found, mapped{name: l.Name, brand: brand, from: from})
+		found = append(found, mapped{name: l.Name, brand: brand, from: from, site: site})
 	}
 
 	if len(halfTagged) > 0 {
-		return out, errors.New(a.i18n.Ts("campaigns.brandFromHalfTagged", "lists", strings.Join(halfTagged, ", ")))
+		return out, errors.New(i.Ts("campaigns.brandFromHalfTagged", "lists", strings.Join(halfTagged, ", ")))
 	}
 
 	if len(found) == 0 {
@@ -137,15 +155,15 @@ func (a *App) resolveBrandMapping(listIDs []int) (brandMapping, error) {
 	}
 
 	if len(brands) > 1 {
-		return out, errors.New(a.i18n.Ts("campaigns.brandFromConflict", "brands", strings.Join(brands, ", ")))
+		return out, errors.New(i.Ts("campaigns.brandFromConflict", "brands", strings.Join(brands, ", ")))
 	}
 
 	if len(addrs) > 1 {
-		return out, errors.New(a.i18n.Ts("campaigns.brandFromAddressConflict", "addresses", strings.Join(addrs, ", ")))
+		return out, errors.New(i.Ts("campaigns.brandFromAddressConflict", "addresses", strings.Join(addrs, ", ")))
 	}
 
 	if !reBrandSlug.MatchString(brands[0]) {
-		return out, errors.New(a.i18n.Ts("campaigns.brandFromInvalidSlug", "brand", brands[0], "list", found[0].name))
+		return out, errors.New(i.Ts("campaigns.brandFromInvalidSlug", "brand", brands[0], "list", found[0].name))
 	}
 
 	// The `from:` tag must name an address that is actually configured for sending. Without this a
@@ -157,11 +175,32 @@ func (a *App) resolveBrandMapping(listIDs []int) (brandMapping, error) {
 	// break every install that has not opted in.
 	if allowed := configuredFromAddresses(); len(allowed) > 0 {
 		if _, ok := allowed[email.NormalizeAddr(bareAddress(addrs[0]))]; !ok {
-			return out, errors.New(a.i18n.Ts("campaigns.brandFromUnknownAddress", "from", addrs[0], "list", found[0].name))
+			return out, errors.New(i.Ts("campaigns.brandFromUnknownAddress", "from", addrs[0], "list", found[0].name))
 		}
 	}
 
-	return brandMapping{brand: brands[0], fromEmail: addrs[0], listName: found[0].name, mapped: true}, nil
+	// The first mapped list's `site:` tag; lists of one brand normally share one, and a
+	// disagreement is not worth refusing a send over -- the fallback is best-effort.
+	site := ""
+	for _, m := range found {
+		if m.site != "" {
+			site = m.site
+			break
+		}
+	}
+
+	return brandMapping{brand: brands[0], fromEmail: addrs[0], listName: found[0].name, mapped: true, site: site}, nil
+}
+
+// siteTagOf returns a list's `site:` tag value (trimmed), or "" when it carries none.
+func siteTagOf(tags []string) string {
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if strings.HasPrefix(t, siteTagPrefix) {
+			return strings.TrimSpace(strings.TrimPrefix(t, siteTagPrefix))
+		}
+	}
+	return ""
 }
 
 // setBrandTagHeader merges `brand=<slug>` into a campaign's X-SES-MESSAGE-TAGS header.

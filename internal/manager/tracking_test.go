@@ -366,3 +366,100 @@ func TestArchiveDummySubscriberRender(t *testing.T) {
 		t.Fatalf("empty subscriber UUID segment in URL:\n%s", out)
 	}
 }
+
+// Fork (click tracking) -- CLICK-TRACKING-SPEC T2a (I1a): with tracking disabled, or when
+// link registration fails, a DYNAMIC link renders its EVALUATED destination (or the
+// campaign's fallback) at send time — never the raw expression, never %7b%7b.
+type failingLinkStore struct{ Store }
+
+func (failingLinkStore) CreateLink(string) (string, error) { return "", fmt.Errorf("db down") }
+
+func TestDynamicLinkSendTimeBranch(t *testing.T) {
+	body := `<html><body><a href="{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}">go</a>` +
+		`<a href="{{ .Subscriber.Attribs.site }}">bare</a><a href="https://static.test/p">s</a></body></html>`
+	withSite := models.Subscriber{UUID: "sub-uuid", Email: "a@b.c", Attribs: models.JSON{"site": "https://shop.test/creator-9"}}
+	withoutSite := models.Subscriber{UUID: "sub-uuid", Email: "a@b.c", Attribs: models.JSON{}}
+
+	for _, mode := range []string{"tracking disabled", "registration fails"} {
+		t.Run(mode, func(t *testing.T) {
+			var m *Manager
+			if mode == "tracking disabled" {
+				m = newTrackingManager(&fakeLinkStore{})
+				m.cfg.DisableTracking = true
+			} else {
+				m = newTrackingManager(&fakeLinkStore{})
+				m.store = failingLinkStore{}
+			}
+			m.cfg.LinkFallback = func(c *models.Campaign) string { return "https://brand.test" }
+
+			out := renderCampaign(t, m, visualCampaign(body), withSite)
+			for _, want := range []string{`href="https://shop.test/creator-9"`, `href="https://static.test/p"`} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("[%s] expected %s in:\n%s", mode, want, out)
+				}
+			}
+			if strings.Contains(out, "{{") || strings.Contains(strings.ToLower(out), "%7b%7b") {
+				t.Fatalf("[%s] raw expression leaked into the rendered body:\n%s", mode, out)
+			}
+
+			// Missing attrib: the `or` literal for the first button, the brand fallback for the bare one.
+			out = renderCampaign(t, m, visualCampaign(body), withoutSite)
+			if !strings.Contains(out, `href="https://curatedfor.you"`) || !strings.Contains(out, `href="https://brand.test"`) {
+				t.Fatalf("[%s] expected the or-literal and the brand fallback in:\n%s", mode, out)
+			}
+			if strings.Contains(out, "{{") || strings.Contains(strings.ToLower(out), "%7b%7b") {
+				t.Fatalf("[%s] raw expression leaked (missing attrib):\n%s", mode, out)
+			}
+		})
+	}
+
+	// No fallback configured at all: an empty href, still never the expression.
+	m := newTrackingManager(&fakeLinkStore{})
+	m.cfg.DisableTracking = true
+	out := renderCampaign(t, m, visualCampaign(`<a href="{{ .Subscriber.Attribs.site }}">x</a>`), withoutSite)
+	if !strings.Contains(out, `href=""`) || strings.Contains(out, "{{") {
+		t.Fatalf("expected an empty href with no fallback, got:\n%s", out)
+	}
+}
+
+// I1 (render level) -- with tracking ON a dynamic link registers ONCE as its unexpanded,
+// entity-decoded text, for two buttons and for the VML marker alike, and the rendered hrefs
+// are tracking URLs.
+func TestDynamicLinkRegistersOnce(t *testing.T) {
+	fs := &fakeLinkStore{}
+	m := newTrackingManager(fs)
+	body := `<html><body>` +
+		`<a href="{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}">a</a>` +
+		`{{ Safe "\x3c!--[if\x20mso]\x3e\x3cv:roundrect\x20href=\"" }}<span data-lm-vml-href="{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}"></span>{{ Safe "\"\x3e\x3c/v:roundrect\x3e\x3c![endif]--\x3e" }}` +
+		`<a href="{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}">b</a>` +
+		`</body></html>`
+	out := renderCampaign(t, m, visualCampaign(body), testSub)
+
+	want := `{{ or .Subscriber.Attribs.site "https://curatedfor.you" }}`
+	if len(fs.created) != 1 || fs.created[0] != want {
+		t.Fatalf("CreateLink calls = %#v, want exactly one of %q", fs.created, want)
+	}
+	if n := strings.Count(out, "https://lm.test/link/lnk-1/camp-uuid/sub-uuid"); n != 3 {
+		t.Fatalf("expected 3 tracked hrefs (two anchors + the VML copy), got %d:\n%s", n, out)
+	}
+	if !strings.Contains(out, `<v:roundrect href="https://lm.test/link/lnk-1/camp-uuid/sub-uuid">`) {
+		t.Fatalf("VML href not tracked:\n%s", out)
+	}
+}
+
+// I3 -- golden: a static visual body renders exactly as before this release, and every
+// non-visual type without a marker is byte-identical to its input.
+func TestStaticVisualGolden(t *testing.T) {
+	fs := &fakeLinkStore{}
+	m := newTrackingManager(fs)
+	body := `<html><body><p>hi</p><a href="https://example.com/page?a=1&amp;b=2">x</a><a href="#top">t</a></body></html>`
+	out := renderCampaign(t, m, visualCampaign(body), testSub)
+	want := `<html><body><p>hi</p><a href="https://lm.test/link/lnk-1/camp-uuid/sub-uuid">x</a><a href="#top">t</a></body></html>` +
+		`<img src="https://lm.test/campaign/camp-uuid/sub-uuid/px.png" alt="" width="1" height="1" />`
+	if out != want {
+		t.Fatalf("static visual golden mismatch:\n got  %s\n want %s", out, want)
+	}
+	if len(fs.created) != 1 || fs.created[0] != "https://example.com/page?a=1&b=2" {
+		t.Fatalf("CreateLink calls = %#v", fs.created)
+	}
+}
