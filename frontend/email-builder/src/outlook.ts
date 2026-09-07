@@ -728,7 +728,7 @@ const VML_HREF_SENTINEL = '\u0000LM_VML_HREF\u0000';
 // @media (prefers-color-scheme), mso-color-alt. If every candidate fails the fallback is a
 // light button, chosen by the campaign author. Flip the constant to switch; the shape test
 // (test/vml-dark-label.test.cjs) pins whichever variant is set here.
-export const VML_LABEL_VARIANT: 'font' | 'bgcolor' | 'border' = 'font';
+export const VML_LABEL_VARIANT: 'font' | 'bgcolor' | 'border' = 'border';
 
 function buildVmlLabel(options: TVmlButtonOptions) {
   const label = escapeHtml(options.text);
