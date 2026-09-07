@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/knadh/listmonk/internal/subimporter"
@@ -167,5 +168,64 @@ func TestPresetFeederHonoursStop(t *testing.T) {
 	}
 	if st := h.im.GetStats(); st.Imported != 2 {
 		t.Errorf("imported count %d", st.Imported)
+	}
+}
+
+// CAMPAIGN-52-HARDENING T6 (I8) -- a list CREATED by a preset carries exactly the preset's
+// list_tags; an existing list of the resolved name keeps its own tags after an import
+// (asserted on the tags column, not only on id reuse). The preview reports the tags it
+// will create with, and nothing for an existing list.
+func TestPresetListTagsCreateVsReuse(t *testing.T) {
+	h := newPresetHarness(t)
+	ctx := context.Background()
+	data := []byte("earner_name,earner_email,earner_locale,earned_from_site_url\r\nAnn,ann@example.test,en,\r\n")
+	hash := subimporter.ContentHash(data)
+	tags := func(id int) string {
+		var out []string
+		h.db.Select(&out, `SELECT unnest(tags) FROM lists WHERE id = $1 ORDER BY 1`, id)
+		return strings.Join(out, "|")
+	}
+
+	// Created: born with the preset's tags; the preview said so.
+	pv, err := subimporter.Preview(ctx, h.db.DB, h.im, h.p, "090426_rewards_bundle_list.csv", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pv.List.Exists || strings.Join(pv.List.Tags, "|") != "brand:rewards|from:Rewards <hello@rewards.test>" {
+		t.Fatalf("preview of a list to create must carry the preset tags: %+v", pv.List)
+	}
+	prep, err := subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, "090426_rewards_bundle_list.csv", data, hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tags(prep.List.ID); got != "brand:rewards|from:Rewards <hello@rewards.test>" {
+		t.Fatalf("created list tags = %q", got)
+	}
+	if strings.Join(prep.List.Tags, "|") != "brand:rewards|from:Rewards <hello@rewards.test>" {
+		t.Fatalf("Prepared.List.Tags = %v", prep.List.Tags)
+	}
+
+	// Reused: an existing list of the name keeps its own tags, and the preview shows none.
+	var existing int
+	h.db.Get(&existing, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), '090426 Rewards-Product', 'private', 'single', '{keep,"brand:other","from:Other <hello@other.test>"}') RETURNING id`)
+	pv, err = subimporter.Preview(ctx, h.db.DB, h.im, h.p, "090426_rewards_product_list.csv", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pv.List.Exists || pv.List.ID != existing || len(pv.List.Tags) != 0 {
+		t.Fatalf("preview of an existing list: %+v", pv.List)
+	}
+	prep, err = subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, "090426_rewards_product_list.csv", data, hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prep.List.ID != existing {
+		t.Fatalf("existing list not reused: %+v", prep.List)
+	}
+	if got := tags(existing); got != "brand:other|from:Other <hello@other.test>|keep" {
+		t.Fatalf("existing list tags must be untouched, got %q", got)
+	}
+	if len(prep.List.Tags) != 0 {
+		t.Fatalf("Prepared.List.Tags must be empty for a reused list: %v", prep.List.Tags)
 	}
 }

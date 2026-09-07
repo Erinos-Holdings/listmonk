@@ -51,10 +51,11 @@ function decodeSafe(out) {
     s.replace(/\\x3c/g, '<').replace(/\\x3e/g, '>').replace(/\\x20/g, ' ').replace(/\\x09/g, '\t').replace(/\\x26/g, '&').replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
 }
 
-// Word's view: drop every [if !mso] region, reveal every [if mso] region. CSS clients' view:
+// Word's view: drop every mso-hide:all twin (D1 — the non-Word copy is no longer a
+// downlevel-revealed conditional), reveal every [if mso] region. CSS clients' view:
 // strip all comments. `balanced` walks table/tr/td/tbody/a open+close tags with a stack.
 function msoView(html) {
-  return html.replace(/<!--\[if !mso\]><!-->[\s\S]*?<!--<!\[endif\]-->/g, '').replace(/<!--\[if mso\]>([\s\S]*?)<!\[endif\]-->/g, '$1');
+  return html.replace(/<div class="lm-nomso"[^>]*>[\s\S]*?<\/div>/g, '').replace(/<!--\[if mso\]>([\s\S]*?)<!\[endif\]-->/g, '$1');
 }
 function cssView(html) { return html.replace(/<!--[\s\S]*?-->/g, ''); }
 function balanced(html) {
@@ -124,7 +125,7 @@ for (const [label, inner] of [['bare img', logo], ['linked img', linked]]) {
   const cssImgs = (css.match(/<img[^>]*alt="wide"[^>]*>/g) || []).map((t) => (t.match(/ width="(\d+)"/) || [])[1]);
   check('oversized right image: Word view has exactly one copy, clamped to 552', msoImgs.length === 1 && msoImgs[0] === '552', msoImgs.join(','));
   check('oversized right image: CSS view has exactly one copy, the 900 original', cssImgs.length === 1 && cssImgs[0] === '900', cssImgs.join(','));
-  check('oversized right image: both views balanced, copies inside the align="right" table', balanced(mso) && balanced(css) && /<table role="presentation" align="right"[^>]*><tbody><tr><td align="right"><img[^>]*alt="wide"[^>]*width="552"/.test(mso) && /<table role="presentation" align="right"[^>]*><tbody><tr><td align="right"><img[^>]*alt="wide"[^>]*width="900"/.test(css));
+  check('oversized right image: both views balanced, copies inside the align="right" table', balanced(mso) && balanced(css) && /<table role="presentation" align="right"[^>]*><tbody><tr><td align="right"><img[^>]*alt="wide"[^>]*width="552"/.test(mso) && /<table role="presentation" align="right"[^>]*><tbody><tr><td align="right"><div class="lm-nomso" style="mso-hide:all"><img[^>]*alt="wide"[^>]*width="900"/.test(css));
 }
 
 // Scope guard 2: a padded Container holding a centered image must NOT derive align="center"

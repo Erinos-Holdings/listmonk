@@ -37,7 +37,8 @@ const rendered = out.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
 const gmailVisible = rendered.replace(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/g, '');
 const gmailButtons = [...gmailVisible.matchAll(/<a href="https:\/\/listmonk.app"[^>]*style="[^"]*display:block[^"]*"/g)];
 check('8 original CSS buttons in gmail-visible content', gmailButtons.length === 8, `count=${gmailButtons.length}`);
-const gmailTables = [...gmailVisible.matchAll(/<table role="presentation" width="100%"[^>]*class="lm-gm-pin-(\d+)"><tbody><tr><td data-lm-full-width-button/g)];
+// D1: the fluid twin also carries the lm-nomso class + mso-hide:all (table and cell).
+const gmailTables = [...gmailVisible.matchAll(/<table role="presentation" width="100%"[^>]*style="[^"]*mso-hide:all[^"]*" class="lm-gm-pin-(\d+) lm-nomso"><tbody><tr><td data-lm-full-width-button[^>]*style="[^"]*mso-hide:all/g)];
 check('8 originals stay fluid (width=100%) with per-width Gmail class', gmailTables.length === 8, `count=${gmailTables.length} w=${[...new Set(gmailTables.map((m) => m[1]))]}`);
 check('no px pin on the original style', !/lm-gm-pin[^>]*style="[^"]*width:244px/.test(gmailVisible));
 check('Gmail-only pin rule injected behind u + .body', /<style>u \+ \.body table\.lm-gm-pin-244\{width:244px!important;max-width:100%!important;margin:0 auto!important\}/.test(out));

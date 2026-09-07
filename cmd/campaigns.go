@@ -50,7 +50,8 @@ type campContentReq struct {
 }
 
 var (
-	reFromAddress = regexp.MustCompile(`((.+?)\s)?<(.+?)@(.+?)>`)
+	// Fork -- owned by models (shared with the list-tag validator); same pattern as upstream.
+	reFromAddress = models.ReFromAddress
 	reSlug        = regexp.MustCompile(`[^\p{L}\p{M}\p{N}]`)
 )
 
@@ -398,8 +399,9 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		return err
 	}
 
-	// Ephemeral send-quality warnings on the saved state (Gmail clip size, embed lint).
-	out.Warnings = a.campaignWarningsByID(id)
+	// Ephemeral send-quality warnings on the saved state (Gmail clip size, embed lint),
+	// plus the zero-width-character nudge on the saved subject/preheader (I9).
+	out.Warnings = append(a.campaignWarningsByID(id), a.zeroWidthWarnings(&out)...)
 
 	return c.JSON(http.StatusOK, okResp{out})
 }
@@ -460,6 +462,9 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		if out.Preheader() == "" {
 			w = append(w, manager.WarnNoPreheader)
 		}
+		// Fork (CAMPAIGN-52-HARDENING I9) -- zero-width characters in the subject/preheader
+		// fields (never the body). Warns; Start proceeds.
+		w = append(w, a.zeroWidthWarnings(&out)...)
 		// Fork (multi-language campaigns) -- a language-scoped broadcast with nobody to send
 		// to would otherwise finish instantly with sent 0 and nothing saying why. Warns, never
 		// blocks. Evergreens are skipped (their audience is future joiners).

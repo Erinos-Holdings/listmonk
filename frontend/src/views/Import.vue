@@ -61,6 +61,10 @@
                       {{ $t('import.preset.listExists', { id: preset.preview.list.id, count: preset.preview.list.subscriber_count || 0 }) }}
                     </b-tag>
                     <b-tag v-else type="is-success is-light">{{ $t('import.preset.listCreate') }}</b-tag>
+                    <span v-if="!preset.preview.list.exists && preset.preview.list.tags && preset.preview.list.tags.length"
+                      class="preset-list-tags">
+                      {{ $t('import.preset.listCreateTags', { tags: preset.preview.list.tags.join(', ') }) }}
+                    </span>
                   </td>
                 </tr>
                 <tr>

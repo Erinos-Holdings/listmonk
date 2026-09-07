@@ -8,6 +8,75 @@ type TPaddingValues = {
 
 const PRESENTATION_TABLE_STYLE = 'border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;';
 
+// CAMPAIGN-52-HARDENING D1: NO DOWNLEVEL-REVEALED CONDITIONAL COMMENTS, EVER.
+// T-Online's sanitizer drops the contents of every downlevel-revealed (if-not-mso)
+// block (2026-09-07 full-matrix Inspect: both buttons and the clamped photo vanished —
+// exactly the three such blocks in the campaign). The non-Word twin of a VML button or a
+// clamped image is therefore emitted unconditionally and hidden from Word with
+// `mso-hide:all` on a wrapper Word honors (a block element or a table cell — never an
+// inline one), the same property the preheader div already relies on. The Word twin stays
+// inside downlevel-HIDDEN `<!--[if mso]>…<![endif]-->`, an ordinary comment to every other
+// client. The if-not-mso conditional string must not appear anywhere in this file; the
+// test suite greps compiled output for it.
+const NON_MSO_HIDE_STYLE = 'mso-hide:all';
+const NON_MSO_CLASS = 'lm-nomso';
+
+// CAMPAIGN-52-HARDENING D4: families Windows/Office ship, so Word resolves them. Word does
+// not walk a font stack: it takes the FIRST family it cannot resolve as the cue to fall
+// back to its default (Times New Roman). A block whose effective stack leads with a family
+// off this list gets a Word-only `<font face>` naming the stack's first listed family
+// (wordFontFallback) — the Mac-first stacks in fontFamily.ts stay untouched everywhere
+// else. Matching is case-insensitive on the unquoted family name.
+export const WORD_FONT_ALLOWLIST = [
+  'Arial',
+  'Arial Rounded MT Bold',
+  'Bahnschrift',
+  'Bodoni MT',
+  'Bookman Old Style',
+  'Calibri',
+  'Cambria',
+  'Candara',
+  'Corbel',
+  'Courier New',
+  'Franklin Gothic Medium',
+  'Georgia',
+  'Palatino Linotype',
+  'Rockwell',
+  'Segoe Print',
+  'Segoe UI',
+  'Sitka Text',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+];
+
+const WORD_FONT_ALLOWSET = new Set(WORD_FONT_ALLOWLIST.map((f) => f.toLowerCase()));
+
+// Splits a CSS font-family value into bare family names (quotes and whitespace stripped).
+export function parseFontStack(stack: string): string[] {
+  return stack
+    .split(',')
+    .map((f) => f.trim().replace(/^["']|["']$/g, '').trim())
+    .filter(Boolean);
+}
+
+// The Word-only fallback for a font stack: '' when the lead family is allowlisted (Word
+// resolves it; no wrapper needed), the first allowlisted family otherwise, or null when the
+// stack contains none (nothing to fall back to — the builder's font list must never ship
+// such a stack; test/word-font-fallback.test.cjs fails the build on one).
+export function wordFontFallback(stack: string): string | null {
+  const families = parseFontStack(stack);
+  if (families.length === 0) {
+    return '';
+  }
+  if (WORD_FONT_ALLOWSET.has(families[0].toLowerCase())) {
+    return '';
+  }
+  const fallback = families.find((f) => WORD_FONT_ALLOWSET.has(f.toLowerCase()));
+  return fallback ?? null;
+}
+
 function appendMissingStyles(style: string | null, declarations: Array<[string, string]>) {
   const current = (style || '').trim();
   const lower = current.toLowerCase();
@@ -366,6 +435,94 @@ function estimateEdgeMarginPx(container: Element, side: 'first' | 'last', inheri
   return 0;
 }
 
+const TEXT_FLOW_TAGS = /^(P|H[1-6]|UL|OL|BLOCKQUOTE|PRE)$/;
+
+// The font-family in effect on an element: its own declaration, else the nearest
+// ancestor's (the EmailLayout backdrop div carries the layout default that blocks
+// without a per-block font inherit).
+function getEffectiveFontFamily(element: Element): string | null {
+  let node: Element | null = element;
+  while (node) {
+    const family = parseStyleMap(node.getAttribute('style'))['font-family'];
+    if (family) {
+      return family;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// CAMPAIGN-52-HARDENING D4. Wraps the contents of every builder text block (a wrapper div
+// whose children are text flow — the Text/Heading readers' output) whose EFFECTIVE font
+// stack leads with a family Word cannot resolve in a Word-only `<font face="<fallback>">`,
+// where the fallback is the stack's first Windows/Office family (wordFontFallback). The
+// wrapper rides inside downlevel-hidden conditionals, so no other client sees it; Word
+// honors `<font face>` inline over the cell's stack and nested p/li/a inherit it. Blocks on
+// a compliant stack (Arial, Georgia, …) get nothing. User-authored Html content is fenced
+// (data-lm-user-html) and never touched. Runs BEFORE the div→td conversion so the wrapper
+// travels with the block's innerHTML into the converted cell; the Safe payloads are text
+// nodes, so the conversion's first/last-element-child edge-margin estimate is unaffected.
+function addWordFontFallbacks(doc: Document) {
+  Array.from(doc.querySelectorAll('div')).forEach((div) => {
+    if (div.getAttribute('data-lm-user-html') || div.parentElement?.closest('[data-lm-user-html]')) {
+      return;
+    }
+    const children = Array.from(div.children);
+    // A Text block with markdown OFF renders as a div holding a bare text node (the
+    // vendored block-text's non-markdown branch): no element children, real text. Wrap it
+    // too; an empty or whitespace/nbsp-only div (spacers) is left alone.
+    const textOnly = children.length === 0 && (div.textContent || '').trim() !== '';
+    if (!textOnly && (children.length === 0 || !children.every((child) => TEXT_FLOW_TAGS.test(child.tagName)))) {
+      return;
+    }
+    const stack = getEffectiveFontFamily(div);
+    if (!stack) {
+      return;
+    }
+    const fallback = wordFontFallback(stack);
+    if (!fallback) {
+      return;
+    }
+    div.prepend(doc.createTextNode(makeSafeTemplate(`<!--[if mso]><font face="${escapeAttribute(fallback)}"><![endif]-->`)));
+    div.append(doc.createTextNode(makeSafeTemplate('<!--[if mso]></font><![endif]-->')));
+  });
+}
+
+// CAMPAIGN-52-HARDENING D3. The reader's Container (the vendored @usewaypoint/block-container)
+// emits its border as the `border: 1px solid <color>` shorthand on the block div, which the
+// conversion below carries verbatim onto a td. M365/2021/2024 Outlook, Outlook.com, Libero
+// and Free.fr rewrite that shorthand and keep the color on one side only (the campaign-52
+// expiry box rendered grey on three sides, 2026-09-07 matrix); per-side longhands survive
+// their sanitizers. Every block wrapper / cell whose shorthand carries a real stroke is
+// rewritten to the four `border-<side>` longhands plus `border-color` — compiled mail only,
+// the editor is untouched. Anchors are left alone (the VML button reads the anchor's
+// shorthand), as is fenced user-authored Html content.
+function expandBorderShorthands(doc: Document) {
+  doc.querySelectorAll('div, td, th').forEach((element) => {
+    if (element.closest('[data-lm-user-html]') && !element.getAttribute('data-lm-user-html')) {
+      return;
+    }
+    const styleMap = parseStyleMap(element.getAttribute('style'));
+    const shorthand = styleMap.border;
+    if (!shorthand) {
+      return;
+    }
+    const { color, width } = parseButtonBorder(styleMap);
+    if (!color || width <= 0) {
+      return;
+    }
+    const value = shorthand.trim();
+    element.setAttribute('style', setStyleValues(element.getAttribute('style'), [
+      ['border', null],
+      ['border-top', styleMap['border-top'] || value],
+      ['border-right', styleMap['border-right'] || value],
+      ['border-bottom', styleMap['border-bottom'] || value],
+      ['border-left', styleMap['border-left'] || value],
+      ['border-color', styleMap['border-color'] || color],
+    ]));
+  });
+}
+
 function transformSimpleDivBlocks(doc: Document) {
   const wrappers = Array.from(doc.querySelectorAll('div')).filter((div) => {
     // Anything strictly inside an Html block's wrapper (marked by the reader,
@@ -555,6 +712,42 @@ type TVmlButtonOptions = {
 // value as a marker element between the two halves (see wrapMsoVml).
 const VML_HREF_SENTINEL = '\u0000LM_VML_HREF\u0000';
 
+// CAMPAIGN-52-HARDENING D2: Windows Outlook's dark mode ("partial invert") recolors text it
+// judges dark-on-light without reading the VML fill, so a light label on a dark
+// `fillcolor` came out dark grey on black (2026-09-07 matrix, every `_dm_dt` Outlook). There
+// is no media-query or attribute hook in Word; the only levers are markup shapes, and each
+// is a CANDIDATE that the single-client Inspect gate (spec G2) must prove:
+//   'font'   — the label inside `<font color><span style="color">` (hypothesis: the dark
+//              transform rewrites CSS color and leaves the legacy attribute alone);
+//   'bgcolor' — a dark background on the <center> INSIDE the roundrect (never on the
+//              wrapper td, which is the full-width column cell), so the transform sees
+//              dark-behind-light text;
+//   'border' — the label in the button's border color when it has one (a light label may
+//              be recolored whatever its hue; the surviving stroke is a VML attribute).
+// Known-ineffective levers, never worth a credit: !important, [data-ogsc]/[data-ogsb],
+// @media (prefers-color-scheme), mso-color-alt. If every candidate fails the fallback is a
+// light button, chosen by the campaign author. Flip the constant to switch; the shape test
+// (test/vml-dark-label.test.cjs) pins whichever variant is set here.
+export const VML_LABEL_VARIANT: 'font' | 'bgcolor' | 'border' = 'font';
+
+function buildVmlLabel(options: TVmlButtonOptions) {
+  const label = escapeHtml(options.text);
+  const centerStyle = (color: string, extra: string = '') =>
+    `color:${escapeAttribute(color)};font-family:${escapeAttribute(options.fontFamily)};font-size:${String(Math.round(options.fontSize * 0.75 * 100) / 100)}pt;font-weight:${escapeAttribute(options.fontWeight)};${extra}`;
+
+  switch (VML_LABEL_VARIANT) {
+    case 'bgcolor':
+      return `<center style="${centerStyle(options.textColor, `background:${escapeAttribute(options.buttonColor)};`)}">${label}</center>`;
+    case 'border': {
+      const color = options.borderColor ?? options.textColor;
+      return `<center style="${centerStyle(color)}">${label}</center>`;
+    }
+    case 'font':
+    default:
+      return `<center style="${centerStyle(options.textColor)}"><font color="${escapeAttribute(options.textColor)}"><span style="color:${escapeAttribute(options.textColor)}">${label}</span></font></center>`;
+  }
+}
+
 function buildVmlButton(options: TVmlButtonOptions) {
   const pt = (px: number) => String(Math.round(px * 0.75 * 100) / 100);
   const arcsize = Math.max(0, Math.min(50, Math.round((options.borderRadius / options.height) * 100)));
@@ -562,7 +755,10 @@ function buildVmlButton(options: TVmlButtonOptions) {
     ? `strokecolor="${escapeAttribute(options.borderColor)}" strokeweight="${pt(options.borderWidth)}pt"`
     : `strokecolor="${escapeAttribute(options.buttonColor)}"`;
 
-  return `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${VML_HREF_SENTINEL}" style="height:${pt(options.height)}pt;v-text-anchor:middle;width:${pt(options.width)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"><w:anchorlock/><center style="color:${escapeAttribute(options.textColor)};font-family:${escapeAttribute(options.fontFamily)};font-size:${pt(options.fontSize)}pt;font-weight:${escapeAttribute(options.fontWeight)};">${escapeHtml(options.text)}</center></v:roundrect>`;
+  // The canonical shape stays: <w:anchorlock/> then <center> (v-text-anchor:middle alone
+  // centers; a v:textbox is deliberately absent — see the comment above). Only the label
+  // markup inside the <center> varies (buildVmlLabel).
+  return `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${VML_HREF_SENTINEL}" style="height:${pt(options.height)}pt;v-text-anchor:middle;width:${pt(options.width)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"><w:anchorlock/>${buildVmlLabel(options)}</v:roundrect>`;
 }
 
 // Wraps a VML button (with its [if mso] conditional markers) in Safe payloads, emitting the
@@ -688,11 +884,11 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
   // renders clipped. Upstream PR #2978 has this latent. The href value alone
   // rides OUTSIDE the payload as a marker (wrapMsoVml).
   const msoBlock = wrapMsoVml(vml, href);
-  const nonMsoStart = makeSafeTemplate('<!--[if !mso]><!-->');
-  const nonMsoEnd = makeSafeTemplate('<!--<![endif]-->');
-
+  // The CSS twin is emitted UNCONDITIONALLY and hidden from Word with mso-hide:all
+  // on a block wrapper (Word ignores the property on inline elements) — never inside a
+  // downlevel-revealed if-not-mso conditional (see NON_MSO_HIDE_STYLE).
   return buildPresentationTable(
-    `<tbody><tr><td align="${escapeAttribute(align)}" style="${escapeAttribute(wrapperStyle)}">${msoBlock}${nonMsoStart}<a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(cleanAnchorStyle)}">${escapeHtml(text)}</a>${nonMsoEnd}</td></tr></tbody>`
+    `<tbody><tr><td align="${escapeAttribute(align)}" style="${escapeAttribute(wrapperStyle)}">${msoBlock}<div class="${NON_MSO_CLASS}" style="${NON_MSO_HIDE_STYLE}"><a href="${escapeAttribute(href)}"${targetAttr} style="${escapeAttribute(cleanAnchorStyle)}">${escapeHtml(text)}</a></div></td></tr></tbody>`
   );
 }
 
@@ -712,17 +908,29 @@ function transformButtonBlocks(doc: Document) {
   });
 }
 
-function getBorderWidths(styleMap: TStyleMap): Pick<TPaddingValues, 'top' | 'right' | 'bottom' | 'left'> {
-  const shorthand = styleMap.border?.trim() || '';
-  const shorthandMatch = shorthand.match(/^(-?\d+(?:\.\d+)?)px\b/i);
-  const fromShorthand = shorthandMatch ? Math.round(Number(shorthandMatch[1])) : 0;
-  const all = getPixelValue(styleMap['border-width']) ?? fromShorthand;
+// The px width leading a `border` / `border-<side>` shorthand (`1px solid #fbf00b`), or
+// null when the value carries no leading px token.
+function getShorthandBorderWidth(value?: string) {
+  const match = (value || '').trim().match(/^(-?\d+(?:\.\d+)?)px\b/i);
+  return match ? Math.round(Number(match[1])) : null;
+}
+
+// Reads every form a border width arrives in: the `border` shorthand, `border-width`,
+// per-side `border-<side>` shorthands (what the reader emits for a Container since
+// CAMPAIGN-52-HARDENING D3 — the failing clients rewrite the `border` shorthand and keep
+// one side's color, longhands survive) and per-side `border-<side>-width`.
+export function getBorderWidths(styleMap: TStyleMap): Pick<TPaddingValues, 'top' | 'right' | 'bottom' | 'left'> {
+  const all = getPixelValue(styleMap['border-width']) ?? getShorthandBorderWidth(styleMap.border) ?? 0;
+  const side = (name: 'top' | 'right' | 'bottom' | 'left') =>
+    getPixelValue(styleMap[`border-${name}-width`])
+    ?? getShorthandBorderWidth(styleMap[`border-${name}`])
+    ?? all;
 
   return {
-    top: getPixelValue(styleMap['border-top-width']) ?? all,
-    right: getPixelValue(styleMap['border-right-width']) ?? all,
-    bottom: getPixelValue(styleMap['border-bottom-width']) ?? all,
-    left: getPixelValue(styleMap['border-left-width']) ?? all,
+    top: side('top'),
+    right: side('right'),
+    bottom: side('bottom'),
+    left: side('left'),
   };
 }
 
@@ -951,13 +1159,20 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   // text-width pill, so the computed width is applied to Gmail ONLY, via a
   // per-width class and a head rule behind Gmail's `u + .body` selector hook
   // (see addGmailButtonPinStyles).
-  table.setAttribute('class', `${table.getAttribute('class') || ''} lm-gm-pin-${width}`.trim());
+  table.setAttribute('class', `${table.getAttribute('class') || ''} lm-gm-pin-${width} ${NON_MSO_CLASS}`.trim());
+  // The fluid CSS twin stays in the document for every client and is hidden from Word
+  // with mso-hide:all — on the table AND on each cell, because Word applies the
+  // property per cell (a table-level declaration alone leaves the cells visible).
+  table.setAttribute('style', appendMissingStyles(table.getAttribute('style'), [['mso-hide', 'all']]));
+  getDirectRows(table).forEach((row) => {
+    Array.from(row.children)
+      .filter((cell) => cell.tagName === 'TD' || cell.tagName === 'TH')
+      .forEach((cell) => cell.setAttribute('style', appendMissingStyles(cell.getAttribute('style'), [['mso-hide', 'all']])));
+  });
 
   replaceNodeWithHtml(table, [
     wrapMsoVml(vml, href),
-    makeSafeTemplate('<!--[if !mso]><!-->'),
     table.outerHTML,
-    makeSafeTemplate('<!--<![endif]-->'),
   ].join(''));
 }
 
@@ -1001,13 +1216,14 @@ function clampImageWidths(node: Element, available: number) {
 
       clampedImage.setAttribute('style', setStyleValues(clampedImage.getAttribute('style'), styleUpdates));
 
+      // The clamped copy rides in a downlevel-HIDDEN conditional (an ordinary comment
+      // to every non-Word client); the original is emitted unconditionally inside an
+      // mso-hide:all block so Word never draws it (see NON_MSO_HIDE_STYLE).
       replaceNodeWithHtml(img, [
         makeSafeTemplate('<!--[if mso]>'),
         clampedImage.outerHTML,
         makeSafeTemplate('<![endif]-->'),
-        makeSafeTemplate('<!--[if !mso]><!-->'),
-        originalImage.outerHTML,
-        makeSafeTemplate('<!--<![endif]-->'),
+        `<div class="${NON_MSO_CLASS}" style="${NON_MSO_HIDE_STYLE}">${originalImage.outerHTML}</div>`,
       ].join(''));
     }
     return;
@@ -1159,6 +1375,8 @@ export function postProcessForOutlook(html: string) {
   hardenImages(doc);
   transformButtonBlocks(doc);
   transformImageBlocks(doc);
+  addWordFontFallbacks(doc);
+  expandBorderShorthands(doc);
   transformSimpleDivBlocks(doc);
   clampImagesToCanvas(doc);
   constrainCanvasForOutlook(doc);

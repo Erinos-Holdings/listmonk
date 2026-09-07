@@ -28,6 +28,7 @@ const presetTestJSON = `[{
   "list_type": "private", "list_optin": "single",
   "subscription_status": "confirmed", "backfill": true, "merge": "fill",
   "skip_email_pattern": "@canceled\\.local$",
+  "list_tags": ["brand:rewards", "from:Rewards <hello@rewards.test>"],
   "dedupe": { "name": "longest-first", "locale": "first-mapped", "attribs": "last" }
 }]`
 

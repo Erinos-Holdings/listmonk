@@ -44,7 +44,7 @@
           </b-select>
         </b-field>
 
-        <b-field :label="$t('globals.terms.tags')" label-position="on-border">
+        <b-field :label="$t('globals.terms.tags')" label-position="on-border" :message="$t('lists.tagsHelp')">
           <b-taginput v-model="form.tags" name="tags" ellipsis icon="tag-outline"
             :placeholder="$t('globals.terms.tags')" />
         </b-field>

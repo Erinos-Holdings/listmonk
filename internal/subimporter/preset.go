@@ -27,6 +27,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gofrs/uuid/v5"
+	"github.com/knadh/listmonk/internal/utils"
 	"github.com/knadh/listmonk/models"
 	"github.com/lib/pq"
 	"golang.org/x/text/cases"
@@ -102,6 +103,11 @@ type Preset struct {
 	Backfill           *bool             `json:"backfill"`
 	Merge              string            `json:"merge"`
 	SkipEmailPattern   string            `json:"skip_email_pattern"`
+	// ListTags are the tags a list CREATED by this preset is born with (an existing list of
+	// the resolved name is reused untouched). Validated at load by the same rule as the
+	// list form (models.ListTagsProblem): a bad tag fails the preset, never a mis-tagged
+	// list. Optional; absent = an untagged list.
+	ListTags []string `json:"list_tags"`
 	// DisplayHeaders is the column list shown to the user as "the exact column names", in
 	// the source file's own order. Optional; when empty it is derived from the mappings.
 	DisplayHeaders []string     `json:"headers"`
@@ -125,6 +131,13 @@ type PresetInfo struct {
 // of campaign languages a locale may map to. Any invalid preset fails the whole set; the
 // caller is expected to log and run with no presets rather than refuse to boot.
 func ParsePresets(b []byte, langs []string) ([]Preset, error) {
+	return ParsePresetsWith(b, langs, nil)
+}
+
+// ParsePresetsWith is ParsePresets with the configured from_addresses lookup a `from:` list
+// tag is checked against (nil skips that check, as the list form does when no SMTP block
+// declares from_addresses).
+func ParsePresetsWith(b []byte, langs []string, allowedFrom func(bare string) bool) ([]Preset, error) {
 	b = bytes.TrimSpace(b)
 	if len(b) == 0 || bytes.Equal(b, []byte("null")) {
 		return nil, nil
@@ -138,7 +151,7 @@ func ParsePresets(b []byte, langs []string) ([]Preset, error) {
 	seen := map[string]struct{}{}
 	for i := range out {
 		p := &out[i]
-		if err := p.validate(langs); err != nil {
+		if err := p.validate(langs, allowedFrom); err != nil {
 			return nil, fmt.Errorf("preset %d (%q): %w", i, p.Key, err)
 		}
 		if _, dup := seen[p.Key]; dup {
@@ -150,7 +163,7 @@ func ParsePresets(b []byte, langs []string) ([]Preset, error) {
 	return out, nil
 }
 
-func (p *Preset) validate(langs []string) error {
+func (p *Preset) validate(langs []string, allowedFrom func(bare string) bool) error {
 	if !regexPresetKey.MatchString(p.Key) {
 		return errors.New("key must be non-empty [a-z0-9_-]")
 	}
@@ -245,6 +258,19 @@ func (p *Preset) validate(langs []string) error {
 	}
 	if p.Merge != MergeFill {
 		return fmt.Errorf("unknown merge %q (only %q is supported)", p.Merge, MergeFill)
+	}
+
+	// list_tags: stored trimmed (the shape normalizeListTags gives a form-saved tag) and held
+	// to the list form's rule. Empty entries are dropped.
+	tags := make([]string, 0, len(p.ListTags))
+	for _, t := range p.ListTags {
+		if t = models.TrimListTag(t); t != "" {
+			tags = append(tags, t)
+		}
+	}
+	p.ListTags = tags
+	if key, args := models.ListTagsProblem(p.ListTags, allowedFrom, utils.SanitizeEmail); key != "" {
+		return fmt.Errorf("list_tags: %s %s", key, strings.Join(args, "="))
 	}
 
 	if p.SkipEmailPattern != "" {
@@ -700,6 +726,9 @@ type ListInfo struct {
 	ID              int    `json:"id,omitempty"`
 	Exists          bool   `json:"exists"`
 	SubscriberCount int    `json:"subscriber_count,omitempty"`
+	// Tags the list WILL be created with (the preset's list_tags); empty for an existing
+	// list, whose own tags are never touched.
+	Tags []string `json:"tags,omitempty"`
 }
 
 // FillName is an existing subscriber whose name the import will set.
@@ -805,6 +834,9 @@ func Preview(ctx context.Context, db Querier, im *Importer, p *Preset, filename 
 	if err != nil {
 		return nil, err
 	}
+	if !list.Exists {
+		list.Tags = append([]string(nil), p.ListTags...)
+	}
 
 	emails := make([]string, 0, len(parsed.Subs))
 	for _, s := range parsed.Subs {
@@ -874,11 +906,14 @@ func PrepareImport(ctx context.Context, db Querier, im *Importer, p *Preset, fil
 		if err != nil {
 			return nil, err
 		}
+		// Born with the preset's (trimmed, load-validated) tags; this INSERT bypasses
+		// core, so the trimming happened at load (validate).
 		if err := db.QueryRowContext(ctx,
-			`INSERT INTO lists (uuid, name, type, optin, status, tags, description) VALUES ($1, $2, $3, $4, $5, '{}', '') RETURNING id`,
-			uu.String(), listName, p.ListType, p.ListOptin, models.ListStatusActive).Scan(&list.ID); err != nil {
+			`INSERT INTO lists (uuid, name, type, optin, status, tags, description) VALUES ($1, $2, $3, $4, $5, $6, '') RETURNING id`,
+			uu.String(), listName, p.ListType, p.ListOptin, models.ListStatusActive, pq.StringArray(p.ListTags)).Scan(&list.ID); err != nil {
 			return nil, fmt.Errorf("error creating list %q: %w", listName, err)
 		}
+		list.Tags = append([]string(nil), p.ListTags...)
 	}
 
 	return &Prepared{List: list, Parsed: parsed}, nil

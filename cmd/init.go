@@ -669,7 +669,10 @@ func initImportPresets(ko *koanf.Koanf) []subimporter.Preset {
 		lo.Printf("error reading app.import_presets, import presets disabled: %v", err)
 		return nil
 	}
-	presets, err := subimporter.ParsePresets(b, models.CampaignLangs)
+	// A preset's list_tags are held to the list form's rule, configured from_addresses
+	// included (CAMPAIGN-52-HARDENING D7): a bad seeded tag hides the feature with a logged
+	// error rather than creating a mis-tagged list.
+	presets, err := subimporter.ParsePresetsWith(b, models.CampaignLangs, configuredFromLookup())
 	if err != nil {
 		lo.Printf("error loading app.import_presets, import presets disabled: %v", err)
 		return nil

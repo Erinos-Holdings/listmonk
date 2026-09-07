@@ -18,8 +18,10 @@ function check(name, ok, detail) {
 
 const MSO_OPEN = '{{ Safe "\\x3c!--[if\\x20mso]\\x3e" }}';
 const MSO_CLOSE = '{{ Safe "\\x3c![endif]--\\x3e" }}';
-const NONMSO_OPEN = '{{ Safe "\\x3c!--[if\\x20!mso]\\x3e\\x3c!--\\x3e" }}';
-const NONMSO_CLOSE = '{{ Safe "\\x3c!--\\x3c![endif]--\\x3e" }}';
+// CAMPAIGN-52-HARDENING D1: the non-Word twin is no longer a downlevel-revealed
+// conditional (T-Online strips those wholesale) but an unconditional mso-hide:all block.
+const NONMSO_OPEN = '<div class="lm-nomso" style="mso-hide:all">';
+const NONMSO_CLOSE = '</div>';
 
 // 1. Ghost table wraps the canvas
 const ghostOpen = output.match(/\{\{ Safe "\\x3c!--\[if\\x20mso\]\\x3e\\x3ctable\\x20[^}]*width=\\"600\\"[^}]*\}\}/);
@@ -39,17 +41,12 @@ check('4 clamped 150px footer copies (mso)', countOf(150) === 4, `150=${countOf(
 check('4 original 200px footer copies (non-mso)', countOf(200) === 4, `200=${countOf(200)}`);
 check('hero images stay single 600px (not dual-emitted)', countOf(600) === 3, `600=${countOf(600)}`);
 
-// 4. Pairing structure: [if mso]<img clamped>[endif] [if !mso]<img original>[endif]
-const pair = new RegExp(
-  [
-    MSO_OPEN, '<img[^>]*width="270"[^>]*>', MSO_CLOSE,
-    NONMSO_OPEN, '<img[^>]*width="300"[^>]*>', NONMSO_CLOSE,
-  ].map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => ('<img'.includes(c) ? c : '\\' + c))).join('')
-);
-// simpler literal scan: find one full dual block
+// 4. Pairing structure: [if mso]<img clamped>[endif] <div mso-hide:all><img original></div>
+// (D1: no downlevel-revealed conditional anywhere in the output.)
+check('no downlevel-revealed conditional in the output', !output.includes('!mso'));
 const idx = output.indexOf(MSO_OPEN + '<img');
 const block = idx >= 0 ? output.slice(idx, idx + 1600) : '';
-check('dual block order: mso-clamped then !mso-original',
+check('dual block order: mso-clamped then mso-hidden original',
   idx >= 0 && block.indexOf('width="270"') !== -1
     && block.indexOf(MSO_CLOSE) > block.indexOf('width="270"')
     && block.indexOf(NONMSO_OPEN) > block.indexOf(MSO_CLOSE)
@@ -75,9 +72,8 @@ const rendered = output.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
   s.replace(/\\x3c/g, '<').replace(/\\x3e/g, '>').replace(/\\x20/g, ' ').replace(/\\x09/g, '\t').replace(/\\x26/g, '&').replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
 const opens = (rendered.match(/<!--\[if mso\]>/g) || []).length;
 const closes = (rendered.match(/<!\[endif\]-->/g) || []).length;
-const nonMsoOpens = (rendered.match(/<!--\[if !mso\]><!-->/g) || []).length;
-const nonMsoCloses = (rendered.match(/<!--<!\[endif\]-->/g) || []).length;
-check('rendered conditional comments balance', opens === closes - nonMsoCloses && nonMsoOpens === nonMsoCloses, `mso=${opens} !mso=${nonMsoOpens} end=${closes - nonMsoCloses}+${nonMsoCloses}`);
+check('rendered conditional comments balance', opens === closes, `mso=${opens} end=${closes}`);
+check('rendered output has no downlevel-revealed conditional', !/<!--\[if !mso\]>|<!--<!\[endif\]-->/.test(rendered));
 check('rendered output has no leftover {{ Safe', !rendered.includes('{{ Safe'));
 fs.writeFileSync(path.join(__dirname, '.build', 'campaign10-rendered.html'), rendered);
 

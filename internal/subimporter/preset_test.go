@@ -379,3 +379,53 @@ func TestParsePresetsErrors(t *testing.T) {
 		t.Errorf("defaults: %+v", p)
 	}
 }
+
+// CAMPAIGN-52-HARDENING T6 (I7) -- list_tags round-trip (trimmed) and the validation
+// failures the list form refuses, applied at preset load: a bad tag fails the preset
+// (naming the key and the i18n reason), never a mis-tagged list.
+func TestParsePresetsListTags(t *testing.T) {
+	withTags := func(tags string) []byte {
+		return []byte(strings.Replace(testPresetJSON, `"merge": "fill",`, `"merge": "fill", "list_tags": `+tags+`,`, 1))
+	}
+
+	ps, err := ParsePresets(withTags(`[" brand: curated ", "from: Curated <hello@curatedfor.you> ", "seed"]`), models.CampaignLangs)
+	if err != nil {
+		t.Fatalf("valid list_tags: %v", err)
+	}
+	if got := strings.Join(ps[0].ListTags, "|"); got != "brand:curated|from:Curated <hello@curatedfor.you>|seed" {
+		t.Fatalf("list_tags not trimmed/kept: %q", got)
+	}
+
+	// Absent = untagged (nil), the pre-D7 shape.
+	if p := testPreset(t); len(p.ListTags) != 0 {
+		t.Fatalf("absent list_tags should be empty, got %v", p.ListTags)
+	}
+
+	for _, c := range []struct{ name, tags, want string }{
+		{"half-tagged", `["brand:curated"]`, "lists.brandTagsHalfTagged"},
+		{"duplicate brand", `["brand:a", "brand:b", "from:hello@x.test"]`, "lists.brandTagsDuplicate"},
+		{"non-ASCII from", `["brand:curated", "from:Liyorá <hello@x.test>"]`, "lists.brandFromTagNotASCII"},
+		{"bad slug", `["brand:Thirsty Girl", "from:hello@x.test"]`, "lists.brandTagInvalidSlug"},
+		{"site without brand", `["site:https://shop.x.test"]`, "lists.siteTagNeedsBrand"},
+		{"malformed from", `["brand:curated", "from:not an address"]`, "lists.brandFromTagInvalid"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := ParsePresets(withTags(c.tags), models.CampaignLangs)
+			if err == nil {
+				t.Fatalf("want error %s", c.want)
+			}
+			if !strings.Contains(err.Error(), `"rewards"`) || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("error must name the preset key and the i18n reason: %v", err)
+			}
+		})
+	}
+
+	// The configured from_addresses check applies when the loader supplies one.
+	allowed := func(bare string) bool { return bare == "hello@curatedfor.you" }
+	if _, err := ParsePresetsWith(withTags(`["brand:curated", "from:Curated <hello@curatedfor.you>"]`), models.CampaignLangs, allowed); err != nil {
+		t.Fatalf("configured address: %v", err)
+	}
+	if _, err := ParsePresetsWith(withTags(`["brand:curated", "from:Curated <nobody@else.test>"]`), models.CampaignLangs, allowed); err == nil || !strings.Contains(err.Error(), "lists.brandFromTagUnknownAddress") {
+		t.Fatalf("unconfigured address must fail the preset: %v", err)
+	}
+}

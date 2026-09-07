@@ -2,12 +2,12 @@ package main
 
 import (
 	"errors"
-	"regexp"
 	"strings"
 
 	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/internal/i18n"
 	"github.com/knadh/listmonk/internal/messenger/email"
+	"github.com/knadh/listmonk/models"
 )
 
 // List-scoped From address and brand tag.
@@ -31,15 +31,18 @@ import (
 // with no error in any log or metric. At three brands that is a procedural check; at the ~100
 // this platform is meant to carry it is not survivable.
 const (
-	brandTagPrefix = "brand:"
-	fromTagPrefix  = "from:"
+	// The prefixes, the slug regex and the From-address helpers are owned by models
+	// (models/list_tags.go, the pure validator shared with the import presets); these are
+	// the package-local names the rest of cmd reads.
+	brandTagPrefix = models.BrandTagPrefix
+	fromTagPrefix  = models.FromTagPrefix
 
 	// Fork (click tracking, CLICK-TRACKING-SPEC D2) -- optional per-list storefront URL for a
 	// brand whose site is not its sending domain. Wins over the `from:`-domain derivation as
 	// the fallback destination of an unresolvable personalized link, and joins the UTM
 	// storefront-host union. Valid only beside the brand:/from: pair, at most one per list,
 	// absolute http(s) (cmd/lists_brand.go).
-	siteTagPrefix = "site:"
+	siteTagPrefix = models.SiteTagPrefix
 
 	// The SES message-tag header, and the tag key within it that carries the brand. SES reads
 	// message tags off this header; the CloudWatch event destination dimensions on `brand`.
@@ -65,7 +68,7 @@ const (
 // campaign nobody touched, weeks after someone edited a list tag. That is the same
 // hand-typed-value-with-no-validation failure this feature exists to remove, merely relocated
 // from the campaign to the list.
-var reBrandSlug = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+var reBrandSlug = models.ReBrandSlug
 
 // brandMapping is the single brand + From address that a campaign's target lists describe.
 // `mapped` is false when no target list carries brand tags at all, which is not an error: the
@@ -194,13 +197,7 @@ func resolveBrandMappingWith(co *core.Core, i *i18n.I18n, listIDs []int) (brandM
 
 // siteTagOf returns a list's `site:` tag value (trimmed), or "" when it carries none.
 func siteTagOf(tags []string) string {
-	for _, t := range tags {
-		t = strings.TrimSpace(t)
-		if strings.HasPrefix(t, siteTagPrefix) {
-			return strings.TrimSpace(strings.TrimPrefix(t, siteTagPrefix))
-		}
-	}
-	return ""
+	return models.SiteTagOf(tags)
 }
 
 // setBrandTagHeader merges `brand=<slug>` into a campaign's X-SES-MESSAGE-TAGS header.
@@ -307,11 +304,23 @@ func configuredFromAddresses() map[string]struct{} {
 // from_addresses allowlist, which holds addresses, can be checked against a From that may carry a
 // name. reFromAddress is listmonk's own pattern for this shape (cmd/campaigns.go).
 func bareAddress(from string) string {
-	if m := reFromAddress.FindStringSubmatch(from); len(m) == 5 {
-		return m[3] + "@" + m[4]
-	}
+	return models.BareAddress(from)
+}
 
-	return strings.TrimSpace(from)
+// configuredFromLookup is the from_addresses allowlist as the predicate models.ListTagsProblem
+// takes: nil when no enabled SMTP block declares from_addresses (upstream's default -- the
+// check is opt-in), else a lookup normalised the way the messenger builds its routing pools.
+// Shared by the list form (validateBrandTags) and the import-preset loader (initImportPresets)
+// so a preset's list_tags are held to exactly the form's rule.
+func configuredFromLookup() func(bare string) bool {
+	allowed := configuredFromAddresses()
+	if len(allowed) == 0 {
+		return nil
+	}
+	return func(bare string) bool {
+		_, ok := allowed[email.NormalizeAddr(bare)]
+		return ok
+	}
 }
 
 func contains(hay []string, needle string) bool {

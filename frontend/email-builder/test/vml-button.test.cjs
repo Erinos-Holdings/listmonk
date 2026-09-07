@@ -45,7 +45,10 @@ check('v-text-anchor:middle present for vertical centering', /v-text-anchor:midd
 check('stroke in pt: 5px -> 3.75pt', /strokeweight="3.75pt"/.test(rendered));
 check('font in pt: 16px -> 12pt', /font-size:12pt/.test(rendered));
 check('rendered VML inside one [if mso] conditional', /<!--\[if mso\]><v:roundrect[\s\S]*?<\/v:roundrect><!\[endif\]-->/.test(rendered));
-check('CSS anchor intact in [if !mso] branch', /<!--\[if !mso\]><!--><a href="https:\/\/x.test\/go"[^>]*white-space:nowrap[^>]*>Outlook Test<\/a><!--<!\[endif\]-->/.test(rendered));
+// D1: the CSS anchor rides unconditionally inside an mso-hide:all block, never a
+// downlevel-revealed conditional.
+check('CSS anchor intact inside the mso-hide:all twin', /<div class="lm-nomso" style="mso-hide:all"><a href="https:\/\/x.test\/go"[^>]*white-space:nowrap[^>]*>Outlook Test<\/a><\/div>/.test(rendered));
+check('no downlevel-revealed conditional', !rendered.includes('!mso'));
 // Explicit sub-floor height must also be floored (invisible-label guard)
 const tiny = input.replace('line-height:19px;', 'line-height:19px;height:20px;');
 const tinyOut = postProcessForOutlook(tiny);

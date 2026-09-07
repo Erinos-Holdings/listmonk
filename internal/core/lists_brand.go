@@ -1,13 +1,16 @@
 package core
 
-import "strings"
+import (
+	"strings"
 
-// Brand-mapping tag prefixes. KEEP IN SYNC with cmd/campaigns_brand.go, which owns the
-// campaign-side derivation and enforcement that reads these tags. The packages cannot share the
-// constants (this is internal/core; that is package main), so the coupling is by convention.
+	"github.com/knadh/listmonk/models"
+)
+
+// Brand-mapping tag prefixes, owned by models (models/list_tags.go) and shared with
+// cmd/campaigns_brand.go and the import presets.
 const (
-	brandTagPrefix = "brand:"
-	fromTagPrefix  = "from:"
+	brandTagPrefix = models.BrandTagPrefix
+	fromTagPrefix  = models.FromTagPrefix
 )
 
 // normalizeListTags is normalizeTags with one fork exception: `brand:`/`from:` brand-mapping
@@ -35,12 +38,10 @@ func normalizeListTags(tags []string) []string {
 		// off without trimming, so a stored space here would make the editor refuse campaigns
 		// the API accepts. Whitespace INSIDE the value -- the display name's space -- is kept;
 		// it is the whole reason these tags bypass normalizeTags.
-		if strings.HasPrefix(trimmed, brandTagPrefix) {
-			out = append(out, brandTagPrefix+strings.TrimSpace(strings.TrimPrefix(trimmed, brandTagPrefix)))
-			continue
-		}
-		if strings.HasPrefix(trimmed, fromTagPrefix) {
-			out = append(out, fromTagPrefix+strings.TrimSpace(strings.TrimPrefix(trimmed, fromTagPrefix)))
+		// One trim rule for all three reserved prefixes (brand:, from:, site:), shared with
+		// the preset INSERT path via models.TrimListTag so both writers store one shape.
+		if strings.HasPrefix(trimmed, brandTagPrefix) || strings.HasPrefix(trimmed, fromTagPrefix) || strings.HasPrefix(trimmed, models.SiteTagPrefix) {
+			out = append(out, models.TrimListTag(trimmed))
 			continue
 		}
 
