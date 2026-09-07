@@ -488,12 +488,12 @@ function addWordFontFallbacks(doc: Document) {
   });
 }
 
-// CAMPAIGN-52-HARDENING D3. The reader's Container (the vendored @usewaypoint/block-container)
-// emits its border as the `border: 1px solid <color>` shorthand on the block div, which the
-// conversion below carries verbatim onto a td. M365/2021/2024 Outlook, Outlook.com, Libero
-// and Free.fr rewrite that shorthand and keep the color on one side only (the campaign-52
-// expiry box rendered grey on three sides, 2026-09-07 matrix); per-side longhands survive
-// their sanitizers. Every block wrapper / cell whose shorthand carries a real stroke is
+// CAMPAIGN-52-HARDENING D3 — PREMISE RETRACTED 2026-09-07. The reader's Container (the vendored
+// @usewaypoint/block-container) emits its border as the `border: 1px solid <color>` shorthand
+// on the block div, which the conversion below carries verbatim onto a td. This expansion was
+// built on a reading of Inspect screenshots ("grey on three sides" in M365/Outlook.com/Libero)
+// that a pixel audit disproved: the 1px frame was complete in every light-mode render. It is
+// kept as a harmless normalization (tested, released in erinos.87); it fixes no client. Every block wrapper / cell whose shorthand carries a real stroke is
 // rewritten to the four `border-<side>` longhands plus `border-color` — compiled mail only,
 // the editor is untouched. Anchors are left alone (the VML button reads the anchor's
 // shorthand), as is fenced user-authored Html content.
