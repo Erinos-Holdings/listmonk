@@ -2,6 +2,7 @@ package optimizer
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -23,6 +24,14 @@ const (
 	MaxImageWidth = 1200
 	JPEGQuality   = 80
 
+	// MaxAnimatedGIFBytes is the newsletter weight budget for an animation,
+	// agreed with marketing 2026-09-09. Animations are hotlinked, so this is
+	// a recipient load-time budget, not a deliverability one. It is enforced
+	// by refusing the upload rather than by downsizing: re-encoding through
+	// Go's GIF encoder inflates ~1.9x on identical pixels, so any automatic
+	// repair here is worse than re-exporting the asset properly.
+	MaxAnimatedGIFBytes = 500 * 1024
+
 	// MaxImagePixels caps the decoded size of an upload. Pixels decode to
 	// ~4 bytes each, so 50 MP ≈ 200 MB — survivable once, but anything
 	// beyond it risks OOMing a small host. Checked against the header
@@ -30,6 +39,10 @@ const (
 	// while still cheap.
 	MaxImagePixels = 50_000_000
 )
+
+// ErrAnimatedGIFTooLarge is returned when an animated GIF exceeds
+// MaxAnimatedGIFBytes. UploadMedia renders it as a 400 rather than a 500.
+var ErrAnimatedGIFTooLarge = errors.New("animated GIF exceeds the size budget")
 
 // Image is the outcome of Optimize. Ext and ContentType may
 // differ from the upload's (an opaque photographic PNG becomes a JPEG).
@@ -56,6 +69,9 @@ func Optimize(raw []byte, ext string) (Image, error) {
 
 	if ext == "gif" {
 		if g, err := gif.DecodeAll(bytes.NewReader(raw)); err == nil && len(g.Image) > 1 {
+			if len(raw) > MaxAnimatedGIFBytes {
+				return Image{}, ErrAnimatedGIFTooLarge
+			}
 			return optimizeAnimatedGIF(raw, g), nil
 		}
 		// A single-frame GIF joins the still-image path below.

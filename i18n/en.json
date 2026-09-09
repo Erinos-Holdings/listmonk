@@ -406,6 +406,7 @@
     "maintenance.orphanHelp": "Orphans = subscribers with no lists",
     "maintenance.title": "Maintenance",
     "maintenance.unconfirmedSubs": "Unconfirmed subscriptions older than {name} days.",
+    "media.animatedGIFTooLarge": "This animated GIF is {size}. Animations must be under {limit} so they load quickly for recipients. Please re-export it with fewer frames or smaller dimensions.",
     "media.embed": "Embed inline",
     "media.embedHelp": "Embed the image in the email as an attachment.",
     "media.errorReadingFile": "Error reading file: {error}",

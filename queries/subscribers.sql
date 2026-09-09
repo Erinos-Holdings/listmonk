@@ -189,7 +189,7 @@ UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW()
 -- name: update-subscriber
 UPDATE subscribers SET
     email=(CASE WHEN $2 != '' THEN $2 ELSE email END),
-    name=(CASE WHEN $3 != '' THEN $3 ELSE name END),
+    name=$3,
     status=(CASE WHEN $4 != '' THEN $4::subscriber_status ELSE status END),
     attribs=(CASE WHEN $5 != '' THEN $5::JSONB ELSE attribs END),
     updated_at=NOW()
@@ -201,7 +201,7 @@ WHERE id = $1;
 WITH s AS (
     UPDATE subscribers SET
         email=(CASE WHEN $2 != '' THEN $2 ELSE email END),
-        name=(CASE WHEN $3 != '' THEN $3 ELSE name END),
+        name=$3,
         status=(CASE WHEN $4 != '' THEN $4::subscriber_status ELSE status END),
         attribs=(CASE WHEN $5 != '' THEN $5::JSONB ELSE attribs END),
         updated_at=NOW()

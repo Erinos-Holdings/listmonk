@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -66,6 +68,11 @@ func (a *App) UploadMedia(c echo.Context) error {
 	isImage := inArray(ext, imageExts)
 	if isImage {
 		opt, err := optimizer.Optimize(raw, ext)
+		if errors.Is(err, optimizer.ErrAnimatedGIFTooLarge) {
+			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("media.animatedGIFTooLarge",
+				"size", fmt.Sprintf("%d KB", len(raw)/1024),
+				"limit", fmt.Sprintf("%d KB", optimizer.MaxAnimatedGIFBytes/1024)))
+		}
 		if err != nil {
 			a.log.Printf("error optimizing image: %v", err)
 			return echo.NewHTTPError(http.StatusInternalServerError,

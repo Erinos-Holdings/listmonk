@@ -3,6 +3,7 @@ package optimizer
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -335,4 +336,64 @@ func TestStaticGIFJoinsRasterRule(t *testing.T) {
 	if _, _, err := image.Decode(bytes.NewReader(opt.Data)); err != nil {
 		t.Fatalf("output not decodable: %v", err)
 	}
+}
+
+// TestAnimatedGIFOverBudgetIsRejected pins the upload weight policy: an
+// animated GIF over MaxAnimatedGIFBytes is refused rather than downsized.
+func TestAnimatedGIFOverBudgetIsRejected(t *testing.T) {
+	// Noise defeats LZW, so this fixture is genuinely over the budget.
+	raw := makeNoisyAnimatedGIF(t, 900, 900, 3)
+	if len(raw) <= MaxAnimatedGIFBytes {
+		t.Fatalf("fixture must exceed the budget to exercise the guard; got %d bytes", len(raw))
+	}
+
+	if _, err := Optimize(raw, "gif"); !errors.Is(err, ErrAnimatedGIFTooLarge) {
+		t.Fatalf("expected ErrAnimatedGIFTooLarge, got %v", err)
+	}
+}
+
+// TestAnimatedGIFUnderBudgetIsAccepted is the other half: the guard must not
+// fire on an ordinary animation, which still passes through byte-identical.
+func TestAnimatedGIFUnderBudgetIsAccepted(t *testing.T) {
+	raw := makeAnimatedGIF(t, 800, 100, 4)
+	if len(raw) > MaxAnimatedGIFBytes {
+		t.Fatalf("fixture must be under the budget; got %d bytes", len(raw))
+	}
+
+	opt, err := Optimize(raw, "gif")
+	if err != nil {
+		t.Fatalf("under-budget animation must be accepted, got %v", err)
+	}
+	if !bytes.Equal(opt.Data, raw) {
+		t.Fatal("in-bounds animated GIF must pass through byte-identical")
+	}
+}
+
+// makeNoisyAnimatedGIF builds a multi-frame GIF of random pixels, which
+// compresses poorly and so reliably exceeds the size budget.
+func makeNoisyAnimatedGIF(t *testing.T, w, h, frames int) []byte {
+	t.Helper()
+
+	pal := make(color.Palette, 256)
+	for i := range pal {
+		pal[i] = color.RGBA{R: uint8(i), G: uint8(255 - i), B: uint8(i * 7 % 256), A: 255}
+	}
+
+	rnd := rand.New(rand.NewSource(1))
+	g := &gif.GIF{}
+	for f := 0; f < frames; f++ {
+		img := image.NewPaletted(image.Rect(0, 0, w, h), pal)
+		for i := range img.Pix {
+			img.Pix[i] = uint8(rnd.Intn(256))
+		}
+		g.Image = append(g.Image, img)
+		g.Delay = append(g.Delay, 10)
+		g.Disposal = append(g.Disposal, gif.DisposalNone)
+	}
+
+	var out bytes.Buffer
+	if err := gif.EncodeAll(&out, g); err != nil {
+		t.Fatalf("encoding fixture: %v", err)
+	}
+	return out.Bytes()
 }
