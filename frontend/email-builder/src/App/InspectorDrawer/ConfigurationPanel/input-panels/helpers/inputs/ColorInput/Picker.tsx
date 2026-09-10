@@ -6,6 +6,7 @@ import { Box, Stack, SxProps } from '@mui/material';
 import { useBrandPalettes } from '../../../../../../../documents/editor/EditorContext';
 
 import BrandSwatches from './BrandSwatches';
+import { normalizeHex } from './normalizeHex';
 import Swatch from './Swatch';
 
 export const DEFAULT_PRESET_COLORS = [
@@ -85,7 +86,7 @@ export default function Picker({ value, onChange }: Props) {
     <Stack spacing={1} sx={SX}>
       <BrandSwatches palettes={brandPalettes} value={value} onChange={onChange} />
       <Box>
-        <HexColorInput prefixed color={value} onChange={onChange} />
+        <HexColorInput prefixed color={value} onChange={(v) => onChange(normalizeHex(v))} />
       </Box>
       <HexColorPicker color={value} onChange={onChange} />
       <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={value} onChange={onChange} />

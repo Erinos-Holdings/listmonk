@@ -14,6 +14,7 @@ import { HexColorInput, HexColorPicker } from 'react-colorful';
 import { useBrandPalettes } from '../../../../../../documents/editor/EditorContext';
 
 import BrandSwatches from './ColorInput/BrandSwatches';
+import { normalizeHex } from './ColorInput/normalizeHex';
 import { DEFAULT_PRESET_COLORS } from './ColorInput/Picker';
 import Swatch from './ColorInput/Swatch';
 import { applyBulletList, applyColor, applyEnclose, applyLink, applyWrap, FormatResult } from './markdownFormat';
@@ -185,7 +186,7 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
         <Stack spacing={1} sx={PICKER_SX}>
           <BrandSwatches palettes={brandPalettes} value={pickColor} onChange={stageColor} />
           <Box>
-            <HexColorInput prefixed color={pickColor} onChange={stageColor} />
+            <HexColorInput prefixed color={pickColor} onChange={(v) => stageColor(normalizeHex(v))} />
           </Box>
           <HexColorPicker color={pickColor} onChange={stageColor} />
           <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={pickColor} onChange={stageColor} />
