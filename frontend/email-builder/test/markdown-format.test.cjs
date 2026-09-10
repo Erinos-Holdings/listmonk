@@ -120,6 +120,21 @@ r = fmt.applyBulletList('alpha\nbeta', 0, 6);
 check('selection ending past the trailing newline does not bullet the next line',
   r.text === '- alpha\nbeta', r.text);
 
+// applyBlockquote — same block-selection + per-line prefix contract as applyBulletList.
+r = fmt.applyBlockquote('first\nsecond\nthird', 8, 8);
+check('collapsed blockquote prefixes the caret line only', r.text === 'first\n> second\nthird', r.text);
+
+r = fmt.applyBlockquote('intro\nalpha\nbeta\noutro', 8, 14);
+check('blockquote expands the selection to whole lines', r.text === 'intro\n> alpha\n> beta\noutro', r.text);
+check('blockquote selects the transformed lines', selected(r) === '> alpha\n> beta', selected(r));
+
+r = fmt.applyBlockquote('> already\nfresh', 0, 15);
+check('blockquote skips lines that already have one (idempotent)', r.text === '> already\n> fresh', r.text);
+
+r = fmt.applyBlockquote('alpha\nbeta', 0, 6);
+check('selection ending past the trailing newline does not quote the next line',
+  r.text === '> alpha\nbeta', r.text);
+
 // applyLink — selection becomes the label, the URL placeholder is selected.
 r = fmt.applyLink('visit google now', 6, 12);
 check('link wraps the selection as the label', r.text === 'visit [google](https://) now', r.text);

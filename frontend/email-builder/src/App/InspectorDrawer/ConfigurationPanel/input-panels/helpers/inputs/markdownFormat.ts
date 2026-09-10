@@ -95,6 +95,27 @@ export function applyBulletList(text: string, start: number, end: number): Forma
   return { text: next, selectionStart: blockStart, selectionEnd: blockStart + bulleted.length };
 }
 
+// Expand the selection to whole lines and prefix each with "> ". Modeled on applyBulletList
+// (same block-selection + per-line prefix pattern, same idempotent toggle-safe behavior, same
+// trailing-newline handling for a selection ending just past it, e.g. triple-click/shift+down).
+export function applyBlockquote(text: string, start: number, end: number): FormatResult {
+  if (end > start && text[end - 1] === '\n') {
+    end -= 1;
+  }
+  const blockStart = text.lastIndexOf('\n', start - 1) + 1;
+  let blockEnd = text.indexOf('\n', end);
+  if (blockEnd === -1) {
+    blockEnd = text.length;
+  }
+  const quoted = text
+    .slice(blockStart, blockEnd)
+    .split('\n')
+    .map((line) => (line.trim().length === 0 || line.startsWith('> ') ? line : `> ${line}`))
+    .join('\n');
+  const next = text.slice(0, blockStart) + quoted + text.slice(blockEnd);
+  return { text: next, selectionStart: blockStart, selectionEnd: blockStart + quoted.length };
+}
+
 const COLOR_LABEL_PLACEHOLDER = 'colored text';
 
 export function applyColor(text: string, start: number, end: number, color: string): FormatResult {

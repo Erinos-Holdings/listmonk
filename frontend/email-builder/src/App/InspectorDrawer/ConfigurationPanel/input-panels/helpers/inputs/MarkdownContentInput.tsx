@@ -5,6 +5,7 @@ import {
   FormatColorTextOutlined,
   FormatItalicOutlined,
   FormatListBulletedOutlined,
+  FormatQuoteOutlined,
   FormatUnderlinedOutlined,
   InsertLinkOutlined,
 } from '@mui/icons-material';
@@ -17,7 +18,9 @@ import BrandSwatches from './ColorInput/BrandSwatches';
 import { normalizeHex } from './ColorInput/normalizeHex';
 import { DEFAULT_PRESET_COLORS } from './ColorInput/Picker';
 import Swatch from './ColorInput/Swatch';
-import { applyBulletList, applyColor, applyEnclose, applyLink, applyWrap, FormatResult } from './markdownFormat';
+import {
+  applyBlockquote, applyBulletList, applyColor, applyEnclose, applyLink, applyWrap, FormatResult,
+} from './markdownFormat';
 
 const DEFAULT_PICK_COLOR = '#E11D48';
 
@@ -160,6 +163,10 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
         {toolbarButton('Bullet list', <FormatListBulletedOutlined fontSize="small" />, () => {
           const { start, end } = currentSelection();
           applyResult(applyBulletList(value, start, end));
+        })}
+        {toolbarButton('Blockquote', <FormatQuoteOutlined fontSize="small" />, () => {
+          const { start, end } = currentSelection();
+          applyResult(applyBlockquote(value, start, end));
         })}
       </Stack>
       <TextField
