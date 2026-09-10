@@ -397,13 +397,13 @@ export default Vue.extend({
 
     onPageChange(p) {
       this.queryParams.page = p;
-      this.getCampaigns();
+      this.refreshCampaigns();
     },
 
     onSort(field, direction) {
       this.queryParams.orderBy = field;
       this.queryParams.order = direction;
-      this.getCampaigns();
+      this.refreshCampaigns();
     },
 
     // Campaign actions.
@@ -422,7 +422,7 @@ export default Vue.extend({
       this.queryParams.page = 1;
       this.bulk.checked = [];
       this.bulk.all = false;
-      this.getCampaigns();
+      this.refreshCampaigns();
     },
 
     // Fork (list filter) -- same selection hygiene as the scope pill: a stale selection
@@ -431,7 +431,17 @@ export default Vue.extend({
       this.queryParams.page = 1;
       this.bulk.checked = [];
       this.bulk.all = false;
+      this.refreshCampaigns();
+    },
+
+    // Anything that changes WHICH rows are displayed, or that the user invokes to get
+    // current data, must go through here. getCampaigns() alone leaves the poll in
+    // whatever state the previous view left it: stopped (a running campaign then sits
+    // frozen) or running against rows that are gone. Keeping the pair in one method is
+    // what stops the next handler from forgetting half of it.
+    refreshCampaigns() {
       this.getCampaigns();
+      this.pollStats();
     },
 
     getCampaigns() {
@@ -467,23 +477,60 @@ export default Vue.extend({
       // Clear any running status polls.
       clearInterval(this.pollID);
 
+      // Fork (evergreen) -- Automations are never polled. An evergreen campaign runs
+      // indefinitely by design, so polling it is an unbounded 1/sec request stream for
+      // a counter nobody watches live. The Automations tab shows the state as of the
+      // last fetch: switching to the tab, refreshing, or acting on a campaign refetches.
+      if (this.queryParams.evergreen) {
+        return;
+      }
+
       // Poll for the status as long as the import is running.
       this.pollID = setInterval(() => {
         this.$api.getCampaignStats().then((data) => {
-          // Stop polling. No running campaigns.
-          if (data.length === 0) {
-            clearInterval(this.pollID);
+          // A row rendered as "running" that the server no longer reports as running
+          // is stale -- the campaign finished, paused or was cancelled since the last
+          // list fetch -- so refetch to pick up its final status and counts.
+          //
+          // Keyed on the DISPLAYED rows rather than on the response becoming empty,
+          // for two reasons. An evergreen campaign runs indefinitely, so with one
+          // active the response is never empty and the old empty-response branch
+          // never fired, leaving every finished broadcast stuck on "running" until a
+          // manual reload. And a short campaign can finish between two polls without
+          // ever appearing in one, so keying on ids leaving the response would miss
+          // it. Both sides read campaigns.status from the DB
+          // (GetRunningCampaignStats -> get-campaign-status), so this is never a race
+          // against a still-registering campaign: it is true only when the list is
+          // genuinely behind, and it clears after one refetch. Ids are compared as
+          // strings because the response carries numbers.
+          const runningIDs = new Set(data.map((c) => String(c.id)));
+          const stale = (this.campaigns.results || []).some(
+            (c) => c.status === 'running' && !runningIDs.has(String(c.id)),
+          );
 
-            // There were running campaigns and stats earlier. Clear them
-            // and refetch the campaigns list with up-to-date fields.
-            if (Object.keys(this.campaignStatsData).length > 0) {
-              this.getCampaigns();
-              this.campaignStatsData = {};
-            }
-          } else {
-            // Turn the list of campaigns [{id: 1, ...}, {id: 2, ...}] into
-            // a map indexed by the id: {1: {}, 2: {}}.
-            this.campaignStatsData = data.reduce((obj, cur) => ({ ...obj, [cur.id]: cur }), {});
+          // Turn the list of campaigns [{id: 1, ...}, {id: 2, ...}] into
+          // a map indexed by the id: {1: {}, 2: {}}. Empty when nothing is running.
+          this.campaignStatsData = data.reduce((obj, cur) => ({ ...obj, [cur.id]: cur }), {});
+
+          // Guarded on the in-flight flag: `stale` is computed from campaigns.results,
+          // which only updates when the fetch resolves, so an unguarded call would
+          // stack another refetch on every poll until it did.
+          // getCampaigns(), never refreshCampaigns(): this runs INSIDE the poll, and
+          // the wrapper would restart the interval on every tick.
+          if (stale && !this.loading.campaigns) {
+            this.getCampaigns();
+          }
+
+          // Stop polling once nothing ON SCREEN is running. Checking the displayed rows
+          // rather than `data.length === 0` is what makes this terminate at all: the
+          // response carries EVERY running campaign, including evergreens that never
+          // finish, so an empty-response condition is never met while an automation is
+          // live. The Broadcasts tab filters evergreens out server-side, so once the
+          // refetch above lands the finished status, no displayed row is running and the
+          // poll ends -- on an idle tab, after a single request.
+          const displayedRunning = (this.campaigns.results || []).some((c) => c.status === 'running');
+          if (!displayedRunning) {
+            clearInterval(this.pollID);
           }
         }, () => {
           clearInterval(this.pollID);
@@ -495,8 +542,7 @@ export default Vue.extend({
       this.$api.changeCampaignStatus(c.id, status).then((d) => {
         this.$utils.toast(this.$t('campaigns.statusChanged', { name: c.name, status }));
         this.$utils.showWarnings(d.warnings);
-        this.getCampaigns();
-        this.pollStats();
+        this.refreshCampaigns();
       });
     },
 
@@ -555,7 +601,7 @@ export default Vue.extend({
 
     deleteCampaign(c) {
       this.$api.deleteCampaign(c.id).then(() => {
-        this.getCampaigns();
+        this.refreshCampaigns();
         this.$utils.toast(this.$t('globals.messages.deleted', { name: c.name }));
       });
     },
@@ -590,7 +636,7 @@ export default Vue.extend({
 
         this.$api.deleteCampaigns(params)
           .then(() => {
-            this.getCampaigns();
+            this.refreshCampaigns();
             this.$utils.toast(this.$tc(
               'globals.messages.deletedCount',
               this.numSelectedCampaigns,
@@ -626,16 +672,15 @@ export default Vue.extend({
   },
 
   created() {
-    this.$root.$on('page.refresh', this.getCampaigns);
+    this.$root.$on('page.refresh', this.refreshCampaigns);
   },
 
   mounted() {
-    this.getCampaigns();
-    this.pollStats();
+    this.refreshCampaigns();
   },
 
   destroyed() {
-    this.$root.$off('page.refresh', this.getCampaigns);
+    this.$root.$off('page.refresh', this.refreshCampaigns);
     clearInterval(this.pollID);
   },
 });
