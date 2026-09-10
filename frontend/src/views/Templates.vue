@@ -107,7 +107,7 @@
     <!-- Add / edit form modal -->
     <b-modal scroll="keep" :aria-modal="true" :active.sync="isFormVisible" :width="1440" :can-cancel="false"
       class="template-modal">
-      <template-form :data="curItem" :is-editing="isEditing" @finished="formFinished" />
+      <template-form :data="curItem" :is-editing="isEditing" @finished="formFinished" @created="onTemplateCreated" />
     </b-modal>
 
     <campaign-preview v-if="previewItem" type="template" :id="previewItem.id" :template-type="previewItem.type"
@@ -162,6 +162,15 @@ export default Vue.extend({
 
     formFinished() {
       this.$api.getTemplates();
+    },
+
+    // D2: the child no longer closes the modal on create, and the create-vs-update branch
+    // is the isEditing prop (owned here), not this.data.id (data is a prop; writing to it in
+    // the child would mutate curItem without flipping isEditing, and a second Save would
+    // create a duplicate). getTemplates() is already triggered by the sibling 'finished' emit.
+    onTemplateCreated(d) {
+      this.curItem = d;
+      this.isEditing = true;
     },
 
     previewTemplate(c) {

@@ -90,7 +90,7 @@
             {{ $t('globals.buttons.close') }}
           </b-button>
           <b-button v-if="$can('templates:manage')" native-type="submit" type="is-primary" :loading="loading.templates">
-            {{ $t('globals.buttons.save') }}
+            {{ $t('globals.buttons.saveChanges') }}
           </b-button>
         </footer>
       </div>
@@ -198,7 +198,11 @@ export default Vue.extend({
 
       this.$api.createTemplate(data).then((d) => {
         this.$emit('finished');
-        this.$parent.close();
+        // No $parent.close() here (D2): a save stays open, matching Campaigns' "Save
+        // changes" behavior. The create-vs-update branch is the isEditing PROP, owned by
+        // Templates.vue, not this.data.id (data is itself a prop) — emit the created
+        // record so the parent can flip curItem/isEditing.
+        this.$emit('created', d);
         this.$utils.toast(this.$t('globals.messages.created', { name: d.name }));
       });
     },
@@ -215,7 +219,6 @@ export default Vue.extend({
 
       this.$api.updateTemplate(data).then((d) => {
         this.$emit('finished');
-        this.$parent.close();
         this.$utils.toast(`'${d.name}' updated`);
       });
     },
