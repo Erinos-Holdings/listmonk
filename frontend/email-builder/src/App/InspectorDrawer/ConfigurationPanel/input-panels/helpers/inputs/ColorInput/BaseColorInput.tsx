@@ -85,6 +85,7 @@ export default function ColorInput({ label, defaultValue, onChange, nullable }: 
             setValue(v);
             onChange(v);
           }}
+          onEnter={() => setAnchorEl(null)}
         />
       </Menu>
     </Stack>

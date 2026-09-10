@@ -17,6 +17,11 @@ export type TBrandPalette = {
 
 type TValue = {
   document: TEditorConfiguration;
+  // Bumped by resetDocument(). The host mounts the builder BEFORE it loads the stored document
+  // (VisualEditor.vue: render, then resetDocument), and the sidebar inputs seed their local
+  // state from props once at mount — so the Styles panel is keyed on this to remount with the
+  // loaded values instead of the starter document's.
+  documentGeneration: number;
 
   selectedBlockId: string | null;
   selectedSidebarTab: 'block-configuration' | 'styles';
@@ -31,6 +36,7 @@ type TValue = {
 
 const editorStateStore = create(subscribeWithSelector<TValue>(() => ({
   document: getConfiguration(window.location.hash),
+  documentGeneration: 0,
   selectedBlockId: null,
   selectedSidebarTab: 'styles',
   selectedMainTab: 'editor',
@@ -44,6 +50,10 @@ const editorStateStore = create(subscribeWithSelector<TValue>(() => ({
 
 export function useDocument() {
   return editorStateStore((s) => s.document);
+}
+
+export function useDocumentGeneration() {
+  return editorStateStore((s) => s.documentGeneration);
 }
 
 export function subscribeDocument (listener: (selectedState: TEditorConfiguration, previousSelectedState: TEditorConfiguration) => void) {
@@ -111,6 +121,7 @@ export function setSidebarTab(selectedSidebarTab: TValue['selectedSidebarTab']) 
 export function resetDocument(document: TValue['document']) {
   return editorStateStore.setState({
     document,
+    documentGeneration: editorStateStore.getState().documentGeneration + 1,
     selectedSidebarTab: 'styles',
     selectedBlockId: null,
   });

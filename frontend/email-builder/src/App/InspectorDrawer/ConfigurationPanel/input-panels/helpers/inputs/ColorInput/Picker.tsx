@@ -76,17 +76,29 @@ const SX: SxProps = {
 type Props = {
   value: string;
   onChange: (v: string) => void;
+  /** Enter in the hex field — the host closes the popover, the same as clicking off. */
+  onEnter?: () => void;
 };
 // Section order is a decision (brand-centric picker): brand rows first, then the hex input,
 // then the gradient refiners, with the generic preset grid demoted to the bottom. Keep the
 // markdown toolbar's color popover (MarkdownContentInput) in the same order.
-export default function Picker({ value, onChange }: Props) {
+export default function Picker({ value, onChange, onEnter }: Props) {
   const brandPalettes = useBrandPalettes();
   return (
     <Stack spacing={1} sx={SX}>
       <BrandSwatches palettes={brandPalettes} value={value} onChange={onChange} />
       <Box>
-        <HexColorInput prefixed color={value} onChange={(v) => onChange(normalizeHex(v))} />
+        <HexColorInput
+          prefixed
+          color={value}
+          onChange={(v) => onChange(normalizeHex(v))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onEnter?.();
+            }
+          }}
+        />
       </Box>
       <HexColorPicker color={value} onChange={onChange} />
       <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={value} onChange={onChange} />
