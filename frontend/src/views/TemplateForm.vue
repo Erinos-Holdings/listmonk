@@ -156,11 +156,16 @@ export default Vue.extend({
       // DOCUMENT COLOR PROVENANCE, exactly as in Campaign.vue: the rebrand sweep's mapping
       // source — it follows every found:true pick while the template has no content, then is
       // seeded by the first found:true pick, moved only by an Apply that rewrote
-      // colors, pinned on Keep. A fresh template open has none (nothing is persisted), so the
-      // rebrand gesture is two-step by design: pick the template's ORIGINAL brand first
-      // (seeds provenance, and the swatches visibly matching the design confirms it), then
-      // the target brand — which prompts. A pageless or None pick in between neither clears
-      // provenance nor suppresses the later prompt.
+      // colors, pinned on Keep. A fresh (never-saved) template open has none (nothing is
+      // persisted yet), so the rebrand gesture is still two-step there: pick the template's
+      // ORIGINAL brand first (seeds provenance, and the swatches visibly matching the design
+      // confirms it), then the target brand — which prompts. A pageless or None pick in
+      // between neither clears provenance nor suppresses the later prompt.
+      // D4 (templates.brand persisted): reopening a SAVED template seeds provenance straight
+      // from the stored brand instead (maybeOfferBrandSweep's bodySource-present /
+      // heldBrandPalette-null silent-seed branch), so the rebrand gesture becomes one-step for
+      // it — pick the new brand, get the prompt. Templates saved before this change carry ''
+      // and keep the two-step gesture until their first save with a brand.
       heldBrandPalette: null,
     };
   },
@@ -194,6 +199,7 @@ export default Vue.extend({
         subject: this.form.subject,
         body: this.form.body,
         body_source: this.form.bodySource,
+        brand: this.brandSlug,
       };
 
       this.$api.createTemplate(data).then((d) => {
@@ -215,6 +221,7 @@ export default Vue.extend({
         subject: this.form.subject,
         body: this.form.body,
         body_source: this.form.bodySource,
+        brand: this.brandSlug,
       };
 
       this.$api.updateTemplate(data).then((d) => {
@@ -345,6 +352,9 @@ export default Vue.extend({
 
   mounted() {
     this.form = { ...this.$props.data };
+    // D4: restore the persisted brand (the existing brandSlug watcher runs onBrandPick ->
+    // theme fetch -> swatch row, with no new code path).
+    this.brandSlug = this.$props.data.brand || '';
 
     this.$nextTick(() => {
       this.$refs.focus.focus();

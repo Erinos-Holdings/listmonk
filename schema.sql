@@ -108,6 +108,10 @@ CREATE TABLE templates (
     body            TEXT NOT NULL,
     body_source     TEXT NULL,
     is_default      BOOLEAN NOT NULL DEFAULT false,
+    -- Fork (editor polish, EDITOR-POLISH-SPEC D4): the Templates form's "Brand swatches"
+    -- dropdown selection. Editor-only metadata (swatches + rebrand-sweep provenance) — does
+    -- not feed campaign brand derivation. '' means no brand.
+    brand           TEXT NOT NULL DEFAULT '',
 
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()

@@ -59,6 +59,8 @@ var migList = []migFunc{
 	{"v6.2.6", migrations.V6_2_6},
 	// Fork migration (erinos): campaign_send_failures (SEND-RETRY-SPEC D5) — see internal/migrations/v6.2.7.go.
 	{"v6.2.7", migrations.V6_2_7},
+	// Fork migration (erinos): templates.brand (EDITOR-POLISH-SPEC D4) — see internal/migrations/v6.2.8.go.
+	{"v6.2.8", migrations.V6_2_8},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

@@ -110,7 +110,7 @@ func (a *App) CreateTemplate(c echo.Context) error {
 	if err := c.Bind(&o); err != nil {
 		return err
 	}
-	if err := a.validateTemplate(o); err != nil {
+	if err := a.validateTemplate(&o); err != nil {
 		return err
 	}
 
@@ -130,7 +130,7 @@ func (a *App) CreateTemplate(c echo.Context) error {
 	}
 
 	// Create the template the in the DB.
-	out, err := a.core.CreateTemplate(o.Name, o.Type, o.Subject, []byte(o.Body), o.BodySource)
+	out, err := a.core.CreateTemplate(o.Name, o.Type, o.Subject, []byte(o.Body), o.BodySource, o.Brand)
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func (a *App) UpdateTemplate(c echo.Context) error {
 	if err := c.Bind(&o); err != nil {
 		return err
 	}
-	if err := a.validateTemplate(o); err != nil {
+	if err := a.validateTemplate(&o); err != nil {
 		return err
 	}
 
@@ -171,7 +171,7 @@ func (a *App) UpdateTemplate(c echo.Context) error {
 
 	// Update the template in the DB.
 	id := getID(c)
-	out, err := a.core.UpdateTemplate(id, o.Name, o.Subject, []byte(o.Body), o.BodySource)
+	out, err := a.core.UpdateTemplate(id, o.Name, o.Subject, []byte(o.Body), o.BodySource, o.Brand)
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func (a *App) DeleteTemplate(c echo.Context) error {
 }
 
 // compileTemplate validates template fields.
-func (a *App) validateTemplate(o models.Template) error {
+func (a *App) validateTemplate(o *models.Template) error {
 	if !strHasLen(o.Name, 1, stdInputMaxLen) {
 		return errors.New(a.i18n.T("campaigns.fieldInvalidName"))
 	}
@@ -224,6 +224,19 @@ func (a *App) validateTemplate(o models.Template) error {
 	if o.Type == models.TemplateTypeTx && strings.TrimSpace(o.Subject) == "" {
 		return echo.NewHTTPError(http.StatusBadRequest,
 			a.i18n.Ts("globals.messages.missingFields", "name", "subject"))
+	}
+
+	// Fork (editor polish, EDITOR-POLISH-SPEC D4): '' (no brand) or a slug matching the same
+	// regex list tags and the theme proxy use (cmd/campaigns_brand.go:71 -> models.ReBrandSlug),
+	// lowercase-folded — the frontend roster is already folded, so this only guards direct API
+	// callers.
+	if o.Brand != "" {
+		brand := strings.ToLower(o.Brand)
+		if !models.ReBrandSlug.MatchString(brand) {
+			return echo.NewHTTPError(http.StatusBadRequest,
+				a.i18n.Ts("globals.messages.invalidFields", "name", "brand"))
+		}
+		o.Brand = brand
 	}
 
 	return nil

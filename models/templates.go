@@ -28,6 +28,9 @@ type Template struct {
 	Body       string      `db:"body" json:"body,omitempty"`
 	BodySource null.String `db:"body_source" json:"body_source,omitempty"`
 	IsDefault  bool        `db:"is_default" json:"is_default"`
+	// Brand is the Templates form's "Brand swatches" dropdown selection (fork, EDITOR-POLISH-SPEC
+	// D4) — editor-only metadata, does not feed campaign brand derivation. '' means no brand.
+	Brand string `db:"brand" json:"brand"`
 
 	// Only relevant to tx (transactional) templates.
 	SubjectTpl  *txttpl.Template   `json:"-"`

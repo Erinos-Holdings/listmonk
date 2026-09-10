@@ -37,9 +37,9 @@ func (c *Core) GetTemplate(id int, noBody bool) (models.Template, error) {
 }
 
 // CreateTemplate creates a new template.
-func (c *Core) CreateTemplate(name, typ, subject string, body []byte, bodySource null.String) (models.Template, error) {
+func (c *Core) CreateTemplate(name, typ, subject string, body []byte, bodySource null.String, brand string) (models.Template, error) {
 	var newID int
-	if err := c.q.CreateTemplate.Get(&newID, name, typ, subject, body, bodySource); err != nil {
+	if err := c.q.CreateTemplate.Get(&newID, name, typ, subject, body, bodySource, brand); err != nil {
 		return models.Template{}, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorCreating", "name", "{globals.terms.template}", "error", pqErrMsg(err)))
 	}
@@ -48,8 +48,8 @@ func (c *Core) CreateTemplate(name, typ, subject string, body []byte, bodySource
 }
 
 // UpdateTemplate updates a given template.
-func (c *Core) UpdateTemplate(id int, name, subject string, body []byte, bodySource null.String) (models.Template, error) {
-	res, err := c.q.UpdateTemplate.Exec(id, name, subject, body, bodySource)
+func (c *Core) UpdateTemplate(id int, name, subject string, body []byte, bodySource null.String, brand string) (models.Template, error) {
+	res, err := c.q.UpdateTemplate.Exec(id, name, subject, body, bodySource, brand)
 	if err != nil {
 		return models.Template{}, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.template}", "error", pqErrMsg(err)))

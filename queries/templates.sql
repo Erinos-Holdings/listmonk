@@ -1,22 +1,29 @@
 -- templates
 -- name: get-templates
 -- Only if the second param ($2 - noBody) is true, body and body_source is returned.
+-- brand is selected unconditionally (metadata, not body) — Templates.vue hands the LIST row
+-- straight to the edit form as curItem, so the noBody case must still return it.
 SELECT id, name, type, subject,
     (CASE WHEN $2 = false THEN body ELSE '' END) as body,
     (CASE WHEN $2 = false THEN body_source ELSE NULL END) as body_source,
-    is_default, created_at, updated_at
+    is_default, brand, created_at, updated_at
     FROM templates WHERE ($1 = 0 OR id = $1) AND ($3 = '' OR type = $3::template_type)
     ORDER BY created_at;
 
 -- name: create-template
-INSERT INTO templates (name, type, subject, body, body_source) VALUES($1, $2, $3, $4, $5) RETURNING id;
+INSERT INTO templates (name, type, subject, body, body_source, brand) VALUES($1, $2, $3, $4, $5, $6) RETURNING id;
 
 -- name: update-template
+-- brand=$6 is written UNCONDITIONALLY, not behind a "CASE WHEN $6 != ''" guard like the other
+-- fields here — clearing the dropdown back to None must persist as '' (the CASE-guard pattern
+-- is the silent-no-op hazard recorded for subscriber names in CONTACT-READINESS-SPEC D16: an
+-- empty value would return 200 and keep the old one).
 UPDATE templates SET
     name=(CASE WHEN $2 != '' THEN $2 ELSE name END),
     subject=(CASE WHEN $3 != '' THEN $3 ELSE name END),
     body=(CASE WHEN $4 != '' THEN $4 ELSE body END),
     body_source=(CASE WHEN $5 != '' THEN $5 ELSE body_source END),
+    brand=$6,
     updated_at=NOW()
 WHERE id = $1;
 
