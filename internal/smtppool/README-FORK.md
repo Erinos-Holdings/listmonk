@@ -25,6 +25,10 @@ Fork deltas against v2.1.2 (all in `pool.go`, tests in `retry_test.go`):
   wrapped in `ErrMaybeDelivered` and never retried (D10 — duplicate safety).
 - `smtptest/` — an in-process fake SMTP listener used by the retry tests and by
   listmonk's manager tests.
+- `smtptest/sesim/` — a standalone SES-like listener for release rehearsals (SEND-RETRY-SPEC
+  G2/G3): `-idle D` closes idle sessions with the SES 451, `-first451 N` rejects the first MAIL
+  on the first N connections, `GET /stats` counts connections, MAILs, accepted and per-recipient
+  deliveries. `go run ./smtptest/sesim -idle 8s` from this directory.
 - `pool_test.go`'s MailHog-backed tests skip when MailHog is absent instead of failing.
 - Dial address built with `net.JoinHostPort` (vet: IPv6).
 
