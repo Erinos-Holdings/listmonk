@@ -132,7 +132,9 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
       <Stack
         direction="row"
         spacing={0.5}
-        sx={{ bgcolor: 'grey.100', borderRadius: 1, px: 0.5, py: 0.25, mb: 1 }}
+        sx={{
+          bgcolor: 'grey.100', borderRadius: 1, px: 0.5, py: 0.25, mb: 1, position: 'sticky', top: 0, zIndex: 1,
+        }}
       >
         {toolbarButton('Bold', <FormatBoldOutlined fontSize="small" />, () => {
           const { start, end } = currentSelection();
