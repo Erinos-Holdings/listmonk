@@ -54,6 +54,11 @@ type Store interface {
 	NextEvergreenSubscribers(campID, limit int) ([]models.Subscriber, error)
 	MarkEvergreenSent(campID, subID int) error
 	ReleaseEvergreenClaim(campID, subID int) error
+	// Fork (send retry, SEND-RETRY-SPEC D5) -- the recipient-level failure record, and
+	// the campaign's total for the completion shortfall message (a resumed campaign's
+	// pipe starts its in-memory count at zero).
+	RecordSendFailure(f models.SendFailure) error
+	CountSendFailures(campID int) (int, error)
 	GetCampaign(campID int) (*models.Campaign, error)
 	GetAttachment(mediaID int) (models.Attachment, error)
 	GetInlineAttachmentByFilename(filename string) (models.Attachment, string, error)
@@ -550,67 +555,7 @@ func (m *Manager) worker() {
 			}
 			numMsg++
 
-			// Outgoing message.
-			out := models.Message{
-				From:        msg.from,
-				To:          []string{msg.to},
-				Subject:     msg.subject,
-				ContentType: msg.Campaign.ContentType,
-				Body:        msg.body,
-				AltBody:     msg.altBody,
-				Subscriber:  msg.Subscriber,
-				Campaign:    msg.Campaign,
-				Attachments: msg.Campaign.Attachments,
-			}
-
-			h := textproto.MIMEHeader{}
-			h.Set(models.EmailHeaderCampaignUUID, msg.Campaign.UUID)
-			h.Set(models.EmailHeaderSubscriberUUID, msg.Subscriber.UUID)
-
-			// Attach List-Unsubscribe headers?
-			if m.cfg.UnsubHeader {
-				h.Set("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
-				h.Set("List-Unsubscribe", `<`+msg.unsubURL+`>`)
-			}
-
-			// Attach any custom headers.
-			for _, set := range msg.headers {
-				for hdr, val := range set {
-					h.Add(hdr, val)
-				}
-			}
-
-			// Set the headers.
-			out.Headers = h
-
-			// Push the message to the messenger.
-			err := m.messengers[msg.Campaign.Messenger].Push(out)
-			if err != nil {
-				m.log.Printf("error sending message in campaign %s: subscriber %d: %v", msg.Campaign.Name, msg.Subscriber.ID, err)
-			}
-
-			// Fork (evergreen) -- the attempt is what "sent" means; success resets the
-			// campaign's error streak.
-			m.evergreenAttempted(msg, err)
-
-			// Increment the send rate or the error counter if there was an error.
-			if msg.pipe != nil {
-				// Mark the message as done.
-				msg.pipe.wg.Done()
-
-				if err != nil {
-					// Call the error callback, which keeps track of the error count
-					// and stops the campaign if the error count exceeds the threshold.
-					msg.pipe.OnError()
-				} else {
-					id := uint64(msg.Subscriber.ID)
-					if id > msg.pipe.lastID.Load() {
-						msg.pipe.lastID.Store(uint64(msg.Subscriber.ID))
-					}
-					msg.pipe.rate.Incr(1)
-					msg.pipe.sent.Add(1)
-				}
-			}
+			m.sendCampaignMessage(msg)
 
 		// Arbitrary message.
 		case msg, ok := <-m.msgQ:
@@ -622,6 +567,90 @@ func (m *Manager) worker() {
 			if err := m.messengers[msg.Messenger].Push(msg); err != nil {
 				m.log.Printf("error sending message '%s': %v", msg.Subject, err)
 			}
+		}
+	}
+}
+
+// sendCampaignMessage is the per-message send-and-account step the worker runs for a
+// queued campaign message (fork, SEND-RETRY-SPEC §3.2 -- extracted so it can be driven
+// from a test; the worker's stopped check and per-second rate gate stay in worker()).
+//
+// Retries live INSIDE the messenger: the SMTP pool runs max_msg_retries attempts with
+// msg_retry_delay between them, and only the final outcome reaches this function. So a
+// message counts toward `sent` exactly once, on eventual success (D8), and toward
+// MaxSendErrors exactly once, on exhaustion (D4) -- when it is also recorded in
+// campaign_send_failures (D5) so the recipient is recoverable.
+func (m *Manager) sendCampaignMessage(msg CampaignMessage) {
+	// Outgoing message.
+	out := models.Message{
+		From:        msg.from,
+		To:          []string{msg.to},
+		Subject:     msg.subject,
+		ContentType: msg.Campaign.ContentType,
+		Body:        msg.body,
+		AltBody:     msg.altBody,
+		Subscriber:  msg.Subscriber,
+		Campaign:    msg.Campaign,
+		Attachments: msg.Campaign.Attachments,
+	}
+
+	h := textproto.MIMEHeader{}
+	h.Set(models.EmailHeaderCampaignUUID, msg.Campaign.UUID)
+	h.Set(models.EmailHeaderSubscriberUUID, msg.Subscriber.UUID)
+
+	// Attach List-Unsubscribe headers?
+	if m.cfg.UnsubHeader {
+		h.Set("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+		h.Set("List-Unsubscribe", `<`+msg.unsubURL+`>`)
+	}
+
+	// Attach any custom headers.
+	for _, set := range msg.headers {
+		for hdr, val := range set {
+			h.Add(hdr, val)
+		}
+	}
+
+	// Set the headers.
+	out.Headers = h
+
+	// Push the message to the messenger.
+	err := m.messengers[msg.Campaign.Messenger].Push(out)
+	if err != nil {
+		m.log.Printf("error sending message in campaign %s: subscriber %d: %v", msg.Campaign.Name, msg.Subscriber.ID, err)
+	}
+
+	// Fork (evergreen) -- a successful attempt marks the claim sent and resets the
+	// campaign's error streak; an exhausted one leaves the claim unmarked and is
+	// recorded below (SEND-RETRY-SPEC I8).
+	m.evergreenAttempted(msg, err)
+
+	// Increment the send rate or the error counter if there was an error.
+	if msg.pipe != nil {
+		// Mark the message as done.
+		msg.pipe.wg.Done()
+
+		if err != nil {
+			// Fork (send retry) -- the message exhausted its attempts: record the
+			// recipient (D5), then count it once toward the error threshold (D4). An
+			// error raised after the message data was handed over is recorded under its
+			// own stage so nobody re-sends it blind (D10).
+			stage := models.SendFailureStageSend
+			if errors.Is(err, models.ErrMessageMaybeDelivered) {
+				stage = models.SendFailureStageSendUnconfirmed
+			}
+			msg.pipe.recordFailure(msg.Subscriber, stage, err)
+
+			// Call the error callback, which keeps track of the error count
+			// and stops the campaign if the error count exceeds the threshold.
+			msg.pipe.OnError()
+		} else {
+			id := uint64(msg.Subscriber.ID)
+			if id > msg.pipe.lastID.Load() {
+				msg.pipe.lastID.Store(uint64(msg.Subscriber.ID))
+			}
+			msg.pipe.rate.Incr(1)
+			msg.pipe.sent.Add(1)
 		}
 	}
 }

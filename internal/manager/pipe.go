@@ -17,6 +17,7 @@ type pipe struct {
 	sent       atomic.Int64
 	lastID     atomic.Uint64
 	errors     atomic.Uint64
+	failed     atomic.Int64 // Fork (send retry) -- recipients recorded in campaign_send_failures
 	stopped    atomic.Bool
 	withErrors atomic.Bool
 
@@ -115,6 +116,10 @@ func (p *pipe) NextSubscribers() (bool, error) {
 		msg, err := p.newMessage(s)
 		if err != nil {
 			p.m.log.Printf("error rendering message (%s) (%s): %v", p.camp.Name, s.Email, err)
+			// Fork (send retry, SEND-RETRY-SPEC D5) -- a recipient lost to a render
+			// failure is recorded like one lost to an exhausted send. Not counted toward
+			// MaxSendErrors (D4 counts exhausted sends); the shortfall alert covers it.
+			p.recordFailure(s, models.SendFailureStageRender, err)
 			continue
 		}
 
@@ -174,6 +179,48 @@ func (p *pipe) OnError() {
 
 	p.Stop(true)
 	p.m.log.Printf("error count exceeded %d. pausing campaign %s", p.m.cfg.MaxSendErrors, p.camp.Name)
+}
+
+// recordFailure (fork, SEND-RETRY-SPEC D5) writes the recipient-level failure record and
+// counts it for the completion shortfall message. A store error is logged, never fatal --
+// the message's own error line has already been logged, and losing the record must not
+// lose the campaign.
+func (p *pipe) recordFailure(s models.Subscriber, stage string, cause error) {
+	p.failed.Add(1)
+	f := models.SendFailure{
+		CampaignID:   p.camp.ID,
+		SubscriberID: s.ID,
+		Email:        s.Email,
+		Stage:        stage,
+		Error:        cause.Error(),
+	}
+	if err := p.m.store.RecordSendFailure(f); err != nil {
+		p.m.log.Printf("error recording send failure (%s, subscriber %d): %v", p.camp.Name, s.ID, err)
+	}
+}
+
+// shortfall (fork, SEND-RETRY-SPEC D6) describes a finished campaign that did not reach
+// every intended recipient. Empty when there is nothing to say. `to_send` is recomputed
+// from live list membership on every scan tick, so a mid-send list edit can raise it
+// legitimately -- which is why the text points at the recorded failures: none recorded
+// means a list change, not a loss.
+func (p *pipe) shortfall(c *models.Campaign) string {
+	if c.Evergreen || c.Sent >= c.ToSend {
+		return ""
+	}
+	// The campaign's total, not this pipe's: a resumed campaign's pipe started at zero.
+	failed := int64(-1)
+	if n, err := p.m.store.CountSendFailures(c.ID); err == nil {
+		failed = int64(n)
+	} else {
+		p.m.log.Printf("error counting send failures (%s): %v", p.camp.Name, err)
+		failed = p.failed.Load()
+	}
+	msg := fmt.Sprintf("sent %d of %d recipients; %d recorded in campaign_send_failures", c.Sent, c.ToSend, failed)
+	if failed == 0 {
+		msg += " (none recorded: the target lists changed while sending, or the count predates this pipe)"
+	}
+	return msg
 }
 
 // Stop "marks" a campaign as stopped. It doesn't actually stop the processing
@@ -264,6 +311,7 @@ func (p *pipe) cleanup() {
 	}
 
 	// If a running campaign has exhausted subscribers, it's finished.
+	reason := ""
 	if c.Status == models.CampaignStatusRunning || c.Status == models.CampaignStatusScheduled {
 		c.Status = models.CampaignStatusFinished
 		if err := p.m.store.UpdateCampaignStatus(p.camp.ID, models.CampaignStatusFinished); err != nil {
@@ -271,10 +319,18 @@ func (p *pipe) cleanup() {
 		} else {
 			p.m.log.Printf("campaign (%s) finished", p.camp.Name)
 		}
+
+		// Fork (send retry, SEND-RETRY-SPEC D6) -- a finish that did not reach every
+		// recipient is loud: one log line (the CloudWatch alarm's pattern, "campaign
+		// shortfall") and the same text in the admin notification. Once per pipe, and a
+		// pipe finishes once.
+		if reason = p.shortfall(c); reason != "" {
+			p.m.log.Printf("campaign shortfall (%s): %s", p.camp.Name, reason)
+		}
 	} else {
 		p.m.log.Printf("finish processing campaign (%s)", p.camp.Name)
 	}
 
 	// Notify admin.
-	_ = p.m.sendNotif(c, c.Status, "")
+	_ = p.m.sendNotif(c, c.Status, reason)
 }

@@ -177,11 +177,15 @@ DROP INDEX IF EXISTS idx_camps_status; CREATE INDEX idx_camps_status ON campaign
 
 -- Fork (erinos evergreen campaigns): per-(campaign, subscriber) send history. A row is
 -- CLAIMED when the eligibility query fetches the subscriber (claimed_at) and marked
--- SENT when the worker attempts delivery (sent_at, success or failure). A claim that is
--- dropped unattempted (pause/cancel while queued) is DELETED by the worker; a claim
--- older than one hour with no attempt (process died mid-batch) is ignored by the
--- eligibility query and the subscriber becomes eligible again. Fails toward one late
--- send, never toward a double send. Nothing else updates or deletes rows. No FK to subscribers on purpose — a
+-- SENT when the worker's delivery attempt SUCCEEDS or fails only after the message data
+-- was handed to the server (sent_at -- the server may have accepted it, so the claim is
+-- consumed rather than risk a duplicate). A claim that is dropped unattempted
+-- (pause/cancel while queued) is DELETED by the worker; a claim whose message exhausted
+-- the SMTP pool's attempts before its data was accepted is left unmarked and recorded in
+-- campaign_send_failures (SEND-RETRY-SPEC I8), so like a claim older than one hour with
+-- no attempt (process died mid-batch) it is ignored by the eligibility query after an
+-- hour and the subscriber becomes eligible again. Fails toward one late send, never
+-- toward a double send. Nothing else updates or deletes rows. No FK to subscribers on purpose — a
 -- deleted-and-recreated subscriber is a new id.
 CREATE TABLE IF NOT EXISTS campaign_sends (
     campaign_id   INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -191,6 +195,22 @@ CREATE TABLE IF NOT EXISTS campaign_sends (
 );
 DROP INDEX IF EXISTS idx_campaign_sends_camp_sub; CREATE INDEX idx_campaign_sends_camp_sub ON campaign_sends(campaign_id, subscriber_id, claimed_at DESC);
 DROP INDEX IF EXISTS idx_campaign_sends_sub_camp; CREATE INDEX idx_campaign_sends_sub_camp ON campaign_sends(subscriber_id, campaign_id);
+-- Fork (send retry, SEND-RETRY-SPEC D5): recipients a campaign could not reach. Written by
+-- the manager when a message exhausts the SMTP pool's attempts (stage 'send'), fails after
+-- its data reached the server so it may have been delivered (stage 'send-unconfirmed'), or
+-- fails to render (stage 'render'). Append-only; the recovery list behind a sent < to_send shortfall.
+-- No FK to subscribers on purpose (the email column keeps the record useful after a delete).
+CREATE TABLE IF NOT EXISTS campaign_send_failures (
+    id            BIGSERIAL PRIMARY KEY,
+    campaign_id   INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    subscriber_id INTEGER NOT NULL,
+    email         TEXT NOT NULL,
+    stage         TEXT NOT NULL,
+    error         TEXT NOT NULL,
+    created_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+DROP INDEX IF EXISTS idx_campaign_send_failures_camp; CREATE INDEX idx_campaign_send_failures_camp ON campaign_send_failures(campaign_id, created_at DESC);
+
 DROP INDEX IF EXISTS idx_camps_name; CREATE INDEX idx_camps_name ON campaigns(name);
 DROP INDEX IF EXISTS idx_camps_created_at; CREATE INDEX idx_camps_created_at ON campaigns(created_at);
 DROP INDEX IF EXISTS idx_camps_updated_at; CREATE INDEX idx_camps_updated_at ON campaigns(updated_at);

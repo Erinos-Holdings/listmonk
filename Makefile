@@ -100,6 +100,8 @@ run-frontend: $(FRONTEND_EMAIL_BUILDER_DIST_FINAL)
 .PHONY: test
 test:
 	go test ./...
+	# Erinos fork: internal/smtppool is a nested module and needs its own invocation.
+	cd internal/smtppool && go test ./...
 
 # Bundle all static assets including the JS frontend into the ./listmonk binary
 # using stuffbin (installed with make deps).

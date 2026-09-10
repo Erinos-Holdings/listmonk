@@ -6,6 +6,12 @@
           <b-tag v-if="isEditing" :class="data.status">
             {{ $t(`campaigns.status.${data.status}`) }}
           </b-tag>
+          <!-- Fork (send retry, SEND-RETRY-SPEC D6) -- sent < to_send on a finished broadcast. -->
+          <b-tooltip v-if="isShortfall" :label="$t('campaigns.shortfallHelp')" type="is-dark" multilined>
+            <b-tag type="is-warning" class="shortfall" data-cy="tag-shortfall">
+              {{ $t('campaigns.shortfall', { sent: $utils.formatNumber(data.sent), toSend: $utils.formatNumber(data.toSend) }) }}
+            </b-tag>
+          </b-tooltip>
           <b-tag v-if="data.type === 'optin'" :class="data.type">
             {{ $t('lists.optin') }}
           </b-tag>
@@ -1361,6 +1367,12 @@ export default Vue.extend({
     // Fork (multi-language campaigns).
     isStarted() {
       return !!(this.data && this.data.startedAt);
+    },
+
+    // Fork (send retry, SEND-RETRY-SPEC D6) -- mirrors Campaigns.vue's isShortfall.
+    isShortfall() {
+      const d = this.data;
+      return !!d && d.status === 'finished' && !d.evergreen && d.toSend > 0 && d.sent < d.toSend;
     },
 
     langOptions() {

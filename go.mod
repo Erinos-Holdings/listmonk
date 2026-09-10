@@ -70,3 +70,7 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 )
+
+// Erinos fork of smtppool v2.1.2: SMTP 4yz replies are retriable (SEND-RETRY-SPEC D1).
+// Nested module; tests run from internal/smtppool. See internal/smtppool/README-FORK.md.
+replace github.com/knadh/smtppool/v2 => ./internal/smtppool

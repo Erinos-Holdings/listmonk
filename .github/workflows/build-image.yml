@@ -52,6 +52,13 @@ jobs:
       - name: Go tests
         run: go test ./internal/...
 
+      # The in-tree smtppool fork (internal/smtppool, a NESTED module wired by a go.mod
+      # replace) is excluded from ./internal/... by Go's module boundary, so its tests
+      # — the 4yz retry classifier and the fresh-connection retry (SEND-RETRY-SPEC I4)
+      # — run separately. MailHog-backed upstream tests skip themselves when absent.
+      - name: smtppool fork tests
+        run: cd internal/smtppool && go test ./...
+
       # Structural tests for the Outlook post-processor (fork delta). These
       # gate the image: a broken conditional/dual-emit structure must never
       # ship. They do NOT replace the four-client rendering verification —

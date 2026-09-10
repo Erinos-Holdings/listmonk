@@ -566,6 +566,21 @@ UPDATE campaigns SET
     updated_at=NOW()
 WHERE id=$1;
 
+-- name: record-send-failure
+-- Fork (send retry, SEND-RETRY-SPEC D5) -- one row per recipient a campaign could not
+-- reach, written by the manager when a message exhausts the SMTP pool's attempts
+-- (stage 'send'), fails after its data was handed to the server so it MAY have been
+-- delivered (stage 'send-unconfirmed' -- re-sending risks a duplicate), or fails to
+-- render (stage 'render'). The recovery list behind a
+-- sent < to_send shortfall. Append-only; nothing reads it back at send time.
+INSERT INTO campaign_send_failures (campaign_id, subscriber_id, email, stage, error)
+VALUES ($1, $2, $3, $4, $5);
+
+-- name: count-send-failures
+-- The campaign's total for the completion shortfall line (a resumed campaign's pipe
+-- cannot know what an earlier pipe recorded).
+SELECT COUNT(*) FROM campaign_send_failures WHERE campaign_id = $1;
+
 -- name: update-campaign-status
 -- Fork (template freeze) — a direct start (effective status 'running' — no send_at)
 -- snapshots the resolved template body once (IS NULL guard; pause/resume keeps the

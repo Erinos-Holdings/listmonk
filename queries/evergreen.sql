@@ -8,9 +8,11 @@
 -- send delay has elapsed, and who have not been sent this campaign (or any campaign
 -- in its variant group) since that join. The batch is CLAIMED in campaign_sends in the
 -- same statement (claimed_at), so a crash between fetch and send can never double-send.
--- The worker marks sent_at on the delivery attempt and deletes a claim it drops
--- unattempted; a claim with no attempt after one hour is treated as abandoned (process
--- died mid-batch) and the subscriber is eligible again -- fails toward one late send.
+-- The worker marks sent_at when the delivery attempt succeeds and deletes a claim it
+-- drops unattempted; a claim with no successful attempt after one hour is treated as
+-- abandoned (process died mid-batch, or the send exhausted its retries and was
+-- recorded in campaign_send_failures) and the subscriber is eligible again -- fails
+-- toward one late send.
 -- Two expressions are contractually isolated for later milestones -- the ANCHOR
 -- (today the list join; step chaining will offer the parent campaign's sent_at) and
 -- the EXCLUSION SET (self + variant group + every evergreen sharing a list, see below).
@@ -109,8 +111,12 @@ WHERE c.evergreen AND c.status = 'running' AND c.id != $1
 LIMIT 1;
 
 -- name: mark-evergreen-sent
--- The worker attempted delivery (success or failure -- a failed attempt counts as sent,
--- the campaign's error threshold handles outages).
+-- The worker's delivery attempt succeeded, or failed only after the message data was
+-- handed to the server (it may have been accepted -- consuming the claim is what stops
+-- a duplicate welcome, SEND-RETRY-SPEC D10). An attempt that exhausted the SMTP pool's
+-- retries before that point does NOT mark the claim (it is recorded in
+-- campaign_send_failures instead, I8) -- the claim ages out after an hour and the
+-- subscriber is welcomed late rather than never; the error threshold handles outages.
 UPDATE campaign_sends SET sent_at = NOW()
 WHERE campaign_id = $1 AND subscriber_id = $2 AND sent_at IS NULL;
 

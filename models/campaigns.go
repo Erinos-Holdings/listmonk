@@ -131,6 +131,34 @@ type CampaignMeta struct {
 	Sent      int       `db:"sent" json:"sent"`
 }
 
+// SendFailure (fork, SEND-RETRY-SPEC D5) is one recipient a campaign could not reach: a
+// message that exhausted the SMTP pool's attempts (Stage "send") or that never reached
+// the queue because its template failed to render (Stage "render"). Rows land in
+// campaign_send_failures and are the recovery list behind a sent < to_send shortfall;
+// nothing re-sends them automatically.
+type SendFailure struct {
+	CampaignID   int    `db:"campaign_id" json:"campaign_id"`
+	SubscriberID int    `db:"subscriber_id" json:"subscriber_id"`
+	Email        string `db:"email" json:"email"`
+	Stage        string `db:"stage" json:"stage"`
+	Error        string `db:"error" json:"error"`
+}
+
+const (
+	SendFailureStageSend   = "send"
+	SendFailureStageRender = "render"
+	// SendFailureStageSendUnconfirmed is a send whose error surfaced AFTER the message data
+	// was written: the server may have accepted it. Re-sending such a recipient risks a
+	// duplicate; the manager treats it as attempted (an evergreen claim is consumed).
+	SendFailureStageSendUnconfirmed = "send-unconfirmed"
+)
+
+// ErrMessageMaybeDelivered is wrapped into a messenger's Push error when the failure came
+// after the message body was handed to the server (fork, SEND-RETRY-SPEC D10 / review F1).
+// The email messenger translates smtppool's sentinel into this one so the manager stays
+// messenger-agnostic.
+var ErrMessageMaybeDelivered = errors.New("message may have been delivered")
+
 // GetIDs returns the list of campaign IDs.
 func (camps Campaigns) GetIDs() []int {
 	IDs := make([]int, len(camps))

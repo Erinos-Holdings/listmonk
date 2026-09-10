@@ -84,9 +84,10 @@ func TestShouldPipeEvergreen(t *testing.T) {
 	}
 }
 
-// Review C1: a message dropped because its pipe stopped gives its claim back; an
-// attempted delivery (success or failure) marks the claim sent; a regular campaign's
-// messages touch neither.
+// Review C1: a message dropped because its pipe stopped gives its claim back; a
+// successful delivery marks the claim sent; an exhausted one leaves it unmarked
+// (SEND-RETRY-SPEC I8 -- the worker records it instead, see send_test.go); a regular
+// campaign's messages touch neither.
 func TestEvergreenClaimBookkeeping(t *testing.T) {
 	fs := &fakeStore{}
 	m := newTestManager(fs)
@@ -109,8 +110,8 @@ func TestEvergreenClaimBookkeeping(t *testing.T) {
 	if len(fs.released) != 1 || fs.released[0] != 11 {
 		t.Fatalf("released = %v, want [11]", fs.released)
 	}
-	if len(fs.marked) != 2 || fs.marked[0] != 12 || fs.marked[1] != 13 {
-		t.Fatalf("marked = %v, want [12 13]", fs.marked)
+	if len(fs.marked) != 1 || fs.marked[0] != 12 {
+		t.Fatalf("marked = %v, want [12] (an exhausted send must not consume the claim)", fs.marked)
 	}
 }
 

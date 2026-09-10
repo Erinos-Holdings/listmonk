@@ -11,9 +11,14 @@ package manager
 //   - the batch comes from next-evergreen-subscribers (join-time eligibility, with
 //     the campaign_sends CLAIM written in the same statement) instead of the
 //     last_subscriber_id checkpoint query;
-//   - the worker marks the claim SENT on the delivery attempt and RELEASES it when it
-//     drops the message unattempted (pipe stopped by pause/cancel) — otherwise every
-//     queued-but-unsent welcome at a pause would be lost forever;
+//   - the worker marks the claim SENT when the delivery attempt succeeds and RELEASES it
+//     when it drops the message unattempted (pipe stopped by pause/cancel) — otherwise
+//     every queued-but-unsent welcome at a pause would be lost forever. A message that
+//     exhausted the SMTP pool's attempts leaves the claim unmarked and is recorded in
+//     campaign_send_failures (SEND-RETRY-SPEC I8): after an hour the eligibility query
+//     treats the claim as abandoned and the subscriber is welcomed late rather than
+//     never -- EXCEPT an error raised after the message data was handed over, which
+//     consumes the claim (the server may have accepted it; D10);
 //   - an empty batch ends the pipe WITHOUT finishing the campaign (it stays
 //     'running', idle) and without a notification; scanCampaigns re-pipes it after
 //     an idle interval, which is the tick;
@@ -25,6 +30,7 @@ package manager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"strconv"
@@ -165,9 +171,19 @@ func (m *Manager) evergreenDropped(msg CampaignMessage) {
 	}
 }
 
-// evergreenAttempted runs from the worker after a delivery attempt, success or not.
+// evergreenAttempted runs from the worker after a delivery attempt. A success marks the
+// claim sent and resets the error streak. An exhausted attempt (the pool already retried)
+// marks nothing -- the caller records it in campaign_send_failures (SEND-RETRY-SPEC I8)
+// and the unmarked claim ages out after an hour, so the welcome is late, not lost.
 func (m *Manager) evergreenAttempted(msg CampaignMessage, sendErr error) {
 	if msg.Campaign == nil || !msg.Campaign.Evergreen {
+		return
+	}
+	// An error after the message data was handed over (SEND-RETRY-SPEC D10, review F1)
+	// consumes the claim like a success: the server may have accepted the welcome, and an
+	// unmarked claim would be re-welcomed an hour later -- a duplicate. It still counts as
+	// an error and is recorded as send-unconfirmed; it does not reset the streak.
+	if sendErr != nil && !errors.Is(sendErr, models.ErrMessageMaybeDelivered) {
 		return
 	}
 	if err := m.store.MarkEvergreenSent(msg.Campaign.ID, msg.Subscriber.ID); err != nil {

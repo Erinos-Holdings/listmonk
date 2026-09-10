@@ -94,6 +94,9 @@ type Queries struct {
 	GetEvergreenCollision    *sqlx.Stmt `query:"get-evergreen-collision"`
 	MarkEvergreenSent        *sqlx.Stmt `query:"mark-evergreen-sent"`
 	ReleaseEvergreenClaim    *sqlx.Stmt `query:"release-evergreen-claim"`
+	// Fork (send retry, SEND-RETRY-SPEC D5) -- see queries/campaigns.sql.
+	RecordSendFailure        *sqlx.Stmt `query:"record-send-failure"`
+	CountSendFailures        *sqlx.Stmt `query:"count-send-failures"`
 	GetOneCampaignSubscriber *sqlx.Stmt `query:"get-one-campaign-subscriber"`
 	UpdateCampaign           *sqlx.Stmt `query:"update-campaign"`
 	UpdateCampaignStatus     *sqlx.Stmt `query:"update-campaign-status"`

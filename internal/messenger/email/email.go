@@ -2,6 +2,7 @@ package email
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/mail"
@@ -220,7 +221,13 @@ func (e *Emailer) Push(m models.Message) error {
 		}
 	}
 
-	return srv.pool.Send(em)
+	err := srv.pool.Send(em)
+	if err != nil && errors.Is(err, smtppool.ErrMaybeDelivered) {
+		// Fork (SEND-RETRY-SPEC D10) -- the pool already refused to retry this; tell the
+		// manager it is an unconfirmed send, not a lost one.
+		return fmt.Errorf("%w: %w", models.ErrMessageMaybeDelivered, err)
+	}
+	return err
 }
 
 // Flush flushes the message queue to the server.

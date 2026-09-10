@@ -97,6 +97,10 @@ func newEvergreenHarness(t *testing.T) *evergreenHarness {
 		if err := V6_2_6(db, nil, nil, lo); err != nil {
 			t.Fatalf("V6_2_6 run %d: %v", i+1, err)
 		}
+		// Fork (send retry) -- and v6.2.7.
+		if err := V6_2_7(db, nil, nil, lo); err != nil {
+			t.Fatalf("V6_2_7 run %d: %v", i+1, err)
+		}
 	}
 
 	// Parse every shipped query file exactly as the app does and prepare the ones under test.

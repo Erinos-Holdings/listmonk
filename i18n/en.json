@@ -144,6 +144,8 @@
     "campaigns.sendTestHelp": "Hit Enter after typing an address to add multiple recipients. The addresses must belong to existing subscribers.",
     "campaigns.sendToLists": "Lists to send to",
     "campaigns.sent": "Sent",
+    "campaigns.shortfall": "Sent {sent} of {toSend}",
+    "campaigns.shortfallHelp": "The campaign finished without reaching every intended recipient. The recipients it could not reach are recorded in campaign_send_failures (campaign id, subscriber, error) — re-sending to them is a manual decision. If nothing is recorded there, the target lists changed while the campaign was sending.",
     "campaigns.start": "Start campaign",
     "campaigns.started": "\"{name}\" started",
     "campaigns.startedAt": "Started",

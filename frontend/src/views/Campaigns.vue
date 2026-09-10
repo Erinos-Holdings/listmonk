@@ -96,6 +96,14 @@
               <b-tag :class="props.row.status">
                 {{ $t(`campaigns.status.${props.row.status}`) }}
               </b-tag>
+              <!-- Fork (send retry, SEND-RETRY-SPEC D6) -- a finished broadcast that did not
+                   reach every recipient is a warning, not a quiet "Finished". -->
+              <b-tooltip v-if="isShortfall(props.row)" :label="$t('campaigns.shortfallHelp')" type="is-dark"
+                multilined>
+                <b-tag type="is-warning" class="shortfall" data-cy="tag-shortfall">
+                  {{ $t('campaigns.shortfall', { sent: $utils.formatNumber(props.row.sent), toSend: $utils.formatNumber(props.row.toSend) }) }}
+                </b-tag>
+              </b-tooltip>
               <span class="spinner is-tiny" v-if="isRunning(props.row.id)">
                 <b-loading :is-full-page="false" active />
               </span>
@@ -379,6 +387,11 @@ export default Vue.extend({
     },
     isDone(c) {
       return c.status === 'finished' || c.status === 'cancelled';
+    },
+    // Fork (send retry, SEND-RETRY-SPEC D6). to_send is recomputed from live list
+    // membership per scan tick, so this also flags a mid-send list edit; the tooltip says so.
+    isShortfall(c) {
+      return c.status === 'finished' && !c.evergreen && c.toSend > 0 && c.sent < c.toSend;
     },
 
     isRunning(id) {

@@ -90,6 +90,20 @@ func (s *store) ReleaseEvergreenClaim(campID, subID int) error {
 	return err
 }
 
+// RecordSendFailure appends a recipient the campaign could not reach.
+// Fork (send retry, SEND-RETRY-SPEC D5).
+func (s *store) RecordSendFailure(f models.SendFailure) error {
+	_, err := s.queries.RecordSendFailure.Exec(f.CampaignID, f.SubscriberID, f.Email, f.Stage, f.Error)
+	return err
+}
+
+// CountSendFailures returns the number of recipients recorded as not reached for a campaign.
+func (s *store) CountSendFailures(campID int) (int, error) {
+	var n int
+	err := s.queries.CountSendFailures.Get(&n, campID)
+	return n, err
+}
+
 // GetCampaign fetches a campaign from the database.
 func (s *store) GetCampaign(campID int) (*models.Campaign, error) {
 	var out = &models.Campaign{}
