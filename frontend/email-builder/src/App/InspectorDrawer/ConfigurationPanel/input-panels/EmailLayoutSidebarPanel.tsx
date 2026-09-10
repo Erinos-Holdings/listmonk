@@ -67,6 +67,11 @@ export default function EmailLayoutSidebarFields({ data, setData }: EmailLayoutS
         defaultValue={data.textColor ?? '#262626'}
         onChange={(textColor) => updateData({ ...data, textColor })}
       />
+      <NullableColorInput
+        label="Link color"
+        defaultValue={data.linkColor ?? null}
+        onChange={(linkColor) => updateData({ ...data, linkColor })}
+      />
       <BooleanInput
         label="Outlook compatibility"
         defaultValue={data.outlook ?? false}

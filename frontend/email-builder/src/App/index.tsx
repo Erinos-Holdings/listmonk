@@ -47,7 +47,7 @@ export default function App(props: AppProps) {
     subscribeDocument ((document) => {
       props.onChange?.(
         document,
-        renderHtmlWithMeta(document, { rootBlockId: 'root', outlook: Boolean(document.root?.data?.outlook) })
+        renderHtmlWithMeta(document, { rootBlockId: 'root', outlook: Boolean(document.root?.data?.outlook), linkColor: document.root?.data?.linkColor })
       )
     })
   }

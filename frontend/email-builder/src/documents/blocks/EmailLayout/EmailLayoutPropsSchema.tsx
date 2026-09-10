@@ -27,6 +27,7 @@ const EmailLayoutPropsSchema = z.object({
   borderRadius: z.number().optional().nullable(),
   canvasColor: COLOR_SCHEMA,
   textColor: COLOR_SCHEMA,
+  linkColor: COLOR_SCHEMA,
   fontFamily: FONT_FAMILY_SCHEMA,
   childrenIds: z.array(z.string()).optional().nullable(),
   outlook: z.boolean().optional().nullable(),

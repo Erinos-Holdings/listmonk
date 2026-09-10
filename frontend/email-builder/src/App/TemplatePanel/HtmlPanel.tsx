@@ -8,7 +8,7 @@ import HighlightedCodePanel from './helper/HighlightedCodePanel';
 export default function HtmlPanel() {
   const document = useDocument();
   const code = useMemo(
-    () => renderHtmlWithMeta(document, { rootBlockId: 'root', outlook: Boolean(document.root?.data?.outlook) }),
+    () => renderHtmlWithMeta(document, { rootBlockId: 'root', outlook: Boolean(document.root?.data?.outlook), linkColor: document.root?.data?.linkColor }),
     [document]
   );
   return <HighlightedCodePanel type="html" value={code} />;

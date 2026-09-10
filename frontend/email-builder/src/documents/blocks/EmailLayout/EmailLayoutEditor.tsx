@@ -37,68 +37,72 @@ export default function EmailLayoutEditor(props: EmailLayoutProps) {
   const currentBlockId = useCurrentBlockId();
 
   return (
-    <div
-      onClick={() => {
-        setSelectedBlockId(null);
-      }}
-      style={{
-        backgroundColor: props.backdropColor ?? '#F5F5F5',
-        color: props.textColor ?? '#262626',
-        fontFamily: getFontFamily(props.fontFamily),
-        fontSize: '16px',
-        fontWeight: '400',
-        letterSpacing: '0.15008px',
-        lineHeight: '1.5',
-        margin: '0',
-        padding: '32px 0',
-        width: '100%',
-        minHeight: '100%',
-      }}
-    >
-      <table
-        align="center"
-        width="100%"
-        style={{
-          margin: '0 auto',
-          maxWidth: `${CANVAS_WIDTH}px`,
-          backgroundColor: props.canvasColor ?? '#FFFFFF',
-          borderRadius: props.borderRadius ?? undefined,
-          border: (() => {
-            const v = props.borderColor;
-            if (!v) {
-              return undefined;
-            }
-            return `1px solid ${v}`;
-          })(),
+    <>
+      {props.linkColor && <style>{`.lm-email-canvas a { color: ${props.linkColor}; }`}</style>}
+      <div
+        className="lm-email-canvas"
+        onClick={() => {
+          setSelectedBlockId(null);
         }}
-        role="presentation"
-        cellSpacing="0"
-        cellPadding="0"
-        border={0}
+        style={{
+          backgroundColor: props.backdropColor ?? '#F5F5F5',
+          color: props.textColor ?? '#262626',
+          fontFamily: getFontFamily(props.fontFamily),
+          fontSize: '16px',
+          fontWeight: '400',
+          letterSpacing: '0.15008px',
+          lineHeight: '1.5',
+          margin: '0',
+          padding: '32px 0',
+          width: '100%',
+          minHeight: '100%',
+        }}
       >
-        <tbody>
-          <tr style={{ width: '100%' }}>
-            <td>
-              <EditorChildrenIds
-                childrenIds={childrenIds}
-                onChange={({ block, blockId, childrenIds }) => {
-                  setDocument({
-                    [blockId]: block,
-                    [currentBlockId]: {
-                      type: 'EmailLayout',
-                      data: {
-                        ...document[currentBlockId].data,
-                        childrenIds: childrenIds,
+        <table
+          align="center"
+          width="100%"
+          style={{
+            margin: '0 auto',
+            maxWidth: `${CANVAS_WIDTH}px`,
+            backgroundColor: props.canvasColor ?? '#FFFFFF',
+            borderRadius: props.borderRadius ?? undefined,
+            border: (() => {
+              const v = props.borderColor;
+              if (!v) {
+                return undefined;
+              }
+              return `1px solid ${v}`;
+            })(),
+          }}
+          role="presentation"
+          cellSpacing="0"
+          cellPadding="0"
+          border={0}
+        >
+          <tbody>
+            <tr style={{ width: '100%' }}>
+              <td>
+                <EditorChildrenIds
+                  childrenIds={childrenIds}
+                  onChange={({ block, blockId, childrenIds }) => {
+                    setDocument({
+                      [blockId]: block,
+                      [currentBlockId]: {
+                        type: 'EmailLayout',
+                        data: {
+                          ...document[currentBlockId].data,
+                          childrenIds: childrenIds,
+                        },
                       },
-                    },
-                  });
-                  setSelectedBlockId(blockId);
-                }}
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+                    });
+                    setSelectedBlockId(blockId);
+                  }}
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

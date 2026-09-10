@@ -62,13 +62,18 @@ function applyImageEmbeds(html: string, embedURLs: string[]): string {
 
 export function renderHtmlWithMeta(
   document: TEditorConfiguration,
-  options: { rootBlockId: string; outlook?: boolean }
+  options: { rootBlockId: string; outlook?: boolean; linkColor?: string | null }
 ): string {
   const embedURLs = collectImageEmbedURLs(document);
   const html = renderToStaticMarkup(document, options);
   const rendered = options.outlook ? postProcessForOutlook(html) : html;
   const output = applyImageEmbeds(rendered, embedURLs);
-  const head = options.outlook ? `${VIEWPORT_META}${MSO_DOCUMENT_SETTINGS}` : VIEWPORT_META;
+  const meta = options.outlook ? `${VIEWPORT_META}${MSO_DOCUMENT_SETTINGS}` : VIEWPORT_META;
+  // Gmail strips a <style> tag placed in <body> (caniemail: html-style, note 1)
+  // but honors one in <head> — duplicated here as belt-and-braces alongside the
+  // body-scoped copy the EmailLayout reader renders for clients that instead
+  // strip <head> (e.g. older Yahoo Android, caniemail note 3).
+  const head = options.linkColor ? `${meta}<style>a{color:${options.linkColor};}</style>` : meta;
 
   return injectHeadContents(output, head);
 }
