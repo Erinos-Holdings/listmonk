@@ -117,7 +117,7 @@ export default function Button({ style, props }: ButtonProps) {
     // one line, so a label that wraps on a narrow viewport would escape the
     // coloured area. Padding gives the same box when the label fits on one line
     // and grows the background with the text when it wraps. The explicit
-    // line-height also feeds outlook.ts's VML height estimate, which keeps
+    // line-height also feeds postProcess.ts's VML height estimate, which keeps
     // Outlook within a border width of the requested box.
     const lineHeight = Math.round(fontSize * 1.2);
     const spareV = Math.max(0, customHeight - lineHeight - 2 * borderSize);

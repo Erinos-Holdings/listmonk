@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 
 // IMAGE-WIDTH-SPEC Part A, the pure module behind the sidebar's Width auto-fill
-// (src/documents/blocks/Img/imageWidth.ts). run.cjs compiles only outlook.ts, so this
+// (src/documents/blocks/Img/imageWidth.ts). run.cjs compiles only postProcess.ts, so this
 // suite transpiles and evaluates the module directly (the alt-text-nudge pattern).
 //   I4  measureImageWidth resolves naturalWidth on load, null on error / zero natural
 //       width, and a superseded measurer call resolves null (its result is ignored);

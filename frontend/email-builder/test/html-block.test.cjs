@@ -2,7 +2,7 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // User-pasted table inside an Html block: percentage cells, NOT table-layout:fixed.
 // The 400px image fits its 80% column; it must not be rewritten.
@@ -18,7 +18,7 @@ const input = `<!doctype html><html><body>
 </div>
 </body></html>`;
 
-const out = postProcessForOutlook(input);
+const out = postProcess(input, { outlook: true });
 const m = out.match(/<img[^>]*alt="u"[^>]*width="(\d+)"/);
 const ok = m && Number(m[1]) === 400;
 console.log(`${ok ? 'PASS' : 'FAIL'}  non-fixed-layout (user HTML) table passes width through  [u=${m && m[1]}]`);

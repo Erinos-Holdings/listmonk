@@ -6,6 +6,26 @@ import EditorChildrenIds from '../helpers/EditorChildrenIds';
 
 import { EmailLayoutProps } from './EmailLayoutPropsSchema';
 import { CANVAS_WIDTH } from '../../canvasWidth';
+import { TEXT_FLOW_TAG_NAMES } from '../../../postProcess';
+
+// PARAGRAPH-SPACING-SPEC D3: the canvas mirror of the compile's normalizeTextMargins
+// (postProcess.ts). The marker and `--lm-text-size` sit on EditorBlockWrapper's Box, which
+// wraps the Text block's own padded div — so the rule reaches through it to that div's
+// direct text-flow children (`> :last-child`: the Box's first child is the TuneMenu while a
+// block is selected; the block is always last). Same tag set as the compile, same px size
+// (the BLOCK's, not each child's em — a markdown <h1> is UA 2em). Longhand `!important`
+// is what beats the vendored blockquote's inline `margin: 0 0 12px 0`; side margins are
+// never touched. The `:has` rule covers a Text block ending in a non-text child (<hr>):
+// the compile zeroes the last TEXT-FLOW child, not the last child. It is a separate rule so
+// a browser without `:has` drops only it. Known divergence, accepted: a Text block whose
+// markdown carries a raw <div> is not a compile candidate at all, but the canvas still
+// applies the rule (excluding it would put `:has` in the main rules).
+const TEXT_FLOW = `:is(${TEXT_FLOW_TAG_NAMES.map((t) => t.toLowerCase()).join(',')})`;
+const TEXT_MARGIN_CSS = [
+  `.lm-email-canvas [data-lm-text] > :last-child > ${TEXT_FLOW} { margin-top: 0 !important; margin-bottom: var(--lm-text-size) !important; }`,
+  `.lm-email-canvas [data-lm-text] > :last-child > ${TEXT_FLOW}:last-child { margin-bottom: 0 !important; }`,
+  `.lm-email-canvas [data-lm-text] > :last-child > ${TEXT_FLOW}:not(:has(~ ${TEXT_FLOW})) { margin-bottom: 0 !important; }`,
+].join('\n');
 
 function getFontFamily(fontFamily: EmailLayoutProps['fontFamily']) {
   const f = fontFamily ?? 'MODERN_SANS';
@@ -39,6 +59,7 @@ export default function EmailLayoutEditor(props: EmailLayoutProps) {
   return (
     <>
       {props.linkColor && <style>{`.lm-email-canvas a { color: ${props.linkColor}; }`}</style>}
+      <style>{TEXT_MARGIN_CSS}</style>
       <div
         className="lm-email-canvas"
         onClick={() => {

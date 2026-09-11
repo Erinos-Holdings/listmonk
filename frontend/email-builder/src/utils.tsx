@@ -1,6 +1,6 @@
 import renderToStaticMarkup from './documents/reader/renderToStaticMarkup';
 import { TEditorConfiguration } from './documents/editor/core';
-import { makeSafeTemplate, postProcessForOutlook } from './outlook';
+import { makeSafeTemplate, postProcess } from './postProcess';
 import { inlineLinkColor } from './inlineLinkColor';
 
 const VIEWPORT_META = '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
@@ -8,7 +8,7 @@ const VIEWPORT_META = '<meta name="viewport" content="width=device-width, initia
 // HTML comment, and Go's html/template ELIDES raw comments on every compile, so no
 // recipient has ever received it -- which is why the 120 dpi Outlook renders scale text
 // x1.25 against an unscaled card. Wrapping it in the same `{{ Safe "..." }}` encoder the
-// body-side MSO comments use (outlook.ts makeSafeTemplate) is what makes it survive the
+// body-side MSO comments use (postProcess.ts makeSafeTemplate) is what makes it survive the
 // compile. Emitted only for outlook:true documents, exactly as before.
 const MSO_DOCUMENT_SETTINGS = makeSafeTemplate('<!--[if mso]><noscript><xml xmlns:o="urn:schemas-microsoft-com:office:office"><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->');
 const HTML_ATTRIBUTE_ESCAPES: Record<string, string> = {
@@ -74,11 +74,12 @@ export function renderHtmlWithMeta(
   const embedURLs = collectImageEmbedURLs(document);
   const html = renderToStaticMarkup(document, options);
   // The link-color inlining runs UNCONDITIONALLY (the Outlook transforms are opt-in; this
-  // one must reach every template) and BEFORE postProcessForOutlook, so the VML button
-  // builder reads the same anchor styles it always has. Button anchors already carry a
-  // color, so the pass never reaches them.
+  // one must reach every template) and BEFORE postProcess, so the VML button builder reads
+  // the same anchor styles it always has. Button anchors already carry a color, so the pass
+  // never reaches them. postProcess itself runs for every document: its text-margin pass is
+  // unconditional, and the flag gates only the Word idioms (PARAGRAPH-SPACING-SPEC D4/D7).
   const linked = inlineLinkColor(html, options.linkColor);
-  const rendered = options.outlook ? postProcessForOutlook(linked) : linked;
+  const rendered = postProcess(linked, { outlook: Boolean(options.outlook) });
   const output = applyImageEmbeds(rendered, embedURLs);
   const meta = options.outlook ? `${VIEWPORT_META}${MSO_DOCUMENT_SETTINGS}` : VIEWPORT_META;
   // Gmail strips a <style> tag placed in <body> (caniemail: html-style, note 1)

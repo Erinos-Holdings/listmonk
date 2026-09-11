@@ -48,7 +48,7 @@ type TPadding = { left?: number | null; right?: number | null } | null | undefin
  * The auto-fill cap: the canvas minus the block's own horizontal padding — what
  * a full-width block actually renders at, so the common case (24px each side)
  * fills as 552 and needs no mso dual emit. A block inside a ColumnsContainer is
- * further reduced to its column's share by outlook.ts::clampImageWidths at save
+ * further reduced to its column's share by postProcess.ts::clampImageWidths at save
  * time; the sidebar deliberately does no ancestry walk.
  */
 export function autoFillCap(padding: TPadding): number {

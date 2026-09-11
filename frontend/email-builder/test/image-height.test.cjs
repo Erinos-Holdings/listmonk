@@ -2,7 +2,7 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // Image with explicit height attr inside a fixed-layout 2-col row: clamp must scale height.
 const input = `<!doctype html><html><body>
@@ -22,7 +22,7 @@ const input = `<!doctype html><html><body>
 </div>
 </body></html>`;
 
-const out = postProcessForOutlook(input);
+const out = postProcess(input, { outlook: true });
 // available: 600-48=552; /2=276; -6 = 270. scale: 200 * 270/300 = 180
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }

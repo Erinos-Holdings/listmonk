@@ -1,9 +1,9 @@
 // CAMPAIGN-52-HARDENING T2 (I3). A T-Online-style sanitizer removes every <!--…--> span
 // wholesale; the document must still carry both button anchors and the image afterwards.
-const { outlook, canvas, decodeSafe, makeChecker, JSDOM, inlineButton, fullWidthButton, wideImage } = require('./_fixtures-hardening.cjs');
+const { pp, canvas, decodeSafe, makeChecker, JSDOM, inlineButton, fullWidthButton, wideImage } = require('./_fixtures-hardening.cjs');
 const { check, done } = makeChecker();
 
-const rendered = decodeSafe(outlook.postProcessForOutlook(canvas(inlineButton + fullWidthButton + wideImage)));
+const rendered = decodeSafe(pp.postProcess(canvas(inlineButton + fullWidthButton + wideImage), { outlook: true }));
 const stripped = rendered.replace(/<!--[\s\S]*?-->/g, '');
 check('sanitizer removed the Word twins', !stripped.includes('v:roundrect'));
 

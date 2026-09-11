@@ -1,7 +1,7 @@
 const path = require('path');
 const { JSDOM } = require('jsdom');
 global.DOMParser = new JSDOM('<!doctype html>').window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 const { decodeEntities } = require(path.join(__dirname, 'vml-marker-fold.cjs'));
 
 // CLICK-TRACKING-SPEC T5 (I10–I12): the builder emits the VML button's href value OUTSIDE
@@ -53,7 +53,7 @@ function safePayloadsWellFormed(html) {
 }
 
 // 1. Static URL: marker between two Safe halves, halves end/start with the escaped quote.
-const staticOut = postProcessForOutlook(button('https://x.test/go?a=1&amp;b=2'));
+const staticOut = postProcess(button('https://x.test/go?a=1&amp;b=2'), { outlook: true });
 const m = staticOut.match(MARKER_RE);
 check('static button: marker sits between two Safe payloads', !!m);
 check('first half ends with href=\\" and second starts with \\"', m && /href=\\"$/.test(m[1]) && /^\\"/.test(m[3]));
@@ -64,7 +64,7 @@ check('every Safe payload is well-formed', safePayloadsWellFormed(staticOut));
 
 // 2. Personalized URL with the `or` idiom (React stores the typed quotes as &quot;).
 const dyn = '{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}';
-const dynOut = postProcessForOutlook(button(dyn));
+const dynOut = postProcess(button(dyn), { outlook: true });
 const dm = dynOut.match(MARKER_RE);
 check('dynamic button: marker emitted', !!dm);
 check('dynamic VALUE round-trips to the typed expression after entity decode',
@@ -74,7 +74,7 @@ check('every Safe payload is well-formed (dynamic)', safePayloadsWellFormed(dynO
 
 // 3. Hostile characters: " \ < & typed into a url cannot break out of the marker or a payload.
 const hostile = 'https://x.test/a&quot;b\\c&lt;d&amp;e&gt;f';
-const hostileOut = postProcessForOutlook(button(hostile));
+const hostileOut = postProcess(button(hostile), { outlook: true });
 const hm = hostileOut.match(MARKER_RE);
 check('hostile url: marker still isolates the value', !!hm);
 check('hostile url: value decodes to the typed characters', hm && decodeEntities(hm[2]) === 'https://x.test/a"b\\c<d&e>f', hm && hm[2]);
@@ -102,9 +102,9 @@ check('beautified: every Safe payload is well-formed', safePayloadsWellFormed(be
 // compiled-HTML post-processor only. The Button block's stored props are asserted unchanged
 // by keeping the input <a href> as the single source — the post-processor reads it and
 // emits the marker from it, never rewriting the source document (no body_source writer
-// exists in outlook.ts).
+// exists in postProcess.ts).
 check('post-processor is HTML-in/HTML-out (no document/body_source access)',
-  typeof postProcessForOutlook === 'function' && postProcessForOutlook.length === 1);
+  typeof postProcess === 'function' && postProcess.length === 2);
 
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

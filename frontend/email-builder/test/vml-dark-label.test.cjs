@@ -1,14 +1,14 @@
 // CAMPAIGN-52-HARDENING T3 (I4). The VML <center> label carries the dark-mode-proof shape of
-// whichever D2 variant outlook.ts ships (VML_LABEL_VARIANT); the canonical anchorlock+center
+// whichever D2 variant postProcess.ts ships (VML_LABEL_VARIANT); the canonical anchorlock+center
 // shape and the no-textbox pin hold under every variant. Behavior (Word's dark transform)
 // is external-client rendering — gate G2, not this suite.
-const { outlook, canvas, decodeSafe, makeChecker, inlineButton } = require('./_fixtures-hardening.cjs');
+const { pp, canvas, decodeSafe, makeChecker, inlineButton } = require('./_fixtures-hardening.cjs');
 const { check, done } = makeChecker();
 
-const variant = outlook.VML_LABEL_VARIANT;
+const variant = pp.VML_LABEL_VARIANT;
 check('VML_LABEL_VARIANT is one of the D2 candidates', ['font', 'bgcolor', 'border'].includes(variant), String(variant));
 
-const rendered = decodeSafe(outlook.postProcessForOutlook(canvas(inlineButton)));
+const rendered = decodeSafe(pp.postProcess(canvas(inlineButton), { outlook: true }));
 const vml = (rendered.match(/<v:roundrect[\s\S]*?<\/v:roundrect>/) || [])[0] || '';
 check('VML roundrect rendered', vml.length > 0);
 check('canonical: anchorlock then center, no textbox', /<w:anchorlock\/><center/.test(vml) && !/v:textbox/.test(vml));

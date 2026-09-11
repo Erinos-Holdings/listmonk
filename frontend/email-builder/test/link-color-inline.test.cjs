@@ -9,7 +9,8 @@
 //   I1c  the head's document-settings block is a `{{ Safe "..." }}` action, not a raw
 //        comment -- Go's html/template elides raw comments, so the raw form never reached
 //        a recipient
-// plus: no linkColor => byte-identical output, `background-color` is not a color
+// plus: no linkColor => the render only (I12 of PARAGRAPH-SPACING-SPEC below: since D4
+// every body is re-serialized and carries the text margins), `background-color` is not a color
 // declaration, and the Button VML builder still reads the anchor colors it always did.
 //
 // renderHtmlWithMeta lives in utils.tsx, which pulls the whole React reader. The suite
@@ -23,7 +24,7 @@ global.DOMParser = new JSDOM('<!doctype html>').window.DOMParser;
 
 const builderRoot = path.join(__dirname, '..');
 const ts = require(path.join(builderRoot, 'node_modules', 'typescript'));
-const outlook = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const pp = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 const { foldVmlMarkers } = require(path.join(__dirname, 'vml-marker-fold.cjs'));
 
 // makeSafeTemplate encodes `& < > space tab CR LF` as \xNN and escapes \ and " — decode a
@@ -61,7 +62,7 @@ let fixtureBody = '';
 const { renderHtmlWithMeta } = evaluate(transpile('utils.tsx'), {
   './documents/reader/renderToStaticMarkup': { default: () => `<!DOCTYPE html><html><body>${fixtureBody}</body></html>` },
   './documents/editor/core': {},
-  './outlook': outlook,
+  './postProcess': pp,
   './inlineLinkColor': { inlineLinkColor },
 });
 
@@ -80,7 +81,7 @@ const LINK = '#888888';
 // The six fixture anchors the spec names, in one document: two plain text-block links, a
 // Button anchor with its own color, an Html-block link, an anchor that declares a color,
 // and an anchor carrying only background-color.
-// The canvas wrapper is what postProcessForOutlook's ghost table and VML button builder
+// The canvas wrapper is what postProcess's ghost table and VML button builder
 // key off, so the fixture carries it — the I1c/VML assertions below run the real pipeline.
 const CANVAS_OPEN = '<div style="background-color:#eee;margin:0;padding:20px 0;min-height:100%;width:100%">'
   + '<table align="center" width="100%" style="margin:0 auto;max-width:600px;background-color:#fff"><tbody><tr><td>';
@@ -139,11 +140,25 @@ check('I1b: pass is idempotent over its own output', inlineLinkColor(out, LINK) 
 const twice = inlineLinkColor(inlineLinkColor(fixtureBody, LINK), LINK);
 check('I1b: idempotent over a bare fragment too', twice === inlineLinkColor(fixtureBody, LINK));
 
-// ---- no linkColor: byte-identical, no DOMParser round trip ---------------------------
+// ---- no linkColor: the render, re-serialized, plus the D1 margins only (I12) -----------
+// PARAGRAPH-SPACING-SPEC D4 retired the old byte-identity pin: every body, outlook:false
+// included, now passes through postProcess's DOMParser round trip, because its text-margin
+// pass is not a Word idiom. What survives of the old pin: the output is exactly that round
+// trip of the untouched render plus the inline margins, it is idempotent, and it carries
+// no Word idiom at all.
 const plain = renderHtmlWithMeta({}, { rootBlockId: 'root', outlook: false });
-check('no linkColor: output is the untouched render + viewport meta',
-  plain === `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body>${fixtureBody}</body></html>`,
-  plain.slice(0, 160));
+const rawRender = `<!DOCTYPE html><html><body>${fixtureBody}</body></html>`;
+const roundTrip = `<!doctype html>\n${new DOMParser().parseFromString(rawRender, 'text/html').documentElement.outerHTML}`
+  .replace('<head></head>', '<head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>');
+check('I12: outlook:false output is the round trip of the render plus the D1 margins only',
+  plain.replace(/ style="margin-top:0;margin-bottom:0"/g, '') === roundTrip && plain !== roundTrip,
+  plain.slice(0, 200));
+const ppOnce = pp.postProcess(rawRender, { outlook: false });
+check('I12: postProcess(outlook:false) is idempotent over its own output',
+  pp.postProcess(ppOnce, { outlook: false }) === ppOnce && pp.postProcess(plain, { outlook: false }) === plain);
+check('I12: outlook:false output carries no Word idiom (mso-, VML, conditional comment, Safe payload)',
+  !/mso-|urn:schemas-microsoft-com|v:roundrect|<!--\[if|\{\{ Safe/.test(plain),
+  (plain.match(/mso-|urn:schemas-microsoft-com|v:roundrect|<!--\[if|\{\{ Safe/) || [])[0]);
 check('no linkColor: inlineLinkColor is a strict string no-op',
   inlineLinkColor(fixtureBody, null) === fixtureBody && inlineLinkColor(fixtureBody, '') === fixtureBody
   && inlineLinkColor(fixtureBody, undefined) === fixtureBody);
@@ -176,7 +191,7 @@ check('I1c: the Safe payload decodes to the PixelsPerInch block',
 check('I1c: not emitted for outlook:false documents', !/OfficeDocumentSettings/.test(out));
 
 // ---- the VML button builder still sees the colours it always did ---------------------
-// The inline pass runs first, so this is the shape postProcessForOutlook receives.
+// The inline pass runs first, so this is the shape postProcess receives.
 const vml = decodeSafe(foldVmlMarkers(outlookOut));
 check('VML: a roundrect was emitted at all (the pipeline really ran)', vml.includes('v:roundrect'));
 check('VML: button fill and label colours unchanged by the pass',

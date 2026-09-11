@@ -2,7 +2,7 @@ const path = require('path');
 const { createRequire } = require('module');
 const { JSDOM } = require('jsdom');
 global.DOMParser = new JSDOM('<!doctype html>').window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // Safe payloads must be SINGLE UNBREAKABLE TOKENS (spaces/tabs encoded \x20/\x09).
 // listmonk's format-switch path (Editor.vue convertContentType) runs campaign
@@ -73,7 +73,7 @@ function lexActions(html, label) {
   check(`${label}: no broken Go template strings`, bad === 0, `broken=${bad}`);
 }
 
-const out = postProcessForOutlook(input);
+const out = postProcess(input, { outlook: true });
 
 // 1. Structural: no whitespace and no raw & inside any Safe string payload.
 // Whitespace invites beautifier line-wrapping; & invites entity decode on the

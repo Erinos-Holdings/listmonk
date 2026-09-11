@@ -1,3 +1,10 @@
+// The compile-time post-processor of visual email HTML (renderHtmlWithMeta, utils.tsx).
+// Was `outlook.ts` until PARAGRAPH-SPACING-SPEC D7: it is the ONLY post-processor of
+// compiled mail, so what it emits is what Gmail, Apple Mail, Yahoo and T-Online receive,
+// not just Word. `postProcess(html, { outlook })` runs the all-client pass
+// (normalizeTextMargins) unconditionally and the Word idioms only behind the per-document
+// "Outlook compatibility" flag. Import-free by construction: test/run.cjs compiles this
+// file standalone.
 type TStyleMap = Record<string, string>;
 type TPaddingValues = {
   top: number;
@@ -356,10 +363,18 @@ function hardenImages(doc: Document) {
 
     img.setAttribute('style', setStyleValues(img.getAttribute('style'), declarations));
 
+    // PARAGRAPH-SPACING-SPEC D6. The inline-block anchor lets the cell's `align` center the
+    // image, but an inline-block sits on the line box's baseline and reserves the descender
+    // space beneath it — a ~5px strip under every LINKED standalone image in every
+    // browser-engined client (runbook hazard 55(b), campaign 66). `vertical-align:top`
+    // aligns the box to the line top instead. It removes the descender space, not the
+    // strut: an image shorter than the line box (24px at 16px/1.5) still shows the rest —
+    // accepted, such images are Html-block icons, not Image blocks.
     const parent = img.parentElement;
     if (standaloneImage && parent?.tagName === 'A') {
       parent.setAttribute('style', setStyleValues(parent.getAttribute('style'), [
         ['display', 'inline-block'],
+        ['vertical-align', 'top'],
         ['border', '0'],
         ['text-decoration', 'none'],
       ]));
@@ -407,35 +422,88 @@ function transformImageBlocks(doc: Document) {
   });
 }
 
-const EDGE_MARGIN_TAGS = /^(P|H[1-6]|UL|OL|BLOCKQUOTE)$/;
+// The block-level children marked emits for a Text block (upstream block-text's
+// EmailMarkdown). Exported for the editor canvas, which mirrors the margin rule on the same
+// set (EmailLayoutEditor, PARAGRAPH-SPACING-SPEC D3).
+export const TEXT_FLOW_TAG_NAMES = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'BLOCKQUOTE', 'PRE'];
+const TEXT_FLOW_TAGS = new RegExp(`^(${TEXT_FLOW_TAG_NAMES.join('|')})$`);
 
-// Client-default <p>/<h*> margins (≈1em of the governing font size) supply
-// vertical spacing in every browser-engined client but die at Word's
-// table-cell edges. Estimate what Word loses at a converted cell's top or
-// bottom edge so the conversion can graft it back via mso-padding-alt —
-// which Word reads in place of padding and every other client ignores as an
-// unknown property. The value is an estimate of a client default, so Outlook
-// lands within a few px of Gmail here, not byte-exact.
-function estimateEdgeMarginPx(container: Element, side: 'first' | 'last', inheritedSize: number): number {
-  const child = side === 'first' ? container.firstElementChild : container.lastElementChild;
-  if (!child) {
-    return 0;
+// The font size in effect on an element, in px: its own declaration, else the nearest
+// ancestor's (the EmailLayout backdrop div carries 16px), else 16.
+function getEffectiveFontSizePx(element: Element): number {
+  let node: Element | null = element;
+  while (node) {
+    const size = getPixelValue(parseStyleMap(node.getAttribute('style'))['font-size']);
+    if (size !== null && size > 0) {
+      return size;
+    }
+    node = node.parentElement;
   }
-
-  const size = getPixelValue(parseStyleMap(child.getAttribute('style'))['font-size']) || inheritedSize;
-  if (EDGE_MARGIN_TAGS.test(child.tagName)) {
-    return size;
-  }
-  // An unconverted wrapper div (rhythm text block, structural zero-box div)
-  // is transparent in flow — its own edge decides. User-authored Html content
-  // is never guessed at.
-  if (child.tagName === 'DIV' && !child.getAttribute('data-lm-user-html')) {
-    return estimateEdgeMarginPx(child, side, size);
-  }
-  return 0;
+  return 16;
 }
 
-const TEXT_FLOW_TAGS = /^(P|H[1-6]|UL|OL|BLOCKQUOTE|PRE)$/;
+// A Heading block renders as a bare <h1-3> carrying its own inline `margin:0` (upstream
+// block-heading) — a block in its own right, not a paragraph of a Text block. It only
+// ever meets this pass as the direct child of a Container holding nothing but Headings,
+// and is skipped there: its margins are already explicit. The proxy is the exact `margin:0`
+// upstream inlines — marked never styles a heading, so a markdown heading is still flow;
+// only a hand-typed `<h2 style="margin:0">` inside markdown is (accepted) collateral.
+function isHeadingBlock(element: Element) {
+  return /^H[1-6]$/.test(element.tagName) && /^0(px)?$/.test(parseStyleMap(element.getAttribute('style')).margin || '');
+}
+
+// PARAGRAPH-SPACING-SPEC D1/D2/D4. The compiled body used to rely on client-default
+// paragraph margins it never stated, and three clients read them three ways (runbook
+// hazard 55): Gmail ADDS the two margins between blocks once one of them is a table cell
+// (the editor collapses them), T-Online's reset zeroes them, and every CSS client put ~1em
+// between two stacked Text blocks whatever their padding. So every direct text-flow child
+// of a builder text block states its margins inline: `margin-top:0` and
+// `margin-bottom:<effective font size>px` (the editor's 1em, in px because Word resolves em
+// against the wrong size), `0` on the last. Inter-block spacing is block padding alone.
+//
+// A candidate is any div outside a [data-lm-user-html] fence with at least one direct
+// text-flow child and no direct DIV child (Container/Columns wrappers are never text
+// blocks); non-text children (<hr>, <table>, <img>) are left alone. A `margin` shorthand
+// (the vendored blockquote's `margin: 0 0 12px 0`) is expanded to longhands first so its
+// side 0s survive — dropping it would hand the client the UA 40px indent. Side margins are
+// never written: lists keep their client indent. Runs for EVERY document, Outlook flag or
+// not, before any Word transform. The editor canvas mirrors this rule in CSS.
+function normalizeTextMargins(doc: Document) {
+  Array.from(doc.querySelectorAll('div')).forEach((div) => {
+    if (div.closest('[data-lm-user-html]')) {
+      return;
+    }
+    const children = Array.from(div.children);
+    if (children.some((child) => child.tagName === 'DIV')) {
+      return;
+    }
+    const flow = children.filter((child) => TEXT_FLOW_TAGS.test(child.tagName) && !isHeadingBlock(child));
+    if (flow.length === 0) {
+      return;
+    }
+
+    const size = getEffectiveFontSizePx(div);
+    flow.forEach((child, index) => {
+      const styleMap = parseStyleMap(child.getAttribute('style'));
+      const declarations: Array<[string, string | null]> = [];
+      if (styleMap.margin !== undefined) {
+        const [top, right = top, bottom = top, left = right] = styleMap.margin.split(/\s+/);
+        declarations.push(
+          ['margin', null],
+          ['margin-top', styleMap['margin-top'] || top],
+          ['margin-right', styleMap['margin-right'] || right],
+          ['margin-bottom', styleMap['margin-bottom'] || bottom],
+          ['margin-left', styleMap['margin-left'] || left],
+        );
+      }
+      declarations.push(
+        ['margin-top', '0'],
+        ['margin-bottom', index === flow.length - 1 ? '0' : `${size}px`],
+      );
+      child.setAttribute('style', setStyleValues(child.getAttribute('style'), declarations));
+    });
+  });
+}
 
 // The font-family in effect on an element: its own declaration, else the nearest
 // ancestor's (the EmailLayout backdrop div carries the layout default that blocks
@@ -461,7 +529,7 @@ function getEffectiveFontFamily(element: Element): string | null {
 // a compliant stack (Arial, Georgia, …) get nothing. User-authored Html content is fenced
 // (data-lm-user-html) and never touched. Runs BEFORE the div→td conversion so the wrapper
 // travels with the block's innerHTML into the converted cell; the Safe payloads are text
-// nodes, so the conversion's first/last-element-child edge-margin estimate is unaffected.
+// nodes, so the element children it wraps are the same before and after the conversion.
 function addWordFontFallbacks(doc: Document) {
   Array.from(doc.querySelectorAll('div')).forEach((div) => {
     if (div.getAttribute('data-lm-user-html') || div.parentElement?.closest('[data-lm-user-html]')) {
@@ -562,16 +630,15 @@ function transformSimpleDivBlocks(doc: Document) {
       }
     }
 
-    // Text-flow content (markdown paragraphs, headings) gets its vertical
-    // rhythm from client-default <p>/<h*> margins — Word drops those margins
-    // at table-cell edges, so converting a rhythm-only block destroys more
-    // spacing than it preserves (campaign 28, 2026-08-10: inter-block gaps
-    // vanished in Outlook desktop). Convert only when the div carries a box
-    // Word would otherwise drop: vertical padding, a background, or a height.
-    // Horizontal-only padding is the accepted loss — Word renders the text
-    // uninset, which beats collapsing the rhythm.
+    // Text-flow content (markdown paragraphs, headings) converts on the same
+    // "carries a box" rule: any padding, a background, or a height. Its margins
+    // are stated inline by normalizeTextMargins (0 at the block's edges), so
+    // there is no client-default margin for Word to drop at a cell edge — the
+    // old rhythm-only carve-out (horizontal-padding blocks stayed divs, Word
+    // rendered them uninset) and the mso-padding-alt edge graft are gone
+    // (PARAGRAPH-SPACING-SPEC D5).
     const padding = getPaddingValues(styleMap);
-    return padding.top > 0 || padding.bottom > 0
+    return padding.top > 0 || padding.right > 0 || padding.bottom > 0 || padding.left > 0
       || Boolean(styleMap['background-color'])
       || Boolean(styleMap.height);
   }) as HTMLDivElement[];
@@ -601,18 +668,6 @@ function transformSimpleDivBlocks(doc: Document) {
       return;
     }
 
-    // Graft the edge margins Word drops back onto the cell, Word-only. Fenced
-    // user content gets no guessing. Children already converted (button/image/
-    // nested-container tables) resolve to 0 — no double counting.
-    const ownSize = getPixelValue(styleMap['font-size']) || 16;
-    const extraTop = div.getAttribute('data-lm-user-html') ? 0 : estimateEdgeMarginPx(div, 'first', ownSize);
-    const extraBottom = div.getAttribute('data-lm-user-html') ? 0 : estimateEdgeMarginPx(div, 'last', ownSize);
-    let tdStyle = styleValue;
-    if (extraTop > 0 || extraBottom > 0) {
-      const padding = getPaddingValues(styleMap);
-      tdStyle = `${styleValue.replace(/;+\s*$/, '')};mso-padding-alt:${padding.top + extraTop}px ${padding.right}px ${padding.bottom + extraBottom}px ${padding.left}px`;
-    }
-
     // Never fabricate alignment. An explicit text-align becomes the td
     // attribute; without one the attribute is omitted (left is every client's
     // default anyway) — a stamped align="left" overrode self-centering user
@@ -637,7 +692,7 @@ function transformSimpleDivBlocks(doc: Document) {
     const alignAttr = tdAlign ? ` align="${escapeAttribute(tdAlign)}"` : '';
 
     const blockHtml = buildPresentationTable(
-      `<tbody><tr><td${alignAttr}${bgcolorAttr} style="${escapeAttribute(tdStyle)}">${div.innerHTML}</td></tr></tbody>`
+      `<tbody><tr><td${alignAttr}${bgcolorAttr} style="${escapeAttribute(styleValue)}">${div.innerHTML}</td></tr></tbody>`
     );
 
     replaceNodeWithHtml(div, blockHtml);
@@ -1364,25 +1419,34 @@ function addGmailButtonPinStyles(doc: Document) {
   doc.head.appendChild(style);
 }
 
-export function postProcessForOutlook(html: string) {
+// Every compiled body passes through here (PARAGRAPH-SPACING-SPEC D4/D7). The margin pass
+// is not a Word idiom and runs for every document, first; everything after it is the
+// "Outlook compatibility" set and runs only when the document's flag is on. Consequence: an
+// outlook:false body is a DOMParser re-serialization of the raw render plus the margins,
+// no longer byte-identical to it (test/link-color-inline.test.cjs pins the property).
+export function postProcess(html: string, options: { outlook: boolean }) {
   if (typeof DOMParser === 'undefined') {
     return html;
   }
 
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
-  addTableDefaults(doc);
-  hardenImages(doc);
-  transformButtonBlocks(doc);
-  transformImageBlocks(doc);
-  addWordFontFallbacks(doc);
-  expandBorderShorthands(doc);
-  transformSimpleDivBlocks(doc);
-  clampImagesToCanvas(doc);
-  constrainCanvasForOutlook(doc);
-  addGmailButtonPinStyles(doc);
-  addTableDefaults(doc);
-  hardenImages(doc);
+  normalizeTextMargins(doc);
+
+  if (options.outlook) {
+    addTableDefaults(doc);
+    hardenImages(doc);
+    transformButtonBlocks(doc);
+    transformImageBlocks(doc);
+    addWordFontFallbacks(doc);
+    expandBorderShorthands(doc);
+    transformSimpleDivBlocks(doc);
+    clampImagesToCanvas(doc);
+    constrainCanvasForOutlook(doc);
+    addGmailButtonPinStyles(doc);
+    addTableDefaults(doc);
+    hardenImages(doc);
+  }
 
   return `<!doctype html>\n${doc.documentElement.outerHTML}`;
 }

@@ -64,7 +64,7 @@ jobs:
       # Structural tests for the Outlook post-processor (fork delta). These
       # gate the image: a broken conditional/dual-emit structure must never
       # ship. They do NOT replace the four-client rendering verification —
-      # see the outlook.ts fork-delta note in the listmonk runbook.
+      # see the postProcess.ts fork-delta note in the listmonk runbook.
       - name: Email-builder tests
         run: |
           yarn --cwd frontend/email-builder install --frozen-lockfile

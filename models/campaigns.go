@@ -345,7 +345,7 @@ var (
 	// fallback). Same quoting rule as regVisualHref, so Safe payloads never match.
 	regDynamicHref = regexp.MustCompile(`href="([^"]*{{[^"]*)"`)
 
-	// The builder's VML href marker: outlook.ts emits the mso <v:roundrect> href value
+	// The builder's VML href marker: postProcess.ts emits the mso <v:roundrect> href value
 	// OUTSIDE the Safe string literal as an empty span carrying it in an attribute (the one
 	// shape Editor.vue's beautifier never line-wraps — spec §3.3). Replaced here by a
 	// TrackLink call; the Safe payloads on either side supply the surrounding href="…".

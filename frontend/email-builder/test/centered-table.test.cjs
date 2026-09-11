@@ -2,7 +2,7 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // Conversion must not fabricate alignment: a wrapper without text-align gets
 // NO align attribute (a stamped align="left" overrode self-centering user
@@ -26,7 +26,7 @@ const input = `<!doctype html><html><body>
 </div>
 </body></html>`;
 
-const out = postProcessForOutlook(input);
+const out = postProcess(input, { outlook: true });
 
 const checks = [];
 function check(name, ok, detail) {

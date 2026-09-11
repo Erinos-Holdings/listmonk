@@ -3,7 +3,7 @@ const fs = require('fs');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // Buttons in this fixture predate the data-lm-full-width-button marker that
 // buildBulletproofButton now stamps; inject it to mirror a current re-save.
@@ -11,7 +11,7 @@ const input = fs.readFileSync(path.join(__dirname, 'fixtures', 'campaign10-body.
   .replace(/<td bgcolor="#999999" style="background-color:#999999;border-radius:4px;">/g,
     '<td data-lm-full-width-button="true" bgcolor="#999999" style="background-color:#999999;border-radius:4px;">');
 const { foldVmlMarkers } = require(path.join(__dirname, 'vml-marker-fold.cjs'));
-const raw = postProcessForOutlook(input);
+const raw = postProcess(input, { outlook: true });
 // The VML href rides as a marker between two Safe halves (click tracking); fold it back
 // so the single-payload structural assertions below still read one VML string.
 const out = foldVmlMarkers(raw);
@@ -51,7 +51,7 @@ check('dead data-outlook-cycle rule is gone', !/data-outlook-cycle/.test(out.rep
 check('no explicit-width button tables leak into gmail-visible content', !/width="2\d\d"[^>]*><tbody><tr><td bgcolor="#999999" align="center"/.test(gmailVisible));
 // Negative: an unmarked lookalike (user HTML) must NOT be transformed
 const lookalike = `<!doctype html><html><body><div style="margin:0;min-height:100%;width:100%"><table align="center" width="100%" style="max-width:600px"><tbody><tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tbody><tr><td bgcolor="#336699"><a href="https://x.test" style="background-color:#336699;display:block;padding:10px;color:#fff">FAKE</a></td></tr></tbody></table></td></tr></tbody></table></div></body></html>`;
-const lk = postProcessForOutlook(lookalike);
+const lk = postProcess(lookalike, { outlook: true });
 check('unmarked lookalike button table left untouched', !/\[if mso\]\\x3e\\x3ctable role=\\"presentation\\" width=\\"\d+\\"/.test(lk) && (lk.match(/FAKE/g) || []).length === 1);
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

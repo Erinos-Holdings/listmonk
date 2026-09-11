@@ -2,7 +2,7 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // User-authored markup inside an Html block (marked data-lm-user-html by the
 // reader) must NOT have its divs rewritten into table cells — td drops
@@ -23,7 +23,7 @@ const input = `<!doctype html><html><body>
 </div>
 </body></html>`;
 
-const out = postProcessForOutlook(input);
+const out = postProcess(input, { outlook: true });
 
 const checks = [];
 function check(name, ok, detail) {
@@ -41,7 +41,7 @@ check(
   /<td[^>]*bgcolor="#FFF8F0"[^>]*style="[^"]*padding:16px 24px 16px 24px/.test(out)
 );
 check(
-  'fenced wrapper gets no edge-margin graft (no guessing at user content)',
+  'fenced wrapper gets no edge-margin graft (regression guard: the graft was retired by PARAGRAPH-SPACING-SPEC D5; nothing may reintroduce it here)',
   !/bgcolor="#FFF8F0"[^>]*style="[^"]*mso-padding-alt/.test(out)
 );
 

@@ -2,7 +2,7 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // IMAGE-WIDTH-SPEC Part B (D3.4). hardenImages used to set height:auto on EVERY
 // image, which deleted the only sizing of a height-only image (campaign 47's logo:
@@ -14,13 +14,13 @@ let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 
 function render(imgs) {
-  return postProcessForOutlook(`<!doctype html><html><body>
+  return postProcess(`<!doctype html><html><body>
 <div style="background-color:#eee;margin:0;padding:20px 0;min-height:100%;width:100%">
 <table align="center" width="100%" style="margin:0 auto;max-width:600px;background-color:#fff"><tbody><tr><td>
 ${imgs.map((img) => `<div style="padding:16px 24px 16px 24px;text-align:center">${img}</div>`).join('\n')}
 </td></tr></tbody></table>
 </div>
-</body></html>`);
+</body></html>`, { outlook: true });
 }
 
 function imgByAlt(out, alt) {

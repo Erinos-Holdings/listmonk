@@ -2,10 +2,10 @@
 // downlevel-revealed conditional comment, so compiled output must never contain one; the
 // non-Word twin of every VML button and clamped image rides in an element carrying
 // mso-hide:all (a block wrapper; for a table twin, the table AND each of its cells).
-const { outlook, canvas, decodeSafe, makeChecker, JSDOM, inlineButton, fullWidthButton, wideImage } = require('./_fixtures-hardening.cjs');
+const { pp, canvas, decodeSafe, makeChecker, JSDOM, inlineButton, fullWidthButton, wideImage } = require('./_fixtures-hardening.cjs');
 const { check, done } = makeChecker();
 
-const out = outlook.postProcessForOutlook(canvas(inlineButton + fullWidthButton + wideImage));
+const out = pp.postProcess(canvas(inlineButton + fullWidthButton + wideImage), { outlook: true });
 const rendered = decodeSafe(out);
 
 // I1 — nowhere, in either the stored (Safe-encoded) or the rendered form.

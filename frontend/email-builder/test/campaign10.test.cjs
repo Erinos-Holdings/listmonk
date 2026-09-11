@@ -5,10 +5,10 @@ const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
 
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 const input = fs.readFileSync(path.join(__dirname, 'fixtures', 'campaign10-body.html'), 'utf8');
-const output = postProcessForOutlook(input);
+const output = postProcess(input, { outlook: true });
 fs.writeFileSync(path.join(__dirname, '.build', 'campaign10-fixed.html'), output);
 
 const checks = [];

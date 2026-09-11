@@ -16,7 +16,7 @@
 
 type TStyleMap = Record<string, string>;
 
-// A local copy of outlook.ts's parser. Deliberate: this module imports nothing, and the
+// A local copy of postProcess.ts's parser. Deliberate: this module imports nothing, and the
 // substring test it replaces is the bug it exists to avoid — `background-color:` must not
 // count as a `color:` declaration.
 function parseStyleMap(style: string | null): TStyleMap {

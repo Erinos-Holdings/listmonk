@@ -2,7 +2,7 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // 600px canvas; columns [200px fixed, auto] with 12px gap (6px inner paddings).
 // Auto column real content width = 600 - (200+6) - 6 = 388 -> 380px image must NOT clamp.
@@ -24,7 +24,7 @@ const input = `<!doctype html><html><body>
 </div>
 </body></html>`;
 
-const out = postProcessForOutlook(input);
+const out = postProcess(input, { outlook: true });
 const widths = [...out.matchAll(/<img[^>]*alt="([ab])"[^>]*width="(\d+)"/g)].map((m) => [m[1], Number(m[2])]);
 const byAlt = {};
 for (const [alt, w] of widths) (byAlt[alt] = byAlt[alt] || []).push(w);

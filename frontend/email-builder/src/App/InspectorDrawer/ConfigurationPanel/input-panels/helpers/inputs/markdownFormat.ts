@@ -1,6 +1,6 @@
 // Selection-based formatting transforms for the Text block's Content textarea.
 // Pure and dependency-free so the test suite can transpile it standalone
-// (test/markdown-format.test.cjs), the same isolation approach as outlook.ts.
+// (test/markdown-format.test.cjs), the same isolation approach as postProcess.ts.
 
 export type FormatResult = {
   text: string;

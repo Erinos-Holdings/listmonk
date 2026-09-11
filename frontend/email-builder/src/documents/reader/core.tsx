@@ -72,8 +72,8 @@ function getFontFamily(fontFamily: EmailLayoutProps['fontFamily']) {
 }
 
 // Transcription of upstream's Html component with one addition: the marker
-// attribute. It fences the block's user-authored contents off from the Outlook
-// post-processor (outlook.ts transformSimpleDivBlocks), which must not rewrite
+// attribute. It fences the block's user-authored contents off from the compile
+// post-processor (postProcess.ts transformSimpleDivBlocks), which must not rewrite
 // user divs into table cells — td has no margin, no inline-block, no floats.
 // The marker rides the padding wrapper itself so the WRAPPER stays convertible
 // (its padding is builder-owned); only strict descendants are fenced.

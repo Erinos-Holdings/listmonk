@@ -7,7 +7,7 @@ const { createRequire } = require('module');
 // stored campaigns arrive via resetDocument() and replace it wholesale. Both
 // legs are asserted here: the constant itself, and the EditorContext merge /
 // replace semantics the guarantee rests on. Sources are transpiled standalone
-// and evaluated — same isolation approach as run.cjs takes for outlook.ts.
+// and evaluated — same isolation approach as run.cjs takes for postProcess.ts.
 const builderRoot = path.join(__dirname, '..');
 const ts = require(path.join(builderRoot, 'node_modules', 'typescript'));
 const builderRequire = createRequire(path.join(builderRoot, 'package.json'));

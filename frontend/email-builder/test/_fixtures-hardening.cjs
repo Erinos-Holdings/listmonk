@@ -4,7 +4,7 @@
 const path = require('path');
 const { JSDOM } = require('jsdom');
 global.DOMParser = new JSDOM('<!doctype html>').window.DOMParser;
-const outlook = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const pp = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 const MODERN_SANS = '&quot;Helvetica Neue&quot;, &quot;Arial Nova&quot;, &quot;Nimbus Sans&quot;, Arial, sans-serif';
 const ARIAL = 'Arial, &quot;Helvetica Neue&quot;, Helvetica, sans-serif';
@@ -45,6 +45,6 @@ function makeChecker() {
 }
 
 module.exports = {
-  JSDOM, outlook, canvas, decodeSafe, makeChecker,
+  JSDOM, pp, canvas, decodeSafe, makeChecker,
   MODERN_SANS, ARIAL, inlineButton, fullWidthButton, wideImage, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv,
 };

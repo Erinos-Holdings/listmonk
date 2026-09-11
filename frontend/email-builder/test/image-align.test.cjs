@@ -2,7 +2,7 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 global.DOMParser = dom.window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // Image block alignment (campaign 48 footer logo, 2026-09-03). transformImageBlocks
 // wraps the image in a shrink-wrap inner table inside a full-width outer table; the
@@ -24,13 +24,13 @@ let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 
 function render(inner) {
-  return postProcessForOutlook(`<!doctype html><html><body>
+  return postProcess(`<!doctype html><html><body>
 <div style="background-color:#eee;margin:0;padding:20px 0;min-height:100%;width:100%">
 <table align="center" width="100%" style="margin:0 auto;max-width:600px;background-color:#fff"><tbody><tr><td>
 ${inner}
 </td></tr></tbody></table>
 </div>
-</body></html>`);
+</body></html>`, { outlook: true });
 }
 function block(wrapperStyle, inner) { return `<div style="${wrapperStyle}">${inner}</div>`; }
 
@@ -90,6 +90,24 @@ for (const [label, inner] of [['bare img', logo], ['linked img', linked]]) {
 
   const u = imageTables(render(block('padding:0px', inner)), 'logo');
   check(`${label} unset: inner table carries NO align attribute`, u && u.innerAlign === null, u && String(u.innerAlign));
+}
+
+// PARAGRAPH-SPACING-SPEC D6 / I8 (runbook hazard 55(b), campaign 66): the linked image's
+// inline-block anchor sat on the line box's baseline, leaving a ~5px descender strip under
+// it in every browser-engined client. The anchor now carries vertical-align:top (still
+// inline-block, so the cell's align keeps centering it); the unlinked image, a bare block
+// <img>, never had the gap and gets no vertical-align at all.
+{
+  const doc = new JSDOM(render(block('padding:16px 0px 0px 0px;text-align:center', linked))).window.document;
+  const a = doc.querySelector('img[alt="logo"]').parentElement;
+  const aStyle = a.tagName === 'A' ? (a.getAttribute('style') || '') : '';
+  check('I8: linked standalone image anchor carries vertical-align:top', /(^|;)vertical-align:top(;|$)/.test(aStyle), aStyle);
+  check('I8: linked standalone image anchor stays inline-block (the cell align still centers it)', /(^|;)display:inline-block(;|$)/.test(aStyle), aStyle);
+  check('I8: exactly one vertical-align on the anchor', (aStyle.match(/vertical-align/g) || []).length === 1, aStyle);
+
+  const bare = new JSDOM(render(block('padding:16px 0px 0px 0px;text-align:center', logo))).window.document.querySelector('img[alt="logo"]');
+  check('I8: unlinked standalone image carries no vertical-align', !/vertical-align/.test(bare.getAttribute('style') || ''), bare.getAttribute('style'));
+  check('I8: unlinked standalone image is still display:block', /(^|;)display:block(;|$)/.test(bare.getAttribute('style') || ''));
 }
 
 // A width-sized full-bleed hero (campaign 48 header) is left/unset and must be untouched.

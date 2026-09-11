@@ -1,7 +1,7 @@
 const path = require('path');
 const { JSDOM } = require('jsdom');
 global.DOMParser = new JSDOM('<!doctype html>').window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // Custom width+height button (VML branch): inline-block anchor, explicit width,
 // line-height-based height, thick border — mirrors the "Outlook Test" button.
@@ -15,7 +15,7 @@ const input = `<!doctype html><html><body>
 </div>
 </body></html>`;
 
-const out = postProcessForOutlook(input);
+const out = postProcess(input, { outlook: true });
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 
@@ -51,7 +51,7 @@ check('CSS anchor intact inside the mso-hide:all twin', /<div class="lm-nomso" s
 check('no downlevel-revealed conditional', !rendered.includes('!mso'));
 // Explicit sub-floor height must also be floored (invisible-label guard)
 const tiny = input.replace('line-height:19px;', 'line-height:19px;height:20px;');
-const tinyOut = postProcessForOutlook(tiny);
+const tinyOut = postProcess(tiny, { outlook: true });
 const th = tinyOut.match(/height:([\d.]+)pt;v-text-anchor/);
 check('explicit 20px height floored to 2x font: 32px -> 24pt', th && th[1] === '24', th && `h=${th[1]}`);
 

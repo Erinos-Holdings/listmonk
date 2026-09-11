@@ -4,12 +4,12 @@
 // stack gets no wrapper. A stack with no allowlisted family fails this suite (the build).
 const fs = require('fs');
 const path = require('path');
-const { outlook, canvas, decodeSafe, makeChecker, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv } = require('./_fixtures-hardening.cjs');
+const { pp, canvas, decodeSafe, makeChecker, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv } = require('./_fixtures-hardening.cjs');
 const { check, done } = makeChecker();
 
 // The allowlist pinned by the spec (D4).
 const ALLOWLIST = ['Arial', 'Arial Rounded MT Bold', 'Bahnschrift', 'Bodoni MT', 'Bookman Old Style', 'Calibri', 'Cambria', 'Candara', 'Corbel', 'Courier New', 'Franklin Gothic Medium', 'Georgia', 'Palatino Linotype', 'Rockwell', 'Segoe Print', 'Segoe UI', 'Sitka Text', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
-check('WORD_FONT_ALLOWLIST is exactly the pinned set', JSON.stringify([...outlook.WORD_FONT_ALLOWLIST].sort()) === JSON.stringify([...ALLOWLIST].sort()));
+check('WORD_FONT_ALLOWLIST is exactly the pinned set', JSON.stringify([...pp.WORD_FONT_ALLOWLIST].sort()) === JSON.stringify([...ALLOWLIST].sort()));
 
 // Every stack in fontFamily.ts: the fallback is the first allowlisted family; a stack
 // whose lead is allowlisted needs none; a stack with none is a build error.
@@ -31,33 +31,35 @@ const expected = {
 };
 const allow = new Set(ALLOWLIST.map((f) => f.toLowerCase()));
 for (const { key, value } of fonts) {
-  const got = outlook.wordFontFallback(value);
+  const got = pp.wordFontFallback(value);
   check(`${key}: stack contains an allowlisted family (build error otherwise)`, got !== null, value);
-  const families = outlook.parseFontStack(value);
+  const families = pp.parseFontStack(value);
   const derived = allow.has(families[0].toLowerCase()) ? '' : (families.find((f) => allow.has(f.toLowerCase())) || null);
   check(`${key}: fallback is the stack's first allowlisted family (${JSON.stringify(derived)})`, got === derived, `got ${JSON.stringify(got)}`);
   if (key in expected) check(`${key}: matches the spec's D4 table`, got === expected[key], `got ${JSON.stringify(got)}`);
 }
-check('a stack with no allowlisted family reports null', outlook.wordFontFallback('Roboto, "Open Sans", sans-serif') === null);
-check('MODERN_SANS lead is not compliant; ARIAL is', outlook.wordFontFallback('"Helvetica Neue", Arial') === 'Arial' && outlook.wordFontFallback('Arial, Helvetica') === '');
+check('a stack with no allowlisted family reports null', pp.wordFontFallback('Roboto, "Open Sans", sans-serif') === null);
+check('MODERN_SANS lead is not compliant; ARIAL is', pp.wordFontFallback('"Helvetica Neue", Arial') === 'Arial' && pp.wordFontFallback('Arial, Helvetica') === '');
 
 // Compiled document: layout default MODERN_SANS (inherited from the backdrop) → the
-// converted greeting, the unconverted rhythm block and the box heading inside a bordered
-// Container all get the Word-only wrapper; the explicit ARIAL block gets none.
-const out = outlook.postProcessForOutlook(canvas(modernText + arialText + rhythmModernText + borderedContainer));
+// converted greeting, the horizontal-padding block (a converted td since
+// PARAGRAPH-SPACING-SPEC D5) and the box heading inside a bordered Container all get the
+// Word-only wrapper; the explicit ARIAL block gets none. The paragraphs carry the inline
+// margins normalizeTextMargins states (D1), hence `<p[^>]*>` in the patterns below.
+const out = pp.postProcess(canvas(modernText + arialText + rhythmModernText + borderedContainer), { outlook: true });
 const rendered = decodeSafe(out);
 const OPEN = '<!--[if mso]><font face="Arial"><![endif]-->';
 const CLOSE = '<!--[if mso]></font><![endif]-->';
 check('three MODERN_SANS blocks get the Word-only <font face="Arial"> wrapper', (rendered.split(OPEN).length - 1) === 3, `opens=${rendered.split(OPEN).length - 1}`);
 check('every wrapper is closed', (rendered.split(CLOSE).length - 1) === 3);
-check('greeting (converted td) wrapped', /<td[^>]*>\s*<!--\[if mso\]><font face="Arial"><!\[endif\]--><p>Ciao \{\{ \.Subscriber\.FirstName \}\},<\/p><!--\[if mso\]><\/font><!\[endif\]-->\s*<\/td>/.test(rendered));
-check('rhythm-only block (unconverted div) wrapped', /<div style="padding:0px 24px 0px 24px"[^>]*><!--\[if mso\]><font face="Arial"><!\[endif\]--><p>Hai sbloccato/.test(rendered));
-check('box heading inside the bordered Container wrapped', /<!--\[if mso\]><font face="Arial"><!\[endif\]--><p><strong>Scade il 15 ottobre<\/strong><\/p>/.test(rendered));
+check('greeting (converted td) wrapped', /<td[^>]*>\s*<!--\[if mso\]><font face="Arial"><!\[endif\]--><p[^>]*>Ciao \{\{ \.Subscriber\.FirstName \}\},<\/p><!--\[if mso\]><\/font><!\[endif\]-->\s*<\/td>/.test(rendered));
+check('horizontal-padding block (converted td) wrapped', /<td style="padding:0px 24px 0px 24px"[^>]*><!--\[if mso\]><font face="Arial"><!\[endif\]--><p[^>]*>Hai sbloccato/.test(rendered));
+check('box heading inside the bordered Container wrapped', /<!--\[if mso\]><font face="Arial"><!\[endif\]--><p[^>]*><strong>Scade il 15 ottobre<\/strong><\/p>/.test(rendered));
 // Markdown-off Text block (bare text node, no <p>) — I6 says EVERY text block.
-const outPlain = decodeSafe(outlook.postProcessForOutlook(canvas(plainModernText + spacerDiv)));
+const outPlain = decodeSafe(pp.postProcess(canvas(plainModernText + spacerDiv), { outlook: true }));
 check('markdown-off text block (bare text node) gets the wrapper', /<!--\[if mso\]><font face="Arial"><!\[endif\]-->Tutto a metà prezzo\.<!--\[if mso\]><\/font><!\[endif\]-->/.test(outPlain), outPlain.slice(0, 400));
 check('nbsp-only spacer div gets no wrapper', (outPlain.split(OPEN).length - 1) === 1, `opens=${outPlain.split(OPEN).length - 1}`);
-check('ARIAL block gets no wrapper', !/<!--\[if mso\]><font face="[^"]*"><!\[endif\]--><p>Le ricompense/.test(rendered));
+check('ARIAL block gets no wrapper', !/<!--\[if mso\]><font face="[^"]*"><!\[endif\]--><p[^>]*>Le ricompense/.test(rendered));
 check('wrapper only inside downlevel-hidden conditionals (no raw <font face> outside Word)', !/(^|[^>])<font face=/.test(rendered.replace(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/g, '')));
 check('stored body: wrapper rides in Safe payloads (never a raw comment the DOM could eat)', out.includes('{{ Safe "\\x3c!--[if\\x20mso]\\x3e\\x3cfont\\x20face=\\"Arial\\"\\x3e\\x3c![endif]--\\x3e" }}'));
 

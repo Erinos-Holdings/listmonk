@@ -1,7 +1,7 @@
 const path = require('path');
 const { JSDOM } = require('jsdom');
 global.DOMParser = new JSDOM('<!doctype html>').window.DOMParser;
-const { postProcessForOutlook } = require(path.join(__dirname, '.build', 'outlook.cjs'));
+const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'));
 
 // RAW pre-transform builder shape: wrapper div > display:block anchor.
 // transformButtonBlocks must stamp the marker, the walker must then dual-emit.
@@ -16,7 +16,7 @@ const input = `<!doctype html><html><body>
 </body></html>`;
 
 const { foldVmlMarkers } = require(path.join(__dirname, 'vml-marker-fold.cjs'));
-const out = foldVmlMarkers(postProcessForOutlook(input));
+const out = foldVmlMarkers(postProcess(input, { outlook: true }));
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 const mso = out.match(/\{\{ Safe "[^}]*?v:roundrect[^}]*?width:([\d.]+)pt[^}]*?fillcolor=\\"#0055d4\\"[^}]*?\}\}/);
@@ -28,13 +28,13 @@ check('pipeline: original CSS anchor preserved', /display:block/.test(out) && (o
 // Long label wraps in the CSS button -> VML height must cover the wrapped lines
 const longLabel = 'Discover Everything New In The August Collection Now';
 const wrapInput = input.replace('SHOP NOW', longLabel);
-const wrapOut = foldVmlMarkers(postProcessForOutlook(wrapInput));
+const wrapOut = foldVmlMarkers(postProcess(wrapInput, { outlook: true }));
 const wh = wrapOut.match(/height:([\d.]+)pt;v-text-anchor/);
 check('wrapped 2-line label: 19*2+24+1 hairline=63px -> 47.25pt', wh && wh[1] === '47.25', wh && `h=${wh[1]}`);
 
 // Non-canonical border shorthand still yields the stroke
 const borderInput = input.replace('text-decoration:none">SHOP NOW', 'text-decoration:none;border:solid 5px #e01d1d !important">SHOP NOW');
-const borderOut = foldVmlMarkers(postProcessForOutlook(borderInput));
+const borderOut = foldVmlMarkers(postProcess(borderInput, { outlook: true }));
 check('reordered border + !important -> stroke color kept', /strokecolor=\\"#e01d1d\\"/.test(borderOut) && /strokeweight=\\"3.75pt\\"/.test(borderOut));
 check('border width joins the height: 43+5=48px -> 36pt', /height:36pt;v-text-anchor/.test(borderOut));
 
