@@ -7,6 +7,9 @@ import (
 	"image/draw"
 	"image/gif"
 	"image/png"
+	"math"
+
+	"github.com/disintegration/imaging"
 )
 
 // Dark-mode classification and repair (DARK-MODE-SPEC D4).
@@ -31,7 +34,7 @@ import (
 // ClassifierVersion stamps every verdict. The lint helper on the integrations side
 // (lib/listmonk-media-lint.ts) compares against it to find stale rows, so the two constants
 // MUST be bumped together -- see the listmonk runbook's dark-mode bullet.
-const ClassifierVersion = 1
+const ClassifierVersion = 2
 
 // Image classes, in evaluation order.
 const (
@@ -66,7 +69,13 @@ const (
 	// A pixel at or above this luma is "white" for the border-whiteness and ink measures.
 	nearWhite = 0.95
 
-	darkInk       = 0.35 // ink at or below this is dark
+	darkInk = 0.35 // ink at or below this is dark
+	// icon-ring repair geometry (the Curated convention, measured on the live
+	// social-curated-facebook.png: white disc at the full 104px diameter, ring outer radius
+	// 47 -- inset 5px, ~10% of the disc radius). The margin OUTSIDE the ring is what keeps
+	// the ring visible on a dark ground; a ring at the canvas edge merges into it, which is
+	// what the interior-only fill produced for social-curated-email.png on 2026-09-11.
+	ringInset     = 0.10
 	iconMaxDim    = 256  // icon-ring applies to small glyphs only
 	iconEnclosed  = 0.20 // enclosed transparent area, as a share of the opaque bounding box
 	borderWhiteFr = 0.90 // share of the 2px outer ring that must be white
@@ -412,75 +421,92 @@ func Repairable(class string) bool {
 func Repair(img image.Image, v Verdict) (image.Image, bool) {
 	switch v.Class {
 	case ClassIconRing:
-		return fillEnclosedWhite(img), true
+		return discBacked(img), true
 	case ClassMonoOnWhite:
 		return keyWhiteToAlpha(img), true
 	}
 	return img, false
 }
 
-// fillEnclosedWhite fills the transparent regions a ring encloses with opaque white, giving
-// the glyph the same white disc the other three Curated icons have carried since
-// 2026-08-10. The disc is what makes the glyph legible in BOTH dark-client cases: untouched
-// (black on white) and recoloured by Gmail Android (white on white disc is still a disc).
-func fillEnclosedWhite(img image.Image) image.Image {
+// discBacked rebuilds a ring glyph in the Curated geometry: an opaque white disc at the
+// canvas's full diameter with the glyph scaled so its ring sits ringInset inside the disc's
+// edge, centred. The disc is what makes the glyph legible in BOTH dark-client cases:
+// untouched (black on white) and recoloured by Gmail Android (white on white disc is still
+// a disc). The margin outside the ring keeps the ring itself visible on a dark ground.
+// The canvas size is unchanged, so the template's width attribute still fits.
+//
+// A glyph already smaller than the inset disc is not upscaled -- it is only centred.
+func discBacked(img image.Image) image.Image {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
-	trans := make([]bool, w*h)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			if _, _, _, a := img.At(b.Min.X+x, b.Min.Y+y).RGBA(); a < alphaOpaque {
-				trans[y*w+x] = true
-			}
-		}
-	}
-
-	// Re-run the border flood so the enclosed set is the same one Classify measured.
-	seen := make([]bool, w*h)
-	stack := make([]int, 0, w*h/4)
-	push := func(i int) {
-		if i >= 0 && i < w*h && trans[i] && !seen[i] {
-			seen[i] = true
-			stack = append(stack, i)
-		}
-	}
-	for x := 0; x < w; x++ {
-		push(x)
-		push((h-1)*w + x)
-	}
-	for y := 0; y < h; y++ {
-		push(y * w)
-		push(y*w + w - 1)
-	}
-	for len(stack) > 0 {
-		i := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		x, y := i%w, i/w
-		if x > 0 {
-			push(i - 1)
-		}
-		if x < w-1 {
-			push(i + 1)
-		}
-		if y > 0 {
-			push(i - w)
-		}
-		if y < h-1 {
-			push(i + w)
-		}
-	}
-
 	out := image.NewNRGBA(image.Rect(0, 0, w, h))
-	draw.Draw(out, out.Bounds(), img, b.Min, draw.Src)
-	white := color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
+	if w == 0 || h == 0 {
+		return out
+	}
+
+	// The opaque bounding box is the glyph; its half-extent is the ring's outer radius.
+	minX, minY, maxX, maxY := w, h, -1, -1
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			i := y*w + x
-			if trans[i] && !seen[i] {
-				out.SetNRGBA(x, y, white)
+			if _, _, _, a := img.At(b.Min.X+x, b.Min.Y+y).RGBA(); a >= alphaOpaque {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+				if y < minY {
+					minY = y
+				}
+				if y > maxY {
+					maxY = y
+				}
 			}
 		}
 	}
+	if maxX < 0 {
+		return out
+	}
+
+	disc := float64(min(w, h)) / 2
+	margin := math.Round(disc * ringInset)
+	ringR := float64(max(maxX-minX+1, maxY-minY+1)) / 2
+	scale := (disc - margin) / ringR
+	if scale > 1 {
+		scale = 1
+	}
+
+	glyph := imaging.Crop(img, image.Rect(b.Min.X+minX, b.Min.Y+minY, b.Min.X+maxX+1, b.Min.Y+maxY+1))
+	gw := int(math.Round(float64(maxX-minX+1) * scale))
+	gh := int(math.Round(float64(maxY-minY+1) * scale))
+	if gw < 1 {
+		gw = 1
+	}
+	if gh < 1 {
+		gh = 1
+	}
+	if scale < 1 {
+		glyph = imaging.Resize(glyph, gw, gh, imaging.Lanczos)
+	}
+
+	// The white disc, anti-aliased at its edge by signed distance.
+	cx, cy := float64(w)/2, float64(h)/2
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			d := math.Hypot(float64(x)+0.5-cx, float64(y)+0.5-cy)
+			cov := disc - d + 0.5
+			if cov <= 0 {
+				continue
+			}
+			if cov > 1 {
+				cov = 1
+			}
+			out.SetNRGBA(x, y, color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: uint8(cov*255 + 0.5)})
+		}
+	}
+
+	off := image.Pt((w-gw)/2, (h-gh)/2)
+	draw.Draw(out, image.Rect(off.X, off.Y, off.X+gw, off.Y+gh), glyph, glyph.Bounds().Min, draw.Over)
 	return out
 }
 

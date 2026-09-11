@@ -7,6 +7,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -393,22 +394,69 @@ func TestRepairIdempotent(t *testing.T) {
 	}
 }
 
-func TestRepairIconRingFillsTheDisc(t *testing.T) {
+// ringOuterRadius is the distance from the canvas centre to the first dark opaque pixel on
+// the horizontal centre row -- the ring's outer radius, the number the Curated geometry is
+// pinned on.
+func ringOuterRadius(img image.Image) float64 {
+	b := img.Bounds()
+	y := b.Min.Y + b.Dy()/2
+	for x := 0; x < b.Dx(); x++ {
+		r, g, bl, a := img.At(b.Min.X+x, y).RGBA()
+		if a >= alphaOpaque && lumaAt(straightAlpha(r, g, bl, a)) <= darkInk {
+			return float64(b.Dx())/2 - float64(x)
+		}
+	}
+	return 0
+}
+
+func TestRepairIconRingMatchesTheCuratedGeometry(t *testing.T) {
 	img, v, err := ClassifyRaw(fixture(t, "social-curated-email.png"), "png")
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, _ := Repair(img, v)
+	if v.Class != ClassIconRing {
+		t.Fatalf("fixture classifies %q", v.Class)
+	}
+	out, changed := Repair(img, v)
+	if !changed {
+		t.Fatal("no repair applied")
+	}
 
-	// The centre of the ring was transparent and must now be opaque white.
+	// Same canvas, so the template's width attribute still fits.
+	if out.Bounds().Dx() != img.Bounds().Dx() || out.Bounds().Dy() != img.Bounds().Dy() {
+		t.Fatalf("canvas changed: %v -> %v", img.Bounds(), out.Bounds())
+	}
+
+	// The ring sits at the Facebook icon's radius: the geometry every Curated glyph shares.
+	ref, err := png.Decode(bytes.NewReader(fixture(t, "social-curated-facebook.png")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, got := ringOuterRadius(ref), ringOuterRadius(out)
+	if math.Abs(want-got) > 1 {
+		t.Fatalf("ring outer radius %.1f, want %.1f (facebook) +-1", got, want)
+	}
+
+	// Outside the ring is opaque white (the margin), the centre is opaque white (the
+	// interior), and the corner is transparent (a disc, not a square).
 	b := out.Bounds()
-	r, g, bl, a := out.At(b.Min.X+b.Dx()/2, b.Min.Y+b.Dy()/2).RGBA()
-	if a != 0xffff || r != 0xffff || g != 0xffff || bl != 0xffff {
+	edgeX := b.Min.X + int(float64(b.Dx())/2-want) - 2
+	if r, g, bl, a := out.At(edgeX, b.Min.Y+b.Dy()/2).RGBA(); a != 0xffff || r != 0xffff || g != 0xffff || bl != 0xffff {
+		t.Fatalf("margin outside the ring is %v,%v,%v,%v -- want opaque white", r, g, bl, a)
+	}
+	if r, g, bl, a := out.At(b.Min.X+b.Dx()/2, b.Min.Y+b.Dy()/2).RGBA(); a != 0xffff || r != 0xffff || g != 0xffff || bl != 0xffff {
 		t.Fatalf("ring interior is %v,%v,%v,%v -- want opaque white", r, g, bl, a)
 	}
-	// The transparency OUTSIDE the ring is untouched: the glyph must not become a square.
 	if _, _, _, corner := out.At(b.Min.X, b.Min.Y).RGBA(); corner >= 0x8000 {
-		t.Fatalf("the corner outside the ring became opaque (alpha %v)", corner)
+		t.Fatalf("the corner became opaque (alpha %v)", corner)
+	}
+
+	// And it now measures like the Facebook icon: a light rim, solid, `ok`.
+	if s := measure(out); s.rimDarkFr > 0.05 {
+		t.Fatalf("repaired rim is %.2f dark -- the outer circle would merge into a dark ground", s.rimDarkFr)
+	}
+	if after := Classify(out, "png"); after.Class != ClassOK {
+		t.Fatalf("repaired glyph classifies %q, want ok", after.Class)
 	}
 }
 
