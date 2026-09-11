@@ -470,41 +470,37 @@ func discBacked(img image.Image) image.Image {
 		return out
 	}
 
-	// The opaque bounding box is the glyph; its half-extent is the ring's outer radius.
-	minX, minY, maxX, maxY := w, h, -1, -1
+	// Two bounding boxes: the OPAQUE one is the glyph's geometry (its half-extent is the
+	// ring's outer radius, the number the inset is computed from); the COVERAGE one (any
+	// alpha at all) is what gets cropped, so the anti-aliased fringe outside the opaque
+	// edge rides along instead of being cut off and hardening the ring's outer edge.
+	var opaque, covered bbox
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			if _, _, _, a := img.At(b.Min.X+x, b.Min.Y+y).RGBA(); a >= alphaOpaque {
-				if x < minX {
-					minX = x
-				}
-				if x > maxX {
-					maxX = x
-				}
-				if y < minY {
-					minY = y
-				}
-				if y > maxY {
-					maxY = y
-				}
+			_, _, _, a := img.At(b.Min.X+x, b.Min.Y+y).RGBA()
+			if a > 0 {
+				covered.add(x, y)
+			}
+			if a >= alphaOpaque {
+				opaque.add(x, y)
 			}
 		}
 	}
-	if maxX < 0 {
+	if opaque.empty() {
 		return out
 	}
 
 	disc := float64(min(w, h)) / 2
 	margin := math.Round(disc * ringInset)
-	ringR := float64(max(maxX-minX+1, maxY-minY+1)) / 2
+	ringR := float64(max(opaque.w(), opaque.h())) / 2
 	scale := (disc - margin) / ringR
 	if scale > 1 {
 		scale = 1
 	}
 
-	glyph := imaging.Crop(img, image.Rect(b.Min.X+minX, b.Min.Y+minY, b.Min.X+maxX+1, b.Min.Y+maxY+1))
-	gw := int(math.Round(float64(maxX-minX+1) * scale))
-	gh := int(math.Round(float64(maxY-minY+1) * scale))
+	glyph := imaging.Crop(img, image.Rect(b.Min.X+covered.minX, b.Min.Y+covered.minY, b.Min.X+covered.maxX+1, b.Min.Y+covered.maxY+1))
+	gw := int(math.Round(float64(covered.w()) * scale))
+	gh := int(math.Round(float64(covered.h()) * scale))
 	if gw < 1 {
 		gw = 1
 	}
@@ -535,6 +531,25 @@ func discBacked(img image.Image) image.Image {
 	draw.Draw(out, image.Rect(off.X, off.Y, off.X+gw, off.Y+gh), glyph, glyph.Bounds().Min, draw.Over)
 	return out
 }
+
+// bbox accumulates a pixel bounding box; empty until the first add.
+type bbox struct {
+	minX, minY, maxX, maxY int
+	set                    bool
+}
+
+func (b *bbox) add(x, y int) {
+	if !b.set {
+		b.minX, b.minY, b.maxX, b.maxY, b.set = x, y, x, y, true
+		return
+	}
+	b.minX, b.maxX = min(b.minX, x), max(b.maxX, x)
+	b.minY, b.maxY = min(b.minY, y), max(b.maxY, y)
+}
+
+func (b *bbox) empty() bool { return !b.set }
+func (b *bbox) w() int      { return b.maxX - b.minX + 1 }
+func (b *bbox) h() int      { return b.maxY - b.minY + 1 }
 
 // keyWhiteToAlpha turns a dark mark on an opaque white ground into a #777777 mark on
 // transparency.
