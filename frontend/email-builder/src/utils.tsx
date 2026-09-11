@@ -1,9 +1,16 @@
 import renderToStaticMarkup from './documents/reader/renderToStaticMarkup';
 import { TEditorConfiguration } from './documents/editor/core';
-import { postProcessForOutlook } from './outlook';
+import { makeSafeTemplate, postProcessForOutlook } from './outlook';
+import { inlineLinkColor } from './inlineLinkColor';
 
 const VIEWPORT_META = '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
-const MSO_DOCUMENT_SETTINGS = '<!--[if mso]><noscript><xml xmlns:o="urn:schemas-microsoft-com:office:office"><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->';
+// Fork (dark-mode readiness) -- DARK-MODE-SPEC D1. The document-settings block is a RAW
+// HTML comment, and Go's html/template ELIDES raw comments on every compile, so no
+// recipient has ever received it -- which is why the 120 dpi Outlook renders scale text
+// x1.25 against an unscaled card. Wrapping it in the same `{{ Safe "..." }}` encoder the
+// body-side MSO comments use (outlook.ts makeSafeTemplate) is what makes it survive the
+// compile. Emitted only for outlook:true documents, exactly as before.
+const MSO_DOCUMENT_SETTINGS = makeSafeTemplate('<!--[if mso]><noscript><xml xmlns:o="urn:schemas-microsoft-com:office:office"><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->');
 const HTML_ATTRIBUTE_ESCAPES: Record<string, string> = {
   '&': '&amp;',
   '"': '&quot;',
@@ -66,7 +73,12 @@ export function renderHtmlWithMeta(
 ): string {
   const embedURLs = collectImageEmbedURLs(document);
   const html = renderToStaticMarkup(document, options);
-  const rendered = options.outlook ? postProcessForOutlook(html) : html;
+  // The link-color inlining runs UNCONDITIONALLY (the Outlook transforms are opt-in; this
+  // one must reach every template) and BEFORE postProcessForOutlook, so the VML button
+  // builder reads the same anchor styles it always has. Button anchors already carry a
+  // color, so the pass never reaches them.
+  const linked = inlineLinkColor(html, options.linkColor);
+  const rendered = options.outlook ? postProcessForOutlook(linked) : linked;
   const output = applyImageEmbeds(rendered, embedURLs);
   const meta = options.outlook ? `${VIEWPORT_META}${MSO_DOCUMENT_SETTINGS}` : VIEWPORT_META;
   // Gmail strips a <style> tag placed in <body> (caniemail: html-style, note 1)

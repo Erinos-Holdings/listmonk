@@ -18,3 +18,8 @@ SELECT * FROM media WHERE
 -- name: delete-media
 DELETE FROM media WHERE id=$1 RETURNING filename;
 
+
+-- name: update-media-meta
+-- Fork (dark-mode readiness) -- DARK-MODE-SPEC D4/D5. Merges a key set into media.meta so a
+-- re-classification never drops width/height (or anything a later feature adds).
+UPDATE media SET meta = meta || $2 WHERE id = $1;

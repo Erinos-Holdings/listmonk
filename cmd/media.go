@@ -61,11 +61,39 @@ func (a *App) UploadMedia(c echo.Context) error {
 			a.i18n.Ts("media.errorReadingFile", "error", err.Error()))
 	}
 
+	// Fork (dark-mode readiness) -- DARK-MODE-SPEC D4. Classify every raster upload and
+	// repair the two classes that have a safe, unambiguous fix (a ring glyph's transparent
+	// interior; a dark monochrome mark on an opaque white ground). This runs on the UPLOAD
+	// ITSELF, before the optimizer: the optimizer may re-encode an opaque logo as a JPEG,
+	// and the classifier treats JPEG input as photographic by construction, so classifying
+	// the optimized bytes would let a mono-on-white logo slip past as a "photo". A repair
+	// always encodes PNG (alpha), and is then optimized like any other upload. The untouched
+	// upload bytes are kept under orig_<filename> whenever pixels changed.
+	var (
+		darkVerdict     optimizer.Verdict
+		darkFixed       bool
+		origRaw         []byte
+		origContentType string
+	)
+	isImage := inArray(ext, imageExts)
+	if isImage {
+		out, outExt, v, fixed, err := classifyAndRepair(raw, ext)
+		if err != nil {
+			a.log.Printf("error classifying image for dark mode: %v", err)
+			return echo.NewHTTPError(http.StatusBadRequest,
+				a.i18n.Ts("media.errorReadingFile", "error", err.Error()))
+		}
+		darkVerdict, darkFixed = v, fixed
+		if fixed {
+			origRaw, origContentType = raw, contentType
+			raw, ext, contentType = out, outExt, optimizer.RasterContentType(outExt)
+		}
+	}
+
 	// Optimize raster images for e-mail delivery (downsize to
 	// maxImageWidth, recompress, possibly convert format). The original
 	// bytes are kept whenever optimization cannot produce a smaller file.
 	var width, height int
-	isImage := inArray(ext, imageExts)
 	if isImage {
 		opt, err := optimizer.Optimize(raw, ext)
 		if errors.Is(err, optimizer.ErrAnimatedGIFTooLarge) {
@@ -104,29 +132,38 @@ func (a *App) UploadMedia(c echo.Context) error {
 		fName = appendSuffixToFilename(fName, suffix)
 	}
 
+	// This keeps track of whether the objects have to be deleted from the store if any of
+	// the subsequent steps fail. One helper removes the whole set (file, thumb_, orig_) so the
+	// cleanup path and the delete path cannot drift apart (runbook hazard 59).
+	cleanUp := false
+	defer func() {
+		if cleanUp {
+			deleteMediaObjects(a.media, fName)
+		}
+	}()
+
+	// Fork (dark-mode readiness) -- keep the untouched upload BEFORE the repair is written
+	// (DARK-MODE-SPEC D4), so at no point does a repaired object exist without its original.
+	// A later reprocess always classifies and repairs from the original rather than from
+	// repaired bytes. Never over an existing original (putOriginal enforces that).
+	if darkFixed {
+		if _, err := putOriginal(a.media, fName, origContentType, origRaw); err != nil {
+			cleanUp = true
+			a.log.Printf("error storing original: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError,
+				a.i18n.Ts("media.errorUploading", "error", err.Error()))
+		}
+	}
+
 	// Upload the file to the media store.
-	fName, err = a.media.Put(fName, contentType, bytes.NewReader(raw))
-	if err != nil {
+	if _, err := a.media.Put(fName, contentType, bytes.NewReader(raw)); err != nil {
+		cleanUp = true
 		a.log.Printf("error uploading file: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,
 			a.i18n.Ts("media.errorUploading", "error", err.Error()))
 	}
 
-	// This keeps track of whether the file has to be deleted from the DB and the store
-	// if any of the subsequent steps fail.
-	var (
-		cleanUp    = false
-		thumbfName = ""
-	)
-	defer func() {
-		if cleanUp {
-			a.media.Delete(fName)
-
-			if thumbfName != "" {
-				a.media.Delete(thumbfName)
-			}
-		}
-	}()
+	thumbfName := ""
 
 	// Create thumbnail from the stored (optimized) bytes for non-vector formats.
 	if isImage {
@@ -158,6 +195,11 @@ func (a *App) UploadMedia(c echo.Context) error {
 		meta = models.JSON{
 			"width":  width,
 			"height": height,
+			// Fork (dark-mode readiness) -- DARK-MODE-SPEC D4.
+			darkmodeMetaKey: verdictMeta(darkVerdict, darkFixed),
+		}
+		if darkFixed {
+			meta[originalMetaKey] = true
 		}
 	}
 
@@ -216,9 +258,9 @@ func (a *App) DeleteMedia(c echo.Context) error {
 		return err
 	}
 
-	// Delete the files from the media store.
-	a.media.Delete(fname)
-	a.media.Delete(thumbPrefix + fname)
+	// Delete the files from the media store. Fork (dark-mode readiness) -- the retained
+	// original is derived from the filename exactly as the thumbnail is, and goes with it.
+	deleteMediaObjects(a.media, fname)
 
 	return c.JSON(http.StatusOK, okResp{true})
 }

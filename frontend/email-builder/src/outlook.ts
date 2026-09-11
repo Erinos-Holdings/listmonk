@@ -225,7 +225,7 @@ function escapeTemplateString(value: string) {
     .replace(/"/g, '\\"');
 }
 
-function makeSafeTemplate(raw: string) {
+export function makeSafeTemplate(raw: string) {
   // Encode angle brackets so DOMParser does not consume Outlook conditional comments
   // before the Go template expression is evaluated. Encode spaces/tabs too: the
   // payload must be a single unbreakable token, because listmonk's format-switch

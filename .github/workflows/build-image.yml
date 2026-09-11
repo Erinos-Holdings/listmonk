@@ -47,10 +47,12 @@ jobs:
       - name: Install stuffbin
         run: go install github.com/knadh/stuffbin/...@latest
 
-      # Backend Go tests (fork deltas, e.g. the media upload optimizer).
-      # cmd/ is untestable (package init reads config), so target internal/.
+      # Backend Go tests (fork deltas: the media upload optimizer, the dark-mode
+      # classifier, and the cmd/ originals-retention and reprocess tests -- cmd/ is
+      # testable since the isTestBinary() guard in cmd/main.go short-circuits the
+      # runtime init for a test binary).
       - name: Go tests
-        run: go test ./internal/...
+        run: go test ./internal/... ./cmd/...
 
       # The in-tree smtppool fork (internal/smtppool, a NESTED module wired by a go.mod
       # replace) is excluded from ./internal/... by Go's module boundary, so its tests

@@ -89,6 +89,21 @@ func (c *Core) InsertMedia(fileName, thumbName, contentType string, meta models.
 	return c.GetMedia(newID, "", "", s)
 }
 
+// UpdateMediaMeta merges a key set into a media row's meta JSON.
+//
+// Fork (dark-mode readiness) -- DARK-MODE-SPEC D4/D5. A merge, not a replace: the row
+// already carries width/height from the upload, and a later re-classification must not
+// drop them.
+func (c *Core) UpdateMediaMeta(id int, meta models.JSON) error {
+	if _, err := c.q.UpdateMediaMeta.Exec(id, meta); err != nil {
+		c.log.Printf("error updating media meta: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.media}", "error", pqErrMsg(err)))
+	}
+
+	return nil
+}
+
 // DeleteMedia deletes a given media item and returns the filename of the deleted item.
 func (c *Core) DeleteMedia(id int) (string, error) {
 	var fname string

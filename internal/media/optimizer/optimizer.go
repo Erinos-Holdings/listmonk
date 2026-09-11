@@ -88,7 +88,7 @@ func Optimize(raw []byte, ext string) (Image, error) {
 	best := Image{
 		Data:        raw,
 		Ext:         ext,
-		ContentType: rasterContentType(ext),
+		ContentType: RasterContentType(ext),
 		Width:       img.Bounds().Dx(),
 		Height:      img.Bounds().Dy(),
 	}
@@ -215,8 +215,9 @@ func isOpaque(img image.Image) bool {
 	return true
 }
 
-// rasterContentType maps a raster extension to its MIME type.
-func rasterContentType(ext string) string {
+// RasterContentType maps a raster extension to its MIME type. Exported so the
+// upload and reprocess handlers share it rather than carrying a copy.
+func RasterContentType(ext string) string {
 	switch ext {
 	case "jpg", "jpeg":
 		return "image/jpeg"

@@ -71,14 +71,22 @@
           <div class="thumb">
             <a @click="(e) => onMediaSelect(item, e)" :href="item.url" target="_blank" rel="noopener noreferer"
               class="thumb-link">
-              <div class="thumb-container">
-                <img v-if="item.thumbUrl" :src="item.thumbUrl" :title="item.filename" :alt="item.filename" />
+              <!-- Fork (dark-mode readiness) -- DARK-MODE-SPEC D3. The same <img> is drawn
+                   over a ground that is light on the left and dark on the right. Mail clients
+                   never recolour large images, so what the dark half shows IS the dark-mode
+                   outcome for them; small dark-on-transparent glyphs are the exception (Gmail
+                   Android recolours those), which is what the tile's title says. -->
+              <div class="thumb-container" :class="{ 'thumb-split': item.thumbUrl }"
+                :title="thumbTitle(item)">
+                <img v-if="item.thumbUrl" :src="item.thumbUrl" :alt="item.filename" />
                 <div v-else class="thumb-placeholder">
                   <span class="file-ext">
                     {{ item.filename.split(".").pop().toUpperCase() }}
                   </span>
                 </div>
               </div>
+              <span v-if="darkVerdict(item)" class="darkmode-badge" :class="darkVerdict(item).kind"
+                :title="darkVerdict(item).title">{{ darkVerdict(item).label }}</span>
             </a>
             <div class="actions">
               <a href="#" @click.prevent="$utils.confirm(null, () => onDeleteMedia(item.id))" data-cy="btn-delete"
@@ -163,6 +171,33 @@ export default Vue.extend({
       this.getMedia();
     },
 
+    // Fork (dark-mode readiness) -- DARK-MODE-SPEC D3/D4. The verdict the uploader stamped
+    // into meta.darkmode, rendered as a tile badge. Rows uploaded before the classifier
+    // existed carry nothing and get no badge -- the sweep (D5) is what fills those in.
+    darkVerdict(item) {
+      const d = item.meta && item.meta.darkmode;
+      if (!d || !d.class) {
+        return null;
+      }
+
+      const warnings = d.warnings || [];
+      if (warnings.length > 0) {
+        return {
+          kind: 'is-warning',
+          label: `warn: ${warnings.join(', ')}`,
+          title: this.$t('media.darkmodeWarn', { codes: warnings.join(', '), class: d.class }),
+        };
+      }
+      if (d.fixed) {
+        return { kind: 'is-success', label: 'fixed', title: this.$t('media.darkmodeFixed', { class: d.class }) };
+      }
+      return { kind: 'is-light', label: 'ok', title: this.$t('media.darkmodeOk', { class: d.class }) };
+    },
+
+    thumbTitle(item) {
+      return `${item.filename}\n${this.$t('media.darkmodeTileHelp')}`;
+    },
+
     onMediaSelect(m, e) {
       // If the component is open in the modal mode, close the modal and
       // fire the selection event.
@@ -181,7 +216,14 @@ export default Vue.extend({
       for (let i = 0; i < this.toUpload; i += 1) {
         const params = new FormData();
         params.set('file', this.form.files[i]);
-        this.$api.uploadMedia(params).then(() => {
+        this.$api.uploadMedia(params).then((m) => {
+          // Fork (dark-mode readiness) -- DARK-MODE-SPEC D4. The uploader repairs what it
+          // safely can; the two classes it deliberately does NOT touch surface here, once,
+          // non-blocking. The tile badge (D3) is the durable record.
+          const v = this.darkVerdict(m);
+          if (v && v.kind === 'is-warning') {
+            this.$utils.toast(`${m.filename}: ${v.title}`, 'is-warning', 5000);
+          }
           this.onUploaded();
         }, () => {
           this.onUploaded();

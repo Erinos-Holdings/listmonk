@@ -187,6 +187,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/media/:id", pm(hasID(a.GetMedia), "media:get"))
 		g.POST("/api/media", pm(a.UploadMedia, "media:manage"))
 		g.DELETE("/api/media/:id", pm(hasID(a.DeleteMedia), "media:manage"))
+		// Fork (dark-mode readiness) -- DARK-MODE-SPEC D5. Split by permission on purpose:
+		// `media:manage` also grants DELETE on live assets, so the read-only verdict a dry
+		// run needs must not require it.
+		g.GET("/api/media/:id/darkmode", pm(hasID(a.GetMediaDarkmode), "media:get"))
+		g.POST("/api/media/:id/reprocess", pm(hasID(a.ReprocessMedia), "media:manage"))
 
 		g.GET("/api/templates", pm(a.GetTemplates, "templates:get"))
 		g.GET("/api/templates/:id", pm(hasID(a.GetTemplate), "templates:get"))
