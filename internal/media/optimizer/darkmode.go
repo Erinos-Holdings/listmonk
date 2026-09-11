@@ -34,7 +34,7 @@ import (
 // ClassifierVersion stamps every verdict. The lint helper on the integrations side
 // (lib/listmonk-media-lint.ts) compares against it to find stale rows, so the two constants
 // MUST be bumped together -- see the listmonk runbook's dark-mode bullet.
-const ClassifierVersion = 2
+const ClassifierVersion = 3
 
 // Image classes, in evaluation order.
 const (
@@ -43,6 +43,7 @@ const (
 	ClassIconRing          = "icon-ring"
 	ClassMonoOnWhite       = "mono-on-white"
 	ClassWhiteBackground   = "white-background"
+	ClassMonoOnTransparent = "mono-on-transparent"
 	ClassDarkOnTransparent = "dark-on-transparent"
 	ClassOK                = "ok"
 )
@@ -396,6 +397,9 @@ func Classify(img image.Image, ext string) Verdict {
 		v.Class = ClassWhiteBackground
 		v.Warnings = append(v.Warnings, WarnWhiteBackground)
 
+	case hasAlpha && dark && mono && bareRim && !backedDisc:
+		v.Class = ClassMonoOnTransparent
+
 	case hasAlpha && dark && bareRim && !backedDisc:
 		v.Class = ClassDarkOnTransparent
 		v.Warnings = append(v.Warnings, WarnDarkOnTransparent)
@@ -412,7 +416,7 @@ func ClassifyAnimated() Verdict {
 
 // Repairable reports whether a class has an automatic pixel repair.
 func Repairable(class string) bool {
-	return class == ClassIconRing || class == ClassMonoOnWhite
+	return class == ClassIconRing || class == ClassMonoOnWhite || class == ClassMonoOnTransparent
 }
 
 // Repair applies the class's fix and reports whether pixels changed. An image whose class
@@ -424,8 +428,30 @@ func Repair(img image.Image, v Verdict) (image.Image, bool) {
 		return discBacked(img), true
 	case ClassMonoOnWhite:
 		return keyWhiteToAlpha(img), true
+	case ClassMonoOnTransparent:
+		return recolorInk(img), true
 	}
 	return img, false
+}
+
+// recolorInk flattens a monochrome mark's RGB to repairInk and leaves its alpha exactly as
+// it is: the same recipe keyWhiteToAlpha ends with, for art that already carries its own
+// coverage. A black wordmark on transparency vanishes on every inverting dark client; the
+// mid grey reads on a white page and a dark one alike (the curated_logo3_grey precedent).
+// Coloured art is never recoloured -- that stays an author's decision (dark-on-transparent).
+func recolorInk(img image.Image) image.Image {
+	b := img.Bounds()
+	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			c := color.NRGBAModel.Convert(img.At(b.Min.X+x, b.Min.Y+y)).(color.NRGBA)
+			if c.A == 0 {
+				continue
+			}
+			out.SetNRGBA(x, y, color.NRGBA{R: repairInk.R, G: repairInk.G, B: repairInk.B, A: c.A})
+		}
+	}
+	return out
 }
 
 // discBacked rebuilds a ring glyph in the Curated geometry: an opaque white disc at the

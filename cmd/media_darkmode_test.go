@@ -139,7 +139,7 @@ func TestUploadClassificationStoresAnOriginalOnlyWhenPixelsChange(t *testing.T) 
 		{"curated_logo3.png", true},            // mono-on-white -> keyed to #777 on alpha
 		{"social-curated-email.png", true},     // icon-ring -> white disc filled in
 		{"social-curated-facebook.png", false}, // already fine
-		{"shala_hero.png", false},              // dark-on-transparent: warn only, never touched
+		{"shala_hero.png", true},               // mono-on-transparent -> recoloured to #777, alpha kept
 		{"shala_hero2.jpg", false},             // photo
 	}
 
@@ -300,7 +300,7 @@ func TestReprocessRefusesACurrentVerdictWithoutForce(t *testing.T) {
 }
 
 func TestReprocessLeavesUnrepairableClassesAlone(t *testing.T) {
-	for _, f := range []string{"shala_hero.png", "shala_hero2.jpg", "social-curated-facebook.png"} {
+	for _, f := range []string{"shala_hero2.jpg", "social-curated-facebook.png"} {
 		t.Run(f, func(t *testing.T) {
 			s := newFakeStore()
 			s.objects[f] = testFixture(t, f)

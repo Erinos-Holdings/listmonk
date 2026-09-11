@@ -105,6 +105,20 @@ func darkDiscWithHairline() image.Image {
 	return img
 }
 
+// colouredGlyphOnTransparent: a dark maroon plus sign on transparency -- dark ink, bare rim,
+// thin, but coloured, so it is the one dark-on-transparent shape that still only warns.
+func colouredGlyphOnTransparent() image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, 200, 120))
+	for y := 0; y < 120; y++ {
+		for x := 0; x < 200; x++ {
+			if (x >= 80 && x < 120) || (y >= 40 && y < 80 && x >= 20 && x < 180) {
+				img.SetNRGBA(x, y, color.NRGBA{R: 0x6f, G: 0x09, B: 0x36, A: 0xff})
+			}
+		}
+	}
+	return img
+}
+
 // thickDarkPlus: a near-black plus sign whose two 60px arms fill 84% of a 100px box -- a
 // bare glyph with LESS than 30% transparency.
 func thickDarkPlus() image.Image {
@@ -177,8 +191,10 @@ func TestClassifyFixtures(t *testing.T) {
 	}{
 		{"social-curated-email.png", ClassIconRing,
 			"black ring + glyph on a transparent interior; the envelope vanished on nine dark clients"},
-		{"shala_hero.png", ClassDarkOnTransparent,
-			"dark ink on transparency; invisible on every inverting dark client"},
+		{"shala_hero.png", ClassMonoOnTransparent,
+			"monochrome dark ink on transparency; invisible on every inverting dark client -- recoloured to the mid grey"},
+		{"Asset-2RUZE.png", ClassMonoOnTransparent,
+			"the RUZE wordmark: the same shape, two colours, 54% transparent"},
 		{"exclusively_on_curated_logo.png", ClassMonoOnWhite,
 			"opaque white, no alpha; a white slab on a dark ground"},
 		{"curated_logo3.png", ClassMonoOnWhite,
@@ -254,8 +270,22 @@ func TestClassifyFixtures(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if v.Class != ClassMonoOnTransparent {
+			t.Fatalf("classified %q, want %q", v.Class, ClassMonoOnTransparent)
+		}
+	})
+
+	t.Run("coloured glyph on transparency", func(t *testing.T) {
+		// Dark but NOT monochrome: no automatic recolour, an author's decision (warn).
+		_, v, err := ClassifyRaw(encodeSyntheticPNG(t, colouredGlyphOnTransparent()), "png")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if v.Class != ClassDarkOnTransparent {
 			t.Fatalf("classified %q, want %q", v.Class, ClassDarkOnTransparent)
+		}
+		if Repairable(v.Class) {
+			t.Fatal("coloured dark-on-transparent must never be repairable")
 		}
 	})
 
@@ -297,7 +327,7 @@ func TestClassifyFixtures(t *testing.T) {
 }
 
 func TestClassifyWarningCodes(t *testing.T) {
-	_, v, err := ClassifyRaw(fixture(t, "shala_hero.png"), "png")
+	_, v, err := ClassifyRaw(encodeSyntheticPNG(t, colouredGlyphOnTransparent()), "png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +374,7 @@ func pixelsEqual(a, b image.Image) bool {
 }
 
 func TestRepairIdempotent(t *testing.T) {
-	for _, f := range []string{"social-curated-email.png", "exclusively_on_curated_logo.png", "curated_logo3.png"} {
+	for _, f := range []string{"social-curated-email.png", "exclusively_on_curated_logo.png", "curated_logo3.png", "shala_hero.png", "Asset-2RUZE.png"} {
 		t.Run(f, func(t *testing.T) {
 			img, v, err := ClassifyRaw(fixture(t, f), extOf(f))
 			if err != nil {
@@ -460,6 +490,38 @@ func TestRepairIconRingMatchesTheCuratedGeometry(t *testing.T) {
 	}
 }
 
+// I4f: the mono-on-transparent repair keeps the alpha channel byte-identical and flattens
+// every covered pixel's colour to the mid grey; the result classifies ok.
+func TestRepairMonoOnTransparentKeepsAlpha(t *testing.T) {
+	img, v, err := ClassifyRaw(fixture(t, "shala_hero.png"), "png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Class != ClassMonoOnTransparent {
+		t.Fatalf("fixture classifies %q", v.Class)
+	}
+	out, changed := Repair(img, v)
+	if !changed {
+		t.Fatal("no repair applied")
+	}
+	b := img.Bounds()
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			in := color.NRGBAModel.Convert(img.At(b.Min.X+x, b.Min.Y+y)).(color.NRGBA)
+			got := color.NRGBAModel.Convert(out.At(x, y)).(color.NRGBA)
+			if got.A != in.A {
+				t.Fatalf("alpha changed at %d,%d: %d -> %d", x, y, in.A, got.A)
+			}
+			if in.A > 0 && (got.R != repairInk.R || got.G != repairInk.G || got.B != repairInk.B) {
+				t.Fatalf("pixel %d,%d is %v, want the mid grey", x, y, got)
+			}
+		}
+	}
+	if after := Classify(out, "png"); after.Class != ClassOK {
+		t.Fatalf("repaired mark classifies %q, want ok", after.Class)
+	}
+}
+
 func TestRepairMonoOnWhiteIsCoverageNotAKey(t *testing.T) {
 	img, v, err := ClassifyRaw(fixture(t, "curated_logo3.png"), "png")
 	if err != nil {
@@ -545,7 +607,7 @@ func TestRepairNoopForPhoto(t *testing.T) {
 // Guard: the fixtures really are the live files, not placeholders.
 func TestFixturesDecode(t *testing.T) {
 	for _, f := range []string{
-		"social-curated-email.png", "shala_hero.png", "exclusively_on_curated_logo.png",
+		"social-curated-email.png", "shala_hero.png", "Asset-2RUZE.png", "exclusively_on_curated_logo.png",
 		"curated_logo3.png", "curated_logo3_grey.png", "shala_hero2.jpg", "social-curated-facebook.png",
 	} {
 		raw := fixture(t, f)
