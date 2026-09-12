@@ -36,7 +36,7 @@
         <b-taglist>
           <b-tag v-for="c in chips" :key="c.tag" size="is-medium" class="is-clickable"
             :type="c.on && !allOn ? 'is-primary' : ''" :class="{ 'is-disabled': allOn }"
-            :closable="!c.context" @click.native="onToggleChip(c)" @close="onRemoveChip(c)">
+            :closable="!c.context" @click.native="onToggleChip(c)" @close="onRemoveChip(c, $event)">
             <b-icon v-if="c.on && !allOn" icon="check" size="is-small" />
             {{ c.tag }}
           </b-tag>
@@ -277,7 +277,12 @@ export default Vue.extend({
       this.onFilterChanged();
     },
 
-    onRemoveChip(c) {
+    onRemoveChip(c, e) {
+      // Buefy's Tag.close() only emits; without this the click bubbles into onToggleChip on a
+      // chip that is already gone (a second query, and under All it wipes the selection).
+      if (e && e.stopPropagation) {
+        e.stopPropagation();
+      }
       this.chips = this.chips.filter((x) => x !== c);
       this.onFilterChanged();
     },

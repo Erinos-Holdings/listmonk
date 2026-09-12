@@ -8,6 +8,8 @@ package migrations
 //	LISTMONK_TEST_PG='postgres://listmonk-dev:listmonk-dev@localhost:5432/listmonk-dev?sslmode=disable' go test ./internal/migrations/ -run MediaTags -v
 
 import (
+	"log"
+	"os"
 	"reflect"
 	"sort"
 	"testing"
@@ -72,6 +74,18 @@ func queryMediaNames(t *testing.T, st *sqlx.Stmt, search string, tags []string, 
 func TestMediaTags(t *testing.T) {
 	h := newEvergreenHarness(t)
 
+	// I3 for real: schema.sql already carries the column, so the harness ladder's two V6_2_9
+	// runs are no-ops there. Drop it and run the migration twice on a table that lacks it —
+	// the ADD COLUMN path the host's --upgrade actually takes — before anything is inserted.
+	h.db.MustExec(`DROP INDEX IF EXISTS idx_media_tags`)
+	h.db.MustExec(`ALTER TABLE media DROP COLUMN IF EXISTS tags`)
+	lo := log.New(os.Stderr, "", 0)
+	for i := 0; i < 2; i++ {
+		if err := V6_2_9(h.db, nil, nil, lo); err != nil {
+			t.Fatalf("I3 V6_2_9 run %d on a tag-less table: %v", i+1, err)
+		}
+	}
+
 	var (
 		ins      = prepMediaQuery(t, h, "insert-media")
 		query    = prepMediaQuery(t, h, "query-media")
@@ -95,7 +109,7 @@ func TestMediaTags(t *testing.T) {
 		t.Fatalf("I5 insert stored %v, want [a]", stored)
 	}
 
-	// ---- I3: tags defaults to {} and is NOT NULL (V6_2_9 ran twice in the harness). ----
+	// ---- I3: tags defaults to {} and is NOT NULL (V6_2_9 ran twice above on a tag-less table). ----
 	var defaulted pq.StringArray
 	if err := h.db.Get(&defaulted, `INSERT INTO media (uuid, filename, thumb, provider)
 		VALUES (gen_random_uuid(), 'default.png', '', 'other') RETURNING tags`); err != nil {
