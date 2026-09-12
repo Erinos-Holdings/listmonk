@@ -7,7 +7,7 @@
     <b-modal scroll="keep" :aria-modal="true" :active.sync="isMediaVisible" :width="900">
       <div class="modal-card content" style="width: auto">
         <section expanded class="modal-card-body">
-          <media is-modal @selected="onMediaSelect" />
+          <media is-modal :context="mediaContext" @selected="onMediaSelect" />
         </section>
       </div>
     </b-modal>
@@ -36,6 +36,10 @@ export default {
     // resetDocument use — NEVER by re-rendering with the `force` flag, which double-roots
     // the container and stacks onChange subscriptions.
     brandPalettes: { type: Array, default: () => [] },
+
+    // Fork (media tags) -- MEDIA-TAGS-SPEC 3.5. Forwarded to the image picker, which opens
+    // pre-filtered to these tags.
+    mediaContext: { type: Array, default: () => [] },
   },
 
   watch: {

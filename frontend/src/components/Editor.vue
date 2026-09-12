@@ -62,7 +62,7 @@
 
     <!-- visual editor //-->
     <visual-editor v-if="self.contentType === 'visual'" :source="self.bodySource" @change="onVisualEditorChange"
-      height="65vh" :brand-palettes="brandPalettes" ref="visualEditor" />
+      height="65vh" :brand-palettes="brandPalettes" :media-context="mediaContext" ref="visualEditor" />
 
     <!-- raw html editor //-->
     <code-editor lang="html" v-if="self.contentType === 'html'" v-model="self.body" key="editor-html" />
@@ -110,6 +110,9 @@ export default {
 
     // Brand swatch rows for the visual editor's color picker (passed through untouched).
     brandPalettes: { type: Array, default: () => [] },
+
+    // Fork (media tags) -- MEDIA-TAGS-SPEC 3.5. The image picker's context tags (passed through).
+    mediaContext: { type: Array, default: () => [] },
 
     // Fork (multi-language campaigns) -- JSON attribs (lang, preheader) the preview posts.
     attribs: { type: String, default: '' },

@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/knadh/listmonk/models"
+	"github.com/lib/pq"
 	"gopkg.in/volatiletech/null.v6"
 )
 
@@ -20,7 +21,17 @@ type Media struct {
 	Meta        models.JSON `db:"meta" json:"meta"`
 	URL         string      `json:"url"`
 
+	// Fork (media tags) -- MEDIA-TAGS-SPEC 3.2. Always serialized as an array, never null
+	// (core replaces a nil scan with an empty slice).
+	Tags pq.StringArray `db:"tags" json:"tags"`
+
 	Total int `db:"total" json:"-"`
+}
+
+// TagCount is one distinct media tag and the number of rows carrying it.
+type TagCount struct {
+	Tag   string `db:"tag" json:"tag"`
+	Count int    `db:"count" json:"count"`
 }
 
 // Store represents functions to store and retrieve media (files).

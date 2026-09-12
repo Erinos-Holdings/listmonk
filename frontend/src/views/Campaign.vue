@@ -258,7 +258,7 @@
       <b-tab-item :label="$t('campaigns.content')" icon="text" :disabled="isNew" value="content">
         <editor v-if="data.id" ref="editor" :key="editorKey" v-model="form.content" :id="data.id" :title="data.name"
           :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes"
-          :attribs="previewAttribs" />
+          :media-context="mediaContext" :attribs="previewAttribs" />
 
         <div class="columns">
           <div class="column is-6">
@@ -384,7 +384,7 @@
     <b-modal scroll="keep" :aria-modal="true" :active.sync="isAttachModalOpen" :width="900">
       <div class="modal-card content" style="width: auto">
         <section expanded class="modal-card-body">
-          <media is-modal @selected="onAttachSelect" />
+          <media is-modal :context="mediaContext" @selected="onAttachSelect" />
         </section>
       </div>
     </b-modal>
@@ -409,6 +409,7 @@ import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
 import ListSelector from '../components/ListSelector.vue';
 import Media from './Media.vue';
+import { normalizeMediaTagsLenient } from '../mediaTags';
 import {
   BRAND_TAG_PREFIX, FROM_TAG_PREFIX, brandThemePalette, reBrandSlug,
 } from '../brand';
@@ -1444,6 +1445,16 @@ export default Vue.extend({
     resolvedLists() {
       const all = this.lists.results || [];
       return (this.form.lists || []).map((l) => all.find((x) => x.id === l.id) || l);
+    },
+
+    // Fork (media tags) -- MEDIA-TAGS-SPEC D3. The media picker's context: the derived brand
+    // (the `curated` default for unmapped lists included; nothing on a derivation error) plus
+    // the campaign's own Tags, lenient-normalized -- a tag failing the media-tag rule is
+    // dropped, and the raw brand slug is lower-folded here.
+    mediaContext() {
+      const d = this.brandDerivation;
+      const brand = d.error === null && d.brand ? [d.brand] : [];
+      return normalizeMediaTagsLenient([...brand, ...(this.form.tags || [])]);
     },
 
     // Resolve the selected lists to one brand + From pair, or to the reason it cannot be done.

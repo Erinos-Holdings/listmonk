@@ -2,7 +2,7 @@
   <section class="media-files">
     <h1 class="title is-4">
       {{ $t('media.title') }}
-      <span v-if="media.results && media.results.length > 0">({{ media.results.length }})</span>
+      <span v-if="media.total > 0">({{ media.total }})</span>
       <span class="has-text-grey-light"> / {{ serverConfig.media_provider }}</span>
     </h1>
 
@@ -29,6 +29,30 @@
         </div>
       </div>
 
+      <!-- Fork (media tags) -- MEDIA-TAGS-SPEC 3.6. Tag filter row: one toggle per context tag
+           (ON when the picker opens) and per tag added below (removable), Untagged, All. OR
+           semantics server-side. No persistence: the modal starts from context, the page on All. -->
+      <div class="media-tag-filter mb-4" data-cy="media-tag-filter">
+        <b-taglist>
+          <b-tag v-for="c in chips" :key="c.tag" size="is-medium" class="is-clickable"
+            :type="c.on && !allOn ? 'is-primary' : ''" :class="{ 'is-disabled': allOn }"
+            :closable="!c.context" @click.native="onToggleChip(c)" @close="onRemoveChip(c)">
+            <b-icon v-if="c.on && !allOn" icon="check" size="is-small" />
+            {{ c.tag }}
+          </b-tag>
+          <b-tag size="is-medium" class="is-clickable" :type="untaggedOn && !allOn ? 'is-primary' : ''"
+            :class="{ 'is-disabled': allOn }" @click.native="onToggleUntagged">
+            {{ $t('media.untagged') }}
+          </b-tag>
+          <b-tag size="is-medium" class="is-clickable" :type="isAll ? 'is-dark' : ''" @click.native="onToggleAll">
+            {{ $t('media.all') }}
+          </b-tag>
+        </b-taglist>
+        <b-autocomplete v-model="filterQuery" :data="filterSuggestions" :placeholder="$t('media.filterByTag')"
+          icon="tag-outline" size="is-small" open-on-focus clear-on-select keep-first class="media-tag-add"
+          @select="onAddFilterTag" />
+      </div>
+
       <b-collapse v-if="$can('media:manage')" v-model="showUploadForm" animation="">
         <form @submit.prevent="onSubmit" class="mb-6" data-cy="upload">
           <div>
@@ -47,6 +71,14 @@
                 {{ f.name }}
               </b-tag>
             </div>
+            <!-- D6: pre-filled from the active filter's real tags, editable before submit. -->
+            <b-field :label="$t('media.tags')"
+              :message="uploadTags.length > 0
+                ? $t('media.uploadTaggedAs', { tags: uploadTags.join(', ') }) : $t('media.uploadUntagged')">
+              <b-taginput v-model="uploadTags" :data="tagSuggestions(uploadQuery, uploadTags)" autocomplete allow-new
+                open-on-focus icon="tag-outline" :before-adding="beforeAddingTag" @typing="(q) => { uploadQuery = q; }"
+                @input="(t) => { uploadTags = normalizeTags(t); }" data-cy="upload-tags" />
+            </b-field>
             <div class="buttons">
               <b-button native-type="submit" type="is-primary" icon-left="file-upload-outline"
                 :disabled="form.files.length === 0" :loading="isProcessing">
@@ -66,8 +98,8 @@
       <div v-if="loading.media" class="has-text-centered py-6">
         <b-loading :active="loading.media" />
       </div>
-      <div v-else-if="media.results && media.results.length > 0" class="grid">
-        <div v-for="item in media.results" :key="item.id" class="item">
+      <div v-else-if="items.length > 0" class="grid">
+        <div v-for="item in items" :key="item.id" class="item">
           <div class="thumb">
             <a @click="(e) => onMediaSelect(item, e)" :href="item.url" target="_blank" rel="noopener noreferer"
               class="thumb-link">
@@ -98,6 +130,21 @@
           <div class="info">
             <p class="filename" :title="item.filename">{{ item.filename }}</p>
             <p class="date">{{ $utils.niceDate(item.createdAt, false) }}</p>
+
+            <!-- D7: tags are edited here, never written by selecting the image. Saves on change
+                 and patches the row in place, so an untagged row does not vanish mid-edit. -->
+            <div class="media-tags">
+              <template v-if="editingId !== item.id">
+                <b-tag v-for="t in (item.tags || [])" :key="t" size="is-small">{{ t }}</b-tag>
+                <a v-if="$can('media:manage')" href="#" class="media-tags-edit" :title="$t('media.editTags')"
+                  :aria-label="$t('media.editTags')" @click.prevent="onEditTags(item)" data-cy="btn-edit-tags">
+                  <b-icon icon="tag-outline" size="is-small" />
+                </a>
+              </template>
+              <b-taginput v-else v-model="editTags" :data="tagSuggestions(editQuery, editTags)" autocomplete allow-new
+                open-on-focus size="is-small" icon="tag-outline" :before-adding="beforeAddingTag"
+                @typing="(q) => { editQuery = q; }" @input="(t) => onSaveTags(item, t)" @blur="onEditBlur" />
+            </div>
           </div>
         </div>
       </div>
@@ -120,6 +167,8 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
+import { BRAND_TAG_PREFIX } from '../brand';
+import { foldMediaTag, isValidMediaTag, normalizeMediaTagsLenient } from '../mediaTags';
 
 export default Vue.extend({
   components: {
@@ -131,6 +180,11 @@ export default Vue.extend({
   props: {
     isModal: Boolean,
     type: { type: String, default: '' },
+
+    // Fork (media tags) -- MEDIA-TAGS-SPEC 3.5. The editing context's tags (a campaign's derived
+    // brand + its Tags field, a template's brand), already lenient-normalized by the parent.
+    // Every context tag starts as an ON chip. Empty (the /media page) = open on All.
+    context: { type: Array, default: () => [] },
   },
 
   data() {
@@ -146,6 +200,26 @@ export default Vue.extend({
         page: 1,
         query: '',
       },
+
+      // Fork (media tags). Filter state -- never persisted (D5).
+      chips: [],
+      untaggedOn: false,
+      allOn: false,
+      filterQuery: '',
+
+      // Tag autocomplete source (D8): GET /api/media/tags, unioned with the brand roster.
+      tagCounts: [],
+
+      // Upload tags (D6), re-seeded from the active filter whenever it changes.
+      uploadTags: [],
+      uploadQuery: '',
+
+      // Tile editor. `items` is a component-local copy of media.results (the store's only
+      // mutation is a whole-model replace), so a saved row is patched in place.
+      items: [],
+      editingId: null,
+      editTags: [],
+      editQuery: '',
     };
   },
 
@@ -155,9 +229,134 @@ export default Vue.extend({
     },
 
     getMedia() {
-      this.$api.getMedia({
+      const params = {
         page: this.queryParams.page,
         query: this.queryParams.query,
+      };
+      if (!this.isAll) {
+        if (this.activeTags.length > 0) {
+          params.tag = this.activeTags;
+        }
+        if (this.untaggedOn) {
+          params.untagged = true;
+        }
+      }
+      this.$api.getMedia(params);
+    },
+
+    loadTagCounts() {
+      this.$api.getMediaTags().then((data) => {
+        this.tagCounts = Array.isArray(data) ? data : [];
+      }, () => {
+        this.tagCounts = [];
+      });
+    },
+
+    // Start from context: every context chip ON; no context = All.
+    initFilter() {
+      this.chips = normalizeMediaTagsLenient(this.context).map((tag) => ({ tag, on: true, context: true }));
+      this.untaggedOn = false;
+      this.allOn = this.chips.length === 0;
+    },
+
+    onFilterChanged() {
+      this.queryParams.page = 1;
+      this.uploadTags = [...this.activeTags];
+      this.getMedia();
+    },
+
+    onToggleChip(c) {
+      if (this.allOn) {
+        // Picking a chip while All is on leaves All and filters on that chip alone.
+        this.allOn = false;
+        this.chips = this.chips.map((x) => ({ ...x, on: x.tag === c.tag }));
+        this.untaggedOn = false;
+      } else {
+        this.chips = this.chips.map((x) => (x.tag === c.tag ? { ...x, on: !x.on } : x));
+      }
+      this.onFilterChanged();
+    },
+
+    onRemoveChip(c) {
+      this.chips = this.chips.filter((x) => x !== c);
+      this.onFilterChanged();
+    },
+
+    onToggleUntagged() {
+      if (this.allOn) {
+        this.allOn = false;
+        this.chips = this.chips.map((x) => ({ ...x, on: false }));
+        this.untaggedOn = true;
+      } else {
+        this.untaggedOn = !this.untaggedOn;
+      }
+      this.onFilterChanged();
+    },
+
+    onToggleAll() {
+      this.allOn = !this.isAll;
+      this.onFilterChanged();
+    },
+
+    onAddFilterTag(t) {
+      const tag = foldMediaTag(t);
+      if (!tag || !isValidMediaTag(tag)) {
+        return;
+      }
+      this.allOn = false;
+      if (this.chips.some((c) => c.tag === tag)) {
+        this.chips = this.chips.map((c) => (c.tag === tag ? { ...c, on: true } : c));
+      } else {
+        this.chips = [...this.chips, { tag, on: true, context: false }];
+      }
+      this.$nextTick(() => { this.filterQuery = ''; });
+      this.onFilterChanged();
+    },
+
+    // before-adding for user-typed tags: the server's rule, applied to the folded form.
+    beforeAddingTag(t) {
+      const tag = foldMediaTag(t);
+      if (!isValidMediaTag(tag)) {
+        this.$utils.toast(this.$t('media.tagInvalid', { tag }), 'is-danger');
+        return false;
+      }
+      return true;
+    },
+
+    normalizeTags(tags) {
+      return normalizeMediaTagsLenient(tags);
+    },
+
+    // Autocomplete candidates for a tag input: the known vocabulary minus what is already
+    // chosen, filtered by what has been typed.
+    tagSuggestions(query, chosen) {
+      const q = foldMediaTag(query);
+      const have = new Set(chosen || []);
+      return this.tagVocabulary.filter((t) => !have.has(t) && (!q || t.includes(q)));
+    },
+
+    onEditTags(item) {
+      this.editingId = item.id;
+      this.editTags = [...(item.tags || [])];
+      this.editQuery = '';
+    },
+
+    onEditBlur() {
+      // Leave the editor only once the input is empty, so a half-typed tag is not lost.
+      if (!this.editQuery) {
+        this.editingId = null;
+      }
+    },
+
+    onSaveTags(item, tags) {
+      const next = normalizeMediaTagsLenient(tags);
+      this.editTags = next;
+      this.$api.updateMediaTags(item.id, next).then((m) => {
+        const i = this.items.findIndex((x) => x.id === item.id);
+        if (i > -1) {
+          this.items.splice(i, 1, { ...this.items[i], ...m });
+        }
+        this.loadTagCounts();
       });
     },
 
@@ -202,6 +401,7 @@ export default Vue.extend({
       // If the component is open in the modal mode, close the modal and
       // fire the selection event.
       // Otherwise, do nothing and let the image open like a normal link.
+      // Fork (media tags) -- D7: selecting never writes a tag.
       if (this.isModal) {
         e.preventDefault();
         this.$emit('selected', m);
@@ -211,12 +411,13 @@ export default Vue.extend({
 
     onSubmit() {
       this.toUpload = this.form.files.length;
+      const tags = normalizeMediaTagsLenient(this.uploadTags);
 
       // Upload N files with N requests.
       for (let i = 0; i < this.toUpload; i += 1) {
         const params = new FormData();
         params.set('file', this.form.files[i]);
-        this.$api.uploadMedia(params).then((m) => {
+        this.$api.uploadMedia(params, tags).then((m) => {
           // Fork (dark-mode readiness) -- DARK-MODE-SPEC D4. The uploader repairs what it
           // safely can; the two classes it deliberately does NOT touch surface here, once,
           // non-blocking. The tile badge (D3) is the durable record.
@@ -234,6 +435,7 @@ export default Vue.extend({
     onDeleteMedia(id) {
       this.$api.deleteMedia(id).then(() => {
         this.getMedia();
+        this.loadTagCounts();
       });
     },
 
@@ -245,6 +447,7 @@ export default Vue.extend({
         this.form.files = [];
 
         this.getMedia();
+        this.loadTagCounts();
       }
     },
 
@@ -255,13 +458,60 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['loading', 'media', 'serverConfig']),
+    ...mapState(['loading', 'media', 'serverConfig', 'lists']),
 
     isProcessing() {
       if (this.toUpload > 0 && this.uploaded < this.toUpload) {
         return true;
       }
       return false;
+    },
+
+    // No tag filter is sent when All is on, or when nothing is selected.
+    isAll() {
+      return this.allOn || (!this.untaggedOn && !this.chips.some((c) => c.on));
+    },
+
+    // The active filter's REAL tags (Untagged/All excluded) -- what an upload is tagged with.
+    activeTags() {
+      if (this.isAll) {
+        return [];
+      }
+      return this.chips.filter((c) => c.on).map((c) => c.tag);
+    },
+
+    // D8: media tags in use ∪ brand slugs from the lists store (a brand with no media yet
+    // still autocompletes).
+    tagVocabulary() {
+      const out = new Set(this.tagCounts.map((t) => t.tag));
+      ((this.lists && this.lists.results) || []).forEach((l) => {
+        const b = (l.tags || []).find((x) => x.startsWith(BRAND_TAG_PREFIX));
+        if (b) {
+          out.add(b.slice(BRAND_TAG_PREFIX.length));
+        }
+      });
+      return normalizeMediaTagsLenient([...out]);
+    },
+
+    filterSuggestions() {
+      return this.tagSuggestions(this.filterQuery, this.chips.map((c) => c.tag));
+    },
+  },
+
+  watch: {
+    // Re-seed the local grid copy whenever the store's media model is replaced.
+    media: {
+      handler(m) {
+        this.items = (m && m.results) ? [...m.results] : [];
+      },
+      immediate: true,
+    },
+
+    context(next, prev) {
+      if (JSON.stringify(next) !== JSON.stringify(prev)) {
+        this.initFilter();
+        this.onFilterChanged();
+      }
     },
   },
 
@@ -274,7 +524,10 @@ export default Vue.extend({
   },
 
   mounted() {
-    this.$api.getMedia();
+    this.initFilter();
+    this.uploadTags = [...this.activeTags];
+    this.getMedia();
+    this.loadTagCounts();
 
     if (this.$utils.getPref('media.upload')) {
       this.showUploadForm = true;
@@ -282,3 +535,31 @@ export default Vue.extend({
   },
 });
 </script>
+
+<style scoped>
+.media-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.media-tag-filter .tags {
+  margin-bottom: 0;
+}
+.media-tag-filter .tag.is-disabled {
+  opacity: 0.5;
+}
+.media-tag-add {
+  min-width: 12rem;
+}
+.media-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+.media-tags-edit {
+  line-height: 1;
+}
+</style>

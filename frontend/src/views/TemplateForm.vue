@@ -68,7 +68,7 @@
             <b-field v-if="form.type === 'campaign_visual'" label-position="on-border" class="mb-1">
               <visual-editor v-if="form.type === 'campaign_visual'" ref="visualEditor" name="body"
                 :source="form.bodySource" @change="onChangeVisualEditor" height="70vh"
-                :brand-palettes="brandPalettes" />
+                :brand-palettes="brandPalettes" :media-context="mediaContext" />
             </b-field>
 
             <b-field v-else :label="$t('templates.rawHTML')" label-position="on-border">
@@ -108,6 +108,7 @@ import CodeEditor from '../components/CodeEditor.vue';
 import VisualEditor from '../components/VisualEditor.vue';
 import CopyText from '../components/CopyText.vue';
 import { BRAND_TAG_PREFIX, brandThemePalette, reBrandSlug } from '../brand';
+import { normalizeMediaTagsLenient } from '../mediaTags';
 
 export default Vue.extend({
   components: {
@@ -319,6 +320,12 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading', 'lists']),
+
+    // Fork (media tags) -- MEDIA-TAGS-SPEC D3. The media picker's context is the template's
+    // brand; no brand = no context.
+    mediaContext() {
+      return this.brandSlug ? normalizeMediaTagsLenient([this.brandSlug]) : [];
+    },
 
     // Distinct brand slugs from the vuex lists store's `brand:` tags, lowercase-folded before
     // dedupe — mixed-case tags are valid on the send path and the theme proxy folds, so

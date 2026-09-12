@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/disintegration/imaging"
@@ -27,6 +28,15 @@ var (
 
 // UploadMedia handles media file uploads.
 func (a *App) UploadMedia(c echo.Context) error {
+	// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. The optional `tags` field (comma-separated) is
+	// parsed and normalized strictly as the FIRST step, before the file is read, the filename
+	// is checked, the duplicate lookup runs or anything is classified: an invalid tag is a 400
+	// with no DB read and no object stored. cmd/media_tags_test.go relies on this order.
+	tags, err := a.normalizeMediaTags(splitMediaTagsField(c.FormValue("tags")))
+	if err != nil {
+		return err
+	}
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest,
@@ -204,7 +214,7 @@ func (a *App) UploadMedia(c echo.Context) error {
 	}
 
 	// Insert the media into the DB.
-	m, err := a.core.InsertMedia(fName, thumbfName, contentType, meta, a.cfg.MediaUpload.Provider, a.media)
+	m, err := a.core.InsertMedia(fName, thumbfName, contentType, meta, tags, a.cfg.MediaUpload.Provider, a.media)
 	if err != nil {
 		cleanUp = true
 		return err
@@ -220,8 +230,16 @@ func (a *App) GetAllMedia(c echo.Context) error {
 
 		pg = a.pg.NewFromURL(c.Request().URL.Query())
 	)
+
+	// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. Repeatable `tag` (OR) and `untagged=true`.
+	tags, err := a.normalizeMediaTags(c.QueryParams()["tag"])
+	if err != nil {
+		return err
+	}
+	untagged, _ := strconv.ParseBool(c.QueryParam("untagged"))
+
 	// Fetch the media items from the DB.
-	res, total, err := a.core.QueryMedia(a.cfg.MediaUpload.Provider, a.media, query, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryMedia(a.cfg.MediaUpload.Provider, a.media, query, tags, untagged, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}

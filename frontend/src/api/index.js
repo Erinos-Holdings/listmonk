@@ -447,10 +447,23 @@ export const getMedia = async (params) => http.get(
   { params, loading: models.media, store: models.media },
 );
 
-export const uploadMedia = (data) => http.post(
-  '/api/media',
-  data,
-  { loading: models.media },
+// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. `tags` (optional array) rides on the FormData as
+// the comma-separated `tags` field; the server normalizes strictly.
+export const uploadMedia = (data, tags) => {
+  if (tags && tags.length > 0 && data instanceof FormData) {
+    data.set('tags', tags.join(','));
+  }
+  return http.post('/api/media', data, { loading: models.media });
+};
+
+// Distinct media tags with counts, [{tag, count}] -- the tag autocomplete source (D8).
+// No store/loading: it must not clobber the media model the grid renders from.
+export const getMediaTags = async () => http.get('/api/media/tags');
+
+// Replace one media item's tag set; returns the row (url/thumb_url filled).
+export const updateMediaTags = async (id, tags) => http.put(
+  `/api/media/${id}/tags`,
+  { tags },
 );
 
 export const deleteMedia = (id) => http.delete(

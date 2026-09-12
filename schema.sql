@@ -257,9 +257,12 @@ CREATE TABLE media (
     content_type     TEXT NOT NULL DEFAULT 'application/octet-stream',
     thumb            TEXT NOT NULL,
     meta             JSONB NOT NULL DEFAULT '{}',
+    -- Fork (media tags, v6.2.9). Bare lowercase slugs; empty = untagged.
+    tags             VARCHAR(100)[] NOT NULL DEFAULT '{}',
     created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 DROP INDEX IF EXISTS idx_media_filename; CREATE INDEX idx_media_filename ON media(provider, filename);
+DROP INDEX IF EXISTS idx_media_tags; CREATE INDEX idx_media_tags ON media USING GIN(tags);
 
 -- campaign_media
 DROP TABLE IF EXISTS campaign_media CASCADE;

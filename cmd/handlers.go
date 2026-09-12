@@ -184,7 +184,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/brands/:slug/theme", a.GetBrandTheme)
 
 		g.GET("/api/media", pm(a.GetAllMedia, "media:get"))
+		// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. Registered before /api/media/:id for the
+		// reader's benefit; echo resolves the static segment first regardless of order.
+		g.GET("/api/media/tags", pm(a.GetMediaTags, "media:get"))
 		g.GET("/api/media/:id", pm(hasID(a.GetMedia), "media:get"))
+		g.PUT("/api/media/:id/tags", pm(hasID(a.UpdateMediaTags), "media:manage"))
 		g.POST("/api/media", pm(a.UploadMedia, "media:manage"))
 		g.DELETE("/api/media/:id", pm(hasID(a.DeleteMedia), "media:manage"))
 		// Fork (dark-mode readiness) -- DARK-MODE-SPEC D5. Split by permission on purpose:

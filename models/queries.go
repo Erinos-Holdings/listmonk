@@ -112,6 +112,9 @@ type Queries struct {
 	DeleteMedia *sqlx.Stmt `query:"delete-media"`
 	// Fork (dark-mode readiness) -- DARK-MODE-SPEC D4/D5.
 	UpdateMediaMeta *sqlx.Stmt `query:"update-media-meta"`
+	// Fork (media tags) -- MEDIA-TAGS-SPEC 3.3.
+	UpdateMediaTags *sqlx.Stmt `query:"update-media-tags"`
+	GetMediaTags    *sqlx.Stmt `query:"get-media-tags"`
 
 	CreateTemplate     *sqlx.Stmt `query:"create-template"`
 	GetTemplates       *sqlx.Stmt `query:"get-templates"`
