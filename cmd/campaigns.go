@@ -685,11 +685,22 @@ func (a *App) TestCampaign(c echo.Context) error {
 	user := auth.GetUser(c)
 	validSubs := subs[:0]
 	for _, s := range subs {
-		if err := a.hasSubPerm(user, []int{s.ID}); err == nil {
-			validSubs = append(validSubs, s)
+		if err := a.hasSubPerm(user, []int{s.ID}); err != nil {
+			// A denial drops the subscriber. Anything else (a DB failure) fails the whole test
+			// send before any message goes out, rather than misreporting the address as not a
+			// subscriber (TEST-SEND-WARNINGS-SPEC D7).
+			if isPermDenied(err) {
+				continue
+			}
+			a.log.Printf("campaign %d test send: permission check failed for subscriber %d: %v", id, s.ID, err)
+			return echo.NewHTTPError(http.StatusInternalServerError, a.i18n.T("campaigns.testTempError"))
 		}
+		validSubs = append(validSubs, s)
 	}
 	subs = validSubs
+
+	// Computed on the final subs slice, after the filter above has reused the backing array.
+	skipped := skippedTestAddresses(req.SubscriberEmails, subs)
 
 	// A test send drops recipients silently, and NOTHING server-side records it. Confirmed twice:
 	// once as the total case (a UI test send produced no send at all, while the same campaign and
@@ -708,8 +719,12 @@ func (a *App) TestCampaign(c echo.Context) error {
 	a.log.Printf("campaign %d test send: requested=%d resolved=%d permitted=%d addresses=%s",
 		id, len(req.SubscriberEmails), numResolved, len(subs), truncateList(req.SubscriberEmails, 10))
 
-	// No subscribers.
+	// No subscribers: name the skipped addresses (D3). The fallback is unreachable while an
+	// empty request is refused above, kept so the 400 never carries an empty message.
 	if len(subs) == 0 {
+		if msg := a.testSkipMessage(skipped, true); msg != "" {
+			return echo.NewHTTPError(http.StatusBadRequest, msg)
+		}
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.noKnownSubsToTest"))
 	}
 
@@ -747,6 +762,11 @@ func (a *App) TestCampaign(c echo.Context) error {
 	// point a campaign is rendered on the real payload, so this is the earliest catch.
 	warnings := a.renderWarnings(camp)
 
+	// Skipped test addresses lead the warnings: they are about the send, not its content (D8).
+	if msg := a.testSkipMessage(skipped, false); msg != "" {
+		warnings = append([]string{msg}, warnings...)
+	}
+
 	// Send the test messages.
 	for _, s := range subs {
 		sub := s
@@ -775,6 +795,51 @@ func truncateList(items []string, n int) string {
 	}
 
 	return fmt.Sprintf("%s (+%d more)", strings.Join(items[:n], ", "), len(items)-n)
+}
+
+// skippedTestAddresses returns the requested addresses no permitted subscriber matched: each
+// once, in request order, blanks ignored. requested is already lowercased and trimmed.
+// (Fork, TEST-SEND-WARNINGS-SPEC D6.)
+func skippedTestAddresses(requested []string, sent models.Subscribers) []string {
+	matched := make(map[string]bool, len(sent))
+	for _, s := range sent {
+		matched[strings.ToLower(s.Email)] = true
+	}
+
+	var out []string
+	seen := make(map[string]bool, len(requested))
+	for _, e := range requested {
+		if e == "" || matched[e] || seen[e] {
+			continue
+		}
+		seen[e] = true
+		out = append(out, e)
+	}
+
+	return out
+}
+
+// testSkipMessage renders the D2 sentence for skipped addresses, or "" when there are none.
+// allSkipped selects the nothing-sent wording. Plain text (D4); at most 10 names (D5).
+// T + ReplaceAll, never Ts: Ts would translate a {key} expression inside an address.
+func (a *App) testSkipMessage(skipped []string, allSkipped bool) string {
+	if len(skipped) == 0 {
+		return ""
+	}
+
+	key := "campaigns.testSkipped"
+	if allSkipped {
+		key = "campaigns.testNoneSent"
+	}
+
+	return strings.ReplaceAll(a.i18n.T(key), "{emails}", truncateList(skipped, 10))
+}
+
+// isPermDenied reports whether a hasSubPerm error is a permission denial (HTTP 403) rather
+// than a failure to check (D7).
+func isPermDenied(err error) bool {
+	var he *echo.HTTPError
+	return errors.As(err, &he) && he != nil && he.Code == http.StatusForbidden
 }
 
 // GetCampaignViewAnalytics retrieves view counts for a campaign.

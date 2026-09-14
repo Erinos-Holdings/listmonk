@@ -80,7 +80,8 @@ func (c *Core) HasSubscriberLists(subIDs []int, listIDs []int) (map[int]bool, er
 	return out, nil
 }
 
-// GetSubscribersByEmail fetches a subscriber by one of the given params.
+// GetSubscribersByEmail fetches the subscribers matching the given e-mails. An empty result is
+// not an error (fork, TEST-SEND-WARNINGS-SPEC D3): the caller names the unmatched addresses.
 func (c *Core) GetSubscribersByEmail(emails []string) (models.Subscribers, error) {
 	var out models.Subscribers
 
@@ -90,7 +91,7 @@ func (c *Core) GetSubscribersByEmail(emails []string) (models.Subscribers, error
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.subscriber}", "error", pqErrMsg(err)))
 	}
 	if len(out) == 0 {
-		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.noKnownSubsToTest"))
+		return out, nil
 	}
 
 	if err := out.LoadLists(c.q.GetSubscriberListsLazy); err != nil {
