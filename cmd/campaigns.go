@@ -719,8 +719,9 @@ func (a *App) TestCampaign(c echo.Context) error {
 	a.log.Printf("campaign %d test send: requested=%d resolved=%d permitted=%d addresses=%s",
 		id, len(req.SubscriberEmails), numResolved, len(subs), truncateList(req.SubscriberEmails, 10))
 
-	// No subscribers: name the skipped addresses (D3). The fallback is unreachable while an
-	// empty request is refused above, kept so the 400 never carries an empty message.
+	// No subscribers: name the skipped addresses (D3). The fallback is reached only when every
+	// requested address is blank (["", "  "] passes the length guard above and sanitizes to
+	// nothing; the UI never posts one) -- kept so the 400 never carries an empty message.
 	if len(subs) == 0 {
 		if msg := a.testSkipMessage(skipped, true); msg != "" {
 			return echo.NewHTTPError(http.StatusBadRequest, msg)
