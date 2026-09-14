@@ -59,6 +59,25 @@ check('short hex and rgb() parse the same as long hex',
   && remapSchemeColor('rgb(255, 255, 255)', 'background') === PAGE_DARK
   && remapSchemeColor('rgba(0,0,0,0.9)', 'text') === LIGHT_TEXT);
 check('an out-of-range rgb() does not parse', parseCssColor('rgb(300,0,0)') === null);
+
+// I7 (BUTTON-DARK-MODE-SPEC): the accept/reject table is mirrored by Go's
+// TestButtonDarkParseColor (internal/manager/button_dark_lint_test.go). A loosening on
+// either side must fail here as well as there.
+const parseOk = {
+  '#fff': [255, 255, 255], '#FFF': [255, 255, 255], '#000000': [0, 0, 0], '#F5F5F5': [245, 245, 245],
+  '  #e54582 ': [229, 69, 130], 'rgb(255, 255, 255)': [255, 255, 255], 'rgb(0,0,0)': [0, 0, 0],
+  'rgb(1 2 3)': [1, 2, 3], 'rgba(0,0,0,0.9)': [0, 0, 0], 'rgba(10, 20, 30, .5)': [10, 20, 30],
+  'RGB(0,0,0)': [0, 0, 0],
+};
+Object.entries(parseOk).forEach(([input, [r, g, b]]) => {
+  const got = parseCssColor(input);
+  check(`I7: parseCssColor accepts ${JSON.stringify(input)}`,
+    got !== null && got.r === r && got.g === g && got.b === b, JSON.stringify(got));
+});
+['rgb(300,0,0)', '#00000080', '#0008', '#ff', 'black', 'transparent', 'inherit',
+  'linear-gradient(#fff,#000)', '', '#gggggg'].forEach((input) => {
+  check(`I7: parseCssColor rejects ${JSON.stringify(input)}`, parseCssColor(input) === null);
+});
 check('light text is left alone (it already reads on a dark ground)',
   remapSchemeColor('#ffffff', 'text') === '#ffffff');
 
@@ -103,9 +122,64 @@ check('full: the invert style block is prepended to <head>',
   full.slice(full.indexOf('<head'), full.indexOf('<head') + 200));
 check('full: images are double-inverted back to true colour',
   /img,video\{filter:invert\(1\) hue-rotate\(180deg\)\}/.test(full));
-check('full: no colour in the document body was rewritten',
-  full.replace(/<style id="lm-dark-sim">[^<]*<\/style>/, '') === applyScheme(fixture, 'nothing-doing')
-  || !/lm-dark-sim/.test(full.replace(/<style id="lm-dark-sim">[^<]*<\/style>/, '')));
+// BUTTON-DARK-MODE-SPEC I2. The previous form was `A || B` with B always true once the style
+// block was stripped, so it passed on any output. Compare the parsed <body> of full against
+// light (the input, parsed the same way) on a fixture that carries a dark border and colour --
+// exactly what the partial pass rewrites -- and prove the comparison can fail by running it on
+// partial too.
+const bodyOf = (html) => new JSDOM(html).window.document.body.innerHTML;
+const borderFixture = '<!doctype html><html><head><title>t</title></head><body>'
+  + '<table bgcolor="#ffffff"><tr><td style="background-color:#f5f5f5;color:#000000;border:2px solid #000000">'
+  + '<a style="color:#111111;border-bottom:1px solid rgb(0, 0, 0)" href="https://x.test">go</a></td></tr></table>'
+  + '</body></html>';
+check('full (I2): the document body is identical to light on a dark border/colour fixture',
+  bodyOf(applyScheme(borderFixture, 'full')) === bodyOf(applyScheme(borderFixture, 'light')));
+check('full (I2): identical to light on template 29 too',
+  bodyOf(full) === bodyOf(applyScheme(fixture, 'light')));
+check('full (I2): the comparison is not vacuous -- partial fails it',
+  bodyOf(applyScheme(borderFixture, 'partial')) !== bodyOf(applyScheme(borderFixture, 'light')));
+
+// ---- borders under partial (BUTTON-DARK-MODE-SPEC D1, I1) --------------------------------
+// The style attribute of the single <td> after a partial pass.
+function partialStyle(style) {
+  const out = applyScheme(`<!doctype html><html><body><table><tr><td style="${style}">x</td></tr></table></body></html>`, 'partial');
+  return new JSDOM(out).window.document.querySelector('td').getAttribute('style');
+}
+const borderCases = [
+  ['border:2px solid #000000', `border:2px solid ${LIGHT_TEXT}`],
+  ['border-color:#000', `border-color:${LIGHT_TEXT}`],
+  ['border-top:1px solid rgb(0, 0, 0)', `border-top:1px solid ${LIGHT_TEXT}`],
+  ['border-color:#000 #fff', `border-color:${LIGHT_TEXT} #fff`],
+  ['border:1px solid transparent', 'border:1px solid transparent'],
+  ['border:1px solid #00000080', 'border:1px solid #00000080'],
+  ['border-color:#0008', 'border-color:#0008'],
+  ['border-radius:64px', 'border-radius:64px'],
+  ['border-radius:64px;border-collapse:collapse', 'border-radius:64px;border-collapse:collapse'],
+  ['border-radius:64px;border:2px solid #000000', `border-radius:64px;border:2px solid ${LIGHT_TEXT}`],
+  ['border:2px solid #777777', 'border:2px solid #777777'],
+  ['border: 2px  dashed #000000 ', `border: 2px  dashed ${LIGHT_TEXT} `],
+  ['border:none', 'border:none'],
+  ['border:1px solid rgba(0,0,0,0.5)', `border:1px solid ${LIGHT_TEXT}`],
+  ['border:1px solid rgb(300, 0, 0)', 'border:1px solid rgb(300, 0, 0)'],
+  ['border-top:1px solid #000;border-top-color:#111', `border-top:1px solid ${LIGHT_TEXT};border-top-color:${LIGHT_TEXT}`],
+  ['color:#000000;background-color:#ffffff;border:2px solid #000000',
+    `color:${LIGHT_TEXT};background-color:${PAGE_DARK};border:2px solid ${LIGHT_TEXT}`],
+];
+['border-right', 'border-bottom', 'border-left'].forEach((p) => {
+  borderCases.push([`${p}:1px solid #000`, `${p}:1px solid ${LIGHT_TEXT}`]);
+});
+['border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color'].forEach((p) => {
+  borderCases.push([`${p}:#000000`, `${p}:${LIGHT_TEXT}`]);
+});
+borderCases.forEach(([input, want]) => {
+  const got = partialStyle(input);
+  check(`I1: partial "${input}" -> "${want}"`, got === want, got);
+});
+
+const borderDoc = '<!doctype html><html><body><table><tr><td style="border:2px solid #000000;border-color:#000 #fff">x</td></tr></table></body></html>';
+check('I1: light returns a border fixture byte for byte', applyScheme(borderDoc, 'light') === borderDoc);
+const borderOnce = applyScheme(borderDoc, 'partial');
+check('I1: the border pass is idempotent', applyScheme(borderOnce, 'partial') === borderOnce, borderOnce);
 
 if (failed) {
   console.log(`\n${failed} FAILURES`);

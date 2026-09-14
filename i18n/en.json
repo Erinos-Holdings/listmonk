@@ -128,7 +128,7 @@
     "campaigns.warnZeroWidth": "The {field} contains invisible zero-width characters (U+200B/U+200C/U+200D/U+FEFF), usually pasted in from another editor. They count toward the length and can show as boxes in older clients — retype the {field} unless they are intended.",
     "campaigns.preview": "Preview",
     "campaigns.previewSchemeFull": "Dark (Outlook-style)",
-    "campaigns.previewSchemeHelp": "Simulation of the inverting client families. Not modeled: Windows Outlook's text-only inversion, Outlook.com's palette, and Gmail Android's recolor of small transparent glyphs \u2014 those need a Mailgun run.",
+    "campaigns.previewSchemeHelp": "Simulation of the inverting client families. Border colors are remapped like text in the Gmail-style scheme (measured 2026-09-14). Not modeled: Windows Outlook's text-only inversion, Outlook.com's palette, and Gmail Android's recolor of small transparent glyphs \u2014 those need a Mailgun run.",
     "campaigns.previewSchemeLight": "Light",
     "campaigns.previewSchemePartial": "Dark (Gmail-style)",
     "campaigns.progress": "Progress",

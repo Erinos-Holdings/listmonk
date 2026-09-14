@@ -9,9 +9,18 @@
 //   full     (Windows Outlook desktop, Gmail iOS): everything flips, images untouched.
 //   partial  (Gmail apps, Outlook.com/M365 web, Outlook mobile, Yahoo web): light grounds
 //            go dark, dark text goes light, mid-tones are kept, images untouched.
+// BORDER colours are modelled (BUTTON-DARK-MODE-SPEC D1): under partial every colour token in
+// a border* declaration is remapped with the text rule. Both Gmail apps lighten a dark border
+// like text (Inspect DqU865vB5L9GkVQgGXubfXOq4RjWiZY0CP30IvyMewHle, campaign 49, 2026-09-14);
+// full needs nothing, its CSS invert already flips borders.
 // NOT modelled, and the caption in the modal says so: Windows Outlook's text-only inversion
 // (runbook hazard 54), Outlook.com's palette, and Gmail Android's recolour of small
 // dark-on-transparent glyphs. Those still need a Mailgun run.
+//
+// TWO-LANGUAGE CONSTANTS: DARK_INK / LIGHT_GROUND and parseCssColor are ported to Go in
+// internal/manager/button_dark_lint.go (the save/Start/test-send button warning must agree
+// with what the Gmail-style scheme shows). TestButtonDarkThresholdsPinned and
+// TestButtonDarkParseColor pin them -- change both sides together.
 //
 // Plain ESM, dependency-free, and deliberately here rather than under frontend/src: this
 // directory's test harness runs in CI ("Email-builder tests", build-image.yml) and the Vue
@@ -114,6 +123,15 @@ export function remapSchemeColor(cssColor, role) {
 }
 
 const BACKGROUND_PROPS = ['background-color', 'background'];
+const BORDER_PROPS = [
+  'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+  'border-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+];
+// One colour token in a border value (border-color legitimately carries 2-4). A hex token is
+// 3 or 6 digits NOT followed by another hex digit, so #rrggbbaa (and #rgba) is never read as
+// its leading digits -- it matches nothing and stays byte-identical. An rgb()/rgba() call is
+// one token whatever its internal spacing. Tokens parseCssColor rejects are kept verbatim.
+const BORDER_COLOR_TOKEN = /rgba?\([^)]*\)|#(?:[0-9a-f]{6}|[0-9a-f]{3})(?![0-9a-f])/gi;
 const FULL_INVERT_CSS = 'html{filter:invert(1) hue-rotate(180deg);background:#fff}'
   + 'img,video{filter:invert(1) hue-rotate(180deg)}';
 
@@ -150,6 +168,24 @@ function remapInlineStyle(style) {
     }
   }
 
+  BORDER_PROPS.forEach((prop) => {
+    // The same anchor as above, so `border` cannot match border-radius/border-collapse and
+    // `border-top` cannot match border-top-color. Only colour tokens are rewritten; every
+    // other byte of the declaration (widths, styles, spacing, keywords) is kept.
+    const re = new RegExp(`(^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i');
+    const m = re.exec(next);
+    if (!m) {
+      return;
+    }
+    const value = m[2].replace(BORDER_COLOR_TOKEN, (token) => (
+      parseCssColor(token) ? remapSchemeColor(token, 'text') : token
+    ));
+    if (value !== m[2]) {
+      next = next.replace(m[0], `${m[0].slice(0, m[0].length - m[2].length)}${value}`);
+      changed = true;
+    }
+  });
+
   return changed ? next : null;
 }
 
@@ -160,8 +196,8 @@ function remapInlineStyle(style) {
  *              original, so the toggle can never drift the document.
  *   'full'     one prepended <style> block: invert the page, invert images back. Nothing in
  *              the document itself is touched.
- *   'partial'  walk the detached document and remap every inline background/colour and
- *              bgcolor attribute. Images are never touched.
+ *   'partial'  walk the detached document and remap every inline background/colour, border
+ *              colour and bgcolor attribute. Images are never touched.
  *
  * Pure: it parses into a detached document and serialises back. It performs no network call
  * and reaches nothing outside the string it was given, which is why the toggle cannot alter

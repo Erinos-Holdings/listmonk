@@ -66,7 +66,8 @@ func QPEncodedSize(b []byte) int {
 // RenderWarnings inspects a fully rendered per-subscriber message body (template
 // wrap + preheader + tracking pixel, i.e. what CampaignMessage.render() emits for
 // a dummy subscriber) and returns non-blocking send-quality warnings: the Gmail
-// clip check and the embedded-image lint. The input must be the rendered output,
+// clip check, the embedded-image and size lints, and the dark-on-light VML button
+// lint (button_dark_lint.go). The input must be the rendered output,
 // never the raw editor body — the base template and Outlook dual-emit markup count
 // toward Gmail's limit too.
 func RenderWarnings(rendered []byte) []string {
@@ -81,6 +82,7 @@ func RenderWarnings(rendered []byte) []string {
 
 	warns = append(warns, embedWarnings(rendered)...)
 	warns = append(warns, sizeWarnings(rendered)...)
+	warns = append(warns, ButtonDarkModeWarnings(string(rendered))...)
 	return warns
 }
 
