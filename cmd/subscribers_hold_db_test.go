@@ -256,14 +256,22 @@ func TestHold_RelabelMode(t *testing.T) {
 	held, _ := f.sub("h@x", f.brandID, "confirmed")
 	f.hold([]int{held}, "old", nil, false)
 	f.age(held, f.brandID)
+	// An opt-out recorded after an earlier hold (hold_released to unsubscribed) is consent and is
+	// never relabelled (review L2).
+	rel, _ := f.sub("rel@x", f.brandID, "unsubscribed")
+	f.db.MustExec(`UPDATE subscriber_lists SET meta='{"hold_released":{"at":"2026-09-01T00:00:00Z","to":"unsubscribed","hold":{"rule":"x"}}}' WHERE subscriber_id=$1 AND list_id=$2`, rel, f.brandID)
+	relBefore := f.row(rel, f.brandID)
 
 	plainBefore := f.row(plain, f.brandID)
 	confBefore := f.row(conf, f.brandID)
 	heldBefore := f.row(held, f.brandID)
 
-	res := f.hold([]int{plain, conf, held}, "hcn-tier-D", nil, true)
-	if res.Held != 1 || skipWhy(res, conf) != "confirmed" || skipWhy(res, held) != "already_held" {
+	res := f.hold([]int{plain, conf, held, rel}, "hcn-tier-D", nil, true)
+	if res.Held != 1 || skipWhy(res, conf) != "confirmed" || skipWhy(res, held) != "already_held" || skipWhy(res, rel) != "opt_out_after_hold" {
 		t.Fatalf("relabel: %+v", res)
+	}
+	if rr := f.row(rel, f.brandID); string(rr.Meta) != string(relBefore.Meta) || !rr.UpdatedAt.Equal(relBefore.UpdatedAt) {
+		t.Fatalf("released opt-out touched: %s", rr.Meta)
 	}
 
 	p := f.row(plain, f.brandID)
@@ -376,6 +384,11 @@ func TestHoldRelease_EveryStatusWriter(t *testing.T) {
 		}},
 		{"upsert-blocklist-subscriber (import)", keptNotCount, func(_ int, _, email string) {
 			if _, err := stmt("upsert-blocklist-subscriber").Exec("00000000-0000-0000-0000-000000000001", email, "n", "{}"); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"record-bounce unsubscribe action (same-status, no meta)", kept, func(_ int, uu, email string) {
+			if _, err := stmt("record-bounce").Exec(uu, email, "", "hard", "test", "{}", time.Now(), 1, "unsubscribe"); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -520,4 +533,45 @@ func sameTime(a, b *time.Time) bool {
 		return a == b
 	}
 	return a.Equal(*b)
+}
+
+// TestHold_NewStampDropsReleased -- a NEW hold on a row that carries a stale hold_released
+// (declined or opted out after an earlier hold, then re-joined) drops the released record, so a
+// row is never both held and released and the §6 report queries count it once (review L1).
+func TestHold_NewStampDropsReleased(t *testing.T) {
+	f := newHoldFixture(t)
+	id, _ := f.sub("again@x", f.brandID, "confirmed")
+	f.db.MustExec(`UPDATE subscriber_lists SET meta='{"hold_released":{"at":"2026-09-01T00:00:00Z","to":"unsubscribed","hold":{"rule":"x"}}}' WHERE subscriber_id=$1 AND list_id=$2`, id, f.brandID)
+	if res := f.hold([]int{id}, "r2", nil, false); res.Held != 1 {
+		t.Fatalf("hold: %+v", res)
+	}
+	m := f.row(id, f.brandID).meta(t)
+	if m["hold"] == nil || m["hold_released"] != nil {
+		t.Fatalf("stale hold_released survived a new stamp: %v", m)
+	}
+}
+
+// TestHold_ByQueryRefused -- the SQL-fragment endpoint refuses action hold by name (spec D3:
+// ids only), before any list permission filtering could turn it into a write.
+func TestHold_ByQueryRefused(t *testing.T) {
+	f := newHoldFixture(t)
+	e := echo.New()
+	body := `{"query":"subscribers.id = 1","action":"hold","target_list_ids":[` + itoa(f.brandID) + `],"hold":{"reason":"manual","source":"test","rule":"r"}}`
+	req := httptest.NewRequest(http.MethodPut, "/api/subscribers/query/lists", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set(auth.UserHTTPCtxKey, auth.User{PermissionsMap: map[string]struct{}{
+		auth.PermListGetAll: {}, auth.PermListManageAll: {}, auth.PermSubscribersSqlQuery: {},
+	}})
+	err := f.app.ManageSubscriberListsByQuery(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusBadRequest || !strings.Contains(strings.ToLower(he.Message.(string)), "explicit ids") {
+		t.Fatalf("want 400 refusing hold by query, got %v / %d %s", err, rec.Code, rec.Body.String())
+	}
+	var n int
+	f.db.Get(&n, `SELECT COUNT(*) FROM subscriber_lists WHERE meta ? 'hold'`)
+	if n != 0 {
+		t.Fatalf("by-query hold wrote %d rows", n)
+	}
 }

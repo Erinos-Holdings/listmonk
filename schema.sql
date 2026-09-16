@@ -577,7 +577,7 @@ RETURNS TABLE (subscriber_id INT, anchor_at TIMESTAMPTZ, eligible_sends BIGINT,
     first_eligible_send_at TIMESTAMPTZ, last_eligible_send_at TIMESTAMPTZ,
     last_view_at TIMESTAMPTZ, last_click_at TIMESTAMPTZ) AS $$
     WITH members AS (
-        SELECT sl.subscriber_id, COALESCE(sl.confirmed_at, sl.created_at) AS anchor_at,
+        SELECT sl.subscriber_id, GREATEST(COALESCE(sl.confirmed_at, sl.created_at), COALESCE((sl.meta->'hold_released'->>'at')::TIMESTAMPTZ, '-infinity'::TIMESTAMPTZ)) AS anchor_at,
             COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') AS lang
         FROM subscriber_lists sl JOIN subscribers s ON (s.id = sl.subscriber_id)
         WHERE sl.list_id = p_list_id AND sl.status = 'confirmed' AND s.status <> 'blocklisted'

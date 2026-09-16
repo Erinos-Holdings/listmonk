@@ -280,4 +280,29 @@ func TestEngagementView_ScopedToListAndAnchor(t *testing.T) {
 	if !r.AnchorAt.After(t0.Add(5*time.Hour)) || r.LastViewAt.Valid || r.LastClickAt.Valid || r.EligibleSends != 0 {
 		t.Fatalf("re-confirm did not reset: %+v", r)
 	}
+
+	// A HOLD re-permission re-confirms under listmonk.backfill (no welcome), which never restamps
+	// confirmed_at -- so the anchor must follow hold_released.at, or every broadcast sent while
+	// the person was held counts as an eligible send and the rule re-holds them the next day
+	// (implementation review C1). Back to t0 so campA and a view count again, hold, then
+	// release under backfill.
+	h.anchorAt(sub, h.listA, t0)
+	view(campA, t0.Add(3*time.Hour))
+	if r := h.engagement(h.listA)[sub]; r.EligibleSends != 1 || !r.LastViewAt.Valid {
+		t.Fatalf("pre-hold state: %+v", r)
+	}
+	h.db.MustExec(`UPDATE subscriber_lists SET status='unsubscribed', meta='{"hold":{"rule":"r","reason":"never-engaged","source":"t"}}' WHERE subscriber_id=$1 AND list_id=$2`, sub, h.listA)
+	tx := h.db.MustBegin()
+	tx.MustExec(`SET LOCAL listmonk.backfill = 'true'`)
+	tx.MustExec(`UPDATE subscriber_lists SET status='confirmed' WHERE subscriber_id=$1 AND list_id=$2`, sub, h.listA)
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if ca := h.confirmedAt(sub, h.listA); !ca.Valid || !ca.Time.Equal(t0) {
+		t.Fatalf("backfill re-confirm restamped confirmed_at: %v", ca)
+	}
+	r = h.engagement(h.listA)[sub]
+	if !r.AnchorAt.After(now.Add(-time.Minute)) || r.EligibleSends != 0 || r.LastViewAt.Valid {
+		t.Fatalf("hold re-permission under backfill did not move the anchor: %+v", r)
+	}
 }
