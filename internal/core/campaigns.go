@@ -183,6 +183,13 @@ func (c *Core) GetArchivedCampaigns(offset, limit int) (models.Campaigns, int, e
 
 // CreateCampaign creates a new campaign.
 func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int) (models.Campaign, error) {
+	// Fork (SHALA-CUTOVER-SPEC D9) -- attribs.lang defaults to "en" on create when absent.
+	// HERE rather than in the handler's validateCampaignFields, so EVERY create path gets it:
+	// the editor, the API, and a clone (which the frontend performs as a plain create from the
+	// source campaign's fields). Update paths deliberately do not call this -- see
+	// models.DefaultCampaignLang.
+	o.Attribs = models.DefaultCampaignLang(o.Attribs, o.Type)
+
 	uu, err := uuid.NewV4()
 	if err != nil {
 		c.log.Printf("error generating UUID: %v", err)
@@ -356,6 +363,19 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 func (c *Core) CampaignLangAudience(id int) (int, error) {
 	var n int
 	if err := c.q.GetCampaignLangAudience.Get(&n, id); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// CampaignNonEnAudience (fork, SHALA-CUTOVER-SPEC D9/I8) counts, among the subscribers a
+// campaign would send to under its lists' opt-in rules, how many read a language other than
+// English. Used for the language-less-campaign warning, where CampaignLangAudience cannot
+// answer the question -- a campaign with no attribs.lang matches every subscriber, so its
+// audience count is the whole list and says nothing about who is in it.
+func (c *Core) CampaignNonEnAudience(id int) (int, error) {
+	var n int
+	if err := c.q.GetCampaignNonEnAudience.Get(&n, id); err != nil {
 		return 0, err
 	}
 	return n, nil

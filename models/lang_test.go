@@ -35,3 +35,29 @@ func TestNormalizeLang(t *testing.T) {
 		t.Fatal("no attribs -> everyone")
 	}
 }
+
+// TestDefaultCampaignLang pins SHALA-CUTOVER-SPEC I5's pure half: the create-time default.
+// The end-to-end create/clone/update behaviour is cmd/campaign_lang_default_db_test.go.
+func TestDefaultCampaignLang(t *testing.T) {
+	if got := DefaultCampaignLang(nil, CampaignTypeRegular); got["lang"] != "en" {
+		t.Fatalf("nil attribs must yield lang en, got %v", got)
+	}
+	if got := DefaultCampaignLang(JSON{"preheader": "x"}, CampaignTypeRegular); got["lang"] != "en" || got["preheader"] != "x" {
+		t.Fatalf("absent lang must be defaulted without disturbing other keys, got %v", got)
+	}
+	if got := DefaultCampaignLang(JSON{"lang": "fr"}, CampaignTypeRegular); got["lang"] != "fr" {
+		t.Fatalf("an explicit language must be kept, got %v", got)
+	}
+	// An opt-in campaign is the confirmation mail for a double opt-in list -- defaulting it
+	// would stop confirmations reaching non-English subscribers.
+	if got := DefaultCampaignLang(nil, CampaignTypeOptin); got != nil {
+		t.Fatalf("optin campaigns must not be defaulted, got %v", got)
+	}
+	if got := DefaultCampaignLang(JSON{}, CampaignTypeOptin); len(got) != 0 {
+		t.Fatalf("optin campaigns must not be defaulted, got %v", got)
+	}
+	// The default must be a value NormalizeLang accepts, or every create would 400.
+	if !NormalizeLang(JSON{"lang": CampaignLangDefault}) {
+		t.Fatal("CampaignLangDefault must be a member of CampaignLangs")
+	}
+}

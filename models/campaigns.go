@@ -491,10 +491,49 @@ func (c *Campaign) Preheader() string {
 // agree with what those queries accept — they compare strings, so any value here works.
 var CampaignLangs = []string{"en", "es", "fr", "de", "it"}
 
+// CampaignLangDefault (fork, SHALA-CUTOVER-SPEC D9) is what a campaign created without a
+// language is stored with. Must be a member of CampaignLangs.
+const CampaignLangDefault = "en"
+
 // Lang returns the campaign's language code from attribs.lang, or "" for everyone.
 func (c *Campaign) Lang() string {
 	s, _ := c.Attribs["lang"].(string)
 	return s
+}
+
+// DefaultCampaignLang (fork, SHALA-CUTOVER-SPEC D9) applies the CREATE-time default for
+// attribs.lang: a campaign created without one is stored as "en". Returns the attribs to
+// store, allocating a map when the caller had none.
+//
+// EN is the safe default because of how the send predicates read it (COALESCE-EN): an `en`
+// campaign reaches `en` subscribers AND those with no language, i.e. exactly the pre-fork
+// audience minus the people who would receive a language they do not read. A lang-less
+// campaign reaches EVERYONE regardless of language, which is the shape that sends English
+// mail to `fr`/`de` readers -- the likeliest driver of a negative user-feedback verdict.
+// Clearing the language is still allowed for a deliberate whole-list send; it just stops
+// being the value nobody has to remember.
+//
+// CREATE ONLY. Applying it on update would make clearing the language impossible: the form's
+// "All" option posts "", NormalizeLang deletes the key, and a default here would immediately
+// put it back (I10).
+//
+// OPT-IN CAMPAIGNS ARE EXEMPT. listmonk generates their body itself and they are the
+// confirmation mail for a double opt-in list; defaulting them to `en` would silently stop
+// confirmations reaching a subscriber whose attribs.lang is fr/de/es/it, which is a
+// functional regression rather than a deliverability improvement. A human can still set a
+// language on one explicitly.
+func DefaultCampaignLang(attribs JSON, campType string) JSON {
+	if campType == CampaignTypeOptin {
+		return attribs
+	}
+	if attribs == nil {
+		attribs = JSON{}
+	}
+	if s, ok := attribs["lang"].(string); ok && s != "" {
+		return attribs
+	}
+	attribs["lang"] = CampaignLangDefault
+	return attribs
 }
 
 // NormalizeLang validates attribs.lang in place. An absent or empty value removes the key

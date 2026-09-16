@@ -654,3 +654,31 @@ WITH view AS (
 INSERT INTO campaign_views (campaign_id, subscriber_id)
     VALUES((SELECT campaign_id FROM view), (SELECT subscriber_id FROM view));
 
+
+-- name: get-campaign-non-en-audience
+-- Fork (SHALA-CUTOVER-SPEC D9/I8). Among the subscribers campaign $1 would send to under
+-- its lists' opt-in rules, how many read a language other than English -- the COALESCE-EN
+-- rule, so a subscriber with no attribs.lang counts as en and is NOT counted here. Drives
+-- the warning on a LANGUAGE-LESS campaign, whose audience is everyone; the campaign's own
+-- attribs.lang is deliberately not consulted.
+WITH campLists AS (
+    SELECT lists.id AS list_id, optin FROM lists
+    INNER JOIN campaign_lists ON (campaign_lists.list_id = lists.id)
+    WHERE campaign_lists.campaign_id = $1
+),
+camp AS (
+    SELECT id, type FROM campaigns WHERE id = $1
+)
+SELECT COUNT(DISTINCT sl.subscriber_id)
+    FROM camp
+    JOIN campLists cl ON TRUE
+    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
+        AND (
+            CASE
+                WHEN camp.type = 'optin' THEN sl.status = 'unconfirmed' AND cl.optin = 'double'
+                WHEN cl.optin = 'double' THEN sl.status = 'confirmed'
+                ELSE sl.status != 'unsubscribed'
+            END
+        )
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+        AND COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') != 'en';

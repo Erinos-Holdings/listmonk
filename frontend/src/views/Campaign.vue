@@ -532,7 +532,10 @@ export default Vue.extend({
         name: '',
         subject: '',
         preheader: '',
-        lang: '',
+        // Fork (SHALA-CUTOVER-SPEC D9) -- English is preselected on a NEW campaign, matching
+        // the server-side create default. A loaded campaign overwrites this from its own
+        // attribs, so an existing language-less draft still shows "All".
+        lang: 'en',
         fromEmail: '',
         headersStr: '[]',
         headers: [],

@@ -1063,7 +1063,26 @@ func (a *App) campaignWarningsByID(id int) []string {
 		a.log.Printf("error fetching campaign %d for warnings: %v", id, err)
 		return nil
 	}
-	return a.renderWarnings(camp)
+	w := a.renderWarnings(camp)
+
+	// Fork (SHALA-CUTOVER-SPEC D9/I8) -- a campaign with NO attribs.lang reaches every
+	// subscriber on its lists regardless of what they read. Since erinos.* every create
+	// defaults to "en", so a language-less campaign is now a deliberate act (an existing
+	// draft, an API caller clearing it, a transactional-style notice) -- worth one warning
+	// when the lists actually hold someone who reads something else, and silent when they
+	// do not. THIS is the DB-aware point: manager.RenderWarnings sees rendered bytes only
+	// and cannot count an audience. Warns, never blocks. Opt-in campaigns are exempt: they
+	// never take the default (models.DefaultCampaignLang) and by design reach every
+	// unconfirmed row, so the warning would fire on every one of them (review F7).
+	if camp.Lang() == "" && camp.Type != models.CampaignTypeOptin {
+		if n, err := a.core.CampaignNonEnAudience(id); err != nil {
+			a.log.Printf("error counting non-en audience for campaign %d: %v", id, err)
+		} else if n > 0 {
+			w = append(w, a.i18n.Ts("campaigns.warnLangLess", "count", strconv.Itoa(n)))
+		}
+	}
+
+	return w
 }
 
 // sendTestMessage takes a campaign and a subscriber and sends out a sample campaign message.

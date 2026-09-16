@@ -124,6 +124,7 @@
     "campaigns.langLocked": "The language cannot be changed once a campaign has started. Clone it and change the language on the copy.",
     "campaigns.footerMissing": "This campaign cannot be started or scheduled: {error}.",
     "campaigns.fieldInvalidLang": "Invalid language. Leave it empty for all, or use one of: {langs}.",
+    "campaigns.warnLangLess": "No language is set, so this campaign sends to everyone on its lists — including {count} subscriber(s) who read another language. Set one unless a whole-list send is intended.",
     "campaigns.warnNoLangAudience": "No subscribers on these lists have language {lang}. The campaign will finish with nothing sent.",
     "campaigns.warnZeroWidth": "The {field} contains invisible zero-width characters (U+200B/U+200C/U+200D/U+FEFF), usually pasted in from another editor. They count toward the length and can show as boxes in older clients — retype the {field} unless they are intended.",
     "campaigns.preview": "Preview",
