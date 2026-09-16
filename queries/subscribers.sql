@@ -327,7 +327,9 @@ UPDATE subscriber_lists SET status = 'unsubscribed', updated_at=NOW() WHERE
 -- here). $4 is the consent-time bound (NULL = none), a row updated at or after it is skipped.
 -- $5 false is the default mode, where a confirmed or unconfirmed row flips to unsubscribed and
 -- updated_at bumps, an unsubscribed row WITHOUT a hold is a real opt-out and is never stamped,
--- and a held row is re-stamped only when hold.rule differs (updated_at untouched).
+-- and a held row is re-stamped only when hold.rule differs (updated_at untouched). A held row
+-- under the SAME rule whose stored hold would change by merging $3 into it gets that merge with
+-- its at kept (the asks bookkeeping of the re-permission flow), and an identical call is a no-op.
 -- $5 true is relabel mode for a backfill, stamping only plain unsubscribed rows and never
 -- changing status or updated_at. No row is ever inserted.
 -- Returns one row per distinct input id with held and, when not held, why.
@@ -341,14 +343,20 @@ cur AS (
 upd AS (
     UPDATE subscriber_lists sl SET
         status = (CASE WHEN $5 THEN sl.status ELSE 'unsubscribed'::subscription_status END),
-        meta = sl.meta || JSONB_BUILD_OBJECT('hold', $3::JSONB
-            || JSONB_BUILD_OBJECT('at', TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))),
+        meta = sl.meta || JSONB_BUILD_OBJECT('hold', (CASE
+            WHEN NOT $5 AND sl.status = 'unsubscribed' AND sl.meta ? 'hold'
+                AND sl.meta->'hold'->>'rule' IS NOT DISTINCT FROM $3::JSONB->>'rule'
+            THEN (sl.meta->'hold') || ($3::JSONB - 'at')
+            ELSE $3::JSONB || JSONB_BUILD_OBJECT('at', TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+        END)),
         updated_at = (CASE WHEN NOT $5 AND sl.status <> 'unsubscribed' THEN NOW() ELSE sl.updated_at END)
     WHERE sl.list_id = $2 AND sl.subscriber_id = ANY(SELECT id FROM ids)
         AND ($4::TIMESTAMPTZ IS NULL OR sl.updated_at < $4::TIMESTAMPTZ)
         AND (CASE WHEN $5
             THEN sl.status = 'unsubscribed' AND NOT sl.meta ? 'hold'
-            ELSE sl.status <> 'unsubscribed' OR (sl.meta ? 'hold' AND sl.meta->'hold'->>'rule' IS DISTINCT FROM $3::JSONB->>'rule')
+            ELSE sl.status <> 'unsubscribed' OR (sl.meta ? 'hold' AND (
+                sl.meta->'hold'->>'rule' IS DISTINCT FROM $3::JSONB->>'rule'
+                OR (sl.meta->'hold') || ($3::JSONB - 'at') IS DISTINCT FROM sl.meta->'hold'))
         END)
     RETURNING sl.subscriber_id
 )

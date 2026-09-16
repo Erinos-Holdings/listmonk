@@ -229,6 +229,22 @@ func TestHold_NeverRelabelsOptOut_IdempotentSameRule(t *testing.T) {
 	if !r.UpdatedAt.Equal(first.UpdatedAt) {
 		t.Fatal("re-stamp bumped updated_at")
 	}
+
+	// Same rule, new bookkeeping (the re-permission asks counter): merged in, at and updated_at
+	// kept, still held. Repeating the identical call is a no-op again.
+	stampedAt := m["hold"].(map[string]any)["at"]
+	book := map[string]any{"reason": "never-engaged", "source": "test", "rule": "r2", "asks": 1}
+	if res, err := f.app.core.HoldSubscriptions([]int{conf}, f.brandID, book, nil, false); err != nil || res.Held != 1 {
+		t.Fatalf("bookkeeping merge: %+v %v", res, err)
+	}
+	r = f.row(conf, f.brandID)
+	hold := r.meta(t)["hold"].(map[string]any)
+	if hold["asks"] != float64(1) || hold["at"] != stampedAt || hold["rule"] != "r2" || !r.UpdatedAt.Equal(first.UpdatedAt) || r.Status != "unsubscribed" {
+		t.Fatalf("bookkeeping merge wrote %s", r.Meta)
+	}
+	if res, _ := f.app.core.HoldSubscriptions([]int{conf}, f.brandID, book, nil, false); res.Held != 0 || skipWhy(res, conf) != "already_held" {
+		t.Fatalf("identical bookkeeping call: %+v", res)
+	}
 }
 
 // TestHold_RelabelMode -- I2 (relabel). Stamps exactly the plain-unsubscribed rows, never changes
