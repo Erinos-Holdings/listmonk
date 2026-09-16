@@ -27,6 +27,10 @@ var (
 		"links":            {},
 		"link_clicks":      {},
 		"bounces":          {},
+		// Fork (holds) -- subscription_engagement(list_id) reads campaign_send_failures, and the
+		// validator inspects the EXPLAIN plan, so the function's inner tables must be allowed
+		// for the sunset predicate (integrations SUNSET-SPEC D7) to pass.
+		"campaign_send_failures": {},
 	}
 )
 

@@ -575,3 +575,16 @@ func TestHold_ByQueryRefused(t *testing.T) {
 		t.Fatalf("by-query hold wrote %d rows", n)
 	}
 }
+
+// TestSunsetPredicate_PassesTableAllowlist -- the D7 rule predicate, run through the subscriber
+// query API, must pass validateQueryTables: the EXPLAIN plan of subscription_engagement(list)
+// names campaign_send_failures, which the allowlist has to carry (found live 2026-09-16).
+func TestSunsetPredicate_PassesTableAllowlist(t *testing.T) {
+	f := newHoldFixture(t)
+	pred := "subscribers.id IN (SELECT subscriber_id FROM subscription_engagement(" + itoa(f.brandID) + ") " +
+		"WHERE anchor_at <= NOW() - INTERVAL '120 days' AND eligible_sends >= 6 " +
+		"AND first_eligible_send_at >= '2026-08-31T00:00:00Z' AND last_view_at IS NULL AND last_click_at IS NULL)"
+	if _, _, err := f.app.core.QuerySubscribers("", pred, []int{f.brandID}, "", "", "", 0, 10); err != nil {
+		t.Fatalf("sunset predicate rejected: %v", err)
+	}
+}
