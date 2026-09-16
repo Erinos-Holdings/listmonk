@@ -98,6 +98,33 @@ CREATE TRIGGER subscriber_lists_confirmed_at
     FOR EACH ROW EXECUTE FUNCTION subscriber_lists_stamp_confirmed_at();
 DROP INDEX IF EXISTS idx_sub_lists_status; CREATE INDEX idx_sub_lists_status ON subscriber_lists(status);
 
+-- Fork (holds): a hold is status 'unsubscribed' + meta.hold on a non-blocklisted subscriber.
+-- A real status change releases it (meta.hold -> meta.hold_released) and bumps updated_at;
+-- the unsubscribe queries release it explicitly on an already-unsubscribed row. Mirrors
+-- internal/migrations/v6.2.10.go.
+CREATE OR REPLACE FUNCTION subscriber_lists_release_hold(meta JSONB, rel_to TEXT) RETURNS JSONB AS $$
+    SELECT CASE WHEN meta ? 'hold'
+        THEN (meta - 'hold') || JSONB_BUILD_OBJECT('hold_released', JSONB_BUILD_OBJECT(
+            'at', TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+            'to', rel_to,
+            'hold', meta->'hold'))
+        ELSE meta END;
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION subscriber_lists_hold_release() RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.status IS DISTINCT FROM NEW.status AND OLD.meta ? 'hold' AND NEW.meta ? 'hold' THEN
+        NEW.meta := subscriber_lists_release_hold(NEW.meta, NEW.status::TEXT);
+        NEW.updated_at := NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS subscriber_lists_hold_release ON subscriber_lists;
+CREATE TRIGGER subscriber_lists_hold_release
+    BEFORE UPDATE OF status ON subscriber_lists
+    FOR EACH ROW EXECUTE FUNCTION subscriber_lists_hold_release();
+
 -- templates
 DROP TABLE IF EXISTS templates CASCADE;
 CREATE TABLE templates (
@@ -528,11 +555,64 @@ CREATE MATERIALIZED VIEW mat_dashboard_charts AS
 DROP INDEX IF EXISTS mat_dashboard_charts_idx; CREATE UNIQUE INDEX mat_dashboard_charts_idx ON mat_dashboard_charts (updated_at);
 
 -- subscriber counts stats for lists
+-- Fork (holds): status is TEXT with a 'held' pseudo-status (v6.2.10).
+DROP INDEX IF EXISTS mat_list_subscriber_stats_idx;
 DROP MATERIALIZED VIEW IF EXISTS mat_list_subscriber_stats;
 CREATE MATERIALIZED VIEW mat_list_subscriber_stats AS
-    SELECT NOW() AS updated_at, lists.id AS list_id, subscriber_lists.status, COUNT(subscriber_lists.status) AS subscriber_count FROM lists
+    SELECT NOW() AS updated_at, lists.id AS list_id,
+        (CASE WHEN subscriber_lists.status = 'unsubscribed' AND subscriber_lists.meta ? 'hold' AND subscribers.status <> 'blocklisted'
+              THEN 'held' ELSE subscriber_lists.status::TEXT END) AS status,
+        COUNT(subscriber_lists.status) AS subscriber_count
+    FROM lists
     LEFT JOIN subscriber_lists ON (subscriber_lists.list_id = lists.id)
-    GROUP BY lists.id, subscriber_lists.status
+    LEFT JOIN subscribers ON (subscribers.id = subscriber_lists.subscriber_id)
+    GROUP BY lists.id, 3
     UNION ALL
     SELECT NOW() AS updated_at, 0 AS list_id, NULL AS status, COUNT(id) AS subscriber_count FROM subscribers;
-DROP INDEX IF EXISTS mat_list_subscriber_stats_idx; CREATE UNIQUE INDEX mat_list_subscriber_stats_idx ON mat_list_subscriber_stats (list_id, status);
+CREATE UNIQUE INDEX mat_list_subscriber_stats_idx ON mat_list_subscriber_stats (list_id, status);
+
+-- Fork (holds): per-row engagement for the sunset rule (v6.2.10).
+CREATE OR REPLACE FUNCTION subscription_engagement(p_list_id INT)
+RETURNS TABLE (subscriber_id INT, anchor_at TIMESTAMPTZ, eligible_sends BIGINT,
+    first_eligible_send_at TIMESTAMPTZ, last_eligible_send_at TIMESTAMPTZ,
+    last_view_at TIMESTAMPTZ, last_click_at TIMESTAMPTZ) AS $$
+    WITH members AS (
+        SELECT sl.subscriber_id, COALESCE(sl.confirmed_at, sl.created_at) AS anchor_at,
+            COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') AS lang
+        FROM subscriber_lists sl JOIN subscribers s ON (s.id = sl.subscriber_id)
+        WHERE sl.list_id = p_list_id AND sl.status = 'confirmed' AND s.status <> 'blocklisted'
+    ),
+    list_camps AS (
+        SELECT c.id, c.type, c.status, c.evergreen, c.started_at, c.max_subscriber_id, c.attribs->>'lang' AS lang
+        FROM campaigns c JOIN campaign_lists cl ON (cl.campaign_id = c.id)
+        WHERE cl.list_id = p_list_id
+    ),
+    sends AS (
+        SELECT m.subscriber_id, COUNT(*) AS n, MIN(c.started_at) AS first_at, MAX(c.started_at) AS last_at
+        FROM members m JOIN list_camps c ON (
+            c.type = 'regular' AND c.status = 'finished' AND c.evergreen = FALSE
+            AND c.started_at > m.anchor_at
+            AND m.subscriber_id <= c.max_subscriber_id
+            AND (c.lang IS NULL OR m.lang = c.lang))
+        WHERE NOT EXISTS (SELECT 1 FROM campaign_send_failures f
+            WHERE f.campaign_id = c.id AND f.subscriber_id = m.subscriber_id)
+        GROUP BY m.subscriber_id
+    ),
+    views AS (
+        SELECT m.subscriber_id, MAX(v.created_at) AS at
+        FROM members m JOIN campaign_views v ON (v.subscriber_id = m.subscriber_id AND v.created_at > m.anchor_at)
+        WHERE v.campaign_id IN (SELECT id FROM list_camps)
+        GROUP BY m.subscriber_id
+    ),
+    clicks AS (
+        SELECT m.subscriber_id, MAX(k.created_at) AS at
+        FROM members m JOIN link_clicks k ON (k.subscriber_id = m.subscriber_id AND k.created_at > m.anchor_at)
+        WHERE k.campaign_id IN (SELECT id FROM list_camps)
+        GROUP BY m.subscriber_id
+    )
+    SELECT m.subscriber_id, m.anchor_at, COALESCE(s.n, 0), s.first_at, s.last_at, v.at, k.at
+    FROM members m
+    LEFT JOIN sends s ON (s.subscriber_id = m.subscriber_id)
+    LEFT JOIN views v ON (v.subscriber_id = m.subscriber_id)
+    LEFT JOIN clicks k ON (k.subscriber_id = m.subscriber_id);
+$$ LANGUAGE sql STABLE;

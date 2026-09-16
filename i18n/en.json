@@ -395,6 +395,7 @@
     "lists.brandTagsHalfTagged": "A list needs both the `brand:` and `from:` tags, or neither.",
     "lists.confirmDelete": "Are you sure? This does not delete subscribers.",
     "lists.confirmSub": "Confirm subscription(s) to {name}",
+    "lists.held": "Held",
     "lists.invalidName": "Invalid name",
     "lists.newList": "New list",
     "lists.optin": "Opt-in",

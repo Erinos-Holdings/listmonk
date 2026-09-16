@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -111,6 +112,35 @@ func (c *Core) UnsubscribeLists(subIDs, listIDs []int, listUUIDs []string) error
 	}
 
 	return nil
+}
+
+// HoldSubscriptions (fork, holds) puts subscribers on hold on one list -- see the
+// hold-subscribers-lists query for both modes. ifUpdatedBefore nil means no consent-time bound.
+func (c *Core) HoldSubscriptions(subIDs []int, listID int, hold map[string]any, ifUpdatedBefore *time.Time, relabel bool) (models.HoldResult, error) {
+	b, err := json.Marshal(hold)
+	if err != nil {
+		return models.HoldResult{}, echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	var rows []struct {
+		models.HoldSkip
+		Held bool `db:"held"`
+	}
+	if err := c.q.HoldSubscribersLists.Select(&rows, pq.Array(subIDs), listID, b, ifUpdatedBefore, relabel); err != nil {
+		c.log.Printf("error holding subscriptions: %v", err)
+		return models.HoldResult{}, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.subscribers}", "error", err.Error()))
+	}
+
+	out := models.HoldResult{Skipped: []models.HoldSkip{}}
+	for _, r := range rows {
+		if r.Held {
+			out.Held++
+		} else {
+			out.Skipped = append(out.Skipped, r.HoldSkip)
+		}
+	}
+	return out, nil
 }
 
 // UnsubscribeListsByQuery sets list subscriptions to 'unsubscribed' by a given arbitrary query expression.

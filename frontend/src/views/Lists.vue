@@ -115,10 +115,18 @@
       <b-table-column v-slot="props" field="subscriber_counts" header-class="cy-subscribers" width="10%">
         <div class="fields stats">
           <p v-for="(count, status) in filterStatuses(props.row)" :key="status">
-            <label for="#">{{ $tc(`subscribers.status.${status}`, count) }}</label>
-            <router-link :to="`/subscribers/lists/${props.row.id}?subscription_status=${status}`" :class="status">
-              {{ $utils.formatNumber(count) }}
-            </router-link>
+            <!-- Fork (holds). held is a pseudo-status from mat_list_subscriber_stats, not a
+            subscription_status value, so it has no filter link (the held rows are an API query). -->
+            <template v-if="status === 'held'">
+              <label for="#">{{ $t('lists.held') }}</label>
+              <span :class="status">{{ $utils.formatNumber(count) }}</span>
+            </template>
+            <template v-else>
+              <label for="#">{{ $tc(`subscribers.status.${status}`, count) }}</label>
+              <router-link :to="`/subscribers/lists/${props.row.id}?subscription_status=${status}`" :class="status">
+                {{ $utils.formatNumber(count) }}
+              </router-link>
+            </template>
           </p>
         </div>
       </b-table-column>

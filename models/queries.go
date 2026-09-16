@@ -32,6 +32,7 @@ type Queries struct {
 	DeleteUnconfirmedSubscriptions  *sqlx.Stmt `query:"delete-unconfirmed-subscriptions"`
 	ConfirmSubscriptionOptin        *sqlx.Stmt `query:"confirm-subscription-optin"`
 	UnsubscribeSubscribersFromLists *sqlx.Stmt `query:"unsubscribe-subscribers-from-lists"`
+	HoldSubscribersLists            *sqlx.Stmt `query:"hold-subscribers-lists"` // Fork (holds).
 	DeleteSubscribers               *sqlx.Stmt `query:"delete-subscribers"`
 	DeleteBlocklistedSubscribers    *sqlx.Stmt `query:"delete-blocklisted-subscribers"`
 	DeleteOrphanSubscribers         *sqlx.Stmt `query:"delete-orphan-subscribers"`

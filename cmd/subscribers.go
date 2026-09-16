@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/i18n"
@@ -37,6 +38,11 @@ type subQueryReq struct {
 	All                bool   `json:"all"`
 	// Fork (evergreen) -- see subimporter.SessionOpt.Backfill.
 	Backfill bool `json:"backfill"`
+
+	// Fork (holds) -- action "hold" on ManageSubscriberLists only. See holdSubscriberLists.
+	Hold            map[string]any `json:"hold"`
+	IfUpdatedBefore string         `json:"if_updated_before"`
+	Relabel         bool           `json:"relabel"`
 }
 
 // subOptin contains the data that's passed to the double opt-in e-mail template.
@@ -498,6 +504,11 @@ func (a *App) ManageSubscriberLists(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, a.i18n.Ts("globals.messages.permissionDenied", "name", "lists"))
 	}
 
+	// Fork (holds) -- a hold returns its per-id outcome, not okResp.
+	if req.Action == "hold" {
+		return a.holdSubscriberLists(c, subIDs, listIDs, req)
+	}
+
 	// Run the action in the DB.
 	var err error
 	switch req.Action {
@@ -516,6 +527,37 @@ func (a *App) ManageSubscriberLists(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, okResp{true})
+}
+
+// holdSubscriberLists (fork, holds -- integrations SUNSET-SPEC D3) puts explicit subscriber
+// ids on hold on exactly one list. hold needs reason and source (at is server-stamped);
+// if_updated_before is an RFC 3339 consent-time bound; relabel is the backfill mode that
+// stamps plain-unsubscribed rows without touching status or updated_at.
+func (a *App) holdSubscriberLists(c echo.Context, subIDs, listIDs []int, req subQueryReq) error {
+	if len(listIDs) != 1 || len(req.TargetListIDs) != 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, "action hold takes exactly one target list")
+	}
+
+	hold, err := models.ValidateHold(req.Hold)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	var bound *time.Time
+	if req.IfUpdatedBefore != "" {
+		t, err := time.Parse(time.RFC3339, req.IfUpdatedBefore)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "if_updated_before must be RFC 3339")
+		}
+		bound = &t
+	}
+
+	out, err := a.core.HoldSubscriptions(subIDs, listIDs[0], hold, bound, req.Relabel)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
 }
 
 // DeleteSubscriber handles deletion of a single subscriber.
@@ -670,6 +712,12 @@ func (a *App) ManageSubscriberListsByQuery(c echo.Context) error {
 	// Filter lists against the current user's permitted lists.
 	sourceListIDs := user.GetPermittedListIDs(req.ListIDs)
 	targetListIDs := user.FilterListsByPerm(auth.PermTypeManage, req.TargetListIDs)
+
+	// Fork (holds) -- hold is ids-only (ManageSubscriberLists). An unsuspecting SQL-fragment
+	// write is exactly what a hold must never be, so the by-query endpoint refuses it by name.
+	if req.Action == "hold" {
+		return echo.NewHTTPError(http.StatusBadRequest, "action hold takes explicit ids on PUT /api/subscribers/lists")
+	}
 
 	// Run the action in the DB.
 	var err error

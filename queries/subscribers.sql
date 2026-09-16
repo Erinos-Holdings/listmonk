@@ -297,7 +297,11 @@ WITH listIDs AS (
         (CASE WHEN CARDINALITY($2::INT[]) > 0 THEN id=ANY($2) ELSE uuid=ANY($3::UUID[]) END)
     ) id
 )
-UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW()
+-- Fork (holds). An unsubscribe landing on a HELD row is a real opt-out, so it releases the
+-- hold (meta.hold -> meta.hold_released, to unsubscribed). A status change releases through
+-- the trigger instead, so only the already-unsubscribed case is handled here.
+UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW(),
+    meta=(CASE WHEN status = 'unsubscribed' THEN subscriber_lists_release_hold(meta, 'unsubscribed') ELSE meta END)
     WHERE (subscriber_id, list_id) = ANY(SELECT a, b FROM UNNEST($1::INT[]) a, UNNEST((SELECT id FROM listIDs)) b);
 
 -- name: unsubscribe-by-campaign
@@ -317,6 +321,48 @@ UPDATE subscriber_lists SET status = 'unsubscribed', updated_at=NOW() WHERE
     subscriber_id = (SELECT id FROM sub) AND status != 'unsubscribed' AND
     -- If $3 is false, unsubscribe from the campaign's lists, otherwise all lists.
     CASE WHEN $3 IS FALSE THEN list_id = ANY(SELECT list_id FROM lists) ELSE list_id != 0 END;
+
+-- name: hold-subscribers-lists
+-- Fork (holds). Puts subscribers $1 on list $2 on HOLD with the hold object $3 (at is stamped
+-- here). $4 is the consent-time bound (NULL = none), a row updated at or after it is skipped.
+-- $5 false is the default mode, where a confirmed or unconfirmed row flips to unsubscribed and
+-- updated_at bumps, an unsubscribed row WITHOUT a hold is a real opt-out and is never stamped,
+-- and a held row is re-stamped only when hold.rule differs (updated_at untouched).
+-- $5 true is relabel mode for a backfill, stamping only plain unsubscribed rows and never
+-- changing status or updated_at. No row is ever inserted.
+-- Returns one row per distinct input id with held and, when not held, why.
+WITH ids AS (
+    SELECT DISTINCT UNNEST($1::INT[]) AS id
+),
+cur AS (
+    SELECT ids.id, sl.status, sl.meta, sl.updated_at
+    FROM ids LEFT JOIN subscriber_lists sl ON (sl.subscriber_id = ids.id AND sl.list_id = $2)
+),
+upd AS (
+    UPDATE subscriber_lists sl SET
+        status = (CASE WHEN $5 THEN sl.status ELSE 'unsubscribed'::subscription_status END),
+        meta = sl.meta || JSONB_BUILD_OBJECT('hold', $3::JSONB
+            || JSONB_BUILD_OBJECT('at', TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))),
+        updated_at = (CASE WHEN NOT $5 AND sl.status <> 'unsubscribed' THEN NOW() ELSE sl.updated_at END)
+    WHERE sl.list_id = $2 AND sl.subscriber_id = ANY(SELECT id FROM ids)
+        AND ($4::TIMESTAMPTZ IS NULL OR sl.updated_at < $4::TIMESTAMPTZ)
+        AND (CASE WHEN $5
+            THEN sl.status = 'unsubscribed' AND NOT sl.meta ? 'hold'
+            ELSE sl.status <> 'unsubscribed' OR (sl.meta ? 'hold' AND sl.meta->'hold'->>'rule' IS DISTINCT FROM $3::JSONB->>'rule')
+        END)
+    RETURNING sl.subscriber_id
+)
+SELECT cur.id, (upd.subscriber_id IS NOT NULL) AS held,
+    (CASE
+        WHEN upd.subscriber_id IS NOT NULL THEN ''
+        WHEN cur.status IS NULL THEN 'not_on_list'
+        WHEN $4::TIMESTAMPTZ IS NOT NULL AND cur.updated_at >= $4::TIMESTAMPTZ THEN 'updated_after_bound'
+        WHEN cur.status = 'unsubscribed' AND cur.meta ? 'hold' THEN 'already_held'
+        WHEN cur.status = 'unsubscribed' THEN 'opt_out'
+        ELSE cur.status::TEXT
+    END) AS why
+FROM cur LEFT JOIN upd ON (upd.subscriber_id = cur.id)
+ORDER BY cur.id;
 
 -- name: delete-unconfirmed-subscriptions
 WITH optins AS (
@@ -367,7 +413,9 @@ SELECT COUNT(*) AS total FROM subscribers
 -- Cached query for getting the "all" subscriber count without arbitrary conditions.
 SELECT COALESCE(SUM(subscriber_count), 0) AS total FROM mat_list_subscriber_stats
     WHERE list_id = ANY(CASE WHEN CARDINALITY($1::INT[]) > 0 THEN $1 ELSE '{0}' END)
-    AND ($2 = '' OR status = $2::subscription_status);
+    -- Fork (holds). status is TEXT in the view since v6.2.10 (it carries the held
+    -- pseudo-status), so compare as text. A cast to subscription_status raises there.
+    AND ($2 = '' OR status = $2);
 
 -- name: query-subscribers-for-export
 -- raw: true
@@ -456,7 +504,9 @@ DELETE FROM subscriber_lists
 -- name: unsubscribe-subscribers-from-lists-by-query
 -- raw: true
 WITH subs AS (%query%)
-UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW()
+-- Fork (holds). Same release rule as unsubscribe-subscribers-from-lists.
+UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW(),
+    meta=(CASE WHEN status = 'unsubscribed' THEN subscriber_lists_release_hold(meta, 'unsubscribed') ELSE meta END)
     WHERE (subscriber_id, list_id) = ANY(SELECT a, b FROM UNNEST(ARRAY(SELECT id FROM subs)) a, UNNEST($5::INT[]) b);
 
 
@@ -469,7 +519,9 @@ WITH prof AS (
 subs AS (
     SELECT subscriber_lists.status AS subscription_status,
             (CASE WHEN lists.type = 'private' THEN 'Private list' ELSE lists.name END) as name,
-            lists.type, subscriber_lists.created_at
+            lists.type, subscriber_lists.created_at,
+            -- Fork (holds). meta carries a hold and its release, so a person's own export shows them.
+            subscriber_lists.meta
     FROM lists
     LEFT JOIN subscriber_lists ON (subscriber_lists.list_id = lists.id)
     WHERE subscriber_lists.subscriber_id = (SELECT id FROM prof)

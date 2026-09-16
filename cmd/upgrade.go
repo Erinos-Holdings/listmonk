@@ -63,6 +63,8 @@ var migList = []migFunc{
 	{"v6.2.8", migrations.V6_2_8},
 	// Fork migration (erinos): media.tags (MEDIA-TAGS-SPEC D1) — see internal/migrations/v6.2.9.go.
 	{"v6.2.9", migrations.V6_2_9},
+	// Fork migration (erinos): holds — release trigger, held list stats, subscription_engagement (SUNSET-SPEC) — see internal/migrations/v6.2.10.go.
+	{"v6.2.10", migrations.V6_2_10},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files
