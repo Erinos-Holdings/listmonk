@@ -391,20 +391,17 @@ func (p *Preset) ListName(filename string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// LangFor derives the campaign language from a locale. The primary subtag (split on - or _)
-// is lowercased and kept only when it is one of the preset's allowed languages; anything
-// else yields "" (no lang key).
+// LangFor derives the campaign language from a locale: the shared subscriber-language rule
+// (models.SubscriberLangCode -- primary subtag, split on - or _, lowercased, must EQUAL a
+// campaign language; fork, LIST-GRID-SPEC D13), kept only when it is also one of the preset's
+// allowed languages. Anything else yields "" (no lang key).
 func (p *Preset) LangFor(locale string) string {
-	locale = strings.TrimSpace(strings.ToLower(locale))
-	if locale == "" {
+	code, ok := models.SubscriberLangCode(locale)
+	if !ok || code == "" {
 		return ""
 	}
-	primary := strings.FieldsFunc(locale, func(r rune) bool { return r == '-' || r == '_' })
-	if len(primary) == 0 {
-		return ""
-	}
-	if _, ok := p.langs[primary[0]]; ok {
-		return primary[0]
+	if _, ok := p.langs[code]; ok {
+		return code
 	}
 	return ""
 }

@@ -189,6 +189,9 @@ export default Vue.extend({
         body: t.body,
         body_source: t.bodySource,
         brand: t.brand,
+        // Fork (LIST-GRID-SPEC D12) -- this is a fixed field list. A cloned FR template must
+        // not come back as the server default (en).
+        lang: t.lang,
       };
       this.$api.createTemplate(data).then((d) => {
         this.$api.getTemplates();

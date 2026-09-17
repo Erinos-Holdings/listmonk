@@ -25,6 +25,8 @@ import (
 	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/internal/i18n"
 	"github.com/knadh/listmonk/internal/migrations"
+	"github.com/knadh/listmonk/internal/subimporter"
+	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 	_ "github.com/lib/pq"
 )
@@ -42,6 +44,7 @@ type linkHarness struct {
 	t   *testing.T
 	db  *sqlx.DB
 	app *App
+	q   *models.Queries
 }
 
 func newLinkHarness(t *testing.T) *linkHarness {
@@ -150,8 +153,17 @@ func newLinkHarness(t *testing.T) *linkHarness {
 		i18n:          i,
 		log:           lg,
 		linkFallbacks: newLinkFallbacks(co, i, ko, lg),
+		// The campaign and subscriber handlers validate through the importer. initImporter's
+		// wiring minus the admin notification.
+		importer: subimporter.New(subimporter.Options{
+			UpsertStmt:         q.UpsertSubscriber.Stmt,
+			UpsertFillStmt:     q.UpsertSubscriberFill.Stmt,
+			BlocklistStmt:      q.UpsertBlocklistSubscriber.Stmt,
+			UpdateListDateStmt: q.UpdateListsDate.Stmt,
+			PostCB:             func(subject string, data any) error { return nil },
+		}, db.DB, i),
 	}
-	return &linkHarness{t: t, db: db, app: app}
+	return &linkHarness{t: t, db: db, app: app, q: q}
 }
 
 func (h *linkHarness) redirect(campUUID, subUUID, linkUUID string) (int, string, string) {

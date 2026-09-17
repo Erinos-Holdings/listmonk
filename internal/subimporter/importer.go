@@ -114,7 +114,11 @@ type Status struct {
 	Total    int    `json:"total"`
 	Imported int    `json:"imported"`
 	Status   string `json:"status"`
-	logBuf   *bytes.Buffer
+	// Fork (LIST-GRID-SPEC D13) -- rows imported with an unrecognised attribs.lang DROPPED. The
+	// subscriber is kept (losing someone over a bad locale is worse than mailing them EN); the
+	// Import page warns with this count and the log names the first maxLangOffendersLogged.
+	LangDropped int `json:"lang_dropped"`
+	logBuf      *bytes.Buffer
 }
 
 // SubReq is a wrapper over the Subscriber model.
@@ -220,6 +224,9 @@ func (im *Importer) GetStats() Status {
 		Status:   im.status.Status,
 		Total:    im.status.Total,
 		Imported: im.status.Imported,
+		// Fork (LIST-GRID-SPEC D13) -- this is a field-by-field copy. A counter left out here
+		// never reaches the API or the Import page.
+		LangDropped: im.status.LangDropped,
 	}
 }
 
@@ -260,6 +267,32 @@ func (im *Importer) isDone() bool {
 	im.RUnlock()
 
 	return s
+}
+
+// maxLangOffendersLogged caps the per-row log lines for a dropped attribs.lang.
+const maxLangOffendersLogged = 20
+
+// dropInvalidLang (fork, LIST-GRID-SPEC D13) is the importer's half of the no-garbage-in rule:
+// an incoming attribs.lang is normalized (FR, fr-CA -> fr) or, when it is not a campaign
+// language, DROPPED -- the row is imported without it, never rejected. Every row of every
+// import mode passes through here (the CSV reader, LoadRows and the presets all feed the one
+// queue), so no import path can store an unrecognised language.
+func (s *Session) dropInvalidLang(sub *SubReq) {
+	if models.NormalizeSubscriberLang(sub.Attribs) {
+		return
+	}
+	bad := sub.Attribs["lang"]
+	delete(sub.Attribs, "lang")
+
+	s.im.Lock()
+	s.im.status.LangDropped++
+	n := s.im.status.LangDropped
+	s.im.Unlock()
+	if n <= maxLangOffendersLogged {
+		s.log.Printf("unrecognised language %v for '%s': imported without a language", bad, sub.Email)
+	} else if n == maxLangOffendersLogged+1 {
+		s.log.Printf("more rows with an unrecognised language follow (not logged individually)")
+	}
 }
 
 // incrementImportCount sets the Importer's "imported" counter.
@@ -335,6 +368,9 @@ func (s *Session) Start() {
 			tx.Rollback()
 			break
 		}
+
+		// Fork (LIST-GRID-SPEC D13).
+		s.dropInvalidLang(&sub)
 
 		if s.opt.Mode == ModeSubscribe && s.opt.Merge == MergeFill {
 			// Fork (import presets) -- $7 is the placeholder name for this email, so the

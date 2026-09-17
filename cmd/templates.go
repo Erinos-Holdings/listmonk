@@ -130,7 +130,7 @@ func (a *App) CreateTemplate(c echo.Context) error {
 	}
 
 	// Create the template the in the DB.
-	out, err := a.core.CreateTemplate(o.Name, o.Type, o.Subject, []byte(o.Body), o.BodySource, o.Brand)
+	out, err := a.core.CreateTemplate(o.Name, o.Type, o.Subject, []byte(o.Body), o.BodySource, o.Brand, o.Lang)
 	if err != nil {
 		return err
 	}
@@ -171,7 +171,7 @@ func (a *App) UpdateTemplate(c echo.Context) error {
 
 	// Update the template in the DB.
 	id := getID(c)
-	out, err := a.core.UpdateTemplate(id, o.Name, o.Subject, []byte(o.Body), o.BodySource, o.Brand)
+	out, err := a.core.UpdateTemplate(id, o.Name, o.Subject, []byte(o.Body), o.BodySource, o.Brand, o.Lang)
 	if err != nil {
 		return err
 	}
@@ -237,6 +237,13 @@ func (a *App) validateTemplate(o *models.Template) error {
 				a.i18n.Ts("globals.messages.invalidFields", "name", "brand"))
 		}
 		o.Brand = brand
+	}
+
+	// Fork (LIST-GRID-SPEC D12): absent (stored "en" on create, kept on update) or exactly one of
+	// models.CampaignLangs -- the same closed set, and the same exact match, as a campaign's.
+	if o.Lang != "" && !models.IsCampaignLang(o.Lang) {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("campaigns.fieldInvalidLang", "langs", strings.Join(models.CampaignLangs, ", ")))
 	}
 
 	return nil

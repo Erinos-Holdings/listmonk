@@ -50,6 +50,18 @@
             </div>
           </div>
 
+          <!-- Fork (LIST-GRID-SPEC D12). The language the body is written in. Importing this
+               template into a campaign sets the campaign's language to it. -->
+          <div class="columns" v-if="form.type !== 'tx'">
+            <div class="column is-4">
+              <b-field :label="$t('campaigns.lang')" label-position="on-border" :message="$t('templates.langHelp')">
+                <b-select v-model="form.lang" name="lang" expanded required data-cy="template-lang">
+                  <option v-for="l in langOptions" :key="l.code" :value="l.code">{{ l.label }}</option>
+                </b-select>
+              </b-field>
+            </div>
+          </div>
+
           <template v-if="form.body !== null">
             <!-- Brand swatch picker: no list selection exists here to derive a brand from,
                  so the brand is picked explicitly. No selection -> no brand row. -->
@@ -108,6 +120,7 @@ import CodeEditor from '../components/CodeEditor.vue';
 import VisualEditor from '../components/VisualEditor.vue';
 import CopyText from '../components/CopyText.vue';
 import { BRAND_TAG_PREFIX, brandThemePalette, reBrandSlug } from '../brand';
+import { CAMPAIGN_LANGS } from '../langs';
 import { normalizeMediaTagsLenient } from '../mediaTags';
 
 export default Vue.extend({
@@ -201,6 +214,7 @@ export default Vue.extend({
         body: this.form.body,
         body_source: this.form.bodySource,
         brand: this.brandSlug,
+        lang: this.form.lang || 'en',
       };
 
       this.$api.createTemplate(data).then((d) => {
@@ -223,6 +237,7 @@ export default Vue.extend({
         body: this.form.body,
         body_source: this.form.bodySource,
         brand: this.brandSlug,
+        lang: this.form.lang || 'en',
       };
 
       this.$api.updateTemplate(data).then((d) => {
@@ -321,6 +336,10 @@ export default Vue.extend({
   computed: {
     ...mapState(['loading', 'lists']),
 
+    langOptions() {
+      return CAMPAIGN_LANGS;
+    },
+
     // Fork (media tags) -- MEDIA-TAGS-SPEC D3. The media picker's context is the template's
     // brand; no brand = no context.
     mediaContext() {
@@ -358,7 +377,8 @@ export default Vue.extend({
   },
 
   mounted() {
-    this.form = { ...this.$props.data };
+    // Fork (LIST-GRID-SPEC D12) -- English preselected on a new template.
+    this.form = { ...this.$props.data, lang: this.$props.data.lang || 'en' };
     // D4: restore the persisted brand (the existing brandSlug watcher runs onBrandPick ->
     // theme fetch -> swatch row, with no new code path).
     this.brandSlug = this.$props.data.brand || '';

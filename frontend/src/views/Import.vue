@@ -299,6 +299,10 @@
       </p>
 
       <p>{{ $t('import.recordsCount', { num: status.imported, total: status.total }) }}</p>
+      <!-- Fork (LIST-GRID-SPEC D13) -- rows imported with their unrecognised language dropped. -->
+      <b-message v-if="status.langDropped > 0" type="is-warning" class="has-text-left mt-3" data-cy="lang-dropped">
+        {{ $t('import.langDropped', { num: status.langDropped }) }}
+      </b-message>
       <br />
 
       <p>

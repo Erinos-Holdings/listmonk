@@ -65,6 +65,8 @@ var migList = []migFunc{
 	{"v6.2.9", migrations.V6_2_9},
 	// Fork migration (erinos): holds — release trigger, held list stats, subscription_engagement (SUNSET-SPEC) — see internal/migrations/v6.2.10.go.
 	{"v6.2.10", migrations.V6_2_10},
+	// Fork migration (erinos): Lists-page grid -- segment/lang functions, regrouped list stats, templates.lang, draft campaign lang (LIST-GRID-SPEC) — see internal/migrations/v6.2.11.go.
+	{"v6.2.11", migrations.V6_2_11},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

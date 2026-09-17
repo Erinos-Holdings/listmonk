@@ -83,6 +83,85 @@ func TestQueryListsSortsBeforePaginating(t *testing.T) {
 	got, _ = page("subscriber_count DESC, id ASC", 0, 1)
 	eq(t, "subscriber_count desc page 1", got, []int{ids[2]})
 
+	// Fork (list grid, LIST-GRID-SPEC D9/I12) -- each segment sort key orders the FULL set
+	// before pagination. Every list gets a different count per segment, arranged so that the
+	// five orders all differ from each other and from id order; walking one row per page must
+	// reproduce the expected order exactly, both directions.
+	h.db.MustExec(`DELETE FROM subscriber_lists`) // the subscriber_count case's row would skew the counts below
+	var dbl int
+	if err := h.db.Get(&dbl, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'sort-double', 'private', 'double') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	all := append(append([]int{}, ids...), dbl)
+	n := 0
+	seed := func(list, count int, slStatus, meta, sStatus string) {
+		for i := 0; i < count; i++ {
+			n++
+			sid := h.subscriber(fmt.Sprintf("seg-%d@example.com", n))
+			h.db.MustExec(`UPDATE subscribers SET status = $2 WHERE id = $1`, sid, sStatus)
+			h.db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status, meta) VALUES ($1, $2, $3, $4)`, sid, list, slStatus, meta)
+		}
+	}
+	const hold = `{"hold": {"reason": "never-engaged"}}`
+	// counts[segment][i] is list all[i]'s count. pending can only exist on the double list
+	// (all[5]), so its order is that list first, then the id tiebreaker.
+	counts := map[string][]int{
+		"active":       {3, 1, 4, 0, 2, 5},
+		"held":         {1, 4, 0, 3, 5, 2},
+		"unsubscribed": {5, 2, 3, 1, 0, 4},
+		"blocked":      {0, 5, 2, 4, 3, 1},
+		"pending":      {0, 0, 0, 0, 0, 2},
+	}
+	for i, l := range all {
+		seed(l, counts["active"][i], "confirmed", "{}", "enabled")
+		seed(l, counts["held"][i], "unsubscribed", hold, "enabled")
+		seed(l, counts["unsubscribed"][i], "unsubscribed", "{}", "enabled")
+		seed(l, counts["blocked"][i], "confirmed", "{}", "blocklisted")
+		seed(l, counts["pending"][i], "unconfirmed", "{}", "enabled")
+	}
+	h.db.MustExec(`REFRESH MATERIALIZED VIEW mat_list_subscriber_stats`)
+	for seg, c := range counts {
+		// Expected DESC order: count descending, id ascending on ties (the ls.id tiebreaker).
+		want := append([]int{}, all...)
+		idx := map[int]int{}
+		for i, l := range all {
+			idx[l] = i
+		}
+		for i := range want {
+			for j := i + 1; j < len(want); j++ {
+				ci, cj := c[idx[want[i]]], c[idx[want[j]]]
+				if cj > ci || (cj == ci && want[j] < want[i]) {
+					want[i], want[j] = want[j], want[i]
+				}
+			}
+		}
+		var walk []int
+		for off := 0; off < len(all); off++ {
+			got, _ = page(seg+"_count DESC", off, 1)
+			walk = append(walk, got...)
+		}
+		eq(t, seg+"_count desc walk", walk, want)
+
+		// ASC: count ascending, id ascending on ties.
+		for i := range want {
+			for j := i + 1; j < len(want); j++ {
+				ci, cj := c[idx[want[i]]], c[idx[want[j]]]
+				if cj < ci || (cj == ci && want[j] < want[i]) {
+					want[i], want[j] = want[j], want[i]
+				}
+			}
+		}
+		walk = nil
+		for off := 0; off < len(all); off += 2 {
+			got, _ = page(seg+"_count ASC", off, 2)
+			walk = append(walk, got...)
+		}
+		eq(t, seg+"_count asc walk", walk, want)
+	}
+	h.db.MustExec(`DELETE FROM lists WHERE id = $1`, dbl)
+	h.db.MustExec(`DELETE FROM subscriber_lists`)
+	h.db.MustExec(`REFRESH MATERIALIZED VIEW mat_list_subscriber_stats`)
+
 	// limit < 1 means no limit: every row, in order.
 	got, _ = page("created_at DESC", 0, 0)
 	eq(t, "unlimited", got, newest)

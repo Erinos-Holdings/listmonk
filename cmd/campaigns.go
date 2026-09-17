@@ -378,6 +378,12 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 	if core.EvergreenLockedChange(cm, o.Evergreen, o.ListIDs) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.evergreenLocked"))
 	}
+	// Fork (LIST-GRID-SPEC D11) -- a regular campaign's language cannot be cleared: attribs that
+	// arrive without one get the stored one back. BEFORE the lock check below, or a started
+	// campaign's unrelated save (the form posts attribs without the key) would 400 as a
+	// language change. cm.Type is the stored type -- update-campaign never writes it.
+	o.Attribs = core.KeepCampaignLang(cm.Type, prevLang, o.Attribs)
+
 	// Fork (multi-language campaigns) -- the language is frozen once started (the checkpoint
 	// window was computed for the old population). Clone to change it.
 	if core.LangLockedChange(cm, prevLang, o.Attribs) {
@@ -421,6 +427,19 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 	}{}
 	if err := c.Bind(&req); err != nil {
 		return err
+	}
+
+	// Fork (LIST-GRID-SPEC D11) -- a language-less regular campaign can enter neither running
+	// nor scheduled (the scheduler starts a scheduled one with no further handler). First,
+	// because it is the cheapest refusal and names the field. core enforces the same rule.
+	if req.Status == models.CampaignStatusRunning || req.Status == models.CampaignStatusScheduled {
+		cm, err := a.core.GetCampaign(id, "", "")
+		if err != nil {
+			return err
+		}
+		if core.LangRequiredForStatus(cm, req.Status) {
+			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.langRequired"))
+		}
 	}
 
 	// Fork (footer guard) -- refuse a start or a schedule whose rendered body carries no
@@ -1065,20 +1084,18 @@ func (a *App) campaignWarningsByID(id int) []string {
 	}
 	w := a.renderWarnings(camp)
 
-	// Fork (SHALA-CUTOVER-SPEC D9/I8) -- a campaign with NO attribs.lang reaches every
-	// subscriber on its lists regardless of what they read. Since erinos.* every create
-	// defaults to "en", so a language-less campaign is now a deliberate act (an existing
-	// draft, an API caller clearing it, a transactional-style notice) -- worth one warning
-	// when the lists actually hold someone who reads something else, and silent when they
-	// do not. THIS is the DB-aware point: manager.RenderWarnings sees rendered bytes only
-	// and cannot count an audience. Warns, never blocks. Opt-in campaigns are exempt: they
-	// never take the default (models.DefaultCampaignLang) and by design reach every
-	// unconfirmed row, so the warning would fire on every one of them (review F7).
-	if camp.Lang() == "" && camp.Type != models.CampaignTypeOptin {
-		if n, err := a.core.CampaignNonEnAudience(id); err != nil {
-			a.log.Printf("error counting non-en audience for campaign %d: %v", id, err)
+	// Fork (LIST-GRID-SPEC D13) -- subscribers whose stored language is outside
+	// models.CampaignLangs match NO language-scoped broadcast, so they silently receive nothing.
+	// Only a regular campaign WITH a language excludes them: an opt-in campaign and a legacy
+	// language-less one reach every language. This replaces the Shala-I8 language-less warning,
+	// which nothing can trigger now that a regular campaign always has a language (D11).
+	// THIS is the DB-aware point: manager.RenderWarnings sees rendered bytes only. Warns, never
+	// blocks. After D13 such rows come only from direct SQL or from before the rule.
+	if camp.Lang() != "" && camp.Type != models.CampaignTypeOptin {
+		if n, err := a.core.CampaignUnreachableLang(id); err != nil {
+			a.log.Printf("error counting unrecognised-language subscribers for campaign %d: %v", id, err)
 		} else if n > 0 {
-			w = append(w, a.i18n.Ts("campaigns.warnLangLess", "count", strconv.Itoa(n)))
+			w = append(w, a.i18n.Ts("campaigns.warnUnreachableLang", "count", strconv.Itoa(n)))
 		}
 	}
 

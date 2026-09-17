@@ -2,10 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/models"
+	"github.com/labstack/echo/v4"
 )
 
 // Fork (SHALA-CUTOVER-SPEC D9) -- the end-to-end half of I5, I8 and I10 against a real
@@ -92,18 +99,70 @@ func TestCampaignLangDefault(t *testing.T) {
 	if got := (&optin).Lang(); got != "" {
 		t.Fatalf("optin campaign: want no language, got %q", got)
 	}
+
+	// (f) LIST-GRID-SPEC D11/I8 -- and it STAYS language-less through an update (the keep-the-
+	// language rule is for regular campaigns), can start without one, and reaches every
+	// language: the unconfirmed en, fr, no-language and unrecognised rows of a double opt-in list.
+	optin.Attribs = models.JSON{"preheader": "p"}
+	upd, err := h.app.core.UpdateCampaign(optin.ID, optin, []int{list}, nil)
+	if err != nil || (&upd).Lang() != "" {
+		t.Fatalf("optin update: lang %q, %v", (&upd).Lang(), err)
+	}
+	var dbl int
+	h.db.Get(&dbl, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Double', 'public', 'double') RETURNING id`)
+	var want []int
+	for i, attribs := range []string{`{"lang":"en"}`, `{"lang":"fr"}`, `{}`, `{"lang":"pt"}`} {
+		var id int
+		h.db.Get(&id, `INSERT INTO subscribers (uuid, email, name, attribs) VALUES (gen_random_uuid(), $1, 'S', $2::jsonb) RETURNING id`,
+			fmt.Sprintf("optin-%d@x.test", i), attribs)
+		h.db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $2, 'unconfirmed')`, id, dbl)
+		want = append(want, id)
+	}
+	oc, err := h.app.core.CreateCampaign(models.Campaign{
+		Type: models.CampaignTypeOptin, Name: "O3", Subject: "s", FromEmail: "hello@acme.test",
+		Body: "b", ContentType: models.CampaignContentTypePlain, Messenger: "email",
+		Headers: models.Headers{}, ArchiveMeta: json.RawMessage("{}"),
+	}, []int{dbl}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.app.core.UpdateCampaignStatus(oc.ID, models.CampaignStatusRunning); err != nil {
+		t.Fatalf("a language-less OPT-IN campaign must start: %v", err)
+	}
+	h.db.MustExec(`UPDATE campaigns SET max_subscriber_id = (SELECT MAX(id) FROM subscribers) WHERE id = $1`, oc.ID)
+	subs, err := (&store{queries: h.q, core: h.app.core}).NextSubscribers(oc.ID, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []int
+	for _, s := range subs {
+		got = append(got, s.ID)
+	}
+	sort.Ints(got)
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("opt-in campaign recipients: got %v, want every language %v", got, want)
+	}
 }
 
-// TestCampaignLangClearStoresNoKey -- I10: clearing the language stores NO key, never "".
-// A stored "" matches nobody (the send predicate is `attribs->>'lang' IS NULL OR ... = it`),
-// so the campaign would finish at 0 sent with nothing saying why. Also proves the create
-// default does not sneak back in on update.
+// TestCampaignLangClearStoresNoKey -- Shala I10, which LIST-GRID-SPEC D11 keeps for OPT-IN
+// campaigns only (a regular campaign's language can no longer be cleared, see
+// TestCampaignLangCannotBeCleared): clearing a hand-set language stores NO key, never "". A
+// stored "" matches nobody (the send predicate is `attribs->>'lang' IS NULL OR ... = it`), so
+// the confirmation mail would finish at 0 sent with nothing saying why.
 func TestCampaignLangClearStoresNoKey(t *testing.T) {
 	h := newLinkHarness(t)
 	var list int
-	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Acme', 'public', 'single') RETURNING id`)
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Acme', 'public', 'double') RETURNING id`)
 
-	c := newLangCampaign(t, h, list, models.JSON{"lang": "fr", "preheader": "p"})
+	c, err := h.app.core.CreateCampaign(models.Campaign{
+		Type: models.CampaignTypeOptin, Name: "O", Subject: "s", FromEmail: "hello@acme.test",
+		Body: "b", ContentType: models.CampaignContentTypePlain, Messenger: "email",
+		Attribs: models.JSON{"lang": "fr", "preheader": "p"},
+		Headers: models.Headers{}, ArchiveMeta: json.RawMessage("{}"),
+	}, []int{list}, nil)
+	if err != nil || (&c).Lang() != "fr" {
+		t.Fatalf("optin with a hand-set language: %q, %v", (&c).Lang(), err)
+	}
 
 	// What the form posts for "All": lang "". NormalizeLang deletes the key in place, and
 	// that is what the update stores.
@@ -112,7 +171,7 @@ func TestCampaignLangClearStoresNoKey(t *testing.T) {
 		t.Fatal("empty lang must validate")
 	}
 	c.Attribs = attribs
-	if _, err := h.app.core.UpdateCampaign(c.ID, *c, []int{list}, nil); err != nil {
+	if _, err := h.app.core.UpdateCampaign(c.ID, c, []int{list}, nil); err != nil {
 		t.Fatalf("UpdateCampaign: %v", err)
 	}
 
@@ -130,74 +189,238 @@ func TestCampaignLangClearStoresNoKey(t *testing.T) {
 	}
 }
 
-// TestCampaignLangLessWarning -- I8: campaignWarningsByID warns for a language-less campaign
-// whose target lists hold a subscriber reading something other than English, and is silent
-// when they do not. COALESCE-EN: a subscriber with no attribs.lang counts as English.
-func TestCampaignLangLessWarning(t *testing.T) {
+// stubMessenger lets validateCampaignFields find the "email" messenger. Nothing is ever pushed.
+type stubMessenger struct{}
+
+func (stubMessenger) Name() string              { return "email" }
+func (stubMessenger) Push(models.Message) error { return nil }
+func (stubMessenger) Flush() error              { return nil }
+func (stubMessenger) Close() error              { return nil }
+
+// ensureManager gives the app a manager that is constructed but never Run(): the campaign and
+// template handlers ask it for the messenger roster and the template funcs, nothing more.
+func ensureManager(h *linkHarness) {
+	if h.app.manager == nil {
+		h.app.manager = manager.New(manager.Config{}, &store{queries: h.q, core: h.app.core}, h.app.i18n, h.app.log)
+		h.app.manager.AddMessenger(stubMessenger{})
+	}
+}
+
+// putCampaign runs the UpdateCampaign handler as a campaign manager and returns the status.
+func putCampaign(t *testing.T, h *linkHarness, id int, body string) (int, string) {
+	t.Helper()
+	ensureManager(h)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/api/campaigns/"+itoa(id), strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("id", id) // what the hasID middleware stores for getID
+	c.Set(auth.UserHTTPCtxKey, auth.User{PermissionsMap: map[string]struct{}{
+		auth.PermCampaignsManageAll: {}, auth.PermListGetAll: {}, auth.PermListManageAll: {},
+	}})
+	if err := h.app.UpdateCampaign(c); err != nil {
+		if he, ok := err.(*echo.HTTPError); ok {
+			return he.Code, fmt.Sprint(he.Message)
+		}
+		t.Fatalf("UpdateCampaign: %v", err)
+	}
+	return rec.Code, rec.Body.String()
+}
+
+func storedLang(t *testing.T, h *linkHarness, id int) string {
+	t.Helper()
+	c, err := h.app.core.GetCampaign(id, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return (&c).Lang()
+}
+
+// TestCampaignLangCannotBeCleared -- LIST-GRID-SPEC D11/I8. An update that drops the language
+// of a REGULAR campaign keeps the stored one: attribs without the key (what the form posts),
+// lang "" (the old "All"), and no attribs at all. On a STARTED campaign the same save must not
+// 400 as a lang-lock violation (review M1) -- while a real change of language still does.
+func TestCampaignLangCannotBeCleared(t *testing.T) {
+	h := newLinkHarness(t)
+	var list int
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Acme', 'public', 'single') RETURNING id`)
+	lists := fmt.Sprintf(`"lists": [%d]`, list)
+
+	c := newLangCampaign(t, h, list, models.JSON{"lang": "fr", "preheader": "p"})
+
+	for name, body := range map[string]string{
+		"attribs without lang": `{` + lists + `, "attribs": {"preheader": "q"}}`,
+		"lang empty":           `{` + lists + `, "attribs": {"preheader": "q", "lang": ""}}`,
+		"no attribs":           `{` + lists + `, "name": "renamed"}`,
+	} {
+		if code, msg := putCampaign(t, h, c.ID, body); code != http.StatusOK {
+			t.Fatalf("%s: %d %s", name, code, msg)
+		}
+		if got := storedLang(t, h, c.ID); got != "fr" {
+			t.Fatalf("%s: the language was cleared or changed, got %q", name, got)
+		}
+	}
+	// The other attribs of the request ARE what is stored.
+	if got, _ := h.app.core.GetCampaign(c.ID, "", ""); (&got).Preheader() != "q" {
+		t.Fatalf("preheader: got %q", (&got).Preheader())
+	}
+	// A draft may still CHANGE its language.
+	if code, msg := putCampaign(t, h, c.ID, `{`+lists+`, "attribs": {"lang": "de"}}`); code != http.StatusOK || storedLang(t, h, c.ID) != "de" {
+		t.Fatalf("draft language change: %d %s, stored %q", code, msg, storedLang(t, h, c.ID))
+	}
+
+	// STARTED. started_at is what the lang lock reads. The status stays draft only because a
+	// paused/scheduled edit also runs the footer guard, which needs the manager this harness
+	// does not build. The lock itself does not look at the status.
+	h.db.MustExec(`UPDATE campaigns SET started_at = NOW() WHERE id = $1`, c.ID)
+	if code, msg := putCampaign(t, h, c.ID, `{`+lists+`, "attribs": {"preheader": "after start"}}`); code != http.StatusOK {
+		t.Fatalf("PUT {preheader} on a started campaign must not be a lang-lock violation: %d %s", code, msg)
+	}
+	if code, msg := putCampaign(t, h, c.ID, `{`+lists+`, "attribs": {"preheader": "x", "lang": ""}}`); code != http.StatusOK {
+		t.Fatalf("PUT lang \"\" on a started campaign: %d %s", code, msg)
+	}
+	if got := storedLang(t, h, c.ID); got != "de" {
+		t.Fatalf("started campaign: language %q, want de", got)
+	}
+	if code, _ := putCampaign(t, h, c.ID, `{`+lists+`, "attribs": {"lang": "it"}}`); code != http.StatusBadRequest {
+		t.Fatalf("a real language change on a started campaign must still 400, got %d", code)
+	}
+
+	// Every other caller goes through core.UpdateCampaign, which applies the same rule.
+	cm, _ := h.app.core.GetCampaign(c.ID, "", "")
+	cm.Attribs = models.JSON{"preheader": "core"}
+	if out, err := h.app.core.UpdateCampaign(c.ID, cm, []int{list}, nil); err != nil || (&out).Lang() != "de" {
+		t.Fatalf("core.UpdateCampaign dropped the language: %q, %v", (&out).Lang(), err)
+	}
+}
+
+// langlessDraft is a regular draft with no language, which only SQL can produce now.
+func langlessDraft(t *testing.T, h *linkHarness, list int) int {
+	t.Helper()
+	c := newLangCampaign(t, h, list, nil)
+	h.db.MustExec(`UPDATE campaigns SET attribs = attribs - 'lang', send_at = NOW() + INTERVAL '1 day' WHERE id = $1`, c.ID)
+	return c.ID
+}
+
+func putCampaignStatus(t *testing.T, h *linkHarness, id int, status string) (int, string) {
+	t.Helper()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPut, "/api/campaigns/"+itoa(id)+"/status", strings.NewReader(`{"status": "`+status+`"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("id", id) // what the hasID middleware stores for getID
+	c.Set(auth.UserHTTPCtxKey, auth.User{PermissionsMap: map[string]struct{}{auth.PermCampaignsManageAll: {}}})
+	if err := h.app.UpdateCampaignStatus(c); err != nil {
+		if he, ok := err.(*echo.HTTPError); ok {
+			return he.Code, fmt.Sprint(he.Message)
+		}
+		t.Fatalf("UpdateCampaignStatus: %v", err)
+	}
+	return rec.Code, rec.Body.String()
+}
+
+func testLanglessRefused(t *testing.T, status string) {
+	h := newLinkHarness(t)
+	var list int
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Acme', 'public', 'single') RETURNING id`)
+	id := langlessDraft(t, h, list)
+
+	// The handler refuses, naming the field, BEFORE the footer guard (which would need the
+	// manager) -- and core refuses for every other caller.
+	code, msg := putCampaignStatus(t, h, id, status)
+	if code != http.StatusBadRequest || !strings.Contains(strings.ToLower(msg), "language") {
+		t.Fatalf("language-less draft -> %s: want 400 naming the language, got %d %s", status, code, msg)
+	}
+	if _, err := h.app.core.UpdateCampaignStatus(id, status); err == nil {
+		t.Fatalf("core: language-less draft -> %s must be refused", status)
+	} else if he, ok := err.(*echo.HTTPError); !ok || he.Code != http.StatusBadRequest {
+		t.Fatalf("core: want 400, got %v", err)
+	}
+	var got string
+	h.db.Get(&got, `SELECT status FROM campaigns WHERE id = $1`, id)
+	if got != models.CampaignStatusDraft {
+		t.Fatalf("a refused transition must leave the campaign a draft, got %s", got)
+	}
+
+	// Give it a language and the same transition goes through (core -- the handler's positive
+	// path renders the footer guard).
+	h.db.MustExec(`UPDATE campaigns SET attribs = attribs || '{"lang": "en"}' WHERE id = $1`, id)
+	if _, err := h.app.core.UpdateCampaignStatus(id, status); err != nil {
+		t.Fatalf("with a language -> %s: %v", status, err)
+	}
+}
+
+// TestLanglessDraftCannotStart -- LIST-GRID-SPEC D11/I8.
+func TestLanglessDraftCannotStart(t *testing.T) {
+	testLanglessRefused(t, models.CampaignStatusRunning)
+}
+
+// TestLanglessDraftCannotSchedule -- LIST-GRID-SPEC D11/I8 (review H5). Scheduling is its own
+// transition and the scheduler starts the campaign with no further handler.
+func TestLanglessDraftCannotSchedule(t *testing.T) {
+	testLanglessRefused(t, models.CampaignStatusScheduled)
+}
+
+// TestCampaignUnreachableLangWarning -- LIST-GRID-SPEC D13/I11. A campaign over a list holding
+// one ACTIVE subscriber with an unrecognised language (pt, written by SQL -- the API and the
+// importer cannot store one any more) warns with N=1, and is silent at zero. Reads the cached
+// list stats view. It replaces the Shala-I8 language-less warning (TestCampaignLangLessWarning,
+// deleted with it: a regular campaign always has a language now).
+func TestCampaignUnreachableLangWarning(t *testing.T) {
 	h := newLinkHarness(t)
 	db := h.db
 
-	mkList := func(name string) int {
+	mkList := func(name, optin string) int {
 		var id int
-		db.Get(&id, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), $1, 'public', 'single') RETURNING id`, name)
+		db.Get(&id, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), $1, 'public', $2::list_optin) RETURNING id`, name, optin)
 		return id
 	}
-	addSub := func(listID int, email, attribs string) {
+	addSub := func(listID int, email, attribs, status string) int {
 		var id int
 		db.Get(&id, `INSERT INTO subscribers (uuid, email, name, attribs) VALUES (gen_random_uuid(), $1, 'S', $2::jsonb) RETURNING id`, email, attribs)
-		db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $2, 'confirmed')`, id, listID)
+		db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $2, $3::subscription_status)`, id, listID, status)
+		return id
 	}
 
-	mixed := mkList("Mixed")
-	addSub(mixed, "fr@x.test", `{"lang":"fr"}`)
-	addSub(mixed, "en@x.test", `{"lang":"en"}`)
-	addSub(mixed, "none@x.test", `{}`) // COALESCE-EN — counts as English.
+	mixed := mkList("Mixed", "single")
+	addSub(mixed, "pt@x.test", `{"lang":"pt"}`, "confirmed")
+	addSub(mixed, "fr@x.test", `{"lang":"fr"}`, "confirmed")
+	addSub(mixed, "none@x.test", `{}`, "confirmed")
+	// Not ACTIVE, so they would not receive the campaign anyway and are not counted.
+	addSub(mixed, "pt-unsub@x.test", `{"lang":"pt"}`, "unsubscribed")
+	blocked := addSub(mixed, "pt-blocked@x.test", `{"lang":"pt"}`, "confirmed")
+	db.MustExec(`UPDATE subscribers SET status = 'blocklisted' WHERE id = $1`, blocked)
 
-	english := mkList("English only")
-	addSub(english, "en2@x.test", `{"lang":"en"}`)
-	addSub(english, "none2@x.test", `{}`)
+	clean := mkList("Clean", "single")
+	addSub(clean, "en@x.test", `{"lang":"en"}`, "confirmed")
+	addSub(clean, "none2@x.test", `{}`, "confirmed")
 
-	langLess := func(listID int) int {
-		c := newLangCampaign(t, h, listID, nil)
-		db.MustExec(`UPDATE campaigns SET attribs = attribs - 'lang' WHERE id = $1`, c.ID)
-		return c.ID
-	}
-
-	// (a) Language-less over a list holding one fr subscriber → one warning, naming the count.
-	id := langLess(mixed)
-	w := h.app.campaignWarningsByID(id)
-	if len(w) != 1 || !strings.Contains(w[0], "1") {
+	// (a) One unrecognised ACTIVE row -> one warning naming 1.
+	w := h.app.campaignWarningsByID(newLangCampaign(t, h, mixed, models.JSON{"lang": "en"}).ID)
+	if len(w) != 1 || !strings.Contains(w[0], "1 subscriber") || !strings.Contains(w[0], "unrecognised language") {
 		t.Fatalf("mixed list: want one warning naming 1 subscriber, got %q", w)
 	}
-
-	// (b) An English-only list → silent. Subscribers with no language are not "another
-	// language"; warning on them would fire on every campaign and mean nothing.
-	if w := h.app.campaignWarningsByID(langLess(english)); len(w) != 0 {
-		t.Fatalf("english-only list: want no warnings, got %q", w)
+	// ... whatever the campaign's language.
+	if w := h.app.campaignWarningsByID(newLangCampaign(t, h, mixed, models.JSON{"lang": "fr"}).ID); len(w) != 1 {
+		t.Fatalf("fr campaign on the mixed list: got %q", w)
 	}
 
-	// (c) The same list, but the campaign HAS a language → silent, whatever the audience:
-	// the language predicate already decides who receives it, and the zero-audience warning
-	// at start covers the empty case.
-	if w := h.app.campaignWarningsByID(newLangCampaign(t, h, mixed, models.JSON{"lang": "en"}).ID); len(w) != 0 {
-		t.Fatalf("en campaign on a mixed list: want no warnings, got %q", w)
+	// (b) Silent at zero.
+	if w := h.app.campaignWarningsByID(newLangCampaign(t, h, clean, nil).ID); len(w) != 0 {
+		t.Fatalf("clean list: want no warnings, got %q", w)
 	}
 
-	// (d) An unsubscribed non-English row is not an audience member, so it cannot trigger
-	// the warning.
-	db.MustExec(`UPDATE subscriber_lists SET status = 'unsubscribed' WHERE list_id = $1 AND subscriber_id = (SELECT id FROM subscribers WHERE email = 'fr@x.test')`, mixed)
-	if w := h.app.campaignWarningsByID(langLess(mixed)); len(w) != 0 {
-		t.Fatalf("unsubscribed fr row: want no warnings, got %q", w)
+	// (c) A legacy language-less campaign and an opt-in campaign reach every language, the
+	// unrecognised rows included, so neither warns.
+	legacy := newLangCampaign(t, h, mixed, nil)
+	db.MustExec(`UPDATE campaigns SET attribs = attribs - 'lang' WHERE id = $1`, legacy.ID)
+	if w := h.app.campaignWarningsByID(legacy.ID); len(w) != 0 {
+		t.Fatalf("language-less campaign: want no warnings, got %q", w)
 	}
-
-	// (e) An opt-in campaign never carries a language and reaches every unconfirmed row by
-	// design, so it is exempt (implementation review F7): a double-opt-in list holding an
-	// unconfirmed fr row must not warn.
-	var dbl int
-	db.Get(&dbl, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Double', 'public', 'double') RETURNING id`)
-	var frID int
-	db.Get(&frID, `INSERT INTO subscribers (uuid, email, name, attribs) VALUES (gen_random_uuid(), 'fr2@x.test', 'S', '{"lang":"fr"}'::jsonb) RETURNING id`)
-	db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $2, 'unconfirmed')`, frID, dbl)
+	dbl := mkList("Double", "double")
+	addSub(dbl, "pt-unconf@x.test", `{"lang":"pt"}`, "unconfirmed")
 	optin, err := h.app.core.CreateCampaign(models.Campaign{
 		Type: models.CampaignTypeOptin, Name: "O2", Subject: "s", FromEmail: "hello@acme.test",
 		Body: "b", ContentType: models.CampaignContentTypePlain, Messenger: "email",
@@ -207,6 +430,6 @@ func TestCampaignLangLessWarning(t *testing.T) {
 		t.Fatalf("CreateCampaign optin: %v", err)
 	}
 	if w := h.app.campaignWarningsByID(optin.ID); len(w) != 0 {
-		t.Fatalf("opt-in campaign on a double-opt-in list with an unconfirmed fr row: want no warnings, got %q", w)
+		t.Fatalf("opt-in campaign: want no warnings, got %q", w)
 	}
 }

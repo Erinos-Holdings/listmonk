@@ -108,7 +108,8 @@ func (c *Core) GetSubscribersByEmail(emails []string) (models.Subscribers, error
 }
 
 // QuerySubscribers queries and returns paginated subscrribers based on the given params including the total count.
-func (c *Core) QuerySubscribers(searchStr, queryExp string, listIDs []int, subStatus string, order, orderBy string, offset, limit int) (models.Subscribers, int, error) {
+// filter (fork, list grid) is the server-authored segment/lang filter -- see subscriberFilterExp.
+func (c *Core) QuerySubscribers(searchStr, queryExp string, listIDs []int, subStatus string, filter models.SubscriberFilter, order, orderBy string, offset, limit int) (models.Subscribers, int, error) {
 	// Sort params.
 	if !strSliceContains(orderBy, subQuerySortFields) {
 		orderBy = "subscribers.id"
@@ -123,6 +124,10 @@ func (c *Core) QuerySubscribers(searchStr, queryExp string, listIDs []int, subSt
 	}
 
 	// There's an arbitrary query condition.
+	queryExp, err := c.subscriberFilterExp(queryExp, listIDs, filter)
+	if err != nil {
+		return nil, 0, err
+	}
 	cond := "TRUE"
 	if queryExp != "" {
 		cond = queryExp
@@ -141,7 +146,7 @@ func (c *Core) QuerySubscribers(searchStr, queryExp string, listIDs []int, subSt
 
 	// Create a readonly transaction that just does COUNT() to obtain the count of results
 	// and to ensure that the arbitrary query is indeed readonly.
-	total, err := c.getSubscriberCount(searchStr, cond, subStatus, listIDs)
+	total, err := c.getSubscriberCount(searchStr, cond, subStatus, listIDs, !filter.Empty())
 	if err != nil {
 		c.log.Printf("error getting subscriber count: %v", err)
 		return nil, 0, err
@@ -237,7 +242,7 @@ func (c *Core) GetSubscriberActivity(id int) (models.SubscriberActivity, error) 
 // on the given criteria in an exportable form. The iterator function returned can be called
 // repeatedly until there are nil subscribers. It's an iterator because exports can be extremely
 // large and may have to be fetched in batches from the DB and streamed somewhere.
-func (c *Core) ExportSubscribers(searchStr, query string, subIDs, listIDs []int, subStatus string, batchSize int) (func() ([]models.SubscriberExport, error), error) {
+func (c *Core) ExportSubscribers(searchStr, query string, subIDs, listIDs []int, subStatus string, filter models.SubscriberFilter, batchSize int) (func() ([]models.SubscriberExport, error), error) {
 	if subIDs == nil {
 		subIDs = []int{}
 	}
@@ -246,6 +251,10 @@ func (c *Core) ExportSubscribers(searchStr, query string, subIDs, listIDs []int,
 	}
 
 	// There's an arbitrary query condition.
+	query, err := c.subscriberFilterExp(query, listIDs, filter)
+	if err != nil {
+		return nil, err
+	}
 	cond := "TRUE"
 	if query != "" {
 		cond = query
@@ -263,7 +272,7 @@ func (c *Core) ExportSubscribers(searchStr, query string, subIDs, listIDs []int,
 
 	// Create a readonly transaction that just does COUNT() to obtain the count of results
 	// and to ensure that the arbitrary query is indeed readonly.
-	if _, err := c.getSubscriberCount(searchStr, cond, subStatus, listIDs); err != nil {
+	if _, err := c.getSubscriberCount(searchStr, cond, subStatus, listIDs, !filter.Empty()); err != nil {
 		c.log.Printf("error getting subscriber count: %v", err)
 		return nil, err
 	}
@@ -470,7 +479,11 @@ func (c *Core) BlocklistSubscribers(subIDs []int) error {
 }
 
 // BlocklistSubscribersByQuery blocklists the given list of subscribers.
-func (c *Core) BlocklistSubscribersByQuery(searchStr, queryExp string, listIDs []int, subStatus string) error {
+func (c *Core) BlocklistSubscribersByQuery(searchStr, queryExp string, listIDs []int, subStatus string, filter models.SubscriberFilter) error {
+	queryExp, err := c.subscriberFilterExp(sanitizeSQLExp(queryExp), listIDs, filter)
+	if err != nil {
+		return err
+	}
 	if err := c.q.ExecSubQueryTpl(searchStr, sanitizeSQLExp(queryExp), c.q.BlocklistSubscribersByQuery, listIDs, c.db, subStatus); err != nil {
 		c.log.Printf("error blocklisting subscribers: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,
@@ -499,8 +512,12 @@ func (c *Core) DeleteSubscribers(subIDs []int, subUUIDs []string) error {
 }
 
 // DeleteSubscribersByQuery deletes subscribers by a given arbitrary query expression.
-func (c *Core) DeleteSubscribersByQuery(searchStr, queryExp string, listIDs []int, subStatus string) error {
-	err := c.q.ExecSubQueryTpl(searchStr, sanitizeSQLExp(queryExp), c.q.DeleteSubscribersByQuery, listIDs, c.db, subStatus)
+func (c *Core) DeleteSubscribersByQuery(searchStr, queryExp string, listIDs []int, subStatus string, filter models.SubscriberFilter) error {
+	queryExp, err := c.subscriberFilterExp(sanitizeSQLExp(queryExp), listIDs, filter)
+	if err != nil {
+		return err
+	}
+	err = c.q.ExecSubQueryTpl(searchStr, sanitizeSQLExp(queryExp), c.q.DeleteSubscribersByQuery, listIDs, c.db, subStatus)
 	if err != nil {
 		c.log.Printf("error deleting subscribers: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,
@@ -578,9 +595,16 @@ func (c *Core) DeleteBlocklistedSubscribers() (int, error) {
 	return int(n), nil
 }
 
-func (c *Core) getSubscriberCount(searchStr, queryExp, subStatus string, listIDs []int) (int, error) {
+// filtered (fork, list grid, LIST-GRID-SPEC D6) -- a segment/lang-filtered count is ALWAYS live.
+// The view's list_id = 0 row has a NULL lang, so a view-sourced lang=fr total on the
+// all-subscribers page would be 0 and QuerySubscribers would answer "no results".
+// DEFENSIVE ONLY today: both callers pass a cond that is "TRUE" or the query, never "", so the
+// cached branch below is unreachable and every count is already live (implementation review
+// L1 -- removing the guard fails no test). It stays so that re-enabling the cached path cannot
+// silently route a filtered count through the view.
+func (c *Core) getSubscriberCount(searchStr, queryExp, subStatus string, listIDs []int, filtered bool) (int, error) {
 	// If there's no condition, it's a "get all" call which can probably be optionally pulled from cache.
-	if queryExp == "" {
+	if queryExp == "" && !filtered {
 		_ = c.refreshCache(matListSubStats, false)
 
 		total := 0

@@ -12,6 +12,18 @@
             <span v-if="queryParams.subStatus" class="has-text-grey has-text-weight-normal is-capitalized">({{
               queryParams.subStatus }})</span>
           </span>
+          <!-- Fork (list grid, LIST-GRID-SPEC D8). The Lists-page grid's segment/lang filter. It
+          rides every query, page, sort, export and select-all bulk request until removed. -->
+          <b-taglist v-if="queryParams.segment || queryParams.lang" class="grid-filter is-inline-flex ml-2">
+            <b-tag v-if="queryParams.segment" closable attached type="is-light" data-cy="chip-segment"
+              @close="clearGridFilter('segment')">
+              {{ $t(`lists.grid.${queryParams.segment}`) }}
+            </b-tag>
+            <b-tag v-if="queryParams.lang" closable attached type="is-light" data-cy="chip-lang"
+              @close="clearGridFilter('lang')">
+              {{ gridLangLabel }}
+            </b-tag>
+          </b-taglist>
         </h1>
       </div>
       <div class="column has-text-right">
@@ -265,6 +277,10 @@ export default Vue.extend({
         orderBy: 'id',
         order: 'desc',
         subStatus: null,
+
+        // Fork (list grid). Server-authored filters from the Lists-page grid (?segment=&lang=).
+        segment: null,
+        lang: null,
       },
     };
   },
@@ -382,6 +398,15 @@ export default Vue.extend({
       this.querySubscribers({ page: 1 });
     },
 
+    // Fork (list grid). Removing a chip goes through the route: the router-view is keyed by
+    // fullPath, so the page reloads with the remaining filter and nothing can go on carrying
+    // the removed one (a bulk selection made under it is dropped with the page).
+    clearGridFilter(which) {
+      const query = { ...this.$route.query };
+      delete query[which];
+      this.$router.push({ path: this.$route.path, query });
+    },
+
     // Search / query subscribers.
     querySubscribers(params) {
       this.queryParams = { ...this.queryParams, ...params };
@@ -394,6 +419,7 @@ export default Vue.extend({
         subscription_status: this.queryParams.subStatus,
         order_by: this.queryParams.orderBy,
         order: this.queryParams.order,
+        ...this.gridFilter,
       };
 
       if (this.queryParams.queryExp) {
@@ -443,6 +469,7 @@ export default Vue.extend({
             query: this.queryParams.queryExp,
             list_ids: this.queryParams.listID ? [this.queryParams.listID] : null,
             subscription_status: this.queryParams.subStatus,
+            ...this.gridFilter,
           }).then(() => this.querySubscribers());
         };
       }
@@ -470,6 +497,9 @@ export default Vue.extend({
         if (this.queryParams.subStatus) {
           q.append('subscription_status', this.queryParams.subStatus);
         }
+
+        // Fork (list grid).
+        Object.entries(this.gridFilter).forEach(([k, v]) => q.append(k, v));
 
         // Export selected subscribers.
         if (!this.bulk.all && this.bulk.checked.length > 0) {
@@ -504,6 +534,9 @@ export default Vue.extend({
             query: this.queryParams.queryExp,
             list_ids: this.queryParams.listID ? [this.queryParams.listID] : null,
             subscription_status: this.queryParams.subStatus,
+            // Fork (list grid, D7). all=true above is sent exactly when a grid-linked page has
+            // no search -- the server keeps the segment through it (it never voids a segment).
+            ...this.gridFilter,
           }).then(() => {
             this.querySubscribers();
 
@@ -547,6 +580,7 @@ export default Vue.extend({
         // 'All' is selected, perform by query.
         data.query = this.queryParams.queryExp;
         data.subscription_status = this.queryParams.subStatus;
+        Object.assign(data, this.gridFilter); // Fork (list grid, D7).
         fn = this.$api.addSubscribersToListsByQuery;
       }
 
@@ -568,6 +602,28 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['subscribers', 'lists', 'loading']),
+
+    // Fork (list grid, LIST-GRID-SPEC D7). THE one place the segment/lang filter is read for a
+    // request. Every read and every select-all write spreads it, so a by-query delete,
+    // blocklist or list change can never reach beyond the rows the page is showing.
+    gridFilter() {
+      const out = {};
+      if (this.queryParams.segment) {
+        out.segment = this.queryParams.segment;
+      }
+      if (this.queryParams.lang) {
+        out.lang = this.queryParams.lang;
+      }
+      return out;
+    },
+
+    gridLangLabel() {
+      const l = this.queryParams.lang;
+      if (l === 'none') {
+        return this.$t('lists.grid.noLangChip');
+      }
+      return l === 'other' ? this.$t('lists.grid.other') : l.toUpperCase();
+    },
 
     numSelectedSubscribers() {
       if (this.bulk.all) {
@@ -600,6 +656,13 @@ export default Vue.extend({
     }
     if (this.$route.query.subscription_status) {
       this.queryParams.subStatus = this.$route.query.subscription_status;
+    }
+    // Fork (list grid). Unknown values are passed through and refused by the server (400).
+    if (this.$route.query.segment) {
+      this.queryParams.segment = this.$route.query.segment;
+    }
+    if (this.$route.query.lang) {
+      this.queryParams.lang = this.$route.query.lang;
     }
 
     if (this.$route.params.id) {

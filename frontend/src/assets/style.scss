@@ -828,6 +828,39 @@ section.lists {
     }
   }
 
+  /* Fork (list grid). One line per send language under the "all" line, aligned across the six
+  columns by a fixed line height. */
+  td.grid-cell {
+    white-space: nowrap;
+
+    .grid-line {
+      line-height: 1.6rem;
+      height: 1.6rem;
+
+      &:not(.lang-all) {
+        font-size: $size-7;
+      }
+    }
+    .grid-label {
+      float: left;
+      margin-right: 0.5rem;
+      font-weight: 600;
+    }
+    .grid-nolang {
+      float: left;
+      margin-right: 0.75rem;
+      color: $grey-light;
+    }
+    .grid-zero {
+      color: $grey-lighter;
+    }
+    .lang-other {
+      &, a, .grid-label {
+        color: $warning-dark;
+      }
+    }
+  }
+
   .view {
     display: block;
     color: $grey-light;

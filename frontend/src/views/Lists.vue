@@ -99,34 +99,52 @@
         </div>
       </b-table-column>
 
-      <b-table-column v-slot="props" field="subscriber_count" :label="$t('globals.terms.subscribers')"
-        header-class="cy-subscribers" numeric sortable centered>
-        <template v-if="$can('subscribers:get_all', 'subscribers:get')">
-          <router-link :to="`/subscribers/lists/${props.row.id}`">
-            {{ $utils.formatNumber(props.row.subscriberCount) }}
-            <span class="is-size-7 view">{{ $t('globals.buttons.view') }}</span>
-          </router-link>
-        </template>
-        <template v-else>
-          {{ $utils.formatNumber(props.row.subscriberCount) }}
-        </template>
-      </b-table-column>
+      <!-- Fork (list grid, integrations LIST-GRID-SPEC D8/D9). Six columns that partition the
+      list -- Subscribers (total) and the five segments -- by one "all" line and, where the list
+      has more than one send language (or a no-language residue, or an unrecognised value), one
+      line per SEND language. Every number links to exactly the subscribers it counts
+      (?segment=&lang=, filters the server writes). The numbers are the API's subscriber_grid as
+      is. Nothing is added up or folded here -- en already includes the no-language rows. -->
+      <b-table-column v-for="col in gridCols" :key="col.key" v-slot="props" :field="col.field" :label="$t(col.label)"
+        :header-class="`cy-${col.key}`" cell-class="grid-cell" numeric sortable>
+        <!-- Pending cannot occur on a single opt-in list. -->
+        <div v-if="!(col.key === 'pending' && props.row.optin === 'single')" class="grid-lines">
+          <p v-for="line in gridLines(props.row)" :key="line.key" :class="['grid-line', `lang-${line.key}`]"
+            :data-cy="`grid-${col.key}-${line.key}`">
+            <!-- The line's label sits in the first (Subscribers) column. -->
+            <template v-if="col.key === 'total' && line.key !== 'all'">
+              <b-tooltip v-if="line.key === 'other'" :label="$t('lists.grid.otherHelp')" type="is-dark" multilined>
+                <component :is="canViewSubs ? 'router-link' : 'span'" :to="gridLink(props.row, '', line.key)"
+                  class="grid-label">
+                  {{ $t('lists.grid.other') }}
+                </component>
+              </b-tooltip>
+              <component v-else :is="canViewSubs ? 'router-link' : 'span'" :to="gridLink(props.row, '', line.key)"
+                class="grid-label">
+                {{ line.key.toUpperCase() }}
+              </component>
+              <template v-if="line.key === 'en' && line.none && line.none.total > 0">
+                <component :is="canViewSubs ? 'router-link' : 'span'" :to="gridLink(props.row, '', 'none')"
+                  class="grid-nolang" data-cy="grid-nolang">
+                  &middot; {{ $t('lists.grid.noLang', { num: $utils.formatNumber(line.none.total) }) }}
+                </component>
+              </template>
+            </template>
 
-      <b-table-column v-slot="props" field="subscriber_counts" header-class="cy-subscribers" width="10%">
-        <div class="fields stats">
-          <p v-for="(count, status) in filterStatuses(props.row)" :key="status">
-            <!-- Fork (holds). held is a pseudo-status from mat_list_subscriber_stats, not a
-            subscription_status value, so it has no filter link (the held rows are an API query). -->
-            <template v-if="status === 'held'">
-              <label for="#">{{ $t('lists.held') }}</label>
-              <span :class="status">{{ $utils.formatNumber(count) }}</span>
-            </template>
-            <template v-else>
-              <label for="#">{{ $tc(`subscribers.status.${status}`, count) }}</label>
-              <router-link :to="`/subscribers/lists/${props.row.id}?subscription_status=${status}`" :class="status">
-                {{ $utils.formatNumber(count) }}
-              </router-link>
-            </template>
+            <span v-if="!line.row[col.key]" class="grid-zero">0</span>
+            <b-tooltip v-else-if="line.key === 'en' && line.none && line.none[col.key] > 0" type="is-dark" :label="$t('lists.grid.enSplit', {
+              en: $utils.formatNumber(line.row[col.key] - line.none[col.key]),
+              none: $utils.formatNumber(line.none[col.key]),
+            })">
+              <component :is="canViewSubs ? 'router-link' : 'span'"
+                :to="gridLink(props.row, col.key === 'total' ? '' : col.key, line.key)" :class="col.key">
+                {{ $utils.formatNumber(line.row[col.key]) }}
+              </component>
+            </b-tooltip>
+            <component v-else :is="canViewSubs ? 'router-link' : 'span'"
+              :to="gridLink(props.row, col.key === 'total' ? '' : col.key, line.key)" :class="col.key">
+              {{ $utils.formatNumber(line.row[col.key]) }}
+            </component>
           </p>
         </div>
       </b-table-column>
@@ -198,6 +216,9 @@ import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import ListForm from './ListForm.vue';
 
+// Fork (list grid). Send-language lines in display order. The API's en already includes none.
+const GRID_LANGS = ['en', 'fr', 'es', 'de', 'it', 'other'];
+
 export default Vue.extend({
   components: {
     ListForm,
@@ -211,6 +232,17 @@ export default Vue.extend({
       isEditing: false,
       isFormVisible: false,
       lists: [],
+
+      // Fork (list grid). field = a column in core.go listQuerySortFields (the grid's all row).
+      gridCols: [
+        { key: 'total', field: 'subscriber_count', label: 'globals.terms.subscribers' },
+        { key: 'active', field: 'active_count', label: 'lists.grid.active' },
+        { key: 'held', field: 'held_count', label: 'lists.grid.held' },
+        { key: 'unsubscribed', field: 'unsubscribed_count', label: 'lists.grid.unsubscribed' },
+        { key: 'pending', field: 'pending_count', label: 'lists.grid.pending' },
+        { key: 'blocked', field: 'blocked_count', label: 'lists.grid.blocked' },
+      ],
+
       queryParams: {
         page: 1,
         query: '',
@@ -265,13 +297,37 @@ export default Vue.extend({
       }
     },
 
-    filterStatuses(list) {
-      const out = { ...list.subscriberStatuses };
-      if (list.optin === 'single') {
-        delete out.unconfirmed;
-        delete out.confirmed;
+    // Fork (list grid). The lines of one list's grid: "all", then one per send language with
+    // subscribers, in a fixed order. Language lines show only with app.lang_enable on AND when
+    // they say something the "all" line does not: more than one send language, a no-language
+    // residue (none, a subset of en), or an unrecognised value (other -- an alarm, so it is
+    // never hidden behind the one-language rule).
+    gridLines(list) {
+      const grid = list.subscriberGrid || {};
+      const lines = [{ key: 'all', row: grid.all || {} }];
+      if (!this.serverConfig.lang_enabled) {
+        return lines;
       }
-      return out;
+
+      const langs = GRID_LANGS.filter((k) => grid[k] && grid[k].total > 0);
+      const hasNone = grid.none && grid.none.total > 0;
+      if (langs.length > 1 || hasNone || langs.includes('other')) {
+        langs.forEach((k) => lines.push({ key: k, row: grid[k], none: k === 'en' ? grid.none : null }));
+      }
+      return lines;
+    },
+
+    // The subscribers page filtered to exactly what a cell counts. segment '' = the whole
+    // line, lang 'all' = the whole column.
+    gridLink(list, segment, lang) {
+      const query = {};
+      if (segment) {
+        query.segment = segment;
+      }
+      if (lang && lang !== 'all') {
+        query.lang = lang;
+      }
+      return { path: `/subscribers/lists/${list.id}`, query };
     },
 
     getLists() {
@@ -366,7 +422,12 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['loading', 'settings']),
+    ...mapState(['loading', 'settings', 'serverConfig']),
+
+    // Without a subscribers permission the grid is plain numbers.
+    canViewSubs() {
+      return this.$can('subscribers:get_all', 'subscribers:get');
+    },
 
     numSelectedLists() {
       return this.bulk.all ? this.lists.total : this.bulk.checked.length;

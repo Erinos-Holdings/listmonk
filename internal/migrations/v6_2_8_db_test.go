@@ -28,7 +28,7 @@ func TestTemplateBrandPersistence(t *testing.T) {
 	// Insert with brand='liyora'.
 	var id int
 	if err := h.db.Get(&id, create.Query,
-		"brand-test", "campaign_visual", "", []byte("{}"), sql.NullString{String: "{}", Valid: true}, "liyora",
+		"brand-test", "campaign_visual", "", []byte("{}"), sql.NullString{String: "{}", Valid: true}, "liyora", "", // lang (v6.2.11): "" takes the default
 	); err != nil {
 		t.Fatalf("create-template: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestTemplateBrandPersistence(t *testing.T) {
 	// Update to '' (clearing the dropdown) must persist as '', not silently keep 'liyora' --
 	// brand=$6 is unconditional in the query, unlike name/subject/body/body_source's
 	// CASE-WHEN-not-empty guards.
-	if _, err := h.db.Exec(update.Query, id, "", "", "", sql.NullString{}, ""); err != nil {
+	if _, err := h.db.Exec(update.Query, id, "", "", "", sql.NullString{}, "", ""); err != nil {
 		t.Fatalf("update-template: %v", err)
 	}
 	if err := h.db.Get(&brand, `SELECT brand FROM templates WHERE id=$1`, id); err != nil {

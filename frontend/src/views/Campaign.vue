@@ -101,11 +101,19 @@
 
                 <!-- Fork (multi-language campaigns) -- attribs.lang. Hidden behind app.lang_enable
                   until subscribers carry a language; a campaign that already has one always
-                  shows it. Locked once started (server-enforced too). -->
+                  shows it. Locked once started (server-enforced too).
+                  Fork (LIST-GRID-SPEC D11) -- a REGULAR campaign has no "All": a whole-list send is
+                  English to the fr/es/de/it readers, the server keeps the stored language on
+                  update and refuses to start or schedule without one. "All" survives read-only
+                  on a language-less campaign that can no longer be edited (history), and as a
+                  real choice on an OPT-IN campaign -- the double opt-in confirmation, which must
+                  reach every language, so its field shows only when someone hand-set a language
+                  and lets them clear it. -->
                 <b-field :label="$t('campaigns.lang')" label-position="on-border" :message="$t('campaigns.langHelp')"
-                  v-if="serverConfig.lang_enabled || form.lang">
-                  <b-select v-model="form.lang" name="lang" :disabled="!canEdit || isStarted" expanded data-cy="lang">
-                    <option value="">{{ $t('campaigns.langAll') }}</option>
+                  v-if="showLang">
+                  <b-select v-model="form.lang" name="lang" :disabled="!canEdit || isStarted" expanded data-cy="lang"
+                    :required="!isOptin">
+                    <option v-if="showLangAll" value="">{{ $t('campaigns.langAll') }}</option>
                     <option v-for="l in langOptions" :key="l.code" :value="l.code">{{ l.label }}</option>
                   </b-select>
                 </b-field>
@@ -258,7 +266,7 @@
       <b-tab-item :label="$t('campaigns.content')" icon="text" :disabled="isNew" value="content">
         <editor v-if="data.id" ref="editor" :key="editorKey" v-model="form.content" :id="data.id" :title="data.name"
           :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes"
-          :media-context="mediaContext" :attribs="previewAttribs" />
+          :media-context="mediaContext" :attribs="previewAttribs" @template-imported="onTemplateImported" />
 
         <div class="columns">
           <div class="column is-6">
@@ -404,6 +412,7 @@ import {
   readDraft, writeDraft, deleteDraft, DRAFT_MAX_AGE_MS,
 } from '../drafts';
 
+import { CAMPAIGN_LANGS, campaignLangLabel } from '../langs';
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
@@ -534,7 +543,7 @@ export default Vue.extend({
         preheader: '',
         // Fork (SHALA-CUTOVER-SPEC D9) -- English is preselected on a NEW campaign, matching
         // the server-side create default. A loaded campaign overwrites this from its own
-        // attribs, so an existing language-less draft still shows "All".
+        // attribs (LIST-GRID-SPEC D11: only history and opt-in campaigns can lack one).
         lang: 'en',
         fromEmail: '',
         headersStr: '[]',
@@ -1072,6 +1081,24 @@ export default Vue.extend({
     // cleared the field), so a key managed directly in the JSON tab survives saves where
     // the field was simply left untouched. lang (fork, multi-language): the select is the
     // single owner -- "All" (empty) always removes the key.
+    // Fork (LIST-GRID-SPEC D12). Importing a visual template sets the campaign's language to
+    // the template's -- a campaign's language is its BODY's. (The wrapper template select does
+    // not do this: wrappers are chrome.) Opt-in campaigns stay language-less, and a started
+    // campaign's language is locked, so there the import leaves it alone and says so.
+    onTemplateImported(tpl) {
+      const lang = tpl && tpl.lang;
+      if (!lang || this.isOptin || lang === this.form.lang) {
+        return;
+      }
+      const name = campaignLangLabel(lang);
+      if (this.isStarted) {
+        this.$utils.toast(this.$t('campaigns.langImportLocked', { lang: name }), 'is-warning');
+        return;
+      }
+      this.form.lang = lang;
+      this.$utils.toast(this.$t('campaigns.langImported', { lang: name }));
+    },
+
     foldAttribs(base) {
       let attribs = base;
       const preheader = (this.form.preheader || '').trim();
@@ -1373,6 +1400,29 @@ export default Vue.extend({
       return !!(this.data && this.data.startedAt);
     },
 
+    // Fork (LIST-GRID-SPEC D11). The STORED type and language -- the form's own lang must not
+    // decide whether its field exists, or clearing it would remove the field mid-edit.
+    isOptin() {
+      return !!this.data && this.data.type === 'optin';
+    },
+
+    storedLang() {
+      return (this.data && this.data.attribs && this.data.attribs.lang) || '';
+    },
+
+    showLang() {
+      if (this.isOptin) {
+        return !!this.storedLang;
+      }
+      return this.serverConfig.lang_enabled || !!this.form.lang;
+    },
+
+    // "All" is an option for an opt-in campaign, and the read-only value of a language-less
+    // regular campaign that is past editing. Never a choice on an editable regular campaign.
+    showLangAll() {
+      return this.isOptin || (!this.canEdit && !this.form.lang);
+    },
+
     // Fork (send retry, SEND-RETRY-SPEC D6) -- mirrors Campaigns.vue's isShortfall.
     isShortfall() {
       const d = this.data;
@@ -1380,13 +1430,7 @@ export default Vue.extend({
     },
 
     langOptions() {
-      return [
-        { code: 'en', label: 'English' },
-        { code: 'es', label: 'Español' },
-        { code: 'fr', label: 'Français' },
-        { code: 'de', label: 'Deutsch' },
-        { code: 'it', label: 'Italiano' },
-      ];
+      return CAMPAIGN_LANGS;
     },
 
     // What the in-editor preview posts as attribs -- the on-screen preheader and language,

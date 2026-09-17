@@ -32,6 +32,12 @@ type Template struct {
 	// D4) — editor-only metadata, does not feed campaign brand derivation. '' means no brand.
 	Brand string `db:"brand" json:"brand"`
 
+	// Lang (fork, integrations LIST-GRID-SPEC D12) is the language the template's body is
+	// written in -- one of CampaignLangs, stored "en" when absent. Importing a visual template
+	// into a campaign sets the campaign's language to it (frontend, Editor.vue). The wrapper
+	// template_id of a campaign does NOT drive language. Wrappers are chrome.
+	Lang string `db:"lang" json:"lang"`
+
 	// Only relevant to tx (transactional) templates.
 	SubjectTpl  *txttpl.Template   `json:"-"`
 	Tpl         *template.Template `json:"-"`

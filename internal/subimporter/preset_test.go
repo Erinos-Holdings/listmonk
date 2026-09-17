@@ -120,6 +120,28 @@ func TestPresetLangFor(t *testing.T) {
 			t.Errorf("CampaignLangs %s not honoured: %q", l, got)
 		}
 	}
+
+	// Fork (LIST-GRID-SPEC D13/I10) -- LangFor IS the shared subscriber-language rule
+	// (models.SubscriberLangCode), so a preset import is unchanged by it and the two cannot
+	// drift: every input agrees, and the primary subtag must EQUAL a code (never its first two
+	// letters -- "estonian" is not es).
+	for _, locale := range []string{
+		"de-DE", "en_US", "fr", "pt-BR", "", "EN-GB", " it-IT ", "es-419", "zz", "-",
+		"estonian", "italy", "eng", "123", "fr_CA", "FR",
+	} {
+		want, ok := models.SubscriberLangCode(locale)
+		if !ok {
+			want = ""
+		}
+		if got := p.LangFor(locale); got != want {
+			t.Errorf("LangFor(%q)=%q but SubscriberLangCode gives %q", locale, got, want)
+		}
+	}
+	for _, locale := range []string{"estonian", "italy", "eng"} {
+		if got := p.LangFor(locale); got != "" {
+			t.Errorf("LangFor(%q)=%q, want no language", locale, got)
+		}
+	}
 }
 
 // I12 -- filename to list name.

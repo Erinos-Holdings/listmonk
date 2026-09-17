@@ -3,15 +3,20 @@
 -- Only if the second param ($2 - noBody) is true, body and body_source is returned.
 -- brand is selected unconditionally (metadata, not body) — Templates.vue hands the LIST row
 -- straight to the edit form as curItem, so the noBody case must still return it.
+-- Fork (list grid, LIST-GRID-SPEC D12) -- lang likewise. This SELECT names its columns, so a new
+-- column is invisible to the API until it is added here.
 SELECT id, name, type, subject,
     (CASE WHEN $2 = false THEN body ELSE '' END) as body,
     (CASE WHEN $2 = false THEN body_source ELSE NULL END) as body_source,
-    is_default, brand, created_at, updated_at
+    is_default, brand, lang, created_at, updated_at
     FROM templates WHERE ($1 = 0 OR id = $1) AND ($3 = '' OR type = $3::template_type)
     ORDER BY created_at;
 
 -- name: create-template
-INSERT INTO templates (name, type, subject, body, body_source, brand) VALUES($1, $2, $3, $4, $5, $6) RETURNING id;
+-- Fork (LIST-GRID-SPEC D12) -- lang ($7), one of models.CampaignLangs, validated by the handler.
+-- An empty value takes the column default (en).
+INSERT INTO templates (name, type, subject, body, body_source, brand, lang)
+    VALUES($1, $2, $3, $4, $5, $6, COALESCE(NULLIF($7, ''), 'en')) RETURNING id;
 
 -- name: update-template
 -- brand=$6 is written UNCONDITIONALLY, not behind a "CASE WHEN $6 != ''" guard like the other
@@ -24,6 +29,9 @@ UPDATE templates SET
     body=(CASE WHEN $4 != '' THEN $4 ELSE body END),
     body_source=(CASE WHEN $5 != '' THEN $5 ELSE body_source END),
     brand=$6,
+    -- Fork (LIST-GRID-SPEC D12). Guarded, unlike brand, because a template always has a
+    -- language. There is no empty value to store, so an absent lang keeps the stored one.
+    lang=(CASE WHEN $7 != '' THEN $7 ELSE lang END),
     updated_at=NOW()
 WHERE id = $1;
 

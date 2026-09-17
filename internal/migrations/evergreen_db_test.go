@@ -113,6 +113,11 @@ func newEvergreenHarness(t *testing.T) *evergreenHarness {
 		if err := V6_2_10(db, nil, nil, lo); err != nil {
 			t.Fatalf("V6_2_10 run %d: %v", i+1, err)
 		}
+		// Fork (list grid) -- and v6.2.11. It must run LAST: V6_2_10 recreates the old-shape
+		// list stats view, and the shipped query-lists reads the v6.2.11 shape.
+		if err := V6_2_11(db, nil, nil, lo); err != nil {
+			t.Fatalf("V6_2_11 run %d: %v", i+1, err)
+		}
 	}
 
 	// Parse every shipped query file exactly as the app does and prepare the ones under test.

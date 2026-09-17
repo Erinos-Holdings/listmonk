@@ -139,6 +139,9 @@ CREATE TABLE templates (
     -- dropdown selection. Editor-only metadata (swatches + rebrand-sweep provenance) — does
     -- not feed campaign brand derivation. '' means no brand.
     brand           TEXT NOT NULL DEFAULT '',
+    -- Fork (list grid, LIST-GRID-SPEC D12, v6.2.11): the language the template's body is written
+    -- in, one of models.CampaignLangs. Importing a visual template sets the campaign's language.
+    lang            TEXT NOT NULL DEFAULT 'en',
 
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -556,20 +559,48 @@ DROP INDEX IF EXISTS mat_dashboard_charts_idx; CREATE UNIQUE INDEX mat_dashboard
 
 -- subscriber counts stats for lists
 -- Fork (holds): status is TEXT with a 'held' pseudo-status (v6.2.10).
+-- Fork (list grid, v6.2.11): regrouped (list_id, status, segment, lang). The three functions are
+-- the one definition of the segment and language partitions (integrations LIST-GRID-SPEC D1-D3).
+-- EVERY reader must pre-aggregate to its own grain -- JSONB_OBJECT_AGG keeps the last duplicate
+-- key, it does not sum. Mirrors listGridDDL in internal/migrations/v6.2.11.go. Keep identical.
+CREATE OR REPLACE FUNCTION subscription_segment(sl_status subscription_status, sl_meta JSONB, s_status subscriber_status, l_optin list_optin) RETURNS TEXT AS $$
+    SELECT CASE
+        WHEN s_status = 'blocklisted' THEN 'blocked'
+        WHEN sl_status = 'unsubscribed' AND COALESCE(sl_meta ? 'hold', FALSE) THEN 'held'
+        WHEN sl_status = 'unsubscribed' THEN 'unsubscribed'
+        WHEN sl_status = 'unconfirmed' AND l_optin = 'double' THEN 'pending'
+        ELSE 'active' END;
+$$ LANGUAGE sql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION subscriber_lang(attribs JSONB) RETURNS TEXT AS $$
+    SELECT CASE
+        WHEN NULLIF(LOWER(LEFT(attribs->>'lang', 2)), '') IS NULL THEN 'none'
+        WHEN LOWER(LEFT(attribs->>'lang', 2)) IN ('en', 'es', 'fr', 'de', 'it') THEN LOWER(LEFT(attribs->>'lang', 2))
+        ELSE 'other' END;
+$$ LANGUAGE sql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION send_lang(bucket TEXT) RETURNS TEXT AS $$
+    SELECT CASE WHEN bucket = 'none' THEN 'en' ELSE bucket END;
+$$ LANGUAGE sql IMMUTABLE;
+
 DROP INDEX IF EXISTS mat_list_subscriber_stats_idx;
 DROP MATERIALIZED VIEW IF EXISTS mat_list_subscriber_stats;
 CREATE MATERIALIZED VIEW mat_list_subscriber_stats AS
     SELECT NOW() AS updated_at, lists.id AS list_id,
         (CASE WHEN subscriber_lists.status = 'unsubscribed' AND subscriber_lists.meta ? 'hold' AND subscribers.status <> 'blocklisted'
               THEN 'held' ELSE subscriber_lists.status::TEXT END) AS status,
+        (CASE WHEN subscriber_lists.status IS NULL THEN NULL
+              ELSE subscription_segment(subscriber_lists.status, subscriber_lists.meta, subscribers.status, lists.optin) END) AS segment,
+        (CASE WHEN subscriber_lists.status IS NULL THEN NULL ELSE subscriber_lang(subscribers.attribs) END) AS lang,
         COUNT(subscriber_lists.status) AS subscriber_count
     FROM lists
     LEFT JOIN subscriber_lists ON (subscriber_lists.list_id = lists.id)
     LEFT JOIN subscribers ON (subscribers.id = subscriber_lists.subscriber_id)
-    GROUP BY lists.id, 3
+    GROUP BY lists.id, 3, 4, 5
     UNION ALL
-    SELECT NOW() AS updated_at, 0 AS list_id, NULL AS status, COUNT(id) AS subscriber_count FROM subscribers;
-CREATE UNIQUE INDEX mat_list_subscriber_stats_idx ON mat_list_subscriber_stats (list_id, status);
+    SELECT NOW() AS updated_at, 0 AS list_id, NULL AS status, NULL AS segment, NULL AS lang, COUNT(id) AS subscriber_count FROM subscribers;
+CREATE UNIQUE INDEX mat_list_subscriber_stats_idx ON mat_list_subscriber_stats (list_id, status, segment, lang);
+
 
 -- Fork (holds): per-row engagement for the sunset rule (v6.2.10).
 CREATE OR REPLACE FUNCTION subscription_engagement(p_list_id INT)

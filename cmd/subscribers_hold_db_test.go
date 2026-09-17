@@ -365,7 +365,7 @@ func TestHoldRelease_EveryStatusWriter(t *testing.T) {
 			}
 		}},
 		{"unsubscribe-subscribers-from-lists-by-query", releasedOut, func(id int, _, _ string) {
-			if err := co.UnsubscribeListsByQuery("", "subscribers.id = "+itoa(id), nil, []int{f.brandID}, ""); err != nil {
+			if err := co.UnsubscribeListsByQuery("", "subscribers.id = "+itoa(id), nil, []int{f.brandID}, "", models.SubscriberFilter{}); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -378,7 +378,7 @@ func TestHoldRelease_EveryStatusWriter(t *testing.T) {
 			}
 		}},
 		{"blocklist-subscribers-by-query", keptNotCount, func(id int, _, _ string) {
-			if err := co.BlocklistSubscribersByQuery("", "subscribers.id = "+itoa(id), nil, ""); err != nil {
+			if err := co.BlocklistSubscribersByQuery("", "subscribers.id = "+itoa(id), nil, "", models.SubscriberFilter{}); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -584,7 +584,7 @@ func TestSunsetPredicate_PassesTableAllowlist(t *testing.T) {
 	pred := "subscribers.id IN (SELECT subscriber_id FROM subscription_engagement(" + itoa(f.brandID) + ") " +
 		"WHERE anchor_at <= NOW() - INTERVAL '120 days' AND eligible_sends >= 6 " +
 		"AND first_eligible_send_at >= '2026-08-31T00:00:00Z' AND last_view_at IS NULL AND last_click_at IS NULL)"
-	if _, _, err := f.app.core.QuerySubscribers("", pred, []int{f.brandID}, "", "", "", 0, 10); err != nil {
+	if _, _, err := f.app.core.QuerySubscribers("", pred, []int{f.brandID}, "", models.SubscriberFilter{}, "", "", 0, 10); err != nil {
 		t.Fatalf("sunset predicate rejected: %v", err)
 	}
 }

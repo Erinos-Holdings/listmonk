@@ -491,6 +491,16 @@ func (c *Campaign) Preheader() string {
 // agree with what those queries accept — they compare strings, so any value here works.
 var CampaignLangs = []string{"en", "es", "fr", "de", "it"}
 
+// IsCampaignLang reports whether s is exactly one of CampaignLangs.
+func IsCampaignLang(s string) bool {
+	for _, l := range CampaignLangs {
+		if s == l {
+			return true
+		}
+	}
+	return false
+}
+
 // CampaignLangDefault (fork, SHALA-CUTOVER-SPEC D9) is what a campaign created without a
 // language is stored with. Must be a member of CampaignLangs.
 const CampaignLangDefault = "en"
@@ -510,12 +520,13 @@ func (c *Campaign) Lang() string {
 // audience minus the people who would receive a language they do not read. A lang-less
 // campaign reaches EVERYONE regardless of language, which is the shape that sends English
 // mail to `fr`/`de` readers -- the likeliest driver of a negative user-feedback verdict.
-// Clearing the language is still allowed for a deliberate whole-list send; it just stops
-// being the value nobody has to remember.
+// A REGULAR campaign's language can no longer be cleared at all (integrations LIST-GRID-SPEC
+// D11, superseding Shala D9's "clearing stays possible"): core.KeepCampaignLang puts the stored
+// language back on an update that drops it, and core.LangRequiredForStatus refuses to start or
+// schedule a regular campaign without one. A genuine all-hands notice is five clones.
 //
-// CREATE ONLY. Applying it on update would make clearing the language impossible: the form's
-// "All" option posts "", NormalizeLang deletes the key, and a default here would immediately
-// put it back (I10).
+// CREATE ONLY. The update path keeps the STORED language (KeepCampaignLang) rather than
+// re-defaulting, so an fr campaign whose form posts no lang key stays fr, not en.
 //
 // OPT-IN CAMPAIGNS ARE EXEMPT. listmonk generates their body itself and they are the
 // confirmation mail for a double opt-in list; defaulting them to `en` would silently stop
@@ -537,7 +548,9 @@ func DefaultCampaignLang(attribs JSON, campType string) JSON {
 }
 
 // NormalizeLang validates attribs.lang in place. An absent or empty value removes the key
-// (the form's "All" option posts ""); anything else must be one of CampaignLangs, exactly
+// (an opt-in campaign's "All" option posts ""; for a regular campaign core.KeepCampaignLang
+// then restores the stored language -- LIST-GRID-SPEC D11 keeps this branch on purpose, the
+// validator is shared with opt-ins and a stored "" matches nobody); anything else must be one of CampaignLangs, exactly
 // (lowercase), or ok is false. Attribs may be nil.
 func NormalizeLang(attribs JSON) (ok bool) {
 	if attribs == nil {

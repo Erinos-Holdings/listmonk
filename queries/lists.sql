@@ -26,24 +26,66 @@ WITH ls AS (
         WHEN $8 = TRUE THEN TRUE ELSE id = ANY($9::INT[])
     END
 ),
+-- Fork (list grid, LIST-GRID-SPEC D4) -- the view is grouped (list_id, status, segment, lang)
+-- since v6.2.11, so it is summed to (list_id, status) BEFORE JSONB_OBJECT_AGG. That aggregate
+-- keeps the last duplicate key rather than adding them up, and a status now spans many rows.
 statuses AS (
     SELECT
         list_id,
         COALESCE(JSONB_OBJECT_AGG(status, subscriber_count) FILTER (WHERE status IS NOT NULL), '{}') AS subscriber_statuses,
         SUM(subscriber_count) AS subscriber_count
-    FROM mat_list_subscriber_stats
+    FROM (
+        SELECT list_id, status, SUM(subscriber_count)::BIGINT AS subscriber_count
+        FROM mat_list_subscriber_stats GROUP BY list_id, status
+    ) st
     GROUP BY list_id
+),
+-- Fork (list grid, LIST-GRID-SPEC D5) -- subscriber_grid. One cell row per (list, key, segment).
+-- Keys are the SEND-language rows (send_lang folds the none bucket into en, the only place that
+-- fold is stated), the informational none row (a subset of en), and the all row. A key exists
+-- only where it counts someone, so total > 0 by construction. The all row is defaulted in the
+-- final SELECT for an empty list.
+cells AS (
+    SELECT list_id, send_lang(lang) AS k, segment, SUM(subscriber_count)::BIGINT AS n
+        FROM mat_list_subscriber_stats WHERE segment IS NOT NULL AND subscriber_count > 0 GROUP BY 1, 2, 3
+    UNION ALL
+    SELECT list_id, 'none' AS k, segment, SUM(subscriber_count)::BIGINT AS n
+        FROM mat_list_subscriber_stats WHERE segment IS NOT NULL AND subscriber_count > 0 AND lang = 'none' GROUP BY 1, 3
+    UNION ALL
+    SELECT list_id, 'all' AS k, segment, SUM(subscriber_count)::BIGINT AS n
+        FROM mat_list_subscriber_stats WHERE segment IS NOT NULL AND subscriber_count > 0 GROUP BY 1, 3
+),
+gridrows AS (
+    SELECT list_id, k, JSONB_BUILD_OBJECT(
+        'active', COALESCE(SUM(n) FILTER (WHERE segment = 'active'), 0),
+        'held', COALESCE(SUM(n) FILTER (WHERE segment = 'held'), 0),
+        'unsubscribed', COALESCE(SUM(n) FILTER (WHERE segment = 'unsubscribed'), 0),
+        'pending', COALESCE(SUM(n) FILTER (WHERE segment = 'pending'), 0),
+        'blocked', COALESCE(SUM(n) FILTER (WHERE segment = 'blocked'), 0),
+        'total', COALESCE(SUM(n), 0)) AS cell
+    FROM cells GROUP BY list_id, k
+),
+grid AS (
+    SELECT list_id, JSONB_OBJECT_AGG(k, cell) AS subscriber_grid FROM gridrows GROUP BY list_id
 )
 -- Fork -- sort the whole result set, THEN paginate. Upstream paginates inside the ls
 -- CTE (no ORDER BY there) and sorts only the page, so a sort by created_at re-ordered
 -- the 20 rows already picked rather than the full set (seen 2026-09-04). The
 -- subscriber_count sort key comes from the join, so the ORDER BY has to live here --
 -- and so must OFFSET/LIMIT. COUNT(*) OVER () in ls still reports the full total.
--- ls.id is the tiebreaker: every sortable column ties (status, subscriber_count, a
+-- ls.id is the tiebreaker -- every sortable column ties (status, subscriber_count, a
 -- bulk-created created_at), and without a total order a list can appear on two pages
 -- and another on none.
-SELECT ls.*, COALESCE(ss.subscriber_statuses, '{}') AS subscriber_statuses, COALESCE(ss.subscriber_count, 0) AS subscriber_count
-    FROM ls LEFT JOIN statuses ss ON (ls.id = ss.list_id) ORDER BY %order%, ls.id
+-- Fork (list grid, D9) -- the five segment sort keys read the all row of the grid.
+SELECT ls.*, COALESCE(ss.subscriber_statuses, '{}') AS subscriber_statuses, COALESCE(ss.subscriber_count, 0) AS subscriber_count,
+    COALESCE(g.subscriber_grid, '{}'::JSONB) || JSONB_BUILD_OBJECT('all', COALESCE(g.subscriber_grid->'all',
+        '{"active": 0, "held": 0, "unsubscribed": 0, "pending": 0, "blocked": 0, "total": 0}'::JSONB)) AS subscriber_grid,
+    COALESCE((g.subscriber_grid->'all'->>'active')::BIGINT, 0) AS active_count,
+    COALESCE((g.subscriber_grid->'all'->>'held')::BIGINT, 0) AS held_count,
+    COALESCE((g.subscriber_grid->'all'->>'unsubscribed')::BIGINT, 0) AS unsubscribed_count,
+    COALESCE((g.subscriber_grid->'all'->>'pending')::BIGINT, 0) AS pending_count,
+    COALESCE((g.subscriber_grid->'all'->>'blocked')::BIGINT, 0) AS blocked_count
+    FROM ls LEFT JOIN statuses ss ON (ls.id = ss.list_id) LEFT JOIN grid g ON (ls.id = g.list_id) ORDER BY %order%, ls.id
     OFFSET $10 LIMIT (CASE WHEN $11 < 1 THEN NULL ELSE $11 END);
 
 -- name: get-lists-by-optin

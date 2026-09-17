@@ -44,12 +44,16 @@ func (c *Core) AddSubscriptions(subIDs, listIDs []int, status string, backfill b
 // AddSubscriptionsByQuery adds list subscriptions to subscribers by a given arbitrary query expression.
 // sourceListIDs is the list of list IDs to filter the subscriber query with.
 // backfill (fork, evergreen) marks the subscribers as not new -- see backfillStmt.
-func (c *Core) AddSubscriptionsByQuery(searchStr, queryExp string, sourceListIDs, targetListIDs []int, status string, subStatus string, backfill bool) error {
+func (c *Core) AddSubscriptionsByQuery(searchStr, queryExp string, sourceListIDs, targetListIDs []int, status string, subStatus string, filter models.SubscriberFilter, backfill bool) error {
 	if sourceListIDs == nil {
 		sourceListIDs = []int{}
 	}
 
-	var err error
+	// Fork (list grid) -- the segment/lang filter, scoped to the SOURCE lists.
+	queryExp, err := c.subscriberFilterExp(queryExp, sourceListIDs, filter)
+	if err != nil {
+		return err
+	}
 	if backfill {
 		tx, txErr := c.db.Beginx()
 		if txErr != nil {
@@ -88,12 +92,16 @@ func (c *Core) DeleteSubscriptions(subIDs, listIDs []int) error {
 
 // DeleteSubscriptionsByQuery deletes list subscriptions from subscribers by a given arbitrary query expression.
 // sourceListIDs is the list of list IDs to filter the subscriber query with.
-func (c *Core) DeleteSubscriptionsByQuery(searchStr, queryExp string, sourceListIDs, targetListIDs []int, subStatus string) error {
+func (c *Core) DeleteSubscriptionsByQuery(searchStr, queryExp string, sourceListIDs, targetListIDs []int, subStatus string, filter models.SubscriberFilter) error {
 	if sourceListIDs == nil {
 		sourceListIDs = []int{}
 	}
 
-	err := c.q.ExecSubQueryTpl(searchStr, queryExp, c.q.DeleteSubscriptionsByQuery, sourceListIDs, c.db, subStatus, pq.Array(targetListIDs))
+	queryExp, err := c.subscriberFilterExp(queryExp, sourceListIDs, filter)
+	if err != nil {
+		return err
+	}
+	err = c.q.ExecSubQueryTpl(searchStr, queryExp, c.q.DeleteSubscriptionsByQuery, sourceListIDs, c.db, subStatus, pq.Array(targetListIDs))
 	if err != nil {
 		c.log.Printf("error deleting subscriptions by query: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,
@@ -145,12 +153,16 @@ func (c *Core) HoldSubscriptions(subIDs []int, listID int, hold map[string]any, 
 
 // UnsubscribeListsByQuery sets list subscriptions to 'unsubscribed' by a given arbitrary query expression.
 // sourceListIDs is the list of list IDs to filter the subscriber query with.
-func (c *Core) UnsubscribeListsByQuery(searchStr, queryExp string, sourceListIDs, targetListIDs []int, subStatus string) error {
+func (c *Core) UnsubscribeListsByQuery(searchStr, queryExp string, sourceListIDs, targetListIDs []int, subStatus string, filter models.SubscriberFilter) error {
 	if sourceListIDs == nil {
 		sourceListIDs = []int{}
 	}
 
-	err := c.q.ExecSubQueryTpl(searchStr, queryExp, c.q.UnsubscribeSubscribersFromListsByQuery, sourceListIDs, c.db, subStatus, pq.Array(targetListIDs))
+	queryExp, err := c.subscriberFilterExp(queryExp, sourceListIDs, filter)
+	if err != nil {
+		return err
+	}
+	err = c.q.ExecSubQueryTpl(searchStr, queryExp, c.q.UnsubscribeSubscribersFromListsByQuery, sourceListIDs, c.db, subStatus, pq.Array(targetListIDs))
 	if err != nil {
 		c.log.Printf("error unsubscribing from lists by query: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,

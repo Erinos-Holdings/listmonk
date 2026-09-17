@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -40,9 +41,19 @@ type subQueryReq struct {
 	Backfill bool `json:"backfill"`
 
 	// Fork (holds) -- action "hold" on ManageSubscriberLists only. See holdSubscriberLists.
+	// Fork (list grid, LIST-GRID-SPEC D6) -- the server-authored segment/lang filter. Own
+	// fields on purpose: they survive the all=true reset of Search/Query below, and they are
+	// composed into SQL in core (core.subscriberFilterExp), never into Query here.
+	Segment string `json:"segment"`
+	Lang    string `json:"lang"`
+
 	Hold            map[string]any `json:"hold"`
 	IfUpdatedBefore string         `json:"if_updated_before"`
 	Relabel         bool           `json:"relabel"`
+}
+
+func (r subQueryReq) filter() models.SubscriberFilter {
+	return models.SubscriberFilter{Segment: r.Segment, Lang: r.Lang}
 }
 
 // subOptin contains the data that's passed to the double opt-in e-mail template.
@@ -132,7 +143,9 @@ func (a *App) QuerySubscribers(c echo.Context) error {
 	)
 
 	// Query subscribers from the DB.
-	res, total, err := a.core.QuerySubscribers(searchStr, query, listIDs, subStatus, order, orderBy, pg.Offset, pg.Limit)
+	// Fork (list grid) -- segment=/lang= need no subscribers:sql_query. The server writes the SQL.
+	filter := models.SubscriberFilter{Segment: c.FormValue("segment"), Lang: c.FormValue("lang")}
+	res, total, err := a.core.QuerySubscribers(searchStr, query, listIDs, subStatus, filter, order, orderBy, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}
@@ -186,7 +199,8 @@ func (a *App) ExportSubscribers(c echo.Context) error {
 	}
 
 	// Get the batched export iterator.
-	exp, err := a.core.ExportSubscribers(searchStr, query, subIDs, listIDs, subStatus, a.cfg.DBBatchSize)
+	filter := models.SubscriberFilter{Segment: c.FormValue("segment"), Lang: c.FormValue("lang")}
+	exp, err := a.core.ExportSubscribers(searchStr, query, subIDs, listIDs, subStatus, filter, a.cfg.DBBatchSize)
 	if err != nil {
 		return err
 	}
@@ -254,6 +268,11 @@ func (a *App) CreateSubscriber(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, a.i18n.Ts("globals.messages.permissionDenied", "name", "lists"))
 	}
 
+	// Fork (LIST-GRID-SPEC D13) -- a new subscriber has no stored language to compare with.
+	if err := a.validateIncomingSubLang(nil, req.Attribs); err != nil {
+		return err
+	}
+
 	// Insert the subscriber into the DB.
 	sub, _, err := a.core.InsertSubscriber(req.Subscriber, listIDs, nil, req.PreconfirmSubs, false, req.Backfill)
 	if err != nil {
@@ -305,6 +324,16 @@ func (a *App) UpdateSubscriber(c echo.Context) error {
 		return err
 	}
 
+	// Fork (LIST-GRID-SPEC D13) -- the edit form PUTs the whole attribs object back, stored
+	// language included, so the incoming value is judged against the stored one.
+	stored, err := a.core.GetSubscriber(id, "", "")
+	if err != nil {
+		return err
+	}
+	if err := a.validateIncomingSubLang(stored.Attribs, req.Attribs); err != nil {
+		return err
+	}
+
 	// Get the user's permitted lists to pass to the update query so that lists on the subscribers
 	// to which they don't have permissions are preserved/left as-is when deleteLists=true.
 	allPerm, permittedLists := user.GetPermittedLists(auth.PermTypeManage)
@@ -351,7 +380,18 @@ func (a *App) PatchSubscriber(c echo.Context) error {
 		Subscriber: sub,
 	}
 
+	// Fork (LIST-GRID-SPEC D13) -- the stored language, captured BEFORE the bind: Bind merges
+	// the request INTO the stored attribs map, after which the two cannot be told apart.
+	storedLang := models.JSON{}
+	if v, ok := sub.Attribs["lang"]; ok {
+		storedLang["lang"] = v
+	}
+
 	if err := c.Bind(&req); err != nil {
+		return err
+	}
+
+	if err := a.validateIncomingSubLang(storedLang, req.Attribs); err != nil {
 		return err
 	}
 
@@ -621,7 +661,8 @@ func (a *App) DeleteSubscribersByQuery(c echo.Context) error {
 		// If the "all" flag is set, ignore any subquery that may be present.
 		req.Search = ""
 		req.Query = ""
-	} else if req.Search == "" && req.Query == "" {
+	} else if req.Search == "" && req.Query == "" && req.Segment == "" && req.Lang == "" {
+		// Fork (list grid) -- a segment/lang filter is a filter. It satisfies this check.
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "query"))
 	}
 
@@ -637,7 +678,7 @@ func (a *App) DeleteSubscribersByQuery(c echo.Context) error {
 	listIDs := user.GetPermittedListIDs(req.ListIDs)
 
 	// Delete the subscribers from the DB.
-	if err := a.core.DeleteSubscribersByQuery(req.Search, req.Query, listIDs, req.SubscriptionStatus); err != nil {
+	if err := a.core.DeleteSubscribersByQuery(req.Search, req.Query, listIDs, req.SubscriptionStatus, req.filter()); err != nil {
 		return err
 	}
 
@@ -661,7 +702,8 @@ func (a *App) BlocklistSubscribersByQuery(c echo.Context) error {
 		// If the "all" flag is set, ignore any subquery that may be present.
 		req.Search = ""
 		req.Query = ""
-	} else if req.Search == "" && req.Query == "" {
+	} else if req.Search == "" && req.Query == "" && req.Segment == "" && req.Lang == "" {
+		// Fork (list grid) -- a segment/lang filter is a filter. It satisfies this check.
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "query"))
 	}
 	// Does the user have the subscribers:sql_query permission?
@@ -676,7 +718,7 @@ func (a *App) BlocklistSubscribersByQuery(c echo.Context) error {
 	listIDs := user.GetPermittedListIDs(req.ListIDs)
 
 	// Update the subscribers in the DB.
-	if err := a.core.BlocklistSubscribersByQuery(req.Search, req.Query, listIDs, req.SubscriptionStatus); err != nil {
+	if err := a.core.BlocklistSubscribersByQuery(req.Search, req.Query, listIDs, req.SubscriptionStatus, req.filter()); err != nil {
 		return err
 	}
 
@@ -723,11 +765,11 @@ func (a *App) ManageSubscriberListsByQuery(c echo.Context) error {
 	var err error
 	switch req.Action {
 	case "add":
-		err = a.core.AddSubscriptionsByQuery(req.Search, req.Query, sourceListIDs, targetListIDs, req.Status, req.SubscriptionStatus, req.Backfill)
+		err = a.core.AddSubscriptionsByQuery(req.Search, req.Query, sourceListIDs, targetListIDs, req.Status, req.SubscriptionStatus, req.filter(), req.Backfill)
 	case "remove":
-		err = a.core.DeleteSubscriptionsByQuery(req.Search, req.Query, sourceListIDs, targetListIDs, req.SubscriptionStatus)
+		err = a.core.DeleteSubscriptionsByQuery(req.Search, req.Query, sourceListIDs, targetListIDs, req.SubscriptionStatus, req.filter())
 	case "unsubscribe":
-		err = a.core.UnsubscribeListsByQuery(req.Search, req.Query, sourceListIDs, targetListIDs, req.SubscriptionStatus)
+		err = a.core.UnsubscribeListsByQuery(req.Search, req.Query, sourceListIDs, targetListIDs, req.SubscriptionStatus, req.filter())
 	default:
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("subscribers.invalidAction"))
 	}
@@ -887,6 +929,37 @@ func (a *App) filterListQueryByPerm(param string, qp url.Values, user auth.User)
 	}
 
 	return user.GetPermittedListIDs(listIDs), nil
+}
+
+// validateIncomingSubLang (fork, integrations LIST-GRID-SPEC D13) is the admin/API edge of the
+// no-garbage-in rule for subscriber attribs.lang. It judges the INCOMING value only, and only
+// when it differs from the stored one:
+//
+//   - PATCH binds the request over the stored subscriber and the edit form PUTs the whole attribs
+//     object back, so by the time a handler sees attribs they hold the STORED language too.
+//     Validating that merged map would 400 every unrelated write to a row holding a legacy value
+//     (a "pt" imported before this rule) -- including each HandleListmonkSync merge, which would
+//     land in its DLQ (spec review H3). An unchanged value, valid or not, passes untouched.
+//   - A changed or new value is normalized in place by models.NormalizeSubscriberLang (FR, fr-CA
+//     -> fr. "" or null -> key removed) or refused with a 400 naming it.
+//
+// Deliberately NOT in core and NOT on the public subscription/preference paths (cmd/public.go):
+// those resend stored attribs and the public form carries none, so a check there could only
+// punish a member of the public for an admin's data defect. Bulk imports never reject either --
+// subimporter.Session.dropInvalidLang drops the key and counts the row.
+func (a *App) validateIncomingSubLang(stored, incoming models.JSON) error {
+	in, present := incoming["lang"]
+	if !present {
+		return nil
+	}
+	if was, ok := stored["lang"]; ok && reflect.DeepEqual(was, in) {
+		return nil
+	}
+	if !models.NormalizeSubscriberLang(incoming) {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("subscribers.invalidLang", "lang", fmt.Sprint(in), "langs", strings.Join(models.CampaignLangs, ", ")))
+	}
+	return nil
 }
 
 // formatSQLExp does basic sanitisation on arbitrary

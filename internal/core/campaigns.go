@@ -248,6 +248,16 @@ func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs
 	// `null`, a valid JSONB value that COALESCE would happily store (wiping preheader/lang).
 	var attribs any
 	if o.Attribs != nil {
+		// Fork (LIST-GRID-SPEC D11) -- a regular campaign's language cannot be cleared. The
+		// handler has already done this before its lang-lock check; this is the same rule for
+		// every other caller, read from the STORED row (o is the incoming state).
+		if s, _ := o.Attribs["lang"].(string); s == "" {
+			stored, err := c.GetCampaign(id, "", "")
+			if err != nil {
+				return models.Campaign{}, err
+			}
+			o.Attribs = KeepCampaignLang(stored.Type, stored.Lang(), o.Attribs)
+		}
 		attribs = o.Attribs
 	}
 	_, err := c.q.UpdateCampaign.Exec(id,
@@ -325,6 +335,12 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 		return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest, errMsg)
 	}
 
+	// Fork (LIST-GRID-SPEC D11) -- a language-less regular campaign can neither start nor be
+	// scheduled. Here as well as in the handler so every caller is covered.
+	if LangRequiredForStatus(cm, status) {
+		return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.langRequired"))
+	}
+
 	// Fork (evergreen) -- starting (or resuming) an evergreen is gated on the feature
 	// flag and refused when another running evergreen on the same list and delay would
 	// send a second welcome per signup (unless both are in one variant group).
@@ -368,14 +384,13 @@ func (c *Core) CampaignLangAudience(id int) (int, error) {
 	return n, nil
 }
 
-// CampaignNonEnAudience (fork, SHALA-CUTOVER-SPEC D9/I8) counts, among the subscribers a
-// campaign would send to under its lists' opt-in rules, how many read a language other than
-// English. Used for the language-less-campaign warning, where CampaignLangAudience cannot
-// answer the question -- a campaign with no attribs.lang matches every subscriber, so its
-// audience count is the whole list and says nothing about who is in it.
-func (c *Core) CampaignNonEnAudience(id int) (int, error) {
+// CampaignUnreachableLang (fork, LIST-GRID-SPEC D13) counts the ACTIVE subscribers on a
+// campaign's lists whose language is unrecognised -- the grid's "other" bucket, counted live through
+// the same SQL functions the stats view groups by (no view refresh on a campaign save). No
+// language-scoped broadcast reaches them.
+func (c *Core) CampaignUnreachableLang(id int) (int, error) {
 	var n int
-	if err := c.q.GetCampaignNonEnAudience.Get(&n, id); err != nil {
+	if err := c.q.GetCampaignUnreachableLang.Get(&n, id); err != nil {
 		return 0, err
 	}
 	return n, nil

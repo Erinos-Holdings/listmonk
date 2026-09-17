@@ -325,6 +325,10 @@ export default {
             this.isVisualTplDisabled = true;
 
             this.$refs.visualEditor.render(JSON.parse(data.bodySource));
+
+            // Fork (LIST-GRID-SPEC D12) -- the campaign form sets its language from the
+            // imported template's (Campaign.vue onTemplateImported).
+            this.$emit('template-imported', data);
           });
         },
       );
