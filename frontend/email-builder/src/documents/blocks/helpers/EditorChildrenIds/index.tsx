@@ -48,7 +48,7 @@ export default function EditorChildrenIds({ childrenIds, onChange }: EditorChild
     <>
       {childrenIds.map((childId, i) => (
         <Fragment key={childId}>
-          <AddBlockButton onSelect={(block) => insertBlock(block, i)} />
+          <AddBlockButton first={i === 0} onSelect={(block) => insertBlock(block, i)} />
           <EditorBlock id={childId} />
         </Fragment>
       ))}

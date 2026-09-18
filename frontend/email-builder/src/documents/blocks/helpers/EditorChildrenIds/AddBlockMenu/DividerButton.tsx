@@ -6,8 +6,11 @@ import { Fade, IconButton } from '@mui/material';
 type Props = {
   buttonElement: HTMLElement | null;
   onClick: () => void;
+  // The first button of a list: the canvas is flush with the top of the scroll
+  // container, so a button straddling the edge would be clipped there.
+  first?: boolean;
 };
-export default function DividerButton({ buttonElement, onClick }: Props) {
+export default function DividerButton({ buttonElement, onClick, first }: Props) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -20,7 +23,9 @@ export default function DividerButton({ buttonElement, onClick }: Props) {
       const bottomX = rect.x;
       const topX = bottomX + rect.width;
 
-      if (Math.abs(clientY - rectY) < 20) {
+      // The first button hangs below the line (top:0) instead of straddling it.
+      const dy = clientY - rectY;
+      if (first ? dy > -20 && dy < 32 : Math.abs(dy) < 20) {
         if (bottomX < clientX && clientX < topX) {
           setVisible(true);
           return;
@@ -32,7 +37,7 @@ export default function DividerButton({ buttonElement, onClick }: Props) {
     return () => {
       window.removeEventListener('mousemove', listener);
     };
-  }, [buttonElement, setVisible]);
+  }, [buttonElement, setVisible, first]);
 
   return (
     <Fade in={visible}>
@@ -41,7 +46,7 @@ export default function DividerButton({ buttonElement, onClick }: Props) {
         sx={{
           p: 0.12,
           position: 'absolute',
-          top: '-12px',
+          top: first ? '0' : '-12px',
           left: '50%',
           transform: 'translateX(-10px)',
           bgcolor: 'brand.blue',

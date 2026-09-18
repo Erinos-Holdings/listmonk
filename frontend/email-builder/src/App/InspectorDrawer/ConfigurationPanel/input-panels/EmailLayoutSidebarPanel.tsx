@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 
-import { RoundedCornerOutlined } from '@mui/icons-material';
+import { HeightOutlined, RoundedCornerOutlined } from '@mui/icons-material';
 
 import EmailLayoutPropsSchema, {
+  BACKDROP_PADDING_MAX,
   EmailLayoutProps,
+  getBackdropPadding,
 } from '../../../../documents/blocks/EmailLayout/EmailLayoutPropsSchema';
 
 import BaseSidebarPanel from './helpers/BaseSidebarPanel';
@@ -35,6 +37,17 @@ export default function EmailLayoutSidebarFields({ data, setData }: EmailLayoutS
         label="Backdrop color"
         defaultValue={data.backdropColor ?? '#F5F5F5'}
         onChange={(backdropColor) => updateData({ ...data, backdropColor })}
+      />
+      <SliderInput
+        iconLabel={<HeightOutlined />}
+        units="px"
+        step={4}
+        marks
+        min={0}
+        max={BACKDROP_PADDING_MAX}
+        label="Backdrop padding (top & bottom)"
+        defaultValue={getBackdropPadding(data.backdropPadding)}
+        onChange={(backdropPadding) => updateData({ ...data, backdropPadding })}
       />
       <ColorInput
         label="Canvas color"

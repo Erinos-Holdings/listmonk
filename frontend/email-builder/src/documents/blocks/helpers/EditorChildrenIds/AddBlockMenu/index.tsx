@@ -8,9 +8,10 @@ import PlaceholderButton from './PlaceholderButton';
 
 type Props = {
   placeholder?: boolean;
+  first?: boolean;
   onSelect: (block: TEditorBlock) => void;
 };
-export default function AddBlockButton({ onSelect, placeholder }: Props) {
+export default function AddBlockButton({ onSelect, placeholder, first }: Props) {
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
   const [buttonElement, setButtonElement] = useState<HTMLElement | null>(null);
 
@@ -22,7 +23,7 @@ export default function AddBlockButton({ onSelect, placeholder }: Props) {
     if (placeholder) {
       return <PlaceholderButton onClick={handleButtonClick} />;
     } else {
-      return <DividerButton buttonElement={buttonElement} onClick={handleButtonClick} />;
+      return <DividerButton buttonElement={buttonElement} onClick={handleButtonClick} first={first} />;
     }
   };
 

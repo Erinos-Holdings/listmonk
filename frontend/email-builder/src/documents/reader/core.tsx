@@ -20,7 +20,7 @@ import Button from '../blocks/Button/Button';
 import ButtonPropsSchema from '../blocks/Button/ButtonPropsSchema';
 import ColumnsContainerPropsSchema from '../blocks/ColumnsContainer/ColumnsContainerPropsSchema';
 import ContainerPropsSchema from '../blocks/Container/ContainerPropsSchema';
-import EmailLayoutPropsSchema, { EmailLayoutProps } from '../blocks/EmailLayout/EmailLayoutPropsSchema';
+import EmailLayoutPropsSchema, { EmailLayoutProps, getBackdropPadding } from '../blocks/EmailLayout/EmailLayoutPropsSchema';
 import { FONT_FAMILIES } from '../blocks/helpers/fontFamily';
 import { ImgPropsSchema } from '../blocks/Img/ImgPropsSchema';
 import { CANVAS_WIDTH } from '../canvasWidth';
@@ -116,7 +116,7 @@ function EmailLayoutReader(props: EmailLayoutProps) {
           letterSpacing: '0.15008px',
           lineHeight: '1.5',
           margin: '0',
-          padding: '32px 0',
+          padding: `${getBackdropPadding(props.backdropPadding)}px 0`,
           minHeight: '100%',
           width: '100%',
         }}
