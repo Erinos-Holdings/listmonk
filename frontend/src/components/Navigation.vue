@@ -89,6 +89,29 @@ export default {
   methods: {
     toggleGroup(group, state) {
       this.$emit('toggleGroup', group, state);
+
+      // Clicking a group header lands on its first permitted child in one
+      // click instead of merely expanding the group. Buefy emits
+      // update:active=true on every header click and an active group never
+      // collapses from its own header, so this is the only thing the click
+      // could usefully do. A route already inside the group is left alone so
+      // the header acts as a section label while the user is on a sibling.
+      // The template already orders the children and hides the ones the user
+      // may not open, so the first rendered link is the target by construction.
+      // Clicking the anchor (rather than router.push) also fires the mobile
+      // burger-close hook in mounted(). It is a router-link, so the page's
+      // beforeRouteLeave discard prompt (Campaign, Settings) still applies —
+      // never replace this with a full-page navigation.
+      if (!state || this.$route.meta.group === group) {
+        return;
+      }
+
+      this.$nextTick(() => {
+        const first = this.$el.querySelector(`[data-cy="${group}"] ul a[href]`);
+        if (first) {
+          first.click();
+        }
+      });
     },
 
     doLogout() {
