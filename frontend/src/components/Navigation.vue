@@ -107,7 +107,11 @@ export default {
       }
 
       this.$nextTick(() => {
-        const first = this.$el.querySelector(`[data-cy="${group}"] ul a[href]`);
+        // Buefy binds $attrs (data-cy) onto the header <a>, not the <li>, and the
+        // children <ul> is the anchor's sibling — so climb to the <li> first.
+        const header = this.$el.querySelector(`[data-cy="${group}"]`);
+        const item = header ? header.closest('li') : null;
+        const first = item ? item.querySelector('ul a[href]') : null;
         if (first) {
           first.click();
         }
