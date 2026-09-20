@@ -10,6 +10,7 @@ import (
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 	"github.com/lib/pq"
+	null "gopkg.in/volatiletech/null.v6"
 )
 
 const (
@@ -62,6 +63,21 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 		c.log.Printf("error fetching campaign stats: %v", err)
 		return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))
+	}
+
+	// Fork (list-page audience) -- the expected send of every not-yet-started broadcast on
+	// the page, through the one audience query (no further copy of the send predicate). A
+	// failed count leaves the field null rather than failing the page.
+	for i := range out {
+		if !wantsAudience(out[i]) {
+			continue
+		}
+		n, err := c.CampaignLangAudience(out[i].ID)
+		if err != nil {
+			c.log.Printf("error counting campaign audience (%d): %v", out[i].ID, err)
+			continue
+		}
+		out[i].Audience = null.IntFrom(n)
 	}
 
 	total := 0
@@ -371,6 +387,13 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 
 	cm.Status = status
 	return cm, nil
+}
+
+// wantsAudience (fork, list-page audience) reports whether the campaign list shows a live
+// expected-send count for cm: a broadcast that has not started. Once a campaign is claimed
+// its stored to_send is the denominator, and an evergreen has none.
+func wantsAudience(cm models.Campaign) bool {
+	return !cm.Evergreen && (cm.Status == models.CampaignStatusDraft || cm.Status == models.CampaignStatusScheduled)
 }
 
 // CampaignLangAudience (fork, multi-language campaigns) counts the subscribers a campaign

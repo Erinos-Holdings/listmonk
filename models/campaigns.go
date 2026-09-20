@@ -129,6 +129,12 @@ type CampaignMeta struct {
 	StartedAt null.Time `db:"started_at" json:"started_at"`
 	ToSend    int       `db:"to_send" json:"to_send"`
 	Sent      int       `db:"sent" json:"sent"`
+
+	// Fork (list-page audience). The LIVE count a draft or scheduled broadcast would send
+	// to right now (get-campaign-lang-audience), filled by Core.QueryCampaigns only. Null on
+	// every other status and on evergreens. Deliberately not to_send: that column is the
+	// send-time claim's, and the shortfall tag and progress bar read it.
+	Audience null.Int `db:"-" json:"audience"`
 }
 
 // SendFailure (fork, SEND-RETRY-SPEC D5) is one recipient a campaign could not reach: a

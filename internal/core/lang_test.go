@@ -32,3 +32,27 @@ func TestLangLockedChange(t *testing.T) {
 		}
 	}
 }
+
+func TestWantsAudience(t *testing.T) {
+	cases := []struct {
+		name      string
+		status    string
+		evergreen bool
+		want      bool
+	}{
+		{"draft", models.CampaignStatusDraft, false, true},
+		{"scheduled", models.CampaignStatusScheduled, false, true},
+		{"running", models.CampaignStatusRunning, false, false},
+		{"paused", models.CampaignStatusPaused, false, false},
+		{"finished", models.CampaignStatusFinished, false, false},
+		{"cancelled", models.CampaignStatusCancelled, false, false},
+		{"evergreen draft", models.CampaignStatusDraft, true, false},
+		{"evergreen scheduled", models.CampaignStatusScheduled, true, false},
+	}
+	for _, c := range cases {
+		cm := models.Campaign{Status: c.status, Evergreen: c.evergreen}
+		if got := wantsAudience(cm); got != c.want {
+			t.Errorf("%s: got %v want %v", c.name, got, c.want)
+		}
+	}
+}

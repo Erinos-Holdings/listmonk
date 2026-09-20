@@ -189,7 +189,18 @@
             <label for="#">{{ $t('campaigns.clicks') }}</label>
             <span>{{ $utils.formatNumber(props.row.clicks) }}</span>
           </p>
-          <p>
+          <!-- Fork (list-page audience) -- a broadcast that has not started shows the LIVE
+               count it would send to now (its lists, opt-in rules and language), not the
+               stored to_send, which stays 0 until the send-time claim. Zero is a warning. -->
+          <p v-if="hasAudience(props.row)" data-cy="stat-to-send">
+            <label for="#">{{ $t('campaigns.toSend') }}</label>
+            <b-tooltip :label="$t('campaigns.toSendHelp')" type="is-dark" multilined>
+              <span :class="{ 'has-text-danger has-text-weight-bold': props.row.audience === 0 }">
+                {{ $utils.formatNumber(props.row.audience) }}
+              </span>
+            </b-tooltip>
+          </p>
+          <p v-else>
             <label for="#">{{ $t('campaigns.sent') }}</label>
             <span v-if="props.row.evergreen">
               {{ $utils.formatNumber(stats.sent) }}
@@ -388,6 +399,12 @@ export default Vue.extend({
     isDone(c) {
       return c.status === 'finished' || c.status === 'cancelled';
     },
+    // Fork (list-page audience). The server decides which rows carry `audience`
+    // (core.wantsAudience -- not-yet-started broadcasts); null means "no estimate", never zero.
+    hasAudience(c) {
+      return c.audience !== null && c.audience !== undefined;
+    },
+
     // Fork (send retry, SEND-RETRY-SPEC D6). to_send is recomputed from live list
     // membership per scan tick, so this also flags a mid-send list edit; the tooltip says so.
     isShortfall(c) {
