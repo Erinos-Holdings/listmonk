@@ -193,6 +193,37 @@ func TestSegmentFilterMatchesGrid(t *testing.T) {
 		}
 	}
 
+	// lang=en_only (the Subscribers picker's "English") is stored en alone: with lang=none it
+	// partitions lang=en, on a list under every segment and on the all-subscribers page.
+	for _, ids := range [][]int{{f.single}, {f.double}, nil} {
+		segs := append([]string{""}, listgrid.Segments...)
+		if ids == nil {
+			segs = []string{""}
+		}
+		for _, seg := range segs {
+			count := func(lang string) []int {
+				subs, total, err := f.app.core.QuerySubscribers("", "", ids, "",
+					models.SubscriberFilter{Segment: seg, Lang: lang}, "", "", 0, 0)
+				if err != nil {
+					t.Fatalf("lists %v %s/%q: %v", ids, lang, seg, err)
+				}
+				if total != len(subs) {
+					t.Fatalf("lists %v %s/%q: total %d, %d rows", ids, lang, seg, total, len(subs))
+				}
+				return subIDs(subs)
+			}
+			en, only, none := count("en"), count("en_only"), count("none")
+			if seg == "" && (len(only) == 0 || len(none) == 0) {
+				t.Fatalf("lists %v: fixture has no stored-en or no none rows (%d, %d)", ids, len(only), len(none))
+			}
+			union := append(append([]int{}, only...), none...)
+			sort.Ints(union)
+			if !sameInts(union, en) {
+				t.Fatalf("lists %v seg %q: en_only (%d) + none (%d) != en (%d)", ids, seg, len(only), len(none), len(en))
+			}
+		}
+	}
+
 	// The filter composes with subscription_status and with a search.
 	subs, total, err := f.app.core.QuerySubscribers("upperfr-enabled", "", []int{f.double}, "unconfirmed",
 		models.SubscriberFilter{Segment: "pending", Lang: "fr"}, "", "", 0, 0)

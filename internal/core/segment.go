@@ -60,6 +60,9 @@ func (c *Core) subscriberFilterExp(queryExp string, listIDs []int, f models.Subs
 		if f.Lang == models.SubscriberLangNone {
 			// The explicit no-language set, a subset of lang=en.
 			preds = append(preds, `subscriber_lang(subscribers.attribs) = 'none'`)
+		} else if f.Lang == models.SubscriberLangEnOnly {
+			// Stored en alone: the STORAGE bucket, so lang=en = en_only + none, disjoint.
+			preds = append(preds, `subscriber_lang(subscribers.attribs) = 'en'`)
 		} else {
 			// A SEND language -- en is the en and none buckets, which send_lang() folds.
 			preds = append(preds, fmt.Sprintf(`send_lang(subscriber_lang(subscribers.attribs)) = '%s'`, f.Lang))

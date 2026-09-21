@@ -68,6 +68,12 @@ const (
 	// SubscriberLangOther of one whose value is outside CampaignLangs.
 	SubscriberLangNone  = "none"
 	SubscriberLangOther = "other"
+
+	// SubscriberLangEnOnly is a lang= FILTER value only, never a bucket or a grid key: the
+	// subscribers whose STORED language is en, i.e. lang=en minus lang=none. The Subscribers
+	// page's language picker uses it; the Lists grid's EN line keeps linking to lang=en, the
+	// send language, because that is what its cells count.
+	SubscriberLangEnOnly = "en_only"
 )
 
 // SubscriberFilter is the server-authored segment=/lang= filter on the subscriber query and
@@ -94,9 +100,9 @@ func IsSegment(s string) bool {
 }
 
 // IsSubscriberLangFilter reports whether s is a valid lang= value: a CampaignLangs code (a
-// SEND language -- en includes the none bucket), none, or other.
+// SEND language -- en includes the none bucket), none, other, or en_only (stored en alone).
 func IsSubscriberLangFilter(s string) bool {
-	return s == SubscriberLangNone || s == SubscriberLangOther || IsCampaignLang(s)
+	return s == SubscriberLangNone || s == SubscriberLangOther || s == SubscriberLangEnOnly || IsCampaignLang(s)
 }
 
 // ListGridRow is one row of the grid. Total is the sum of the five segments.

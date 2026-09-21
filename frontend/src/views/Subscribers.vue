@@ -1,8 +1,8 @@
 <template>
   <section class="subscribers">
     <header class="columns page-header">
-      <div class="column is-10 is-flex is-align-items-center">
-        <h1 class="title is-4 mb-0">
+      <div class="column is-10">
+        <h1 class="title is-4">
           {{ $t('globals.terms.subscribers') }}
           <span v-if="!isNaN(subscribers.total)">
             (<span data-cy="count">{{ subscribers.total }}</span>)
@@ -22,22 +22,6 @@
             </b-tag>
           </b-taglist>
         </h1>
-
-        <!-- Fork (LIST-COLLAPSE-SPEC C8). The send-language filter, and the only path to the
-        no-language residue now that the Lists grid's suffix link is gone. It WRITES THE ROUTE
-        AND NOTHING ELSE: :value + @input, never v-model / .sync on queryParams.lang, which
-        keeps its single writer (route hydration) and single reader (gridFilter). -->
-        <b-select v-if="showLangPicker" class="lang-picker ml-3" size="is-small" data-cy="select-lang"
-          :aria-label="$t('subscribers.langFilter')" :value="queryParams.lang || ''" @input="onLangSelect">
-          <option value="">{{ $t('subscribers.langAll') }}</option>
-          <option value="en">{{ $t('subscribers.langEnSend') }}</option>
-          <option v-for="l in langOptions" :key="l" :value="l">{{ langLabel(l) }}</option>
-          <option value="none">{{ $t('lists.grid.noLangChip') }}</option>
-          <!-- A route value outside the set (the grid's Other line; a hand-typed ?lang=pt, which
-          the server 400s) is appended as one extra option, so the select is never blank and
-          "All languages" always recovers. -->
-          <option v-if="extraLang" :value="extraLang">{{ extraLangLabel }}</option>
-        </b-select>
       </div>
       <div class="column has-text-right">
         <b-field v-if="$can('subscribers:manage')" expanded>
@@ -54,6 +38,25 @@
           <form @submit.prevent="onSubmit">
             <div>
               <b-field addons>
+                <!-- Fork (LIST-COLLAPSE-SPEC C8). The language filter, inline to the left of the
+                search, and the only path to the no-language residue now that the Lists grid's
+                suffix link is gone. It WRITES THE ROUTE AND NOTHING ELSE: :value + @input,
+                never v-model / .sync on queryParams.lang, which keeps its single writer (route
+                hydration) and single request reader (gridFilter). "English" is STORED en
+                (lang=en_only), disjoint from "No language"; the Lists grid's EN cells link to
+                lang=en -- the send language, en plus none -- which arrives here as the extra
+                option below. -->
+                <b-select v-if="showLangPicker" class="lang-picker" data-cy="select-lang"
+                  :aria-label="$t('subscribers.langFilter')" :value="queryParams.lang || ''" @input="onLangSelect">
+                  <option value="">{{ $t('subscribers.langAll') }}</option>
+                  <option value="en_only">{{ langLabel('en') }}</option>
+                  <option value="none">{{ $t('lists.grid.noLangChip') }}</option>
+                  <option v-for="l in langOptions" :key="l" :value="l">{{ langLabel(l) }}</option>
+                  <!-- A route value outside the set (a grid EN cell's lang=en; the grid's Other
+                  line; a hand-typed ?lang=pt, which the server 400s) is appended as one extra
+                  option, so the select is never blank and "All languages" always recovers. -->
+                  <option v-if="extraLang" :value="extraLang">{{ extraLangLabel }}</option>
+                </b-select>
                 <b-input @input="onSimpleQueryInput" v-model="queryInput" expanded
                   :placeholder="$t('subscribers.queryPlaceholder')" icon="magnify" ref="query"
                   :disabled="isSearchAdvanced" data-cy="search" />
@@ -420,10 +423,20 @@ export default Vue.extend({
     // Fork (list grid). Removing a chip goes through the route: the router-view is keyed by
     // fullPath, so the page reloads with the remaining filter and nothing can go on carrying
     // the removed one (a bulk selection made under it is dropped with the page).
+    // The picker sits inside the search field, so the two read as one filter: every filter
+    // route push carries the CURRENT simple search text across its reload (mounted() reads it
+    // back) -- set from the box each time, so a stale search= in the route can never come back.
+    // An advanced SQL query is not carried; it does not belong in a URL.
+    withRouteSearch(query) {
+      const { search: _stale, ...rest } = query;
+      const search = this.isSearchAdvanced ? '' : this.queryInput.trim();
+      return search ? { ...rest, search } : rest;
+    },
+
     clearGridFilter(which) {
       const query = { ...this.$route.query };
       delete query[which];
-      this.$router.push({ path: this.$route.path, query });
+      this.$router.push({ path: this.$route.path, query: this.withRouteSearch(query) });
     },
 
     // Fork (LIST-COLLAPSE-SPEC C8). Same reload path as clearGridFilter: the page remounts with
@@ -436,7 +449,7 @@ export default Vue.extend({
       } else {
         delete query.lang;
       }
-      this.$router.push({ path: this.$route.path, query });
+      this.$router.push({ path: this.$route.path, query: this.withRouteSearch(query) });
     },
 
     langLabel(code) {
@@ -666,13 +679,16 @@ export default Vue.extend({
     // A route lang that is not one of the picker's own options.
     extraLang() {
       const l = this.queryParams.lang;
-      if (!l || l === 'en' || l === 'none' || PICKER_LANGS.includes(l)) {
+      if (!l || l === 'en_only' || l === 'none' || PICKER_LANGS.includes(l)) {
         return null;
       }
       return l;
     },
 
     extraLangLabel() {
+      if (this.extraLang === 'en') {
+        return this.$t('subscribers.langEnSend');
+      }
       return this.extraLang === 'other' ? this.$t('lists.grid.other') : this.extraLang;
     },
 
@@ -714,6 +730,11 @@ export default Vue.extend({
     }
     if (this.$route.query.lang) {
       this.queryParams.lang = this.$route.query.lang;
+    }
+    // The simple search a language pick carried across its reload (onLangSelect).
+    if (typeof this.$route.query.search === 'string' && this.$route.query.search) {
+      this.queryInput = this.$route.query.search;
+      this.onSimpleQueryInput(this.queryInput);
     }
 
     if (this.$route.params.id) {
