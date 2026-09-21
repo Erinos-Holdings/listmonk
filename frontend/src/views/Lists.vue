@@ -29,7 +29,7 @@
     <b-table :data="lists.results" :loading="loading.listsFull" @check-all="onTableCheck" @check="onTableCheck"
       :checked-rows.sync="bulk.checked" hoverable :default-sort="['created_at', 'desc']" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page" :per-page="lists.perPage"
-      :total="lists.total" checkable backend-sorting @sort="onSort">
+      :total="lists.total" checkable backend-sorting @sort="onSort" ref="table">
       <template #top-left>
         <div class="columns">
           <div class="column is-6">
@@ -249,6 +249,10 @@ import ListForm from './ListForm.vue';
 // Fork (list grid). Send-language lines in display order. The API's en already includes none.
 const GRID_LANGS = ['en', 'fr', 'es', 'de', 'it', 'other'];
 
+// Fork. Columns whose FIRST click sorts ascending (see onSort). Text columns go here; every other
+// sortable column -- counts and dates -- sorts biggest/newest first.
+const ASC_FIRST_FIELDS = ['name', 'type'];
+
 export default Vue.extend({
   components: {
     ListForm,
@@ -322,9 +326,25 @@ export default Vue.extend({
       this.getLists();
     },
 
+    // Fork. Counts and dates sort biggest/newest first on the FIRST click of a column; Name and
+    // Type stay A-Z. Buefy's default-sort-direction is table-wide and read inside sort() before
+    // it emits, so the per-column rule lives here: on a click that CHANGES the column Buefy has
+    // just set isAsc = true and emits 'asc' -- flip its isAsc (the arrow reads it; Buefy does not
+    // touch it again after the emit) and ask the server for desc. A second click on the same
+    // column is Buefy's own toggle and passes through untouched. isAsc is Buefy-internal state
+    // (verified against 0.9.29): if an upgrade ever removes it, skip the whole override and fall
+    // back to stock asc-first, so the arrow and the data can never disagree.
     onSort(field, direction) {
+      let order = direction;
+      const { table } = this.$refs;
+      const descFirst = !ASC_FIRST_FIELDS.includes(field);
+      if (descFirst && field !== this.queryParams.orderBy && direction === 'asc'
+        && table && typeof table.isAsc === 'boolean') {
+        table.isAsc = false;
+        order = 'desc';
+      }
       this.queryParams.orderBy = field;
-      this.queryParams.order = direction;
+      this.queryParams.order = order;
       this.getLists();
     },
 

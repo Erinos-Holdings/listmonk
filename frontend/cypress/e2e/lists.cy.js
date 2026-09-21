@@ -125,11 +125,12 @@ describe('Lists', () => {
     cy.sortTable('thead th.cy-type', [3, 4, 5, 6]);
     cy.sortTable('thead th.cy-type', [6, 5, 4, 3]);
 
-    cy.sortTable('thead th.cy-created_at', [3, 4, 5, 6]);
+    // Fork: counts and dates sort newest/biggest first on a column's first click (Lists.vue onSort).
     cy.sortTable('thead th.cy-created_at', [6, 5, 4, 3]);
+    cy.sortTable('thead th.cy-created_at', [3, 4, 5, 6]);
 
-    cy.sortTable('thead th.cy-updated_at', [3, 4, 5, 6]);
     cy.sortTable('thead th.cy-updated_at', [6, 5, 4, 3]);
+    cy.sortTable('thead th.cy-updated_at', [3, 4, 5, 6]);
   });
 
   it('Opens forms page', () => {
