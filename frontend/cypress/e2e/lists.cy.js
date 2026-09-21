@@ -5,7 +5,7 @@ describe('Lists', () => {
   });
 
   it('Counts subscribers in default lists', () => {
-    cy.get('tbody td[data-label=Subscribers]').contains('1');
+    cy.get('tbody td[data-label=Subscr]').contains('1');
   });
 
   it('Creates campaign for list', () => {
@@ -18,6 +18,8 @@ describe('Lists', () => {
   });
 
   it('Creates opt-in campaign for list', () => {
+    // Fork (LIST-COLLAPSE-SPEC C4): the opt-in campaign link sits behind the row expand.
+    cy.get('thead [data-cy=btn-expand-all]').click();
     cy.get('tbody a[data-cy=btn-send-optin-campaign]').click();
     cy.get('.modal button.is-primary').click();
     cy.location('pathname').should('contain', '/campaigns/2');
@@ -31,7 +33,7 @@ describe('Lists', () => {
     // Click on each list on the lists page, go the subscribers page
     // for that list, and check the subscriber details.
     subs.forEach((s, n) => {
-      cy.get('tbody td[data-label=Subscribers] a').eq(n).click();
+      cy.get('tbody td[data-label=Subscr] a').eq(n).click();
       cy.location('pathname').should('contain', `/subscribers/lists/${s.listID}`);
       cy.get('tbody tr').its('length').should('eq', 1);
       cy.get('tbody td[data-label="E-mail"]').contains(s.email);
@@ -97,6 +99,8 @@ describe('Lists', () => {
         const tr = `tbody tr:nth-child(${n + 1})`;
         cy.get(`${tr} td[data-label=Name]`).contains(name);
         cy.get(`${tr} td[data-label=Type] .tag[data-cy=type-${t}]`);
+        // Fork (LIST-COLLAPSE-SPEC C4): the opt-in tag sits behind the row expand.
+        cy.get(`${tr} [data-cy=btn-expand]`).click();
         cy.get(`${tr} td[data-label=Type] .tag[data-cy=optin-${o}]`);
         n++;
       });

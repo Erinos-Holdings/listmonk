@@ -184,6 +184,22 @@ export const queryLists = (params) => http.get(
   },
 );
 
+// Fork (list collapse, LIST-COLLAPSE-SPEC C10). The Pending-column probe: does any list the
+// caller may see, under the given status, have a Pending subscriber? Its own function, WITHOUT
+// loading: models.listsFull -- going through queryLists would flash the table spinner a second
+// time on every load. Read the response as results[0].subscriberGrid.all.pending: pending_count
+// is `json:"-"` and never reaches the client.
+export const probeListsPending = (params) => http.get(
+  '/api/lists',
+  {
+    params: {
+      ...params, order_by: 'pending_count', order: 'desc', per_page: 1,
+    },
+    // Column visibility is cosmetic: a failed probe shows the column, it does not toast.
+    disableToast: true,
+  },
+);
+
 export const getList = async (id) => http.get(
   `/api/lists/${id}`,
   { loading: models.list },

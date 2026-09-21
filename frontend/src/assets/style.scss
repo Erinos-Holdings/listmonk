@@ -828,6 +828,61 @@ section.lists {
     }
   }
 
+  /* Fork (list collapse, LIST-COLLAPSE-SPEC C1/C2/C5/C6). The expand chevrons, the collapsed
+  row's Other alarm marker, and one tag per line in the Name and Type cells so both columns can
+  shrink to their widest single tag. */
+  th.cy-expand, td.expand-cell {
+    width: 2.5rem;
+    padding-right: 0;
+  }
+
+  .expand-btn, .grid-other-marker {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: $grey;
+    line-height: 1;
+    vertical-align: middle;
+
+    &:hover {
+      color: $primary;
+    }
+  }
+
+  .grid-other-marker {
+    color: $warning-dark;
+    margin-left: 0.25rem;
+
+    &:hover {
+      color: $warning-dark;
+    }
+  }
+
+  /* A column flex keeps Bulma's pill (inline-flex, centred, 2em) and puts one per line. The cap
+  is a FIXED width: a percentage max-width is ignored when an auto-layout table computes a cell's
+  intrinsic width, so the column would grow to the longest tag instead of truncating it. */
+  .stacked-tags {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+
+    .tag, .send-optin {
+      margin-right: 0;
+      white-space: nowrap;
+    }
+    .tag {
+      max-width: 16rem;
+
+      > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+  }
+
   /* Fork (list grid). One line per send language under the "all" line, aligned across the six
   columns by a fixed line height. */
   td.grid-cell {
@@ -845,11 +900,6 @@ section.lists {
       float: left;
       margin-right: 0.5rem;
       font-weight: 600;
-    }
-    .grid-nolang {
-      float: left;
-      margin-right: 0.75rem;
-      color: $grey-light;
     }
     .grid-zero {
       color: $grey-lighter;

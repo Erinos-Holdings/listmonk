@@ -1,8 +1,8 @@
 <template>
   <section class="subscribers">
     <header class="columns page-header">
-      <div class="column is-10">
-        <h1 class="title is-4">
+      <div class="column is-10 is-flex is-align-items-center">
+        <h1 class="title is-4 mb-0">
           {{ $t('globals.terms.subscribers') }}
           <span v-if="!isNaN(subscribers.total)">
             (<span data-cy="count">{{ subscribers.total }}</span>)
@@ -12,19 +12,32 @@
             <span v-if="queryParams.subStatus" class="has-text-grey has-text-weight-normal is-capitalized">({{
               queryParams.subStatus }})</span>
           </span>
-          <!-- Fork (list grid, LIST-GRID-SPEC D8). The Lists-page grid's segment/lang filter. It
-          rides every query, page, sort, export and select-all bulk request until removed. -->
-          <b-taglist v-if="queryParams.segment || queryParams.lang" class="grid-filter is-inline-flex ml-2">
-            <b-tag v-if="queryParams.segment" closable attached type="is-light" data-cy="chip-segment"
-              @close="clearGridFilter('segment')">
+          <!-- Fork (list grid, LIST-GRID-SPEC D8). The Lists-page grid's segment filter. It rides
+          every query, page, sort, export and select-all bulk request until removed. The language
+          half of that filter is the picker beside this title (LIST-COLLAPSE-SPEC C8) -- one
+          control per fact. -->
+          <b-taglist v-if="queryParams.segment" class="grid-filter is-inline-flex ml-2">
+            <b-tag closable attached type="is-light" data-cy="chip-segment" @close="clearGridFilter('segment')">
               {{ $t(`lists.grid.${queryParams.segment}`) }}
-            </b-tag>
-            <b-tag v-if="queryParams.lang" closable attached type="is-light" data-cy="chip-lang"
-              @close="clearGridFilter('lang')">
-              {{ gridLangLabel }}
             </b-tag>
           </b-taglist>
         </h1>
+
+        <!-- Fork (LIST-COLLAPSE-SPEC C8). The send-language filter, and the only path to the
+        no-language residue now that the Lists grid's suffix link is gone. It WRITES THE ROUTE
+        AND NOTHING ELSE: :value + @input, never v-model / .sync on queryParams.lang, which
+        keeps its single writer (route hydration) and single reader (gridFilter). -->
+        <b-select v-if="showLangPicker" class="lang-picker ml-3" size="is-small" data-cy="select-lang"
+          :aria-label="$t('subscribers.langFilter')" :value="queryParams.lang || ''" @input="onLangSelect">
+          <option value="">{{ $t('subscribers.langAll') }}</option>
+          <option value="en">{{ $t('subscribers.langEnSend') }}</option>
+          <option v-for="l in langOptions" :key="l" :value="l">{{ langLabel(l) }}</option>
+          <option value="none">{{ $t('lists.grid.noLangChip') }}</option>
+          <!-- A route value outside the set (the grid's Other line; a hand-typed ?lang=pt, which
+          the server 400s) is appended as one extra option, so the select is never blank and
+          "All languages" always recovers. -->
+          <option v-if="extraLang" :value="extraLang">{{ extraLangLabel }}</option>
+        </b-select>
       </div>
       <div class="column has-text-right">
         <b-field v-if="$can('subscribers:manage')" expanded>
@@ -236,6 +249,12 @@ import { uris, MANAGE_PREFS_URL } from '../constants';
 import SubscriberBulkList from './SubscriberBulkList.vue';
 import SubscriberForm from './SubscriberForm.vue';
 import CopyText from '../components/CopyText.vue';
+import { CAMPAIGN_LANGS, campaignLangLabel } from '../langs';
+
+// Fork (LIST-COLLAPSE-SPEC C8). The send languages offered by the picker after English
+// (which is en union no-language, its own option) and before No language. Derived, so a new
+// campaign language is one edit (langs.js), not two.
+const PICKER_LANGS = CAMPAIGN_LANGS.map((l) => l.code).filter((c) => c !== 'en');
 
 export default Vue.extend({
   components: {
@@ -405,6 +424,23 @@ export default Vue.extend({
       const query = { ...this.$route.query };
       delete query[which];
       this.$router.push({ path: this.$route.path, query });
+    },
+
+    // Fork (LIST-COLLAPSE-SPEC C8). Same reload path as clearGridFilter: the page remounts with
+    // the new language, so the search, advanced query, sort and page number are discarded (they
+    // are not route state) along with any bulk selection made under the old filter.
+    onLangSelect(lang) {
+      const query = { ...this.$route.query };
+      if (lang) {
+        query.lang = lang;
+      } else {
+        delete query.lang;
+      }
+      this.$router.push({ path: this.$route.path, query });
+    },
+
+    langLabel(code) {
+      return campaignLangLabel(code);
     },
 
     // Search / query subscribers.
@@ -601,7 +637,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['subscribers', 'lists', 'loading']),
+    ...mapState(['subscribers', 'lists', 'loading', 'serverConfig']),
 
     // Fork (list grid, LIST-GRID-SPEC D7). THE one place the segment/lang filter is read for a
     // request. Every read and every select-all write spreads it, so a by-query delete,
@@ -617,12 +653,27 @@ export default Vue.extend({
       return out;
     },
 
-    gridLangLabel() {
+    // Fork (LIST-COLLAPSE-SPEC C8). Shown when languages are on, or when the route carries one
+    // (so a lang= link stays visible and clearable even with app.lang_enable off).
+    showLangPicker() {
+      return this.serverConfig.lang_enabled || !!this.queryParams.lang;
+    },
+
+    langOptions() {
+      return PICKER_LANGS;
+    },
+
+    // A route lang that is not one of the picker's own options.
+    extraLang() {
       const l = this.queryParams.lang;
-      if (l === 'none') {
-        return this.$t('lists.grid.noLangChip');
+      if (!l || l === 'en' || l === 'none' || PICKER_LANGS.includes(l)) {
+        return null;
       }
-      return l === 'other' ? this.$t('lists.grid.other') : l.toUpperCase();
+      return l;
+    },
+
+    extraLangLabel() {
+      return this.extraLang === 'other' ? this.$t('lists.grid.other') : this.extraLang;
     },
 
     numSelectedSubscribers() {

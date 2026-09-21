@@ -59,43 +59,76 @@
         </div>
       </template>
 
+      <!-- Fork (list collapse, LIST-COLLAPSE-SPEC C1/C2). Rows are collapsed by default; the
+      chevron expands THIS row in place (never b-table's `detailed` slot, whose full-width detail
+      row would take the language lines out of their columns). The column is deliberately its own
+      NON-SORTABLE column so the expand-all control can have a #header slot: a slot on a sortable
+      column's header drops Buefy's sort arrow, and the <th> click would re-sort. -->
+      <b-table-column custom-key="expand" header-class="cy-expand" cell-class="expand-cell" width="40">
+        <template #header>
+          <button type="button" class="expand-btn" data-cy="btn-expand-all"
+            :aria-label="$t('lists.grid.expandAll')" :aria-expanded="allExpanded ? 'true' : 'false'"
+            @click.stop="toggleExpandAll">
+            <b-icon :icon="allExpanded ? 'chevron-down' : 'chevron-right'" size="is-small" />
+          </button>
+        </template>
+        <template #default="props">
+          <button type="button" class="expand-btn" data-cy="btn-expand"
+            :aria-label="$t('lists.grid.expandRow', { name: props.row.name })"
+            :aria-expanded="expanded[props.row.id] ? 'true' : 'false'" @click.stop="toggleExpand(props.row.id)">
+            <b-icon :icon="expanded[props.row.id] ? 'chevron-down' : 'chevron-right'" size="is-small" />
+          </button>
+        </template>
+      </b-table-column>
+
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" header-class="cy-name" sortable
-        width="25%" paginated backend-pagination pagination-position="both" :td-attrs="$utils.tdID"
-        @page-change="onPageChange">
+        paginated backend-pagination pagination-position="both" :td-attrs="$utils.tdID" @page-change="onPageChange">
         <div>
           <a :href="`/lists/${props.row.id}`" @click.prevent="showEditForm(props.row)">
             {{ props.row.name }}
           </a>
-          <b-taglist>
-            <b-tag class="is-small" v-for="t in props.row.tags" :key="t">
+          <!-- Fork (LIST-COLLAPSE-SPEC C6). `Other` is an alarm, so it survives the collapse: the
+          marker shows on the collapsed row and expands it. -->
+          <b-tooltip v-if="hasOther(props.row) && !expanded[props.row.id]" :label="$t('lists.grid.otherHelp')" type="is-dark" multilined
+            :triggers="['hover', 'focus']">
+            <button type="button" class="grid-other-marker" data-cy="grid-other-marker"
+              :aria-label="$t('lists.grid.otherHelp')" @click.stop="expandRow(props.row.id)">
+              <b-icon icon="alert-outline" size="is-small" />
+            </button>
+          </b-tooltip>
+          <!-- C3/C4: tags live behind the expand; one per line (C5) so the column can shrink. -->
+          <b-taglist v-if="expanded[props.row.id]" class="stacked-tags">
+            <b-tag class="is-small" v-for="t in props.row.tags" :key="t" :title="t">
               {{ t }}
             </b-tag>
           </b-taglist>
         </div>
       </b-table-column>
 
-      <b-table-column v-slot="props" field="type" :label="$t('globals.fields.type')" header-class="cy-type" sortable
-        width="15%">
-        <div class="tags">
+      <b-table-column v-slot="props" field="type" :label="$t('globals.fields.type')" header-class="cy-type" sortable>
+        <!-- C3: the type tag alone when collapsed; C4 adds the opt-in tag and the opt-in campaign
+        link on expand. C5: one per line. -->
+        <div class="tags stacked-tags">
           <b-tag :class="props.row.type" :data-cy="`type-${props.row.type}`">
             {{ $t(`lists.types.${props.row.type}`) }}
           </b-tag>
-          {{ ' ' }}
 
-          <b-tag :class="props.row.optin" :data-cy="`optin-${props.row.optin}`">
-            <b-icon :icon="props.row.optin === 'double' ? 'account-check-outline' : 'account-off-outline'"
-              size="is-small" />
-            {{ ' ' }}
-            {{ $t(`lists.optins.${props.row.optin}`) }}
-          </b-tag>{{ ' ' }}
+          <template v-if="expanded[props.row.id]">
+            <b-tag :class="props.row.optin" :data-cy="`optin-${props.row.optin}`">
+              <b-icon :icon="props.row.optin === 'double' ? 'account-check-outline' : 'account-off-outline'"
+                size="is-small" />
+              {{ ' ' }}
+              {{ $t(`lists.optins.${props.row.optin}`) }}
+            </b-tag>
 
-          <a v-if="props.row.optin === 'double'" class="is-size-7 send-optin" href="#"
-            @click="$utils.confirm(null, () => createOptinCampaign(props.row))" data-cy="btn-send-optin-campaign">
-            <b-tooltip :label="$t('lists.sendOptinCampaign')" type="is-dark">
-              <b-icon icon="rocket-launch-outline" size="is-small" />
-              {{ $t('lists.sendOptinCampaign') }}
-            </b-tooltip>
-          </a>
+            <a v-if="props.row.optin === 'double'" class="is-size-7 send-optin" href="#"
+              @click="$utils.confirm(null, () => createOptinCampaign(props.row))" data-cy="btn-send-optin-campaign">
+              <b-tooltip :label="$t('lists.sendOptinCampaign')" type="is-dark">
+                <b-icon icon="rocket-launch-outline" size="is-small" />
+                {{ $t('lists.sendOptinCampaign') }}
+              </b-tooltip>
+            </a>
+          </template>
         </div>
       </b-table-column>
 
@@ -105,15 +138,17 @@
       line per SEND language. Every number links to exactly the subscribers it counts
       (?segment=&lang=, filters the server writes). The numbers are the API's subscriber_grid as
       is. Nothing is added up or folded here -- en already includes the no-language rows. -->
-      <b-table-column v-for="col in gridCols" :key="col.key" v-slot="props" :field="col.field" :label="$t(col.label)"
-        :header-class="`cy-${col.key}`" cell-class="grid-cell" numeric sortable>
+      <b-table-column v-for="col in visibleGridCols" :key="col.key" v-slot="props" :field="col.field"
+        :label="$t(col.label)" :th-attrs="() => gridThAttrs(col)" :header-class="`cy-${col.key}`"
+        cell-class="grid-cell" numeric sortable>
         <!-- Pending cannot occur on a single opt-in list. -->
         <div v-if="!(col.key === 'pending' && props.row.optin === 'single')" class="grid-lines">
-          <p v-for="line in gridLines(props.row)" :key="line.key" :class="['grid-line', `lang-${line.key}`]"
+          <p v-for="line in visibleLines(props.row)" :key="line.key" :class="['grid-line', `lang-${line.key}`]"
             :data-cy="`grid-${col.key}-${line.key}`">
             <!-- The line's label sits in the first (Subscribers) column. -->
             <template v-if="col.key === 'total' && line.key !== 'all'">
-              <b-tooltip v-if="line.key === 'other'" :label="$t('lists.grid.otherHelp')" type="is-dark" multilined>
+              <b-tooltip v-if="line.key === 'other'" :label="$t('lists.grid.otherHelp')" type="is-dark" multilined
+                :triggers="['hover', 'focus']">
                 <component :is="canViewSubs ? 'router-link' : 'span'" :to="gridLink(props.row, '', line.key)"
                   class="grid-label">
                   {{ $t('lists.grid.other') }}
@@ -123,19 +158,14 @@
                 class="grid-label">
                 {{ line.key.toUpperCase() }}
               </component>
-              <template v-if="line.key === 'en' && line.none && line.none.total > 0">
-                <component :is="canViewSubs ? 'router-link' : 'span'" :to="gridLink(props.row, '', 'none')"
-                  class="grid-nolang" data-cy="grid-nolang">
-                  &middot; {{ $t('lists.grid.noLang', { num: $utils.formatNumber(line.none.total) }) }}
-                </component>
-              </template>
             </template>
 
             <span v-if="!line.row[col.key]" class="grid-zero">0</span>
-            <b-tooltip v-else-if="line.key === 'en' && line.none && line.none[col.key] > 0" type="is-dark" :label="$t('lists.grid.enSplit', {
-              en: $utils.formatNumber(line.row[col.key] - line.none[col.key]),
-              none: $utils.formatNumber(line.none[col.key]),
-            })">
+            <b-tooltip v-else-if="line.key === 'en' && line.none && line.none[col.key] > 0" type="is-dark"
+              :triggers="['hover', 'focus']" :label="$t('lists.grid.enSplit', {
+                en: $utils.formatNumber(line.row[col.key] - line.none[col.key]),
+                none: $utils.formatNumber(line.none[col.key]),
+              })">
               <component :is="canViewSubs ? 'router-link' : 'span'"
                 :to="gridLink(props.row, col.key === 'total' ? '' : col.key, line.key)" :class="col.key">
                 {{ $utils.formatNumber(line.row[col.key]) }}
@@ -234,14 +264,39 @@ export default Vue.extend({
       lists: [],
 
       // Fork (list grid). field = a column in core.go listQuerySortFields (the grid's all row).
+      // title (LIST-COLLAPSE-SPEC C9) = the full word behind an abbreviated header, rendered as
+      // the <th>'s title through :th-attrs -- NEVER a #header slot, which would drop the sort
+      // arrow. globals.terms.subscribers and lists.grid.unsubscribed are shared keys and are not
+      // edited: the short forms are their own keys (V6).
       gridCols: [
-        { key: 'total', field: 'subscriber_count', label: 'globals.terms.subscribers' },
+        {
+          key: 'total',
+          field: 'subscriber_count',
+          label: 'lists.grid.totalShort',
+          title: 'globals.terms.subscribers',
+        },
         { key: 'active', field: 'active_count', label: 'lists.grid.active' },
         { key: 'held', field: 'held_count', label: 'lists.grid.held' },
-        { key: 'unsubscribed', field: 'unsubscribed_count', label: 'lists.grid.unsubscribed' },
+        {
+          key: 'unsubscribed',
+          field: 'unsubscribed_count',
+          label: 'lists.grid.unsubscribedShort',
+          title: 'lists.grid.unsubscribed',
+        },
         { key: 'pending', field: 'pending_count', label: 'lists.grid.pending' },
         { key: 'blocked', field: 'blocked_count', label: 'lists.grid.blocked' },
       ],
+
+      // Fork (list collapse, C1). Expanded row ids, { [listId]: true }. A plain object because
+      // Vue 2.7 does not make a Set reactive. Not persisted: reset on every mount, and it
+      // survives paging, sorting and getLists() refreshes within the visit (ids that are no
+      // longer on the page are simply inert).
+      expanded: {},
+
+      // Fork (list collapse, C10). Does ANY list (under the page's status, ignoring search and
+      // pagination) have Pending? Starts hidden; a rejected probe shows the column -- a hidden
+      // non-zero Pending is worse than a column of zeros.
+      hasPending: false,
 
       queryParams: {
         page: 1,
@@ -288,7 +343,49 @@ export default Vue.extend({
     },
 
     formFinished() {
+      this.refresh();
+    },
+
+    // A refresh that may have changed the data re-asks the Pending question too (C10).
+    refresh() {
       this.getLists();
+      this.probePending();
+    },
+
+    // Fork (list collapse, C1/C2).
+    toggleExpand(id) {
+      this.$set(this.expanded, id, !this.expanded[id]);
+    },
+
+    expandRow(id) {
+      this.$set(this.expanded, id, true);
+    },
+
+    // If any row on the page is collapsed, expand all; otherwise collapse all.
+    toggleExpandAll() {
+      const expand = !this.allExpanded;
+      this.pageRows.forEach((l) => this.$set(this.expanded, l.id, expand));
+    },
+
+    // C6. The unrecognised-language alarm, which must be visible without expanding.
+    hasOther(list) {
+      // With app.lang_enable off gridLines shows no Other line, so there is nothing to expand to.
+      if (!this.serverConfig.lang_enabled) {
+        return false;
+      }
+      const grid = list.subscriberGrid || {};
+      return !!(grid.other && grid.other.total > 0);
+    },
+
+    // C3/C4. Collapsed = the "all" line alone; expanded = today's gridLines rule, unchanged.
+    visibleLines(list) {
+      const lines = this.gridLines(list);
+      return this.expanded[list.id] ? lines : lines.slice(0, 1);
+    },
+
+    // C9. The full word behind an abbreviated header.
+    gridThAttrs(col) {
+      return col.title ? { title: this.$t(col.title) } : {};
     },
 
     onFormClose() {
@@ -346,12 +443,29 @@ export default Vue.extend({
       this.$api.getLists({ minimal: true, per_page: 'all', status: 'active' });
     },
 
+    // Fork (list collapse, C10). Is the Pending column worth a column at all? One extra
+    // query-lists execution ordered by pending_count -- read as subscriberGrid.all.pending,
+    // because pending_count itself is `json:"-"` (a sort key only) and would be undefined.
+    // Issued with the page's first load and after a write, never on paging, sorting or search,
+    // so the column set is stable across pages. An empty result set means hidden; a rejected
+    // request shows the column (fail open, V8).
+    probePending() {
+      this.$api.probeListsPending({ status: this.queryParams.status }).then((resp) => {
+        const results = (resp && resp.results) || [];
+        this.hasPending = ((results[0] && results[0].subscriberGrid
+          && results[0].subscriberGrid.all && results[0].subscriberGrid.all.pending) || 0) > 0;
+      }).catch(() => {
+        this.hasPending = true;
+      });
+    },
+
     deleteList(list) {
       this.$utils.confirm(
         this.$t('lists.confirmDelete'),
         () => {
           this.$api.deleteList(list.id).then(() => {
             this.getLists();
+            this.probePending();
 
             this.$utils.toast(this.$t('globals.messages.deleted', { name: list.name }));
           });
@@ -388,6 +502,7 @@ export default Vue.extend({
         this.$api.deleteLists(params)
           .then(() => {
             this.getLists();
+            this.probePending();
             this.$utils.toast(this.$tc(
               'globals.messages.deletedCount',
               this.numSelectedLists,
@@ -432,14 +547,31 @@ export default Vue.extend({
     numSelectedLists() {
       return this.bulk.all ? this.lists.total : this.bulk.checked.length;
     },
+
+    // Fork (list collapse, C2). The rows of the current page.
+    pageRows() {
+      return this.lists.results || [];
+    },
+
+    allExpanded() {
+      return this.pageRows.length > 0 && this.pageRows.every((l) => this.expanded[l.id]);
+    },
+
+    // Fork (list collapse, C10). Pending renders only when some list has Pending -- or while it
+    // is the active sort key: Buefy reads default-sort once, so destroying the sorted column
+    // would strand the sort with no way to reset it.
+    visibleGridCols() {
+      return this.gridCols.filter((c) => c.key !== 'pending'
+        || this.hasPending || this.queryParams.orderBy === 'pending_count');
+    },
   },
 
   created() {
-    this.$root.$on('page.refresh', this.getLists);
+    this.$root.$on('page.refresh', this.refresh);
   },
 
   destroyed() {
-    this.$root.$off('page.refresh', this.getLists);
+    this.$root.$off('page.refresh', this.refresh);
   },
 
   mounted() {
@@ -449,6 +581,7 @@ export default Vue.extend({
       });
     } else {
       this.getLists();
+      this.probePending();
     }
   },
 });
