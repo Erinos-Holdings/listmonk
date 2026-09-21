@@ -14,8 +14,8 @@
           </span>
           <!-- Fork (list grid, LIST-GRID-SPEC D8). The Lists-page grid's segment filter. It rides
           every query, page, sort, export and select-all bulk request until removed. The language
-          half of that filter is the picker beside this title (LIST-COLLAPSE-SPEC C8) -- one
-          control per fact. -->
+          half of that filter is the picker inside the search field (LIST-COLLAPSE-SPEC C11) --
+          one control per fact. -->
           <b-taglist v-if="queryParams.segment" class="grid-filter is-inline-flex ml-2">
             <b-tag closable attached type="is-light" data-cy="chip-segment" @close="clearGridFilter('segment')">
               {{ $t(`lists.grid.${queryParams.segment}`) }}
@@ -46,7 +46,7 @@
                 (lang=en_only), disjoint from "No language"; the Lists grid's EN cells link to
                 lang=en -- the send language, en plus none -- which arrives here as the extra
                 option below. -->
-                <b-select v-if="showLangPicker" class="lang-picker" data-cy="select-lang"
+                <b-select v-if="showLangPicker" data-cy="select-lang" :title="extraLangTitle"
                   :aria-label="$t('subscribers.langFilter')" :value="queryParams.lang || ''" @input="onLangSelect">
                   <option value="">{{ $t('subscribers.langAll') }}</option>
                   <option value="en_only">{{ langLabel('en') }}</option>
@@ -55,7 +55,9 @@
                   <!-- A route value outside the set (a grid EN cell's lang=en; the grid's Other
                   line; a hand-typed ?lang=pt, which the server 400s) is appended as one extra
                   option, so the select is never blank and "All languages" always recovers. -->
-                  <option v-if="extraLang" :value="extraLang">{{ extraLangLabel }}</option>
+                  <option v-if="extraLang" :value="extraLang" :title="extraLangTitle">
+                    {{ extraLangLabel }}
+                  </option>
                 </b-select>
                 <b-input @input="onSimpleQueryInput" v-model="queryInput" expanded
                   :placeholder="$t('subscribers.queryPlaceholder')" icon="magnify" ref="query"
@@ -252,11 +254,13 @@ import { uris, MANAGE_PREFS_URL } from '../constants';
 import SubscriberBulkList from './SubscriberBulkList.vue';
 import SubscriberForm from './SubscriberForm.vue';
 import CopyText from '../components/CopyText.vue';
-import { CAMPAIGN_LANGS, campaignLangLabel } from '../langs';
+import {
+  CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
+} from '../langs';
 
-// Fork (LIST-COLLAPSE-SPEC C8). The send languages offered by the picker after English
-// (which is en union no-language, its own option) and before No language. Derived, so a new
-// campaign language is one edit (langs.js), not two.
+// Fork (LIST-COLLAPSE-SPEC C11). The languages the picker offers after English (STORED en alone,
+// lang=en_only, its own option) and No language. For these four the stored and the send language
+// are the same set. Derived, so a new campaign language is one edit (langs.js), not two.
 const PICKER_LANGS = CAMPAIGN_LANGS.map((l) => l.code).filter((c) => c !== 'en');
 
 export default Vue.extend({
@@ -425,8 +429,12 @@ export default Vue.extend({
     // the removed one (a bulk selection made under it is dropped with the page).
     // The picker sits inside the search field, so the two read as one filter: every filter
     // route push carries the CURRENT simple search text across its reload (mounted() reads it
-    // back) -- set from the box each time, so a stale search= in the route can never come back.
-    // An advanced SQL query is not carried; it does not belong in a URL.
+    // back) -- set from the box each time, so a filter push never resurrects an older search=.
+    // Submitting or clearing the box does NOT rewrite the route, so between pushes the URL's
+    // search= can lag the box (a reload re-applies it). That is cosmetic, never unsafe:
+    // mounted() sets the box and queryParams.search together, so the box, the request and any
+    // by-query bulk action always agree. An advanced SQL query is not carried; it does not
+    // belong in a URL.
     withRouteSearch(query) {
       const { search: _stale, ...rest } = query;
       const search = this.isSearchAdvanced ? '' : this.queryInput.trim();
@@ -439,9 +447,10 @@ export default Vue.extend({
       this.$router.push({ path: this.$route.path, query: this.withRouteSearch(query) });
     },
 
-    // Fork (LIST-COLLAPSE-SPEC C8). Same reload path as clearGridFilter: the page remounts with
-    // the new language, so the search, advanced query, sort and page number are discarded (they
-    // are not route state) along with any bulk selection made under the old filter.
+    // Fork (LIST-COLLAPSE-SPEC C8/C11). Same reload path as clearGridFilter: the page remounts
+    // with the new language. The simple search text is carried (withRouteSearch); an advanced
+    // query, the sort and the page number are discarded (they are not route state) along with
+    // any bulk selection made under the old filter.
     onLangSelect(lang) {
       const query = { ...this.$route.query };
       if (lang) {
@@ -685,9 +694,14 @@ export default Vue.extend({
       return l;
     },
 
+    extraLangTitle() {
+      return isSendPlus(this.extraLang) ? this.$t('langs.sendPlusHelp') : null;
+    },
+
     extraLangLabel() {
-      if (this.extraLang === 'en') {
-        return this.$t('subscribers.langEnSend');
+      // Arrived from a grid EN+ cell: the send language, en plus no-language.
+      if (isSendPlus(this.extraLang)) {
+        return sendLangLabel(this.extraLang);
       }
       return this.extraLang === 'other' ? this.$t('lists.grid.other') : this.extraLang;
     },

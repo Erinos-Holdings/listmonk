@@ -156,9 +156,10 @@
                   {{ $t('lists.grid.other') }}
                 </component>
               </b-tooltip>
+              <!-- EN+ : the send language, en plus no-language (langs.js, the "+" convention). -->
               <component v-else :is="canViewSubs ? 'router-link' : 'span'" :to="gridLink(props.row, '', line.key)"
-                class="grid-label">
-                {{ line.key.toUpperCase() }}
+                class="grid-label" :title="langTitle(line.key)">
+                {{ langCode(line.key) }}
               </component>
             </template>
 
@@ -247,6 +248,7 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import ListForm from './ListForm.vue';
+import { isSendPlus, sendLangCode } from '../langs';
 
 // Fork (list grid). Send-language lines in display order. The API's en already includes none.
 const GRID_LANGS = ['en', 'fr', 'es', 'de', 'it', 'other'];
@@ -403,6 +405,15 @@ export default Vue.extend({
     visibleLines(list) {
       const lines = this.gridLines(list);
       return this.expanded[list.id] ? lines : lines.slice(0, 1);
+    },
+
+    // The grid's language labels are send languages (langs.js, the "+" convention).
+    langCode(key) {
+      return sendLangCode(key);
+    },
+
+    langTitle(key) {
+      return isSendPlus(key) ? this.$t('langs.sendPlusHelp') : null;
     },
 
     // C9. The full word behind an abbreviated header.

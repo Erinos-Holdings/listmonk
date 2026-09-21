@@ -112,9 +112,13 @@
                 <b-field :label="$t('campaigns.lang')" label-position="on-border" :message="$t('campaigns.langHelp')"
                   v-if="showLang">
                   <b-select v-model="form.lang" name="lang" :disabled="!canEdit || isStarted" expanded data-cy="lang"
+                    :title="sendLangTitle(form.lang)"
                     :required="!isOptin">
                     <option v-if="showLangAll" value="">{{ $t('campaigns.langAll') }}</option>
-                    <option v-for="l in langOptions" :key="l.code" :value="l.code">{{ l.label }}</option>
+                    <!-- A campaign's language is a SEND audience: English+ (langs.js). -->
+                    <option v-for="l in langOptions" :key="l.code" :value="l.code" :title="sendLangTitle(l.code)">
+                      {{ sendLangLabel(l.code) }}
+                    </option>
                   </b-select>
                 </b-field>
 
@@ -412,7 +416,9 @@ import {
   readDraft, writeDraft, deleteDraft, DRAFT_MAX_AGE_MS,
 } from '../drafts';
 
-import { CAMPAIGN_LANGS, campaignLangLabel } from '../langs';
+import {
+  CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
+} from '../langs';
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
@@ -582,6 +588,15 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (langs.js, the "+" convention). The Language select names a send audience.
+    sendLangLabel(code) {
+      return sendLangLabel(code);
+    },
+
+    sendLangTitle(code) {
+      return isSendPlus(code) ? this.$t('langs.sendPlusHelp') : null;
+    },
+
     formatDateTime(s) {
       return dayjs(s).format('YYYY-MM-DD HH:mm');
     },

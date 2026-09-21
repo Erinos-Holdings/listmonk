@@ -511,6 +511,18 @@ func IsCampaignLang(s string) bool {
 // language is stored with. Must be a member of CampaignLangs.
 const CampaignLangDefault = "en"
 
+// SendLangCode is a campaign language as a SEND-audience label: the upper-cased code, with a "+"
+// on the default language, whose audience also takes in subscribers with no language set
+// (COALESCE-EN). The "+" convention's one home is frontend/src/langs.js; this is its server twin
+// for text the server renders. Never use the result as a value.
+func SendLangCode(lang string) string {
+	code := strings.ToUpper(lang)
+	if strings.EqualFold(lang, CampaignLangDefault) {
+		code += "+"
+	}
+	return code
+}
+
 // Lang returns the campaign's language code from attribs.lang, or "" for everyone.
 func (c *Campaign) Lang() string {
 	s, _ := c.Attribs["lang"].(string)

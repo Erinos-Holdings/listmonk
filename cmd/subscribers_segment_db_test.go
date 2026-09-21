@@ -213,6 +213,25 @@ func TestSegmentFilterMatchesGrid(t *testing.T) {
 				return subIDs(subs)
 			}
 			en, only, none := count("en"), count("en_only"), count("none")
+
+			// Fixture-side expectation, independent of the SQL under test: stored en = the en
+			// send language minus the none bucket. The union check below already forces this
+			// given the earlier loops pin en and none to the fixture; asserting it directly
+			// keeps en_only pinned even if those loops are ever edited.
+			double := len(ids) == 1 && ids[0] == f.double
+			inNone := map[int]bool{}
+			for _, id := range f.want(double, seg, "none") {
+				inNone[id] = true
+			}
+			wantOnly := []int{}
+			for _, id := range f.want(double, seg, "en") {
+				if !inNone[id] {
+					wantOnly = append(wantOnly, id)
+				}
+			}
+			if !sameInts(only, wantOnly) {
+				t.Fatalf("lists %v seg %q: en_only = %d rows, fixture says %d", ids, seg, len(only), len(wantOnly))
+			}
 			if seg == "" && (len(only) == 0 || len(none) == 0) {
 				t.Fatalf("lists %v: fixture has no stored-en or no none rows (%d, %d)", ids, len(only), len(none))
 			}

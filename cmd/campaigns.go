@@ -491,7 +491,7 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 			if n, err := a.core.CampaignLangAudience(id); err != nil {
 				a.log.Printf("error counting language audience for campaign %d: %v", id, err)
 			} else if n == 0 {
-				w = append(w, a.i18n.Ts("campaigns.warnNoLangAudience", "lang", strings.ToUpper(lang)))
+				w = append(w, a.i18n.Ts("campaigns.warnNoLangAudience", "lang", models.SendLangCode(lang)))
 			}
 		}
 		w = append(w, linkWarnings...)

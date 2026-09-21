@@ -130,8 +130,8 @@
             </b-tag>
             <!-- Fork (multi-language campaigns) -- absent lang is "All", one word everywhere. -->
             <b-tag v-if="serverConfig.lang_enabled || (props.row.attribs && props.row.attribs.lang)" class="is-small lang"
-              data-cy="lang-chip">
-              {{ props.row.attribs && props.row.attribs.lang ? props.row.attribs.lang.toUpperCase() : $t('campaigns.langAll') }}
+              data-cy="lang-chip" :title="langChipTitle(props.row)">
+              {{ props.row.attribs && props.row.attribs.lang ? langChip(props.row.attribs.lang) : $t('campaigns.langAll') }}
             </b-tag>
             <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
               {{ props.row.name }}
@@ -343,6 +343,7 @@ import { mapState } from 'vuex';
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
+import { isSendPlus, sendLangCode } from '../langs';
 
 export default Vue.extend({
   components: {
@@ -377,6 +378,15 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (langs.js, the "+" convention). The chip names a send audience: EN+.
+    langChip(lang) {
+      return sendLangCode(lang);
+    },
+
+    langChipTitle(row) {
+      return row.attribs && isSendPlus(row.attribs.lang) ? this.$t('langs.sendPlusHelp') : null;
+    },
+
     // Campaign statuses.
     canStart(c) {
       return c.status === 'draft' && !c.sendAt;

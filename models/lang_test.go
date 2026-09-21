@@ -61,3 +61,13 @@ func TestDefaultCampaignLang(t *testing.T) {
 		t.Fatal("CampaignLangDefault must be a member of CampaignLangs")
 	}
 }
+
+// TestSendLangCode -- the "+" convention's server twin: only the default language, whose send
+// audience also takes in the no-language subscribers, carries the "+".
+func TestSendLangCode(t *testing.T) {
+	for in, want := range map[string]string{"en": "EN+", "EN": "EN+", "fr": "FR", "": "", "en-GB": "EN-GB"} {
+		if got := SendLangCode(in); got != want {
+			t.Fatalf("SendLangCode(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
