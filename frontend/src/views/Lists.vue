@@ -63,20 +63,22 @@
       chevron expands THIS row in place (never b-table's `detailed` slot, whose full-width detail
       row would take the language lines out of their columns). The column is deliberately its own
       NON-SORTABLE column so the expand-all control can have a #header slot: a slot on a sortable
-      column's header drops Buefy's sort arrow, and the <th> click would re-sort. -->
+      column's header drops Buefy's sort arrow, and the <th> click would re-sort. ICONS: the
+      fork ships a fontello SUBSET (assets/icons/fontello.css) -- a name that is not in it renders
+      nothing at all, silently (chevron-down and alert-outline both did). Check the file. -->
       <b-table-column custom-key="expand" header-class="cy-expand" cell-class="expand-cell" width="40">
         <template #header>
           <button type="button" class="expand-btn" data-cy="btn-expand-all"
             :aria-label="$t('lists.grid.expandAll')" :aria-expanded="allExpanded ? 'true' : 'false'"
             @click.stop="toggleExpandAll">
-            <b-icon :icon="allExpanded ? 'chevron-down' : 'chevron-right'" size="is-small" />
+            <b-icon :icon="allExpanded ? 'minus' : 'plus'" size="is-small" />
           </button>
         </template>
         <template #default="props">
           <button type="button" class="expand-btn" data-cy="btn-expand"
             :aria-label="$t('lists.grid.expandRow', { name: props.row.name })"
             :aria-expanded="expanded[props.row.id] ? 'true' : 'false'" @click.stop="toggleExpand(props.row.id)">
-            <b-icon :icon="expanded[props.row.id] ? 'chevron-down' : 'chevron-right'" size="is-small" />
+            <b-icon :icon="expanded[props.row.id] ? 'minus' : 'plus'" size="is-small" />
           </button>
         </template>
       </b-table-column>
@@ -93,7 +95,7 @@
             :triggers="['hover', 'focus']">
             <button type="button" class="grid-other-marker" data-cy="grid-other-marker"
               :aria-label="$t('lists.grid.otherHelp')" @click.stop="expandRow(props.row.id)">
-              <b-icon icon="alert-outline" size="is-small" />
+              <b-icon icon="warning-empty" size="is-small" />
             </button>
           </b-tooltip>
           <!-- C3/C4: tags live behind the expand; one per line (C5) so the column can shrink. -->

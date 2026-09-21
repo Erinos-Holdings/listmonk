@@ -831,14 +831,51 @@ section.lists {
   /* Fork (list collapse, LIST-COLLAPSE-SPEC C1/C2/C5/C6). The expand chevrons, the collapsed
   row's Other alarm marker, and one tag per line in the Name and Type cells so both columns can
   shrink to their widest single tag. */
+  /* Header and row glyphs share one centre line: same padding on th and td, both centred.
+  Two Buefy header rules fight that: .th-wrap is a space-between flex box, and
+  `.b-table .table th .th-wrap .icon` gives any header icon margin-left 0.5rem + font-size 1rem
+  (the indent). Both are overridden below; the second needs the long selector to out-rank it. */
   th.cy-expand, td.expand-cell {
     width: 2.5rem;
+    padding-left: 0.5rem;
     padding-right: 0;
+    text-align: center;
+  }
+  th.cy-expand .th-wrap {
+    justify-content: center;
+  }
+  th.cy-expand .th-wrap .expand-btn .icon {
+    margin: 0;
+    font-size: 0.7rem;
+  }
+  /* Cells are top-aligned: nudge the row glyph down onto the list name's centre line (a 24px
+  line box against an ~18px glyph). Tune by eye. */
+  td.expand-cell .expand-btn {
+    margin-top: 0.15rem;
+  }
+
+  /* The +/- expand glyph: a small rounded box. */
+  .expand-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 1px solid $grey-light;
+    border-radius: 3px;
+
+    .icon {
+      width: 1rem;
+      height: 1rem;
+      font-size: 0.7rem;
+    }
+    &:hover {
+      border-color: $primary;
+    }
   }
 
   .expand-btn, .grid-other-marker {
     background: none;
-    border: 0;
     padding: 0;
     cursor: pointer;
     color: $grey;
@@ -851,6 +888,7 @@ section.lists {
   }
 
   .grid-other-marker {
+    border: 0;
     color: $warning-dark;
     margin-left: 0.25rem;
 
