@@ -149,3 +149,65 @@ func TestIsPermDenied(t *testing.T) {
 		})
 	}
 }
+
+// Fork (TEST-SUBJECT-PREFIX-SPEC I1): testSubject prepends "[TEST] " once -- exact,
+// case-sensitive, no trimming -- and leaves an already-prefixed subject unchanged.
+func TestTestSubject(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain", "Hello", "[TEST] Hello"},
+		{"already prefixed", "[TEST] Hello", "[TEST] Hello"},
+		{"case-sensitive", "[test] Hello", "[TEST] [test] Hello"},
+		{"no trimming", " [TEST] Hello", "[TEST]  [TEST] Hello"},
+		{"templated", "Hi {{ .Subscriber.FirstName }}", "[TEST] Hi {{ .Subscriber.FirstName }}"},
+		{"empty", "", "[TEST] "},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := testSubject(c.in); got != c.want {
+				t.Fatalf("got %q want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// Fork (TEST-SUBJECT-PREFIX-SPEC I2): a prefixed templated subject compiles and renders,
+// including the builder-escaped &quot; form the regTplFuncs quote-entity decoder handles.
+func TestTestSubjectCompiles(t *testing.T) {
+	cases := []struct {
+		name    string
+		subject string
+		subName string
+		want    string
+	}{
+		{"first name", "Hi {{ .Subscriber.FirstName }}", "Jane Doe", "[TEST] Hi Jane"},
+		{"or fallback, named", "Hi {{ or .Subscriber.FirstName &quot;there&quot; }}", "Jane Doe", "[TEST] Hi Jane"},
+		{"or fallback, empty name", "Hi {{ or .Subscriber.FirstName &quot;there&quot; }}", "", "[TEST] Hi there"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			camp := models.Campaign{Subject: testSubject(c.subject)}
+			if err := camp.CompileTemplate(nil); err != nil {
+				t.Fatalf("CompileTemplate: %v", err)
+			}
+			if camp.SubjectTpl == nil {
+				t.Fatal("SubjectTpl not compiled")
+			}
+
+			sub := models.Subscriber{}
+			sub.Name = c.subName
+			v := struct{ Subscriber models.Subscriber }{sub}
+
+			var out strings.Builder
+			if err := camp.SubjectTpl.ExecuteTemplate(&out, models.ContentTpl, v); err != nil {
+				t.Fatalf("ExecuteTemplate: %v", err)
+			}
+			if got := out.String(); got != c.want {
+				t.Fatalf("got %q want %q", got, c.want)
+			}
+		})
+	}
+}

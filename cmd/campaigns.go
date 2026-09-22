@@ -757,7 +757,10 @@ func (a *App) TestCampaign(c echo.Context) error {
 
 	// Override certain values from the DB with incoming values.
 	camp.Name = req.Name
-	camp.Subject = req.Subject
+	// Fork (TEST-SUBJECT-PREFIX-SPEC D1): the sent test message's subject carries testSubjectPrefix.
+	// Applied here, once, on the local copy -- never inside sendTestMessage (every recipient shares
+	// camp, so it would prefix again per recipient) and never stored (D4).
+	camp.Subject = testSubject(req.Subject)
 	camp.FromEmail = req.FromEmail
 	camp.Body = req.Body
 	camp.AltBody = req.AltBody
@@ -815,6 +818,21 @@ func truncateList(items []string, n int) string {
 	}
 
 	return fmt.Sprintf("%s (+%d more)", strings.Join(items[:n], ", "), len(items)-n)
+}
+
+// testSubjectPrefix marks a test send's subject line. A constant, not an i18n string: the marker
+// reads the same in every locale and every log. ASCII only. (Fork, TEST-SUBJECT-PREFIX-SPEC D2.)
+const testSubjectPrefix = "[TEST] "
+
+// testSubject returns s with testSubjectPrefix prepended, or s unchanged when it already begins
+// with the prefix (exact, case-sensitive, no trimming). A plain literal ahead of the subject
+// template, so templated subjects compile as before. (Fork, TEST-SUBJECT-PREFIX-SPEC D1/D3.)
+func testSubject(s string) string {
+	if strings.HasPrefix(s, testSubjectPrefix) {
+		return s
+	}
+
+	return testSubjectPrefix + s
 }
 
 // skippedTestAddresses returns the requested addresses no permitted subscriber matched: each
