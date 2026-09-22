@@ -839,11 +839,9 @@ func (a *App) processSubForm(c echo.Context) (bool, error) {
 	}
 	req.Email = em
 
+	// Fork (subscriber names) -- an empty name stays empty (never the address's local part).
 	req.Name = strings.TrimSpace(req.Name)
-	if len(req.Name) == 0 {
-		// If there's no name, use the name bit from the e-mail.
-		req.Name = strings.Split(req.Email, "@")[0]
-	} else if len(req.Name) > stdInputMaxLen {
+	if len(req.Name) > stdInputMaxLen {
 		return false, echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("subscribers.invalidName"))
 	}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -38,6 +39,50 @@ const (
 type regTplFunc struct {
 	regExp  *regexp.Regexp
 	replace string
+
+	// Fork (subscriber names) -- when set, each match is replaced by replaceFunc(match)
+	// instead of the replace pattern (a FIELD -> expression mapping cannot be a $1 pattern).
+	replaceFunc func(string) string
+}
+
+// apply rewrites every match of the entry in s. Every regTplFuncs site calls this.
+func (r regTplFunc) apply(s string) string {
+	if r.replaceFunc != nil {
+		return r.regExp.ReplaceAllStringFunc(s, r.replaceFunc)
+	}
+	return r.regExp.ReplaceAllString(s, r.replace)
+}
+
+// Fork (subscriber names) -- the ZMA-style merge shorthand $[UD:FIELD|fallback]$ (SUBSCRIBER-
+// NAME-SPEC D2). Quote-free because the visual builder's Text block escapes " to &quot;, which
+// breaks {{ or .Subscriber.FirstName "there" }} typed there. Grammar: "$[", optional "UD:",
+// FIELD, optional ("|" or "||") fallback (no ], ", \, CR or LF), "]$"; prefix and FIELD are
+// case-insensitive. Anything else is left verbatim.
+var regSubscriberField = regexp.MustCompile(`\$\[(?i:UD:)?([A-Za-z_][A-Za-z0-9_]*)(?:\|\|?([^\]"\\\r\n]*))?\]\$`)
+
+// subscriberFieldExprs maps the shorthand's known FIELDs (upper-cased) to template expressions.
+// Any other FIELD reads the subscriber attribute of the lower-cased name.
+var subscriberFieldExprs = map[string]string{
+	"FIRST_NAME": ".Subscriber.FirstName",
+	"LAST_NAME":  ".Subscriber.LastName",
+	"NAME":       ".Subscriber.Name",
+	"FULL_NAME":  ".Subscriber.Name",
+	"EMAIL":      ".Subscriber.Email",
+}
+
+// subscriberFieldExpr rewrites one shorthand match to {{ or <expr> "<fallback>" }} -- always
+// the or form (empty fallback when none) so a missing attrib renders empty, never <no value>.
+// The fallback is emitted verbatim inside the string literal: the grammar admits no " or \.
+func subscriberFieldExpr(match string) string {
+	m := regSubscriberField.FindStringSubmatch(match)
+	if m == nil {
+		return match
+	}
+	expr, ok := subscriberFieldExprs[strings.ToUpper(m[1])]
+	if !ok {
+		expr = `(index .Subscriber.Attribs "` + strings.ToLower(m[1]) + `")`
+	}
+	return `{{ or ` + expr + ` "` + m[2] + `" }}`
 }
 
 var regTplFuncs = []regTplFunc{
@@ -62,6 +107,12 @@ var regTplFuncs = []regTplFunc{
 	{
 		regExp:  regexp.MustCompile(`{{(\s+)?(TrackView|UnsubscribeURL|ManageURL|OptinURL|MessageURL)(\s+)?}}`),
 		replace: `{{ $2 . }}`,
+	},
+
+	// Fork (subscriber names) -- $[UD:FIRST_NAME|there]$ -> {{ or .Subscriber.FirstName "there" }}.
+	{
+		regExp:      regSubscriberField,
+		replaceFunc: subscriberFieldExpr,
 	},
 }
 

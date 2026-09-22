@@ -206,7 +206,7 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 	if hasTplExpr(c.Subject) {
 		subj := c.Subject
 		for _, r := range regTplFuncs {
-			subj = r.regExp.ReplaceAllString(subj, r.replace)
+			subj = r.apply(subj)
 		}
 
 		var txtFuncs map[string]any = f
@@ -220,7 +220,7 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 	// If the preheader has a template string, compile it like the subject.
 	if p := c.Preheader(); hasTplExpr(p) {
 		for _, r := range regTplFuncs {
-			p = r.regExp.ReplaceAllString(p, r.replace)
+			p = r.apply(p)
 		}
 
 		var txtFuncs map[string]any = f
@@ -248,7 +248,7 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 	}
 
 	for _, r := range regTplFuncs {
-		body = r.regExp.ReplaceAllString(body, r.replace)
+		body = r.apply(body)
 	}
 
 	baseTPL, err := template.New(BaseTpl).Funcs(f).Parse(body)
@@ -275,7 +275,7 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 
 	// Compile the campaign message.
 	for _, r := range regTplFuncs {
-		body = r.regExp.ReplaceAllString(body, r.replace)
+		body = r.apply(body)
 	}
 
 	msgTpl, err := template.New(ContentTpl).Funcs(f).Parse(body)
@@ -292,7 +292,7 @@ func (c *Campaign) CompileTemplate(f template.FuncMap) error {
 	if hasTplExpr(c.AltBody.String) {
 		b := c.AltBody.String
 		for _, r := range regTplFuncs {
-			b = r.regExp.ReplaceAllString(b, r.replace)
+			b = r.apply(b)
 		}
 		bTpl, err := template.New(ContentTpl).Funcs(f).Parse(b)
 		if err != nil {
@@ -410,6 +410,7 @@ func rewriteVisualTrackLinks(body string) string {
 	return regVisualHref.ReplaceAllStringFunc(body, func(match string) string {
 		url := match[len(`href="`) : len(match)-1]
 		if strings.Contains(url, "@TrackLink") || strings.Contains(url, "{{") ||
+			regSubscriberField.MatchString(url) || // Fork (subscriber names): would nest actions
 			strings.Contains(url, `\`) ||
 			strings.IndexFunc(url, func(r rune) bool { return r < 0x20 }) >= 0 {
 			return match
@@ -595,9 +596,13 @@ func NormalizeLang(attribs JSON) (ok bool) {
 }
 
 // hasTplExpr checks whether a given string has a Go template expression with {{ and  }}.
+// Fork (subscriber names) -- or the $[FIELD|fallback]$ shorthand, which the regTplFuncs pass
+// turns into one: a subject carrying only the shorthand must still be compiled.
 func hasTplExpr(s string) bool {
-	_, after, ok := strings.Cut(s, "{{")
-	return ok && strings.Contains(after, "}}")
+	if _, after, ok := strings.Cut(s, "{{"); ok && strings.Contains(after, "}}") {
+		return true
+	}
+	return regSubscriberField.MatchString(s)
 }
 
 // ConvertContent converts a campaign's body from one format to another,
@@ -605,7 +610,7 @@ func hasTplExpr(s string) bool {
 func (c *Campaign) ConvertContent(from, to string) (string, error) {
 	body := c.Body
 	for _, r := range regTplFuncs {
-		body = r.regExp.ReplaceAllString(body, r.replace)
+		body = r.apply(body)
 	}
 
 	// If the format is markdown, convert Markdown to HTML.

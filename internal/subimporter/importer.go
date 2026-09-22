@@ -721,12 +721,10 @@ func (im *Importer) ValidateFields(s SubReq) (SubReq, error) {
 	}
 	s.Email = strings.ToLower(em)
 
-	// If there's no name, use the name part of the e-mail.
-	// Fork (import presets) -- the rule lives in PlaceholderName, shared with the fill upsert.
+	// Fork (subscriber names) -- an empty name stays empty; a name is real or empty, never
+	// derived from the address. PlaceholderName survives only as the fill upsert's
+	// "no information" marker for rows written before this change.
 	s.Name = strings.TrimSpace(s.Name)
-	if len(s.Name) == 0 {
-		s.Name = PlaceholderName(s.Email)
-	}
 
 	return s, nil
 }

@@ -51,25 +51,26 @@ func testPreset(t *testing.T) *Preset {
 	return &ps[0]
 }
 
-// I3 -- PlaceholderName is exactly what ValidateFields produces for an empty name.
-func TestPresetPlaceholderNameMatchesValidateFields(t *testing.T) {
+// Subscriber names I1 -- an empty or whitespace-only name is stored as ""; a given name is
+// stored trimmed. (Replaces the pre-fork TestPresetPlaceholderNameMatchesValidateFields: the
+// placeholder is no longer what ValidateFields produces.)
+func TestValidateFieldsKeepsEmptyName(t *testing.T) {
 	im := testImporter(t)
-	for _, email := range []string{
-		"ann42@example.test", "jane.doe@example.test", "bine-j@example.test",
-		"first.middle.last@example.test", "user+tag@example.test", "UPPER.Case@Example.TEST",
-		"x@example.test", "a.b-c_d@example.test", "12345@example.test", "o.brien@example.test",
-	} {
-		got, err := im.ValidateFields(SubReq{Subscriber: models.Subscriber{Email: email}})
-		if err != nil {
-			t.Fatalf("%s: %v", email, err)
-		}
-		if want := PlaceholderName(strings.ToLower(email)); got.Name != want {
-			t.Errorf("%s: ValidateFields=%q PlaceholderName=%q", email, got.Name, want)
-		}
-		if got.Name == "" {
-			t.Errorf("%s: placeholder must never be empty", email)
+	for in, want := range map[string]string{"": "", "  ": "", " Jane ": "Jane", "\t\n": ""} {
+		for _, email := range []string{"ann42@example.test", "jane.doe@example.test", "UPPER.Case@Example.TEST"} {
+			got, err := im.ValidateFields(SubReq{Subscriber: models.Subscriber{Email: email, Name: in}})
+			if err != nil {
+				t.Fatalf("%s: %v", email, err)
+			}
+			if got.Name != want {
+				t.Errorf("ValidateFields(%q, %q).Name=%q want %q", email, in, got.Name, want)
+			}
 		}
 	}
+}
+
+// I3 -- PlaceholderName's shapes (still the fill upsert's "no information" marker).
+func TestPresetPlaceholderName(t *testing.T) {
 	// The documented shapes.
 	for email, want := range map[string]string{
 		"ann42@example.test": "Ann42", "jane.doe@example.test": "Jane Doe", "bine-j@example.test": "Bine-J",
@@ -295,7 +296,7 @@ func TestPresetTransformHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out.Subs) != 1 || out.Subs[0].Name != "X" {
+	if len(out.Subs) != 1 || out.Subs[0].Name != "" { // Subscriber names D1: no name column → "", never the placeholder
 		t.Errorf("subs %+v", out.Subs)
 	}
 	if len(out.Warnings) != 3 {
