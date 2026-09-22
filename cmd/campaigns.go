@@ -1213,6 +1213,8 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 
 	// If there's a "send_at" date, it should be in the future.
 	if c.SendAt.Valid {
+		// Fork -- a scheduled send fires on the minute, whoever wrote it (editor, API, clone).
+		c.SendAt.Time = truncateSendAt(c.SendAt.Time)
 		if c.SendAt.Time.Before(time.Now()) {
 			return c, errors.New(a.i18n.T("campaigns.fieldInvalidSendAt"))
 		}
@@ -1388,4 +1390,11 @@ func canEditCampaign(status string) bool {
 	return status == models.CampaignStatusDraft ||
 		status == models.CampaignStatusPaused ||
 		status == models.CampaignStatusScheduled
+}
+
+// truncateSendAt drops the seconds (and sub-seconds) of a scheduled send instant. The
+// editor's Send-later picker already stores the minute; this is the same rule for every
+// other writer of send_at, so the invariant does not depend on which client scheduled it.
+func truncateSendAt(t time.Time) time.Time {
+	return t.Truncate(time.Minute)
 }

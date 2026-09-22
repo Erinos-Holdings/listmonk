@@ -148,6 +148,7 @@
     "campaigns.scheduled": "Scheduled",
     "campaigns.send": "Send",
     "campaigns.sendLater": "Send later",
+    "campaigns.sendLaterHelp": "Sends {mt}  ·  {utc}",
     "campaigns.sendTest": "Send test message",
     "campaigns.sendTestHelp": "Hit Enter after typing an address to add multiple recipients. The addresses must belong to existing subscribers.",
     "campaigns.sendToLists": "Lists to send to",

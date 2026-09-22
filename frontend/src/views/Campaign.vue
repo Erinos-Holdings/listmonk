@@ -186,8 +186,7 @@
                   </div>
                   <div class="column">
                     <br />
-                    <b-field v-if="form.sendLater" data-cy="send_at"
-                      :message="form.sendAtDate ? $utils.duration(Date(), form.sendAtDate) : ''">
+                    <b-field v-if="form.sendLater" data-cy="send_at" :message="sendAtMessage">
                       <b-datetimepicker v-model="form.sendAtDate" :disabled="!canEdit" required editable mobile-native
                         position="is-top-right" :placeholder="$t('campaigns.dateAndTime')" icon="calendar-clock"
                         :timepicker="{ hourFormat: '24' }" :datetime-formatter="formatDateTime"
@@ -429,6 +428,22 @@ import {
   BRAND_TAG_PREFIX, FROM_TAG_PREFIX, brandThemePalette, reBrandSlug,
 } from '../brand';
 
+// Fork: the account's local zone for the Send-later helper text. MDT/MST is resolved by Intl
+// per date, so DST never needs a code change.
+const DISPLAY_TIME_ZONE = 'America/Denver';
+
+// Fork: a scheduled send always fires on the minute — the picker hands back the wall-clock
+// seconds of the click. Every reader of the picked date (save payload, draft dirty-check)
+// goes through this so they agree. Invalid / missing → null.
+const toSendAtMinute = (d) => {
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) {
+    return null;
+  }
+  const z = new Date(d.getTime());
+  z.setSeconds(0, 0);
+  return z;
+};
+
 // Canonical casing, folded at the comparison — mirrors `sesTagHeader` in cmd/campaigns_brand.go,
 // which is the half that actually enforces this. The header name should exist exactly once per
 // implementation; the two implementations have to agree, which is the whole reason both exist.
@@ -601,6 +616,11 @@ export default Vue.extend({
       return dayjs(s).format('YYYY-MM-DD HH:mm');
     },
 
+    // Fork: the `send_at` the API receives — minute-truncated, null unless Send later is on.
+    sendAtPayload() {
+      return this.form.sendLater ? toSendAtMinute(this.form.sendAtDate) : null;
+    },
+
     onToggleArchivePreview() {
       this.isPreviewingArchive = !this.isPreviewingArchive;
     },
@@ -699,8 +719,8 @@ export default Vue.extend({
     },
 
     draftShape(f) {
-      const d = f.sendAtDate;
-      const validDate = d instanceof Date && !Number.isNaN(d.getTime());
+      // Minute-truncated like the saved payload, so a re-pick of the same minute is not dirty.
+      const sendAt = toSendAtMinute(f.sendAtDate);
       return {
         name: f.name || '',
         subject: f.subject || '',
@@ -715,7 +735,7 @@ export default Vue.extend({
         archiveMetaStr: f.archiveMetaStr,
         archiveTemplateId: f.archiveTemplateId || null,
         listIds: (f.lists || []).map((l) => l.id).sort((a, b) => a - b),
-        sendAtDate: validDate ? d.toISOString() : null,
+        sendAtDate: sendAt ? sendAt.toISOString() : null,
         evergreen: !!f.evergreen,
         sendDelayDays: Number(f.sendDelayDays) || 0,
         content: {
@@ -1272,7 +1292,7 @@ export default Vue.extend({
         messenger: this.form.messenger,
         type: 'regular',
         tags: this.form.tags,
-        send_at: this.form.sendLater ? this.form.sendAtDate : null,
+        send_at: this.sendAtPayload(),
         headers: this.form.headers,
         attribs: this.form.attribs,
         media: this.form.media.map((m) => m.id),
@@ -1306,7 +1326,7 @@ export default Vue.extend({
         messenger: this.form.messenger,
         type: 'regular',
         tags: this.form.tags,
-        send_at: this.form.sendLater ? this.form.sendAtDate : null,
+        send_at: this.sendAtPayload(),
         headers: this.form.headers,
         attribs: this.form.attribs,
         template_id: this.form.content.templateId,
@@ -1409,6 +1429,33 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['serverConfig', 'loading', 'lists', 'templates', 'profile']),
+
+    // Fork: the Send-later helper text — the scheduled instant in Mountain time (MDT/MST
+    // resolved by Intl for that date) and in UTC, 12-hour, no seconds, one format for both.
+    sendAtMessage() {
+      const d = this.sendAtPayload();
+      if (!d) {
+        return '';
+      }
+      const fmt = (timeZone) => {
+        const date = new Intl.DateTimeFormat('en-US', {
+          timeZone,
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }).format(d);
+        const time = new Intl.DateTimeFormat('en-US', {
+          timeZone,
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZoneName: 'short',
+        }).format(d);
+        return `${date} ${time}`;
+      };
+      return this.$t('campaigns.sendLaterHelp', { mt: fmt(DISPLAY_TIME_ZONE), utc: fmt('UTC') });
+    },
 
     // Fork (multi-language campaigns).
     isStarted() {
