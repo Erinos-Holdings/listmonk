@@ -99,7 +99,6 @@ var regTplFuncs = []regTplFunc{
 		regExp:  regexp.MustCompile(`{{(\s+)?(TrackView|UnsubscribeURL|ManageURL|OptinURL|MessageURL)(\s+)?}}`),
 		replace: `{{ $2 . }}`,
 	},
-
 }
 
 // markdown is a global instance of Markdown parser and renderer.
