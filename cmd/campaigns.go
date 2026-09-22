@@ -821,8 +821,10 @@ func truncateList(items []string, n int) string {
 }
 
 // testSubjectPrefix marks a test send's subject line. A constant, not an i18n string: the marker
-// reads the same in every locale and every log. ASCII only. (Fork, TEST-SUBJECT-PREFIX-SPEC D2.)
-const testSubjectPrefix = "[TEST] "
+// reads the same in every locale and every log. ASCII only, and NOT square-bracketed: Gmail hides
+// a leading [tag] in its conversation list on any message carrying List-Unsubscribe (every
+// listmonk send), so "[TEST] " was invisible where it mattered most. (Fork, TEST-SUBJECT-PREFIX-SPEC D2.)
+const testSubjectPrefix = "TEST: "
 
 // testSubject returns s with testSubjectPrefix prepended, or s unchanged when it already begins
 // with the prefix (exact, case-sensitive, no trimming). A plain literal ahead of the subject

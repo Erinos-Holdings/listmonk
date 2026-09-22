@@ -150,7 +150,7 @@ func TestIsPermDenied(t *testing.T) {
 	}
 }
 
-// Fork (TEST-SUBJECT-PREFIX-SPEC I1): testSubject prepends "[TEST] " once -- exact,
+// Fork (TEST-SUBJECT-PREFIX-SPEC I1): testSubject prepends "TEST: " once -- exact,
 // case-sensitive, no trimming -- and leaves an already-prefixed subject unchanged.
 func TestTestSubject(t *testing.T) {
 	cases := []struct {
@@ -158,12 +158,12 @@ func TestTestSubject(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"plain", "Hello", "[TEST] Hello"},
-		{"already prefixed", "[TEST] Hello", "[TEST] Hello"},
-		{"case-sensitive", "[test] Hello", "[TEST] [test] Hello"},
-		{"no trimming", " [TEST] Hello", "[TEST]  [TEST] Hello"},
-		{"templated", "Hi {{ .Subscriber.FirstName }}", "[TEST] Hi {{ .Subscriber.FirstName }}"},
-		{"empty", "", "[TEST] "},
+		{"plain", "Hello", "TEST: Hello"},
+		{"already prefixed", "TEST: Hello", "TEST: Hello"},
+		{"case-sensitive", "test: Hello", "TEST: test: Hello"},
+		{"no trimming", " TEST: Hello", "TEST:  TEST: Hello"},
+		{"templated", "Hi {{ .Subscriber.FirstName }}", "TEST: Hi {{ .Subscriber.FirstName }}"},
+		{"empty", "", "TEST: "},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -183,9 +183,9 @@ func TestTestSubjectCompiles(t *testing.T) {
 		subName string
 		want    string
 	}{
-		{"first name", "Hi {{ .Subscriber.FirstName }}", "Jane Doe", "[TEST] Hi Jane"},
-		{"or fallback, named", "Hi {{ or .Subscriber.FirstName &quot;there&quot; }}", "Jane Doe", "[TEST] Hi Jane"},
-		{"or fallback, empty name", "Hi {{ or .Subscriber.FirstName &quot;there&quot; }}", "", "[TEST] Hi there"},
+		{"first name", "Hi {{ .Subscriber.FirstName }}", "Jane Doe", "TEST: Hi Jane"},
+		{"or fallback, named", "Hi {{ or .Subscriber.FirstName &quot;there&quot; }}", "Jane Doe", "TEST: Hi Jane"},
+		{"or fallback, empty name", "Hi {{ or .Subscriber.FirstName &quot;there&quot; }}", "", "TEST: Hi there"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
