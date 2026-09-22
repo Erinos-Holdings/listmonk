@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -41,7 +40,7 @@ type regTplFunc struct {
 	replace string
 
 	// Fork (subscriber names) -- when set, each match is replaced by replaceFunc(match)
-	// instead of the replace pattern (a FIELD -> expression mapping cannot be a $1 pattern).
+	// instead of the replace pattern (the action quote-entity decoder is not a $1 pattern).
 	replaceFunc func(string) string
 }
 
@@ -53,39 +52,31 @@ func (r regTplFunc) apply(s string) string {
 	return r.regExp.ReplaceAllString(s, r.replace)
 }
 
-// Fork (subscriber names) -- the ZMA-style merge shorthand $[UD:FIELD|fallback]$ (SUBSCRIBER-
-// NAME-SPEC D2). Quote-free because the visual builder's Text block escapes " to &quot;, which
-// breaks {{ or .Subscriber.FirstName "there" }} typed there. Grammar: "$[", optional "UD:",
-// FIELD, optional ("|" or "||") fallback (no ], ", \, CR or LF), "]$"; prefix and FIELD are
-// case-insensitive. Anything else is left verbatim.
-var regSubscriberField = regexp.MustCompile(`\$\[(?i:UD:)?([A-Za-z_][A-Za-z0-9_]*)(?:\|\|?([^\]"\\\r\n]*))?\]\$`)
+// Fork (subscriber names) -- regActionQuoteEntity matches the three spellings of an
+// HTML-encoded double quote. Only these are decoded, and only inside a {{ ... }} action
+// (decodeActionQuoteEntities); every other entity is left as it is.
+var regActionQuoteEntity = regexp.MustCompile(`&quot;|&#34;|&#[xX]22;`)
 
-// subscriberFieldExprs maps the shorthand's known FIELDs (upper-cased) to template expressions.
-// Any other FIELD reads the subscriber attribute of the lower-cased name.
-var subscriberFieldExprs = map[string]string{
-	"FIRST_NAME": ".Subscriber.FirstName",
-	"LAST_NAME":  ".Subscriber.LastName",
-	"NAME":       ".Subscriber.Name",
-	"FULL_NAME":  ".Subscriber.Name",
-	"EMAIL":      ".Subscriber.Email",
-}
-
-// subscriberFieldExpr rewrites one shorthand match to {{ or <expr> "<fallback>" }} -- always
-// the or form (empty fallback when none) so a missing attrib renders empty, never <no value>.
-// The fallback is emitted verbatim inside the string literal: the grammar admits no " or \.
-func subscriberFieldExpr(match string) string {
-	m := regSubscriberField.FindStringSubmatch(match)
-	if m == nil {
-		return match
-	}
-	expr, ok := subscriberFieldExprs[strings.ToUpper(m[1])]
-	if !ok {
-		expr = `(index .Subscriber.Attribs "` + strings.ToLower(m[1]) + `")`
-	}
-	return `{{ or ` + expr + ` "` + m[2] + `" }}`
+// decodeActionQuoteEntities turns &quot; / &#34; / &#x22; back into " inside one matched
+// {{ ... }} action (SUBSCRIBER-NAME-SPEC D2). The visual builder's Text block (via marked)
+// stores a typed {{ or .Subscriber.FirstName "there" }} as
+// {{ or .Subscriber.FirstName &quot;there&quot; }}, which Go's template parser rejects
+// (unexpected "&" in operand), so the native fallback form could not be used there.
+func decodeActionQuoteEntities(action string) string {
+	return regActionQuoteEntity.ReplaceAllString(action, `"`)
 }
 
 var regTplFuncs = []regTplFunc{
+	// Fork (subscriber names) -- decode the builder's &quot; inside each {{ ... }} action (see
+	// decodeActionQuoteEntities). Lazy and single-line: an action never spans lines, and the
+	// match must stop at the first }} so text between two actions is never touched. FIRST, so
+	// the normalizers below also see a builder-escaped {{ TrackLink &quot;...&quot; }} as
+	// {{ TrackLink "..." }}.
+	{
+		regExp:      regexp.MustCompile(`{{.*?}}`),
+		replaceFunc: decodeActionQuoteEntities,
+	},
+
 	// Regular expression for matching {{ TrackLink "http://link.com" }} in the template
 	// and substituting it with {{ TrackLink "http://link.com" . }} (the dot context)
 	// before compilation. This is to make linking easier for users.
@@ -109,11 +100,6 @@ var regTplFuncs = []regTplFunc{
 		replace: `{{ $2 . }}`,
 	},
 
-	// Fork (subscriber names) -- $[UD:FIRST_NAME|there]$ -> {{ or .Subscriber.FirstName "there" }}.
-	{
-		regExp:      regSubscriberField,
-		replaceFunc: subscriberFieldExpr,
-	},
 }
 
 // markdown is a global instance of Markdown parser and renderer.

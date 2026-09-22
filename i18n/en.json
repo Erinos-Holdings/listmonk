@@ -353,7 +353,7 @@
     "import.listSubHelp": "Lists to subscribe to.",
     "import.mode": "Mode",
     "import.overwriteUserInfo": "Overwrite user info",
-    "import.overwriteUserInfoHelp": "Overwrite name and attributes of existing subscribers",
+    "import.overwriteUserInfoHelp": "Overwrite name and attributes of existing subscribers — an empty name cell blanks the stored name",
     "import.preset.badFile": "Could not read the file: {error}",
     "import.preset.badFilename": "The filename \"{name}\" does not match the expected pattern {pattern}.",
     "import.preset.cancel": "Cancel",

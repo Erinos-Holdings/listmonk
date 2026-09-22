@@ -410,7 +410,6 @@ func rewriteVisualTrackLinks(body string) string {
 	return regVisualHref.ReplaceAllStringFunc(body, func(match string) string {
 		url := match[len(`href="`) : len(match)-1]
 		if strings.Contains(url, "@TrackLink") || strings.Contains(url, "{{") ||
-			regSubscriberField.MatchString(url) || // Fork (subscriber names): would nest actions
 			strings.Contains(url, `\`) ||
 			strings.IndexFunc(url, func(r rune) bool { return r < 0x20 }) >= 0 {
 			return match
@@ -596,13 +595,9 @@ func NormalizeLang(attribs JSON) (ok bool) {
 }
 
 // hasTplExpr checks whether a given string has a Go template expression with {{ and  }}.
-// Fork (subscriber names) -- or the $[FIELD|fallback]$ shorthand, which the regTplFuncs pass
-// turns into one: a subject carrying only the shorthand must still be compiled.
 func hasTplExpr(s string) bool {
-	if _, after, ok := strings.Cut(s, "{{"); ok && strings.Contains(after, "}}") {
-		return true
-	}
-	return regSubscriberField.MatchString(s)
+	_, after, ok := strings.Cut(s, "{{")
+	return ok && strings.Contains(after, "}}")
 }
 
 // ConvertContent converts a campaign's body from one format to another,
