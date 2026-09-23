@@ -8,6 +8,14 @@
         ]
     },
     {
+        "group": "brands",
+        "permissions":
+        [
+            "brands:get",
+            "brands:manage"
+        ]
+    },
+    {
         "group": "subscribers",
         "permissions":
         [

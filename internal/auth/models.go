@@ -72,6 +72,10 @@ const (
 	PermSettingsGet           = "settings:get"
 	PermSettingsManage        = "settings:manage"
 	PermSettingsMaintain      = "settings:maintain"
+
+	// Fork (brand health, BRAND-HEALTH-SPEC D10).
+	PermBrandsGet    = "brands:get"
+	PermBrandsManage = "brands:manage"
 )
 
 // Base holds common fields shared across models.

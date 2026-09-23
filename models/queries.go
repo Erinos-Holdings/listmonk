@@ -119,6 +119,11 @@ type Queries struct {
 	UpdateMediaTags *sqlx.Stmt `query:"update-media-tags"`
 	GetMediaTags    *sqlx.Stmt `query:"get-media-tags"`
 
+	// Fork (brand health) -- queries/brands.sql, BRAND-HEALTH-SPEC D2.
+	UpsertBrandHealth     *sqlx.Stmt `query:"upsert-brand-health"`
+	GetBrandHealthLatest  *sqlx.Stmt `query:"get-brand-health-latest"`
+	GetBrandHealthHistory *sqlx.Stmt `query:"get-brand-health-history"`
+
 	CreateTemplate     *sqlx.Stmt `query:"create-template"`
 	GetTemplates       *sqlx.Stmt `query:"get-templates"`
 	UpdateTemplate     *sqlx.Stmt `query:"update-template"`

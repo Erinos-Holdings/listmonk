@@ -35,6 +35,19 @@ const routes = [
     meta: { title: 'globals.terms.lists', group: 'lists' },
     component: () => import('../views/Lists.vue'),
   },
+  // Fork (brand health, BRAND-HEALTH-SPEC D12). One view; :brand opens the detail.
+  {
+    path: '/brands',
+    name: 'brands',
+    meta: { title: 'brands.title' },
+    component: () => import('../views/Brands.vue'),
+  },
+  {
+    path: '/brands/:brand',
+    name: 'brand',
+    meta: { title: 'brands.title' },
+    component: () => import('../views/Brands.vue'),
+  },
   {
     path: '/subscribers',
     name: 'subscribers',

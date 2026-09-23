@@ -134,6 +134,18 @@
         </div>
       </b-table-column>
 
+      <!-- Fork (brand health, integrations BRAND-HEALTH-SPEC D3/D11/D12). The owning brand's
+      latest status, per row (lists are not grouped and the table sorts), from the list's own
+      API row -- health + health_tag ride on GET /api/lists, so there is no second request and
+      no client-side join. Not sortable: it is not a server sort key. Click -> the brand's page. -->
+      <b-table-column v-slot="props" field="health" :label="$t('lists.health.column')" header-class="cy-health">
+        <health-chip v-if="props.row.health" :status="props.row.health.status" :note="props.row.health.note || ''"
+          :detail="props.row.health.asOf ? $t('brands.asOf', { date: props.row.health.asOf }) : ''"
+          :to="{ name: 'brand', params: { brand: props.row.health.brand } }"
+          :hint="props.row.health.default && !props.row.healthTag ? $t('lists.health.defaultSender') : ''" />
+        <health-chip v-else :missing-tag="props.row.healthTag || ''" />
+      </b-table-column>
+
       <!-- Fork (list grid, integrations LIST-GRID-SPEC D8/D9). Six columns that partition the
       list -- Subscribers (total) and the five segments -- by one "all" line and, where the list
       has more than one send language (or a no-language residue, or an unrecognised value), one
@@ -248,6 +260,7 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import ListForm from './ListForm.vue';
+import HealthChip from '../components/HealthChip.vue';
 import { isSendPlus, sendLangCode } from '../langs';
 
 // Fork (list grid). Send-language lines in display order. The API's en already includes none.
@@ -261,6 +274,7 @@ export default Vue.extend({
   components: {
     ListForm,
     EmptyPlaceholder,
+    HealthChip,
   },
 
   data() {

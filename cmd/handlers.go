@@ -182,6 +182,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Fork: brand theme proxy for the visual editor's brand swatch row (brand_theme.go).
 		// No pm() — public catalog data, any authenticated user; same posture as GetLists.
 		g.GET("/api/brands/:slug/theme", a.GetBrandTheme)
+		// Fork (brand health) -- BRAND-HEALTH-SPEC D2/D10 (brands.go). The static `health`
+		// segment resolves before the :slug param, so /api/brands/health/theme is a history read.
+		g.GET("/api/brands/health", pm(a.GetBrandHealth, "brands:get"))
+		g.GET("/api/brands/health/:brand", pm(a.GetBrandHealthHistory, "brands:get"))
+		g.PUT("/api/brands/health", pm(a.PutBrandHealth, "brands:manage"))
 
 		g.GET("/api/media", pm(a.GetAllMedia, "media:get"))
 		// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. Registered before /api/media/:id for the

@@ -42,6 +42,14 @@ type List struct {
 	PendingCount      int      `db:"pending_count" json:"-"`
 	BlockedCount      int      `db:"blocked_count" json:"-"`
 
+	// Fork (brand health, BRAND-HEALTH-SPEC D11). Health is the owning brand's latest
+	// brand_health summary ({brand, status, note, as_of, default}) and HealthTag the list's
+	// `brand:` tag value the join used. query-lists selects both as JSON literals, so a literal
+	// null survives (no row / untagged); get-lists (minimal=true) does not select them, the
+	// slices stay nil and omitempty drops both keys.
+	Health    json.RawMessage `db:"health" json:"health,omitempty"`
+	HealthTag json.RawMessage `db:"health_tag" json:"health_tag,omitempty"`
+
 	// This is only relevant when querying the lists of a subscriber.
 	SubscriptionStatus    string    `db:"subscription_status" json:"subscription_status,omitempty"`
 	SubscriptionCreatedAt null.Time `db:"subscription_created_at" json:"subscription_created_at,omitempty"`

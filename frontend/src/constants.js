@@ -20,6 +20,8 @@ export const models = Object.freeze({
   settings: 'settings',
   logs: 'logs',
   maintenance: 'maintenance',
+  // Fork (brand health).
+  brands: 'brands',
 });
 
 // Ad-hoc URIs that are used outside of vuex requests.

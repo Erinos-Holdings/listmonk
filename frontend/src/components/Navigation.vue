@@ -12,6 +12,12 @@
         icon="newspaper-variant-outline" :label="$t('menu.forms')" />
     </b-menu-item><!-- lists -->
 
+    <!-- Fork (brand health, BRAND-HEALTH-SPEC D10/D12). Gated on brands:get; the Lists chip
+    needs no permission beyond the list's own. The icon is from the fontello subset. -->
+    <b-menu-item v-if="$can('brands:get')" :to="{ name: 'brands' }" tag="router-link"
+      :active="activeItem.brands || activeItem.brand" data-cy="brands" icon="speedometer"
+      :label="$t('brands.title')" /><!-- brands -->
+
     <b-menu-item v-if="$can('subscribers:*')" :expanded="activeGroup.subscribers" :active="activeGroup.subscribers"
       data-cy="subscribers" @update:active="(state) => toggleGroup('subscribers', state)" icon="account-multiple"
       :label="$t('globals.terms.subscribers')">

@@ -67,6 +67,14 @@ gridrows AS (
 ),
 grid AS (
     SELECT list_id, JSONB_OBJECT_AGG(k, cell) AS subscriber_grid FROM gridrows GROUP BY list_id
+),
+-- Fork (brand health, BRAND-HEALTH-SPEC D11) -- the latest brand_health row per brand, and the
+-- default-sender row (the newest row flagged is_default) that every untagged list carries.
+bh_latest AS (
+    SELECT DISTINCT ON (brand) brand, day, status, is_default, doc FROM brand_health ORDER BY brand, day DESC
+),
+bh_default AS (
+    SELECT brand, day, status, is_default, doc FROM brand_health WHERE is_default ORDER BY day DESC, brand LIMIT 1
 )
 -- Fork -- sort the whole result set, THEN paginate. Upstream paginates inside the ls
 -- CTE (no ORDER BY there) and sorts only the page, so a sort by created_at re-ordered
@@ -84,8 +92,20 @@ SELECT ls.*, COALESCE(ss.subscriber_statuses, '{}') AS subscriber_statuses, COAL
     COALESCE((g.subscriber_grid->'all'->>'held')::BIGINT, 0) AS held_count,
     COALESCE((g.subscriber_grid->'all'->>'unsubscribed')::BIGINT, 0) AS unsubscribed_count,
     COALESCE((g.subscriber_grid->'all'->>'pending')::BIGINT, 0) AS pending_count,
-    COALESCE((g.subscriber_grid->'all'->>'blocked')::BIGINT, 0) AS blocked_count
-    FROM ls LEFT JOIN statuses ss ON (ls.id = ss.list_id) LEFT JOIN grid g ON (ls.id = g.list_id) ORDER BY %order%, ls.id
+    COALESCE((g.subscriber_grid->'all'->>'blocked')::BIGINT, 0) AS blocked_count,
+    -- Fork (brand health, D11) -- health and health_tag are JSON literals (null when absent), so
+    -- the Lists chip can tell "no row for this tag" (health null, health_tag set) from untagged.
+    COALESCE(CASE WHEN h.brand IS NULL THEN NULL ELSE JSONB_BUILD_OBJECT('brand', h.brand, 'status', h.status,
+        'note', h.doc->'note', 'as_of', h.day, 'default', h.is_default) END, 'null'::JSONB) AS health,
+    COALESCE(TO_JSONB(bt.tag), 'null'::JSONB) AS health_tag
+    FROM ls LEFT JOIN statuses ss ON (ls.id = ss.list_id) LEFT JOIN grid g ON (ls.id = g.list_id)
+    LEFT JOIN LATERAL (SELECT list_brand_tag(ls.tags) AS tag) bt ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT * FROM bh_latest WHERE bt.tag IS NOT NULL AND bh_latest.brand = bt.tag
+        UNION ALL
+        SELECT * FROM bh_default WHERE bt.tag IS NULL
+    ) h ON TRUE
+    ORDER BY %order%, ls.id
     OFFSET $10 LIMIT (CASE WHEN $11 < 1 THEN NULL ELSE $11 END);
 
 -- name: get-lists-by-optin

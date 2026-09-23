@@ -200,6 +200,19 @@ export const probeListsPending = (params) => http.get(
   },
 );
 
+// Fork (brand health, integrations BRAND-HEALTH-SPEC D2/D12). The documents are returned
+// verbatim (camelCase: false) -- the Lambda already writes camelCase keys, and a key rewrite
+// would be the page computing something.
+export const getBrandsHealth = async () => http.get(
+  '/api/brands/health',
+  { loading: models.brands, camelCase: false },
+);
+
+export const getBrandHealthHistory = async (brand, days) => http.get(
+  `/api/brands/health/${encodeURIComponent(brand)}`,
+  { params: { days }, camelCase: false },
+);
+
 export const getList = async (id) => http.get(
   `/api/lists/${id}`,
   { loading: models.list },

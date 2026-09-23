@@ -647,3 +647,21 @@ RETURNS TABLE (subscriber_id INT, anchor_at TIMESTAMPTZ, eligible_sends BIGINT,
     LEFT JOIN views v ON (v.subscriber_id = m.subscriber_id)
     LEFT JOIN clicks k ON (k.subscriber_id = m.subscriber_id);
 $$ LANGUAGE sql STABLE;
+
+
+-- Fork (brand health): one computed document per brand per day, and the list brand-tag rule (v6.2.12).
+DROP TABLE IF EXISTS brand_health CASCADE;
+CREATE TABLE IF NOT EXISTS brand_health (
+    brand            TEXT NOT NULL,
+    day              DATE NOT NULL,
+    status           TEXT NOT NULL,
+    is_default       BOOLEAN NOT NULL DEFAULT FALSE,
+    doc              JSONB NOT NULL,
+    computed_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (brand, day)
+);
+CREATE INDEX IF NOT EXISTS idx_brand_health_brand_day ON brand_health (brand, day DESC);
+
+CREATE OR REPLACE FUNCTION list_brand_tag(tags VARCHAR[]) RETURNS TEXT AS $$
+    SELECT NULLIF(SUBSTRING(t FROM 7), '') FROM UNNEST(tags) AS t WHERE t LIKE 'brand:%' LIMIT 1;
+$$ LANGUAGE sql IMMUTABLE;
