@@ -65,7 +65,7 @@
     "brands.ses.complaints": "Complaints",
     "brands.ses.deliveries": "Deliveries",
     "brands.ses.noAlarm": "no alarm pair",
-    "brands.ses.noAlarmHint": "This brand has no SES Complaint/Bounce alarm pair — create one (runbook Adding a brand).",
+    "brands.ses.noAlarmHint": "This brand has no SES Complaint/Bounce alarm pair — create one.",
     "brands.ses.notClassified": "not enough volume to rate",
     "brands.ses.rejects": "Rejects",
     "brands.ses.sends": "Sends",
