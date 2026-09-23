@@ -251,8 +251,6 @@ const STATUS_ORDER = {
   issues: 0, warn: 1, unknown: 2, ok: 3,
 };
 const STRIP_DAYS = 30;
-// The spam-rate bar's full width is Google's 0.3% requirement.
-const BAR_FULL = 0.003;
 
 export default Vue.extend({
   components: { HealthChip },
@@ -291,6 +289,15 @@ export default Vue.extend({
         out.push({ day: key, status: byDay[key] || '' });
       }
       return out;
+    },
+
+    spamBarFull() {
+      const t = this.current && this.current.inputs && this.current.inputs.spamRate
+        && this.current.inputs.spamRate.detail && this.current.inputs.spamRate.detail.thresholds;
+      if (t && typeof t.issues === 'number' && t.issues > 0) {
+        return t.issues;
+      }
+      return this.spamSeries.reduce((m, p) => Math.max(m, p.spamRate), 0);
     },
 
     // The spam-rate series from every stored row (newest row wins a day), newest first.
@@ -341,8 +348,15 @@ export default Vue.extend({
       return `${(v * 100).toFixed(digits)}%`;
     },
 
+    // The bar's full width is the document's own issues threshold (spamRate.detail.thresholds,
+    // written by the Lambda); a document without it falls back to a neutral scale -- the largest
+    // value shown is full width. No threshold lives in the page.
     barWidth(v) {
-      return `${Math.min(100, Math.max(0, (v / BAR_FULL) * 100))}%`;
+      const full = this.spamBarFull;
+      if (!full || typeof v !== 'number') {
+        return '0%';
+      }
+      return `${Math.min(100, Math.max(0, (v / full) * 100))}%`;
     },
 
     sortName(a, b, isAsc) {

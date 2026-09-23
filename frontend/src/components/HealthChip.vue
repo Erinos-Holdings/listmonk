@@ -12,7 +12,9 @@
     <b-tag v-else-if="missingTag" class="health-tag health-missing" data-cy="health-missing">
       {{ $t('lists.health.noRow') }}
     </b-tag>
-    <span v-else class="has-text-grey-light" data-cy="health-none">&mdash;</span>
+    <!-- No row at all and no tag (an untagged list with no default-sender row): the unknown
+    state. There are exactly four chip states; an absent row is never a fifth. -->
+    <b-tag v-else class="health-tag health-unknown" data-cy="health-unknown">{{ $t('brands.status.unknown') }}</b-tag>
     <span v-if="hint" class="is-size-7 has-text-grey health-hint">{{ hint }}</span>
   </span>
 </template>
