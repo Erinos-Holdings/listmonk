@@ -6,9 +6,26 @@
           {{ $utils.niceDate(new Date()) }}
         </h1>
       </div>
+      <!-- Fork (system health, integrations SES-HEALTH-SPEC D7) -- Overview | SES pill, the
+           Campaigns Broadcasts | Automations pattern. Sticky via the shared pref helper; the SES
+           option exists only for users who may read Brands (brands:get). -->
+      <div v-if="canSes" class="column has-text-right">
+        <b-field class="is-inline-flex">
+          <b-radio-button v-model="pane" native-value="overview" type="is-primary"
+            data-cy="pane-overview" @input="onPaneChange">
+            {{ $t('dashboard.panes.overview') }}
+          </b-radio-button>
+          <b-radio-button v-model="pane" native-value="ses" type="is-primary"
+            data-cy="pane-ses" @input="onPaneChange">
+            {{ $t('dashboard.panes.ses') }}
+          </b-radio-button>
+        </b-field>
+      </div>
     </header>
 
-    <section class="counts wrap">
+    <dashboard-ses v-if="pane === 'ses'" />
+
+    <section v-else class="counts wrap">
       <div class="tile is-ancestor">
         <div class="tile is-vertical is-12">
           <div class="tile">
@@ -154,14 +171,20 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import { colors } from '../constants';
 import Chart from '../components/Chart.vue';
+import DashboardSes from './DashboardSes.vue';
 
 export default Vue.extend({
   components: {
     Chart,
+    DashboardSes,
   },
 
   data() {
+    const canSes = this.$can('brands:get');
     return {
+      canSes,
+      // Overview unless the user may see SES and last chose it.
+      pane: canSes && this.$utils.getPref('dashboard.sesPane') === true ? 'ses' : 'overview',
       isChartsLoading: true,
       isCountsLoading: true,
       campaignViews: null,
@@ -176,6 +199,10 @@ export default Vue.extend({
   },
 
   methods: {
+    onPaneChange() {
+      this.$utils.setPref('dashboard.sesPane', this.pane === 'ses');
+    },
+
     fetchData() {
       this.isCountsLoading = true;
       this.isChartsLoading = true;

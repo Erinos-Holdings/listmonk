@@ -665,3 +665,15 @@ CREATE INDEX IF NOT EXISTS idx_brand_health_brand_day ON brand_health (brand, da
 CREATE OR REPLACE FUNCTION list_brand_tag(tags VARCHAR[]) RETURNS TEXT AS $$
     SELECT NULLIF(SUBSTRING(t FROM 7), '') FROM UNNEST(tags) AS t WHERE t LIKE 'brand:%' LIMIT 1;
 $$ LANGUAGE sql IMMUTABLE;
+
+-- Fork (system health): one computed system-wide document per kind per day (v6.2.13).
+DROP TABLE IF EXISTS system_health CASCADE;
+CREATE TABLE IF NOT EXISTS system_health (
+    kind             TEXT NOT NULL,
+    day              DATE NOT NULL,
+    status           TEXT NOT NULL,
+    doc              JSONB NOT NULL,
+    computed_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (kind, day)
+);
+CREATE INDEX IF NOT EXISTS idx_system_health_kind_day ON system_health (kind, day DESC);

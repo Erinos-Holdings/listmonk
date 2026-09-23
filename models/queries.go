@@ -124,6 +124,10 @@ type Queries struct {
 	GetBrandHealthLatest  *sqlx.Stmt `query:"get-brand-health-latest"`
 	GetBrandHealthHistory *sqlx.Stmt `query:"get-brand-health-history"`
 
+	// Fork (system health) -- queries/system.sql, SES-HEALTH-SPEC D6.
+	UpsertSystemHealth     *sqlx.Stmt `query:"upsert-system-health"`
+	GetSystemHealthHistory *sqlx.Stmt `query:"get-system-health-history"`
+
 	CreateTemplate     *sqlx.Stmt `query:"create-template"`
 	GetTemplates       *sqlx.Stmt `query:"get-templates"`
 	UpdateTemplate     *sqlx.Stmt `query:"update-template"`

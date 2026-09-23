@@ -213,6 +213,13 @@ export const getBrandHealthHistory = async (brand, days) => http.get(
   { params: { days }, camelCase: false },
 );
 
+// Fork (system health, integrations SES-HEALTH-SPEC D6/D7). One kind's documents, newest first,
+// returned verbatim (camelCase: false) -- same reasoning as the brand-health reads.
+export const getSystemHealth = async (kind, days) => http.get(
+  `/api/system/health/${encodeURIComponent(kind)}`,
+  { params: { days }, loading: models.systemHealth, camelCase: false },
+);
+
 export const getList = async (id) => http.get(
   `/api/lists/${id}`,
   { loading: models.list },

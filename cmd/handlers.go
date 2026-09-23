@@ -187,6 +187,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/brands/health", pm(a.GetBrandHealth, "brands:get"))
 		g.GET("/api/brands/health/:brand", pm(a.GetBrandHealthHistory, "brands:get"))
 		g.PUT("/api/brands/health", pm(a.PutBrandHealth, "brands:manage"))
+		// Fork (system health) -- SES-HEALTH-SPEC D6 (system_health.go). No new permission:
+		// whoever may read Brands may read the system rows; the brand-health writer writes them.
+		g.GET("/api/system/health/:kind", pm(a.GetSystemHealthHistory, "brands:get"))
+		g.PUT("/api/system/health", pm(a.PutSystemHealth, "brands:manage"))
 
 		g.GET("/api/media", pm(a.GetAllMedia, "media:get"))
 		// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. Registered before /api/media/:id for the

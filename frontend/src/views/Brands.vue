@@ -216,6 +216,71 @@
             </div>
           </div>
 
+          <!-- SES (per-brand bounce/complaint rates; SES-HEALTH-SPEC D4). Everything shown is the
+          document's: counts, rates (null when under the floor), which rate is classified, the
+          floors, thresholds and the matched alarm states. -->
+          <div class="column is-6">
+            <div class="box" data-cy="brand-ses">
+              <h3 class="title is-6">
+                {{ $t('brands.inputs.ses') }} <health-chip :status="inputOf(current, 'ses').status" />
+                <span class="is-size-7 has-text-grey">{{ asOfText(inputOf(current, 'ses')) }}</span>
+              </h3>
+              <p v-if="typeof inputOf(current, 'ses').detail === 'string'" class="is-size-7">
+                {{ inputOf(current, 'ses').detail }}
+              </p>
+              <template v-else-if="detailOf('ses').window">
+                <p class="is-size-7 has-text-grey mb-2">
+                  {{ $t('brands.ses.window', { start: detailOf('ses').window.start, end: detailOf('ses').window.end }) }}
+                </p>
+                <table class="table is-narrow is-fullwidth is-size-7">
+                  <tbody>
+                    <tr><td>{{ $t('brands.ses.sends') }}</td><td>{{ detailOf('ses').sends }}</td></tr>
+                    <tr><td>{{ $t('brands.ses.deliveries') }}</td><td>{{ detailOf('ses').deliveries }}</td></tr>
+                    <tr><td>{{ $t('brands.ses.bounces') }}</td><td>{{ detailOf('ses').bounces }}</td></tr>
+                    <tr><td>{{ $t('brands.ses.complaints') }}</td><td>{{ detailOf('ses').complaints }}</td></tr>
+                    <tr><td>{{ $t('brands.ses.rejects') }}</td><td>{{ detailOf('ses').rejects }}</td></tr>
+                    <tr>
+                      <td>{{ $t('brands.ses.bounceRate') }}</td>
+                      <td>
+                        <template v-if="sesClassified('bounce')">{{ pct(detailOf('ses').bounceRate, 2) }}</template>
+                        <span v-else class="has-text-grey">{{ $t('brands.ses.notClassified') }}</span>
+                        <span v-if="sesThreshold('bounce')" class="has-text-grey">
+                          ({{ pct(sesThreshold('bounce').warn, 1) }} / {{ pct(sesThreshold('bounce').issues, 1) }})
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>{{ $t('brands.ses.complaintRate') }}</td>
+                      <td>
+                        <template v-if="sesClassified('complaint')">{{ pct(detailOf('ses').complaintRate, 3) }}</template>
+                        <span v-else class="has-text-grey">{{ $t('brands.ses.notClassified') }}</span>
+                        <span v-if="sesThreshold('complaint')" class="has-text-grey">
+                          ({{ pct(sesThreshold('complaint').warn, 1) }} / {{ pct(sesThreshold('complaint').issues, 1) }})
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <h4 class="title is-6 mt-3 mb-2">{{ $t('brands.ses.alarms') }}</h4>
+                <table class="table is-narrow is-fullwidth is-size-7">
+                  <tbody>
+                    <tr>
+                      <td>{{ $t('brands.ses.alarmComplaints') }}</td>
+                      <td>{{ sesAlarm('complaints') || $t('brands.ses.noAlarm') }}</td>
+                    </tr>
+                    <tr>
+                      <td>{{ $t('brands.ses.alarmBounces') }}</td>
+                      <td>{{ sesAlarm('bounces') || $t('brands.ses.noAlarm') }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p v-if="!sesAlarm('complaints') || !sesAlarm('bounces')" class="is-size-7 has-text-grey">
+                  {{ $t('brands.ses.noAlarmHint') }}
+                </p>
+              </template>
+            </div>
+          </div>
+
           <!-- Registry facts + lists -->
           <div class="column is-6">
             <div class="box">
@@ -245,7 +310,9 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
 
-const INPUT_KEYS = ['config', 'verdict', 'spamRate', 'engagement', 'dnsbl'];
+// Fork (SES health, SES-HEALTH-SPEC D4/M4): `ses` is the sixth input; rows written before it
+// existed lack it and render the unknown chip.
+const INPUT_KEYS = ['config', 'verdict', 'spamRate', 'engagement', 'dnsbl', 'ses'];
 // Display order only (worst first) for the status sort -- not a rule.
 const STATUS_ORDER = {
   issues: 0, warn: 1, unknown: 2, ok: 3,
@@ -335,6 +402,21 @@ export default Vue.extend({
     inputError(row, k) {
       const d = this.inputOf(row, k).detail;
       return typeof d === 'string' ? d : '';
+    },
+
+    sesClassified(kind) {
+      const c = this.detailOf('ses').classified;
+      return !!(c && c[kind]);
+    },
+
+    sesThreshold(kind) {
+      const t = this.detailOf('ses').thresholds;
+      return t && t[kind] && typeof t[kind].warn === 'number' && typeof t[kind].issues === 'number' ? t[kind] : null;
+    },
+
+    sesAlarm(which) {
+      const a = this.detailOf('ses').alarms;
+      return (a && a[which]) || '';
     },
 
     asOfText(input) {

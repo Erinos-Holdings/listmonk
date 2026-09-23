@@ -69,6 +69,8 @@ var migList = []migFunc{
 	{"v6.2.11", migrations.V6_2_11},
 	// Fork migration (erinos): brand health -- brand_health table, list_brand_tag(), brands:get/manage grants (BRAND-HEALTH-SPEC) — see internal/migrations/v6.2.12.go.
 	{"v6.2.12", migrations.V6_2_12},
+	// Fork migration (erinos): system health -- system_health table (SES-HEALTH-SPEC) — see internal/migrations/v6.2.13.go.
+	{"v6.2.13", migrations.V6_2_13},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files
