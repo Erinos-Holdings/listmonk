@@ -88,8 +88,10 @@
          Done: sent. -->
     <div v-if="audienceBox" class="audience-anchor">
       <div class="audience-box" :class="`is-${audienceBox.tone}`" :style="audienceBoxStyle" data-cy="audience-box">
-        <p v-if="storedLang" class="audience-head" :title="audienceHeadTitle" data-cy="audience-lang">
-          {{ audienceHeadLabel }}
+        <!-- Always two rows: a campaign stored before the create-time language default (no
+             lang, past editing) shows a dash. -->
+        <p class="audience-head" :title="audienceHeadTitle" data-cy="audience-lang">
+          {{ storedLang ? audienceHeadLabel : '—' }}
         </p>
         <!-- append-to-body: the box clips its overflow for the rounded corners, which would
              clip the tooltip too. -->
@@ -444,7 +446,7 @@ import {
 import {
   CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
 } from '../langs';
-import { audienceBox, hasEnSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
+import { audienceBox, hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
@@ -1265,7 +1267,7 @@ export default Vue.extend({
           } else {
             // No longer running: refetch the final status and counts. A plain read, not the
             // page loader -- that would replay its load-time brand-repoint notice.
-            this.$api.getCampaign(this.data.id).then((d) => {
+            this.$api.getCampaignQuiet(this.data.id).then((d) => {
               this.data = {
                 ...this.data, status: d.status, sent: d.sent, toSend: d.toSend,
               };
@@ -1595,19 +1597,20 @@ export default Vue.extend({
       if (!b) {
         return '';
       }
+      const parts = enSplit(b.count, b.noLang, b.en);
+      const split = hasEnSplit(this.storedLang, b.kind, b.noLang) ? this.$t('lists.grid.enSplit', {
+        en: this.$utils.formatNumber(parts.en),
+        none: this.$utils.formatNumber(parts.none),
+      }) : '';
       if (b.kind === 'sending') {
-        return this.$t(this.data.evergreen ? 'campaigns.audienceEvergreenHelp' : 'campaigns.audienceSendingHelp');
+        const base = this.$t(this.data.evergreen ? 'campaigns.audienceEvergreenHelp' : 'campaigns.audienceSendingHelp');
+        // An English evergreen appends its split; a broadcast has none (noLang is 0).
+        return split ? `${base} ${split}.` : base;
       }
       if (b.kind === 'sent') {
         return this.$t('campaigns.audienceSentHelp');
       }
-      if (hasEnSplit(this.storedLang, b.kind, b.noLang)) {
-        return this.$t('lists.grid.enSplit', {
-          en: this.$utils.formatNumber(b.count - b.noLang),
-          none: this.$utils.formatNumber(b.noLang),
-        });
-      }
-      return this.$t('campaigns.toSendHelp');
+      return split || this.$t('campaigns.toSendHelp');
     },
 
     // Fork (send retry, SEND-RETRY-SPEC D6) -- mirrors Campaigns.vue's isShortfall.

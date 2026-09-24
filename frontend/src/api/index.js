@@ -403,6 +403,13 @@ export const getCampaign = async (id) => http.get(`/api/campaigns/${id}`, {
   camelCase: (keyPath) => !keyPath.startsWith('.headers'),
 });
 
+// Fork (campaign-page audience box): the same read without the page-wide loading overlay,
+// for the background refetch when a running broadcast finishes.
+export const getCampaignQuiet = async (id) => http.get(`/api/campaigns/${id}`, {
+  params: { no_body: true },
+  camelCase: (keyPath) => !keyPath.startsWith('.headers'),
+});
+
 export const getCampaignStats = async () => http.get('/api/campaigns/running/stats', {});
 
 // Fork: the create/update responses carry the campaign's headers too; camelCasing them

@@ -89,6 +89,7 @@ type Queries struct {
 	// Fork (multi-language campaigns) -- see queries/campaigns.sql.
 	GetCampaignLangAudience    *sqlx.Stmt `query:"get-campaign-lang-audience"`
 	GetCampaignUnreachableLang *sqlx.Stmt `query:"get-campaign-unreachable-lang"`
+	GetEvergreenSentSplit      *sqlx.Stmt `query:"get-evergreen-sent-split"`
 	// Fork (SHALA-CUTOVER-SPEC D9/I8) -- non-English subscribers on a campaign's lists.
 	// Fork (click tracking) -- see queries/campaigns.sql.
 	GetCampaignAttribCoverage *sqlx.Stmt `query:"get-campaign-attrib-coverage"`

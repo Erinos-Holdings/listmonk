@@ -37,13 +37,32 @@ export const audienceBox = (c) => {
       kind: 'sent', tone: 'grey', count, noLang: 0,
     };
   }
+  // An evergreen keeps a per-recipient send record, so its sent count splits too (server
+  // fields `sent_en` / `sent_no_lang`, English evergreens only, both counted from the same
+  // rows); a broadcast's does not. `en` is carried rather than derived because
+  // campaigns.sent is a separate counter that need not equal the recorded rows.
+  const evergreen = !!c.evergreen;
   return {
-    kind: 'sending', tone: 'info', count, noLang: 0,
+    kind: 'sending',
+    tone: 'info',
+    count,
+    noLang: evergreen ? (Number(c.sentNoLang) || 0) : 0,
+    en: evergreen ? (Number(c.sentEn) || 0) : null,
   };
 };
 
-// Whether the count's hover text is the EN+ split ("n en + m no language") -- an English
-// audience with at least one no-language row, exactly the Lists grid's rule -- or the plain
-// state text. Used by the Campaign page box and the Campaigns list's To send stat.
-export const hasEnSplit = (lang, kind, noLang) => kind === 'audience'
+// Whether the count's hover text carries the EN+ split ("n en + m no language") -- an
+// English audience (or an English evergreen's sends) with at least one no-language row,
+// exactly the Lists grid's rule. Used by the Campaign page box and the Campaigns list's
+// To send stat.
+export const hasEnSplit = (lang, kind, noLang) => (kind === 'audience' || kind === 'sending')
   && (lang || '').toLowerCase() === SEND_LANG_EN && (Number(noLang) || 0) > 0;
+
+// The two numbers of that split. An audience splits its own count (en = count - noLang, the
+// Lists grid's arithmetic; the query guarantees noLang <= count); an evergreen's sends carry
+// their English share explicitly. Never negative.
+export const enSplit = (count, noLang, en) => {
+  const none = Math.max(0, Number(noLang) || 0);
+  const e = en === null || en === undefined ? (Number(count) || 0) - none : Number(en) || 0;
+  return { en: Math.max(0, e), none };
+};

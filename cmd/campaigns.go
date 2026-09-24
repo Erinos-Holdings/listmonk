@@ -413,6 +413,10 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 	// plus the zero-width-character nudge on the saved subject/preheader (I9).
 	out.Warnings = append(a.campaignWarningsByID(id), a.zeroWidthWarnings(&out)...)
 
+	// Fork (campaign-page audience) -- the page replaces its campaign with this response,
+	// so it carries the live count too (recomputed: a save can change the lists).
+	a.core.FillAudience(&out)
+
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
@@ -501,6 +505,10 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		w = append(w, linkWarnings...)
 		out.Warnings = w
 	}
+
+	// Fork (campaign-page audience) -- same as UpdateCampaign: the page keeps this response
+	// (an Unschedule lands back on a draft that still wants its count).
+	a.core.FillAudience(&out)
 
 	return c.JSON(http.StatusOK, okResp{out})
 }

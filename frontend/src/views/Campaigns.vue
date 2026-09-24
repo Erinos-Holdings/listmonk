@@ -344,7 +344,7 @@ import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus, sendLangCode } from '../langs';
-import { hasEnSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
+import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -421,9 +421,10 @@ export default Vue.extend({
     toSendHelp(c) {
       const lang = (c.attribs && c.attribs.lang) || '';
       if (hasEnSplit(lang, 'audience', c.audienceNoLang)) {
+        const parts = enSplit(c.audience, c.audienceNoLang);
         return this.$t('lists.grid.enSplit', {
-          en: this.$utils.formatNumber(c.audience - c.audienceNoLang),
-          none: this.$utils.formatNumber(c.audienceNoLang),
+          en: this.$utils.formatNumber(parts.en),
+          none: this.$utils.formatNumber(parts.none),
         });
       }
       return this.$t('campaigns.toSendHelp');

@@ -482,6 +482,22 @@ SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang);
 
+-- name: get-evergreen-sent-split
+-- Fork (campaign-page audience box). Of the subscribers evergreen campaign $1 has SENT to
+-- (campaign_sends rows with sent_at -- the per-recipient record an evergreen keeps; a
+-- broadcast keeps none), how many carry English and how many no language TODAY
+-- (subscriber_lang). Both shares come from the same rows so the UI's "n en + m no
+-- language" never goes negative -- campaigns.sent is a separate counter (bumped on the
+-- next scan tick, and not on a maybe-delivered failure), so the two need not sum to it.
+-- The send-time language is not recorded: a subscriber who set a language after their
+-- welcome moves between shares, and a since-deleted subscriber (no FK) drops out of both.
+SELECT COUNT(DISTINCT cs.subscriber_id) FILTER (WHERE subscriber_lang(s.attribs) = 'en')::INT AS en,
+       COUNT(DISTINCT cs.subscriber_id) FILTER (WHERE subscriber_lang(s.attribs) = 'none')::INT AS no_lang
+    FROM campaign_sends cs
+    JOIN subscribers s ON (s.id = cs.subscriber_id)
+    WHERE cs.campaign_id = $1
+      AND cs.sent_at IS NOT NULL;
+
 -- name: get-campaign-attrib-coverage
 -- Fork (click tracking, CLICK-TRACKING-SPEC D11). For campaign $1 and attribute key $2, the
 -- number of targeted subscribers (same opt-in and language predicate as the audience count

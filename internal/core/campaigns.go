@@ -91,10 +91,23 @@ func (c *Core) GetCampaign(id int, uuid, archiveSlug string) (models.Campaign, e
 // FillAudience (fork, list-page / campaign-page audience) attaches the live expected send
 // to a not-yet-started broadcast through the one audience query (no further copy of the
 // send predicate). A failed count leaves the fields null rather than failing the read.
-// Called only where the campaign JSON is served (QueryCampaigns, the GetCampaign handler):
+// Called only where the campaign JSON is served (QueryCampaigns; the GetCampaign,
+// UpdateCampaign and UpdateCampaignStatus handlers -- the page keeps each response):
 // Core.GetCampaign is the internal read every save/start/public view reuses, and the count
 // is a DISTINCT join over the lists' membership (implementation review M2).
 func (c *Core) FillAudience(cm *models.Campaign) {
+	if wantsSentNoLang(*cm) {
+		var row struct {
+			En     int `db:"en"`
+			NoLang int `db:"no_lang"`
+		}
+		if err := c.q.GetEvergreenSentSplit.Get(&row, cm.ID); err != nil {
+			c.log.Printf("error counting evergreen sends by language (%d): %v", cm.ID, err)
+		} else {
+			cm.SentEn = null.IntFrom(row.En)
+			cm.SentNoLang = null.IntFrom(row.NoLang)
+		}
+	}
 	if !wantsAudience(*cm) {
 		return
 	}
@@ -105,6 +118,17 @@ func (c *Core) FillAudience(cm *models.Campaign) {
 	}
 	cm.Audience = null.IntFrom(n)
 	cm.AudienceNoLang = null.IntFrom(noLang)
+}
+
+// wantsSentNoLang (fork, campaign-page audience box) reports whether cm carries the
+// no-language share of its sent count: a not-done English evergreen (the only campaign kind
+// with a per-recipient send record, and the only send language that reaches no-language
+// subscribers).
+func wantsSentNoLang(cm models.Campaign) bool {
+	if !cm.Evergreen || cm.Lang() != "en" {
+		return false
+	}
+	return cm.Status != models.CampaignStatusFinished && cm.Status != models.CampaignStatusCancelled
 }
 
 // GetArchivedCampaign retrieves a campaign with the archive template body.
