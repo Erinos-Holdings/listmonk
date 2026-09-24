@@ -345,6 +345,17 @@ export default Vue.extend({
 .dashboard-ses {
   position: relative;
 
+  // section.dashboard's count-label rule (style.scss: label { display: inline-block; text-align:
+  // right; font-weight: bold; min-width }) also hits Buefy's switch, which is a <label> -- the
+  // control stacked above its text. Restore the switch's own inline-flex layout here so it reads
+  // exactly as the Brands page's: control left, label right.
+  .switch {
+    display: inline-flex;
+    font-weight: normal;
+    min-width: 0;
+    text-align: left;
+  }
+
   .quota-track,
   .rate-track {
     position: relative;
