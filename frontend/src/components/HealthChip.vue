@@ -17,7 +17,7 @@
     <b-tag v-else class="health-tag health-unknown" data-cy="health-unknown">{{ $t('brands.status.unknown') }}</b-tag>
     <!-- BRANDS-UX-SPEC D8: a mark (URL from the health document) replaces the text hint; the
     hint stays its accessible name and tooltip. -->
-    <img v-if="hint && hintImg" class="health-hint-img ml-2" :src="hintImg" :alt="hint" :title="hint" height="16"
+    <img v-if="hint && hintImgOk" class="health-hint-img ml-2" :src="hintImg" :alt="hint" :title="hint" height="16"
       data-cy="health-hint-img">
     <span v-else-if="hint" class="is-size-7 has-text-grey health-hint">{{ hint }}</span>
   </span>
@@ -46,6 +46,13 @@ export default {
   },
 
   computed: {
+    // The mark renders only from an https URL (the registry script accepts nothing else); any
+    // other value falls through to the text hint, so the document can never make the admin
+    // page fetch an http:/data: resource.
+    hintImgOk() {
+      return /^https:\/\//i.test(this.hintImg);
+    },
+
     label() {
       const s = STATUSES.includes(this.status) ? this.status : 'unknown';
       return this.$t(`brands.status.${s}`);
