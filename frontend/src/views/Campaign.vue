@@ -91,8 +91,10 @@
         <p v-if="storedLang" class="audience-head" :title="audienceHeadTitle" data-cy="audience-lang">
           {{ audienceHeadLabel }}
         </p>
+        <!-- append-to-body: the box clips its overflow for the rounded corners, which would
+             clip the tooltip too. -->
         <b-tooltip :label="audienceCountHelp" type="is-dark" multilined :triggers="['hover', 'focus']"
-          position="is-left">
+          position="is-left" append-to-body>
           <p class="audience-count" tabindex="0" data-cy="audience-count">
             {{ $utils.formatNumber(audienceBox.count) }}
           </p>
