@@ -1264,7 +1264,9 @@ export default Vue.extend({
             // No longer running: refetch the final status and counts. A plain read, not the
             // page loader -- that would replay its load-time brand-repoint notice.
             this.$api.getCampaign(this.data.id).then((d) => {
-              this.data = { ...this.data, status: d.status, sent: d.sent, toSend: d.toSend };
+              this.data = {
+                ...this.data, status: d.status, sent: d.sent, toSend: d.toSend,
+              };
             });
           }
         });
