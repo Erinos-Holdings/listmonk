@@ -153,7 +153,7 @@
           the count stands alone and the row sorts last. Hover: the rule, from the row's own
           thresholds/floors (rows written before they were carried show no tooltip). -->
           <b-table-column v-slot="props" field="bounceRate" :label="$t('dashboard.ses.bounces')" numeric sortable>
-            <b-tooltip :label="rateTip(props.row, 'bounce')" :active="!!rateTip(props.row, 'bounce')" type="is-dark" multilined>
+            <b-tooltip :label="rateTip(props.row, 'bounce')" :active="!!rateTip(props.row, 'bounce')" type="is-dark" multilined append-to-body>
               <template v-if="typeof props.row.bounceRate === 'number'">
                 {{ pct(props.row.bounceRate, 2) }}
                 <span class="is-size-7 has-text-grey">({{ num(props.row.bounces) }})</span>
@@ -162,7 +162,7 @@
             </b-tooltip>
           </b-table-column>
           <b-table-column v-slot="props" field="complaintRate" :label="$t('dashboard.ses.complaints')" numeric sortable>
-            <b-tooltip :label="rateTip(props.row, 'complaint')" :active="!!rateTip(props.row, 'complaint')" type="is-dark" multilined>
+            <b-tooltip :label="rateTip(props.row, 'complaint')" :active="!!rateTip(props.row, 'complaint')" type="is-dark" multilined append-to-body>
               <template v-if="typeof props.row.complaintRate === 'number'">
                 {{ pct(props.row.complaintRate, 3) }}
                 <span class="is-size-7 has-text-grey">({{ num(props.row.complaints) }})</span>

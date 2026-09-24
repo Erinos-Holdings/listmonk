@@ -3,7 +3,9 @@
   BrandHealth Lambda computed; it computes nothing. Four states plus "no row for this tag".
   unknown is neutral grey and never carries a warning glyph. -->
   <span class="health-chip">
-    <b-tooltip v-if="status" :label="tooltip" :active="!!tooltip" type="is-dark" multilined>
+    <!-- append-to-body: the Brands/Lists tables scroll inside their wrapper, which would clip a
+    tooltip popping above the first row. -->
+    <b-tooltip v-if="status" :label="tooltip" :active="!!tooltip" type="is-dark" multilined append-to-body>
       <router-link v-if="to" :to="to" :data-cy="`health-${status}`">
         <b-tag :class="['health-tag', `health-${status}`]">{{ label }}</b-tag>
       </router-link>

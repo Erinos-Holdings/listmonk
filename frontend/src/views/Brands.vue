@@ -134,12 +134,12 @@
               <detail-cols />
               <tbody>
                 <tr v-for="r in (detailOf('config').rows || [])" :key="r.requirement">
-                  <td>{{ r.requirement }}</td><td><value-tag :level="complianceLevel(r.status)" :tip="$t('brands.tips.compliance')">{{ r.status }}</value-tag></td>
+                  <td>{{ r.requirement }}</td><td><value-tag :level="complianceLevel(r.status, detailOf('config').rolledUpTo)" :tip="tipCompliance()">{{ r.status }}</value-tag></td>
                 </tr>
                 <tr v-if="detailOf('config').oneClickUnsubscribe">
                   <td>{{ $t('brands.oneClick') }}</td>
                   <td>
-                    <value-tag :level="complianceLevel(detailOf('config').oneClickUnsubscribe.status)" :tip="$t('brands.tips.compliance')">
+                    <value-tag :level="complianceLevel(detailOf('config').oneClickUnsubscribe.status, detailOf('config').rolledUpTo)" :tip="tipCompliance()">
                       {{ detailOf('config').oneClickUnsubscribe.status }}
                     </value-tag>
                   </td>
@@ -147,7 +147,7 @@
                 <tr v-if="detailOf('config').honorUnsubscribe">
                   <td>{{ $t('brands.honorUnsub') }}</td>
                   <td>
-                    <value-tag :level="complianceLevel(detailOf('config').honorUnsubscribe.status)" :tip="$t('brands.tips.compliance')">
+                    <value-tag :level="complianceLevel(detailOf('config').honorUnsubscribe.status, detailOf('config').rolledUpTo)" :tip="tipCompliance()">
                       {{ detailOf('config').honorUnsubscribe.status }}
                     </value-tag>
                   </td>
@@ -171,11 +171,11 @@
               <tbody>
                 <tr>
                   <td>{{ $t('brands.verdictState') }}</td>
-                  <td><value-tag :level="verdictLevel(detailOf('verdict'))" :tip="$t('brands.tips.verdict')">{{ detailOf('verdict').state || '—' }}</value-tag></td>
+                  <td><value-tag :level="verdictLevel(detailOf('verdict'))" :tip="tipVerdict()">{{ detailOf('verdict').state || '—' }}</value-tag></td>
                 </tr>
                 <tr>
                   <td>{{ $t('brands.verdictReason') }}</td>
-                  <td><value-tag :level="verdictLevel(detailOf('verdict'))" :tip="$t('brands.tips.verdict')">{{ detailOf('verdict').reason || '—' }}</value-tag></td>
+                  <td><value-tag :level="verdictLevel(detailOf('verdict'))" :tip="tipVerdict()">{{ detailOf('verdict').reason || '—' }}</value-tag></td>
                 </tr>
               </tbody>
             </table>
@@ -231,12 +231,8 @@
                     <template v-else>{{ s.name }}</template>
                   </td>
                   <td>{{ s.sent }}</td><td>{{ s.views }}</td>
-                  <td>
-                    <value-tag v-if="s.sent" :level="viewRateLevel(s.views / s.sent, detailOf('engagement').thresholds)" :tip="tipViewRate()">
-                      {{ pct(s.views / s.sent, 1) }}
-                    </value-tag>
-                    <template v-else>—</template>
-                  </td>
+                  <!-- Plain: the Lambda classifies only the pooled view rate above, never one campaign. -->
+                  <td>{{ s.sent ? pct(s.views / s.sent, 1) : '—' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -321,14 +317,14 @@
                   <tr>
                     <td>{{ $t('brands.ses.alarmComplaints') }}</td>
                     <td>
-                      <value-tag :level="alarmLevel(sesAlarm('complaints'))" :tip="$t('brands.tips.alarm', { metric: 'complaint' })">
+                      <value-tag :level="alarmLevel(sesAlarm('complaints'))" :tip="$t('brands.tips.alarmComplaints')">
                         {{ sesAlarm('complaints') || $t('brands.ses.noAlarm') }}
                       </value-tag>
                     </td>
                   </tr>
                   <tr>
                     <td>{{ $t('brands.ses.alarmBounces') }}</td>
-                    <td><value-tag :level="alarmLevel(sesAlarm('bounces'))" :tip="$t('brands.tips.alarm', { metric: 'bounce' })">{{ sesAlarm('bounces') || $t('brands.ses.noAlarm') }}</value-tag></td>
+                    <td><value-tag :level="alarmLevel(sesAlarm('bounces'))" :tip="$t('brands.tips.alarmBounces')">{{ sesAlarm('bounces') || $t('brands.ses.noAlarm') }}</value-tag></td>
                   </tr>
                 </tbody>
               </table>
@@ -600,24 +596,41 @@ export default Vue.extend({
     // each input (lib/brand-health.ts: configInput, verdictStatus, spamRateInput,
     // engagementInput, dnsblInput; lib/ses-health.ts classifyRate) using the document's OWN
     // thresholds where there are any -- the box chip beside them is still the Lambda's verdict.
-    complianceLevel(status) {
+    // alarmLevel is the one level with NO Lambda counterpart (alarm states never feed a status).
+    // configInput: only NEEDS_WORK is issues; any other non-empty status counts as ok. A
+    // rolled-up parent's data caps at warn (the Lambda's `cap(status, "warn")`).
+    complianceLevel(status, rolledUpTo) {
+      let level = 'unknown';
       if (status === 'NEEDS_WORK') {
-        return 'issues';
+        level = 'issues';
+      } else if (status) {
+        level = 'ok';
       }
-      return status === 'COMPLIANT' ? 'ok' : 'unknown';
+      return rolledUpTo && level === 'issues' ? 'warn' : level;
     },
 
     verdictLevel(v) {
       if (!v || v.reason === 'MESSAGE_VOLUME_LOW') {
         return 'unknown';
       }
+      let level = 'unknown';
       if (v.state === 'NEEDS_WORK') {
-        return 'issues';
+        level = 'issues';
+      } else if (v.state === 'COMPLIANT') {
+        level = v.reason === 'USER_FEEDBACK_LOW' ? 'warn' : 'ok';
       }
-      if (v.state === 'COMPLIANT') {
-        return v.reason === 'USER_FEEDBACK_LOW' ? 'warn' : 'ok';
-      }
-      return 'unknown';
+      return v.rolledUpTo && level === 'issues' ? 'warn' : level;
+    },
+
+    // The rule text, plus the rolled-up caveat when the data is a parent domain's.
+    tipCompliance() {
+      const r = this.detailOf('config').rolledUpTo;
+      return this.$t('brands.tips.compliance') + (r ? ` ${this.$t('brands.tips.rolledUp', { parent: r })}` : '');
+    },
+
+    tipVerdict() {
+      const r = this.detailOf('verdict').rolledUpTo;
+      return this.$t('brands.tips.verdict') + (r ? ` ${this.$t('brands.tips.rolledUp', { parent: r })}` : '');
     },
 
     // A rate against {warn, issues} lines (spam rate, SES bounce/complaint); no lines → no tag.
@@ -779,9 +792,6 @@ export default Vue.extend({
     td, th {
       overflow-wrap: anywhere;
     }
-  }
-  .bar-cell {
-    width: 40%;
   }
   .bar {
     display: inline-block;
