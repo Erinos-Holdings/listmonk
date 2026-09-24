@@ -182,6 +182,7 @@
     "campaigns.onlyPausedDraft": "Only paused campaigns and drafts can be started.",
     "campaigns.onlyScheduledAsDraft": "Only scheduled campaigns can be saved as drafts.",
     "campaigns.pause": "Pause",
+    "campaigns.pauseCampaign": "Pause campaign",
     "campaigns.plainText": "Plain text",
     "campaigns.preheader": "Preheader text",
     "campaigns.preheaderHelp": "Hidden preview text shown after the subject in inboxes. Optional.",

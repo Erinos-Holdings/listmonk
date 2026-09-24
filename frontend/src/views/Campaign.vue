@@ -35,7 +35,7 @@
             <b-field expanded>
               <b-button expanded @click="$utils.confirm(null, pauseCampaign)" :loading="loading.campaigns"
                 type="is-primary" icon-left="pause-circle-outline" data-cy="btn-pause-evergreen">
-                {{ $t('campaigns.pause') }}
+                {{ $t('campaigns.pauseCampaign') }}
               </b-button>
             </b-field>
           </b-field>
