@@ -40,7 +40,7 @@
       <b-table-column v-slot="props" field="domain" :label="$t('brands.domain')">
         {{ props.row.domain }}
       </b-table-column>
-      <b-table-column v-slot="props" field="channel" :label="$t('brands.channel')">
+      <b-table-column v-slot="props" field="channel" :label="$t('brands.channel')" sortable>
         {{ (props.row.facts && props.row.facts.channel) || '—' }}
       </b-table-column>
       <b-table-column v-slot="props" field="status" :label="$t('brands.health')" sortable
@@ -131,15 +131,26 @@
               {{ inputOf(current, 'config').detail }}
             </p>
             <table v-else class="table is-narrow is-fullwidth is-size-7">
+              <detail-cols />
               <tbody>
                 <tr v-for="r in (detailOf('config').rows || [])" :key="r.requirement">
-                  <td>{{ r.requirement }}</td><td>{{ r.status }}</td>
+                  <td>{{ r.requirement }}</td><td><value-tag :level="complianceLevel(r.status)" :tip="$t('brands.tips.compliance')">{{ r.status }}</value-tag></td>
                 </tr>
                 <tr v-if="detailOf('config').oneClickUnsubscribe">
-                  <td>{{ $t('brands.oneClick') }}</td><td>{{ detailOf('config').oneClickUnsubscribe.status }}</td>
+                  <td>{{ $t('brands.oneClick') }}</td>
+                  <td>
+                    <value-tag :level="complianceLevel(detailOf('config').oneClickUnsubscribe.status)" :tip="$t('brands.tips.compliance')">
+                      {{ detailOf('config').oneClickUnsubscribe.status }}
+                    </value-tag>
+                  </td>
                 </tr>
                 <tr v-if="detailOf('config').honorUnsubscribe">
-                  <td>{{ $t('brands.honorUnsub') }}</td><td>{{ detailOf('config').honorUnsubscribe.status }}</td>
+                  <td>{{ $t('brands.honorUnsub') }}</td>
+                  <td>
+                    <value-tag :level="complianceLevel(detailOf('config').honorUnsubscribe.status)" :tip="$t('brands.tips.compliance')">
+                      {{ detailOf('config').honorUnsubscribe.status }}
+                    </value-tag>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -155,9 +166,19 @@
             <p v-if="typeof inputOf(current, 'verdict').detail === 'string'" class="is-size-7">
               {{ inputOf(current, 'verdict').detail }}
             </p>
-            <p v-else class="is-size-7">
-              {{ detailOf('verdict').state || '—' }} / {{ detailOf('verdict').reason || '—' }}
-            </p>
+            <table v-else class="table is-narrow is-fullwidth is-size-7">
+              <detail-cols />
+              <tbody>
+                <tr>
+                  <td>{{ $t('brands.verdictState') }}</td>
+                  <td><value-tag :level="verdictLevel(detailOf('verdict'))" :tip="$t('brands.tips.verdict')">{{ detailOf('verdict').state || '—' }}</value-tag></td>
+                </tr>
+                <tr>
+                  <td>{{ $t('brands.verdictReason') }}</td>
+                  <td><value-tag :level="verdictLevel(detailOf('verdict'))" :tip="$t('brands.tips.verdict')">{{ detailOf('verdict').reason || '—' }}</value-tag></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <!-- Spam rate -->
@@ -169,11 +190,12 @@
             <source-line :sources="sourcesOf('spamRate')" />
             <p v-if="!spamSeries.length" class="is-size-7 has-text-grey">{{ $t('brands.noGmailDays') }}</p>
             <table v-else class="table is-narrow is-fullwidth is-size-7">
+              <detail-cols />
               <thead><tr><th>{{ $t('brands.day') }}</th><th>{{ $t('brands.inputs.spamRate') }}</th><th /></tr></thead>
               <tbody>
                 <tr v-for="p in spamSeries" :key="p.day">
                   <td>{{ p.day }}</td>
-                  <td>{{ pct(p.spamRate, 2) }}</td>
+                  <td><value-tag :level="rateLevel(p.spamRate, detailOf('spamRate').thresholds)" :tip="tipSpamRate()">{{ pct(p.spamRate, 2) }}</value-tag></td>
                   <td class="bar-cell"><span class="bar" :style="{ width: barWidth(p.spamRate) }" /></td>
                 </tr>
               </tbody>
@@ -189,9 +211,13 @@
             <source-line :sources="sourcesOf('engagement')" />
             <p v-if="detailOf('engagement').viewRate !== undefined && detailOf('engagement').viewRate !== null"
               class="is-size-7 mb-2">
-              {{ $t('brands.viewRate') }}: {{ pct(detailOf('engagement').viewRate, 1) }}
+              {{ $t('brands.viewRate') }}:
+              <value-tag :level="viewRateLevel(detailOf('engagement').viewRate, detailOf('engagement').thresholds)" :tip="tipViewRate()">
+                {{ pct(detailOf('engagement').viewRate, 1) }}
+              </value-tag>
             </p>
             <table v-if="(detailOf('engagement').sends || []).length" class="table is-narrow is-fullwidth is-size-7">
+              <detail-cols />
               <thead>
                 <tr>
                   <th>{{ $t('brands.campaign') }}</th><th>{{ $t('brands.sent') }}</th>
@@ -205,7 +231,12 @@
                     <template v-else>{{ s.name }}</template>
                   </td>
                   <td>{{ s.sent }}</td><td>{{ s.views }}</td>
-                  <td>{{ s.sent ? pct(s.views / s.sent, 1) : '—' }}</td>
+                  <td>
+                    <value-tag v-if="s.sent" :level="viewRateLevel(s.views / s.sent, detailOf('engagement').thresholds)" :tip="tipViewRate()">
+                      {{ pct(s.views / s.sent, 1) }}
+                    </value-tag>
+                    <template v-else>—</template>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -220,13 +251,14 @@
             </h3>
             <source-line :sources="sourcesOf('dnsbl')" />
             <table class="table is-narrow is-fullwidth is-size-7">
+              <detail-cols />
               <tbody>
                 <tr v-for="l in (detailOf('dnsbl').lists || [])" :key="l.zone">
                   <td>
                     <a v-if="isHttpUrl(l.url)" :href="l.url" target="_blank" rel="noopener">{{ l.zone }}</a>
                     <template v-else>{{ l.zone }}</template>
                   </td>
-                  <td>{{ l.result }}</td><td>{{ l.code || '' }}</td>
+                  <td><value-tag :level="dnsblLevel(l.result)" :tip="$t('brands.tips.dnsbl')">{{ l.result }}</value-tag></td><td>{{ l.code || '' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -249,6 +281,7 @@
                 {{ $t('brands.ses.window', { start: detailOf('ses').window.start, end: detailOf('ses').window.end }) }}
               </p>
               <table class="table is-narrow is-fullwidth is-size-7">
+                <detail-cols />
                 <tbody>
                   <tr><td>{{ $t('brands.ses.sends') }}</td><td>{{ detailOf('ses').sends }}</td></tr>
                   <tr><td>{{ $t('brands.ses.deliveries') }}</td><td>{{ detailOf('ses').deliveries }}</td></tr>
@@ -258,8 +291,10 @@
                   <tr>
                     <td>{{ $t('brands.ses.bounceRate') }}</td>
                     <td>
-                      <template v-if="sesClassified('bounce')">{{ pct(detailOf('ses').bounceRate, 2) }}</template>
-                      <span v-else class="has-text-grey">{{ $t('brands.ses.notClassified') }}</span>
+                      <value-tag v-if="sesClassified('bounce')" :level="rateLevel(detailOf('ses').bounceRate, sesThreshold('bounce'))" :tip="tipSesRate('bounce')">
+                        {{ pct(detailOf('ses').bounceRate, 2) }}
+                      </value-tag>
+                      <value-tag v-else level="unknown" :tip="tipSesRate('bounce')">{{ $t('brands.ses.notClassified') }}</value-tag>
                       <span v-if="sesThreshold('bounce')" class="has-text-grey">
                         ({{ pct(sesThreshold('bounce').warn, 1) }} / {{ pct(sesThreshold('bounce').issues, 1) }})
                       </span>
@@ -268,8 +303,10 @@
                   <tr>
                     <td>{{ $t('brands.ses.complaintRate') }}</td>
                     <td>
-                      <template v-if="sesClassified('complaint')">{{ pct(detailOf('ses').complaintRate, 3) }}</template>
-                      <span v-else class="has-text-grey">{{ $t('brands.ses.notClassified') }}</span>
+                      <value-tag v-if="sesClassified('complaint')" :level="rateLevel(detailOf('ses').complaintRate, sesThreshold('complaint'))" :tip="tipSesRate('complaint')">
+                        {{ pct(detailOf('ses').complaintRate, 3) }}
+                      </value-tag>
+                      <value-tag v-else level="unknown" :tip="tipSesRate('complaint')">{{ $t('brands.ses.notClassified') }}</value-tag>
                       <span v-if="sesThreshold('complaint')" class="has-text-grey">
                         ({{ pct(sesThreshold('complaint').warn, 1) }} / {{ pct(sesThreshold('complaint').issues, 1) }})
                       </span>
@@ -279,14 +316,19 @@
               </table>
               <h4 class="title is-6 mt-3 mb-2">{{ $t('brands.ses.alarms') }}</h4>
               <table class="table is-narrow is-fullwidth is-size-7">
+                <detail-cols />
                 <tbody>
                   <tr>
                     <td>{{ $t('brands.ses.alarmComplaints') }}</td>
-                    <td>{{ sesAlarm('complaints') || $t('brands.ses.noAlarm') }}</td>
+                    <td>
+                      <value-tag :level="alarmLevel(sesAlarm('complaints'))" :tip="$t('brands.tips.alarm', { metric: 'complaint' })">
+                        {{ sesAlarm('complaints') || $t('brands.ses.noAlarm') }}
+                      </value-tag>
+                    </td>
                   </tr>
                   <tr>
                     <td>{{ $t('brands.ses.alarmBounces') }}</td>
-                    <td>{{ sesAlarm('bounces') || $t('brands.ses.noAlarm') }}</td>
+                    <td><value-tag :level="alarmLevel(sesAlarm('bounces'))" :tip="$t('brands.tips.alarm', { metric: 'bounce' })">{{ sesAlarm('bounces') || $t('brands.ses.noAlarm') }}</value-tag></td>
                   </tr>
                 </tbody>
               </table>
@@ -302,6 +344,7 @@
             <h3 class="title is-6">{{ $t('brands.facts') }}</h3>
             <source-line :sources="registrySources" />
             <table class="table is-narrow is-fullwidth is-size-7">
+              <detail-cols />
               <tbody>
                 <tr v-for="f in factRows" :key="f.key"><td>{{ f.key }}</td><td>{{ f.value }}</td></tr>
               </tbody>
@@ -325,7 +368,7 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
 import {
-  compareDay, compareStatus, isUnlaunchedBrandDoc, sortRows,
+  compareDay, compareStatus, compareText, isUnlaunchedBrandDoc, sortRows,
 } from '../health-sort';
 
 // Fork (SES health, SES-HEALTH-SPEC D4/M4): `ses` is the sixth input; rows written before it
@@ -336,8 +379,9 @@ const STRIP_DAYS = 30;
 const LINKED_STATUSES = ['warn', 'issues'];
 // BRANDS-UX-SPEC D9/review M3: document facts that are a link or a mark, not a fact row.
 const FACTS_EXCLUDED = ['logoUrl', 'registrySource'];
-// BRANDS-UX-SPEC D3: the Brand column (field 'name') is the only ascending-first column.
-const ASC_FIRST_FIELDS = ['name'];
+// BRANDS-UX-SPEC D3: text columns (Brand, Channel) sort A-Z on the first click; every other
+// column is worst / largest first.
+const ASC_FIRST_FIELDS = ['name', 'channel'];
 const PREF_HIDE = 'brands.hideUnlaunched';
 
 const isHttpUrl = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
@@ -364,8 +408,37 @@ const SourceLine = {
   },
 };
 
+// One <colgroup> for every detail table so the 2nd/3rd/4th columns line up across the stacked
+// boxes whatever a table's column count (widths in the .brand-stack styles).
+const DetailCols = {
+  name: 'DetailCols',
+  render(h) {
+    return h('colgroup', [1, 2, 3, 4].map((i) => h('col', { class: `dc${i}` })));
+  },
+};
+
+// A value in the health-chip palette (ok / warn / issues / unknown) so the rows that drive a
+// box's rollup stand out; no level → plain text. `tip` is the one-line rule the value is judged
+// by (thresholds from the document), shown on hover so the page itself stays uncluttered.
+const ValueTag = {
+  name: 'ValueTag',
+  props: { level: { type: String, default: '' }, tip: { type: String, default: '' } },
+  render(h) {
+    if (!this.level) {
+      return h('span', this.$slots.default);
+    }
+    const tag = h('span', { class: ['tag', 'health-tag', `health-${this.level}`] }, this.$slots.default);
+    const body = this.tip
+      ? h('b-tooltip', { props: { label: this.tip, type: 'is-dark', multilined: true } }, [tag])
+      : tag;
+    return h('span', { class: 'health-chip' }, [body]);
+  },
+};
+
 export default Vue.extend({
-  components: { HealthChip, SourceLine },
+  components: {
+    HealthChip, SourceLine, DetailCols, ValueTag,
+  },
 
   data() {
     return {
@@ -392,6 +465,7 @@ export default Vue.extend({
       const comparators = {
         status: (a, b, o) => compareStatus(a.status, b.status, o),
         day: (a, b, o) => compareDay(a.day, b.day, o),
+        channel: (a, b, o) => compareText(a.facts && a.facts.channel, b.facts && b.facts.channel, o),
       };
       INPUT_KEYS.forEach((k) => {
         comparators[`input-${k}`] = (a, b, o) => compareStatus(this.inputOf(a, k).status, this.inputOf(b, k).status, o);
@@ -522,6 +596,98 @@ export default Vue.extend({
       return Array.isArray(s) ? s : [];
     },
 
+    // Per-VALUE levels. These restate, for display only, how the integrations Lambda classifies
+    // each input (lib/brand-health.ts: configInput, verdictStatus, spamRateInput,
+    // engagementInput, dnsblInput; lib/ses-health.ts classifyRate) using the document's OWN
+    // thresholds where there are any -- the box chip beside them is still the Lambda's verdict.
+    complianceLevel(status) {
+      if (status === 'NEEDS_WORK') {
+        return 'issues';
+      }
+      return status === 'COMPLIANT' ? 'ok' : 'unknown';
+    },
+
+    verdictLevel(v) {
+      if (!v || v.reason === 'MESSAGE_VOLUME_LOW') {
+        return 'unknown';
+      }
+      if (v.state === 'NEEDS_WORK') {
+        return 'issues';
+      }
+      if (v.state === 'COMPLIANT') {
+        return v.reason === 'USER_FEEDBACK_LOW' ? 'warn' : 'ok';
+      }
+      return 'unknown';
+    },
+
+    // A rate against {warn, issues} lines (spam rate, SES bounce/complaint); no lines → no tag.
+    rateLevel(v, t) {
+      if (typeof v !== 'number' || !t || typeof t.warn !== 'number' || typeof t.issues !== 'number') {
+        return '';
+      }
+      if (v >= t.issues) {
+        return 'issues';
+      }
+      return v >= t.warn ? 'warn' : 'ok';
+    },
+
+    // A view rate against {minViewRate, warnViewRate} floors (higher is better).
+    viewRateLevel(v, t) {
+      if (typeof v !== 'number' || !t || typeof t.minViewRate !== 'number' || typeof t.warnViewRate !== 'number') {
+        return '';
+      }
+      if (v < t.minViewRate) {
+        return 'issues';
+      }
+      return v < t.warnViewRate ? 'warn' : 'ok';
+    },
+
+    dnsblLevel(result) {
+      if (result === 'listed') {
+        return 'issues';
+      }
+      return result === 'clear' ? 'ok' : 'unknown';
+    },
+
+    // Hover text: the rule behind a tag, with the DOCUMENT's thresholds and floors filled in;
+    // empty (no tooltip) when the document carries none.
+    tipSpamRate() {
+      const t = this.detailOf('spamRate').thresholds;
+      return t && typeof t.warn === 'number' && typeof t.issues === 'number'
+        ? this.$t('brands.tips.spamRate', { warn: this.pct(t.warn, 1), issues: this.pct(t.issues, 1) }) : '';
+    },
+
+    tipViewRate() {
+      const t = this.detailOf('engagement').thresholds;
+      return t && typeof t.minViewRate === 'number' && typeof t.warnViewRate === 'number'
+        ? this.$t('brands.tips.viewRate', { sends: t.sends || '—', min: this.pct(t.minViewRate, 0), warn: this.pct(t.warnViewRate, 0) }) : '';
+    },
+
+    tipSesRate(kind) {
+      const t = this.sesThreshold(kind);
+      const f = this.detailOf('ses').floors || {};
+      if (!t) {
+        return '';
+      }
+      const warn = this.pct(t.warn, 1);
+      const issues = this.pct(t.issues, 1);
+      return kind === 'bounce'
+        ? this.$t('brands.tips.bounceRate', { floor: f.bounceSends || '—', warn, issues })
+        : this.$t('brands.tips.complaintRate', {
+          floorDeliveries: f.complaintDeliveries || '—', floorCount: f.complaintCount || '—', warn, issues,
+        });
+    },
+
+    alarmLevel(state) {
+      if (!state) {
+        return '';
+      }
+      if (state === 'ALARM') {
+        return 'issues';
+      }
+      return state === 'OK' ? 'ok' : 'unknown';
+    },
+
     isHttpUrl,
 
     chipTo(row, status) {
@@ -602,6 +768,18 @@ export default Vue.extend({
   .strip-cell.health-issues { background: #d33b3b; }
   .strip-cell.health-unknown { background: #bdbdbd; }
   .strip-cell.strip-empty { background: #f2f2f2; border: 1px dashed #d0d0d0; }
+  // Every detail table shares one column grid (DetailCols), so the value columns line up
+  // across the stacked boxes: label 45%, value 25%, then 15% + 15%.
+  .brand-stack table {
+    table-layout: fixed;
+    col.dc1 { width: 45%; }
+    col.dc2 { width: 25%; }
+    col.dc3 { width: 15%; }
+    col.dc4 { width: 15%; }
+    td, th {
+      overflow-wrap: anywhere;
+    }
+  }
   .bar-cell {
     width: 40%;
   }
@@ -611,12 +789,14 @@ export default Vue.extend({
     background: #d33b3b;
     border-radius: 2px;
   }
-  // BRANDS-UX-SPEC D10: stacked, left-aligned, half the content width; full width below
-  // Bulma's tablet breakpoint.
+  // BRANDS-UX-SPEC D10: every detail box -- headline, actions, strip and the stack -- is
+  // left-aligned at half the content width; full width below Bulma's tablet breakpoint.
+  .brand-detail > .box,
   .brand-stack > .box {
     max-width: 50%;
   }
   @media screen and (max-width: 768px) {
+    .brand-detail > .box,
     .brand-stack > .box {
       max-width: 100%;
     }

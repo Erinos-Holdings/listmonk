@@ -148,13 +148,27 @@
           <b-table-column v-slot="props" field="deliveries" :label="$t('dashboard.ses.deliveries')" numeric sortable>
             {{ num(props.row.deliveries) }}
           </b-table-column>
-          <b-table-column v-slot="props" field="bounces" :label="$t('dashboard.ses.bounces')" numeric sortable>
-            {{ num(props.row.bounces) }}
-            <span class="is-size-7 has-text-grey">{{ typeof props.row.bounceRate === 'number' ? `(${pct(props.row.bounceRate, 2)})` : '' }}</span>
+          <!-- Bounces / Complaints: the RATE is the value (it is what SES judges and what the
+          column sorts on); the count rides in grey. Under the volume floor there is no rate, so
+          the count stands alone and the row sorts last. Hover: the rule, from the row's own
+          thresholds/floors (rows written before they were carried show no tooltip). -->
+          <b-table-column v-slot="props" field="bounceRate" :label="$t('dashboard.ses.bounces')" numeric sortable>
+            <b-tooltip :label="rateTip(props.row, 'bounce')" :active="!!rateTip(props.row, 'bounce')" type="is-dark" multilined>
+              <template v-if="typeof props.row.bounceRate === 'number'">
+                {{ pct(props.row.bounceRate, 2) }}
+                <span class="is-size-7 has-text-grey">({{ num(props.row.bounces) }})</span>
+              </template>
+              <template v-else>{{ num(props.row.bounces) }}</template>
+            </b-tooltip>
           </b-table-column>
-          <b-table-column v-slot="props" field="complaints" :label="$t('dashboard.ses.complaints')" numeric sortable>
-            {{ num(props.row.complaints) }}
-            <span class="is-size-7 has-text-grey">{{ typeof props.row.complaintRate === 'number' ? `(${pct(props.row.complaintRate, 3)})` : '' }}</span>
+          <b-table-column v-slot="props" field="complaintRate" :label="$t('dashboard.ses.complaints')" numeric sortable>
+            <b-tooltip :label="rateTip(props.row, 'complaint')" :active="!!rateTip(props.row, 'complaint')" type="is-dark" multilined>
+              <template v-if="typeof props.row.complaintRate === 'number'">
+                {{ pct(props.row.complaintRate, 3) }}
+                <span class="is-size-7 has-text-grey">({{ num(props.row.complaints) }})</span>
+              </template>
+              <template v-else>{{ num(props.row.complaints) }}</template>
+            </b-tooltip>
           </b-table-column>
           <b-table-column v-slot="props" field="alarms" :label="$t('dashboard.ses.alarms')" sortable>
             <span v-if="props.row.alarms && (props.row.alarms.complaints || props.row.alarms.bounces)" class="is-size-7">
@@ -187,7 +201,7 @@ const UNLINKED = ['unattributed'];
 // BRANDS-UX-SPEC D3: the Brand column (field 'name') is the only ascending-first column.
 const ASC_FIRST_FIELDS = ['name'];
 const PREF_HIDE = 'dashboard.ses.hideUnlaunched';
-const NUMERIC_FIELDS = ['sends', 'deliveries', 'bounces', 'complaints'];
+const NUMERIC_FIELDS = ['sends', 'deliveries', 'bounceRate', 'complaintRate'];
 const nameOf = (row) => row.displayName || row.brand || '';
 
 export default Vue.extend({
@@ -298,6 +312,23 @@ export default Vue.extend({
 
     num(v) {
       return typeof v === 'number' ? this.$utils.niceNumber(v) : '—';
+    },
+
+    // The rule behind a rate cell, from the ROW's thresholds and floors (the brand lines the
+    // Lambda classified against); '' when the row carries none.
+    rateTip(row, kind) {
+      const t = row && row.thresholds && row.thresholds[kind];
+      const f = (row && row.floors) || {};
+      if (!t || typeof t.warn !== 'number' || typeof t.issues !== 'number') {
+        return '';
+      }
+      const warn = this.pct(t.warn, 1);
+      const issues = this.pct(t.issues, 1);
+      return kind === 'bounce'
+        ? this.$t('brands.tips.bounceRate', { floor: f.bounceSends || '—', warn, issues })
+        : this.$t('brands.tips.complaintRate', {
+          floorDeliveries: f.complaintDeliveries || '—', floorCount: f.complaintCount || '—', warn, issues,
+        });
     },
 
     // The Lists.vue onSort pattern (BRANDS-UX-SPEC D3); see Brands.vue onSort.

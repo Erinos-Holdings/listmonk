@@ -10,6 +10,7 @@ import {
   compareAlarms,
   compareNumber,
   compareDay,
+  compareText,
   compareName,
   withBrandTiebreak,
   sortRows,
@@ -58,6 +59,12 @@ test('I1 compareNumber: numeric, missing (null / non-number / NaN) last in BOTH 
   const asc = sortVals(vals, compareNumber, 'asc');
   assert.deepEqual(asc.slice(0, 4), [0, 5, 20, 100]);
   assert.equal(asc.slice(4).every((v) => typeof v !== 'number' || Number.isNaN(v)), true);
+});
+
+test('I1 compareText: case-insensitive text; missing/empty last both ways', () => {
+  const vals = ['zma', null, 'Listmonk', '', 'listmonk'];
+  assert.deepEqual(sortVals(vals, compareText, 'asc'), ['Listmonk', 'listmonk', 'zma', null, '']);
+  assert.deepEqual(sortVals(vals, compareText, 'desc'), ['zma', 'Listmonk', 'listmonk', null, '']);
 });
 
 test('I1 compareDay: the day string; missing last both ways', () => {

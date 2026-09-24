@@ -75,6 +75,16 @@ export function compareDay(x, y, order = 'asc') {
   return (x < y ? -1 : 1) * dir(order);
 }
 
+// A plain text cell (e.g. Channel): case-insensitive, missing/empty last in both directions.
+export function compareText(x, y, order = 'asc') {
+  const mx = typeof x !== 'string' || !x;
+  const my = typeof y !== 'string' || !y;
+  if (mx || my) {
+    return Number(mx) - Number(my);
+  }
+  return x.toLowerCase().localeCompare(y.toLowerCase()) * dir(order);
+}
+
 // Case-insensitive localeCompare on the DISPLAYED name.
 export function compareName(nameOf) {
   return (a, b, order = 'asc') => {
