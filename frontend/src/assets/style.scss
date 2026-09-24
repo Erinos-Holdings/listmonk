@@ -1638,3 +1638,87 @@ th.role-toggle-select a {
 .evergreen-field .label {
   white-space: nowrap;
 }
+
+/* Fork (campaign-page audience box; Campaign.vue, rule in audience-box.mjs). */
+section.campaign {
+  /* Room under the buttons for the part of the box that rises above the tab strip. */
+  .page-header .column.audience-room {
+    min-height: 6.5rem;
+  }
+
+  /* The running-automation notice stops at the right edge of the Campaign tab's form column
+  (column is-7 inside .tab-content's 20px padding and the columns' 0.75rem gutters). */
+  .evergreen-notice {
+    width: calc((100% - 16px) * 0.58333 - 4px);
+    max-width: 100%;
+  }
+
+  .audience-anchor {
+    position: relative;
+    height: 0;
+    z-index: 1;
+  }
+
+  .audience-box {
+    position: absolute;
+    right: 0;
+    top: 2.6rem; /* the tab strip's height; measured at runtime */
+    transform: translateY(-100%);
+    width: 12rem; /* the right-most header button's width; measured at runtime */
+    border-radius: $radius;
+    overflow: hidden;
+    text-align: center;
+    background: $white;
+
+    .audience-head {
+      font-weight: 600;
+      line-height: 1.75rem;
+    }
+
+    .b-tooltip {
+      display: block;
+    }
+
+    .audience-count {
+      font-size: $size-6;
+      font-weight: 700;
+      line-height: 2.5rem;
+      color: $white;
+      cursor: default;
+    }
+
+    &.is-success {
+      border: 1px solid $success;
+      .audience-head { background: $success-light; color: $success-dark; }
+      .audience-count { background: $success; }
+    }
+    &.is-danger {
+      border: 1px solid $danger;
+      .audience-head { background: $danger-light; color: $danger-dark; }
+      .audience-count { background: $danger; }
+    }
+    &.is-info {
+      border: 1px solid $info;
+      .audience-head { background: $info-light; color: $info-dark; }
+      .audience-count { background: $info; }
+    }
+    &.is-grey {
+      border: 1px solid $grey-light;
+      .audience-head { background: $white-ter; color: $grey-dark; }
+      .audience-count { background: $grey; }
+    }
+  }
+}
+
+@media screen and (max-width: 850px) {
+  section.campaign {
+    .audience-anchor { height: auto; }
+    .audience-box {
+      position: static;
+      transform: none;
+      width: 100% !important;
+      margin-bottom: 1rem;
+    }
+    .evergreen-notice { width: auto; }
+  }
+}

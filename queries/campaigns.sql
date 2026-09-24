@@ -454,7 +454,11 @@ SELECT COUNT(DISTINCT sl.subscriber_id)::INT
 -- name: get-campaign-lang-audience
 -- Fork (multi-language campaigns). The number of subscribers campaign $1 would send to
 -- under its lists' opt-in rules AND its attribs.lang -- the next-campaigns count, for one
--- campaign, without the side effects. Drives the zero-audience warning at start.
+-- campaign, without the side effects. Drives the zero-audience warning at start and the
+-- To send count on the Campaigns list and the Campaign page. `no_lang` is how many of
+-- them carry NO language (subscriber_lang = 'none', the rows an English send reaches by
+-- COALESCE-EN); it is zero for a non-English campaign by construction, and the UI splits
+-- the EN+ count as "n en + m no language" with it, as the Lists grid does.
 WITH camp AS (
     SELECT id, type, attribs->>'lang' AS lang FROM campaigns WHERE id = $1
 ),
@@ -463,7 +467,8 @@ campLists AS (
     INNER JOIN campaign_lists ON (campaign_lists.list_id = lists.id)
     WHERE campaign_lists.campaign_id = $1
 )
-SELECT COUNT(DISTINCT sl.subscriber_id)
+SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
+       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE subscriber_lang(s.attribs) = 'none') AS no_lang
     FROM camp
     JOIN campLists cl ON TRUE
     JOIN subscriber_lists sl ON sl.list_id = cl.list_id

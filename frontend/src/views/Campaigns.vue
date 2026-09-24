@@ -194,7 +194,7 @@
                stored to_send, which stays 0 until the send-time claim. Zero is a warning. -->
           <p v-if="hasAudience(props.row)" data-cy="stat-to-send">
             <label for="#">{{ $t('campaigns.toSend') }}</label>
-            <b-tooltip :label="$t('campaigns.toSendHelp')" type="is-dark" multilined>
+            <b-tooltip :label="toSendHelp(props.row)" type="is-dark" multilined>
               <span :class="{ 'has-text-danger has-text-weight-bold': props.row.audience === 0 }">
                 {{ $utils.formatNumber(props.row.audience) }}
               </span>
@@ -344,6 +344,7 @@ import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus, sendLangCode } from '../langs';
+import { hasEnSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -413,6 +414,19 @@ export default Vue.extend({
     // (core.wantsAudience -- not-yet-started broadcasts); null means "no estimate", never zero.
     hasAudience(c) {
       return c.audience !== null && c.audience !== undefined;
+    },
+
+    // An English audience with no-language rows hovers as the Lists grid's EN+ split
+    // ("n en + m no language"); every other campaign keeps the plain To send text.
+    toSendHelp(c) {
+      const lang = (c.attribs && c.attribs.lang) || '';
+      if (hasEnSplit(lang, 'audience', c.audienceNoLang)) {
+        return this.$t('lists.grid.enSplit', {
+          en: this.$utils.formatNumber(c.audience - c.audienceNoLang),
+          none: this.$utils.formatNumber(c.audienceNoLang),
+        });
+      }
+      return this.$t('campaigns.toSendHelp');
     },
 
     // Fork (send retry, SEND-RETRY-SPEC D6). to_send is recomputed from live list

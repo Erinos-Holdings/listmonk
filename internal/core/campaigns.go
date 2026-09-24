@@ -72,12 +72,7 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 		if !wantsAudience(out[i]) {
 			continue
 		}
-		n, err := c.CampaignLangAudience(out[i].ID)
-		if err != nil {
-			c.log.Printf("error counting campaign audience (%d): %v", out[i].ID, err)
-			continue
-		}
-		out[i].Audience = null.IntFrom(n)
+		c.fillAudience(&out[i])
 	}
 
 	total := 0
@@ -90,7 +85,31 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 
 // GetCampaign retrieves a campaign.
 func (c *Core) GetCampaign(id int, uuid, archiveSlug string) (models.Campaign, error) {
-	return c.getCampaign(id, uuid, archiveSlug, campaignTplDefault)
+	out, err := c.getCampaign(id, uuid, archiveSlug, campaignTplDefault)
+	if err != nil {
+		return out, err
+	}
+	// Fork (campaign-page audience) -- the same live count the list carries, so the
+	// Campaign page's audience box reads one number with the list. Never on the archive
+	// read (public).
+	c.fillAudience(&out)
+	return out, nil
+}
+
+// fillAudience (fork, list-page / campaign-page audience) attaches the live expected send
+// to a not-yet-started broadcast through the one audience query (no further copy of the
+// send predicate). A failed count leaves the fields null rather than failing the read.
+func (c *Core) fillAudience(cm *models.Campaign) {
+	if !wantsAudience(*cm) {
+		return
+	}
+	n, noLang, err := c.CampaignLangAudience(cm.ID)
+	if err != nil {
+		c.log.Printf("error counting campaign audience (%d): %v", cm.ID, err)
+		return
+	}
+	cm.Audience = null.IntFrom(n)
+	cm.AudienceNoLang = null.IntFrom(noLang)
 }
 
 // GetArchivedCampaign retrieves a campaign with the archive template body.
@@ -398,13 +417,18 @@ func wantsAudience(cm models.Campaign) bool {
 
 // CampaignLangAudience (fork, multi-language campaigns) counts the subscribers a campaign
 // would send to under its lists' opt-in rules AND its attribs.lang -- the same predicate
-// next-campaigns uses for to_send. Used for the zero-audience warning at start.
-func (c *Core) CampaignLangAudience(id int) (int, error) {
-	var n int
-	if err := c.q.GetCampaignLangAudience.Get(&n, id); err != nil {
-		return 0, err
+// next-campaigns uses for to_send -- and how many of them carry no language (the rows an
+// English send reaches by COALESCE-EN; zero for any other language). Used for the
+// zero-audience warning at start and the To send count in the UI.
+func (c *Core) CampaignLangAudience(id int) (total int, noLang int, err error) {
+	var row struct {
+		Total  int `db:"total"`
+		NoLang int `db:"no_lang"`
 	}
-	return n, nil
+	if err := c.q.GetCampaignLangAudience.Get(&row, id); err != nil {
+		return 0, 0, err
+	}
+	return row.Total, row.NoLang, nil
 }
 
 // CampaignUnreachableLang (fork, LIST-GRID-SPEC D13) counts the ACTIVE subscribers on a

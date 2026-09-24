@@ -9,6 +9,7 @@
     "lint": "eslint --ext .js,.mjs,.vue --ignore-path .gitignore src",
     "prebuild": "eslint --ext .js,.mjs,.vue --ignore-path .gitignore src",
     "test:sort": "node --test src/health-sort.test.mjs",
+    "test:audience": "node --test src/audience-box.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },
   "dependencies": {

@@ -130,11 +130,15 @@ type CampaignMeta struct {
 	ToSend    int       `db:"to_send" json:"to_send"`
 	Sent      int       `db:"sent" json:"sent"`
 
-	// Fork (list-page audience). The LIVE count a draft or scheduled broadcast would send
-	// to right now (get-campaign-lang-audience), filled by Core.QueryCampaigns only. Null on
-	// every other status and on evergreens. Deliberately not to_send: that column is the
-	// send-time claim's, and the shortfall tag and progress bar read it.
-	Audience null.Int `db:"-" json:"audience"`
+	// Fork (list-page / campaign-page audience). The LIVE count a draft or scheduled
+	// broadcast would send to right now (get-campaign-lang-audience), filled by
+	// Core.QueryCampaigns and Core.GetCampaign. Null on every other status and on
+	// evergreens. Deliberately not to_send: that column is the send-time claim's, and the
+	// shortfall tag and progress bar read it. AudienceNoLang is the share of Audience with
+	// no language set (the "n en + m no language" split of an EN+ count; zero for a
+	// non-English campaign), null exactly when Audience is.
+	Audience       null.Int `db:"-" json:"audience"`
+	AudienceNoLang null.Int `db:"-" json:"audience_no_lang"`
 }
 
 // SendFailure (fork, SEND-RETRY-SPEC D5) is one recipient a campaign could not reach: a

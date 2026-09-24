@@ -488,7 +488,7 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		// to would otherwise finish instantly with sent 0 and nothing saying why. Warns, never
 		// blocks. Evergreens are skipped (their audience is future joiners).
 		if lang := out.Lang(); lang != "" && !out.Evergreen {
-			if n, err := a.core.CampaignLangAudience(id); err != nil {
+			if n, _, err := a.core.CampaignLangAudience(id); err != nil {
 				a.log.Printf("error counting language audience for campaign %d: %v", id, err)
 			} else if n == 0 {
 				w = append(w, a.i18n.Ts("campaigns.warnNoLangAudience", "lang", models.SendLangCode(lang)))

@@ -28,8 +28,8 @@
         </h4>
       </div>
 
-      <div class="column is-6">
-        <div v-if="canManage || canSend" class="buttons">
+      <div class="column is-6" :class="{ 'audience-room': audienceBox }">
+        <div v-if="canManage || canSend" class="buttons" ref="headerButtons">
           <!-- Fork (evergreen) -- a running evergreen is edited by pausing it first. -->
           <b-field grouped v-if="isEditing && data.evergreen && data.status === 'running' && canSend">
             <b-field expanded>
@@ -72,9 +72,33 @@
 
     <b-loading :active="loading.campaigns" />
 
-    <b-message v-if="isEditing && data.evergreen && data.status === 'running'" type="is-info" class="mb-4">
+    <!-- Fork -- stops at the right edge of the Campaign tab's form column (Name, Subject, ...)
+         so it never runs under the audience box. -->
+    <b-message v-if="isEditing && data.evergreen && data.status === 'running'" type="is-info"
+      class="mb-4 evergreen-notice">
       {{ $t('campaigns.evergreenPauseToEdit') }}
     </b-message>
+
+    <!-- Fork (campaign-page audience box; rule in audience-box.mjs). Sits outside the tabs so
+         it stays on every tab: right edge on the header's right-most button, the same width as
+         that button (measured), bottom on the tab strip's bottom (measured; hence the anchor
+         just before the tabs and the upward translate). Draft / scheduled: the LIVE count the
+         campaign would send to now, in the send language -- the same number as the Campaigns
+         list's To send, the EN+ split on hover as on the Lists grid. In progress: sent so far.
+         Done: sent. -->
+    <div v-if="audienceBox" class="audience-anchor">
+      <div class="audience-box" :class="`is-${audienceBox.tone}`" :style="audienceBoxStyle" data-cy="audience-box">
+        <p v-if="storedLang" class="audience-head" :title="audienceHeadTitle" data-cy="audience-lang">
+          {{ audienceHeadLabel }}
+        </p>
+        <b-tooltip :label="audienceCountHelp" type="is-dark" multilined :triggers="['hover', 'focus']"
+          position="is-left">
+          <p class="audience-count" tabindex="0" data-cy="audience-count">
+            {{ $utils.formatNumber(audienceBox.count) }}
+          </p>
+        </b-tooltip>
+      </div>
+    </div>
 
     <b-tabs type="is-boxed" :animated="false" v-model="activeTab" @input="onTab">
       <b-tab-item :label="$tc('globals.terms.campaign')" label-position="on-border" value="campaign"
@@ -418,6 +442,7 @@ import {
 import {
   CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
 } from '../langs';
+import { audienceBox, hasEnSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
@@ -514,6 +539,11 @@ export default Vue.extend({
       activeTab: 'campaign',
 
       data: {},
+
+      // Fork (audience box) -- measured from the header's right-most button and the tab
+      // strip (syncAudienceBox); the CSS fallbacks apply until the first measurement.
+      audienceLayout: { width: null, tabsHeight: null },
+      audiencePollID: null,
 
       // IDs from ?list_id query param.
       selListIDs: [],
@@ -1195,6 +1225,49 @@ export default Vue.extend({
       });
     },
 
+    // Fork (audience box). Width = the header's right-most button (Start / Schedule /
+    // Unschedule / Pause -- whichever renders last), top = the tab strip's height so the
+    // upward translate lands the box's bottom on the strip's bottom.
+    syncAudienceBox() {
+      if (!this.audienceBox) {
+        return;
+      }
+      const btns = this.$refs.headerButtons ? this.$refs.headerButtons.querySelectorAll('.button') : [];
+      const last = btns.length ? btns[btns.length - 1] : null;
+      const tabs = this.$el.querySelector('.b-tabs > .tabs');
+      const width = last ? Math.round(last.getBoundingClientRect().width) : null;
+      const tabsHeight = tabs ? Math.round(tabs.getBoundingClientRect().height) : null;
+      if (width !== this.audienceLayout.width || tabsHeight !== this.audienceLayout.tabsHeight) {
+        this.audienceLayout = { width, tabsHeight };
+      }
+    },
+
+    // Fork (audience box). A running broadcast's sent count moves; read it from the same
+    // running-stats endpoint the Campaigns list polls, at a gentler cadence, only while this
+    // campaign is running. Evergreens are never polled (see Campaigns.vue pollStats).
+    syncAudiencePoll() {
+      const wants = this.isEditing && this.data && this.data.status === 'running' && !this.data.evergreen;
+      if (!wants) {
+        clearInterval(this.audiencePollID);
+        this.audiencePollID = null;
+        return;
+      }
+      if (this.audiencePollID) {
+        return;
+      }
+      this.audiencePollID = setInterval(() => {
+        this.$api.getCampaignStats().then((rows) => {
+          const row = (rows || []).find((r) => `${r.id}` === `${this.data.id}`);
+          if (row) {
+            this.data = { ...this.data, sent: row.sent, toSend: row.toSend };
+          } else {
+            // No longer running: refetch for the final status and counts.
+            this.getCampaign(this.data.id);
+          }
+        });
+      }, 3000);
+    },
+
     getCampaign(id) {
       return this.$api.getCampaign(id).then((data) => {
         this.data = data;
@@ -1485,6 +1558,51 @@ export default Vue.extend({
       return this.isOptin || (!this.canEdit && !this.form.lang);
     },
 
+    // Fork (campaign-page audience box; audience-box.mjs).
+    audienceBox() {
+      return this.isEditing ? audienceBox(this.data) : null;
+    },
+
+    audienceBoxStyle() {
+      const st = {};
+      if (this.audienceLayout.width) {
+        st.width = `${this.audienceLayout.width}px`;
+      }
+      if (this.audienceLayout.tabsHeight) {
+        st.top = `${this.audienceLayout.tabsHeight}px`;
+      }
+      return st;
+    },
+
+    // The head names the SEND audience -- English+ (langs.js, the "+" convention).
+    audienceHeadLabel() {
+      return sendLangLabel(this.storedLang);
+    },
+
+    audienceHeadTitle() {
+      return isSendPlus(this.storedLang) ? this.$t('langs.sendPlusHelp') : null;
+    },
+
+    audienceCountHelp() {
+      const b = this.audienceBox;
+      if (!b) {
+        return '';
+      }
+      if (b.kind === 'sending') {
+        return this.$t(this.data.evergreen ? 'campaigns.audienceEvergreenHelp' : 'campaigns.audienceSendingHelp');
+      }
+      if (b.kind === 'sent') {
+        return this.$t('campaigns.audienceSentHelp');
+      }
+      if (hasEnSplit(this.storedLang, b.kind, b.noLang)) {
+        return this.$t('lists.grid.enSplit', {
+          en: this.$utils.formatNumber(b.count - b.noLang),
+          none: this.$utils.formatNumber(b.noLang),
+        });
+      }
+      return this.$t('campaigns.toSendHelp');
+    },
+
     // Fork (send retry, SEND-RETRY-SPEC D6) -- mirrors Campaigns.vue's isShortfall.
     isShortfall() {
       const d = this.data;
@@ -1712,6 +1830,16 @@ export default Vue.extend({
       this.syncBrandTheme();
     },
 
+    // Fork (audience box). Status and buttons change together; re-measure after render.
+    'data.status': function watchDataStatus() {
+      this.syncAudiencePoll();
+      this.$nextTick(this.syncAudienceBox);
+    },
+
+    audienceBox() {
+      this.$nextTick(this.syncAudienceBox);
+    },
+
     // eslint-disable-next-line func-names
     'data.sendAt': function () {
       if (this.data.sendAt !== null) {
@@ -1796,11 +1924,22 @@ export default Vue.extend({
 
     // Fork (session expiry): the api interceptor dispatches this before redirecting to login.
     window.addEventListener('listmonk:session-expired', this.stashDraft);
+
+    // Fork (audience box): the button and tab-strip sizes it follows change with the viewport.
+    window.addEventListener('resize', this.syncAudienceBox);
+  },
+
+  updated() {
+    // Fork (audience box): the right-most button can change on any re-render (save, start,
+    // schedule); cheap, and a no-op when nothing moved.
+    this.syncAudienceBox();
   },
 
   beforeDestroy() {
     this.$events.$off('campaign.update');
     window.removeEventListener('listmonk:session-expired', this.stashDraft);
+    window.removeEventListener('resize', this.syncAudienceBox);
+    clearInterval(this.audiencePollID);
   },
 });
 </script>
