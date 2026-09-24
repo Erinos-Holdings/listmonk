@@ -132,7 +132,7 @@ type CampaignMeta struct {
 
 	// Fork (list-page / campaign-page audience). The LIVE count a draft or scheduled
 	// broadcast would send to right now (get-campaign-lang-audience), filled by
-	// Core.QueryCampaigns and Core.GetCampaign. Null on every other status and on
+	// Core.QueryCampaigns and the GetCampaign handler. Null on every other status and on
 	// evergreens. Deliberately not to_send: that column is the send-time claim's, and the
 	// shortfall tag and progress bar read it. AudienceNoLang is the share of Audience with
 	// no language set (the "n en + m no language" split of an EN+ count; zero for a

@@ -1650,7 +1650,8 @@ section.campaign {
   (column is-7 inside .tab-content's 20px padding and the columns' 0.75rem gutters). */
   .evergreen-notice {
     width: calc((100% - 16px) * 0.58333 - 4px);
-    max-width: 100%;
+    /* section.wrap caps the form at 1100px, so the column's right edge stops growing there. */
+    max-width: calc(1124px * 0.58333 - 4px);
   }
 
   .audience-anchor {
@@ -1710,8 +1711,11 @@ section.campaign {
   }
 }
 
-@media screen and (max-width: 850px) {
+/* Below ~1000px the four boxed tabs and the box no longer fit side by side (the box would sit
+over the last tab and take its clicks), so the box drops into the flow above the strip. */
+@media screen and (max-width: 1000px) {
   section.campaign {
+    .page-header .column.audience-room { min-height: 0; }
     .audience-anchor { height: auto; }
     .audience-box {
       position: static;
@@ -1719,6 +1723,6 @@ section.campaign {
       width: 100% !important;
       margin-bottom: 1rem;
     }
-    .evergreen-notice { width: auto; }
+    .evergreen-notice { width: auto; max-width: none; }
   }
 }

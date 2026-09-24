@@ -142,6 +142,10 @@ func (a *App) GetCampaign(c echo.Context) error {
 		return err
 	}
 
+	// Fork (campaign-page audience) -- the same live count the list carries, so the Campaign
+	// page's audience box reads one number with the list.
+	a.core.FillAudience(&out)
+
 	// Blank out the body if requested.
 	noBody, _ := strconv.ParseBool(c.QueryParam("no_body"))
 	if noBody {

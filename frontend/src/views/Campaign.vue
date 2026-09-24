@@ -1261,8 +1261,11 @@ export default Vue.extend({
           if (row) {
             this.data = { ...this.data, sent: row.sent, toSend: row.toSend };
           } else {
-            // No longer running: refetch for the final status and counts.
-            this.getCampaign(this.data.id);
+            // No longer running: refetch the final status and counts. A plain read, not the
+            // page loader -- that would replay its load-time brand-repoint notice.
+            this.$api.getCampaign(this.data.id).then((d) => {
+              this.data = { ...this.data, status: d.status, sent: d.sent, toSend: d.toSend };
+            });
           }
         });
       }, 3000);
@@ -1849,6 +1852,8 @@ export default Vue.extend({
         this.form.sendLater = false;
         this.form.sendAtDate = null;
       }
+      // Fork (audience box): Start becomes Schedule (and back) with sendAt; re-measure.
+      this.$nextTick(this.syncAudienceBox);
     },
   },
 
@@ -1927,12 +1932,6 @@ export default Vue.extend({
 
     // Fork (audience box): the button and tab-strip sizes it follows change with the viewport.
     window.addEventListener('resize', this.syncAudienceBox);
-  },
-
-  updated() {
-    // Fork (audience box): the right-most button can change on any re-render (save, start,
-    // schedule); cheap, and a no-op when nothing moved.
-    this.syncAudienceBox();
   },
 
   beforeDestroy() {

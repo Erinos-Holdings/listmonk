@@ -72,7 +72,7 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 		if !wantsAudience(out[i]) {
 			continue
 		}
-		c.fillAudience(&out[i])
+		c.FillAudience(&out[i])
 	}
 
 	total := 0
@@ -85,21 +85,16 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 
 // GetCampaign retrieves a campaign.
 func (c *Core) GetCampaign(id int, uuid, archiveSlug string) (models.Campaign, error) {
-	out, err := c.getCampaign(id, uuid, archiveSlug, campaignTplDefault)
-	if err != nil {
-		return out, err
-	}
-	// Fork (campaign-page audience) -- the same live count the list carries, so the
-	// Campaign page's audience box reads one number with the list. Never on the archive
-	// read (public).
-	c.fillAudience(&out)
-	return out, nil
+	return c.getCampaign(id, uuid, archiveSlug, campaignTplDefault)
 }
 
-// fillAudience (fork, list-page / campaign-page audience) attaches the live expected send
+// FillAudience (fork, list-page / campaign-page audience) attaches the live expected send
 // to a not-yet-started broadcast through the one audience query (no further copy of the
 // send predicate). A failed count leaves the fields null rather than failing the read.
-func (c *Core) fillAudience(cm *models.Campaign) {
+// Called only where the campaign JSON is served (QueryCampaigns, the GetCampaign handler):
+// Core.GetCampaign is the internal read every save/start/public view reuses, and the count
+// is a DISTINCT join over the lists' membership (implementation review M2).
+func (c *Core) FillAudience(cm *models.Campaign) {
 	if !wantsAudience(*cm) {
 		return
 	}
