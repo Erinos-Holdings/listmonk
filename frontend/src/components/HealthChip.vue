@@ -15,7 +15,11 @@
     <!-- No row at all and no tag (an untagged list with no default-sender row): the unknown
     state. There are exactly four chip states; an absent row is never a fifth. -->
     <b-tag v-else class="health-tag health-unknown" data-cy="health-unknown">{{ $t('brands.status.unknown') }}</b-tag>
-    <span v-if="hint" class="is-size-7 has-text-grey health-hint">{{ hint }}</span>
+    <!-- BRANDS-UX-SPEC D8: a mark (URL from the health document) replaces the text hint; the
+    hint stays its accessible name and tooltip. -->
+    <img v-if="hint && hintImg" class="health-hint-img ml-2" :src="hintImg" :alt="hint" :title="hint" height="16"
+      data-cy="health-hint-img">
+    <span v-else-if="hint" class="is-size-7 has-text-grey health-hint">{{ hint }}</span>
   </span>
 </template>
 
@@ -35,6 +39,8 @@ export default {
     missingTag: { type: String, default: '' },
     // Small text after the chip, e.g. "(default sender)".
     hint: { type: String, default: '' },
+    // An image URL rendered (16px tall) INSTEAD of the hint text, with the hint as alt/title.
+    hintImg: { type: String, default: '' },
     // Extra tooltip text (e.g. the as-of date).
     detail: { type: String, default: '' },
   },
@@ -78,6 +84,11 @@ export default {
   }
   .health-hint {
     margin-left: 0.35rem;
+  }
+  .health-hint-img {
+    height: 16px;
+    width: auto;
+    vertical-align: middle;
   }
 }
 </style>

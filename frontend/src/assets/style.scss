@@ -219,7 +219,17 @@ section {
     padding: 30px;
     flex-grow: 1;
     position: relative;
+    // Fork (BRANDS-UX-SPEC D7): a flex item defaults to min-width: auto, so a wide table widened
+    // .main past the viewport instead of scrolling inside its own wrapper.
+    min-width: 0;
   }
+}
+
+// Fork (BRANDS-UX-SPEC D7): Buefy's .table-wrapper scrolls only at touch widths; the Brands table
+// and the Dashboard SES per-brand table scroll horizontally inside their wrapper at every width.
+.brands .table-wrapper,
+.dashboard-ses .table-wrapper {
+  overflow-x: auto;
 }
 
 .navbar {

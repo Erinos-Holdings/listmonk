@@ -137,12 +137,15 @@
       <!-- Fork (brand health, integrations BRAND-HEALTH-SPEC D3/D11/D12). The owning brand's
       latest status, per row (lists are not grouped and the table sorts), from the list's own
       API row -- health + health_tag ride on GET /api/lists, so there is no second request and
-      no client-side join. Not sortable: it is not a server sort key. Click -> the brand's page. -->
+      no client-side join. Not sortable: it is not a server sort key. Click -> the brand's page.
+      The default-sender hint renders as the default row's logo_url mark when set (BRANDS-UX-SPEC D8;
+      default-row-only: a tagged list's logo_url is deliberately unused). -->
       <b-table-column v-slot="props" field="health" :label="$t('lists.health.column')" header-class="cy-health">
         <health-chip v-if="props.row.health" :status="props.row.health.status" :note="props.row.health.note || ''"
           :detail="props.row.health.asOf ? $t('brands.asOf', { date: props.row.health.asOf }) : ''"
           :to="{ name: 'brand', params: { brand: props.row.health.brand } }"
-          :hint="props.row.health.default && !props.row.healthTag ? $t('lists.health.defaultSender') : ''" />
+          :hint="props.row.health.default && !props.row.healthTag ? $t('lists.health.defaultSender') : ''"
+          :hint-img="props.row.health.default && !props.row.healthTag ? (props.row.health.logo_url || '') : ''" />
         <health-chip v-else :missing-tag="props.row.healthTag || ''" />
       </b-table-column>
 

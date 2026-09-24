@@ -2,15 +2,14 @@
   <section class="dashboard content">
     <header class="columns">
       <div class="column is-two-thirds">
-        <h1 class="title is-5">
+        <h1 :class="['title', 'is-5', { 'mb-0': canSes }]">
           {{ $utils.niceDate(new Date()) }}
         </h1>
-      </div>
-      <!-- Fork (system health, integrations SES-HEALTH-SPEC D7) -- Overview | SES pill, the
-           Campaigns Broadcasts | Automations pattern. Sticky via the shared pref helper; the SES
-           option exists only for users who may read Brands (brands:get). -->
-      <div v-if="canSes" class="column has-text-right">
-        <b-field class="is-inline-flex">
+        <!-- Fork (system health, integrations SES-HEALTH-SPEC D7) -- Overview | SES pill, the
+             Campaigns Broadcasts | Automations pattern. Sticky via the shared pref helper; the SES
+             option exists only for users who may read Brands (brands:get). Directly beneath the
+             date, left-aligned (BRANDS-UX-SPEC D2). -->
+        <b-field v-if="canSes" class="is-inline-flex mt-2">
           <b-radio-button v-model="pane" native-value="overview" type="is-primary"
             data-cy="pane-overview" @input="onPaneChange">
             {{ $t('dashboard.panes.overview') }}

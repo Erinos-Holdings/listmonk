@@ -116,32 +116,47 @@
 
       <!-- Per-brand table (a copy of the same run's per-brand SES inputs) -->
       <div class="box">
-        <h3 class="title is-6">{{ $t('dashboard.ses.brands') }}</h3>
-        <b-table :data="doc.brands || []" hoverable data-cy="ses-brands">
-          <b-table-column v-slot="props" field="displayName" :label="$t('dashboard.ses.brand')">
+        <!-- BRANDS-UX-SPEC D4: the hide toggle sits right-aligned on the title's line; it hides
+        only unknown rows with no sends (health-sort.mjs). Sticky per browser. -->
+        <div class="level mb-3">
+          <div class="level-left">
+            <h3 class="title is-6">{{ $t('dashboard.ses.brands') }}</h3>
+          </div>
+          <div class="level-right">
+            <b-switch v-model="hideUnlaunched" data-cy="ses-hide-unlaunched" @input="onHideChange">
+              {{ $t('brands.hideUnlaunched', { n: unlaunchedCount }) }}
+            </b-switch>
+          </div>
+        </div>
+        <!-- BRANDS-UX-SPEC D3: backend-sorting -- the view owns {field, order} and sorts its own
+        rows through health-sort.mjs; first click on any non-Brand column is descending (worst /
+        largest first); the tiebreak is always Brand A-Z. -->
+        <b-table ref="table" :data="visibleRows" hoverable data-cy="ses-brands"
+          backend-sorting :default-sort="[sort.field, sort.order]" @sort="onSort">
+          <b-table-column v-slot="props" field="name" :label="$t('dashboard.ses.brand')" sortable>
             <router-link v-if="linkable(props.row)" :to="{ name: 'brand', params: { brand: props.row.brand } }">
               {{ props.row.displayName || props.row.brand }}
             </router-link>
             <span v-else>{{ props.row.displayName || props.row.brand }}</span>
           </b-table-column>
-          <b-table-column v-slot="props" field="status" :label="$t('dashboard.ses.health')">
+          <b-table-column v-slot="props" field="status" :label="$t('dashboard.ses.health')" sortable>
             <health-chip :status="props.row.status" />
           </b-table-column>
-          <b-table-column v-slot="props" field="sends" :label="$t('dashboard.ses.sends')" numeric>
+          <b-table-column v-slot="props" field="sends" :label="$t('dashboard.ses.sends')" numeric sortable>
             {{ num(props.row.sends) }}
           </b-table-column>
-          <b-table-column v-slot="props" field="deliveries" :label="$t('dashboard.ses.deliveries')" numeric>
+          <b-table-column v-slot="props" field="deliveries" :label="$t('dashboard.ses.deliveries')" numeric sortable>
             {{ num(props.row.deliveries) }}
           </b-table-column>
-          <b-table-column v-slot="props" field="bounces" :label="$t('dashboard.ses.bounces')" numeric>
+          <b-table-column v-slot="props" field="bounces" :label="$t('dashboard.ses.bounces')" numeric sortable>
             {{ num(props.row.bounces) }}
             <span class="is-size-7 has-text-grey">{{ typeof props.row.bounceRate === 'number' ? `(${pct(props.row.bounceRate, 2)})` : '' }}</span>
           </b-table-column>
-          <b-table-column v-slot="props" field="complaints" :label="$t('dashboard.ses.complaints')" numeric>
+          <b-table-column v-slot="props" field="complaints" :label="$t('dashboard.ses.complaints')" numeric sortable>
             {{ num(props.row.complaints) }}
             <span class="is-size-7 has-text-grey">{{ typeof props.row.complaintRate === 'number' ? `(${pct(props.row.complaintRate, 3)})` : '' }}</span>
           </b-table-column>
-          <b-table-column v-slot="props" field="alarms" :label="$t('dashboard.ses.alarms')">
+          <b-table-column v-slot="props" field="alarms" :label="$t('dashboard.ses.alarms')" sortable>
             <span v-if="props.row.alarms && (props.row.alarms.complaints || props.row.alarms.bounces)" class="is-size-7">
               {{ props.row.alarms.complaints || '—' }} / {{ props.row.alarms.bounces || '—' }}
             </span>
@@ -157,6 +172,9 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
+import {
+  compareAlarms, compareNumber, compareStatus, isUnlaunchedSesRow, sortRows,
+} from '../health-sort';
 
 const RATE_KEYS = ['accountRates', 'listmonkRates'];
 const RATES = [
@@ -166,6 +184,11 @@ const RATES = [
 // The per-brand row with no brand document behind it (the `brand=unattributed` SES tag value);
 // it has no Brands page to link to. A display rule, not a threshold.
 const UNLINKED = ['unattributed'];
+// BRANDS-UX-SPEC D3: the Brand column (field 'name') is the only ascending-first column.
+const ASC_FIRST_FIELDS = ['name'];
+const PREF_HIDE = 'dashboard.ses.hideUnlaunched';
+const NUMERIC_FIELDS = ['sends', 'deliveries', 'bounces', 'complaints'];
+const nameOf = (row) => row.displayName || row.brand || '';
 
 export default Vue.extend({
   components: { HealthChip },
@@ -175,11 +198,34 @@ export default Vue.extend({
       doc: null,
       rateKeys: RATE_KEYS,
       rates: RATES,
+      // BRANDS-UX-SPEC D3/M6: the view owns the sort; a re-fetch (page.refresh) never resets it.
+      sort: { field: 'name', order: 'asc' },
+      hideUnlaunched: this.$utils.getPref(PREF_HIDE) === true,
     };
   },
 
   computed: {
     ...mapState(['loading']),
+
+    brandRows() {
+      return (this.doc && Array.isArray(this.doc.brands)) ? this.doc.brands : [];
+    },
+
+    unlaunchedCount() {
+      return this.brandRows.filter(isUnlaunchedSesRow).length;
+    },
+
+    visibleRows() {
+      const rows = this.hideUnlaunched ? this.brandRows.filter((r) => !isUnlaunchedSesRow(r)) : this.brandRows;
+      const comparators = {
+        status: (a, b, o) => compareStatus(a.status, b.status, o),
+        alarms: (a, b, o) => compareAlarms(a.alarms, b.alarms, o),
+      };
+      NUMERIC_FIELDS.forEach((f) => {
+        comparators[f] = (a, b, o) => compareNumber(a[f], b[f], o);
+      });
+      return sortRows(rows, this.sort.field, this.sort.order, nameOf, comparators);
+    },
 
     quotaWidth() {
       const q = this.doc && this.doc.quota;
@@ -252,6 +298,22 @@ export default Vue.extend({
 
     num(v) {
       return typeof v === 'number' ? this.$utils.niceNumber(v) : '—';
+    },
+
+    // The Lists.vue onSort pattern (BRANDS-UX-SPEC D3); see Brands.vue onSort.
+    onSort(field, direction) {
+      let order = direction;
+      const { table } = this.$refs;
+      if (!ASC_FIRST_FIELDS.includes(field) && field !== this.sort.field && direction === 'asc'
+        && table && typeof table.isAsc === 'boolean') {
+        table.isAsc = false;
+        order = 'desc';
+      }
+      this.sort = { field, order };
+    },
+
+    onHideChange(v) {
+      this.$utils.setPref(PREF_HIDE, v === true);
     },
 
     linkable(row) {

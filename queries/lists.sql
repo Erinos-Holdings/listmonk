@@ -95,8 +95,10 @@ SELECT ls.*, COALESCE(ss.subscriber_statuses, '{}') AS subscriber_statuses, COAL
     COALESCE((g.subscriber_grid->'all'->>'blocked')::BIGINT, 0) AS blocked_count,
     -- Fork (brand health, D11) -- health and health_tag are JSON literals (null when absent), so
     -- the Lists chip can tell "no row for this tag" (health null, health_tag set) from untagged.
+    -- logo_url (BRANDS-UX-SPEC D8) is the row's facts.logoUrl, JSON null when absent.
     COALESCE(CASE WHEN h.brand IS NULL THEN NULL ELSE JSONB_BUILD_OBJECT('brand', h.brand, 'status', h.status,
-        'note', h.doc->'note', 'as_of', h.day, 'default', h.is_default) END, 'null'::JSONB) AS health,
+        'note', h.doc->'note', 'as_of', h.day, 'default', h.is_default,
+        'logo_url', h.doc->'facts'->'logoUrl') END, 'null'::JSONB) AS health,
     COALESCE(TO_JSONB(bt.tag), 'null'::JSONB) AS health_tag
     FROM ls LEFT JOIN statuses ss ON (ls.id = ss.list_id) LEFT JOIN grid g ON (ls.id = g.list_id)
     LEFT JOIN LATERAL (SELECT list_brand_tag(ls.tags) AS tag) bt ON TRUE

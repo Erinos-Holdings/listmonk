@@ -69,6 +69,28 @@ func TestValidateBrandHealthRows(t *testing.T) {
 	if err := validateBrandHealthRows([]json.RawMessage{good, other}); err != nil {
 		t.Fatalf("two days of one brand refused: %v", err)
 	}
+
+	// Integrations BRANDS-UX-SPEC I7: the document is additive at v 1 -- a row carrying every new
+	// field (inputs[k].sources, dnsbl lists[].url, facts.logoUrl / facts.registrySource) and a
+	// row without sources both pass validation unchanged.
+	src := []any{map[string]any{"label": "Source", "url": "https://source.example/x"}}
+	withNew := healthRow(func(m map[string]any) {
+		m["facts"] = map[string]any{"displayName": "Example", "logoUrl": "https://media.example/logo.jpg",
+			"registrySource": map[string]any{"label": "Registry", "url": "https://registry.example/item"}}
+		m["inputs"] = map[string]any{
+			"verdict":    map[string]any{"status": "warn", "sources": src},
+			"engagement": map[string]any{"status": "ok", "sources": []any{}},
+			"dnsbl": map[string]any{"status": "ok", "sources": []any{}, "detail": map[string]any{
+				"lists": []any{map[string]any{"zone": "zone.example", "result": "clear", "url": "https://zone.example/q"}}}},
+		}
+	})
+	withoutSources := healthRow(func(m map[string]any) {
+		m["day"] = "2026-09-22"
+		m["facts"] = map[string]any{"displayName": "Example"}
+	})
+	if err := validateBrandHealthRows([]json.RawMessage{withNew, withoutSources}); err != nil {
+		t.Fatalf("additive BRANDS-UX fields refused: %v", err)
+	}
 }
 
 func TestParseBrandHealthDays(t *testing.T) {

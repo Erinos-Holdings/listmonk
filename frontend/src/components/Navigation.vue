@@ -3,6 +3,13 @@
     <b-menu-item :to="{ name: 'dashboard' }" tag="router-link" :active="activeItem.dashboard"
       icon="view-dashboard-variant-outline" :label="$t('menu.dashboard')" /><!-- dashboard -->
 
+    <!-- Fork (brand health, BRAND-HEALTH-SPEC D10/D12; directly under
+    Dashboard since BRANDS-UX-SPEC D1). Gated on brands:get; the Lists chip
+    needs no permission beyond the list's own. The icon is from the fontello subset. -->
+    <b-menu-item v-if="$can('brands:get')" :to="{ name: 'brands' }" tag="router-link"
+      :active="activeItem.brands || activeItem.brand" data-cy="brands" icon="speedometer"
+      :label="$t('brands.title')" /><!-- brands -->
+
     <b-menu-item :expanded="activeGroup.lists" :active="activeGroup.lists" data-cy="lists"
       @update:active="(state) => toggleGroup('lists', state)" icon="format-list-bulleted-square"
       :label="$t('globals.terms.lists')">
@@ -11,12 +18,6 @@
       <b-menu-item :to="{ name: 'forms' }" tag="router-link" :active="activeItem.forms" class="forms"
         icon="newspaper-variant-outline" :label="$t('menu.forms')" />
     </b-menu-item><!-- lists -->
-
-    <!-- Fork (brand health, BRAND-HEALTH-SPEC D10/D12). Gated on brands:get; the Lists chip
-    needs no permission beyond the list's own. The icon is from the fontello subset. -->
-    <b-menu-item v-if="$can('brands:get')" :to="{ name: 'brands' }" tag="router-link"
-      :active="activeItem.brands || activeItem.brand" data-cy="brands" icon="speedometer"
-      :label="$t('brands.title')" /><!-- brands -->
 
     <b-menu-item v-if="$can('subscribers:*')" :expanded="activeGroup.subscribers" :active="activeGroup.subscribers"
       data-cy="subscribers" @update:active="(state) => toggleGroup('subscribers', state)" icon="account-multiple"

@@ -6,8 +6,9 @@
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "lint": "eslint --ext .js,.vue --ignore-path .gitignore src",
-    "prebuild": "eslint --ext .js,.vue --ignore-path .gitignore src",
+    "lint": "eslint --ext .js,.mjs,.vue --ignore-path .gitignore src",
+    "prebuild": "eslint --ext .js,.mjs,.vue --ignore-path .gitignore src",
+    "test:sort": "node --test src/health-sort.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },
   "dependencies": {
