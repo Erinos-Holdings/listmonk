@@ -66,12 +66,9 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 	}
 
 	// Fork (list-page audience) -- the expected send of every not-yet-started broadcast on
-	// the page, through the one audience query (no further copy of the send predicate). A
-	// failed count leaves the field null rather than failing the page.
+	// the page and the sent split of every English evergreen (FillAudience decides which
+	// rows carry what; no pre-filter here, or the evergreen split never reaches the list).
 	for i := range out {
-		if !wantsAudience(out[i]) {
-			continue
-		}
 		c.FillAudience(&out[i])
 	}
 
