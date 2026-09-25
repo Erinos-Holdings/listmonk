@@ -183,3 +183,20 @@ export function applyFixes(campaign, fixes) {
 export function reviewPayload(campaign, body) {
   return campaignPayload(campaign, body);
 }
+
+// Stage 4 finding 6: the dispositions to record AFTER the fixes ran. A "Fix for me" whose fix was
+// applied is `fixed`; one that could not be applied (the text changed, the builder was unavailable)
+// is recorded as `fixme` -- the log never claims a fix that did not happen. Other decisions pass
+// through. `applied` holds the fix objects applyFixes returned as applied (identity match).
+export function dispositionsAfterFixes(staged, applied) {
+  const done = new Set(applied || []);
+  return (staged || []).map((s) => {
+    let { action } = s;
+    if (action === 'fixed' && !(s.fix && done.has(s.fix))) {
+      action = 'fixme';
+    }
+    return {
+      key: s.key, rubric_id: s.rubric_id, action, note: s.note || '',
+    };
+  });
+}

@@ -200,8 +200,12 @@ func (a *App) PostReviewDispositions(c echo.Context) error {
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "items"))
 	}
+	cm, err := a.core.GetCampaign(id, "", "")
+	if err != nil {
+		return err
+	}
 	user := auth.GetUser(c)
-	out, err := a.core.AddDispositions(id, user.ID, user.Username, req.Items)
+	out, err := a.core.AddDispositions(cm, user.ID, user.Username, req.Items)
 	if err != nil {
 		return err
 	}

@@ -29,6 +29,11 @@ SELECT * FROM campaign_reviews WHERE campaign_id = $1 ORDER BY requested_at DESC
 SELECT * FROM campaign_reviews WHERE campaign_id = $1 AND bundle_hash = $2 AND status = 'complete'
     ORDER BY requested_at DESC, id DESC LIMIT 1;
 
+-- name: get-campaign-review-latest-complete
+-- The newest COMPLETE row of a campaign, whatever its hash (the disposition fallback).
+SELECT * FROM campaign_reviews WHERE campaign_id = $1 AND status = 'complete'
+    ORDER BY requested_at DESC, id DESC LIMIT 1;
+
 -- name: get-campaign-review-previous
 -- The newest complete row of a campaign requested before the given job (the A-tier cache, D14).
 SELECT * FROM campaign_reviews WHERE campaign_id = $1 AND status = 'complete'

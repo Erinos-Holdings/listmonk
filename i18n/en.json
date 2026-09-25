@@ -218,6 +218,7 @@
     "campaigns.review.tagEdited": "edited since",
     "campaigns.review.tagFailed": "inspection failed",
     "campaigns.review.title": "Inspection",
+    "campaigns.review.saveFailed": "The campaign could not be saved, so it was not inspected. Fix the error shown and click Inspect again.",
     "campaigns.review.windowBlocked": "The window was blocked by the browser. Allow pop-ups for this site, then click Inspect again.",
     "campaigns.review.verdictPass": "Ready to send",
     "campaigns.review.verdictBlocked": "{n} item(s) to decide before this campaign can be sent",

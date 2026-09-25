@@ -698,6 +698,7 @@ CREATE TABLE IF NOT EXISTS campaign_reviews (
     updated_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_campaign_reviews_campaign ON campaign_reviews (campaign_id, requested_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_reviews_one_running ON campaign_reviews (campaign_id) WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS campaign_review_dispositions (
     id               BIGSERIAL PRIMARY KEY,

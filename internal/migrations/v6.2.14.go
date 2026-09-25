@@ -11,7 +11,8 @@ import (
 // V6_2_14 is a FORK migration (campaign review, integrations CAMPAIGN-INSPECT-SPEC D5/D6), not an
 // upstream release. It adds:
 //
-//   - campaign_reviews: one row per inspection (the review Lambda's report stored verbatim as
+//   - campaign_reviews: one row per inspection (at most ONE running row per campaign -- a partial
+//     unique index, so two simultaneous Inspect clicks cannot both start a job) (the review Lambda's report stored verbatim as
 //     JSONB), keyed by campaign + bundle hash; the status gate reads the newest `complete` row for
 //     the campaign's CURRENT hash (internal/review.BundleHash).
 //   - campaign_review_dispositions: the Fix for me / I'll fix it / Accept risk decisions, APPEND-ONLY
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS campaign_reviews (
     updated_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_campaign_reviews_campaign ON campaign_reviews (campaign_id, requested_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_reviews_one_running ON campaign_reviews (campaign_id) WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS campaign_review_dispositions (
     id               BIGSERIAL PRIMARY KEY,

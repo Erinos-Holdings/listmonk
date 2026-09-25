@@ -81,7 +81,7 @@ func TestCampaignReviewMigration(t *testing.T) {
 	}) {
 		t.Fatalf("campaign_structure_verifications columns = %s", got)
 	}
-	for _, idx := range []string{"idx_campaign_reviews_campaign", "idx_campaign_review_dispositions"} {
+	for _, idx := range []string{"idx_campaign_reviews_campaign", "idx_campaign_review_dispositions", "idx_campaign_reviews_one_running"} {
 		var c int
 		h.db.Get(&c, `SELECT COUNT(*) FROM pg_indexes WHERE indexname = $1`, idx)
 		if c != 1 {
@@ -100,6 +100,16 @@ func TestCampaignReviewMigration(t *testing.T) {
 		t.Fatal("a bogus disposition action was accepted")
 	}
 	h.db.MustExec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status) VALUES ($1, 'h', gen_random_uuid(), 'running')`, camp)
+	// One running row per campaign (Stage 4 finding 15); a complete row beside it is fine.
+	if _, err := h.db.Exec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status) VALUES ($1, 'h2', gen_random_uuid(), 'running')`, camp); err == nil {
+		t.Fatal("a second running review for one campaign was accepted")
+	}
+	h.db.MustExec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status) VALUES ($1, 'h3', gen_random_uuid(), 'complete')`, camp)
+	var unique bool
+	h.db.Get(&unique, `SELECT indisunique FROM pg_index WHERE indexrelid = 'idx_campaign_reviews_one_running'::regclass`)
+	if !unique {
+		t.Fatal("idx_campaign_reviews_one_running is not unique")
+	}
 	h.db.MustExec(`INSERT INTO campaign_review_dispositions (campaign_id, bundle_hash, item_key, rubric_id, action) VALUES ($1, 'h', 'k', 'D1.1', 'accept')`, camp)
 	h.db.MustExec(`DELETE FROM campaigns WHERE id = $1`, camp)
 	var left int

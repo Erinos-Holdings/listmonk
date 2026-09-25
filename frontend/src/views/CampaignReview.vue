@@ -176,7 +176,7 @@ fork {{ report.provenance.forkVersion }} · builder {{ (report.provenance.bundle
 <script>
 import Vue from 'vue';
 import { mapState } from 'vuex';
-import { applyFixes, reviewPayload } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
+import { applyFixes, reviewPayload, dispositionsAfterFixes } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { deriveContext, isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 
 const STAGES = ['reading', 'deterministic', 'screenshots', 'ai', 'writing'];
@@ -198,11 +198,22 @@ export default Vue.extend({
   computed: {
     ...mapState(['lists']),
 
+    // The newest row: the running / failed / stale banners read it.
     row() {
       return this.state && this.state.review;
     },
 
+    // The GATE's row (Stage 4 finding 2): the newest COMPLETE review of the campaign's current
+    // bundle hash, with the fork's verdict over it -- exactly what Start is judged by. A newer
+    // failed/stale row never hides it. The report, verdict and items render from it when present.
+    gate() {
+      return (this.state && this.state.gate) || null;
+    },
+
     report() {
+      if (this.gate && this.gate.review) {
+        return this.gate.review.report;
+      }
       return this.row && this.row.status === 'complete' ? this.row.report : null;
     },
 
@@ -211,15 +222,22 @@ export default Vue.extend({
     },
 
     isEdited() {
-      return !!this.row && this.row.status === 'complete' && this.row.bundle_hash !== this.state.current_hash;
+      return !this.gate && !!this.row && this.row.status === 'complete' && this.row.bundle_hash !== this.state.current_hash;
+    },
+
+    verdictSource() {
+      if (this.gate) {
+        return this.gate.verdict;
+      }
+      return (this.state && this.state.verdict) || null;
     },
 
     verdictName() {
-      return (this.state && this.state.verdict && this.state.verdict.verdict) || 'none';
+      return (this.verdictSource && this.verdictSource.verdict) || 'none';
     },
 
     blockers() {
-      return (this.state && this.state.verdict && this.state.verdict.blockers) || [];
+      return (this.verdictSource && this.verdictSource.blockers) || [];
     },
 
     lang() {
@@ -364,8 +382,10 @@ export default Vue.extend({
       }[s] || 'is-light';
     },
 
+    // Only our CDN's images render as a thumbnail (Stage 4 finding 17): evidence is model- or
+    // author-supplied text, and an arbitrary URL in an <img src> would be fetched by the browser.
     isImageUrl(s) {
-      return typeof s === 'string' && /^https?:\/\/\S+\.(png|jpe?g|gif|webp)(\?\S*)?$/i.test(s.trim());
+      return typeof s === 'string' && /^https:\/\/email\.curatedfor\.you\/\S+\.(png|jpe?g|gif|webp)(\?\S*)?$/i.test(s.trim());
     },
 
     // The builder UMD in this window's own frame, for compileDocument (the sweep's compile).
@@ -384,8 +404,8 @@ export default Vue.extend({
       });
     },
 
-    // Apply the staged fixes to the SAVED campaign, recompile a visual body, PUT it. Returns the
-    // number applied.
+    // Apply the staged fixes to the SAVED campaign, recompile a visual body, PUT it. Returns the fix
+    // objects that were applied AND saved (empty when nothing could be).
     async applyStagedFixes() {
       const raw = await this.$api.getCampaignRaw(this.id);
       const {
@@ -395,7 +415,7 @@ export default Vue.extend({
         this.$utils.toast(this.$t('campaigns.review.fixesSkipped', { n: skipped.length }), 'is-warning');
       }
       if (!applied.length) {
-        return 0;
+        return [];
       }
       let { body } = campaign;
       if (recompile) {
@@ -407,7 +427,7 @@ export default Vue.extend({
         }
         if (!em || !em.compileDocument) {
           this.$utils.toast(this.$t('campaigns.review.builderUnavailable'), 'is-danger');
-          return 0;
+          return [];
         }
         const [tpls, lists] = await Promise.all([
           this.$api.getTemplatesRaw(),
@@ -421,25 +441,24 @@ export default Vue.extend({
       }
       await this.$api.updateCampaign(this.id, reviewPayload(campaign, body));
       this.$utils.toast(this.$t('campaigns.review.fixesApplied', { n: applied.length }));
-      return applied.length;
+      return applied;
     },
 
-    // Record the staged decisions against the CURRENT report, then (fixes) save and re-inspect.
+    // Stage 4 finding 6: apply the fixes FIRST, then record `fixed` only for the ones applied and
+    // `fixme` for the ones that could not be, then re-inspect.
     async submit(withFixes) {
       this.busy = true;
       try {
-        const items = Object.values(this.staged).map((s) => ({
-          key: s.key, rubric_id: s.rubric_id, action: s.action, note: '',
-        }));
+        let applied = [];
+        if (withFixes && this.stagedFixes.length) {
+          applied = await this.applyStagedFixes();
+        }
+        const items = dispositionsAfterFixes(Object.values(this.staged), applied);
         if (items.length) {
           await this.$api.postReviewDispositions(this.id, items);
         }
-        let n = 0;
-        if (withFixes && this.stagedFixes.length) {
-          n = await this.applyStagedFixes();
-        }
         this.staged = {};
-        if (n > 0) {
+        if (applied.length > 0) {
           await this.$api.startCampaignReview(this.id);
         }
         await this.loadCampaign();

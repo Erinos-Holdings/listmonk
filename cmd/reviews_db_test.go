@@ -20,6 +20,67 @@ import (
 	"github.com/knadh/listmonk/models"
 )
 
+func freshCampaign(t *testing.T, h *linkHarness, id int) models.Campaign {
+	t.Helper()
+	cm, err := h.app.core.GetCampaign(id, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cm
+}
+
+// Stage 4 findings 2 and 3: a newer failed/stale row over a passing complete row of the SAME hash.
+// The latest endpoint reports the gate's row (so the page and the window agree with the gate), and
+// dispositions are validated against it -- never refused because the NEWEST row failed. After a fix
+// changed the hash, dispositions fall back to the newest complete row.
+func TestReviewGateRowAndDispositionsAgainstIt(t *testing.T) {
+	h := newLinkHarness(t)
+	ensureReviewManager(h)
+	var list int
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Acme', 'public', 'single', '{brand:acme,"from:Acme <hello@acme.test>"}') RETURNING id`)
+	camp := newReviewCampaign(t, h, models.CampaignTypeRegular, list)
+	hash := currentHash(t, h, camp.ID)
+	items := `{"id": "D2.3", "tier": "D", "verdict": "fail", "acceptable": true, "findings": [{"key": "D2.3#aa"}]}`
+	insertReview(t, h, camp.ID, hash, "complete", reviewReport(hash, items), 5)
+	insertReview(t, h, camp.ID, hash, "failed", "", 1)
+
+	state, err := h.app.core.GetLatestReview(freshCampaign(t, h, camp.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Review == nil || state.Review.Status != "failed" {
+		t.Fatalf("review (newest row) = %+v, want the failed row", state.Review)
+	}
+	if state.Gate == nil || state.Gate.Review.Status != "complete" || state.Gate.Verdict.Verdict != review.VerdictBlocked {
+		t.Fatalf("gate = %+v, want the complete row, blocked", state.Gate)
+	}
+
+	// The newest row is failed: the accept is still validated against the gate's report.
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 1, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "accept"}}); err != nil {
+		t.Fatalf("accept under a newer failed row: %v", err)
+	}
+	state, _ = h.app.core.GetLatestReview(freshCampaign(t, h, camp.ID))
+	if state.Gate.Verdict.Verdict != review.VerdictPass {
+		t.Fatalf("gate verdict after accept = %+v", state.Gate.Verdict)
+	}
+
+	// A fix saved -> the hash changed -> no gate row; dispositions fall back to the newest complete.
+	h.db.MustExec(`UPDATE campaigns SET subject = 'Changed' WHERE id = $1`, camp.ID)
+	state, _ = h.app.core.GetLatestReview(freshCampaign(t, h, camp.ID))
+	if state.Gate != nil {
+		t.Fatal("a changed hash must have no gate row")
+	}
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 1, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "fixed"}}); err != nil {
+		t.Fatalf("disposition after a fix changed the hash: %v", err)
+	}
+
+	// At most one running row per campaign (the partial unique index).
+	insertReview(t, h, camp.ID, "x", "running", "", 0)
+	if _, err := h.db.Exec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status) VALUES ($1, 'y', gen_random_uuid(), 'running')`, camp.ID); err == nil {
+		t.Fatal("a second running row was accepted")
+	}
+}
+
 func TestReviewDispositionsLog(t *testing.T) {
 	h := newLinkHarness(t)
 	ensureReviewManager(h)
@@ -29,7 +90,7 @@ func TestReviewDispositionsLog(t *testing.T) {
 	hash := currentHash(t, h, camp.ID)
 
 	// No completed inspection yet: nothing can be decided.
-	if _, err := h.app.core.AddDispositions(camp.ID, 0, "robbie", []core.DispositionIn{{Key: "A", Action: "accept"}}); err == nil {
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 0, "robbie", []core.DispositionIn{{Key: "A", Action: "accept"}}); err == nil {
 		t.Fatal("a disposition without a completed report must be refused")
 	}
 
@@ -44,7 +105,7 @@ func TestReviewDispositionsLog(t *testing.T) {
 		"bad action":                      {{Key: "D2.3#aa", Action: "ignore"}},
 		"one bad row refuses the batch":   {{Key: "D2.3#aa", Action: "accept"}, {Key: "D2.6#nope", Action: "accept"}},
 	} {
-		if _, err := h.app.core.AddDispositions(camp.ID, 0, "robbie", in); err == nil {
+		if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 0, "robbie", in); err == nil {
 			t.Fatalf("%s: want a refusal", name)
 		}
 	}
@@ -62,7 +123,7 @@ func TestReviewDispositionsLog(t *testing.T) {
 		{Key: "R", Action: "accept"},
 		{Key: "A1.1#cc", RubricID: "spoofed", Action: "accept"},
 	} {
-		if _, err := h.app.core.AddDispositions(camp.ID, 7, "robbie", []core.DispositionIn{in}); err != nil {
+		if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 7, "robbie", []core.DispositionIn{in}); err != nil {
 			t.Fatalf("%s: %v", in.Key, err)
 		}
 	}
@@ -74,7 +135,7 @@ func TestReviewDispositionsLog(t *testing.T) {
 	}
 
 	// Append-only: a later fixme adds a row; the accept row is untouched and the latest wins.
-	if _, err := h.app.core.AddDispositions(camp.ID, 7, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "fixme"}}); err != nil {
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 7, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "fixme"}}); err != nil {
 		t.Fatal(err)
 	}
 	var actions []string

@@ -15,6 +15,7 @@ import (
 	"github.com/knadh/listmonk/internal/review"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 )
 
 // Fork (campaign review, integrations CAMPAIGN-INSPECT-SPEC D2/D5/D12). The review Lambda computes
@@ -52,10 +53,20 @@ type DispositionIn struct {
 // (newest first), the fork's verdict over that row, and the campaign's CURRENT bundle hash (the
 // window and the campaign page read "edited since" from row.bundle_hash != current_hash).
 type ReviewState struct {
-	Review       *models.CampaignReview     `json:"review"`
+	Review *models.CampaignReview `json:"review"`
+	// Gate is the row the status gate reads -- the newest COMPLETE review of CurrentHash -- with the
+	// verdict over it (Stage 4 finding 2): a newer failed/stale row never hides it, so the campaign
+	// page and the window agree with the gate. nil when there is none.
+	Gate         *ReviewGate                `json:"gate"`
 	Dispositions []models.ReviewDisposition `json:"dispositions"`
 	Verdict      review.VerdictResult       `json:"verdict"`
 	CurrentHash  string                     `json:"current_hash"`
+}
+
+// ReviewGate is the gate's row and its verdict.
+type ReviewGate struct {
+	Review  *models.CampaignReview `json:"review"`
+	Verdict review.VerdictResult   `json:"verdict"`
 }
 
 var reviewClient = &http.Client{Timeout: 8 * time.Second}
@@ -117,6 +128,11 @@ func (c *Core) StartCampaignReview(cm models.Campaign, requestedBy string, cfg R
 	jobID := uuid.Must(uuid.NewV4()).String()
 	var row models.CampaignReview
 	if err := c.q.InsertCampaignReview.Get(&row, cm.ID, hash, jobID, requestedBy); err != nil {
+		// The partial unique index (one running row per campaign) lost a race with another start.
+		var pqe *pq.Error
+		if errors.As(err, &pqe) && pqe.Code == "23505" {
+			return models.CampaignReview{}, echo.NewHTTPError(http.StatusConflict, c.i18n.T("campaigns.reviewRunning"))
+		}
 		return models.CampaignReview{}, c.reviewErr(err, "inserting")
 	}
 
@@ -183,6 +199,13 @@ func (c *Core) GetLatestReview(cm models.Campaign) (ReviewState, error) {
 		out.Verdict = review.Verdict(json.RawMessage(out.Review.Report), ds)
 	} else {
 		out.Verdict = review.VerdictResult{Verdict: review.VerdictNone, Blockers: []review.Blocker{}}
+	}
+	gate, err := c.GetReviewByHash(cm.ID, out.CurrentHash)
+	if err != nil {
+		return out, err
+	}
+	if gate != nil {
+		out.Gate = &ReviewGate{Review: gate, Verdict: review.Verdict(json.RawMessage(gate.Report), ds)}
 	}
 	return out, nil
 }
@@ -259,23 +282,29 @@ func (c *Core) CompleteReview(campID int, jobID, status string, report json.RawM
 	return row, nil
 }
 
-// AddDispositions appends checklist decisions against the campaign's newest COMPLETE report. It
-// refuses (400) an `accept` of an item the report marks acceptable:false, and any key the report
-// does not carry except the pseudo-keys A (the AI-unavailable override) and R (the declined
-// rendering-matrix offer). Rows are only ever inserted -- the log is append-only (I4).
-func (c *Core) AddDispositions(campID int, userID int, username string, items []DispositionIn) ([]models.ReviewDisposition, error) {
+// AddDispositions appends checklist decisions against the report the gate reads -- the newest
+// COMPLETE review of the campaign's CURRENT bundle hash -- or, when there is none (a fix was just
+// saved), the newest complete review; a newer failed/stale row never refuses them (Stage 4
+// finding 3). It refuses (400) an `accept` of an item the report marks acceptable:false, and any key
+// the report does not carry except the pseudo-keys A (the AI-unavailable override) and R (the
+// declined rendering-matrix offer). Rows are only ever inserted -- the log is append-only (I4).
+func (c *Core) AddDispositions(cm models.Campaign, userID int, username string, items []DispositionIn) ([]models.ReviewDisposition, error) {
+	campID := cm.ID
 	if len(items) == 0 {
 		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.Ts("globals.messages.invalidFields", "name", "items"))
 	}
+	gate, err := c.GetReviewByHash(campID, CampaignBundleHash(cm))
+	if err != nil {
+		return nil, err
+	}
 	var row models.CampaignReview
-	if err := c.q.GetCampaignReviewLatest.Get(&row, campID); err != nil {
+	if gate != nil {
+		row = *gate
+	} else if err := c.q.GetCampaignReviewLatestDone.Get(&row, campID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.reviewNoReport"))
 		}
 		return nil, c.reviewErr(err, "fetching")
-	}
-	if row.Status != models.ReviewStatusComplete {
-		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.reviewNoReport"))
 	}
 	keys, err := review.ItemKeys(json.RawMessage(row.Report))
 	if err != nil {

@@ -1173,7 +1173,8 @@ export default Vue.extend({
           this.sendTest();
           break;
         default:
-          this.updateCampaign();
+          // The API error is already toasted by the interceptor.
+          this.updateCampaign().catch(() => {});
           break;
       }
     },
@@ -1467,8 +1468,9 @@ export default Vue.extend({
         this.form.sendLater = false;
       }
 
-      // This promise is used by startCampaign to first save before starting.
-      return new Promise((resolve) => {
+      // This promise is used by startCampaign and inspectCampaign to first save. It REJECTS on a
+      // failed save (Stage 4 finding 7), so neither ever proceeds on a stale body.
+      return new Promise((resolve, reject) => {
         this.$api.updateCampaign(this.data.id, data).then((d) => {
           this.data = d;
           this.form.archiveSlug = d.archiveSlug;
@@ -1483,7 +1485,7 @@ export default Vue.extend({
             this.$utils.showWarnings(d.warnings);
           }
           resolve();
-        });
+        }, reject);
       });
     },
 
@@ -1553,9 +1555,18 @@ export default Vue.extend({
         win.focus();
       }
       this.updateCampaign(null, true)
-        .then(() => this.$api.startCampaignReview(this.data.id))
-        .then(() => this.loadReview())
-        .catch(() => this.loadReview())
+        .then(
+          () => this.$api.startCampaignReview(this.data.id).then(() => this.loadReview(), () => this.loadReview()),
+          () => {
+            // Stage 4 finding 7: the save failed, so nothing was inspected -- never leave the window
+            // showing the previous inspection as if it were this one.
+            this.$utils.toast(this.$t('campaigns.review.saveFailed'), 'is-danger');
+            if (win && !win.closed) {
+              win.close();
+            }
+            this.reviewWindow = null;
+          },
+        )
         .finally(() => this.syncReviewPoll());
     },
 
@@ -1586,6 +1597,8 @@ export default Vue.extend({
               this.$utils.showWarnings(d.warnings);
               this.$router.push({ name: 'campaigns' });
             });
+          }).catch(() => {
+            // The failed save is already toasted; nothing is started (unchanged behaviour).
           });
         },
       );
@@ -1754,14 +1767,29 @@ export default Vue.extend({
 
     // not-inspected | inspecting | pass | blocked | edited | failed -- from the SAVED campaign's
     // latest inspection and the fork's verdict (never recomputed here).
+    // The verdict the gate reads (Stage 4 finding 2): the newest COMPLETE review of the CURRENT
+    // bundle hash when there is one (`gate`), else the newest row's.
+    reviewVerdict() {
+      const st = this.reviewState;
+      if (!st) {
+        return null;
+      }
+      return st.gate ? st.gate.verdict : st.verdict;
+    },
+
     reviewTag() {
       const st = this.reviewState;
       const r = st && st.review;
+      if (r && r.status === 'running') {
+        return 'inspecting';
+      }
+      // A newer failed/stale row over a passing complete row of this hash: the gate passes, and so
+      // does the tag.
+      if (st && st.gate) {
+        return st.gate.verdict && st.gate.verdict.verdict === 'pass' ? 'pass' : 'blocked';
+      }
       if (!r) {
         return 'notInspected';
-      }
-      if (r.status === 'running') {
-        return 'inspecting';
       }
       if (r.bundle_hash !== st.current_hash || r.status === 'stale') {
         return 'edited';
@@ -1776,7 +1804,7 @@ export default Vue.extend({
       switch (this.reviewTag) {
         case 'inspecting': return this.$t('campaigns.review.tagInspecting');
         case 'pass': return this.$t('campaigns.review.tagPass');
-        case 'blocked': return this.$t('campaigns.review.tagBlocked', { n: this.reviewState.verdict.blockers.length });
+        case 'blocked': return this.$t('campaigns.review.tagBlocked', { n: ((this.reviewVerdict && this.reviewVerdict.blockers) || []).length });
         case 'edited': return this.$t('campaigns.review.tagEdited');
         case 'failed': return this.$t('campaigns.review.tagFailed');
         default: return this.$t('campaigns.review.tagNotInspected');

@@ -3,7 +3,10 @@
 // skipped; the PUT payload key set equals campaignPayload's.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyFixes, reviewPayload, FIX_KINDS } from './reviewFixes.mjs'; // eslint-disable-line import/extensions
+import { readFileSync } from 'node:fs';
+import {
+  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes,
+} from './reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { campaignPayload, CAMPAIGN_UPDATE_KEYS } from './officialSweep.mjs'; // eslint-disable-line import/extensions
 
 const doc = {
@@ -134,4 +137,38 @@ test('I13: the PUT payload key set equals campaignPayload\'s (the Campaign.vue k
   assert.deepEqual(Object.keys(p), [...CAMPAIGN_UPDATE_KEYS]);
   assert.equal(p.body, '<p>new</p>');
   assert.deepEqual(p.lists, [15]);
+});
+
+test('Stage 4 finding 11: a non-visual fix edits the n-th opening tag over the RAW body (the Lambda\'s numbering, shared fixture)', () => {
+  const fx = JSON.parse(readFileSync(new URL('./testdata/review-fix-indices.json', import.meta.url), 'utf8'));
+  fx.cases.filter((c) => c.fix).forEach((c) => {
+    const { campaign, applied } = applyFixes({ content_type: 'html', body: fx.html }, [c.fix]);
+    assert.equal(applied.length, 1, c.tag);
+    // Exactly that tag changed; everything else byte-identical.
+    const i = fx.html.indexOf(c.tag);
+    assert.ok(i >= 0);
+    assert.equal(campaign.body.slice(0, i), fx.html.slice(0, i));
+    assert.ok(campaign.body.slice(i).startsWith(c.tag.replace(c.fix.from, c.fix.to)));
+  });
+});
+
+test('Stage 4 finding 6: only applied fixes are recorded as fixed; skipped ones become fixme; others pass through', () => {
+  const f1 = { kind: 'subject.trim', from: '  Sale ', to: 'Sale' };
+  const f2 = {
+    kind: 'alt.stripPrefix', block: 'img', from: 'stale', to: 'X',
+  };
+  const staged = [
+    {
+      key: 'D1.4#a', rubric_id: 'D1.4', action: 'fixed', fix: f1,
+    },
+    {
+      key: 'D3.3b#b', rubric_id: 'D3.3b', action: 'fixed', fix: f2,
+    },
+    { key: 'D2.3#c', rubric_id: 'D2.3', action: 'accept' },
+    { key: 'D1.1#d', rubric_id: 'D1.1', action: 'fixme' },
+  ];
+  const { applied } = applyFixes(visual(), [f1, f2]);
+  assert.deepEqual(dispositionsAfterFixes(staged, applied).map((d) => [d.key, d.action]), [
+    ['D1.4#a', 'fixed'], ['D3.3b#b', 'fixme'], ['D2.3#c', 'accept'], ['D1.1#d', 'fixme'],
+  ]);
 });

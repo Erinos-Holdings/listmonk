@@ -1,0 +1,10 @@
+{
+  "comment": "Shared by integrations tests/lib/campaign-review/extract.test.ts and the fork's frontend/src/reviewFixes.test.mjs (copied to frontend/src/testdata/review-fix-indices.json). A non-visual fix names the n-th opening <a>/<img> tag counted over the RAW stored body — every `<a\\b` / `<img\\b` opening, comments included; `<abbr>` is not an `<a>` (CAMPAIGN-INSPECT-SPEC Stage 4 finding 11).",
+  "html": "<!--[if mso]><a href=\"https://m.com/\">mso</a><img src=\"mso.png\" alt=\"mso\"><![endif]--><p><abbr>x</abbr><a href=\"https://https://ok.com/b\">b</a> <img src=\"a.png\" alt=\"photo de la plage\"><a href=\"#top\">t</a><img src=\"b.png\" alt=\"keep\"></p>",
+  "cases": [
+    { "kind": "a", "index": 1, "tag": "<a href=\"https://https://ok.com/b\">", "fix": { "kind": "link.collapseScheme", "index": 1, "from": "https://https://ok.com/b", "to": "https://ok.com/b" } },
+    { "kind": "a", "index": 2, "tag": "<a href=\"#top\">" },
+    { "kind": "img", "index": 1, "tag": "<img src=\"a.png\" alt=\"photo de la plage\">", "fix": { "kind": "alt.stripPrefix", "index": 1, "from": "photo de la plage", "to": "La plage" } },
+    { "kind": "img", "index": 2, "tag": "<img src=\"b.png\" alt=\"keep\">" }
+  ]
+}

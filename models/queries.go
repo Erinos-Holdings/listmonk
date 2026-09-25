@@ -135,6 +135,7 @@ type Queries struct {
 	UpdateCampaignReviewResult   *sqlx.Stmt `query:"update-campaign-review-result"`
 	GetCampaignReviewLatest      *sqlx.Stmt `query:"get-campaign-review-latest"`
 	GetCampaignReviewByHash      *sqlx.Stmt `query:"get-campaign-review-by-hash"`
+	GetCampaignReviewLatestDone  *sqlx.Stmt `query:"get-campaign-review-latest-complete"`
 	GetCampaignReviewPrevious    *sqlx.Stmt `query:"get-campaign-review-previous"`
 	GetCampaignReviewByJob       *sqlx.Stmt `query:"get-campaign-review-by-job"`
 	ExpireRunningReviews         *sqlx.Stmt `query:"expire-running-reviews"`
