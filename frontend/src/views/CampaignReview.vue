@@ -382,10 +382,15 @@ export default Vue.extend({
       }[s] || 'is-light';
     },
 
-    // Only our CDN's images render as a thumbnail (Stage 4 finding 17): evidence is model- or
-    // author-supplied text, and an arbitrary URL in an <img src> would be fetched by the browser.
+    // Only this listmonk host's own uploads render as a thumbnail (Stage 4 finding 17): evidence is
+    // model- or author-supplied text, and an arbitrary URL in an <img src> would be fetched by the
+    // browser. Same-origin, so no host is hard-coded.
     isImageUrl(s) {
-      return typeof s === 'string' && /^https:\/\/email\.curatedfor\.you\/\S+\.(png|jpe?g|gif|webp)(\?\S*)?$/i.test(s.trim());
+      if (typeof s !== 'string') {
+        return false;
+      }
+      const v = s.trim();
+      return v.startsWith(`${window.location.origin}/uploads/`) && /^\S+\.(png|jpe?g|gif|webp)(\?\S*)?$/i.test(v);
     },
 
     // The builder UMD in this window's own frame, for compileDocument (the sweep's compile).
