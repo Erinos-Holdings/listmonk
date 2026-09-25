@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 
 import getConfiguration from '../../getConfiguration';
+import type { TOfficialContext, TOfficialRef } from '../../official/resolve';
 
 import { TEditorConfiguration } from './core';
 
@@ -32,6 +33,12 @@ type TValue = {
   samplesDrawerOpen: boolean;
 
   brandPalettes: TBrandPalette[];
+
+  // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D2/D8. Every `Official_` campaign_visual
+  // template ({id, name, body_source}) and the resolution context ({lang, brand, official}),
+  // pushed by the host through setOfficialFooters/setOfficialContext.
+  officialFooters: TOfficialRef[];
+  officialContext: TOfficialContext | null;
 };
 
 const editorStateStore = create(subscribeWithSelector<TValue>(() => ({
@@ -46,6 +53,9 @@ const editorStateStore = create(subscribeWithSelector<TValue>(() => ({
   samplesDrawerOpen: true,
 
   brandPalettes: [],
+
+  officialFooters: [],
+  officialContext: null,
 })));
 
 export function useDocument() {
@@ -99,6 +109,60 @@ export function useBrandPalettes() {
 // The store update re-renders only the pickers that read it.
 export function setBrandPalettes(brandPalettes: TBrandPalette[]) {
   return editorStateStore.setState({ brandPalettes });
+}
+
+export function useOfficialFooters() {
+  return editorStateStore((s) => s.officialFooters);
+}
+
+export function useOfficialContext() {
+  return editorStateStore((s) => s.officialContext);
+}
+
+// One read of the official state, for the compile (renderHtmlWithMeta) outside React.
+export function getOfficialState(): { refs: TOfficialRef[]; context: TOfficialContext | null } {
+  const s = editorStateStore.getState();
+  return { refs: s.officialFooters, context: s.officialContext };
+}
+
+// OFFICIAL-FOOTER-SPEC D8: a context or references change must regenerate the host's compiled
+// body, so the setters re-set the document (new object identity -> the document subscription
+// fires onChange) -- WITHOUT resetDocument, which would drop the selection and remount the
+// Styles panel. Only once documentGeneration > 0: the host mounts, then loads the stored
+// document on a timer, and a re-emit before that would push the empty starter document into
+// the host's form. Unchanged values are ignored, so a host watcher re-pushing the same context
+// never marks a document dirty.
+function reemitDocument() {
+  const s = editorStateStore.getState();
+  if (s.documentGeneration > 0) {
+    editorStateStore.setState({ document: { ...s.document } });
+  }
+}
+
+function sameJSON(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch (e) {
+    return false;
+  }
+}
+
+export function setOfficialFooters(refs: TOfficialRef[] | null | undefined) {
+  const next = Array.isArray(refs) ? refs : [];
+  if (sameJSON(editorStateStore.getState().officialFooters, next)) {
+    return;
+  }
+  editorStateStore.setState({ officialFooters: next });
+  reemitDocument();
+}
+
+export function setOfficialContext(context: TOfficialContext | null | undefined) {
+  const next = context ?? null;
+  if (sameJSON(editorStateStore.getState().officialContext, next)) {
+    return;
+  }
+  editorStateStore.setState({ officialContext: next });
+  reemitDocument();
 }
 
 export function setSelectedBlockId(selectedBlockId: TValue['selectedBlockId']) {

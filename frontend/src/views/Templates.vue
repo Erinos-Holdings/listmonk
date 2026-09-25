@@ -21,6 +21,11 @@
         <a href="#" @click.prevent="showEditForm(props.row)">
           {{ props.row.name }}
         </a>
+        <!-- Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10. -->
+        <b-tooltip v-if="isOfficial(props.row)" :label="$t('templates.officialHint')" type="is-dark" multilined
+          data-cy="official-lock">
+          <b-icon icon="lock-outline" size="is-small" :aria-label="$t('templates.officialHint')" />
+        </b-tooltip>
         <b-tag v-if="props.row.isDefault">
           {{ $t('templates.default') }}
         </b-tag>
@@ -87,7 +92,8 @@
             <b-icon icon="check-circle-outline" size="is-small" />
           </span>
 
-          <a v-if="!props.row.isDefault" href="#" @click.prevent="$utils.confirm(null, () => deleteTemplate(props.row))"
+          <a v-if="!props.row.isDefault && !isOfficial(props.row)" href="#"
+            @click.prevent="$utils.confirm(null, () => deleteTemplate(props.row))"
             data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
             <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
               <b-icon icon="trash-can-outline" size="is-small" />
@@ -122,6 +128,7 @@ import CampaignPreview from '../components/CampaignPreview.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 
 import TemplateForm from './TemplateForm.vue';
+import { isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -140,6 +147,12 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (official footer) -- D10: an `Official_` template has no Delete action (the server
+    // refuses it too: remove it from the seed file first).
+    isOfficial(t) {
+      return isOfficialName(t && t.name);
+    },
+
     fetchTemplates() {
       this.$api.getTemplates();
     },

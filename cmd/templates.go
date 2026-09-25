@@ -113,6 +113,9 @@ func (a *App) CreateTemplate(c echo.Context) error {
 	if err := a.validateTemplate(&o); err != nil {
 		return err
 	}
+	if err := a.guardOfficialTemplate(nil, &o); err != nil {
+		return err
+	}
 
 	// Subject is only relevant for fixed tx templates. For campaigns,
 	// the subject changes per campaign and is on models.Campaign.
@@ -154,6 +157,16 @@ func (a *App) UpdateTemplate(c echo.Context) error {
 		return err
 	}
 
+	// Fork (official footer): the refusals read the stored row (rename off the prefix).
+	id := getID(c)
+	stored, err := a.core.GetTemplate(id, true)
+	if err != nil {
+		return err
+	}
+	if err := a.guardOfficialTemplate(&stored, &o); err != nil {
+		return err
+	}
+
 	// Subject is only relevant for fixed tx templates. For campaigns,
 	// the subject changes per campaign and is on models.Campaign.
 	var funcs template.FuncMap
@@ -170,7 +183,6 @@ func (a *App) UpdateTemplate(c echo.Context) error {
 	}
 
 	// Update the template in the DB.
-	id := getID(c)
 	out, err := a.core.UpdateTemplate(id, o.Name, o.Subject, []byte(o.Body), o.BodySource, o.Brand, o.Lang)
 	if err != nil {
 		return err
@@ -200,6 +212,14 @@ func (a *App) TemplateSetDefault(c echo.Context) error {
 func (a *App) DeleteTemplate(c echo.Context) error {
 	// Delete the template from the DB.
 	id := getID(c)
+
+	// Fork (official footer, OFFICIAL-FOOTER-SPEC D10): an official block is removed from the
+	// seed file first -- the seed re-creates it at the next bootstrap anyway. A lookup failure
+	// falls through to the delete, which reports a missing id as before.
+	if stored, err := a.core.GetTemplate(id, true); err == nil && models.IsOfficialTemplate(stored.Name) {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("templates.officialDelete"))
+	}
+
 	if err := a.core.DeleteTemplate(id); err != nil {
 		return err
 	}
@@ -208,6 +228,61 @@ func (a *App) DeleteTemplate(c echo.Context) error {
 	a.manager.DeleteTpl(id)
 
 	return c.JSON(http.StatusOK, okResp{true})
+}
+
+// officialTemplateRefusal is the pure half of the official-block rules (integrations
+// OFFICIAL-FOOTER-SPEC D10): stored is the row being updated (nil on create), o the incoming
+// template, all every stored template. It returns the i18n key of the refusal, or "".
+//   - an official template may not be renamed away from the Official_ prefix;
+//   - a create, or a rename, onto an Official_ name that already exists is refused (the
+//     resolver needs one row per name; the templates table has no unique constraint);
+//   - an official template's body_source may not hold an OfficialFooter block (a reference
+//     must never recurse).
+//
+// `type` needs no guard: the update SQL never writes it.
+func officialTemplateRefusal(stored *models.Template, o *models.Template, all []models.Template) string {
+	if stored != nil && models.IsOfficialTemplate(stored.Name) && !models.IsOfficialTemplate(o.Name) {
+		return "templates.officialRename"
+	}
+	if !models.IsOfficialTemplate(o.Name) {
+		return ""
+	}
+	if stored == nil || stored.Name != o.Name {
+		for _, t := range all {
+			if t.Name == o.Name && (stored == nil || t.ID != stored.ID) {
+				return "templates.officialDuplicate"
+			}
+		}
+	}
+	if o.BodySource.Valid && models.HasOfficialFooterBlock(o.BodySource.String) {
+		return "templates.officialNested"
+	}
+	return ""
+}
+
+// guardOfficialTemplate applies officialTemplateRefusal as a 400. The template list is read only
+// when an official name is involved.
+func (a *App) guardOfficialTemplate(stored *models.Template, o *models.Template) error {
+	if !models.IsOfficialTemplate(o.Name) && (stored == nil || !models.IsOfficialTemplate(stored.Name)) {
+		return nil
+	}
+
+	var all []models.Template
+	if models.IsOfficialTemplate(o.Name) {
+		var err error
+		if all, err = a.core.GetTemplates("", true); err != nil {
+			return err
+		}
+	}
+
+	switch key := officialTemplateRefusal(stored, o, all); key {
+	case "":
+		return nil
+	case "templates.officialDuplicate":
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts(key, "name", o.Name))
+	default:
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T(key))
+	}
 }
 
 // compileTemplate validates template fields.

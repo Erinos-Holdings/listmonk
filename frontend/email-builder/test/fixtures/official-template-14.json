@@ -1,0 +1,81 @@
+{
+  "id": 14,
+  "name": "Official_RUZE_Footer_EN",
+  "type": "campaign_visual",
+  "brand": "ruze",
+  "lang": "en",
+  "body_source": {
+    "root": {
+      "type": "EmailLayout",
+      "data": {
+        "backdropColor": "#F5F5F5",
+        "canvasColor": "#FFFFFF",
+        "textColor": "#262626",
+        "fontFamily": "MODERN_SANS",
+        "outlook": true,
+        "childrenIds": [
+          "block-1788298044435",
+          "block-joybelle-social"
+        ]
+      }
+    },
+    "block-1788298044435": {
+      "type": "Container",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 0,
+            "bottom": 0,
+            "right": 0,
+            "left": 0
+          }
+        },
+        "props": {
+          "childrenIds": [
+            "block-1788298139076"
+          ]
+        }
+      }
+    },
+    "block-1788298139076": {
+      "type": "Image",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 24,
+            "bottom": 16,
+            "right": 16,
+            "left": 16
+          },
+          "textAlign": "center"
+        },
+        "props": {
+          "height": 20,
+          "url": "https://email.curatedfor.you/uploads/Asset-2RUZE.png",
+          "alt": "Ruze",
+          "linkHref": "https://ruzepouches.com/",
+          "contentAlignment": "middle"
+        }
+      }
+    },
+    "block-joybelle-social": {
+      "type": "Html",
+      "data": {
+        "style": {
+          "color": null,
+          "fontSize": 16,
+          "textAlign": null,
+          "padding": {
+            "top": 16,
+            "bottom": 12,
+            "right": 24,
+            "left": 24
+          }
+        },
+        "props": {
+          "contents": "<table role=\"presentation\" align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 auto;\">\n  <tr>\n    <td style=\"padding:0 6px;\">\n      <a href=\"https://www.facebook.com/ruzepouches\" target=\"_blank\" aria-label=\"Facebook\" style=\"text-decoration:none;border:0;\"><img src=\"https://email.curatedfor.you/uploads/social-curated-facebook.png\" alt=\"Facebook\" width=\"26\" height=\"26\" style=\"display:block;border:0;\"></a>\n    </td>\n    <td style=\"padding:0 6px;\">\n      <a href=\"https://www.instagram.com/ruzepouches/\" target=\"_blank\" aria-label=\"Instagram\" style=\"text-decoration:none;border:0;\"><img src=\"https://email.curatedfor.you/uploads/social-curated-instagram.png\" alt=\"Instagram\" width=\"26\" height=\"26\" style=\"display:block;border:0;\"></a>\n    </td>\n  </tr>\n</table>"
+        }
+      }
+    }
+  }
+}

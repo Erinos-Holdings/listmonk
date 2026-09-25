@@ -7,9 +7,12 @@ import EditorBlock from '../../documents/editor/EditorBlock';
 import {
   setSelectedScreenSize,
   useDocument,
+  useOfficialContext,
+  useOfficialFooters,
   useSelectedMainTab,
   useSelectedScreenSize,
 } from '../../documents/editor/EditorContext';
+import { OfficialRenderContext } from '../../documents/blocks/OfficialFooter/OfficialContext';
 import { Reader } from '../../documents/reader/core';
 import ToggleInspectorPanelButton from '../InspectorDrawer/ToggleInspectorPanelButton';
 
@@ -23,6 +26,8 @@ export default function TemplatePanel() {
   const document = useDocument();
   const selectedMainTab = useSelectedMainTab();
   const selectedScreenSize = useSelectedScreenSize();
+  const officialFooters = useOfficialFooters();
+  const officialContext = useOfficialContext();
 
   let mainBoxSx: SxProps = {
     height: '100%',
@@ -60,7 +65,9 @@ export default function TemplatePanel() {
       case 'preview':
         return (
           <Box sx={mainBoxSx}>
-            <Reader document={document} rootBlockId="root" />
+            <OfficialRenderContext.Provider value={{ refs: officialFooters, context: officialContext }}>
+              <Reader document={document} rootBlockId="root" />
+            </OfficialRenderContext.Provider>
           </Box>
         );
       case 'html':

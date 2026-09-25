@@ -18,8 +18,12 @@ const sx: SxProps = {
 
 type Props = {
   blockId: string;
+  // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D6: an OfficialFooter block can be moved but
+  // never duplicated or deleted from its own menu (deleting a Container that holds it remains
+  // possible; the Insert action restores it).
+  moveOnly?: boolean;
 };
-export default function TuneMenu({ blockId }: Props) {
+export default function TuneMenu({ blockId, moveOnly }: Props) {
   const document = useDocument();
 
   const handleDeleteClick = () => {
@@ -256,16 +260,20 @@ export default function TuneMenu({ blockId }: Props) {
             <ArrowDownwardOutlined fontSize="small" />
           </IconButton>
         </Tooltip>
-        <Tooltip title="Duplicate" placement="left-start">
-          <IconButton onClick={handleDuplicateClick} sx={{ color: 'text.primary' }}>
-            <ContentCopyOutlined fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Delete" placement="left-start">
-          <IconButton onClick={handleDeleteClick} sx={{ color: 'text.primary' }}>
-            <DeleteOutlined fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        {!moveOnly && (
+          <Tooltip title="Duplicate" placement="left-start">
+            <IconButton onClick={handleDuplicateClick} sx={{ color: 'text.primary' }}>
+              <ContentCopyOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        {!moveOnly && (
+          <Tooltip title="Delete" placement="left-start">
+            <IconButton onClick={handleDeleteClick} sx={{ color: 'text.primary' }}>
+              <DeleteOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </Stack>
     </Paper>
   );

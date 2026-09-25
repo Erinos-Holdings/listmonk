@@ -3,6 +3,8 @@ package models
 import (
 	"fmt"
 	"html/template"
+	"regexp"
+	"strings"
 	txttpl "text/template"
 	"time"
 
@@ -16,6 +18,26 @@ const (
 	TemplateTypeCampaignVisual = "campaign_visual"
 	TemplateTypeTx             = "tx"
 )
+
+// Fork (official footer, integrations OFFICIAL-FOOTER-SPEC D10). A template whose name carries
+// this prefix is an OFFICIAL block: the visual builder's OfficialFooter block renders it (resolved
+// by name) inside every campaign that carries one. The prefix IS the marker -- the template's
+// lang/brand columns drive nothing -- and IsOfficialTemplate is the one rule.
+const OfficialTemplatePrefix = "Official_"
+
+// IsOfficialTemplate reports whether a template name marks an official block.
+func IsOfficialTemplate(name string) bool {
+	return strings.HasPrefix(name, OfficialTemplatePrefix)
+}
+
+// reOfficialFooterBlock finds an OfficialFooter block in a builder document (body_source JSON).
+var reOfficialFooterBlock = regexp.MustCompile(`"type"\s*:\s*"OfficialFooter"`)
+
+// HasOfficialFooterBlock reports whether a builder document holds an OfficialFooter block -- an
+// official template may not (a reference must never recurse).
+func HasOfficialFooterBlock(bodySource string) bool {
+	return reOfficialFooterBlock.MatchString(bodySource)
+}
 
 // Template represents a reusable e-mail template.
 type Template struct {

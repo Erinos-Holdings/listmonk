@@ -43,20 +43,69 @@ fs.rmSync(buildDir, { recursive: true, force: true });
 fs.mkdirSync(buildDir, { recursive: true });
 
 const tsc = path.join(__dirname, '..', 'node_modules', 'typescript', 'bin', 'tsc');
-const compile = spawnSync(process.execPath, [
-  tsc,
-  path.join(srcDir, 'postProcess.ts'),
-  '--module', 'commonjs',
-  '--target', 'es2020',
-  '--lib', 'es2020,dom',
-  '--outDir', buildDir,
-], { stdio: 'inherit' });
-if (compile.status !== 0) {
-  console.error('tsc failed');
-  process.exit(1);
+
+// Import-free modules compiled standalone: the post-processor, and the official-footer
+// resolver, projection and insert transform (OFFICIAL-FOOTER-SPEC §3.1 -- they stay import-free
+// exactly so they can be tested here without the bundle).
+const STANDALONE = [
+  ['postProcess.ts', 'postProcess'],
+  [path.join('official', 'resolve.ts'), path.join('official', 'resolve')],
+  [path.join('official', 'projection.ts'), path.join('official', 'projection')],
+  [path.join('official', 'insert.ts'), path.join('official', 'insert')],
+];
+for (const [src, out] of STANDALONE) {
+  const outDir = path.join(buildDir, path.dirname(out));
+  const compile = spawnSync(process.execPath, [
+    tsc,
+    path.join(srcDir, src),
+    '--module', 'commonjs',
+    '--target', 'es2020',
+    '--lib', 'es2020,dom',
+    '--outDir', outDir,
+  ], { stdio: 'inherit' });
+  if (compile.status !== 0) {
+    console.error(`tsc failed: ${src}`);
+    process.exit(1);
+  }
+  // The package is "type":"module", so the CommonJS output must be .cjs.
+  fs.renameSync(path.join(buildDir, `${out}.js`), path.join(buildDir, `${out}.cjs`));
 }
-// The package is "type":"module", so the CommonJS output must be .cjs.
-fs.renameSync(path.join(buildDir, 'postProcess.js'), path.join(buildDir, 'postProcess.cjs'));
+
+// OFFICIAL-FOOTER-SPEC §3.1: official-compile.test.cjs loads the BUILT bundle -- the fork's
+// first UMD-level suite. Rebuild it (vite, then the Makefile's copy into frontend/public) when
+// it is absent or older than any builder source file. Yarn runs with corepack auto-pin OFF.
+const umd = path.join(__dirname, '..', '..', 'public', 'static', 'email-builder', 'email-builder.umd.js');
+function newestSourceMtime() {
+  let newest = 0;
+  const visit = (p) => {
+    const st = fs.statSync(p);
+    if (st.isDirectory()) {
+      for (const e of fs.readdirSync(p)) visit(path.join(p, e));
+    } else if (st.mtimeMs > newest) {
+      newest = st.mtimeMs;
+    }
+  };
+  visit(srcDir);
+  for (const f of ['package.json', 'vite.config.ts', 'tsconfig.json']) {
+    const p = path.join(__dirname, '..', f);
+    if (fs.existsSync(p)) newest = Math.max(newest, fs.statSync(p).mtimeMs);
+  }
+  return newest;
+}
+if (!fs.existsSync(umd) || fs.statSync(umd).mtimeMs < newestSourceMtime()) {
+  console.log('building the email-builder bundle (absent or stale)...');
+  const build = spawnSync('yarn', ['build'], {
+    cwd: path.join(__dirname, '..'),
+    stdio: 'inherit',
+    env: { ...process.env, COREPACK_ENABLE_AUTO_PIN: '0' },
+  });
+  if (build.status !== 0) {
+    console.error('yarn build failed');
+    process.exit(1);
+  }
+  fs.mkdirSync(path.dirname(umd), { recursive: true });
+  fs.copyFileSync(path.join(__dirname, '..', 'dist', 'email-builder.umd.js'), umd);
+}
 
 const suites = fs.readdirSync(__dirname).filter((f) => f.endsWith('.test.cjs')).sort();
 let failed = 0;

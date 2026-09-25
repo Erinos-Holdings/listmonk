@@ -64,6 +64,12 @@ const { renderHtmlWithMeta } = evaluate(transpile('utils.tsx'), {
   './documents/editor/core': {},
   './postProcess': pp,
   './inlineLinkColor': { inlineLinkColor },
+  // OFFICIAL-FOOTER-SPEC: utils.tsx now also resolves OfficialFooter references and swaps the
+  // reader's marker placeholders for comments. The fixture documents here hold no such block.
+  './documents/editor/EditorContext': { getOfficialState: () => ({ refs: [], context: null }) },
+  './documents/blocks/OfficialFooter/OfficialContext': { parseReference: () => null },
+  './documents/reader/core': { OFFICIAL_OPEN_TAG: 'lm-official-open', OFFICIAL_CLOSE_TAG: 'lm-official-close' },
+  './official/resolve': require(path.join(__dirname, '.build', 'official', 'resolve.cjs')),
 });
 
 let failed = 0;

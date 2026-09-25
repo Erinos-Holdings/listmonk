@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { LockOutlined } from '@mui/icons-material';
 import { Box, Menu } from '@mui/material';
 
 import { TEditorBlock } from '../../../../editor/core';
@@ -11,8 +12,9 @@ type BlocksMenuProps = {
   anchorEl: HTMLElement | null;
   setAnchorEl: (v: HTMLElement | null) => void;
   onSelect: (block: TEditorBlock) => void;
+  onSelectOfficial?: () => void;
 };
-export default function BlocksMenu({ anchorEl, setAnchorEl, onSelect }: BlocksMenuProps) {
+export default function BlocksMenu({ anchorEl, setAnchorEl, onSelect, onSelectOfficial }: BlocksMenuProps) {
   const onClose = () => {
     setAnchorEl(null);
   };
@@ -38,6 +40,16 @@ export default function BlocksMenu({ anchorEl, setAnchorEl, onSelect }: BlocksMe
         {BUTTONS.map((k, i) => (
           <BlockButton key={i} label={k.label} icon={k.icon} onClick={() => onClick(k.block())} />
         ))}
+        {onSelectOfficial && (
+          <BlockButton
+            label="Official footer"
+            icon={<LockOutlined />}
+            onClick={() => {
+              onSelectOfficial();
+              setAnchorEl(null);
+            }}
+          />
+        )}
       </Box>
     </Menu>
   );

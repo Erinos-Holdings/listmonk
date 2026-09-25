@@ -40,11 +40,30 @@ export default {
     // Fork (media tags) -- MEDIA-TAGS-SPEC 3.5. Forwarded to the image picker, which opens
     // pre-filtered to these tags.
     mediaContext: { type: Array, default: () => [] },
+
+    // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D9. The resolution context
+    // ({lang, brand, official}) and every `Official_` campaign_visual template ({id, name,
+    // body_source}), forwarded to the builder's store setters (same channel as the palettes).
+    // A change re-emits the builder's onChange, so the compiled body follows a Language or list
+    // change made after the document loaded.
+    officialContext: { type: Object, default: null },
+    officialFooters: { type: Array, default: () => [] },
   },
 
   watch: {
     brandPalettes() {
       this.applyBrandPalettes();
+    },
+
+    officialContext: {
+      handler() {
+        this.applyOfficial();
+      },
+      deep: true,
+    },
+
+    officialFooters() {
+      this.applyOfficial();
     },
   },
 
@@ -112,6 +131,9 @@ export default {
         const container = iframe.contentWindow.document.getElementById('visual-editor-container');
         if (container && container.hasChildNodes()) {
           em.resetDocument(source);
+          // D8: the context is applied AFTER the stored document is loaded -- the builder only
+          // re-emits once documentGeneration > 0, so this regenerates the body with the context.
+          this.applyOfficial();
           window.clearInterval(timer);
           return;
         }
@@ -134,6 +156,38 @@ export default {
       if (em && em.setBrandPalettes) {
         em.setBrandPalettes(this.brandPalettes);
       }
+    },
+
+    // Fork (official footer). Push the references + context into the builder's store. Existence-
+    // guarded like setBrandPalettes: a stale cached bundle that predates the exports is a no-op.
+    applyOfficial() {
+      const em = this.builder();
+      if (!em) {
+        return;
+      }
+      if (em.setOfficialFooters) {
+        em.setOfficialFooters(this.officialFooters || []);
+      }
+      if (em.setOfficialContext) {
+        em.setOfficialContext(this.officialContext ? { ...this.officialContext } : null);
+      }
+    },
+
+    // The iframe'd builder's module (EmailBuilder), or null before its script has loaded.
+    builder() {
+      const iframe = this.$refs.visualEditor;
+      return (iframe && iframe.contentWindow && iframe.contentWindow.EmailBuilder) || null;
+    },
+
+    // OFFICIAL-FOOTER-SPEC D11: the headless compile the re-save sweep uses -- another item's
+    // document under its own context, never touching this editor's document or context. null
+    // when the loaded bundle predates compileDocument.
+    compileDocument(doc, context, refs) {
+      const em = this.builder();
+      if (!em || !em.compileDocument) {
+        return null;
+      }
+      return em.compileDocument(doc, context, refs);
     },
 
     // Rebrand sweep: run the builder's pure remap on a document JSON string and, when
@@ -233,6 +287,7 @@ export default {
 
         this.render(source);
         this.applyBrandPalettes();
+        this.applyOfficial();
       }).catch((error) => {
         /* eslint-disable-next-line no-console */
         console.error('Failed to load email-builer script:', error);

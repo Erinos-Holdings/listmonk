@@ -62,7 +62,8 @@
 
     <!-- visual editor //-->
     <visual-editor v-if="self.contentType === 'visual'" :source="self.bodySource" @change="onVisualEditorChange"
-      height="65vh" :brand-palettes="brandPalettes" :media-context="mediaContext" ref="visualEditor" />
+      height="65vh" :brand-palettes="brandPalettes" :media-context="mediaContext" ref="visualEditor"
+      :official-context="officialContext" :official-footers="officialFooters" />
 
     <!-- raw html editor //-->
     <code-editor lang="html" v-if="self.contentType === 'html'" v-model="self.body" key="editor-html" />
@@ -113,6 +114,10 @@ export default {
 
     // Fork (media tags) -- MEDIA-TAGS-SPEC 3.5. The image picker's context tags (passed through).
     mediaContext: { type: Array, default: () => [] },
+
+    // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D9 (passed through to the visual editor).
+    officialContext: { type: Object, default: null },
+    officialFooters: { type: Array, default: () => [] },
 
     // Fork (multi-language campaigns) -- JSON attribs (lang, preheader) the preview posts.
     attribs: { type: String, default: '' },

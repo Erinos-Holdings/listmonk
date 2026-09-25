@@ -1,0 +1,44 @@
+{
+  "id": 30,
+  "name": "Official_Footer_EN",
+  "type": "campaign_visual",
+  "brand": "",
+  "lang": "en",
+  "body_source": {
+    "root": {
+      "type": "EmailLayout",
+      "data": {
+        "backdropColor": "#F5F5F5",
+        "canvasColor": "#FFFFFF",
+        "textColor": "#262626",
+        "fontFamily": "MODERN_SANS",
+        "outlook": true,
+        "childrenIds": [
+          "block-1788298161221"
+        ]
+      }
+    },
+    "block-1788298161221": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "color": "#555555",
+          "fontSize": 11,
+          "fontFamily": "ARIAL",
+          "fontWeight": "normal",
+          "textAlign": "center",
+          "padding": {
+            "top": 0,
+            "bottom": 16,
+            "right": 24,
+            "left": 24
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "<a href=\"https://support.curatedby.you/portal/en/home\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:#888\">Customer Support</a> • <a href=\"https://curatedby.you/-/privacy?lang=en\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:#888\">Privacy Policy</a> • <a href=\"https://curatedby.you/-/terms?lang=en\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:#888\">Terms of Use</a>\n4101 N. Thanksgiving Way Ste 400, Lehi, UT 84048\n©2026. All rights reserved.\n\n<a href=\"{{ UnsubscribeURL }}\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:#888\">Unsubscribe</a>&nbsp;&bull;&nbsp;<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://manage-preferences.curatedfor.you/?uuid={{ .Subscriber.UUID }}&amp;email={{ .Subscriber.Email }}\" style=\"color:#888\">Manage Preferences</a>"
+        }
+      }
+    }
+  }
+}

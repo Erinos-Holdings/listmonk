@@ -297,7 +297,8 @@
       <b-tab-item :label="$t('campaigns.content')" icon="text" :disabled="isNew" value="content">
         <editor v-if="data.id" ref="editor" :key="editorKey" v-model="form.content" :id="data.id" :title="data.name"
           :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes"
-          :media-context="mediaContext" :attribs="previewAttribs" @template-imported="onTemplateImported" />
+          :media-context="mediaContext" :attribs="previewAttribs" @template-imported="onTemplateImported"
+          :official-context="officialContext" :official-footers="officialFooters" />
 
         <div class="columns">
           <div class="column is-6">
@@ -1692,6 +1693,25 @@ export default Vue.extend({
       const d = this.brandDerivation;
       const brand = d.error === null && d.brand ? [d.brand] : [];
       return normalizeMediaTagsLenient([...brand, ...(this.form.tags || [])]);
+    },
+
+    // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D3/D9. What the builder's OfficialFooter
+    // blocks resolve against: the campaign's language ('' -> en) and its derived brand,
+    // lower-folded. brand is null -- the "Choose a list" placeholder -- while no list is picked
+    // (the derivation alone returns the curated default for zero lists) or the derivation errors.
+    officialContext() {
+      const d = this.brandDerivation;
+      const noLists = !this.form.lists || this.form.lists.length === 0;
+      const brand = noLists || d.error !== null || !d.brand ? null : String(d.brand).toLowerCase();
+      return { lang: this.form.lang || 'en', brand };
+    },
+
+    // The `Official_` subset of the templates this page already fetches (GET /api/templates
+    // returns body_source; no second fetch).
+    officialFooters() {
+      return (this.templates || [])
+        .filter((t) => t.type === 'campaign_visual' && typeof t.name === 'string' && t.name.startsWith('Official_'))
+        .map((t) => ({ id: t.id, name: t.name, body_source: t.bodySource }));
     },
 
     // Resolve the selected lists to one brand + From pair, or to the reason it cannot be done.

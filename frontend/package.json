@@ -10,6 +10,7 @@
     "prebuild": "eslint --ext .js,.mjs,.vue --ignore-path .gitignore src",
     "test:sort": "node --test src/health-sort.test.mjs",
     "test:audience": "node --test src/audience-box.test.mjs",
+    "test:official-sweep": "node --test src/officialSweep.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },
   "dependencies": {

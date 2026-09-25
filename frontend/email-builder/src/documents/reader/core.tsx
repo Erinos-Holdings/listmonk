@@ -23,7 +23,11 @@ import ContainerPropsSchema from '../blocks/Container/ContainerPropsSchema';
 import EmailLayoutPropsSchema, { EmailLayoutProps, getBackdropPadding } from '../blocks/EmailLayout/EmailLayoutPropsSchema';
 import { FONT_FAMILIES } from '../blocks/helpers/fontFamily';
 import { ImgPropsSchema } from '../blocks/Img/ImgPropsSchema';
+import { OfficialRenderContext, parseReference } from '../blocks/OfficialFooter/OfficialContext';
+import OfficialFooterPropsSchema from '../blocks/OfficialFooter/OfficialFooterPropsSchema';
 import { CANVAS_WIDTH } from '../canvasWidth';
+import { officialProjection } from '../../official/projection';
+import { officialLang, officialSlug, resolveOfficial } from '../../official/resolve';
 
 /**
  * A local fork of @usewaypoint/email-builder's Reader (MIT, (c) 2024 Waypoint
@@ -151,6 +155,78 @@ function EmailLayoutReader(props: EmailLayoutProps) {
   );
 }
 
+// Fork (official footer) -- OFFICIAL-FOOTER-SPEC D4. The compile of an OfficialFooter block is
+// its marker, the resolved reference's ROOT CHILDREN rendered in place (the reference's own
+// EmailLayout props are ignored, so the campaign's backdrop/font govern), and the end marker.
+// React cannot render a comment node, so the markers are two empty placeholder elements that
+// renderHtmlWithMeta (utils.tsx) replaces with the comment pair BEFORE postProcess runs -- no
+// wrapper element survives, which is what makes the compile byte-identical to the same
+// document with the reference's blocks pasted in (I2).
+//   ok / duplicate  <!-- official:<kind>:<lang>:<brand>:<hash> --> ...children... <!-- /official -->
+//   missing         <!-- official:<kind>:<lang>:<brand>:missing --><!-- /official -->
+//   no-context      <!-- official:<kind>:<lang>:<brand>:no-context --><!-- /official -->
+//   none (curated)  nothing at all, marker included
+// `brand` is `-` for the corporate kind. An OfficialFooter met INSIDE a reference renders
+// nothing (depth 1 only).
+export const OFFICIAL_OPEN_TAG = 'lm-official-open';
+export const OFFICIAL_CLOSE_TAG = 'lm-official-close';
+
+function officialMarker(marker: string, inner: React.ReactNode) {
+  return (
+    <>
+      {React.createElement(OFFICIAL_OPEN_TAG, { 'data-marker': marker })}
+      {inner}
+      {React.createElement(OFFICIAL_CLOSE_TAG)}
+    </>
+  );
+}
+
+// A reference document's root children, rendered by the reader against THAT document (a nested
+// ReaderContext), with the nested flag set so an OfficialFooter inside it renders nothing. The
+// canvas uses this too (OfficialFooterEditor), so the canvas and the compile render one way.
+export function OfficialReferenceChildren({ document }: { document: TReaderDocument }) {
+  const official = useContext(OfficialRenderContext);
+  const root = (document as Record<string, any>).root;
+  const childrenIds: string[] = (root && root.data && root.data.childrenIds) || [];
+  return (
+    <OfficialRenderContext.Provider value={{ refs: official?.refs ?? [], context: official?.context ?? null, nested: true }}>
+      <ReaderContext.Provider value={document}>
+        {childrenIds.map((childId) => (
+          <ReaderBlock key={childId} id={childId} />
+        ))}
+      </ReaderContext.Provider>
+    </OfficialRenderContext.Provider>
+  );
+}
+
+function OfficialFooterReader({ props }: z.infer<typeof OfficialFooterPropsSchema>) {
+  const official = useContext(OfficialRenderContext);
+  const kind = props?.kind;
+  if (official?.nested) {
+    // eslint-disable-next-line no-console
+    console.warn('OfficialFooter inside an official reference renders nothing (depth 1 only)');
+    return <></>;
+  }
+  if (!official || (kind !== 'corporate' && kind !== 'brand')) {
+    return <></>;
+  }
+
+  const res = resolveOfficial(kind, official.context, official.refs);
+  if (res.status === 'none') {
+    return <></>;
+  }
+  const lang = officialLang(official.context?.lang).toLowerCase();
+  const brand = kind === 'corporate' ? '-' : officialSlug(official.context?.brand) || '-';
+  const prefix = `official:${kind}:${lang}:${brand}`;
+
+  const doc = res.ref ? parseReference(res.ref.body_source) : null;
+  if ((res.status === 'ok' || res.status === 'duplicate') && doc) {
+    return officialMarker(`${prefix}:${officialProjection(doc).hash}`, <OfficialReferenceChildren document={doc as TReaderDocument} />);
+  }
+  // missing / no-context (or a reference whose body_source does not parse): an EMPTY pair.
+  return officialMarker(`${prefix}:${res.status === 'no-context' ? 'no-context' : 'missing'}`, null);
+}
+
 const READER_DICTIONARY = buildBlockConfigurationDictionary({
   ColumnsContainer: {
     schema: ColumnsContainerPropsSchema,
@@ -196,6 +272,10 @@ const READER_DICTIONARY = buildBlockConfigurationDictionary({
   Text: {
     schema: TextPropsSchema,
     Component: Text,
+  },
+  OfficialFooter: {
+    schema: OfficialFooterPropsSchema,
+    Component: OfficialFooterReader,
   },
 });
 

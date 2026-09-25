@@ -9,9 +9,11 @@ import TuneMenu from './TuneMenu';
 
 type TEditorBlockWrapperProps = {
   children: JSX.Element;
+  // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D6: the TuneMenu offers move up/down only.
+  moveOnly?: boolean;
 };
 
-export default function EditorBlockWrapper({ children }: TEditorBlockWrapperProps) {
+export default function EditorBlockWrapper({ children, moveOnly }: TEditorBlockWrapperProps) {
   const selectedBlockId = useSelectedBlockId();
   const [mouseInside, setMouseInside] = useState(false);
   const blockId = useCurrentBlockId();
@@ -38,7 +40,7 @@ export default function EditorBlockWrapper({ children }: TEditorBlockWrapperProp
     if (selectedBlockId !== blockId) {
       return null;
     }
-    return <TuneMenu blockId={blockId} />;
+    return <TuneMenu blockId={blockId} moveOnly={moveOnly} />;
   };
 
   return (

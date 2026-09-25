@@ -410,6 +410,16 @@ export const getCampaignQuiet = async (id) => http.get(`/api/campaigns/${id}`, {
   camelCase: (keyPath) => !keyPath.startsWith('.headers'),
 });
 
+// Fork (official footer) -- OFFICIAL-FOOTER-SPEC D11. Raw (snake_case, NOT camelCased) reads for
+// the re-save sweep: its PUT payloads are built from these rows verbatim, and camelCasing would
+// rewrite nested keys (archive_meta, attribs) the full-replace PUT then stores.
+export const getCampaignsRaw = async () => http.get('/api/campaigns', {
+  params: { per_page: 'all' },
+  camelCase: false,
+});
+
+export const getCampaignRaw = async (id) => http.get(`/api/campaigns/${id}`, { camelCase: false });
+
 export const getCampaignStats = async () => http.get('/api/campaigns/running/stats', {});
 
 // Fork: the create/update responses carry the campaign's headers too; camelCasing them
@@ -525,6 +535,11 @@ export const getTemplates = async () => http.get(
   '/api/templates',
   { loading: models.templates, store: models.templates },
 );
+
+// Fork (official footer) -- raw template reads for the sweep (see getCampaignsRaw).
+export const getTemplatesRaw = async () => http.get('/api/templates', { camelCase: false });
+
+export const getTemplateRaw = async (id) => http.get(`/api/templates/${id}`, { camelCase: false });
 
 export const getTemplate = async (id) => http.get(
   `/api/templates/${id}`,

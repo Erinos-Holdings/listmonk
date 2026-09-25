@@ -18,6 +18,10 @@
           </h4>
         </header>
         <section expanded class="modal-card-body mb-0 pb-0">
+          <!-- Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10. -->
+          <b-message v-if="isOfficial" type="is-warning" class="official-banner" data-cy="official-banner">
+            <b-icon icon="lock-outline" size="is-small" /> {{ $t('templates.officialHint') }}
+          </b-message>
           <div class="columns">
             <div class="column is-9">
               <b-field :label="$t('globals.fields.name')" label-position="on-border">
@@ -80,7 +84,8 @@
             <b-field v-if="form.type === 'campaign_visual'" label-position="on-border" class="mb-1">
               <visual-editor v-if="form.type === 'campaign_visual'" ref="visualEditor" name="body"
                 :source="form.bodySource" @change="onChangeVisualEditor" height="70vh"
-                :brand-palettes="brandPalettes" :media-context="mediaContext" />
+                :brand-palettes="brandPalettes" :media-context="mediaContext"
+                :official-context="officialContext" :official-footers="officialFooters" />
             </b-field>
 
             <b-field v-else :label="$t('templates.rawHTML')" label-position="on-border">
@@ -122,6 +127,7 @@ import CopyText from '../components/CopyText.vue';
 import { BRAND_TAG_PREFIX, brandThemePalette, reBrandSlug } from '../brand';
 import { CAMPAIGN_LANGS } from '../langs';
 import { normalizeMediaTagsLenient } from '../mediaTags';
+import { isOfficialName, runSweep, selectSweepItems } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -197,12 +203,112 @@ export default Vue.extend({
     },
 
     onSubmit() {
+      // OFFICIAL-FOOTER-SPEC D10/D11: an official save is a considered act -- confirm with the
+      // counts the re-save sweep will touch, then save, then sweep.
+      if (this.isOfficialSave) {
+        this.confirmOfficialSave();
+        return;
+      }
+
       if (this.isEditing) {
         this.updateTemplate();
         return;
       }
 
       this.createTemplate();
+    },
+
+    // The sweep plan for a save of `saved` ({id, name}): raw campaigns + templates, selected by
+    // resolution (officialSweep.mjs). Also returns the fresh `Official_` references.
+    async planOfficialSweep(saved) {
+      const [camps, tpls] = await Promise.all([this.$api.getCampaignsRaw(), this.$api.getTemplatesRaw()]);
+      const templates = Array.isArray(tpls) ? tpls : [];
+      const plan = selectSweepItems((camps && camps.results) || [], templates, saved, (this.lists && this.lists.results) || []);
+      const refs = templates
+        .filter((t) => t.type === 'campaign_visual' && isOfficialName(t.name))
+        .map((t) => ({ id: t.id, name: t.name, body_source: t.body_source }));
+      return { plan, refs };
+    },
+
+    confirmOfficialSave() {
+      const saved = { id: this.data.id, name: this.form.name };
+      this.planOfficialSweep(saved).then(({ plan }) => this.$t('templates.officialSaveConfirm', {
+        campaigns: plan.campaigns.length,
+        evergreens: plan.evergreens.length,
+        templates: plan.templates.length,
+      }), () => this.$t('templates.officialSaveConfirmUnknown')).then((msg) => {
+        this.$utils.confirm(msg, () => {
+          const save = this.isEditing ? this.updateTemplate() : this.createTemplate();
+          save.then((d) => {
+            if (d) {
+              this.runOfficialSweep({ id: d.id, name: d.name });
+            }
+          });
+        });
+      });
+    },
+
+    // D11: re-save every carrier of the saved template. A sweep failure never un-saves the
+    // template; the recovery is integrations' scripts/repair-official-footers.ts.
+    async runOfficialSweep(saved) {
+      const ve = this.$refs.visualEditor;
+      const em = ve && ve.builder ? ve.builder() : null;
+      if (!em || !em.compileDocument) {
+        this.$utils.toast(this.$t('templates.officialSweepUnavailable'), 'is-danger', 15000);
+        return;
+      }
+
+      let plan;
+      let refs;
+      try {
+        ({ plan, refs } = await this.planOfficialSweep(saved));
+      } catch (e) {
+        this.$utils.toast(this.$t('templates.officialSweepUnavailable'), 'is-danger', 15000);
+        return;
+      }
+      // The saved row is fresh in `refs`; the editor's own references follow via the store.
+      this.$api.getTemplates();
+
+      const canSend = this.$can('campaigns:send');
+      const total = plan.campaigns.length + plan.templates.length + (canSend ? plan.evergreens.length : 0);
+      if (total === 0 && plan.evergreens.length === 0 && plan.unresolved.length === 0) {
+        return;
+      }
+      if (total > 0) {
+        this.$utils.toast(this.$t('templates.officialSweepProgress', { n: total }), 'is-info', 5000);
+      }
+
+      const summary = await runSweep(plan, {
+        api: {
+          getCampaign: (id) => this.$api.getCampaignRaw(id),
+          getTemplate: (id) => this.$api.getTemplateRaw(id),
+          updateCampaign: (id, payload) => this.$api.updateCampaign(id, payload),
+          updateTemplate: (payload) => this.$api.updateTemplate(payload),
+          changeStatus: (id, status) => this.$api.changeCampaignStatus(id, status),
+        },
+        compile: (doc, context) => ve.compileDocument(doc, context, refs),
+        canSend,
+        lists: (this.lists && this.lists.results) || [],
+      });
+
+      // Left-paused first: it is the one that stops a live automation.
+      const lines = [];
+      if (summary.leftPaused.length > 0) {
+        lines.push(this.$t('templates.officialSweepLeftPaused', { refs: summary.leftPaused.map((l) => l.ref).join(', ') }));
+      }
+      lines.push(this.$t('templates.officialSweepDone', { saved: summary.saved.length, failed: summary.failed.length }));
+      if (summary.failed.length > 0) {
+        lines.push(this.$t('templates.officialSweepFailed', { refs: summary.failed.map((f) => `${f.ref} (${f.error})`).join('; ') }));
+      }
+      if (summary.notResaved.length > 0) {
+        lines.push(this.$t('templates.officialSweepNotResaved', { n: summary.notResaved.length, refs: summary.notResaved.map((id) => `c${id}`).join(', ') }));
+      }
+      if (summary.unresolved.length > 0) {
+        lines.push(this.$t('templates.officialSweepUnresolved', { refs: summary.unresolved.map((u) => `c${u.id}`).join(', ') }));
+      }
+      const clean = summary.failed.length === 0 && summary.leftPaused.length === 0
+        && summary.notResaved.length === 0 && summary.unresolved.length === 0;
+      this.$utils.toast(lines.join(' '), clean ? 'is-success' : 'is-warning', clean ? 5000 : 30000);
     },
 
     createTemplate() {
@@ -217,7 +323,7 @@ export default Vue.extend({
         lang: this.form.lang || 'en',
       };
 
-      this.$api.createTemplate(data).then((d) => {
+      return this.$api.createTemplate(data).then((d) => {
         this.$emit('finished');
         // No $parent.close() here (D2): a save stays open, matching Campaigns' "Save
         // changes" behavior. The create-vs-update branch is the isEditing PROP, owned by
@@ -225,6 +331,7 @@ export default Vue.extend({
         // record so the parent can flip curItem/isEditing.
         this.$emit('created', d);
         this.$utils.toast(this.$t('globals.messages.created', { name: d.name }));
+        return d;
       });
     },
 
@@ -240,9 +347,10 @@ export default Vue.extend({
         lang: this.form.lang || 'en',
       };
 
-      this.$api.updateTemplate(data).then((d) => {
+      return this.$api.updateTemplate(data).then((d) => {
         this.$emit('finished');
         this.$utils.toast(`'${d.name}' updated`);
+        return d;
       });
     },
 
@@ -334,7 +442,30 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['loading', 'lists']),
+    ...mapState(['loading', 'lists', 'templates']),
+
+    // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10: an `Official_` template (the stored
+    // name, or the one being typed).
+    isOfficial() {
+      return isOfficialName(this.form.name) || (this.isEditing && isOfficialName(this.data && this.data.name));
+    },
+
+    // A save that must confirm + sweep: the saved row will carry an official name.
+    isOfficialSave() {
+      return this.form.type === 'campaign_visual' && isOfficialName(this.form.name);
+    },
+
+    // D9: the template's own columns; `official` hides the builder's Insert action (a reference
+    // can never hold an OfficialFooter block).
+    officialContext() {
+      return { lang: this.form.lang || 'en', brand: this.brandSlug || 'curated', official: this.isOfficial };
+    },
+
+    officialFooters() {
+      return (this.templates || [])
+        .filter((t) => t.type === 'campaign_visual' && isOfficialName(t.name))
+        .map((t) => ({ id: t.id, name: t.name, body_source: t.bodySource }));
+    },
 
     langOptions() {
       return CAMPAIGN_LANGS;

@@ -24,6 +24,8 @@ import EmailLayoutEditor from '../blocks/EmailLayout/EmailLayoutEditor';
 import EmailLayoutPropsSchema from '../blocks/EmailLayout/EmailLayoutPropsSchema';
 import EditorBlockWrapper from '../blocks/helpers/block-wrappers/EditorBlockWrapper';
 import { ImgPropsSchema } from '../blocks/Img/ImgPropsSchema';
+import OfficialFooterEditor from '../blocks/OfficialFooter/OfficialFooterEditor';
+import OfficialFooterPropsSchema from '../blocks/OfficialFooter/OfficialFooterPropsSchema';
 
 // Re-exported for the sidebar panels, which import it from here. The schema
 // itself lives beside the other block schemas so that the reader can use it
@@ -122,6 +124,16 @@ const EDITOR_DICTIONARY = buildBlockConfigurationDictionary({
     Component: (props) => (
       <EditorBlockWrapper>
         <Divider {...props} />
+      </EditorBlockWrapper>
+    ),
+  },
+  // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D1/D6. Registered in BOTH dictionaries (the
+  // reader's is in ../reader/core.tsx): read-only, move up/down only.
+  OfficialFooter: {
+    schema: OfficialFooterPropsSchema,
+    Component: (props) => (
+      <EditorBlockWrapper moveOnly>
+        <OfficialFooterEditor {...props} />
       </EditorBlockWrapper>
     ),
   },
