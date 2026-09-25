@@ -18,13 +18,14 @@ const PRESENTATION_TABLE_STYLE = 'border-collapse:collapse;mso-table-lspace:0pt;
 // CAMPAIGN-52-HARDENING D1: NO DOWNLEVEL-REVEALED CONDITIONAL COMMENTS, EVER.
 // T-Online's sanitizer drops the contents of every downlevel-revealed (if-not-mso)
 // block (2026-09-07 full-matrix Inspect: both buttons and the clamped photo vanished —
-// exactly the three such blocks in the campaign). The non-Word twin of a VML button or a
-// clamped image is therefore emitted unconditionally and hidden from Word with
+// exactly the three such blocks in the campaign). The non-Word twin of a VML button is
+// therefore emitted unconditionally and hidden from Word with
 // `mso-hide:all` on a wrapper Word honors (a block element or a table cell — never an
 // inline one), the same property the preheader div already relies on. The Word twin stays
 // inside downlevel-HIDDEN `<!--[if mso]>…<![endif]-->`, an ordinary comment to every other
-// client. The if-not-mso conditional string must not appear anywhere in this file; the
-// test suite greps compiled output for it.
+// client. (Clamped images no longer twin at all — see clampImageWidths.) The if-not-mso
+// conditional string must not appear anywhere in this file; the test suite greps compiled
+// output for it.
 const NON_MSO_HIDE_STYLE = 'mso-hide:all';
 const NON_MSO_CLASS = 'lm-nomso';
 
@@ -1244,11 +1245,9 @@ function clampImageWidths(node: Element, available: number) {
       const clampedWidth = Math.floor(available);
       const clamped = String(clampedWidth);
       const clampedImage = img.cloneNode(true) as HTMLImageElement;
-      const originalImage = img.cloneNode(true) as HTMLImageElement;
-      // Dual-emitting multiplies any inline handlers; strip them from both
-      // copies. Rendering (src/size/styles) stays the same for non-MSO.
+      // Kept from the dual-emit era: the clone is rebuilt from outerHTML below, and an inline
+      // handler must not ride through that re-parse into compiled mail.
       stripInlineEventHandlers(clampedImage);
-      stripInlineEventHandlers(originalImage);
       clampedImage.setAttribute('width', clamped);
 
       const styleMap = parseStyleMap(clampedImage.getAttribute('style'));
@@ -1271,15 +1270,14 @@ function clampImageWidths(node: Element, available: number) {
 
       clampedImage.setAttribute('style', setStyleValues(clampedImage.getAttribute('style'), styleUpdates));
 
-      // The clamped copy rides in a downlevel-HIDDEN conditional (an ordinary comment
-      // to every non-Word client); the original is emitted unconditionally inside an
-      // mso-hide:all block so Word never draws it (see NON_MSO_HIDE_STYLE).
-      replaceNodeWithHtml(img, [
-        makeSafeTemplate('<!--[if mso]>'),
-        clampedImage.outerHTML,
-        makeSafeTemplate('<![endif]-->'),
-        `<div class="${NON_MSO_CLASS}" style="${NON_MSO_HIDE_STYLE}">${originalImage.outerHTML}</div>`,
-      ].join(''));
+      // ONE copy, for every client (2026-09-25, RUZE 108). The 2026-09-07 hardening kept
+      // the author's unclamped original for non-Word clients behind mso-hide:all, trusting
+      // max-width:100% to shrink it. The Gmail apps (Android and iOS) size the layout from
+      // the width ATTRIBUTE: a width="600" image beside a Text column pushed the row past
+      // the canvas, and Gmail's overflow mode scaled the page and left-aligned every centered
+      // block below. The clamped width is right for every client (max-width:100% stays as
+      // the fluid belt), so the twin is gone and no conditional is needed here at all.
+      replaceNodeWithHtml(img, clampedImage.outerHTML);
     }
     return;
   }

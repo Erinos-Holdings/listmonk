@@ -16,11 +16,11 @@ const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'
 const builderRequire = createRequire(path.join(__dirname, '..', 'package.json'));
 const frontendRequire = createRequire(path.join(__dirname, '..', '..', 'package.json'));
 
-// An OVERSIZED right-aligned image block carries clampImageWidths' dual-emit markers inside
-// its align="right" inner table, so the fixture includes one and both producers go through the
-// same round trips. (Bare, not linked: prettier reflows inline content inside <a> and breaks the
-// dual-emit's closing marker for ANY linked oversized image — pre-existing, js-beautify path
-// unaffected; blind review 2026-09-03.)
+// An OVERSIZED right-aligned image block is clamped once inside its align="right" inner table
+// (since 2026-09-25 it carries no Safe markers of its own — the buttons' VML twins are what
+// exercise the Safe round trips), so the fixture includes one and both producers go through the
+// same round trips. (Bare, not linked: prettier reflows inline content inside <a> — pre-existing,
+// js-beautify path unaffected; blind review 2026-09-03.)
 // The button carries a QUOTED font stack (BOOK_SANS): escapeAttribute turns
 // the quotes into &quot;, and without &-encoding the fragment-parser round
 // trip decodes them back into raw quotes inside the Go string — the exact

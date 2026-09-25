@@ -13,6 +13,6 @@ check('both button anchors survive with their text', anchors.length === 2 && anc
 check('inline anchor keeps its href', !!doc.querySelector('a[href="https://x.test/go"]'));
 check('full-width anchor keeps its href', !!doc.querySelector('a[href="https://x.test/wide"]'));
 const imgs = doc.querySelectorAll('img[src="https://x.test/photo.png"]');
-check('exactly one image with the src survives (the original, not the clamped copy)', imgs.length === 1 && imgs[0].getAttribute('width') === '700', `imgs=${imgs.length}`);
+check('exactly one image with the src survives (the clamped copy, 2026-09-25: no unclamped twin)', imgs.length === 1 && imgs[0].getAttribute('width') === '552', `imgs=${imgs.length}`);
 
 done();

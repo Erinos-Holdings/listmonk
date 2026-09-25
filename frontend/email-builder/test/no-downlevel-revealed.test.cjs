@@ -30,13 +30,14 @@ const wideCells = wideTable ? Array.from(wideTable.querySelectorAll('td')) : [];
 check('every cell of the full-width twin carries mso-hide:all', wideCells.length > 0 && wideCells.every((td) => /mso-hide:\s*all/.test(td.getAttribute('style') || '')));
 check('full-width twin keeps width=100% (fluid for Outlook mobile)', wideTable && wideTable.getAttribute('width') === '100%');
 
-// The clamped Word copy lives inside a downlevel-hidden conditional — a COMMENT to the
-// DOM — so it is asserted on the rendered string; the original is a real element.
+// 2026-09-25: an over-wide image is emitted ONCE, clamped, as a real element for every
+// client — no Word conditional and no mso-hide twin (the unclamped twin made the Gmail
+// apps overflow a Columns row).
 const imgTags = rendered.match(/<img[^>]*src="https:\/\/x\.test\/photo\.png"[^>]*>/g) || [];
-check('over-wide image is dual-emitted (clamped mso copy + original)', imgTags.length === 2, `imgs=${imgTags.length}`);
-check('clamped copy rides inside <!--[if mso]> … <![endif]-->', /<!--\[if mso\]><img[^>]*width="552"[^>]*><!\[endif\]-->/.test(rendered));
-const original = doc.querySelector('img[src="https://x.test/photo.png"]');
-check('original image twin (width 700) is the one real element, wrapped in a block carrying mso-hide:all',
-  original && original.getAttribute('width') === '700' && original.parentElement.tagName === 'DIV' && /mso-hide:\s*all/.test(original.parentElement.getAttribute('style') || ''));
+check('over-wide image is emitted once', imgTags.length === 1, `imgs=${imgTags.length}`);
+check('no image rides inside <!--[if mso]> … <![endif]-->', !/<!--\[if mso\]><img/.test(rendered));
+const clampedImg = doc.querySelector('img[src="https://x.test/photo.png"]');
+check('the one real image is clamped to 552 and not wrapped in an mso-hide:all block',
+  clampedImg && clampedImg.getAttribute('width') === '552' && !(clampedImg.parentElement.tagName === 'DIV' && /mso-hide:\s*all/.test(clampedImg.parentElement.getAttribute('style') || '')));
 
 done();

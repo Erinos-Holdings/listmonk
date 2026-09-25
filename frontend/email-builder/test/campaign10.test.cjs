@@ -32,31 +32,25 @@ check('mso ghost table closer present', /\{\{ Safe "\\x3c!--\[if\\x20mso\]\\x3e\
 check('backdrop td with bgcolor #edd8d8 + padding', /<td align="center" bgcolor="#edd8d8" style="background-color:#edd8d8;padding:32px 0px 32px 0px">/.test(output));
 check('backdrop div no longer carries padding', !/<div style="background-color:#edd8d8[^"]*padding:/.test(output));
 
-// 3. Dual-emit clamping: mso copy clamped, non-mso copy original
+// 3. Clamping: ONE copy per over-wide image, at the clamped width, for every client
+// (2026-09-25: the unclamped non-Word twin made the Gmail apps overflow the row).
 const widths = [...output.matchAll(/<img[^>]*width="(\d+)"/g)].map((m) => Number(m[1]));
 const countOf = (w) => widths.filter((x) => x === w).length;
-check('6 clamped 270px grid copies (mso)', countOf(270) === 6, `270=${countOf(270)}`);
-check('6 original 300px grid copies (non-mso)', countOf(300) === 6, `300=${countOf(300)}`);
-check('4 clamped 150px footer copies (mso)', countOf(150) === 4, `150=${countOf(150)}`);
-check('4 original 200px footer copies (non-mso)', countOf(200) === 4, `200=${countOf(200)}`);
-check('hero images stay single 600px (not dual-emitted)', countOf(600) === 3, `600=${countOf(600)}`);
+check('6 clamped 270px grid images', countOf(270) === 6, `270=${countOf(270)}`);
+check('no 300px grid original survives', countOf(300) === 0, `300=${countOf(300)}`);
+check('4 clamped 150px footer images', countOf(150) === 4, `150=${countOf(150)}`);
+check('no 200px footer original survives', countOf(200) === 0, `200=${countOf(200)}`);
+check('hero images stay single 600px (never clamped)', countOf(600) === 3, `600=${countOf(600)}`);
 
-// 4. Pairing structure: [if mso]<img clamped>[endif] <div mso-hide:all><img original></div>
-// (D1: no downlevel-revealed conditional anywhere in the output.)
+// 4. No image rides in a conditional or an mso-hide wrapper any more
+// (D1 still holds: no downlevel-revealed conditional anywhere in the output).
 check('no downlevel-revealed conditional in the output', !output.includes('!mso'));
-const idx = output.indexOf(MSO_OPEN + '<img');
-const block = idx >= 0 ? output.slice(idx, idx + 1600) : '';
-check('dual block order: mso-clamped then mso-hidden original',
-  idx >= 0 && block.indexOf('width="270"') !== -1
-    && block.indexOf(MSO_CLOSE) > block.indexOf('width="270"')
-    && block.indexOf(NONMSO_OPEN) > block.indexOf(MSO_CLOSE)
-    && block.indexOf('width="300"') > block.indexOf(NONMSO_OPEN)
-    && block.indexOf(NONMSO_CLOSE) > block.indexOf('width="300"'));
+check('no image inside an [if mso] block', output.indexOf(MSO_OPEN + '<img') === -1);
+check('no image inside an mso-hide:all wrapper', output.indexOf(NONMSO_OPEN + '<img') === -1);
 
-// 5. Clamped copy: style width follows, non-mso copy style untouched
-check('clamped copy style width:270px', /<img[^>]*width="270"[^>]*style="[^"]*width:270px/.test(output));
-check('original copy keeps style width:300px', /<img[^>]*width="300"[^>]*style="[^"]*width:300px/.test(output));
-check('original copy keeps max-width:100%', /<img[^>]*width="300"[^>]*style="[^"]*max-width:100%/.test(output));
+// 5. Clamped image: style width follows, max-width:100% kept as the fluid belt
+check('clamped image style width:270px', /<img[^>]*width="270"[^>]*style="[^"]*width:270px/.test(output));
+check('clamped image keeps max-width:100%', /<img[^>]*width="270"[^>]*style="[^"]*max-width:100%/.test(output));
 
 // 5b. Padded table-wrapping divs convert to td-carried boxes (Word drops div padding)
 check('grid-row wrapper div converted to padded td', /<td style="padding:16px 24px 8px 24px">/.test(output));
@@ -77,11 +71,11 @@ check('rendered output has no downlevel-revealed conditional', !/<!--\[if !mso\]
 check('rendered output has no leftover {{ Safe', !rendered.includes('{{ Safe'));
 fs.writeFileSync(path.join(__dirname, '.build', 'campaign10-rendered.html'), rendered);
 
-// 8. Gmail-visible content = strip downlevel-hidden comments, must contain NO clamped widths
+// 8. Gmail-visible content = strip downlevel-hidden comments; it sees the clamped widths
 const gmailVisible = rendered.replace(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/g, '');
-check('gmail-visible content has no 270px imgs', !/width="270"/.test(gmailVisible));
-check('gmail-visible content keeps all 300px originals', (gmailVisible.match(/width="300"/g) || []).length === 6);
-check('gmail-visible content keeps all 200px originals', (gmailVisible.match(/width="200"/g) || []).length === 4);
+check('gmail-visible content has all 6 clamped 270px imgs', (gmailVisible.match(/width="270"/g) || []).length === 6);
+check('gmail-visible content has all 4 clamped 150px imgs', (gmailVisible.match(/width="150"/g) || []).length === 4);
+check('gmail-visible content has no unclamped 300/200 originals', !/width="300"|width="200"/.test(gmailVisible));
 
 let failed = 0;
 for (const c of checks) {

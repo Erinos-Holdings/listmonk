@@ -35,11 +35,9 @@ check('clamped copy height attr scaled to 180', clampedH && /height="180"/.test(
 const clampedStyle = clampedH && clampedH[0].match(/style="([^"]*)"/);
 check('clamped copy style ends with height:auto', clampedStyle && /(^|;)height:auto(;|$)/.test(clampedStyle[1]), clampedStyle && clampedStyle[1]);
 check('clamped copy style has no px height', clampedStyle && !/(^|;)height:\d+px(;|$)/.test(clampedStyle[1]), clampedStyle && clampedStyle[1]);
-const origH = out.match(/<img[^>]*alt="h"[^>]*width="300"[^>]*>/);
-check('original copy keeps height="200"', origH && /height="200"/.test(origH[0]));
-const origStyle = origH && origH[0].match(/style="([^"]*)"/);
-check('original copy style has height:auto', origStyle && /(^|;)height:auto(;|$)/.test(origStyle[1]), origStyle && origStyle[1]);
-check('original copy style does not gain width:auto', origStyle && !/(^|;)width:auto(;|$)/.test(origStyle[1]), origStyle && origStyle[1]);
+// 2026-09-25: the clamped image is the ONLY copy — no unclamped 300px original survives.
+check('no unclamped original copy', !/<img[^>]*alt="h"[^>]*width="300"/.test(out) && (out.match(/<img[^>]*alt="h"[^>]*>/g) || []).length === 1);
+check('clamped copy style does not gain width:auto', clampedStyle && !/(^|;)width:auto(;|$)/.test(clampedStyle[1]), clampedStyle && clampedStyle[1]);
 const noH = out.match(/<img[^>]*alt="n"[^>]*width="270"[^>]*>/);
 check('no-height image: clamped copy has no height attr', noH && !/height=/.test(noH[0]));
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');

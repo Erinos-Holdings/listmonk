@@ -16,7 +16,7 @@ const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'
 //                   template execution, so the DOM never showed what CSS clients received;
 //   left/unset    → no align attribute on the inner table (left is the default flow, and a
 //                   stamped align="left" is the hazard commit a138c8f6 removed);
-//   scope guards  → an oversized centered image still dual-emits inside the aligned table,
+//   scope guards  → an oversized centered image is clamped once inside the aligned table,
 //                   and a Container holding a centered image does NOT derive align="center"
 //                   on its own td (the self-centering-child rule sees the width="100%"
 //                   outer table, never the aligned inner one).
@@ -118,21 +118,21 @@ for (const [label, inner] of [['bare img', logo], ['linked img', linked]]) {
   check('full-width hero: no image table anywhere carries align', !/<table role="presentation"[^>]* align=/.test(out));
 }
 
-// Scope guard 1: an oversized CENTERED image still dual-emits (mso clamped copy + non-mso
-// original) inside the now-aligned inner table.
+// Scope guard 1: an oversized CENTERED image is emitted once, clamped (2026-09-25: no
+// non-Word twin), inside the now-aligned inner table.
 {
   const out = render(block('padding:16px 24px 16px 24px;text-align:center', '<img alt="wide" src="x://wide.jpg" width="900" style="width:900px;max-width:100%">'));
   const copies = out.match(/<img[^>]*alt="wide"[^>]*>/g) || [];
   const widths = copies.map((t) => (t.match(/ width="(\d+)"/) || [])[1]);
-  check('oversized centered image: dual-emitted (2 copies)', copies.length === 2, String(copies.length));
-  check('oversized centered image: one copy clamped to the block space (552), one original (900)', widths.includes('552') && widths.includes('900'), widths.join(','));
+  check('oversized centered image: emitted once', copies.length === 1, String(copies.length));
+  check('oversized centered image: clamped to the block space (552)', widths.join(',') === '552', widths.join(','));
   const w = imageTables(out, 'wide');
-  check('oversized centered image: the dual emit sits inside the aligned inner table', w && w.innerAlign === 'center', w && String(w.innerAlign));
+  check('oversized centered image: the clamped image sits inside the aligned inner table', w && w.innerAlign === 'center', w && String(w.innerAlign));
 }
 
-// Scope guard 1b (blind review 2026-09-03, F2): an oversized RIGHT image — clampImageWidths'
-// dual emit lands inside the align="right" inner table. Word must see exactly one clamped copy,
-// CSS clients exactly one original, both inside that table, both views balanced.
+// Scope guard 1b (blind review 2026-09-03, F2): an oversized RIGHT image — the clamped image
+// lands inside the align="right" inner table. Word and CSS clients each see exactly the one
+// clamped copy inside that table, both views balanced.
 {
   const out = render(block('padding:16px 24px 16px 24px;text-align:right', '<img alt="wide" src="x://wide.jpg" width="900" style="width:900px;max-width:100%">'));
   const decoded = decodeSafe(out);
@@ -142,8 +142,8 @@ for (const [label, inner] of [['bare img', logo], ['linked img', linked]]) {
   const msoImgs = (mso.match(/<img[^>]*alt="wide"[^>]*>/g) || []).map((t) => (t.match(/ width="(\d+)"/) || [])[1]);
   const cssImgs = (css.match(/<img[^>]*alt="wide"[^>]*>/g) || []).map((t) => (t.match(/ width="(\d+)"/) || [])[1]);
   check('oversized right image: Word view has exactly one copy, clamped to 552', msoImgs.length === 1 && msoImgs[0] === '552', msoImgs.join(','));
-  check('oversized right image: CSS view has exactly one copy, the 900 original', cssImgs.length === 1 && cssImgs[0] === '900', cssImgs.join(','));
-  check('oversized right image: both views balanced, copies inside the align="right" table', balanced(mso) && balanced(css) && /<table role="presentation" align="right"[^>]*><tbody><tr><td align="right"><img[^>]*alt="wide"[^>]*width="552"/.test(mso) && /<table role="presentation" align="right"[^>]*><tbody><tr><td align="right"><div class="lm-nomso" style="mso-hide:all"><img[^>]*alt="wide"[^>]*width="900"/.test(css));
+  check('oversized right image: CSS view has exactly one copy, clamped to 552', cssImgs.length === 1 && cssImgs[0] === '552', cssImgs.join(','));
+  check('oversized right image: both views balanced, the copy inside the align="right" table', balanced(mso) && balanced(css) && /<table role="presentation" align="right"[^>]*><tbody><tr><td align="right"><img[^>]*alt="wide"[^>]*width="552"/.test(mso) && /<table role="presentation" align="right"[^>]*><tbody><tr><td align="right"><img[^>]*alt="wide"[^>]*width="552"/.test(css));
 }
 
 // Scope guard 2: a padded Container holding a centered image must NOT derive align="center"
