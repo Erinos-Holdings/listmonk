@@ -1,0 +1,372 @@
+{
+ "comment": "Shared by integrations tests/lib/campaign-review/bundle.test.ts and the fork's internal/review/bundle_test.go (copied into internal/review/testdata/bundle-hash.json). The expected hash is pinned in BOTH tests; change them together (CAMPAIGN-INSPECT-SPEC D4, I2).",
+ "campaign": {
+  "id": 4242,
+  "uuid": "0e8f5a2e-1111-4222-8333-944455556666",
+  "type": "regular",
+  "status": "draft",
+  "name": "Fixture_Hash_EN",
+  "subject": "Sale — «50 %» off \"today\" 🐋",
+  "content_type": "visual",
+  "body": "<html lang=\"en\"><body><p>Hi {{ or .Subscriber.FirstName \"there\" }},</p>\n\t<a href=\"https://ruzepouches.com/?a=1&b=2\">Shop</a><!-- official:corporate:en:-:6a3c266dc57ecd1e --><p>\u0001ctrl sep</p><!-- /official --></body></html>",
+  "body_source": "{\"root\":{\"type\":\"EmailLayout\",\"data\":{\"childrenIds\":[\"a\"]}},\"a\":{\"type\":\"Text\",\"data\":{\"props\":{\"text\":\"Hi\"}}}}",
+  "altbody": null,
+  "send_at": "2026-10-01T15:00:00Z",
+  "headers": [
+   {
+    "X-Zeta": "z",
+    "X-Alpha": "a"
+   }
+  ],
+  "attribs": {
+   "preheader": "Ends <soon> & now",
+   "lang": "en",
+   "émoji": "✓",
+   "Zed": 1,
+   "nested": {
+    "b": [
+     3,
+     1.5,
+     true,
+     null
+    ],
+    "a": {
+     "y": "x",
+     "X": 1e+21
+    }
+   }
+  },
+  "template_id": null,
+  "archive": true,
+  "archive_slug": "fixture-hash",
+  "archive_template_id": 3,
+  "archive_meta": {
+   "name": "Subscriber",
+   "attribs": {}
+  },
+  "evergreen": false,
+  "send_delay_secs": 0,
+  "lists": [
+   {
+    "id": 15,
+    "name": "Ruze Pouches"
+   },
+   {
+    "id": 6,
+    "name": "Thirsty Girl"
+   }
+  ],
+  "updated_at": "2026-09-25T00:00:00Z",
+  "created_at": "2026-09-24T00:00:00Z"
+ },
+ "expected": "824337bdbfef82eb131f4150df40ec621465ae141f43648fbec7d12f764befbb",
+ "pairs": [
+  {
+   "name": "send_at is not hashed",
+   "a": {
+    "send_at": null
+   },
+   "b": {},
+   "same": true
+  },
+  {
+   "name": "status is not hashed",
+   "a": {
+    "status": "scheduled"
+   },
+   "b": {},
+   "same": true
+  },
+  {
+   "name": "updated_at is not hashed",
+   "a": {
+    "updated_at": "2027-01-01T00:00:00Z"
+   },
+   "b": {},
+   "same": true
+  },
+  {
+   "name": "altbody null == \"\"",
+   "a": {
+    "altbody": ""
+   },
+   "b": {
+    "altbody": null
+   },
+   "same": true
+  },
+  {
+   "name": "body_source null == \"\"",
+   "a": {
+    "body_source": null
+   },
+   "b": {
+    "body_source": ""
+   },
+   "same": true
+  },
+  {
+   "name": "archive_slug null == \"\"",
+   "a": {
+    "archive_slug": null
+   },
+   "b": {
+    "archive_slug": ""
+   },
+   "same": true
+  },
+  {
+   "name": "attribs null == {}",
+   "a": {
+    "attribs": null
+   },
+   "b": {
+    "attribs": {}
+   },
+   "same": true
+  },
+  {
+   "name": "archive_meta null == {}",
+   "a": {
+    "archive_meta": null
+   },
+   "b": {
+    "archive_meta": {}
+   },
+   "same": true
+  },
+  {
+   "name": "headers null == []",
+   "a": {
+    "headers": null
+   },
+   "b": {
+    "headers": []
+   },
+   "same": true
+  },
+  {
+   "name": "attribs key order is irrelevant",
+   "a": {
+    "attribs": {
+     "lang": "en",
+     "Zed": 1,
+     "nested": {
+      "a": {
+       "X": 1e+21,
+       "y": "x"
+      },
+      "b": [
+       3,
+       1.5,
+       true,
+       null
+      ]
+     },
+     "émoji": "✓",
+     "preheader": "Ends <soon> & now"
+    }
+   },
+   "b": {},
+   "same": true
+  },
+  {
+   "name": "list order is irrelevant",
+   "a": {
+    "lists": [
+     {
+      "id": 6,
+      "name": "x"
+     },
+     {
+      "id": 15,
+      "name": "y"
+     }
+    ]
+   },
+   "b": {},
+   "same": true
+  },
+  {
+   "name": "subject",
+   "a": {
+    "subject": "Sale"
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "body",
+   "a": {
+    "body": "<p>x</p>"
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "body_source",
+   "a": {
+    "body_source": "{}"
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "altbody",
+   "a": {
+    "altbody": "plain"
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "name",
+   "a": {
+    "name": "Fixture_Hash_DE"
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "content_type",
+   "a": {
+    "content_type": "html"
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "attribs.lang",
+   "a": {
+    "attribs": {
+     "preheader": "Ends <soon> & now",
+     "lang": "de",
+     "émoji": "✓",
+     "Zed": 1,
+     "nested": {
+      "b": [
+       3,
+       1.5,
+       true,
+       null
+      ],
+      "a": {
+       "y": "x",
+       "X": 1e+21
+      }
+     }
+    }
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "attribs.preheader",
+   "a": {
+    "attribs": {
+     "preheader": "Ends soon",
+     "lang": "en",
+     "émoji": "✓",
+     "Zed": 1,
+     "nested": {
+      "b": [
+       3,
+       1.5,
+       true,
+       null
+      ],
+      "a": {
+       "y": "x",
+       "X": 1e+21
+      }
+     }
+    }
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "lists",
+   "a": {
+    "lists": [
+     {
+      "id": 15,
+      "name": "Ruze Pouches"
+     }
+    ]
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "template_id",
+   "a": {
+    "template_id": 1
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "headers",
+   "a": {
+    "headers": [
+     {
+      "X-Zeta": "q"
+     }
+    ]
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "evergreen",
+   "a": {
+    "evergreen": true
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "send_delay_secs",
+   "a": {
+    "send_delay_secs": 60
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "archive",
+   "a": {
+    "archive": false
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "archive_slug",
+   "a": {
+    "archive_slug": "other"
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "archive_template_id",
+   "a": {
+    "archive_template_id": null
+   },
+   "b": {},
+   "same": false
+  },
+  {
+   "name": "archive_meta",
+   "a": {
+    "archive_meta": {
+     "name": "Other"
+    }
+   },
+   "b": {},
+   "same": false
+  }
+ ]
+}

@@ -129,6 +129,22 @@ type Queries struct {
 	UpsertSystemHealth     *sqlx.Stmt `query:"upsert-system-health"`
 	GetSystemHealthHistory *sqlx.Stmt `query:"get-system-health-history"`
 
+	// Fork (campaign review) -- queries/reviews.sql, CAMPAIGN-INSPECT-SPEC D5.
+	InsertCampaignReview         *sqlx.Stmt `query:"insert-campaign-review"`
+	UpdateCampaignReviewProgress *sqlx.Stmt `query:"update-campaign-review-progress"`
+	UpdateCampaignReviewResult   *sqlx.Stmt `query:"update-campaign-review-result"`
+	GetCampaignReviewLatest      *sqlx.Stmt `query:"get-campaign-review-latest"`
+	GetCampaignReviewByHash      *sqlx.Stmt `query:"get-campaign-review-by-hash"`
+	GetCampaignReviewPrevious    *sqlx.Stmt `query:"get-campaign-review-previous"`
+	GetCampaignReviewByJob       *sqlx.Stmt `query:"get-campaign-review-by-job"`
+	ExpireRunningReviews         *sqlx.Stmt `query:"expire-running-reviews"`
+	InsertReviewDisposition      *sqlx.Stmt `query:"insert-review-disposition"`
+	GetReviewDispositions        *sqlx.Stmt `query:"get-review-dispositions"`
+	GetReviewDispositionStats    *sqlx.Stmt `query:"get-review-disposition-stats"`
+	UpsertStructureVerification  *sqlx.Stmt `query:"upsert-structure-verification"`
+	GetStructureVerification     *sqlx.Stmt `query:"get-structure-verification"`
+	GetStructureVerifications    *sqlx.Stmt `query:"get-structure-verifications"`
+
 	CreateTemplate     *sqlx.Stmt `query:"create-template"`
 	GetTemplates       *sqlx.Stmt `query:"get-templates"`
 	UpdateTemplate     *sqlx.Stmt `query:"update-template"`

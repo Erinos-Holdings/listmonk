@@ -36,7 +36,8 @@
             "campaigns:get_analytics",
             "campaigns:manage",
             "campaigns:manage_all",
-            "campaigns:send"
+            "campaigns:send",
+            "campaigns:review"
         ]
     },
     {

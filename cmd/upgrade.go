@@ -71,6 +71,8 @@ var migList = []migFunc{
 	{"v6.2.12", migrations.V6_2_12},
 	// Fork migration (erinos): system health -- system_health table (SES-HEALTH-SPEC) — see internal/migrations/v6.2.13.go.
 	{"v6.2.13", migrations.V6_2_13},
+	// Fork migration (erinos): campaign review -- campaign_reviews, dispositions, structure verifications, app.review_* settings, campaigns:review grant (CAMPAIGN-INSPECT-SPEC) — see internal/migrations/v6.2.14.go.
+	{"v6.2.14", migrations.V6_2_14},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

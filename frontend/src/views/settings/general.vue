@@ -40,6 +40,20 @@
         data-cy="required-footer-markers" />
     </b-field>
 
+    <!-- Fork (campaign review, CAMPAIGN-INSPECT-SPEC D19) -- the go-live switch: both keys in one
+         save (an app reload). An empty URL turns the gate off. -->
+    <h2 class="is-size-5 mt-5 mb-4">{{ $t('settings.general.reviewTitle') }}</h2>
+    <b-field :label="$t('settings.general.reviewURL')" label-position="on-border"
+      :message="$t('settings.general.reviewURLHelp')">
+      <b-input v-model="data['app.review_url']" name="app.review_url" placeholder="https://…lambda-url.us-west-2.on.aws/"
+        :maxlength="300" data-cy="review-url" />
+    </b-field>
+    <b-field :label="$t('settings.general.reviewSecret')" label-position="on-border"
+      :message="$t('settings.general.reviewSecretHelp')">
+      <b-input v-model="data['app.review_hmac_secret']" name="app.review_hmac_secret" type="password"
+        password-reveal :maxlength="200" data-cy="review-secret" />
+    </b-field>
+
     <hr />
 
     <div>

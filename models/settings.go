@@ -26,6 +26,11 @@ type Settings struct {
 	UTMParams       map[string]string `json:"app.utm_params"`
 	AppLang         string            `json:"app.lang"`
 
+	// Fork (campaign review, CAMPAIGN-INSPECT-SPEC D2/D6). The gate is ON only while ReviewURL is
+	// non-empty; the HMAC secret signs the job POSTed to it (masked on GET, resolved on PUT).
+	ReviewURL        string `json:"app.review_url"`
+	ReviewHMACSecret string `json:"app.review_hmac_secret"`
+
 	AppBatchSize             int    `json:"app.batch_size"`
 	AppConcurrency           int    `json:"app.concurrency"`
 	AppMaxSendErrors         int    `json:"app.max_send_errors"`

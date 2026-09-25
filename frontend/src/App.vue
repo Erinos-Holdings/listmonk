@@ -1,6 +1,9 @@
 <template>
   <div id="app">
-    <b-navbar :fixed-top="true" v-if="$root.isLoaded">
+    <!-- Fork (campaign review, D11) -- a bare route renders its view alone. -->
+    <router-view v-if="$root.isLoaded && isBare" :key="$route.fullPath" />
+
+    <b-navbar :fixed-top="true" v-if="$root.isLoaded && !isBare">
       <template #brand>
         <div class="logo">
           <router-link :to="{ name: 'dashboard' }">
@@ -45,7 +48,7 @@
       </template>
     </b-navbar>
 
-    <div class="wrapper" v-if="$root.isLoaded">
+    <div class="wrapper" v-if="$root.isLoaded && !isBare">
       <section class="sidebar">
         <b-sidebar position="static" mobile="hide" :fullheight="true" :open="true" :can-cancel="false">
           <div>
@@ -250,6 +253,11 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['serverConfig', 'profile']),
+
+    // Fork (campaign review, D11): routes with meta.bare render without the sidebar and navbar.
+    isBare() {
+      return !!(this.$route.meta && this.$route.meta.bare);
+    },
 
     isGlobalNotices() {
       return (this.serverConfig.needs_restart

@@ -244,9 +244,20 @@
 
       <b-table-column v-slot="props" cell-class="actions" width="15%" align="right">
         <div>
+          <!-- Fork (campaign review, CAMPAIGN-INSPECT-SPEC §3.2) -- with the gate on, Start/Resume/
+               Schedule are replaced by one "Open to inspect" glyph, OUTSIDE the campaigns:send block
+               so Marketing sees it; the status endpoint would refuse an uninspected start anyway. -->
+          <router-link v-if="serverConfig.review_enabled && $can('campaigns:manage_all', 'campaigns:manage')
+            && canInspect(props.row)" :to="{ name: 'campaign', params: { id: props.row.id } }"
+            data-cy="btn-open-inspect" :aria-label="$t('campaigns.review.openToInspect')">
+            <b-tooltip :label="$t('campaigns.review.openToInspect')" type="is-dark">
+              <b-icon icon="magnify-scan" size="is-small" />
+            </b-tooltip>
+          </router-link>
+
           <!-- start / pause / resume / scheduled -->
           <template v-if="$can('campaigns:send')">
-            <a v-if="canStart(props.row)" href="#"
+            <a v-if="canStart(props.row) && !gatedRow(props.row)" href="#"
               @click.prevent="$utils.confirm(null, () => changeCampaignStatus(props.row, 'running'))"
               data-cy="btn-start" :aria-label="$t('campaigns.start')">
               <b-tooltip :label="$t('campaigns.start')" type="is-dark">
@@ -262,7 +273,7 @@
               </b-tooltip>
             </a>
 
-            <a v-if="canResume(props.row)" href="#"
+            <a v-if="canResume(props.row) && !gatedRow(props.row)" href="#"
               @click.prevent="$utils.confirm(null, () => changeCampaignStatus(props.row, 'running'))"
               data-cy="btn-resume" :aria-label="$t('campaigns.send')">
               <b-tooltip :label="$t('campaigns.send')" type="is-dark">
@@ -270,7 +281,7 @@
               </b-tooltip>
             </a>
 
-            <a v-if="canSchedule(props.row)" href="#"
+            <a v-if="canSchedule(props.row) && !gatedRow(props.row)" href="#"
               @click.prevent="$utils.confirm($t('campaigns.confirmSchedule'), () => changeCampaignStatus(props.row, 'scheduled'))"
               data-cy="btn-schedule" :aria-label="$t('campaigns.schedule')">
               <b-tooltip :label="$t('campaigns.schedule')" type="is-dark">
@@ -391,6 +402,14 @@ export default Vue.extend({
     // Campaign statuses.
     canStart(c) {
       return c.status === 'draft' && !c.sendAt;
+    },
+    // Fork (campaign review): the rows whose Start/Resume/Schedule glyph becomes "Open to inspect".
+    canInspect(c) {
+      return (c.status === 'draft' || c.status === 'paused') && c.type !== 'optin';
+    },
+    // A row whose start glyphs the gate replaces (opt-in confirmations are never gated).
+    gatedRow(c) {
+      return !!this.serverConfig.review_enabled && c.type !== 'optin';
     },
     canSchedule(c) {
       return c.status === 'draft' && c.sendAt;

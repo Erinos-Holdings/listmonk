@@ -349,6 +349,11 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.cantUpdate"))
 	}
 
+	// Fork (campaign review, CAMPAIGN-INSPECT-SPEC D6) -- the stored row and its bundle hash, taken
+	// before attribs are cleared below, for the scheduled-campaign save rule (reviewGuardOnEdit).
+	storedCamp := cm
+	storedHash := core.CampaignBundleHash(cm)
+
 	// Fork (multi-language campaigns) -- the stored language, read before attribs are cleared
 	// below, for the started-campaign lock after binding.
 	prevLang := cm.Lang()
@@ -404,6 +409,12 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		}
 	}
 
+	// Fork (campaign review, D6 save-path rule) -- beside the footer guard: while the gate is on, a
+	// scheduled campaign's save that changes its bundle hash is refused (Unschedule first).
+	if err := a.reviewGuardOnEdit(storedCamp, storedHash, o); err != nil {
+		return err
+	}
+
 	out, err := a.core.UpdateCampaign(id, o.Campaign, o.ListIDs, o.MediaIDs)
 	if err != nil {
 		return err
@@ -455,6 +466,13 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 	// refusal must leave the campaign in its previous status, not merely report on one
 	// already dispatched. Resumes and automation restarts are never guarded.
 	if err := a.footerGuardOnStatus(id, req.Status); err != nil {
+		return err
+	}
+
+	// Fork (campaign review, CAMPAIGN-INSPECT-SPEC D6) -- Start, Schedule and Resume need a passing
+	// inspection of the CURRENT bundle hash while app.review_url is set. After the footer guard,
+	// before the link checks and the DB write; the Campaigns list's glyphs hit this same handler.
+	if err := a.reviewGate(id, req.Status); err != nil {
 		return err
 	}
 

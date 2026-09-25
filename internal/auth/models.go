@@ -73,6 +73,10 @@ const (
 	PermSettingsManage        = "settings:manage"
 	PermSettingsMaintain      = "settings:maintain"
 
+	// Fork (campaign review, CAMPAIGN-INSPECT-SPEC D3/D6) -- the review Lambda's write-back
+	// (PATCH a review row, read the previous report, record a structure verification).
+	PermCampaignsReview = "campaigns:review"
+
 	// Fork (brand health, BRAND-HEALTH-SPEC D10).
 	PermBrandsGet    = "brands:get"
 	PermBrandsManage = "brands:manage"

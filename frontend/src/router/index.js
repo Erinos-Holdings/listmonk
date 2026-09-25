@@ -102,6 +102,15 @@ const routes = [
     meta: { title: 'analytics.title', group: 'campaigns' },
     component: () => import('../views/CampaignAnalytics.vue'),
   },
+  // Fork (campaign review, CAMPAIGN-INSPECT-SPEC D11) -- the checklist window: a bare route (no
+  // sidebar, no navbar) opened with window.open from the Inspect button, so it can live on a
+  // second monitor.
+  {
+    path: '/campaigns/:id/review',
+    name: 'campaignReview',
+    meta: { title: 'campaigns.review.title', group: 'campaigns', bare: true },
+    component: () => import('../views/CampaignReview.vue'),
+  },
   {
     path: '/campaigns/:id',
     name: 'campaign',

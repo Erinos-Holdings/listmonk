@@ -148,6 +148,13 @@ export default Vue.extend({
         hasDummy = 's3';
       }
 
+      // Fork (campaign review, D2): the review HMAC secret is masked on GET like the others.
+      if (this.isDummy(form['app.review_hmac_secret'])) {
+        form['app.review_hmac_secret'] = '';
+      } else if (this.hasDummy(form['app.review_hmac_secret'])) {
+        hasDummy = 'review signing secret';
+      }
+
       if (this.isDummy(form['bounce.sendgrid_key'])) {
         form['bounce.sendgrid_key'] = '';
       } else if (this.hasDummy(form['bounce.sendgrid_key'])) {

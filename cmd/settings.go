@@ -81,6 +81,7 @@ func (a *App) GetSettings(c echo.Context) error {
 	s.BounceLettermint.Key = core.MaskSecret(s.BounceLettermint.Key)
 	s.SecurityCaptcha.HCaptcha.Secret = core.MaskSecret(s.SecurityCaptcha.HCaptcha.Secret)
 	s.OIDC.ClientSecret = core.MaskSecret(s.OIDC.ClientSecret)
+	s.ReviewHMACSecret = core.MaskSecret(s.ReviewHMACSecret)
 
 	return c.JSON(http.StatusOK, okResp{s})
 }
@@ -434,6 +435,7 @@ var secretSettingKeys = map[string]bool{
 	"bounce.lettermint":               true,
 	"security.captcha":                true,
 	"security.oidc":                   true,
+	"app.review_hmac_secret":          true,
 }
 
 // resolveSecretSettingKey overlays one incoming settings key onto the stored settings, runs
@@ -555,6 +557,7 @@ func resolveSettingsSecrets(set *models.Settings, cur models.Settings) error {
 		{"bounce.lettermint.key", &set.BounceLettermint.Key, cur.BounceLettermint.Key},
 		{"security.captcha.hcaptcha.secret", &set.SecurityCaptcha.HCaptcha.Secret, cur.SecurityCaptcha.HCaptcha.Secret},
 		{"security.oidc.client_secret", &set.OIDC.ClientSecret, cur.OIDC.ClientSecret},
+		{"app.review_hmac_secret", &set.ReviewHMACSecret, cur.ReviewHMACSecret},
 	} {
 		v, err := core.ResolveSecret(*f.dst, f.cur)
 		if err != nil {

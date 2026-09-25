@@ -47,6 +47,9 @@ type serverConfig struct {
 	UTMEnabled      bool   `json:"utm_enabled"`
 	// Fork (import presets) -- the {key, name} of every loaded preset; empty hides the buttons.
 	ImportPresets []subimporter.PresetInfo `json:"import_presets"`
+	// Fork (campaign review, CAMPAIGN-INSPECT-SPEC D12) -- app.review_url is set: the SPA shows
+	// Inspect and the gated Start; false keeps the pre-release Start button.
+	ReviewEnabled bool `json:"review_enabled"`
 }
 
 // GetServerConfig returns general server config.
@@ -62,6 +65,7 @@ func (a *App) GetServerConfig(c echo.Context) error {
 		LinkFallbackURL:  a.cfg.LinkFallbackURL,
 		UTMEnabled:       a.cfg.UTMEnable,
 		ImportPresets:    make([]subimporter.PresetInfo, 0, len(a.importPresets)),
+		ReviewEnabled:    reviewEnabled(),
 		Privacy: struct {
 			DisableTracking    bool `json:"disable_tracking"`
 			IndividualTracking bool `json:"individual_tracking"`

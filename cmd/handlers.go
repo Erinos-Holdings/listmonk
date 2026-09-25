@@ -164,6 +164,15 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 
 		g.GET("/api/campaigns", pm(a.GetCampaigns, "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/running/stats", pm(a.GetRunningCampaignStats, "campaigns:get_all", "campaigns:get"))
+		// Fork (campaign review, CAMPAIGN-INSPECT-SPEC §3.1). Static segments before :id.
+		g.GET("/api/campaigns/reviews/stats", pm(a.GetReviewStats, "campaigns:get_all"))
+		g.PUT("/api/campaigns/structure-verifications", pm(a.PutStructureVerification, "campaigns:review"))
+		g.GET("/api/campaigns/structure-verifications/:fingerprint", pm(a.GetStructureVerification, "campaigns:get_all", "campaigns:get"))
+		g.POST("/api/campaigns/:id/reviews", pm(hasID(a.StartCampaignReview), "campaigns:manage_all", "campaigns:manage"))
+		g.GET("/api/campaigns/:id/reviews/latest", pm(hasID(a.GetCampaignReviewLatest), "campaigns:get_all", "campaigns:get"))
+		g.GET("/api/campaigns/:id/reviews/previous", pm(hasID(a.GetCampaignReviewPrevious), "campaigns:review"))
+		g.POST("/api/campaigns/:id/reviews/dispositions", pm(hasID(a.PostReviewDispositions), "campaigns:manage_all", "campaigns:manage"))
+		g.PATCH("/api/campaigns/:id/reviews/:jobId", pm(hasID(a.PatchCampaignReview), "campaigns:review"))
 		g.GET("/api/campaigns/:id", pm(hasID(a.GetCampaign), "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/analytics/:type", pm(a.GetCampaignViewAnalytics, "campaigns:get_analytics"))
 		g.GET("/api/campaigns/:id/preview", pm(hasID(a.PreviewCampaign), "campaigns:get_all", "campaigns:get"))

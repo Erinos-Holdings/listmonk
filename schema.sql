@@ -370,6 +370,8 @@ INSERT INTO settings (key, value) VALUES
     ('app.utm_enable', 'true'),
     ('app.utm_hosts', '["curatedfor.you","curatedby.you"]'),
     ('app.utm_params', '{"utm_source":"listmonk","utm_medium":"email","utm_campaign":"{{ .Campaign.Name }}","utm_content":"{{ .Campaign.ID }}"}'),
+    ('app.review_url', '""'),
+    ('app.review_hmac_secret', '""'),
     ('app.notify_emails', '[]'),
     ('app.lang', '"en"'),
     ('privacy.individual_tracking', 'false'),
@@ -677,3 +679,44 @@ CREATE TABLE IF NOT EXISTS system_health (
     PRIMARY KEY (kind, day)
 );
 CREATE INDEX IF NOT EXISTS idx_system_health_kind_day ON system_health (kind, day DESC);
+
+-- Fork (campaign review): inspections, the Accept-risk log, structure verifications (v6.2.14).
+DROP TABLE IF EXISTS campaign_reviews CASCADE;
+DROP TABLE IF EXISTS campaign_review_dispositions CASCADE;
+DROP TABLE IF EXISTS campaign_structure_verifications CASCADE;
+CREATE TABLE IF NOT EXISTS campaign_reviews (
+    id               BIGSERIAL PRIMARY KEY,
+    campaign_id      INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    bundle_hash      TEXT NOT NULL,
+    job_id           UUID NOT NULL UNIQUE,
+    status           TEXT NOT NULL CHECK (status IN ('running', 'complete', 'failed', 'stale')),
+    progress         JSONB NOT NULL DEFAULT '{}',
+    report           JSONB NULL,
+    error            TEXT NOT NULL DEFAULT '',
+    requested_by     TEXT NOT NULL DEFAULT '',
+    requested_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_reviews_campaign ON campaign_reviews (campaign_id, requested_at DESC);
+
+CREATE TABLE IF NOT EXISTS campaign_review_dispositions (
+    id               BIGSERIAL PRIMARY KEY,
+    campaign_id      INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    bundle_hash      TEXT NOT NULL,
+    item_key         TEXT NOT NULL,
+    rubric_id        TEXT NOT NULL,
+    action           TEXT NOT NULL CHECK (action IN ('accept', 'fixme', 'fixed')),
+    note             TEXT NOT NULL DEFAULT '',
+    user_id          INTEGER NULL,
+    username         TEXT NOT NULL DEFAULT '',
+    created_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_review_dispositions ON campaign_review_dispositions (campaign_id, item_key, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS campaign_structure_verifications (
+    fingerprint      TEXT PRIMARY KEY,
+    verified_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    test_id          TEXT NOT NULL,
+    components       JSONB NOT NULL DEFAULT '{}',
+    verified_by      TEXT NOT NULL DEFAULT ''
+);

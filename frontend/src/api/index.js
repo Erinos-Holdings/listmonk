@@ -422,6 +422,28 @@ export const getCampaignRaw = async (id) => http.get(`/api/campaigns/${id}`, { c
 
 export const getCampaignStats = async () => http.get('/api/campaigns/running/stats', {});
 
+// Fork (campaign review, integrations CAMPAIGN-INSPECT-SPEC §3.2). Documents verbatim
+// (camelCase: false) -- the report is the Lambda's document and the window renders it as written,
+// the brand-health precedent. Polls pass `quiet` to skip the loading overlay and the error toast.
+export const startCampaignReview = async (id) => http.post(
+  `/api/campaigns/${id}/reviews`,
+  {},
+  { loading: models.reviews, camelCase: false },
+);
+
+export const getCampaignReview = async (id, quiet = false) => http.get(
+  `/api/campaigns/${id}/reviews/latest`,
+  quiet ? { camelCase: false, disableToast: true } : { loading: models.reviews, camelCase: false },
+);
+
+export const postReviewDispositions = async (id, items) => http.post(
+  `/api/campaigns/${id}/reviews/dispositions`,
+  { items },
+  { loading: models.reviews, camelCase: false },
+);
+
+export const getReviewStats = async () => http.get('/api/campaigns/reviews/stats', { camelCase: false });
+
 // Fork: the create/update responses carry the campaign's headers too; camelCasing them
 // (X-SES-MESSAGE-TAGS -> xSESMESSAGETAGS) made the post-save campaign differ from the form
 // and armed the "Discard changes?" guard after every Save. Same exemption as getCampaign.

@@ -40,6 +40,13 @@
             </b-field>
           </b-field>
           <b-field grouped v-if="isEditing && canEdit">
+            <!-- Fork (campaign review, CAMPAIGN-INSPECT-SPEC D11) -- the inspection state of the
+                 SAVED campaign; the server gate is the control, this tag is a courtesy. -->
+            <b-field v-if="reviewEnabled && canManage" class="review-tag-field">
+              <b-tag :type="reviewTagType" class="review-tag" data-cy="review-tag">
+                {{ reviewTagLabel }}
+              </b-tag>
+            </b-field>
             <b-field v-if="canManage" expanded>
               <b-button expanded @click="() => onSubmit('update')" :loading="loading.campaigns" type="is-primary"
                 :disabled="isBrandBlocked" icon-left="content-save-outline" data-cy="btn-save"
@@ -47,17 +54,37 @@
                 <span class="has-kbd">{{ $t('globals.buttons.saveChanges') }} <span class="kbd">Ctrl+S</span></span>
               </b-button>
             </b-field>
+            <!-- Fork (campaign review, D12) -- Inspect saves first, exactly as Start does. -->
+            <b-field v-if="reviewEnabled && canManage" expanded>
+              <b-button expanded @click="inspectCampaign" :loading="loading.campaigns" type="is-primary"
+                :disabled="isBrandBlocked" icon-left="magnify-scan" data-cy="btn-inspect"
+                :title="$t('campaigns.review.inspectHelp')">
+                {{ $t('campaigns.review.inspect') }}
+              </b-button>
+            </b-field>
             <b-field expanded v-if="canSend && canStart">
               <b-button expanded @click="startCampaign" :loading="loading.campaigns" type="is-primary"
-                :disabled="isBrandBlocked" icon-left="rocket-launch-outline" data-cy="btn-start">
+                :disabled="isBrandBlocked || reviewBlocksStart" icon-left="rocket-launch-outline" data-cy="btn-start">
                 {{ $t('campaigns.start') }}
               </b-button>
             </b-field>
             <b-field expanded v-if="canSend && canSchedule">
               <b-button expanded @click="startCampaign" :loading="loading.campaigns" type="is-primary"
-                :disabled="isBrandBlocked" icon-left="clock-start" data-cy="btn-schedule">
+                :disabled="isBrandBlocked || reviewBlocksStart" icon-left="clock-start" data-cy="btn-schedule">
                 {{ $t('campaigns.schedule') }}
               </b-button>
+            </b-field>
+            <!-- Fork (campaign review, D13 phase 1) -- without campaigns:send, Start/Schedule (and a
+                 paused automation's Resume, which is the same button) render DISABLED with the
+                 notice, never hidden. Derived from $can, never a phase flag. -->
+            <b-field expanded v-if="reviewEnabled && !canSend && (canStart || canSchedule)">
+              <b-tooltip :label="$t('campaigns.review.finalReviewNotice')" type="is-dark" position="is-bottom"
+                multilined class="final-review-notice">
+                <b-button expanded disabled type="is-primary" data-cy="btn-start-disabled"
+                  :icon-left="canSchedule ? 'clock-start' : 'rocket-launch-outline'">
+                  {{ canSchedule ? $t('campaigns.schedule') : $t('campaigns.start') }}
+                </b-button>
+              </b-tooltip>
             </b-field>
             <b-field expanded v-if="canSend && canUnSchedule">
               <b-button expanded @click="$utils.confirm(null, unscheduleCampaign)" :loading="loading.campaigns"
@@ -549,6 +576,12 @@ export default Vue.extend({
       // strip (syncAudienceBox); the CSS fallbacks apply until the first measurement.
       audienceLayout: { width: null, tabsHeight: null },
       audiencePollID: null,
+
+      // Fork (campaign review, D11/D12) -- the latest inspection state (GET .../reviews/latest,
+      // verbatim), the checklist window this page opened, and its poll.
+      reviewState: null,
+      reviewWindow: null,
+      reviewPollID: null,
 
       // IDs from ?list_id query param.
       selListIDs: [],
@@ -1471,6 +1504,61 @@ export default Vue.extend({
       });
     },
 
+    // Fork (campaign review, D11). One quiet read of the latest inspection.
+    loadReview() {
+      if (!this.reviewEnabled || !this.isEditing || !this.data.id) {
+        return Promise.resolve();
+      }
+      return this.$api.getCampaignReview(this.data.id, true).then((d) => {
+        this.reviewState = d;
+      }).catch(() => {});
+    },
+
+    // Poll every 3 s while this page's review window is open; stop when it closes.
+    syncReviewPoll() {
+      const open = this.reviewWindow && !this.reviewWindow.closed;
+      if (!open) {
+        clearInterval(this.reviewPollID);
+        this.reviewPollID = null;
+        return;
+      }
+      if (this.reviewPollID) {
+        return;
+      }
+      this.reviewPollID = setInterval(() => {
+        if (!this.reviewWindow || this.reviewWindow.closed) {
+          clearInterval(this.reviewPollID);
+          this.reviewPollID = null;
+          this.loadReview();
+          return;
+        }
+        this.loadReview();
+      }, 3000);
+    },
+
+    onReviewFocus() {
+      this.loadReview();
+    },
+
+    // Fork (campaign review, D12). Open (or focus) the checklist window FIRST -- inside the click,
+    // so no pop-up blocker intervenes -- then save exactly as Start does and start the inspection.
+    // The window polls and shows the running job.
+    inspectCampaign() {
+      const { href } = this.$router.resolve({ name: 'campaignReview', params: { id: this.data.id } });
+      const win = window.open(href, `lm-review-${this.data.id}`);
+      if (!win) {
+        this.$utils.toast(this.$t('campaigns.review.windowBlocked'), 'is-danger');
+      } else {
+        this.reviewWindow = win;
+        win.focus();
+      }
+      this.updateCampaign(null, true)
+        .then(() => this.$api.startCampaignReview(this.data.id))
+        .then(() => this.loadReview())
+        .catch(() => this.loadReview())
+        .finally(() => this.syncReviewPoll());
+    },
+
     // Starts or schedule a campaign.
     startCampaign() {
       if (!this.canStart && !this.canSchedule) {
@@ -1657,6 +1745,54 @@ export default Vue.extend({
 
     canUnSchedule() {
       return this.data.status === 'scheduled';
+    },
+
+    // Fork (campaign review, D12/D13).
+    reviewEnabled() {
+      return !!this.serverConfig.review_enabled;
+    },
+
+    // not-inspected | inspecting | pass | blocked | edited | failed -- from the SAVED campaign's
+    // latest inspection and the fork's verdict (never recomputed here).
+    reviewTag() {
+      const st = this.reviewState;
+      const r = st && st.review;
+      if (!r) {
+        return 'notInspected';
+      }
+      if (r.status === 'running') {
+        return 'inspecting';
+      }
+      if (r.bundle_hash !== st.current_hash || r.status === 'stale') {
+        return 'edited';
+      }
+      if (r.status === 'failed') {
+        return 'failed';
+      }
+      return st.verdict && st.verdict.verdict === 'pass' ? 'pass' : 'blocked';
+    },
+
+    reviewTagLabel() {
+      switch (this.reviewTag) {
+        case 'inspecting': return this.$t('campaigns.review.tagInspecting');
+        case 'pass': return this.$t('campaigns.review.tagPass');
+        case 'blocked': return this.$t('campaigns.review.tagBlocked', { n: this.reviewState.verdict.blockers.length });
+        case 'edited': return this.$t('campaigns.review.tagEdited');
+        case 'failed': return this.$t('campaigns.review.tagFailed');
+        default: return this.$t('campaigns.review.tagNotInspected');
+      }
+    },
+
+    reviewTagType() {
+      return {
+        pass: 'is-success', blocked: 'is-danger', failed: 'is-danger', inspecting: 'is-info',
+      }[this.reviewTag] || 'is-warning';
+    },
+
+    // With campaigns:send, Start/Schedule are enabled only while the tag reads pass (the server
+    // gate is the control; this is the courtesy). Opt-in campaigns are never gated.
+    reviewBlocksStart() {
+      return this.reviewEnabled && this.data.type !== 'optin' && this.reviewTag !== 'pass';
     },
 
     canStart() {
@@ -1870,6 +2006,17 @@ export default Vue.extend({
       this.$nextTick(this.syncAudienceBox);
     },
 
+    // Fork (campaign review) -- the review tag and the Inspect / disabled-Start buttons change the
+    // header's button set; re-measure the audience box after render (fork survey §3).
+    reviewTag() {
+      this.$nextTick(this.syncAudienceBox);
+    },
+
+    reviewEnabled() {
+      this.$nextTick(this.syncAudienceBox);
+      this.loadReview();
+    },
+
     // eslint-disable-next-line func-names
     'data.sendAt': function () {
       if (this.data.sendAt !== null) {
@@ -1939,6 +2086,8 @@ export default Vue.extend({
           this.activeTab = this.$route.hash.replace('#', '');
         }
         this.loadedAt = Date.now();
+        // Fork (campaign review): the inspection state of the saved campaign.
+        this.loadReview();
         // Editor mounts on data.id; offer the stash once it exists.
         this.$nextTick(() => this.offerDraftRestore());
       });
@@ -1959,13 +2108,18 @@ export default Vue.extend({
 
     // Fork (audience box): the button and tab-strip sizes it follows change with the viewport.
     window.addEventListener('resize', this.syncAudienceBox);
+
+    // Fork (campaign review, D11): re-read the inspection when the admin comes back to this tab.
+    window.addEventListener('focus', this.onReviewFocus);
   },
 
   beforeDestroy() {
     this.$events.$off('campaign.update');
     window.removeEventListener('listmonk:session-expired', this.stashDraft);
     window.removeEventListener('resize', this.syncAudienceBox);
+    window.removeEventListener('focus', this.onReviewFocus);
     clearInterval(this.audiencePollID);
+    clearInterval(this.reviewPollID);
   },
 });
 </script>
