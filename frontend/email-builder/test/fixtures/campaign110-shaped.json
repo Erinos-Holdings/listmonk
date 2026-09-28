@@ -1,0 +1,350 @@
+{
+  "id": 110,
+  "name": "c110-shaped (synthetic: campaign 108 blocks in the c110 wrapper shape, CONTAINER-NESTING-SPEC I6)",
+  "lang": "fr",
+  "body_source": {
+    "root": {
+      "type": "EmailLayout",
+      "data": {
+        "backdropColor": "#F5F5F5",
+        "canvasColor": "#FFFFFF",
+        "textColor": "#262626",
+        "fontFamily": "MODERN_SANS",
+        "outlook": true,
+        "childrenIds": [
+          "block-c110-wrapper",
+          "block-official-brand-c110",
+          "block-official-corporate-c110"
+        ]
+      }
+    },
+    "block-c110-wrapper": {
+      "type": "Container",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 0,
+            "bottom": 0,
+            "right": 0,
+            "left": 0
+          }
+        },
+        "props": {
+          "childrenIds": [
+            "block-1790113814527",
+            "block-1790113969156",
+            "block-1790114003983",
+            "block-1790114028227",
+            "block-1790114049589",
+            "block-1790114060357",
+            "block-1790114078343-4uvj4",
+            "block-1790114089273",
+            "block-c110-closing"
+          ]
+        }
+      }
+    },
+    "block-1790113814527": {
+      "type": "Image",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 0,
+            "bottom": 0,
+            "right": 0,
+            "left": 0
+          }
+        },
+        "props": {
+          "width": 600,
+          "url": "https://email.curatedfor.you/uploads/RUZE-Blue-Header2.jpg",
+          "alt": "RUZE Header",
+          "linkHref": "https://ruzepouches.com/",
+          "contentAlignment": "middle"
+        }
+      }
+    },
+    "block-1790113969156": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "backgroundColor": "#ffffff",
+          "fontWeight": "normal",
+          "textAlign": "center",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 8,
+            "left": 8
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "Cheek pouches are convenient, portable, and uniquely effective as a delivery system. But they also bring nicotine to mind, and nicotine simply isn't for everyone. \n\nSo, we kept the pouch and ditched the nicotine. "
+        }
+      }
+    },
+    "block-1790114003983": {
+      "type": "ColumnsContainer",
+      "data": {
+        "style": {
+          "backgroundColor": "#ffffff",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 24,
+            "left": 24
+          }
+        },
+        "props": {
+          "columnsCount": 2,
+          "columnsGap": 16,
+          "columns": [
+            {
+              "childrenIds": [
+                "block-1790114018773"
+              ]
+            },
+            {
+              "childrenIds": [
+                "block-1790114009561"
+              ]
+            },
+            {
+              "childrenIds": []
+            }
+          ]
+        }
+      }
+    },
+    "block-1790114009561": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "fontWeight": "normal",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 8,
+            "left": 8
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "Pouches fit right in your pocket, purse, or gym bag. Even a day with no time for mixing, brewing, or steeping has room for them. "
+        }
+      }
+    },
+    "block-1790114018773": {
+      "type": "Image",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 0,
+            "bottom": 0,
+            "right": 0,
+            "left": 0
+          }
+        },
+        "props": {
+          "width": 600,
+          "url": "https://email.curatedfor.you/uploads/Untitled---September-23,-2026-at-17.45.09.jpg",
+          "alt": "RUZE pocket",
+          "linkHref": "https://linktr.ee/RUZEpouches",
+          "contentAlignment": "middle"
+        }
+      }
+    },
+    "block-1790114028227": {
+      "type": "ColumnsContainer",
+      "data": {
+        "style": {
+          "backgroundColor": "#ffffff",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 24,
+            "left": 24
+          }
+        },
+        "props": {
+          "columnsCount": 2,
+          "columnsGap": 16,
+          "columns": [
+            {
+              "childrenIds": [
+                "block-1790114032597"
+              ]
+            },
+            {
+              "childrenIds": [
+                "block-1790114036913"
+              ]
+            },
+            {
+              "childrenIds": []
+            }
+          ]
+        }
+      }
+    },
+    "block-1790114032597": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "fontWeight": "normal",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 8,
+            "left": 8
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "RUZE Pouches are made to deliver high-quality ingredients and delicious flavor whenever the moment calls for it, always without nicotine. "
+        }
+      }
+    },
+    "block-1790114036913": {
+      "type": "Image",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 0,
+            "bottom": 0,
+            "right": 0,
+            "left": 0
+          }
+        },
+        "props": {
+          "width": 600,
+          "url": "https://email.curatedfor.you/uploads/Untitled---September-23,-2026-at-17.47.41.jpg",
+          "alt": "RUZE taste",
+          "linkHref": "https://linktr.ee/RUZEpouches",
+          "contentAlignment": "middle"
+        }
+      }
+    },
+    "block-1790114049589": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "backgroundColor": "#ffffff",
+          "fontWeight": "normal",
+          "textAlign": "center",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 8,
+            "left": 8
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "Because the tools you reach for to get through your day should make you less dependent, not more. "
+        }
+      }
+    },
+    "block-1790114060357": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "backgroundColor": "#ffffff",
+          "fontSize": 20,
+          "fontWeight": "normal",
+          "textAlign": "center",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 8,
+            "left": 8
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "**ENERGY. COGNITION. CALM.** "
+        }
+      }
+    },
+    "block-1790114078343-4uvj4": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "backgroundColor": "#ffffff",
+          "fontWeight": "normal",
+          "textAlign": "center",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 8,
+            "left": 8
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "Three nicotine-free options for three very different kinds of moments. \n\n \n\nNo complicated routine required. "
+        }
+      }
+    },
+    "block-1790114089273": {
+      "type": "Button",
+      "data": {
+        "style": {
+          "backgroundColor": "#ffffff",
+          "textAlign": "center",
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "right": 24,
+            "left": 24
+          }
+        },
+        "props": {
+          "buttonBackgroundColor": "#003b4d",
+          "buttonStyle": "pill",
+          "size": "small",
+          "text": "FOLLOW ALONG",
+          "url": "https://linktr.ee/RUZEpouches",
+          "customWidth": 240,
+          "customHeight": 32
+        }
+      }
+    },
+    "block-c110-closing": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "fontWeight": "normal",
+          "textAlign": "center",
+          "padding": {
+            "top": 8,
+            "bottom": 24,
+            "right": 24,
+            "left": 24
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "À bientôt,  \nL'équipe RUZE"
+        }
+      }
+    },
+    "block-official-brand-c110": {
+      "type": "OfficialFooter",
+      "data": {
+        "props": {
+          "kind": "brand"
+        }
+      }
+    },
+    "block-official-corporate-c110": {
+      "type": "OfficialFooter",
+      "data": {
+        "props": {
+          "kind": "corporate"
+        }
+      }
+    }
+  }
+}

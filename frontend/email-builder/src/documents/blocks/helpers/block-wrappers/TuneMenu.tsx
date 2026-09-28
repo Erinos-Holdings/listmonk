@@ -1,11 +1,25 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-import { ArrowDownwardOutlined, ArrowUpwardOutlined, ContentCopyOutlined, DeleteOutlined } from '@mui/icons-material';
+import {
+  ArrowDownwardOutlined,
+  ArrowUpwardOutlined,
+  ContentCopyOutlined,
+  DeleteOutlined,
+  LayersClearOutlined,
+  NorthWestOutlined,
+  VerticalAlignBottomOutlined,
+  VerticalAlignTopOutlined,
+} from '@mui/icons-material';
 import { IconButton, Paper, Stack, SxProps, Tooltip } from '@mui/material';
 
+import { insertOfficialFooter } from '../../../../official/insert';
 import { TEditorBlock } from '../../../editor/core';
-import { resetDocument, setSelectedBlockId, useDocument } from '../../../editor/EditorContext';
+import { resetDocument, setDocument, setSelectedBlockId, useDocument, useOfficialContext } from '../../../editor/EditorContext';
+import { freshId, insertAt, parentOf } from '../../../structure';
 import { ColumnsContainerProps } from '../../ColumnsContainer/ColumnsContainerPropsSchema';
+import BlocksMenu from '../EditorChildrenIds/AddBlockMenu/BlocksMenu';
+
+import { useStructureActions } from './structureActions';
 
 const sx: SxProps = {
   position: 'absolute',
@@ -20,163 +34,49 @@ type Props = {
   blockId: string;
   // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D6: an OfficialFooter block can be moved but
   // never duplicated or deleted from its own menu (deleting a Container that holds it remains
-  // possible; the Insert action restores it).
+  // possible; the Insert action restores it). CONTAINER-NESTING-SPEC §2.2: Select parent is
+  // navigation, not an edit, so it is offered here too.
   moveOnly?: boolean;
 };
+
+// Fork (container structure) -- CONTAINER-NESTING-SPEC §2.2. Entries, in order, hidden where
+// they do not apply: Select parent, Move up/down, Insert above/below, Duplicate, Unwrap,
+// Delete. Delete removes the whole subtree (D5), Duplicate never copies an OfficialFooter
+// (D13); both, and Unwrap, go through structure.ts via useStructureActions.
 export default function TuneMenu({ blockId, moveOnly }: Props) {
   const document = useDocument();
+  const officialContext = useOfficialContext();
+  const actions = useStructureActions(blockId);
+  const [insertMenu, setInsertMenu] = useState<{ anchorEl: HTMLElement; where: 'above' | 'below' } | null>(null);
 
-  const handleDeleteClick = () => {
-    const filterChildrenIds = (childrenIds: string[] | null | undefined) => {
-      if (!childrenIds) {
-        return childrenIds;
-      }
-      return childrenIds.filter((f) => f !== blockId);
-    };
-    const nDocument: typeof document = { ...document };
-    for (const [id, b] of Object.entries(nDocument)) {
-      const block = b as TEditorBlock;
-      if (id === blockId) {
-        continue;
-      }
-      switch (block.type) {
-        case 'EmailLayout':
-          nDocument[id] = {
-            ...block,
-            data: {
-              ...block.data,
-              childrenIds: filterChildrenIds(block.data.childrenIds),
-            },
-          };
-          break;
-        case 'Container':
-          nDocument[id] = {
-            ...block,
-            data: {
-              ...block.data,
-              props: {
-                ...block.data.props,
-                childrenIds: filterChildrenIds(block.data.props?.childrenIds),
-              },
-            },
-          };
-          break;
-        case 'ColumnsContainer':
-          nDocument[id] = {
-            type: 'ColumnsContainer',
-            data: {
-              style: block.data.style,
-              props: {
-                ...block.data.props,
-                columns: block.data.props?.columns?.map((c) => ({
-                  childrenIds: filterChildrenIds(c.childrenIds),
-                })),
-              },
-            } as ColumnsContainerProps,
-          };
-          break;
-        default:
-          nDocument[id] = block;
-      }
-    }
-    delete nDocument[blockId];
-    resetDocument(nDocument);
-  };
+  const position = parentOf(document, blockId);
+  const showSelectParent = position !== null && position.parentId !== 'root';
 
-  const handleDuplicateClick = () => {
-    const block = document[blockId] as TEditorBlock;
-    if (!block) {
+  // D7: Insert above/below targets the block's PARENT slot, at its index or index+1. The
+  // Official-footer entry follows EditorChildrenIds' rule exactly: parent is the EmailLayout or
+  // a Container, and no Official_ template is being edited.
+  const insertIndex = position ? position.index + (insertMenu?.where === 'below' ? 1 : 0) : 0;
+  const parentType = position ? document[position.parentId]?.type : undefined;
+  const offerOfficial = !officialContext?.official && (parentType === 'EmailLayout' || parentType === 'Container');
+  const handleInsert = (block: TEditorBlock) => {
+    if (!position) {
       return;
     }
-
-    // Recursively clone a block and all its descendants, assigning new IDs.
-    const clones: Record<string, TEditorBlock> = {};
-    const cloneBlock = (srcId: string): string => {
-      const newId = `block-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const src = document[srcId] as TEditorBlock;
-      if (!src) {
-        return newId;
-      }
-      const cloned: TEditorBlock = JSON.parse(JSON.stringify(src));
-
-      // Remap childrenIds for container types so each child is also cloned.
-      if (cloned.type === 'Container' && cloned.data.props?.childrenIds) {
-        cloned.data.props.childrenIds = cloned.data.props.childrenIds.map(cloneBlock);
-      } else if (cloned.type === 'ColumnsContainer' && cloned.data.props?.columns) {
-        cloned.data.props.columns = cloned.data.props.columns.map((c) => ({
-          childrenIds: c.childrenIds?.map(cloneBlock) ?? [],
-        }));
-      }
-
-      clones[newId] = cloned;
-      return newId;
-    };
-    const newBlockId = cloneBlock(blockId);
-
-    const insertAfter = (ids: string[] | null | undefined) => {
-      if (!ids) {
-        return ids;
-      }
-      const index = ids.indexOf(blockId);
-      if (index < 0) {
-        return ids;
-      }
-      const newIds = [...ids];
-      newIds.splice(index + 1, 0, newBlockId);
-      return newIds;
-    };
-
-    const nDocument: typeof document = {
-      ...document,
-      ...clones,
-    };
-    for (const [id, b] of Object.entries(nDocument)) {
-      const entry = b as TEditorBlock;
-      if (id === blockId || id in clones) {
-        continue;
-      }
-      switch (entry.type) {
-        case 'EmailLayout':
-          nDocument[id] = {
-            ...entry,
-            data: {
-              ...entry.data,
-              childrenIds: insertAfter(entry.data.childrenIds),
-            },
-          };
-          break;
-        case 'Container':
-          nDocument[id] = {
-            ...entry,
-            data: {
-              ...entry.data,
-              props: {
-                ...entry.data.props,
-                childrenIds: insertAfter(entry.data.props?.childrenIds),
-              },
-            },
-          };
-          break;
-        case 'ColumnsContainer':
-          nDocument[id] = {
-            type: 'ColumnsContainer',
-            data: {
-              style: entry.data.style,
-              props: {
-                ...entry.data.props,
-                columns: entry.data.props?.columns?.map((c) => ({
-                  childrenIds: insertAfter(c.childrenIds),
-                })),
-              },
-            } as ColumnsContainerProps,
-          };
-          break;
-        default:
-          nDocument[id] = entry;
-      }
+    const id = freshId(document);
+    const next = insertAt(document, position, insertIndex, id, block);
+    if (next !== document) {
+      setDocument(next as typeof document);
+      setSelectedBlockId(id);
     }
-    resetDocument(nDocument);
-    setSelectedBlockId(newBlockId);
+  };
+  const handleInsertOfficial = () => {
+    if (!position) {
+      return;
+    }
+    const next = insertOfficialFooter(document, position.parentId, insertIndex, officialContext);
+    if (next !== document) {
+      setDocument(next as typeof document);
+    }
   };
 
   const handleMoveClick = (direction: 'up' | 'down') => {
@@ -250,31 +150,70 @@ export default function TuneMenu({ blockId, moveOnly }: Props) {
   return (
     <Paper sx={sx} onClick={(ev) => ev.stopPropagation()}>
       <Stack>
+        {showSelectParent && (
+          <Tooltip title="Select parent" placement="left-start">
+            <IconButton aria-label="Select parent" onClick={() => setSelectedBlockId(position!.parentId)} sx={{ color: 'text.primary' }}>
+              <NorthWestOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title="Move up" placement="left-start">
-          <IconButton onClick={() => handleMoveClick('up')} sx={{ color: 'text.primary' }}>
+          <IconButton aria-label="Move up" onClick={() => handleMoveClick('up')} sx={{ color: 'text.primary' }}>
             <ArrowUpwardOutlined fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Move down" placement="left-start">
-          <IconButton onClick={() => handleMoveClick('down')} sx={{ color: 'text.primary' }}>
+          <IconButton aria-label="Move down" onClick={() => handleMoveClick('down')} sx={{ color: 'text.primary' }}>
             <ArrowDownwardOutlined fontSize="small" />
           </IconButton>
         </Tooltip>
-        {!moveOnly && (
-          <Tooltip title="Duplicate" placement="left-start">
-            <IconButton onClick={handleDuplicateClick} sx={{ color: 'text.primary' }}>
-              <ContentCopyOutlined fontSize="small" />
+        {!moveOnly && position && (
+          <Tooltip title="Insert above" placement="left-start">
+            <IconButton aria-label="Insert above" onClick={(ev) => setInsertMenu({ anchorEl: ev.currentTarget, where: 'above' })} sx={{ color: 'text.primary' }}>
+              <VerticalAlignTopOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        {!moveOnly && position && (
+          <Tooltip title="Insert below" placement="left-start">
+            <IconButton aria-label="Insert below" onClick={(ev) => setInsertMenu({ anchorEl: ev.currentTarget, where: 'below' })} sx={{ color: 'text.primary' }}>
+              <VerticalAlignBottomOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
         {!moveOnly && (
+          <Tooltip title="Duplicate" placement="left-start">
+            <IconButton aria-label="Duplicate" onClick={actions.requestDuplicate} sx={{ color: 'text.primary' }}>
+              <ContentCopyOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        {!moveOnly && actions.isContainer && (
+          <Tooltip title={actions.unwrapRefusal ?? 'Unwrap (keep its blocks)'} placement="left-start">
+            <span>
+              <IconButton aria-label="Unwrap" disabled={Boolean(actions.unwrapRefusal)} onClick={actions.requestUnwrap} sx={{ color: 'text.primary' }}>
+                <LayersClearOutlined fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+        {!moveOnly && (
           <Tooltip title="Delete" placement="left-start">
-            <IconButton onClick={handleDeleteClick} sx={{ color: 'text.primary' }}>
+            <IconButton aria-label="Delete" onClick={actions.requestDelete} sx={{ color: 'text.primary' }}>
               <DeleteOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
       </Stack>
+      <BlocksMenu
+        anchorEl={insertMenu ? insertMenu.anchorEl : null}
+        setAnchorEl={(el) => {
+          if (el === null) setInsertMenu(null);
+        }}
+        onSelect={handleInsert}
+        onSelectOfficial={offerOfficial ? handleInsertOfficial : undefined}
+      />
+      {actions.dialog}
     </Paper>
   );
 }

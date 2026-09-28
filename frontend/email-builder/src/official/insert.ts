@@ -2,7 +2,10 @@
 // entry as a pure document transform: the menu's onSelect contract inserts ONE block, the
 // footer is two. Inserts, at `index` in `parentId`'s children, the brand block (unless the
 // context brand is `curated`, which has no brand footer by design) followed by the corporate
-// block. A kind already present ANYWHERE in the document is not inserted again (idempotent).
+// block. A kind already present in the document -- in a block REACHABLE FROM ROOT -- is not
+// inserted again (idempotent). CONTAINER-NESTING-SPEC D12: an orphaned footer (a key no slot
+// path from root reaches, e.g. left behind by the pre-erinos.N Delete) never compiles -- the
+// Reader walks from root -- so it no longer blocks the Insert.
 //
 // Returns a NEW document object when anything was inserted, else the SAME object.
 //
@@ -18,10 +21,28 @@ type TDocument = Record<string, TBlock>;
 type TInsertContext = { brand?: string | null } | null | undefined;
 
 function presentKinds(doc: TDocument): Set<string> {
+  // Walk from root, inlined (the module stays import-free): the EmailLayout's childrenIds, a
+  // Container's props.childrenIds, every ColumnsContainer column. Cycle-safe.
   const kinds = new Set<string>();
-  for (const b of Object.values(doc)) {
-    if (b && b.type === 'OfficialFooter' && b.data && b.data.props && typeof b.data.props.kind === 'string') {
-      kinds.add(b.data.props.kind);
+  const seen = new Set<string>();
+  const stack = ['root'];
+  while (stack.length) {
+    const id = stack.pop() as string;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const b = doc[id];
+    if (!b) continue;
+    const data = b.data || {};
+    if (b.type === 'OfficialFooter' && data.props && typeof data.props.kind === 'string') {
+      kinds.add(data.props.kind);
+    } else if (b.type === 'EmailLayout' && Array.isArray(data.childrenIds)) {
+      stack.push(...data.childrenIds);
+    } else if (b.type === 'Container' && data.props && Array.isArray(data.props.childrenIds)) {
+      stack.push(...data.props.childrenIds);
+    } else if (b.type === 'ColumnsContainer' && data.props && Array.isArray(data.props.columns)) {
+      for (const c of data.props.columns) {
+        if (c && Array.isArray(c.childrenIds)) stack.push(...c.childrenIds);
+      }
     }
   }
   return kinds;

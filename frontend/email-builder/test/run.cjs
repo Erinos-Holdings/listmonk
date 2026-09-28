@@ -52,7 +52,17 @@ const STANDALONE = [
   [path.join('official', 'resolve.ts'), path.join('official', 'resolve')],
   [path.join('official', 'projection.ts'), path.join('official', 'projection')],
   [path.join('official', 'insert.ts'), path.join('official', 'insert')],
+  // CONTAINER-NESTING-SPEC §2.1 / I9: the structure tree model is import-free too.
+  [path.join('documents', 'structure.ts'), path.join('documents', 'structure')],
 ];
+// CONTAINER-NESTING-SPEC I9: "import-free" is asserted, not assumed -- tsc would otherwise
+// happily compile (and emit) a relative import alongside the file.
+for (const [src] of STANDALONE) {
+  if (/^\s*import\s|^\s*export\s[^\n]*\sfrom\s|\brequire\(/m.test(fs.readFileSync(path.join(srcDir, src), 'utf8'))) {
+    console.error(`${src} must stay import-free (it is compiled standalone)`);
+    process.exit(1);
+  }
+}
 for (const [src, out] of STANDALONE) {
   const outDir = path.join(buildDir, path.dirname(out));
   const compile = spawnSync(process.execPath, [

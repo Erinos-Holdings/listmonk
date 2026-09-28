@@ -1,5 +1,7 @@
 // OFFICIAL-FOOTER-SPEC I6. insertOfficialFooter adds brand (unless curated) then corporate at the
 // given position and never duplicates a kind; the input document is never mutated.
+// CONTAINER-NESTING-SPEC D12 / I5: only footers REACHABLE FROM ROOT count as present -- an
+// orphaned pair (e.g. left by the old Delete) never compiles and no longer blocks the Insert.
 const path = require('path');
 const { insertOfficialFooter } = require(path.join(__dirname, '.build', 'official', 'insert.cjs'));
 
@@ -51,6 +53,30 @@ check('ColumnsContainer parent: unchanged', insertOfficialFooter(cols, 'cols', 0
 check('unknown parent: unchanged', insertOfficialFooter(cols, 'nope', 0, { brand: 'ruze' }) === cols);
 const ids = Object.keys(insertOfficialFooter(base(), 'root', 0, { brand: 'ruze' })).filter((k) => !(k in base()));
 check('fresh unique ids', ids.length === 2 && ids[0] !== ids[1], ids.join(','));
+
+// D12: orphans do not count.
+const orphaned = base();
+orphaned['old-brand'] = { type: 'OfficialFooter', data: { props: { kind: 'brand' } } };
+orphaned['old-corp'] = { type: 'OfficialFooter', data: { props: { kind: 'corporate' } } };
+const withOrphans = insertOfficialFooter(orphaned, 'root', 3, { lang: 'en', brand: 'ruze' });
+check('D12: a pre-existing ORPHANED footer pair does not block the Insert', withOrphans !== orphaned && JSON.stringify(kinds(withOrphans, withOrphans.root.data.childrenIds)) === JSON.stringify(['a', 'box', 'b', 'OF:brand', 'OF:corporate']), JSON.stringify(kinds(withOrphans, withOrphans.root.data.childrenIds)));
+check('D12: the orphans are left alone (no pruning, D11)', 'old-brand' in withOrphans && 'old-corp' in withOrphans);
+const orphanBox = base();
+orphanBox.gone = { type: 'Container', data: { style: {}, props: { childrenIds: ['gb', 'gc'] } } };
+orphanBox.gb = { type: 'OfficialFooter', data: { props: { kind: 'brand' } } };
+orphanBox.gc = { type: 'OfficialFooter', data: { props: { kind: 'corporate' } } };
+check('D12: a footer pair under an orphaned Container does not block the Insert', insertOfficialFooter(orphanBox, 'root', 3, { brand: 'ruze' }) !== orphanBox);
+const inColumn = base();
+inColumn.root.data.childrenIds = ['a', 'box', 'cols', 'b'];
+inColumn.cols.data.props.columns[2].childrenIds = ['cb', 'cc'];
+inColumn.cb = { type: 'OfficialFooter', data: { props: { kind: 'brand' } } };
+inColumn.cc = { type: 'OfficialFooter', data: { props: { kind: 'corporate' } } };
+check('D12: a reachable footer pair (a Columns column, hidden included) still blocks it', insertOfficialFooter(inColumn, 'root', 0, { brand: 'ruze' }) === inColumn);
+const nested = insertOfficialFooter(base(), 'box', 1, { brand: 'ruze' });
+check('D12: a pair inside a reachable Container still blocks it', insertOfficialFooter(nested, 'root', 0, { brand: 'ruze' }) === nested);
+const cyclic = base();
+cyclic.box.data.props.childrenIds = ['c', 'box'];
+check('D12: the root walk terminates on a cyclic document', insertOfficialFooter(cyclic, 'root', 0, { brand: 'ruze' }) !== cyclic);
 
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

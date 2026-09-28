@@ -5,6 +5,8 @@ import { Box, Typography } from '@mui/material';
 import { TEditorBlock } from '../../../documents/editor/core';
 import { setDocument, useDocument, useSelectedBlockId } from '../../../documents/editor/EditorContext';
 
+import { StructureBreadcrumb, WrapperAlert } from './StructureHeader';
+
 import AvatarSidebarPanel from './input-panels/AvatarSidebarPanel';
 import ButtonSidebarPanel from './input-panels/ButtonSidebarPanel';
 import ColumnsContainerSidebarPanel from './input-panels/ColumnsContainerSidebarPanel';
@@ -38,6 +40,18 @@ export default function ConfigurationPanel() {
     return renderMessage(`Block with id ${selectedBlockId} was not found. Click on a block to reset.`);
   }
 
+  // Fork (container structure) -- CONTAINER-NESTING-SPEC §2.4: every block panel opens with the
+  // breadcrumb; a flagged Container's panel adds the D3 Alert with Unwrap.
+  return (
+    <>
+      <StructureBreadcrumb blockId={selectedBlockId} />
+      <WrapperAlert blockId={selectedBlockId} />
+      {renderBlockPanel(selectedBlockId, block)}
+    </>
+  );
+}
+
+function renderBlockPanel(selectedBlockId: string, block: TEditorBlock) {
   const setBlock = (conf: TEditorBlock) => setDocument({ [selectedBlockId]: conf });
   const { data, type } = block;
   switch (type) {

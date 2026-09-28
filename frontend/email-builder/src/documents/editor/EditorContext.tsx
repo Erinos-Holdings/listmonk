@@ -39,7 +39,23 @@ type TValue = {
   // pushed by the host through setOfficialFooters/setOfficialContext.
   officialFooters: TOfficialRef[];
   officialContext: TOfficialContext | null;
+
+  // Fork (container structure) -- CONTAINER-NESTING-SPEC D8/§2.5: the canvas "Show structure"
+  // toggle. Editor chrome only; remembered per browser under SHOW_STRUCTURE_KEY.
+  showStructure: boolean;
 };
+
+export const SHOW_STRUCTURE_KEY = 'lm-eb-show-structure';
+
+// Every storage access is guarded: a throwing or absent localStorage (private mode, blocked
+// site data, an opaque-origin iframe) means "off".
+function readShowStructure(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_STRUCTURE_KEY) === '1';
+  } catch (e) {
+    return false;
+  }
+}
 
 const editorStateStore = create(subscribeWithSelector<TValue>(() => ({
   document: getConfiguration(window.location.hash),
@@ -56,7 +72,22 @@ const editorStateStore = create(subscribeWithSelector<TValue>(() => ({
 
   officialFooters: [],
   officialContext: null,
+
+  showStructure: readShowStructure(),
 })));
+
+export function useShowStructure() {
+  return editorStateStore((s) => s.showStructure);
+}
+
+export function setShowStructure(showStructure: boolean) {
+  editorStateStore.setState({ showStructure });
+  try {
+    window.localStorage.setItem(SHOW_STRUCTURE_KEY, showStructure ? '1' : '0');
+  } catch (e) {
+    // Not remembered; the toggle still works for this session.
+  }
+}
 
 export function useDocument() {
   return editorStateStore((s) => s.document);

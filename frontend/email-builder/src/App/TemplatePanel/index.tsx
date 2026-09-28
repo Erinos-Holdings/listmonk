@@ -1,16 +1,18 @@
 import React from 'react';
 
-import { MonitorOutlined, PhoneIphoneOutlined } from '@mui/icons-material';
+import { AccountTreeOutlined, MonitorOutlined, PhoneIphoneOutlined } from '@mui/icons-material';
 import { Box, Stack, SxProps, ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 
 import EditorBlock from '../../documents/editor/EditorBlock';
 import {
   setSelectedScreenSize,
+  setShowStructure,
   useDocument,
   useOfficialContext,
   useOfficialFooters,
   useSelectedMainTab,
   useSelectedScreenSize,
+  useShowStructure,
 } from '../../documents/editor/EditorContext';
 import { OfficialRenderContext } from '../../documents/blocks/OfficialFooter/OfficialContext';
 import { Reader } from '../../documents/reader/core';
@@ -28,6 +30,7 @@ export default function TemplatePanel() {
   const selectedScreenSize = useSelectedScreenSize();
   const officialFooters = useOfficialFooters();
   const officialContext = useOfficialContext();
+  const showStructure = useShowStructure();
 
   let mainBoxSx: SxProps = {
     height: '100%',
@@ -111,6 +114,18 @@ export default function TemplatePanel() {
                 </Tooltip>
               </ToggleButton>
             </ToggleButtonGroup>
+            {/* Fork (container structure) -- CONTAINER-NESTING-SPEC D8/§2.5: editor chrome only. */}
+            <ToggleButton
+              value="structure"
+              size="small"
+              selected={showStructure}
+              aria-label="Show structure"
+              onChange={() => setShowStructure(!showStructure)}
+            >
+              <Tooltip title="Show structure">
+                <AccountTreeOutlined fontSize="small" />
+              </Tooltip>
+            </ToggleButton>
           </Stack>
         </Stack>
         <ToggleInspectorPanelButton />
