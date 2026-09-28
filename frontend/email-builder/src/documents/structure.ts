@@ -118,9 +118,40 @@ export function reachableIds(doc: TDocument): Set<string> {
   return seen;
 }
 
+// The position index: id -> the slot and index holding it, built ONCE per document object
+// and memoized on its identity (every function here treats documents as immutable, and the
+// editor store replaces the document object on every change). Scan order is the reachable-first
+// order, so when an id sits in several slots (hand-edited JSON) a parent reachable from root
+// wins; within one slot the first occurrence wins. Callers must not mutate a document in place
+// after querying it (the cache would go stale) -- nothing in the builder does.
+const positionCache = new WeakMap<object, Map<string, TPosition>>();
+
+function positionIndex(doc: TDocument): Map<string, TPosition> {
+  let index = positionCache.get(doc);
+  if (index) return index;
+  index = new Map<string, TPosition>();
+  for (const parentId of keysReachableFirst(doc)) {
+    for (const s of slotsOfBlock(doc[parentId])) {
+      s.ids.forEach((id, i) => {
+        if (id !== ROOT && !index!.has(id)) index!.set(id, { parentId, column: s.column, index: i });
+      });
+    }
+  }
+  positionCache.set(doc, index);
+  return index;
+}
+
 // The slot and index holding `id`; null for root and for an id in no slot. When an id sits in
-// several slots (hand-edited JSON), a parent reachable from root wins.
+// several slots (hand-edited JSON), a parent reachable from root wins. Reads the memoized index.
 export function parentOf(doc: TDocument, id: string): TPosition | null {
+  if (id === ROOT) return null;
+  const pos = positionIndex(doc).get(id);
+  return pos ? { ...pos } : null;
+}
+
+// The uncached reference implementation of parentOf (a full scan per call). Kept for the test
+// that pins the index to it; not used by the editor.
+export function parentOfUncached(doc: TDocument, id: string): TPosition | null {
   if (id === ROOT) return null;
   for (const parentId of keysReachableFirst(doc)) {
     for (const s of slotsOfBlock(doc[parentId])) {
@@ -131,11 +162,12 @@ export function parentOf(doc: TDocument, id: string): TPosition | null {
   return null;
 }
 
-// How many slots reference `id` (a count > 1 means a shared id).
+// How many slots of blocks REACHABLE FROM ROOT reference `id` (a count > 1 means a shared id;
+// references from orphaned blocks never render and do not count).
 function referenceCount(doc: TDocument, id: string): number {
   let n = 0;
-  for (const block of Object.values(doc)) {
-    for (const s of slotsOfBlock(block)) {
+  for (const k of reachableIds(doc)) {
+    for (const s of slotsOfBlock(doc[k])) {
       for (const c of s.ids) if (c === id) n += 1;
     }
   }
@@ -279,6 +311,10 @@ export function unwrap(
     return { refused: 'footer-in-column' };
   }
   const ids = [...slotIds(doc, pos)];
+  // A child already in the target slot would leave one id twice in a slot (duplicate React
+  // keys, a shared id): refuse as shared.
+  const siblings = ids.filter((_, i) => i !== pos.index);
+  if (children.some((c) => siblings.includes(c))) return { refused: 'shared' };
   ids.splice(pos.index, 1, ...children);
   const parent = withSlot(doc[pos.parentId], pos.column, ids);
   if (!parent) return { refused: 'detached' };
@@ -337,6 +373,32 @@ export function deleteSubtree(doc: TDocument, id: string): { doc: TDocument; rem
     next[k] = out;
   }
   return { doc: next, removed: removing.size - 1 };
+}
+
+// Move up/down: swaps `id` with its neighbour in every slot that holds it (the pre-existing
+// TuneMenu semantics), preserving every other prop of the parent and of each column entry.
+// No-op (the SAME object is returned) at the ends of a slot or when nothing holds `id`.
+export function moveWithinSlot(doc: TDocument, id: string, direction: 'up' | 'down'): TDocument {
+  let next: TDocument | null = null;
+  for (const [k, block] of Object.entries(doc)) {
+    // Parity with the pre-erinos.N move: a block's own slots are never rewritten.
+    if (k === id) continue;
+    let out = block;
+    for (const s of slotsOfBlock(block)) {
+      const index = s.ids.indexOf(id);
+      if (index < 0) continue;
+      const to = direction === 'up' ? index - 1 : index + 1;
+      if (to < 0 || to >= s.ids.length) continue;
+      const ids = [...s.ids];
+      [ids[index], ids[to]] = [ids[to], ids[index]];
+      out = withSlot(out, s.column, ids) || out;
+    }
+    if (out !== block) {
+      if (!next) next = { ...doc };
+      next[k] = out;
+    }
+  }
+  return next || doc;
 }
 
 // `block-<Date.now()>-<n>`, guaranteed absent from `doc` (and from `taken`, when given).

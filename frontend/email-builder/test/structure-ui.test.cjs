@@ -195,6 +195,34 @@ async function main() {
   await click(toggle);
   check('Show structure on: every container shows its tab', $('[aria-label="Show structure"]').getAttribute('aria-pressed') === 'true' && $$('[data-lm-structure-tab="columns"]').length === 2 && $$('[data-lm-structure-tab]').length === 3);
   check('Show structure is remembered under lm-eb-show-structure', ui.dom.window.localStorage.getItem('lm-eb-show-structure') === '1');
+  // Review fix 3: with Show structure on, hovering a block inside the wrapper (every ancestor
+  // is then "mouseInside") leaves the ancestor containers' dashed depth outline in place; a
+  // hovered non-container keeps today's faint-blue hover outline.
+  {
+    const w = ui.dom.window;
+    const wrapperBox = $('[data-lm-structure-flag]').parentElement;
+    const innerText = wrapperBox.querySelector('[data-lm-text]');
+    const outlineOf = (el) => w.getComputedStyle(el).outline || w.getComputedStyle(el).outlineStyle;
+    // jsdom's synthetic mouseover never reaches React's enter/leave emulation, so the hover is
+    // driven through each wrapper's own onMouseEnter/onMouseLeave props -- exactly the calls a
+    // real pointer entering the Text makes on it and on every ancestor wrapper.
+    const reactProps = (el) => el[Object.keys(el).find((k) => k.startsWith('__reactProps'))];
+    const noop = { stopPropagation() {} };
+    const before = outlineOf(wrapperBox);
+    reactProps(wrapperBox).onMouseEnter(noop);
+    reactProps(innerText).onMouseEnter(noop);
+    await tick();
+    const after = outlineOf(wrapperBox);
+    const textOutline = outlineOf(innerText);
+    check('fix 3: a hovered-ancestor container keeps its dashed structure outline', /dashed/.test(before) && /dashed/.test(after) && !/0\.3/.test(after), `${before} -> ${after}`);
+    check('fix 3: the hovered non-container block keeps the hover outline', /solid/.test(textOutline) && /0\.3/.test(textOutline), textOutline);
+    reactProps(innerText).onMouseLeave(noop);
+    reactProps(wrapperBox).onMouseLeave(noop);
+    await tick();
+    await click($('[data-lm-structure-flag]'));
+    check('fix 3: the SELECTED container still shows the solid selection outline', /solid/.test(outlineOf($('[data-lm-structure-flag]').parentElement)) && !/dashed/.test(outlineOf($('[data-lm-structure-flag]').parentElement)), outlineOf($('[data-lm-structure-flag]').parentElement));
+    await click($$('[data-lm-breadcrumb-segment]')[0]);
+  }
   check('positive control: the editor canvas does carry chrome markers', CHROME.test($('#visual-editor-container').innerHTML));
 
   // Preview and HTML carry no chrome markers (with Show structure on and a block selected).

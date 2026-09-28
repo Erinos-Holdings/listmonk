@@ -281,5 +281,98 @@ const colsPropsSansColumns = (doc) => { const { columns, ...rest } = doc.cols.da
   check('duplicate in the root slot', J(S.duplicateSubtree(tree(), 't0').doc.root.data.childrenIds.slice(0, 1)) === J(['t0']));
 }
 
+// ---------------------------------------------------------------- review fixes
+// (1) the memoized position index equals the uncached scan, on every fixture and edge doc.
+{
+  const fx = ['campaign108-source.json', 'official-template-14.json', 'official-template-30.json', 'campaign110-shaped.json']
+    .map((f) => require('./fixtures/' + f).body_source);
+  const shared = tree();
+  shared.root.data.childrenIds = [...shared.root.data.childrenIds, 't2', 'sub'];
+  const orphaned = { ...tree(), orphan: { type: 'Container', data: { props: { childrenIds: ['o1', 't0'] } } }, o1: { type: 'Text', data: {} } };
+  const cyc = { root: { type: 'EmailLayout', data: { childrenIds: ['a'] } }, a: { type: 'Container', data: { props: { childrenIds: ['b', 'b'] } } }, b: { type: 'Container', data: { props: { childrenIds: ['a'] } } } };
+  const docs = [tree(), shared, orphaned, cyc, ...fx.map(clone)];
+  let mismatches = [];
+  for (const d of docs) {
+    for (const id of [...Object.keys(d), 'nope']) {
+      if (!deepEq(S.parentOf(d, id), S.parentOfUncached(d, id))) mismatches.push(id);
+    }
+  }
+  check('fix 1: the memoized parentOf equals the uncached scan on every fixture (shared, orphaned, cyclic included)', mismatches.length === 0, mismatches);
+  const d = tree();
+  const p1 = S.parentOf(d, 'sub');
+  p1.index = 99;
+  check('fix 1: a returned position is a copy (mutating it cannot poison the cache)', S.parentOf(d, 'sub').index === 1);
+  check('fix 1: a new document object gets a fresh index', S.parentOf(S.unwrap(d, 'sub').doc, 't6').index === 1);
+
+  // Timing sanity: a 1000-block document, containers nested in chains, one full depth pass on a
+  // cold document object (the pre-fix code took ~142 ms; the bound is generous against flakiness).
+  const big = { root: { type: 'EmailLayout', data: { childrenIds: [] } } };
+  let n = 0;
+  for (let chain = 0; chain < 50 && n < 1000; chain++) {
+    let parent = null;
+    for (let depth = 0; depth < 4; depth++) {
+      const cid = `c${chain}-${depth}`;
+      const kids = [];
+      for (let k = 0; k < 4; k++) { const tid = `t${chain}-${depth}-${k}`; big[tid] = { type: 'Text', data: {} }; kids.push(tid); n++; }
+      big[cid] = { type: 'Container', data: { style: null, props: { childrenIds: kids } } };
+      n++;
+      if (parent) big[parent].data.props.childrenIds.push(cid); else big.root.data.childrenIds.push(cid);
+      parent = cid;
+    }
+  }
+  const keys = Object.keys(big);
+  const t0 = process.hrtime.bigint();
+  let total = 0;
+  for (const id of keys) total += S.containerDepth(big, id);
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  check(`fix 1: full containerDepth pass over ${keys.length} blocks is fast (${ms.toFixed(1)} ms < 150 ms)`, keys.length >= 1000 && ms < 150 && total > 0, ms);
+}
+
+// (4) unwrap's shared refusal: only reachable references count; a child already in the target
+// slot is refused.
+{
+  const orphanRef = { ...tree(), orphan: { type: 'Container', data: { props: { childrenIds: ['inner'] } } } };
+  const r = S.unwrap(orphanRef, 'inner');
+  check('fix 4a (I4): a reference from an ORPHANED block does not make the id shared', !('refused' in r) && J(r.doc.box.data.props.childrenIds) === J(['t1', 't2']), r);
+  const dupChild = tree();
+  dupChild.box.data.props.childrenIds = ['t1', 'inner', 't2'];
+  check('fix 4b (I3): refuses when a child already sits in the target slot (no duplicate id in one slot)', S.unwrap(dupChild, 'inner').refused === 'shared');
+  const dupRoot = tree();
+  dupRoot.root.data.childrenIds = ['t0', 'box', 'cols', 't9', 't1'];
+  check('fix 4b (I3): … in the root slot too', S.unwrap(dupRoot, 'box').refused === 'shared');
+}
+
+// (5) moveWithinSlot: props preserved, ends no-op, input not mutated, every slot kind.
+{
+  const d = tree();
+  const frozen = J(d);
+  const up = S.moveWithinSlot(d, 'cols', 'up');
+  check('fix 5 (I7): move up in the root slot', J(up.root.data.childrenIds) === J(['t0', 'cols', 'box', 't9']) && up.root.data.backdropColor === '#F5F5F5');
+  const dn = S.moveWithinSlot(d, 't1', 'down');
+  check('fix 5 (I7): move down in a Container slot keeps its style', J(dn.box.data.props.childrenIds) === J(['inner', 't1']) && deepEq(dn.box.data.style, d.box.data.style));
+  const c0 = S.moveWithinSlot(d, 'sub', 'up');
+  check('fix 5 (I7): move in a Columns column preserves Columns and column-entry props', J(c0.cols.data.props.columns[0].childrenIds) === J(['sub', 't3']) && deepEq(colsPropsSansColumns(c0), colsPropsSansColumns(d)), colsPropsSansColumns(c0));
+  const hidden = tree();
+  hidden.cols.data.props.columns[2].childrenIds = ['t5', 'x'];
+  hidden.x = { type: 'Text', data: {} };
+  const h = S.moveWithinSlot(hidden, 'x', 'up');
+  check('fix 5 (I7): move in the hidden column, props preserved', J(h.cols.data.props.columns[2].childrenIds) === J(['x', 't5']) && h.cols.data.props.columns[2].extra === 'c' && deepEq(colsPropsSansColumns(h), colsPropsSansColumns(hidden)));
+  check('fix 5 (I7): no-op at the ends (same object)', S.moveWithinSlot(d, 't0', 'up') === d && S.moveWithinSlot(d, 't9', 'down') === d && S.moveWithinSlot(d, 't6', 'up') === d && S.moveWithinSlot(d, 'nope', 'up') === d);
+  check('fix 5 (I7): untouched blocks keep their identity', up.box === d.box && up.cols === d.cols && c0.root === d.root);
+  check('fix 5 (I7): input never mutated', J(d) === frozen);
+}
+
+// Re-review finding 1: a block listing itself as a child is never rewritten by its own move.
+{
+  const d = {
+    root: { type: 'EmailLayout', data: { childrenIds: ['a', 'box'] } },
+    a: { type: 'Text', data: { props: { text: 'a' } } },
+    box: { type: 'Container', data: { style: {}, props: { childrenIds: ['x', 'box'] } } },
+    x: { type: 'Text', data: { props: { text: 'x' } } },
+  };
+  const next = S.moveWithinSlot(d, 'box', 'up');
+  check('move parity: the moved block\'s own slot untouched', J(next.box) === J(d.box) && J(next.root.data.childrenIds) === J(['box', 'a']));
+}
+
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

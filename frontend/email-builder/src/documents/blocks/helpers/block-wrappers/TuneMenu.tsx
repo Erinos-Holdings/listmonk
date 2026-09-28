@@ -15,8 +15,7 @@ import { IconButton, Paper, Stack, SxProps, Tooltip } from '@mui/material';
 import { insertOfficialFooter } from '../../../../official/insert';
 import { TEditorBlock } from '../../../editor/core';
 import { resetDocument, setDocument, setSelectedBlockId, useDocument, useOfficialContext } from '../../../editor/EditorContext';
-import { freshId, insertAt, parentOf } from '../../../structure';
-import { ColumnsContainerProps } from '../../ColumnsContainer/ColumnsContainerPropsSchema';
+import { freshId, insertAt, moveWithinSlot, parentOf } from '../../../structure';
 import BlocksMenu from '../EditorChildrenIds/AddBlockMenu/BlocksMenu';
 
 import { useStructureActions } from './structureActions';
@@ -79,71 +78,15 @@ export default function TuneMenu({ blockId, moveOnly }: Props) {
     }
   };
 
+  // CONTAINER-NESTING-SPEC review fix: Move goes through structure.ts so every Columns and
+  // column-entry prop survives (the old walk rebuilt each column as {childrenIds} only).
   const handleMoveClick = (direction: 'up' | 'down') => {
-    const moveChildrenIds = (ids: string[] | null | undefined) => {
-      if (!ids) {
-        return ids;
-      }
-      const index = ids.indexOf(blockId);
-      if (index < 0) {
-        return ids;
-      }
-      const childrenIds = [...ids];
-      if (direction === 'up' && index > 0) {
-        [childrenIds[index], childrenIds[index - 1]] = [childrenIds[index - 1], childrenIds[index]];
-      } else if (direction === 'down' && index < childrenIds.length - 1) {
-        [childrenIds[index], childrenIds[index + 1]] = [childrenIds[index + 1], childrenIds[index]];
-      }
-      return childrenIds;
-    };
-    const nDocument: typeof document = { ...document };
-    for (const [id, b] of Object.entries(nDocument)) {
-      const block = b as TEditorBlock;
-      if (id === blockId) {
-        continue;
-      }
-      switch (block.type) {
-        case 'EmailLayout':
-          nDocument[id] = {
-            ...block,
-            data: {
-              ...block.data,
-              childrenIds: moveChildrenIds(block.data.childrenIds),
-            },
-          };
-          break;
-        case 'Container':
-          nDocument[id] = {
-            ...block,
-            data: {
-              ...block.data,
-              props: {
-                ...block.data.props,
-                childrenIds: moveChildrenIds(block.data.props?.childrenIds),
-              },
-            },
-          };
-          break;
-        case 'ColumnsContainer':
-          nDocument[id] = {
-            type: 'ColumnsContainer',
-            data: {
-              style: block.data.style,
-              props: {
-                ...block.data.props,
-                columns: block.data.props?.columns?.map((c) => ({
-                  childrenIds: moveChildrenIds(c.childrenIds),
-                })),
-              },
-            } as ColumnsContainerProps,
-          };
-          break;
-        default:
-          nDocument[id] = block;
-      }
+    const next = moveWithinSlot(document, blockId, direction);
+    if (next === document) {
+      // At a slot's end: nothing moved, so no commit (no Styles-panel remount).
+      return;
     }
-
-    resetDocument(nDocument);
+    resetDocument(next as typeof document);
     setSelectedBlockId(blockId);
   };
 

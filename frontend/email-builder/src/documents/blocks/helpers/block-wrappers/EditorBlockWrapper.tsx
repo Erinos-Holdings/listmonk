@@ -48,12 +48,14 @@ export default function EditorBlockWrapper({ children, moveOnly }: TEditorBlockW
   let outlineOffset = '-1px';
   if (selectedBlockId === blockId) {
     outline = '2px solid rgba(0,121,204, 1)';
-  } else if (mouseInside) {
-    outline = '2px solid rgba(0,121,204, 0.3)';
   } else if (showStructure && isStructural) {
+    // With Show structure on, a container keeps its depth outline while hovered: every ancestor
+    // of the hovered block is "mouseInside", and that is exactly where the author reads nesting.
     // Coincident nested edges separate visibly: each depth insets its outline 3px further.
     outline = `2px dashed ${STRUCTURE_COLORS[depth % STRUCTURE_COLORS.length]}`;
     outlineOffset = `-${1 + 3 * depth}px`;
+  } else if (mouseInside) {
+    outline = '2px solid rgba(0,121,204, 0.3)';
   }
 
   // §2.3: the handle tab. Visible when selected, while the pointer is anywhere inside the block,
