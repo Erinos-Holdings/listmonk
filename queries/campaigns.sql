@@ -100,7 +100,8 @@ ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 -- the fields the picker needs, never bodies, templates or review data. Scoping is the same
 -- ANY-list rule query-campaigns and campaign-has-lists use (D2).
 --   $1 requested ids; non-empty = exactly those ids that pass scoping, search and limit ignored
---   $2 search string (makeSearchString; empty = all), the query-campaigns predicate
+--   $2 search string (makeSearchString; empty = all), the query-campaigns predicate except
+--      PLAINTO_TSQUERY, because the picker searches per keystroke and TO_TSQUERY 500s on syntax characters
 --   $3 exact id for a numeric search (0 = none)
 --   $4 all campaigns (campaigns get_all, or blanket list access); else $5 permitted list ids
 --   $6 started campaigns only (analytics-only users, D11)
@@ -111,7 +112,7 @@ WHERE (
     CASE WHEN CARDINALITY($1::INT[]) > 0 THEN c.id = ANY($1::INT[])
     ELSE (
         $2::TEXT = ''
-        OR TO_TSVECTOR(CONCAT(c.name, ' ', c.subject)) @@ TO_TSQUERY($2::TEXT)
+        OR TO_TSVECTOR(CONCAT(c.name, ' ', c.subject)) @@ PLAINTO_TSQUERY($2::TEXT)
         OR CONCAT(c.name, ' ', c.subject) ILIKE $2::TEXT
         OR c.id = $3::INT
     ) END

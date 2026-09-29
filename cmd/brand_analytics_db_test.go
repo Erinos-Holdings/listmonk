@@ -161,6 +161,10 @@ func TestBrandAnalyticsPicker(t *testing.T) {
 	superAdmin := baUser(nil)
 	superAdmin.UserRoleID = auth.SuperAdminRoleID
 	superAdmin.UserRole.ID = auth.SuperAdminRoleID
+	// Super Admin holding only get_analytics is still never analytics-only (sees drafts).
+	superAdminAnalytics := baUser([]string{auth.PermCampaignsGetAnalytics})
+	superAdminAnalytics.UserRoleID = auth.SuperAdminRoleID
+	superAdminAnalytics.UserRole.ID = auth.SuperAdminRoleID
 
 	all := sortedInts(f.campA, f.campAB, f.campB, f.draftA, f.summerB)
 	startedAll := sortedInts(f.campA, f.campAB, f.campB, f.summerB)
@@ -176,6 +180,7 @@ func TestBrandAnalyticsPicker(t *testing.T) {
 		{"lists:get_all without campaigns:get_all sees all", listsGetAll, url.Values{}, all},
 		{"lists:get_all analytics-only sees all started", listsGetAllAnalyticsOnly, url.Values{}, startedAll},
 		{"super admin sees all", superAdmin, url.Values{}, all},
+		{"super admin with only get_analytics sees all", superAdminAnalytics, url.Values{}, all},
 		{"scoped user with no lists sees none", noLists, url.Values{}, []int{}},
 		// id= : exactly the permitted subset, unknown and unpermitted dropped silently, query and
 		// per_page ignored.
@@ -191,6 +196,9 @@ func TestBrandAnalyticsPicker(t *testing.T) {
 		{"numeric id outside scope", analyticsA, url.Values{"query": {fmt.Sprint(f.campB)}}, []int{}},
 		{"numeric id inside scope", analyticsA, url.Values{"query": {fmt.Sprint(f.campAB)}}, []int{f.campAB}},
 		{"name outside scope", analyticsA, url.Values{"query": {"summer"}}, []int{}},
+		// Typed per keystroke: a number beyond int32 and tsquery syntax search as text, never 500.
+		{"numeric query beyond int32", analyticsA, url.Values{"query": {"99999999999"}}, []int{}},
+		{"tsquery syntax characters", analyticsA, url.Values{"query": {"a:b) !"}}, []int{}},
 	}
 	for _, tc := range cases {
 		if got := pickerIDs(t, h, tc.name, tc.u, tc.q); !reflect.DeepEqual(got, tc.want) {

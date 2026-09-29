@@ -95,10 +95,13 @@ func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns
 		permittedLists = []int{}
 	}
 
-	idMatch, _ := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(searchStr), "#"))
-	if idMatch < 0 {
-		idMatch = 0
+	// ParseInt at 32 bits: the id is bound as INT, and a longer number (typed digit by digit into
+	// the picker) must search as text, not fail the query with an out-of-range error.
+	idMatch64, err := strconv.ParseInt(strings.TrimPrefix(strings.TrimSpace(searchStr), "#"), 10, 32)
+	if err != nil || idMatch64 < 0 {
+		idMatch64 = 0
 	}
+	idMatch := int(idMatch64)
 
 	out := []models.AnalyticsCampaign{}
 	if err := c.q.QueryAnalyticsCampaigns.Select(&out, pq.Array(ids), makeSearchString(searchStr), idMatch,

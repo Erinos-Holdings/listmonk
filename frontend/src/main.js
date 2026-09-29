@@ -93,16 +93,16 @@ async function initConfig(app) {
   };
 
   // Fork (brand analytics, D10) -- publish the profile to the router guard, then apply the guard to
-  // the route the initial navigation landed on (it ran before the profile existed). onReady waits
-  // for that navigation to resolve, so a pending lazy route is judged once it is current.
+  // the route the initial navigation landed on (it ran before the profile existed). Awaited BEFORE
+  // the app mounts: onReady waits for that navigation (lazy chunk included), and the replace must
+  // resolve first, or the restricted view mounts, fetches and toasts a 403 before the redirect.
   currentProfile = profile;
-  router.onReady(() => {
-    const cur = router.currentRoute;
-    const redirect = routeRedirect(profile, cur.name, cur.params);
-    if (redirect) {
-      router.replace(redirect).catch(() => {});
-    }
-  });
+  await new Promise((resolve) => { router.onReady(resolve); });
+  const cur = router.currentRoute;
+  const redirect = routeRedirect(profile, cur.name, cur.params);
+  if (redirect) {
+    await router.replace(redirect).catch(() => {});
+  }
 
   // Set the page title after i18n has loaded.
   const to = router.history.current;
