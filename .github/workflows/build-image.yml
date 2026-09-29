@@ -99,6 +99,14 @@ jobs:
           --umd frontend/dist/static/email-builder/email-builder.umd.js
           --out frontend/dist/static/email-builder/render-canary.json
 
+      # The server half over the REAL corpus (INSPECT-SCOPE-SPEC §7 Stage 4 #5): every corpus
+      # document must render through the send path, or the image would boot with a 503 canary
+      # and every review would fail closed. The Go tests step above ran before the file existed.
+      - name: Render canary (server half)
+        env:
+          RENDER_CANARY_FILE: ${{ github.workspace }}/frontend/dist/static/email-builder/render-canary.json
+        run: go test ./cmd/ -run '^TestRenderCanaryRealCorpus$' -v
+
       - name: Build arm64 binary and pack static assets into it
         env:
           LISTMONK_VERSION: ${{ steps.ver.outputs.full }}

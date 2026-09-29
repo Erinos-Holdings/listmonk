@@ -223,6 +223,10 @@ func (a *App) PostReviewDispositions(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+// maxStructureRecordBytes caps a structure record PUT (a real one is a few KB: components, the
+// canary map, ~106 client ids twice).
+const maxStructureRecordBytes = 1 << 20
+
 // isStructureKey: the D4.2 structure finding key (R#<hash>) or the legacy pseudo-key R.
 func isStructureKey(k string) bool {
 	return k == review.KeyR || strings.HasPrefix(k, review.KeyR+"#")
@@ -246,8 +250,19 @@ func (a *App) PutStructureVerification(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, a.i18n.T("campaigns.review.structureAdminOnly"))
 	}
 	var req core.StructureRecordIn
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	body := http.MaxBytesReader(c.Response(), c.Request().Body, maxStructureRecordBytes)
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "body"))
+	}
+	// The canary is the record's whole vouching basis: a non-empty map of key -> hash strings.
+	var canary map[string]string
+	if err := json.Unmarshal(req.Canary, &canary); err != nil || len(canary) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "canary"))
+	}
+	for k, v := range canary {
+		if k == "" || v == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "canary"))
+		}
 	}
 	if !reFingerprint.MatchString(req.Fingerprint) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "fingerprint"))

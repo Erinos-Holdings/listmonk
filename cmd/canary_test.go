@@ -184,11 +184,20 @@ func mustJSON(t *testing.T, v any) string {
 	return string(b)
 }
 
-// The REAL corpus (when the builder half has been built locally -- the file is gitignored and
-// CI builds it after the Go tests): every document renders through the send path.
+// The REAL corpus: every document renders through the send path. RENDER_CANARY_FILE names the
+// file (CI: the dist file build-image.yml's Render canary step writes, before pack-bin -- and a
+// named file that is missing FAILS); without it the local builder-half output is used when present.
 func TestRenderCanaryRealCorpus(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "frontend", "public", "static", "email-builder", "render-canary.json"))
+	path := os.Getenv("RENDER_CANARY_FILE")
+	named := path != ""
+	if !named {
+		path = filepath.Join("..", "frontend", "public", "static", "email-builder", "render-canary.json")
+	}
+	raw, err := os.ReadFile(path)
 	if err != nil {
+		if named {
+			t.Fatalf("RENDER_CANARY_FILE %s: %v", path, err)
+		}
 		t.Skip("render-canary.json not built (node frontend/email-builder/test/build-canary.cjs)")
 	}
 	c, err := buildRenderCanary(raw, canaryApp().canaryRender)

@@ -144,6 +144,25 @@ func TestStructureAcceptIsAdminOnly(t *testing.T) {
 	if code, _ := put(admin, strings.Replace(rec, `"clients": ["a", "a_dm"]`, `"clients": []`, 1)); code != http.StatusBadRequest {
 		t.Fatal("a record with no completed clients must be refused")
 	}
+	// Hardening (INSPECT-SCOPE-SPEC §7 Stage 4 #8): the canary must be a non-empty string map, and
+	// the body is capped.
+	for name, bad := range map[string]string{
+		"empty canary":      strings.Replace(rec, `"canary": {"Text": "x"}`, `"canary": {}`, 1),
+		"missing canary":    strings.Replace(rec, `"canary": {"Text": "x"},`, ``, 1),
+		"non-string canary": strings.Replace(rec, `"canary": {"Text": "x"}`, `"canary": {"Text": 1}`, 1),
+		"empty hash":        strings.Replace(rec, `"canary": {"Text": "x"}`, `"canary": {"Text": ""}`, 1),
+		"array canary":      strings.Replace(rec, `"canary": {"Text": "x"}`, `"canary": ["x"]`, 1),
+		"oversized body":    strings.Replace(rec, `"components": {"blocks": []}`, `"components": {"blocks": ["`+strings.Repeat("x", 1<<20)+`"]}`, 1),
+	} {
+		if code, _ := put(admin, bad); code != http.StatusBadRequest {
+			t.Fatalf("%s: want 400, got %d", name, code)
+		}
+	}
+	var stored int
+	h.db.Get(&stored, `SELECT COUNT(*) FROM campaign_structure_records`)
+	if stored != 1 {
+		t.Fatalf("%d records stored, want only the one valid PUT", stored)
+	}
 }
 
 func TestStructureRecordsCoexist(t *testing.T) {
