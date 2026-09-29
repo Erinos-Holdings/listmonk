@@ -152,6 +152,16 @@ func TestLocationPixel(t *testing.T) {
 		t.Fatalf("individual tracking off: row %s, want NULL/GB", got)
 	}
 
+	// Upstream parity: with individual tracking OFF the subscriber UUID is blanked BEFORE the dummy
+	// check, so an archive view (real campaign, dummy subscriber) records anonymously, with its country.
+	h.app.cfg.Privacy.IndividualTracking = false
+	assertPixel("individual off, dummy subscriber", h.pixel(f.campUUID, dummyUUID, "CA"))
+	h.app.cfg.Privacy.IndividualTracking = true
+	if after := h.trackRows("campaign_views", f.campID); len(after) != len(rows)+1 || after[len(after)-1].String() != "NULL/CA" {
+		t.Fatalf("individual off + dummy subscriber: rows %s, want one more NULL/CA", rowsString(after))
+	}
+	rows = h.trackRows("campaign_views", f.campID)
+
 	// Dummy campaign or subscriber UUID (previews, archive) and tracking disabled -> no row.
 	n := len(rows)
 	assertPixel("dummy campaign", h.pixel(dummyUUID, f.subUUID, "FR"))
@@ -199,6 +209,17 @@ func TestLocationClick(t *testing.T) {
 	if got := rows[len(rows)-1].String(); got != "NULL/JP" {
 		t.Fatalf("individual tracking off: row %s, want NULL/JP", got)
 	}
+
+	// Upstream parity: with individual tracking OFF an archive click (real campaign, dummy
+	// subscriber) records anonymously, with its country, and still redirects.
+	h.app.cfg.Privacy.IndividualTracking = false
+	code, loc = h.click(f.campUUID, dummyUUID, f.linkUUID, "CA")
+	assertRedirect("individual off, dummy subscriber", code, loc)
+	h.app.cfg.Privacy.IndividualTracking = true
+	if after := h.trackRows("link_clicks", f.campID); len(after) != len(rows)+1 || after[len(after)-1].String() != "NULL/CA" {
+		t.Fatalf("individual off + dummy subscriber: rows %s, want one more NULL/CA", rowsString(after))
+	}
+	rows = h.trackRows("link_clicks", f.campID)
 
 	// Dummy UUIDs and tracking disabled -> no row, still redirects.
 	n := len(rows)
@@ -269,7 +290,7 @@ func TestLocationAggregation(t *testing.T) {
 	a, b, other := newCamp("A"), newCamp("B"), newCamp("Other")
 	s1, s2, s3 := newSub("s1@x"), newSub("s2@x"), newSub("s3@x")
 
-	// sub 0 = NULL subscriber, country "" = NULL, ago = days before now.
+	// sub 0 = NULL subscriber, country "" = NULL, ago = days before now (negative = in the future).
 	view := func(camp, sub int, country string, times, ago int) {
 		for i := 0; i < times; i++ {
 			db.MustExec(`INSERT INTO campaign_views (campaign_id, subscriber_id, country, created_at) VALUES ($1, NULLIF($2, 0), NULLIF($3, ''), NOW() - ($4 || ' days')::INTERVAL)`, camp, sub, country, fmt.Sprint(ago))
@@ -291,6 +312,7 @@ func TestLocationAggregation(t *testing.T) {
 	view(a, s3, "", 1, 0)
 	view(a, 0, "", 2, 0)
 	view(a, s1, "JP", 1, 30)
+	view(a, s1, "NZ", 1, -5) // after the window's upper bound -- excluded everywhere below
 	// Campaign B: the same subscriber again (a distinct (subscriber, campaign) pair).
 	view(b, s1, "US", 1, 0)
 	// Outside the campaign filter.
@@ -326,7 +348,8 @@ func TestLocationAggregation(t *testing.T) {
 		t.Fatalf("total counts\n got  %s\n want %s", s, want)
 	}
 
-	// The date window alone: widened back, the JP row appears (both modes count it once).
+	// The date window alone: widened back, the JP row appears (both modes count it once); the
+	// future NZ row stays out because the upper bound is unchanged.
 	wide := time.Now().UTC().Add(-60 * 24 * time.Hour).Format(time.RFC3339)
 	got, err = h.app.core.GetCampaignAnalyticsCountries([]int{a}, wide, to)
 	if err != nil {

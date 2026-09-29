@@ -63,11 +63,14 @@ func TestLocationColumnsMigration(t *testing.T) {
 	h.db.MustExec(`INSERT INTO campaign_views (campaign_id, subscriber_id) VALUES ($1, $2)`, camp, sub)
 	h.db.MustExec(`INSERT INTO link_clicks (campaign_id, subscriber_id, link_id) VALUES ($1, $2, $3)`, camp, sub, link)
 
-	// lock_timeout: with a reader holding a lock on campaign_views, the migration fails within
-	// the timeout instead of waiting (and queueing every tracking insert behind it).
+	// lock_timeout and one transaction: with both columns dropped and a reader holding a lock on
+	// link_clicks (the SECOND ALTER), the migration fails within the timeout instead of waiting
+	// (and queueing every tracking insert behind it), and the first ALTER (campaign_views) rolls
+	// back with it -- a non-transactional migration would leave campaign_views.country behind.
 	h.db.MustExec(`ALTER TABLE campaign_views DROP COLUMN country`)
+	h.db.MustExec(`ALTER TABLE link_clicks DROP COLUMN country`)
 	holder := h.db.MustBegin()
-	holder.MustExec(`LOCK TABLE campaign_views IN ACCESS SHARE MODE`)
+	holder.MustExec(`LOCK TABLE link_clicks IN ACCESS SHARE MODE`)
 	start := time.Now()
 	err := V6_2_16(h.db, nil, nil, lo)
 	elapsed := time.Since(start)
@@ -78,11 +81,10 @@ func TestLocationColumnsMigration(t *testing.T) {
 	if elapsed > 15*time.Second {
 		t.Fatalf("migration waited %s under a held lock", elapsed)
 	}
-	// One transaction: the failure left link_clicks.country as it was and campaign_views without one.
 	var n int
-	h.db.Get(&n, `SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'campaign_views' AND column_name = 'country'`)
+	h.db.Get(&n, `SELECT COUNT(*) FROM information_schema.columns WHERE table_name IN ('campaign_views', 'link_clicks') AND column_name = 'country'`)
 	if n != 0 {
-		t.Fatal("a failed migration left a partial change")
+		t.Fatalf("a failed migration left a partial change: %d country column(s), want 0 (the campaign_views ALTER did not roll back)", n)
 	}
 	if err := V6_2_16(h.db, nil, nil, lo); err != nil {
 		t.Fatalf("re-run after the lock cleared: %v", err)
