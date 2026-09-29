@@ -145,6 +145,9 @@ type Queries struct {
 	UpsertStructureVerification  *sqlx.Stmt `query:"upsert-structure-verification"`
 	GetStructureVerification     *sqlx.Stmt `query:"get-structure-verification"`
 	GetStructureVerifications    *sqlx.Stmt `query:"get-structure-verifications"`
+	// Fork (INSPECT-SCOPE-SPEC S13).
+	InsertStructureRecord *sqlx.Stmt `query:"insert-structure-record"`
+	GetStructureRecords   *sqlx.Stmt `query:"get-structure-records"`
 
 	CreateTemplate     *sqlx.Stmt `query:"create-template"`
 	GetTemplates       *sqlx.Stmt `query:"get-templates"`

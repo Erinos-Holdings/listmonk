@@ -721,3 +721,21 @@ CREATE TABLE IF NOT EXISTS campaign_structure_verifications (
     components       JSONB NOT NULL DEFAULT '{}',
     verified_by      TEXT NOT NULL DEFAULT ''
 );
+
+-- Fork (inspect scope): append-only structure records (v6.2.15, INSPECT-SCOPE-SPEC S13).
+DROP TABLE IF EXISTS campaign_structure_records CASCADE;
+CREATE TABLE IF NOT EXISTS campaign_structure_records (
+    id               BIGSERIAL PRIMARY KEY,
+    fingerprint      TEXT NOT NULL,
+    campaign_id      INTEGER NULL,
+    verified_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    verified_by      TEXT NOT NULL DEFAULT '',
+    test_id          TEXT NOT NULL,
+    components       JSONB NOT NULL DEFAULT '{}',
+    canary           JSONB NOT NULL DEFAULT '{}',
+    clients          TEXT[] NOT NULL DEFAULT '{}',
+    roster           TEXT[] NOT NULL DEFAULT '{}',
+    stage            TEXT NOT NULL CHECK (stage IN ('1', '2', 'all')),
+    modes            TEXT[] NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_structure_records_fingerprint ON campaign_structure_records (fingerprint);

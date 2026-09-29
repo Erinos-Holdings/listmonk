@@ -76,6 +76,9 @@ const (
 	// Fork (campaign review, CAMPAIGN-INSPECT-SPEC D3/D6) -- the review Lambda's write-back
 	// (PATCH a review row, read the previous report, record a structure verification).
 	PermCampaignsReview = "campaigns:review"
+	// Fork (INSPECT-SCOPE-SPEC S7): accept an unverified rendering structure (R#/R keys) and
+	// record Mailgun Inspect runs. Super Admin holds it implicitly (HasPerm's short-circuit).
+	PermCampaignsReviewStructure = "campaigns:review_structure"
 
 	// Fork (brand health, BRAND-HEALTH-SPEC D10).
 	PermBrandsGet    = "brands:get"

@@ -16,8 +16,10 @@ const (
 )
 
 // Pseudo-keys (integrations CAMPAIGN-INSPECT-SPEC D7): KeyAI accepts an AI-unavailable/partial
-// report (the user override of parent §6); KeyR records the declined rendering-matrix offer
-// (advisory, never blocks, logged like everything else).
+// report (the user override of parent §6); KeyR is the legacy declined-matrix record (it never
+// blocks on its own). Since INSPECT-SCOPE-SPEC the structure check is D4.2's ONE finding keyed
+// `R#<hash>` (S14): a D-item fail like any other, so it blocks until that key is accepted, and
+// only campaigns:review_structure may accept it or R (cmd/reviews.go PostReviewDispositions).
 const (
 	KeyAI = "A"
 	KeyR  = "R"
@@ -80,8 +82,12 @@ func LatestDispositions(ds []models.ReviewDisposition) map[string]models.ReviewD
 //     is accept -- and blocks regardless when the item is acceptable:false;
 //   - an A finding with severity critical or high blocks unless accepted ("acknowledged", D9);
 //   - ai.status other than ok (unavailable, partial) blocks unless the pseudo-key A is accepted;
-//   - fixme never satisfies; warn, medium, low, n/a, R offers and context lines never block;
-//   - keys are <id>#<fingerprint>, so a disposition on D2.3#fp1 never satisfies D2.3#fp2.
+//   - fixme never satisfies; warn, medium, low, n/a, the legacy R pseudo-key and context lines
+//     never block;
+//   - an unverified rendering structure blocks: D4.2 fails (acceptable) with ONE finding keyed
+//     R#<hash> (INSPECT-SCOPE-SPEC S7/S14) -- the D rule above, nothing special-cased here;
+//   - keys are <id>#<fingerprint> (R#<hash> for D4.2), so a disposition on D2.3#fp1 never
+//     satisfies D2.3#fp2.
 func Verdict(report json.RawMessage, dispositions []models.ReviewDisposition) VerdictResult {
 	var r reportView
 	if len(report) == 0 || json.Unmarshal(report, &r) != nil || r.Status != models.ReviewStatusComplete {

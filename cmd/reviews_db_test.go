@@ -263,16 +263,15 @@ func TestReviewStartAndWriteBack(t *testing.T) {
 		t.Fatalf("row after a refused job = %s %q", st, errMsg)
 	}
 
-	// Structure verifications: upsert + {match, records}.
+	// Structure verifications (INSPECT-SCOPE-SPEC §2.2): the PUT appends to the new table; the GET
+	// returns every new-table record plus the legacy match (none here: nothing writes the legacy
+	// table any more).
 	fp := strings.Repeat("a", 64)
-	if _, err := h.app.core.PutStructureVerification(fp, "test-1", json.RawMessage(`{"blocks": ["Text"]}`), "robbie"); err != nil {
+	if _, err := h.app.core.PutStructureRecord(core.StructureRecordIn{Fingerprint: fp, TestID: "test-1", Components: json.RawMessage(`{"blocks": ["Text"]}`), Clients: []string{"c1"}, Stage: "1"}, "robbie"); err != nil {
 		t.Fatal(err)
 	}
-	match, all, err := h.app.core.GetStructureVerification(fp)
-	if err != nil || match == nil || match.TestID != "test-1" || len(all) != 1 {
-		t.Fatalf("structure: %+v %+v %v", match, all, err)
-	}
-	if m, _, _ := h.app.core.GetStructureVerification(strings.Repeat("b", 64)); m != nil {
-		t.Fatal("an unknown fingerprint must not match")
+	sv, err := h.app.core.GetStructureVerification(fp)
+	if err != nil || sv.Match != nil || len(sv.Records) != 1 || sv.Records[0].TestID != "test-1" || len(sv.LegacyRecords) != 0 {
+		t.Fatalf("structure: %+v %v", sv, err)
 	}
 }

@@ -87,6 +87,18 @@ jobs:
           LISTMONK_VERSION: ${{ steps.ver.outputs.full }}
         run: make build-frontend
 
+      # The render canary, builder half (integrations INSPECT-SCOPE-SPEC §2.1): compile the
+      # canary corpus with the bundle just built and write render-canary.json beside it in
+      # frontend/dist, AFTER build-frontend and BEFORE pack-bin so the file is packed into the
+      # binary (served at /admin/static/email-builder/render-canary.json; the server half hashes
+      # it through the send path at startup). A missing file makes the canary endpoint 503 and
+      # the review's structure check fail closed.
+      - name: Render canary
+        run: >-
+          node frontend/email-builder/test/build-canary.cjs
+          --umd frontend/dist/static/email-builder/email-builder.umd.js
+          --out frontend/dist/static/email-builder/render-canary.json
+
       - name: Build arm64 binary and pack static assets into it
         env:
           LISTMONK_VERSION: ${{ steps.ver.outputs.full }}

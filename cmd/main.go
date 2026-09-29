@@ -57,6 +57,11 @@ type App struct {
 	log           *log.Logger
 	bufLog        *buflog.BufLog
 
+	// Fork (render canary, INSPECT-SCOPE-SPEC §2.1) -- rendered once at startup; nil (with the
+	// error) serves a 503 from GET /api/campaigns/render-canary.
+	renderCanary    *renderCanary
+	renderCanaryErr error
+
 	about         about
 	fnOptinNotify func(models.Subscriber, []int) (int, error)
 
@@ -319,6 +324,12 @@ func main() {
 
 		// If there are no users, then the app needs to prompt for new user setup.
 		needsUserSetup: !hasUsers,
+	}
+
+	// Fork (render canary, INSPECT-SCOPE-SPEC §2.1): render the packed canary through the send
+	// path now that the manager exists. A failure is logged; the endpoint then answers 503.
+	if app.renderCanary, app.renderCanaryErr = initRenderCanary(fs, app.canaryRender); app.renderCanaryErr != nil {
+		lo.Printf("warning: %v", app.renderCanaryErr)
 	}
 
 	// Star the update checker.

@@ -1,0 +1,74 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "c"
+      ]
+    }
+  },
+  "c": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "t",
+          "b"
+        ]
+      }
+    }
+  },
+  "t": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Inside a container."
+      }
+    }
+  },
+  "b": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "buttonBackgroundColor": "#003b4d",
+        "buttonStyle": "rectangle",
+        "size": "medium",
+        "fullWidth": false,
+        "text": "Canary container",
+        "url": "https://canary.invalid/button-container"
+      }
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "cols"
+      ]
+    }
+  },
+  "cols": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 8,
+        "columns": [
+          {
+            "childrenIds": [
+              "a"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b"
+            ]
+          },
+          {
+            "childrenIds": [
+              "c"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "a": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "One."
+      }
+    }
+  },
+  "b": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Two."
+      }
+    }
+  },
+  "c": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Three."
+      }
+    }
+  }
+}

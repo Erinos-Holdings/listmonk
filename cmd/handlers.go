@@ -166,7 +166,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/campaigns/running/stats", pm(a.GetRunningCampaignStats, "campaigns:get_all", "campaigns:get"))
 		// Fork (campaign review, CAMPAIGN-INSPECT-SPEC §3.1). Static segments before :id.
 		g.GET("/api/campaigns/reviews/stats", pm(a.GetReviewStats, "campaigns:get_all"))
-		g.PUT("/api/campaigns/structure-verifications", pm(a.PutStructureVerification, "campaigns:review"))
+		// INSPECT-SCOPE-SPEC §2.4: recording an inspection is structure-admin only.
+		g.PUT("/api/campaigns/structure-verifications", pm(a.PutStructureVerification, "campaigns:review_structure"))
+		g.GET("/api/campaigns/render-canary", pm(a.GetRenderCanary, "campaigns:review"))
 		g.GET("/api/campaigns/structure-verifications/:fingerprint", pm(a.GetStructureVerification, "campaigns:get_all", "campaigns:get"))
 		g.POST("/api/campaigns/:id/reviews", pm(hasID(a.StartCampaignReview), "campaigns:manage_all", "campaigns:manage"))
 		g.GET("/api/campaigns/:id/reviews/latest", pm(hasID(a.GetCampaignReviewLatest), "campaigns:get_all", "campaigns:get"))

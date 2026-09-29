@@ -1,0 +1,103 @@
+// INSPECT-SCOPE-SPEC §2.1 -- the render canary, builder half.
+//
+// Compiles every corpus document under test/canary/*.json with the BUILT bundle's
+// compileDocument and writes render-canary.json beside the served bundle:
+//
+//   { version: 1,
+//     documents: { <file stem>: { doc, html } },
+//     body: <canary/body.html, raw>,
+//     items: { <key>: sha256 } }
+//
+// Key grammar: a block type name exactly as integrations' describeBlock emits it (EmailLayout,
+// Text, Heading, Image, Button, Divider, Spacer, Avatar, Html, Container, ColumnsContainer,
+// OfficialFooter), plus `Body` for canary/body.html. items[T] = sha256 over the compiled HTML of
+// every document containing a block of type T, concatenated in file-stem order, each preceded by
+// `\n--<stem>--\n`; `Body` hashes the raw file. A compile change to T therefore changes items[T]
+// and the key of every type that shares a document with T -- conservative, never
+// under-invalidating. The server half (cmd/canary.go) re-renders each `html` through the send
+// path and hashes with the same grammar.
+//
+// `_context.json` (leading underscore: not a corpus document) carries the compile context and the
+// FIXED Official_ refs, so an Official_ template edit in the database never moves the canary.
+//
+//   node test/build-canary.cjs [--umd <email-builder.umd.js>] [--out <render-canary.json>]
+//
+// Defaults: the run.cjs bundle (frontend/public/static/email-builder/) and render-canary.json
+// beside it. CI (build-image.yml) runs it after `make build-frontend` against
+// frontend/dist/static/email-builder/, so the file is packed into the binary at
+// /admin/static/email-builder/render-canary.json.
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+
+const CANARY_DIR = path.join(__dirname, 'canary');
+const DEFAULT_UMD = path.join(__dirname, '..', '..', 'public', 'static', 'email-builder', 'email-builder.umd.js');
+
+const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
+
+// The corpus: every canary/*.json except `_`-prefixed files, in file-stem order.
+function corpus(dir = CANARY_DIR) {
+  return fs.readdirSync(dir)
+    .filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+    .map((f) => f.slice(0, -'.json'.length))
+    .sort()
+    .map((stem) => ({ stem, doc: JSON.parse(fs.readFileSync(path.join(dir, `${stem}.json`), 'utf8')) }));
+}
+
+// Every block type a document contains (the root EmailLayout included).
+function typesOf(doc) {
+  const out = new Set();
+  for (const b of Object.values(doc || {})) {
+    if (b && typeof b.type === 'string') out.add(b.type);
+  }
+  return out;
+}
+
+// items[T] per the key grammar, from { stem: { doc, html } } plus the raw body.
+function itemsOf(documents, body) {
+  const stems = Object.keys(documents).sort();
+  const types = new Set();
+  stems.forEach((s) => typesOf(documents[s].doc).forEach((t) => types.add(t)));
+  const items = {};
+  for (const t of [...types].sort()) {
+    const parts = stems.filter((s) => typesOf(documents[s].doc).has(t)).map((s) => `\n--${s}--\n${documents[s].html}`);
+    items[t] = sha256(parts.join(''));
+  }
+  items.Body = sha256(body);
+  return items;
+}
+
+// Compile the corpus with a loaded bundle (`EB` = window.EmailBuilder).
+function buildCanary(EB, dir = CANARY_DIR) {
+  const { context, refs } = JSON.parse(fs.readFileSync(path.join(dir, '_context.json'), 'utf8'));
+  const documents = {};
+  for (const { stem, doc } of corpus(dir)) {
+    const html = EB.compileDocument(JSON.parse(JSON.stringify(doc)), context, refs);
+    if (typeof html !== 'string' || html === '') throw new Error(`canary document ${stem} compiled to nothing`);
+    documents[stem] = { doc, html };
+  }
+  const body = fs.readFileSync(path.join(dir, 'body.html'), 'utf8');
+  return { version: 1, documents, body, items: itemsOf(documents, body) };
+}
+
+function arg(name, fallback) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 && process.argv[i + 1] ? path.resolve(process.argv[i + 1]) : fallback;
+}
+
+if (require.main === module) {
+  const { loadUmd } = require('./_umd.cjs');
+  const umd = arg('--umd', DEFAULT_UMD);
+  const out = arg('--out', path.join(path.dirname(umd), 'render-canary.json'));
+  const { dom, EB } = loadUmd(umd);
+  try {
+    const canary = buildCanary(EB);
+    fs.writeFileSync(out, `${JSON.stringify(canary)}\n`);
+    console.log(`render canary: ${Object.keys(canary.documents).length} documents, ${Object.keys(canary.items).length} keys -> ${out}`);
+    for (const [k, v] of Object.entries(canary.items)) console.log(`  ${k.padEnd(18)} ${v}`);
+  } finally {
+    dom.window.close();
+  }
+}
+
+module.exports = { CANARY_DIR, corpus, typesOf, itemsOf, buildCanary };

@@ -1,0 +1,121 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "hdr",
+        "tm",
+        "tl",
+        "btn",
+        "ob",
+        "oc"
+      ]
+    }
+  },
+  "hdr": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "right": 0,
+          "left": 0
+        }
+      },
+      "props": {
+        "width": 600,
+        "url": "https://canary.invalid/uploads/canary-hdr.jpg",
+        "alt": "Canary hdr",
+        "linkHref": "https://canary.invalid/img-hdr",
+        "contentAlignment": "middle"
+      }
+    }
+  },
+  "tm": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        },
+        "backgroundColor": "#ffffff",
+        "textAlign": "center"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Medium text, centred."
+      }
+    }
+  },
+  "tl": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        },
+        "backgroundColor": "#ffffff",
+        "fontSize": 20,
+        "textAlign": "center"
+      },
+      "props": {
+        "markdown": true,
+        "text": "**LARGE TEXT.**"
+      }
+    }
+  },
+  "btn": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "backgroundColor": "#ffffff",
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "buttonBackgroundColor": "#003b4d",
+        "buttonStyle": "pill",
+        "size": "small",
+        "text": "FOLLOW ALONG",
+        "url": "https://canary.invalid/button-c108",
+        "customWidth": 240,
+        "customHeight": 32
+      }
+    }
+  },
+  "ob": {
+    "type": "OfficialFooter",
+    "data": {
+      "props": {
+        "kind": "brand"
+      }
+    }
+  },
+  "oc": {
+    "type": "OfficialFooter",
+    "data": {
+      "props": {
+        "kind": "corporate"
+      }
+    }
+  }
+}

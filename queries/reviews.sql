@@ -81,3 +81,13 @@ SELECT * FROM campaign_structure_verifications WHERE fingerprint = $1;
 -- name: get-structure-verifications
 -- Every record, newest first (D4.1 names what differs from the newest; D4.2 unions them).
 SELECT * FROM campaign_structure_verifications ORDER BY verified_at DESC LIMIT 200;
+
+-- name: insert-structure-record
+-- INSPECT-SCOPE-SPEC S13: append-only; one row per Inspect run, many per fingerprint.
+INSERT INTO campaign_structure_records (fingerprint, campaign_id, verified_at, verified_by, test_id, components, canary, clients, roster, stage, modes)
+    VALUES ($1, $2, COALESCE($3::TIMESTAMP WITH TIME ZONE, NOW()), $4, $5, $6, $7, $8, $9, $10, $11)
+    RETURNING *;
+
+-- name: get-structure-records
+-- Every record (no LIMIT: coverage needs every live record; one row per Inspect run).
+SELECT * FROM campaign_structure_records ORDER BY verified_at DESC, id DESC;

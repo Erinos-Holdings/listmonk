@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/lib/pq"
 	null "gopkg.in/volatiletech/null.v6"
 )
 
@@ -97,6 +98,25 @@ type StructureVerification struct {
 	TestID      string          `db:"test_id" json:"test_id"`
 	Components  json.RawMessage `db:"components" json:"components"`
 	VerifiedBy  string          `db:"verified_by" json:"verified_by"`
+}
+
+// StructureRecord is one append-only clean rendering-matrix record (INSPECT-SCOPE-SPEC S13):
+// one row per Mailgun Inspect run, many per fingerprint. Components are S3-normalized; Canary is
+// the server render canary's items at record time; Clients are the ids the test COMPLETED; Roster
+// is the live Inspect roster at record time (a stage-2 id absent from it is excused).
+type StructureRecord struct {
+	ID          int64           `db:"id" json:"id"`
+	Fingerprint string          `db:"fingerprint" json:"fingerprint"`
+	CampaignID  null.Int        `db:"campaign_id" json:"campaign_id"`
+	VerifiedAt  time.Time       `db:"verified_at" json:"verified_at"`
+	VerifiedBy  string          `db:"verified_by" json:"verified_by"`
+	TestID      string          `db:"test_id" json:"test_id"`
+	Components  json.RawMessage `db:"components" json:"components"`
+	Canary      json.RawMessage `db:"canary" json:"canary"`
+	Clients     pq.StringArray  `db:"clients" json:"clients"`
+	Roster      pq.StringArray  `db:"roster" json:"roster"`
+	Stage       string          `db:"stage" json:"stage"`
+	Modes       pq.StringArray  `db:"modes" json:"modes"`
 }
 
 // ReviewStat is one rubric id's disposition counts (the Accept-risk rate, parent spec §6).

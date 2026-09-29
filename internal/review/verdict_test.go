@@ -127,3 +127,25 @@ func TestItemKeys(t *testing.T) {
 		t.Fatalf("keys = %+v", keys)
 	}
 }
+
+// Integrations INSPECT-SCOPE-SPEC I6 (fork half): an unverified structure is D4.2 fail
+// (acceptable) with ONE finding keyed R#<hash>; it blocks until THAT key is accepted -- the legacy
+// R pseudo-key, or an accept of another structure state's key, never satisfies it; a verified
+// structure (D4.2 pass) never blocks; and ItemKeys offers the R# key for a disposition.
+func TestVerdictStructureBlocks(t *testing.T) {
+	r := rep("complete", "ok", d("D4.1", "n/a", true), d("D4.2", "fail", true, "R#0123456789abcdef"))
+	mustVerdict(t, Verdict(r, nil), VerdictBlocked, 1)
+	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp(KeyR, "accept", 1)}), VerdictBlocked, 1)
+	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp("R#fedcba9876543210", "accept", 1)}), VerdictBlocked, 1)
+	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp("R#0123456789abcdef", "fixme", 1)}), VerdictBlocked, 1)
+	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp("R#0123456789abcdef", "accept", 1)}), VerdictPass, 0)
+	mustVerdict(t, Verdict(rep("complete", "ok", d("D4.2", "pass", true)), nil), VerdictPass, 0)
+
+	keys, err := ItemKeys(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k, ok := keys["R#0123456789abcdef"]; !ok || k.ID != "D4.2" || !k.Acceptable {
+		t.Fatalf("ItemKeys = %+v", keys)
+	}
+}

@@ -117,7 +117,85 @@
         </ul>
       </section>
 
-      <section v-if="report.structure" class="review-section" data-cy="section-structure">
+      <!-- INSPECT-SCOPE-SPEC §2.5: rendered from D4.2's coverage object; a report without it
+           (STRUCTURE_GATE off, older reports) renders the legacy section below. -->
+      <section v-if="structure" class="review-section" data-cy="section-structure">
+        <h5 class="title is-5">{{ $t('campaigns.review.sectionStructure') }}</h5>
+        <p v-if="structure.coverage.verified" class="is-size-7" data-cy="structure-verified">
+          {{ $t('campaigns.review.structureVerifiedRecords', { records: recordsLine(structure.coverage.recordsUsed) }) }}
+        </p>
+        <div v-else class="is-size-7" data-cy="structure-unverified">
+          <p class="structure-summary">
+            <template v-if="!structure.coverage.plan.available">
+              {{ $t('campaigns.review.structureUnavailable', { inputs: (structure.coverage.unavailable || []).join(', ') }) }}
+            </template>
+            <template v-else>
+              {{ $t('campaigns.review.structureSummary', {
+                n: structure.coverage.items.length,
+                stage: structure.coverage.plan.next,
+                count: structure.coverage.plan.count,
+                total: structure.coverage.plan.total,
+              }) }}
+            </template>
+          </p>
+
+          <b-collapse :open="false" class="mt-2" data-cy="structure-detail">
+            <template #trigger="props">
+              <a class="is-clickable">
+                <b-icon :icon="props.open ? 'chevron-down' : 'chevron-right'" size="is-small" />
+                {{ $t('campaigns.review.structureWhat') }}
+              </a>
+            </template>
+            <b-table :data="structure.coverage.items" class="mt-2 structure-table" narrowed>
+              <b-table-column v-slot="props" field="label" :label="$t('campaigns.review.structureItem')">
+                {{ props.row.label }}
+              </b-table-column>
+              <b-table-column v-slot="props" field="reason" :label="$t('campaigns.review.structureReason')">
+                {{ props.row.reason }}
+              </b-table-column>
+              <b-table-column v-slot="props" field="scope" :label="$t('campaigns.review.structureScope')">
+                {{ props.row.scope === 'dark' ? $t('campaigns.review.structureScopeDark') : $t('campaigns.review.structureScopeFull') }}
+              </b-table-column>
+              <b-table-column v-slot="props" field="missing" :label="$t('campaigns.review.structureMissing')">
+                {{ $t('campaigns.review.structureMissingStages', { s1: (props.row.missing['1'] || []).length, s2: (props.row.missing['2'] || []).length }) }}
+              </b-table-column>
+            </b-table>
+            <div v-if="structure.coverage.plan.available" class="mt-2">
+              <p>
+                <strong>{{ $t('campaigns.review.structureStage1', { n: structure.coverage.plan.stages['1'].length }) }}</strong>
+                {{ structure.coverage.plan.stages['1'].map(clientLabel).join(', ') || '—' }}
+              </p>
+              <p>
+                <strong>{{ $t('campaigns.review.structureStage2', { n: structure.coverage.plan.stages['2'].length }) }}</strong>
+              </p>
+              <p>{{ $t('campaigns.review.structureCredits', { total: structure.coverage.plan.total }) }}</p>
+            </div>
+            <pre v-if="structureUi.showCli" class="structure-cmd" data-cy="structure-cli">{{ (structure.coverage.commands || []).join('\n') }}</pre>
+          </b-collapse>
+
+          <div class="buttons mt-2">
+            <b-tooltip :label="structureUi.notify === 'claude' ? $t('campaigns.review.notifyClaudeTip') : $t('campaigns.review.notifyRobbieTip')"
+              type="is-dark" multilined>
+              <b-button size="is-small" data-cy="btn-structure-notify" @click="openStructureBrief">
+                {{ structureUi.notify === 'claude' ? $t('campaigns.review.notifyClaude') : $t('campaigns.review.notifyRobbie') }}
+              </b-button>
+            </b-tooltip>
+            <b-tooltip v-if="structureUi.acknowledge && structure.finding" :label="$t('campaigns.review.structureAcknowledgeTip')"
+              type="is-dark" multilined>
+              <b-button size="is-small" data-cy="btn-structure-acknowledge"
+                :type="stagedAction(structure.finding.key) === 'accept' ? 'is-primary' : ''"
+                @click="stage(structure.finding.key, 'D4.2', 'accept')">
+                {{ $t('campaigns.review.acknowledge') }}
+              </b-button>
+            </b-tooltip>
+            <span v-if="structure.finding && decided(structure.finding.key)" class="ml-2 has-text-grey">
+              {{ decidedLine(decided(structure.finding.key)) }}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section v-else-if="report.structure" class="review-section" data-cy="section-structure">
         <h5 class="title is-5">{{ $t('campaigns.review.sectionStructure') }}</h5>
         <p v-if="report.structure.verified" class="is-size-7">
           {{ $t('campaigns.review.structureVerified', { date: report.structure.verified.verified_at.slice(0, 10), id: report.structure.verified.test_id }) }}
@@ -125,12 +203,28 @@
         <div v-else class="is-size-7">
           <p>{{ $t('campaigns.review.structureOffer', { differs: (report.structure.differs || []).join(', ') }) }}</p>
           <pre class="structure-cmd">{{ report.structure.command }}</pre>
-          <b-button size="is-small" :type="stagedAction('R') === 'accept' ? 'is-primary' : ''" @click="stage('R', 'R', 'accept')">
-            {{ $t('campaigns.review.declineMatrix') }}
-          </b-button>
-          <span v-if="decided('R')" class="ml-2 has-text-grey">{{ decidedLine(decided('R')) }}</span>
         </div>
       </section>
+
+      <b-modal scroll="keep" :aria-modal="true" :active.sync="briefOpen" :width="820" data-cy="structure-brief-modal">
+        <div class="modal-card" style="width: auto">
+          <header class="modal-card-head">
+            <p class="modal-card-title">{{ $t('campaigns.review.structureBriefTitle') }}</p>
+          </header>
+          <section class="modal-card-body">
+            <p class="is-size-7 mb-2">
+              {{ structureUi.notify === 'claude' ? $t('campaigns.review.notifyClaudeTip') : $t('campaigns.review.notifyRobbieTip') }}
+            </p>
+            <label for="structure-brief" class="is-sr-only">{{ $t('campaigns.review.structureBriefTitle') }}</label>
+            <textarea id="structure-brief" ref="briefText" class="textarea structure-brief" readonly :value="brief" rows="18"
+              @focus="$event.target.select()" />
+          </section>
+          <footer class="modal-card-foot">
+            <b-button type="is-primary" data-cy="btn-structure-copy" @click="copyBrief">{{ $t('campaigns.review.structureCopy') }}</b-button>
+            <b-button @click="briefOpen = false">{{ $t('globals.buttons.close') }}</b-button>
+          </footer>
+        </div>
+      </b-modal>
 
       <b-collapse :open="false" class="review-section">
         <template #trigger="props">
@@ -178,6 +272,9 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import { applyFixes, reviewPayload, dispositionsAfterFixes } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { deriveContext, isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
+import {
+  buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
+} from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 
 const STAGES = ['reading', 'deterministic', 'screenshots', 'ai', 'writing'];
 const BUILDER_CACHE_BUST = Date.now();
@@ -192,6 +289,8 @@ export default Vue.extend({
       staged: {},
       busy: false,
       pollID: null,
+      briefOpen: false,
+      brief: '',
     };
   },
 
@@ -275,7 +374,9 @@ export default Vue.extend({
         if (item.verdict === 'pass' || item.verdict === 'n/a') {
           return;
         }
-        (item.findings || []).forEach((finding) => out.push({ key: finding.key, item, finding }));
+        // INSPECT-SCOPE-SPEC §2.5: the structure key (R#…) is decided ONLY in the Structure
+        // section (Acknowledge, structure admins) -- never in the generic lists and their actions.
+        (item.findings || []).filter((f) => !isStructureKey(f.key)).forEach((finding) => out.push({ key: finding.key, item, finding }));
       });
       return out;
     },
@@ -304,6 +405,16 @@ export default Vue.extend({
 
     passed() {
       return this.report ? this.report.items.filter((i) => i.verdict === 'pass' || i.verdict === 'n/a') : [];
+    },
+
+    // D4.2's coverage (INSPECT-SCOPE-SPEC §2.5), or null → the legacy Structure section.
+    structure() {
+      return structureOf(this.report);
+    },
+
+    // Buttons by the SERVER profile's permission (never a role name).
+    structureUi() {
+      return structureButtons(this.$can(STRUCTURE_PERMISSION));
     },
 
     stagedFixes() {
@@ -485,6 +596,44 @@ export default Vue.extend({
       }
     },
 
+    recordsLine(records) {
+      return (records || []).map((r) => `#${r.id} (${String(r.verified_at).slice(0, 10)}, test ${r.test_id})`).join('; ') || '—';
+    },
+
+    clientLabel(id) {
+      const labels = (this.structure && this.structure.coverage.clientLabels) || {};
+      return labels[id] || id;
+    },
+
+    // Both Notify buttons (S8): open the SAME modal with the brief. Nothing is sent.
+    openStructureBrief() {
+      this.brief = buildStructureBrief({
+        campaign: { id: this.id, name: this.campaign.name },
+        review: this.gate ? this.gate.review : this.row,
+        report: this.report,
+        origin: window.location.origin,
+      });
+      this.briefOpen = true;
+    },
+
+    copyBrief() {
+      const done = () => this.$utils.toast(this.$t('campaigns.review.structureCopied'));
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(this.brief).then(done).catch(() => this.selectBrief());
+        return;
+      }
+      this.selectBrief();
+    },
+
+    selectBrief() {
+      const el = this.$refs.briefText;
+      if (el) {
+        el.focus();
+        el.select();
+        document.execCommand('copy');
+      }
+    },
+
     closeWindow() {
       window.close();
     },
@@ -539,6 +688,10 @@ export default Vue.extend({
 }
 .structure-cmd {
   white-space: pre-wrap;
+  font-size: 0.8em;
+}
+.structure-brief {
+  font-family: monospace;
   font-size: 0.8em;
 }
 .review-submit {

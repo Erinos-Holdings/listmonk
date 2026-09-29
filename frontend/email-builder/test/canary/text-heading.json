@@ -1,0 +1,126 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "t1",
+        "t2",
+        "t3",
+        "h1",
+        "h2",
+        "h3"
+      ]
+    }
+  },
+  "t1": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "text": "Default text."
+      }
+    }
+  },
+  "t2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "bold",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Bold text."
+      }
+    }
+  },
+  "t3": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        },
+        "fontSize": 28
+      },
+      "props": {
+        "markdown": true,
+        "text": "Large text."
+      }
+    }
+  },
+  "h1": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "level": "h2",
+        "text": "Default heading"
+      }
+    }
+  },
+  "h2": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "fontWeight": "bold",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "level": "h2",
+        "text": "Bold heading"
+      }
+    }
+  },
+  "h3": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "fontSize": 32,
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "level": "h1",
+        "text": "Large heading"
+      }
+    }
+  }
+}

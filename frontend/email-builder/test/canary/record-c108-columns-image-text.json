@@ -1,0 +1,86 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "cols"
+      ]
+    }
+  },
+  "cols": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        },
+        "backgroundColor": "#ffffff"
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "columns": [
+          {
+            "childrenIds": [
+              "ci"
+            ]
+          },
+          {
+            "childrenIds": [
+              "ct"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "ci": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "right": 0,
+          "left": 0
+        }
+      },
+      "props": {
+        "width": 600,
+        "url": "https://canary.invalid/uploads/canary-ci.jpg",
+        "alt": "Canary ci",
+        "linkHref": "https://canary.invalid/img-ci",
+        "contentAlignment": "middle"
+      }
+    }
+  },
+  "ct": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Beside the image."
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/core"
@@ -205,11 +206,26 @@ func (a *App) PostReviewDispositions(c echo.Context) error {
 		return err
 	}
 	user := auth.GetUser(c)
+	// INSPECT-SCOPE-SPEC S7/§2.4: accepting an unverified rendering structure (R#<fp>, or the
+	// legacy R) is structure-admin only; one such row refuses the whole batch (the window never
+	// stages one for a user without the permission, so no decisions are lost).
+	if !user.HasPerm(auth.PermCampaignsReviewStructure) {
+		for _, it := range req.Items {
+			if it.Action == models.DispositionAccept && isStructureKey(it.Key) {
+				return echo.NewHTTPError(http.StatusForbidden, a.i18n.T("campaigns.review.structureAdminOnly"))
+			}
+		}
+	}
 	out, err := a.core.AddDispositions(cm, user.ID, user.Username, req.Items)
 	if err != nil {
 		return err
 	}
 	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// isStructureKey: the D4.2 structure finding key (R#<hash>) or the legacy pseudo-key R.
+func isStructureKey(k string) bool {
+	return k == review.KeyR || strings.HasPrefix(k, review.KeyR+"#")
 }
 
 // GetReviewStats (GET /api/campaigns/reviews/stats) -- the Accept-risk rate per rubric id.
@@ -221,13 +237,15 @@ func (a *App) GetReviewStats(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
-// PutStructureVerification (PUT /api/campaigns/structure-verifications) records a clean matrix read (D16).
+// PutStructureVerification (PUT /api/campaigns/structure-verifications) APPENDS a clean rendering-
+// matrix record (INSPECT-SCOPE-SPEC §2.2, S13) -- structure-admin only (§2.4; the route also
+// requires it).
 func (a *App) PutStructureVerification(c echo.Context) error {
-	var req struct {
-		Fingerprint string          `json:"fingerprint"`
-		TestID      string          `json:"test_id"`
-		Components  json.RawMessage `json:"components"`
+	user := auth.GetUser(c)
+	if !user.HasPerm(auth.PermCampaignsReviewStructure) {
+		return echo.NewHTTPError(http.StatusForbidden, a.i18n.T("campaigns.review.structureAdminOnly"))
 	}
+	var req core.StructureRecordIn
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "body"))
 	}
@@ -237,28 +255,39 @@ func (a *App) PutStructureVerification(c echo.Context) error {
 	if req.TestID == "" || len(req.TestID) > 200 {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "test_id"))
 	}
-	user := auth.GetUser(c)
-	out, err := a.core.PutStructureVerification(req.Fingerprint, req.TestID, req.Components, user.Username)
+	switch req.Stage {
+	case "1", "2", "all":
+	default:
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "stage"))
+	}
+	if len(req.Clients) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "clients"))
+	}
+	for _, m := range req.Modes {
+		if m != "light" && m != "dark" {
+			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "modes"))
+		}
+	}
+	out, err := a.core.PutStructureRecord(req, user.Username)
 	if err != nil {
 		return err
 	}
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
-// GetStructureVerification (GET /api/campaigns/structure-verifications/:fingerprint) -- {match, records}.
+// GetStructureVerification (GET /api/campaigns/structure-verifications/:fingerprint) --
+// {match, records, legacy_records}: records = every append-only record (INSPECT-SCOPE-SPEC §2.2);
+// match and legacy_records = the v6.2.14 table as before (the Lambda's legacy D4 path).
 func (a *App) GetStructureVerification(c echo.Context) error {
 	fp := c.Param("fingerprint")
 	if !reFingerprint.MatchString(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "fingerprint"))
 	}
-	match, all, err := a.core.GetStructureVerification(fp)
+	out, err := a.core.GetStructureVerification(fp)
 	if err != nil {
 		return err
 	}
-	return c.JSON(http.StatusOK, okResp{struct {
-		Match   *models.StructureVerification  `json:"match"`
-		Records []models.StructureVerification `json:"records"`
-	}{match, all}})
+	return c.JSON(http.StatusOK, okResp{out})
 }
 
 // reviewGate (D6) refuses a transition INTO running or scheduled (Start, Schedule, Resume) unless

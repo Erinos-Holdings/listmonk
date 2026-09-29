@@ -367,30 +367,78 @@ func (c *Core) ReviewStats() ([]models.ReviewStat, error) {
 	return out, nil
 }
 
-// PutStructureVerification records a clean rendering-matrix read for a fingerprint.
-func (c *Core) PutStructureVerification(fp, testID string, components json.RawMessage, by string) (models.StructureVerification, error) {
-	var out models.StructureVerification
-	if len(bytes.TrimSpace(components)) == 0 {
-		components = json.RawMessage(`{}`)
+// StructureRecordIn is one Inspect run to record (INSPECT-SCOPE-SPEC §2.2). VerifiedAt is
+// optional (the one-off backfill preserves the original inspection's date); empty means NOW().
+type StructureRecordIn struct {
+	Fingerprint string          `json:"fingerprint"`
+	CampaignID  *int            `json:"campaign_id"`
+	VerifiedAt  *time.Time      `json:"verified_at"`
+	TestID      string          `json:"test_id"`
+	Components  json.RawMessage `json:"components"`
+	Canary      json.RawMessage `json:"canary"`
+	Clients     []string        `json:"clients"`
+	Roster      []string        `json:"roster"`
+	Stage       string          `json:"stage"`
+	Modes       []string        `json:"modes"`
+}
+
+// PutStructureRecord APPENDS a clean rendering-matrix record (S13) -- never an upsert: a stage-2
+// record for a fingerprint never overwrites its stage-1 record.
+func (c *Core) PutStructureRecord(in StructureRecordIn, by string) (models.StructureRecord, error) {
+	var out models.StructureRecord
+	orEmpty := func(b json.RawMessage) string {
+		if len(bytes.TrimSpace(b)) == 0 {
+			return `{}`
+		}
+		return string(b)
 	}
-	if err := c.q.UpsertStructureVerification.Get(&out, fp, testID, string(components), by); err != nil {
+	strs := func(v []string) pq.StringArray {
+		if v == nil {
+			return pq.StringArray{}
+		}
+		return pq.StringArray(v)
+	}
+	var campID, at any
+	if in.CampaignID != nil {
+		campID = *in.CampaignID
+	}
+	if in.VerifiedAt != nil {
+		at = *in.VerifiedAt
+	}
+	if err := c.q.InsertStructureRecord.Get(&out, in.Fingerprint, campID, at, by, in.TestID,
+		orEmpty(in.Components), orEmpty(in.Canary), strs(in.Clients), strs(in.Roster), in.Stage, strs(in.Modes)); err != nil {
 		return out, c.reviewErr(err, "recording structure for")
 	}
 	return out, nil
 }
 
-// GetStructureVerification returns the record for fp (nil when none) and every record, newest first.
-func (c *Core) GetStructureVerification(fp string) (*models.StructureVerification, []models.StructureVerification, error) {
-	all := []models.StructureVerification{}
-	if err := c.q.GetStructureVerifications.Select(&all); err != nil {
-		return nil, nil, c.reviewErr(err, "fetching structure records for")
+// StructureLookup is GET /api/campaigns/structure-verifications/:fingerprint (§2.2): Records is
+// EVERY row of the append-only table (the new coverage path); Match and LegacyRecords are the
+// v6.2.14 table exactly as the older endpoint served them (the review Lambda's legacy D4 path,
+// STRUCTURE_GATE off, reads them).
+type StructureLookup struct {
+	Match         *models.StructureVerification  `json:"match"`
+	Records       []models.StructureRecord       `json:"records"`
+	LegacyRecords []models.StructureVerification `json:"legacy_records"`
+}
+
+// GetStructureVerification returns the legacy record for fp (nil when none), every legacy record
+// newest first, and every append-only record.
+func (c *Core) GetStructureVerification(fp string) (StructureLookup, error) {
+	out := StructureLookup{Records: []models.StructureRecord{}, LegacyRecords: []models.StructureVerification{}}
+	if err := c.q.GetStructureVerifications.Select(&out.LegacyRecords); err != nil {
+		return out, c.reviewErr(err, "fetching structure records for")
+	}
+	if err := c.q.GetStructureRecords.Select(&out.Records); err != nil {
+		return out, c.reviewErr(err, "fetching structure records for")
 	}
 	var match models.StructureVerification
 	if err := c.q.GetStructureVerification.Get(&match, fp); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, all, nil
+			return out, nil
 		}
-		return nil, nil, c.reviewErr(err, "fetching structure for")
+		return out, c.reviewErr(err, "fetching structure for")
 	}
-	return &match, all, nil
+	out.Match = &match
+	return out, nil
 }

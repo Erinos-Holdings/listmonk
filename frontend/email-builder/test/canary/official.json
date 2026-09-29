@@ -1,0 +1,32 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "ob",
+        "oc"
+      ]
+    }
+  },
+  "ob": {
+    "type": "OfficialFooter",
+    "data": {
+      "props": {
+        "kind": "brand"
+      }
+    }
+  },
+  "oc": {
+    "type": "OfficialFooter",
+    "data": {
+      "props": {
+        "kind": "corporate"
+      }
+    }
+  }
+}

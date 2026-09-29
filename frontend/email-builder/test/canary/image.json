@@ -1,0 +1,55 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "s",
+        "u"
+      ]
+    }
+  },
+  "s": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "right": 0,
+          "left": 0
+        }
+      },
+      "props": {
+        "width": 600,
+        "url": "https://canary.invalid/uploads/canary-s.jpg",
+        "alt": "Canary s",
+        "linkHref": "https://canary.invalid/img-s",
+        "contentAlignment": "middle"
+      }
+    }
+  },
+  "u": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "right": 0,
+          "left": 0
+        }
+      },
+      "props": {
+        "url": "https://canary.invalid/uploads/canary-u.jpg",
+        "alt": "Canary u",
+        "linkHref": "https://canary.invalid/img-u",
+        "contentAlignment": "middle"
+      }
+    }
+  }
+}

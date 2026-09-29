@@ -1,0 +1,31 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "h"
+      ]
+    }
+  },
+  "h": {
+    "type": "Html",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "contents": "<style>.canary a{color:#003b4d;}</style><div class=\"canary\"><p>Html block.</p><a href=\"https://canary.invalid/html\">A link</a></div>"
+      }
+    }
+  }
+}

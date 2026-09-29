@@ -37,7 +37,8 @@
             "campaigns:manage",
             "campaigns:manage_all",
             "campaigns:send",
-            "campaigns:review"
+            "campaigns:review",
+            "campaigns:review_structure"
         ]
     },
     {

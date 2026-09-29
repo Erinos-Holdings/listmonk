@@ -73,6 +73,8 @@ var migList = []migFunc{
 	{"v6.2.13", migrations.V6_2_13},
 	// Fork migration (erinos): campaign review -- campaign_reviews, dispositions, structure verifications, app.review_* settings, campaigns:review grant (CAMPAIGN-INSPECT-SPEC) — see internal/migrations/v6.2.14.go.
 	{"v6.2.14", migrations.V6_2_14},
+	// Fork migration (erinos): inspect scope -- append-only campaign_structure_records (INSPECT-SCOPE-SPEC) — see internal/migrations/v6.2.15.go.
+	{"v6.2.15", migrations.V6_2_15},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

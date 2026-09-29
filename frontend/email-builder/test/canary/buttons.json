@@ -1,0 +1,152 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "rectangle-inline",
+        "rectangle-full",
+        "rounded-inline",
+        "rounded-full",
+        "pill-inline",
+        "pill-full"
+      ]
+    }
+  },
+  "rectangle-inline": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "buttonBackgroundColor": "#003b4d",
+        "buttonStyle": "rectangle",
+        "size": "medium",
+        "fullWidth": false,
+        "text": "Canary rectangle-inline",
+        "url": "https://canary.invalid/button-rectangle-inline"
+      }
+    }
+  },
+  "rectangle-full": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "buttonBackgroundColor": "#003b4d",
+        "buttonStyle": "rectangle",
+        "size": "medium",
+        "fullWidth": true,
+        "text": "Canary rectangle-full",
+        "url": "https://canary.invalid/button-rectangle-full"
+      }
+    }
+  },
+  "rounded-inline": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "buttonBackgroundColor": "#003b4d",
+        "buttonStyle": "rounded",
+        "size": "medium",
+        "fullWidth": false,
+        "text": "Canary rounded-inline",
+        "url": "https://canary.invalid/button-rounded-inline"
+      }
+    }
+  },
+  "rounded-full": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "buttonBackgroundColor": "#003b4d",
+        "buttonStyle": "rounded",
+        "size": "medium",
+        "fullWidth": true,
+        "text": "Canary rounded-full",
+        "url": "https://canary.invalid/button-rounded-full"
+      }
+    }
+  },
+  "pill-inline": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "buttonBackgroundColor": "#003b4d",
+        "buttonStyle": "pill",
+        "size": "medium",
+        "fullWidth": false,
+        "text": "Canary pill-inline",
+        "url": "https://canary.invalid/button-pill-inline"
+      }
+    }
+  },
+  "pill-full": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "buttonBackgroundColor": "#003b4d",
+        "buttonStyle": "pill",
+        "size": "medium",
+        "fullWidth": true,
+        "text": "Canary pill-full",
+        "url": "https://canary.invalid/button-pill-full"
+      }
+    }
+  }
+}

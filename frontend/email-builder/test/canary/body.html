@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+<style>
+  .canary-body { font-family: Arial, sans-serif; color: #262626; }
+  .canary-body a { color: #003b4d; }
+</style>
+</head>
+<body>
+<div class="canary-body">
+  <p>Hello {{ .Subscriber.FirstName }},</p>
+  <p>A raw-HTML canary body with <a href="https://canary.invalid/body">a link</a>.</p>
+  <p><a href="{{ UnsubscribeURL }}">Unsubscribe</a></p>
+</div>
+</body>
+</html>

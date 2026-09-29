@@ -1,0 +1,32 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "outlook": false,
+      "childrenIds": [
+        "t"
+      ]
+    }
+  },
+  "t": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontWeight": "normal",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 8,
+          "left": 8
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Outlook off."
+      }
+    }
+  }
+}

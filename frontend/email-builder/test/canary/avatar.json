@@ -1,0 +1,35 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "a"
+      ]
+    }
+  },
+  "a": {
+    "type": "Avatar",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "right": 24,
+          "left": 24
+        }
+      },
+      "props": {
+        "imageUrl": "https://canary.invalid/uploads/avatar.png",
+        "shape": "circle",
+        "size": 64,
+        "alt": "Avatar"
+      }
+    }
+  }
+}
