@@ -251,7 +251,7 @@
             && canInspect(props.row)" :to="{ name: 'campaign', params: { id: props.row.id } }"
             data-cy="btn-open-inspect" :aria-label="$t('campaigns.review.openToInspect')">
             <b-tooltip :label="$t('campaigns.review.openToInspect')" type="is-dark">
-              <b-icon icon="magnify-scan" size="is-small" />
+              <b-icon icon="creation" size="is-small" />
             </b-tooltip>
           </router-link>
 

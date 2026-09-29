@@ -57,7 +57,7 @@
             <!-- Fork (campaign review, D12) -- Inspect saves first, exactly as Start does. -->
             <b-field v-if="reviewEnabled && canManage" expanded>
               <b-button expanded @click="inspectCampaign" :loading="loading.campaigns" type="is-primary"
-                :disabled="isBrandBlocked" icon-left="magnify-scan" data-cy="btn-inspect"
+                :disabled="isBrandBlocked" icon-left="creation" data-cy="btn-inspect"
                 :title="$t('campaigns.review.inspectHelp')">
                 {{ $t('campaigns.review.inspect') }}
               </b-button>

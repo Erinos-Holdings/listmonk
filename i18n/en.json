@@ -207,7 +207,7 @@
     "campaigns.reviewReasonEdited": "edited since the last inspection",
     "campaigns.reviewReasonRunning": "inspection running",
     "campaigns.reviewReasonBlocked": "blocked: {n} item(s)",
-    "campaigns.review.inspect": "Inspect",
+    "campaigns.review.inspect": "Inspect campaign",
     "campaigns.review.inspectHelp": "Save and inspect this campaign. Starting it needs a passing inspection.",
     "campaigns.review.openToInspect": "Open to inspect",
     "campaigns.review.finalReviewNotice": "Ready for final review — tell Robbie",
