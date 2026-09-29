@@ -271,7 +271,10 @@ CREATE TABLE campaign_views (
 
     -- Subscribers may be deleted, but the view counts should remain.
     subscriber_id    INTEGER NULL REFERENCES subscribers(id) ON DELETE SET NULL ON UPDATE CASCADE,
-    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Fork (location stats, v6.2.16) -- ISO 3166-1 alpha-2 from CloudFront-Viewer-Country; NULL = unknown. Never an IP.
+    country          CHAR(2) NULL
 );
 DROP INDEX IF EXISTS idx_views_camp_id; CREATE INDEX idx_views_camp_id ON campaign_views(campaign_id);
 DROP INDEX IF EXISTS idx_views_subscriber_id; CREATE INDEX idx_views_subscriber_id ON campaign_views(subscriber_id);
@@ -326,7 +329,10 @@ CREATE TABLE link_clicks (
 
     -- Subscribers may be deleted, but the link counts should remain.
     subscriber_id    INTEGER NULL REFERENCES subscribers(id) ON DELETE SET NULL ON UPDATE CASCADE,
-    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Fork (location stats, v6.2.16) -- ISO 3166-1 alpha-2 from CloudFront-Viewer-Country; NULL = unknown. Never an IP.
+    country          CHAR(2) NULL
 );
 DROP INDEX IF EXISTS idx_clicks_camp_id; CREATE INDEX idx_clicks_camp_id ON link_clicks(campaign_id);
 DROP INDEX IF EXISTS idx_clicks_link_id; CREATE INDEX idx_clicks_link_id ON link_clicks(link_id);

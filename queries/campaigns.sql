@@ -327,6 +327,29 @@ SELECT campaign_id, COUNT(*) AS "count", DATE_TRUNC((SELECT * FROM intval), crea
     WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3
     GROUP BY campaign_id, "timestamp" ORDER BY "timestamp" ASC;
 
+-- name: get-campaign-country-counts
+-- raw: true
+-- Fork (location stats, LOCATION-STATS-SPEC D6/D7) -- views and clicks per country for the analytics
+-- page. Prepared on boot (cmd/init.go) like the view and click counts, which interpolates the counted
+-- expression and the row filter per individual tracking. ON counts distinct
+-- (subscriber_id, campaign_id) pairs among rows with a subscriber, so NULL-subscriber rows (deleted
+-- subscribers, rows older than individual tracking) are excluded, not collapsed into one. OFF counts raw
+-- rows. Unknown country (NULL) is reported as the empty string.
+WITH v AS (
+    SELECT COALESCE(country, '') AS country, COUNT(%[1]s) AS n
+    FROM campaign_views
+    WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3 %[2]s
+    GROUP BY 1
+),
+c AS (
+    SELECT COALESCE(country, '') AS country, COUNT(%[1]s) AS n
+    FROM link_clicks
+    WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3 %[2]s
+    GROUP BY 1
+)
+SELECT TRIM(COALESCE(v.country, c.country)) AS country, COALESCE(v.n, 0) AS views, COALESCE(c.n, 0) AS clicks
+    FROM v FULL OUTER JOIN c ON v.country = c.country;
+
 -- name: get-campaign-link-counts
 -- raw: true
 -- %s = * or DISTINCT subscriber_id (prepared based on based on individual tracking=on/off). Prepared on boot.
@@ -687,5 +710,6 @@ WITH view AS (
     LEFT JOIN subscribers ON (CASE WHEN $2::TEXT != '' THEN subscribers.uuid = $2::UUID ELSE FALSE END)
     WHERE campaigns.uuid = $1
 )
-INSERT INTO campaign_views (campaign_id, subscriber_id)
-    VALUES((SELECT campaign_id FROM view), (SELECT subscriber_id FROM view));
+-- Fork (location stats) -- $3 is the normalized CloudFront-Viewer-Country code, or '' for unknown (stored NULL).
+INSERT INTO campaign_views (campaign_id, subscriber_id, country)
+    VALUES((SELECT campaign_id FROM view), (SELECT subscriber_id FROM view), NULLIF($3::TEXT, ''));

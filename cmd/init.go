@@ -417,10 +417,19 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	var (
 		countQuery = "get-campaign-analytics-counts"
 		linkSel    = "*"
+
+		// Fork (location stats, LOCATION-STATS-SPEC D6) -- the per-country counts follow the
+		// same unique/total mode. Unique counts distinct (subscriber, campaign) pairs among rows
+		// WITH a subscriber: the predicate is explicit because a composite COUNT(DISTINCT) would
+		// count ROW(NULL, id).
+		countrySel    = "*"
+		countryFilter = ""
 	)
 	if ko.Bool("privacy.individual_tracking") {
 		countQuery = "get-campaign-analytics-unique-counts"
 		linkSel = "DISTINCT subscriber_id"
+		countrySel = "DISTINCT (subscriber_id, campaign_id)"
+		countryFilter = "AND subscriber_id IS NOT NULL"
 	}
 
 	// These don't exist in the SQL file but are in the queries struct to be prepared.
@@ -433,6 +442,7 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 		Tags:  map[string]string{"name": "get-campaign-click-counts"},
 	}
 	qMap["get-campaign-link-counts"].Query = fmt.Sprintf(qMap["get-campaign-link-counts"].Query, linkSel)
+	qMap["get-campaign-country-counts"].Query = fmt.Sprintf(qMap["get-campaign-country-counts"].Query, countrySel, countryFilter)
 
 	// Scan and prepare all queries.
 	var q models.Queries

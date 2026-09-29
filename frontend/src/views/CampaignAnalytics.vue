@@ -66,6 +66,29 @@
         </div>
       </div>
     </section>
+
+    <!-- Fork (location stats, integrations LOCATION-STATS-SPEC D8): views and clicks per country for
+    the same campaigns and date range. The view owns the sort (countryRows.mjs) so Unknown stays
+    last in every direction. -->
+    <section v-if="countries.fetched" class="location mt-5">
+      <h4>{{ $t('analytics.location') }}</h4>
+      <p class="is-size-7 has-text-grey mb-3">{{ $t('analytics.locationHint') }}</p>
+      <b-table :data="countryTableRows" :loading="countries.loading" hoverable narrowed
+        backend-sorting :default-sort="[countries.sort.field, countries.sort.order]" @sort="onCountrySort">
+        <b-table-column v-slot="props" field="name" :label="$t('analytics.locationCountry')" sortable>
+          <span :class="{ 'has-text-grey': props.row.unknown }" :title="props.row.country">{{ props.row.name }}</span>
+        </b-table-column>
+        <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
+          {{ $utils.niceNumber(props.row.views) }}
+        </b-table-column>
+        <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
+          {{ $utils.niceNumber(props.row.clicks) }}
+        </b-table-column>
+        <template #empty v-if="!countries.loading">
+          <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
+        </template>
+      </b-table>
+    </section>
   </section>
 </template>
 
@@ -75,6 +98,7 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import { colors } from '../constants';
 import Chart from '../components/Chart.vue';
+import { DEFAULT_SORT, shapeCountryRows, sortCountryRows } from '../countryRows.mjs'; // eslint-disable-line import/extensions
 
 const chartColorRed = '#ee7d5b';
 const chartColors = [
@@ -144,6 +168,14 @@ export default Vue.extend({
           chartFn: this.makeLinksChart,
           onClick: this.onLinkClick,
         },
+      },
+
+      // Fork (location stats) -- the Location table.
+      countries: {
+        rows: [],
+        loading: false,
+        fetched: false,
+        sort: { ...DEFAULT_SORT },
       },
 
       form: {
@@ -282,6 +314,28 @@ export default Vue.extend({
       });
     },
 
+    // Fork (location stats) -- fetched alongside the charts, for the same campaigns and range.
+    getCountries(camps) {
+      this.countries.loading = true;
+      this.countries.fetched = true;
+      this.$api.getCampaignCountryCounts({
+        id: camps.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((data) => {
+        this.countries.rows = shapeCountryRows(data, {
+          locale: this.locale,
+          unknownLabel: this.$t('analytics.locationUnknown'),
+        });
+      }).finally(() => {
+        this.countries.loading = false;
+      });
+    },
+
+    onCountrySort(field, order) {
+      this.countries.sort = { field, order };
+    },
+
     onLinkClick(e) {
       const bars = e.chart.getElementsAtEventForMode(e, 'nearest', { intersect: true }, true);
       if (bars.length > 0) {
@@ -292,6 +346,15 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['serverConfig']),
+
+    locale() {
+      return (this.$i18n && this.$i18n.locale) || 'en';
+    },
+
+    countryTableRows() {
+      const { field, order } = this.countries.sort;
+      return sortCountryRows(this.countries.rows, field, order, this.locale);
+    },
   },
 
   created() {
@@ -331,6 +394,9 @@ export default Vue.extend({
             // Fetch views, clicks, bounces for every campaign.
             this.getData(k, this.form.campaigns);
           });
+
+          // Fork (location stats) -- the Location table.
+          this.getCountries(this.form.campaigns);
         });
       });
     }

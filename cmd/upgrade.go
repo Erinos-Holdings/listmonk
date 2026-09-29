@@ -75,6 +75,8 @@ var migList = []migFunc{
 	{"v6.2.14", migrations.V6_2_14},
 	// Fork migration (erinos): inspect scope -- append-only campaign_structure_records (INSPECT-SCOPE-SPEC) — see internal/migrations/v6.2.15.go.
 	{"v6.2.15", migrations.V6_2_15},
+	// Fork migration (erinos): location stats -- country CHAR(2) on campaign_views and link_clicks (LOCATION-STATS-SPEC) — see internal/migrations/v6.2.16.go.
+	{"v6.2.16", migrations.V6_2_16},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

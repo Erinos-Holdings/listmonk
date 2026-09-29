@@ -83,6 +83,9 @@ type Queries struct {
 	ExportCampaignViews        *sqlx.Stmt `query:"export-campaign-views"`
 	ExportCampaignLinkClicks   *sqlx.Stmt `query:"export-campaign-link-clicks"`
 
+	// Fork (location stats) -- interpolated on boot like the link counts (cmd/init.go).
+	GetCampaignCountryCounts *sqlx.Stmt `query:"get-campaign-country-counts"`
+
 	NextCampaigns           *sqlx.Stmt `query:"next-campaigns"`
 	GetRunningCampaign      *sqlx.Stmt `query:"get-running-campaign"`
 	NextCampaignSubscribers *sqlx.Stmt `query:"next-campaign-subscribers"`

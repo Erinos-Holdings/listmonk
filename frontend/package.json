@@ -12,6 +12,7 @@
     "test:audience": "node --test src/audience-box.test.mjs",
     "test:official-sweep": "node --test src/officialSweep.test.mjs",
     "test:structure-brief": "node --test src/structureBrief.test.mjs",
+    "test:countries": "node --test src/countryRows.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },
   "dependencies": {

@@ -473,6 +473,12 @@ export const getCampaignLinkCounts = async (params) => http.get(
   { params, loading: models.campaigns },
 );
 
+// Fork (location stats) -- views and clicks per country: [{country, views, clicks}], country "" = unknown.
+export const getCampaignCountryCounts = async (params) => http.get(
+  '/api/campaigns/analytics/countries',
+  { params, loading: models.campaigns },
+);
+
 export const convertCampaignContent = async (data) => http.post(
   `/api/campaigns/${data.id}/content`,
   data,

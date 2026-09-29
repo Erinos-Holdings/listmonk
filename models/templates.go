@@ -111,6 +111,14 @@ type CampaignAnalyticsLink struct {
 	Count int    `db:"count" json:"count"`
 }
 
+// CampaignAnalyticsCountry is one row of the per-country analytics (fork, location stats):
+// Country is the ISO 3166-1 alpha-2 code, or "" for unknown.
+type CampaignAnalyticsCountry struct {
+	Country string `db:"country" json:"country"`
+	Views   int    `db:"views" json:"views"`
+	Clicks  int    `db:"clicks" json:"clicks"`
+}
+
 type CampaignViewExport struct {
 	CampaignID     int       `db:"campaign_id"`
 	CampaignUUID   string    `db:"campaign_uuid"`
