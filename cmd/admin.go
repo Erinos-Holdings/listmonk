@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/captcha"
 	"github.com/knadh/listmonk/internal/subimporter"
 	"github.com/labstack/echo/v4"
@@ -122,6 +123,17 @@ func (a *App) GetServerConfig(c echo.Context) error {
 
 // GetDashboardCharts returns chart data points to render ont he dashboard.
 func (a *App) GetDashboardCharts(c echo.Context) error {
+	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7) -- a list-scoped user reads live, scoped
+	// charts; everyone with blanket list access keeps the materialized view unchanged.
+	user := auth.GetUser(c)
+	if hasAll, listIDs := user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage); !hasAll {
+		out, err := a.core.GetDashboardChartsScoped(listIDs, user.HasPerm(auth.PermCampaignsGetAll))
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Get the chart data from the DB.
 	out, err := a.core.GetDashboardCharts()
 	if err != nil {
@@ -133,6 +145,17 @@ func (a *App) GetDashboardCharts(c echo.Context) error {
 
 // GetDashboardCounts returns stats counts to show on the dashboard.
 func (a *App) GetDashboardCounts(c echo.Context) error {
+	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7) -- as GetDashboardCharts: list-scoped
+	// users get live counts over their lists (scoped: true), never the global numbers.
+	user := auth.GetUser(c)
+	if hasAll, listIDs := user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage); !hasAll {
+		out, err := a.core.GetDashboardCountsScoped(listIDs, user.HasPerm(auth.PermCampaignsGetAll))
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Get the chart data from the DB.
 	out, err := a.core.GetDashboardCounts()
 	if err != nil {

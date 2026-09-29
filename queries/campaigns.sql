@@ -95,6 +95,36 @@ WHERE ($1 = 0 OR id = $1)
     )
 ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 
+-- name: query-analytics-campaigns
+-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D3/D4/D11). The Campaign Analytics picker -- only
+-- the fields the picker needs, never bodies, templates or review data. Scoping is the same
+-- ANY-list rule query-campaigns and campaign-has-lists use (D2).
+--   $1 requested ids; non-empty = exactly those ids that pass scoping, search and limit ignored
+--   $2 search string (makeSearchString; empty = all), the query-campaigns predicate
+--   $3 exact id for a numeric search (0 = none)
+--   $4 all campaigns (campaigns get_all, or blanket list access); else $5 permitted list ids
+--   $6 started campaigns only (analytics-only users, D11)
+--   $7 limit in search mode
+SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.created_at
+FROM campaigns c
+WHERE (
+    CASE WHEN CARDINALITY($1::INT[]) > 0 THEN c.id = ANY($1::INT[])
+    ELSE (
+        $2::TEXT = ''
+        OR TO_TSVECTOR(CONCAT(c.name, ' ', c.subject)) @@ TO_TSQUERY($2::TEXT)
+        OR CONCAT(c.name, ' ', c.subject) ILIKE $2::TEXT
+        OR c.id = $3::INT
+    ) END
+)
+    AND (
+        $4::BOOLEAN OR EXISTS (
+            SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($5::INT[])
+        )
+    )
+    AND (NOT $6::BOOLEAN OR c.started_at IS NOT NULL)
+ORDER BY c.created_at DESC, c.id DESC
+LIMIT (CASE WHEN CARDINALITY($1::INT[]) > 0 THEN NULL ELSE $7::INT END);
+
 -- name: get-campaign
 -- Fork (template freeze) — a campaign that has run renders its frozen_template_body
 -- snapshot, not the live template — but only for the sending template; an archive

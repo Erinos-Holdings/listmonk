@@ -177,6 +177,8 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PATCH("/api/campaigns/:id/reviews/:jobId", pm(hasID(a.PatchCampaignReview), "campaigns:review"))
 		g.GET("/api/campaigns/:id", pm(hasID(a.GetCampaign), "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/analytics/:type", pm(a.GetCampaignViewAnalytics, "campaigns:get_analytics"))
+		// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker, list-scoped.
+		g.GET("/api/analytics/campaigns", pm(a.GetAnalyticsCampaigns, "campaigns:get_analytics"))
 		g.GET("/api/campaigns/:id/preview", pm(hasID(a.PreviewCampaign), "campaigns:get_all", "campaigns:get"))
 		g.POST("/api/campaigns/:id/preview/archive", pm(hasID(a.PreviewCampaignArchive), "campaigns:get_all", "campaigns:get"))
 		g.POST("/api/campaigns/:id/preview", pm(hasID(a.PreviewCampaign), "campaigns:get_all", "campaigns:get"))

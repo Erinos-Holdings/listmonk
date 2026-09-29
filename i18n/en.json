@@ -3,6 +3,7 @@
     "_.name": "English (en)",
     "admin.errorMarshallingConfig": "Error marshalling config: {error}",
     "analytics.count": "Count",
+    "analytics.dateRangeHint": "From and To limit which views, clicks and bounces are counted for the selected campaigns — they don't filter the campaign list.",
     "analytics.fromDate": "From",
     "analytics.invalidDates": "Invalid `from` or `to` dates.",
     "analytics.links": "Links",

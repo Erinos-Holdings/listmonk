@@ -453,6 +453,14 @@ export const createCampaign = async (data) => http.post(
   { loading: models.campaigns, camelCase: (keyPath) => !keyPath.startsWith('.headers') },
 );
 
+// Fork (brand analytics, integrations BRAND-ANALYTICS-SPEC D3/D4) -- the Campaign Analytics picker:
+// [{id, name, status, evergreen, startedAt, createdAt}], list-scoped, behind campaigns:get_analytics.
+// params: { query, per_page } to search, or { id: [...] } for the ?id= prefill (the permitted subset).
+export const getAnalyticsCampaigns = async (params) => http.get(
+  '/api/analytics/campaigns',
+  { params },
+);
+
 export const getCampaignViewCounts = async (params) => http.get(
   '/api/campaigns/analytics/views',
   { params, loading: models.campaigns },

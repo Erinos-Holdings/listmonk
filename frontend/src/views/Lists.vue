@@ -86,9 +86,12 @@
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" header-class="cy-name" sortable
         paginated backend-pagination pagination-position="both" :td-attrs="$utils.tdID" @page-change="onPageChange">
         <div>
-          <a :href="`/lists/${props.row.id}`" @click.prevent="showEditForm(props.row)">
+          <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D9): the form only for users who may save
+          it; everyone else reads the name as plain text (the server refuses the save anyway). -->
+          <a v-if="canManageList(props.row.id)" :href="`/lists/${props.row.id}`" @click.prevent="showEditForm(props.row)">
             {{ props.row.name }}
           </a>
+          <span v-else data-cy="list-name">{{ props.row.name }}</span>
           <!-- Fork (LIST-COLLAPSE-SPEC C6). `Other` is an alarm, so it survives the collapse: the
           marker shows on the collapsed row and expands it. -->
           <b-tooltip v-if="hasOther(props.row) && !expanded[props.row.id]" :label="$t('lists.grid.otherHelp')" type="is-dark" multilined
@@ -123,7 +126,9 @@
               {{ $t(`lists.optins.${props.row.optin}`) }}
             </b-tag>
 
-            <a v-if="props.row.optin === 'double'" class="is-size-7 send-optin" href="#"
+            <!-- D9: the opt-in campaign needs campaigns:manage(_all) -- the server refuses it otherwise. -->
+            <a v-if="props.row.optin === 'double' && $can('campaigns:manage', 'campaigns:manage_all')"
+              class="is-size-7 send-optin" href="#"
               @click="$utils.confirm(null, () => createOptinCampaign(props.row))" data-cy="btn-send-optin-campaign">
               <b-tooltip :label="$t('lists.sendOptinCampaign')" type="is-dark">
                 <b-icon icon="rocket-launch-outline" size="is-small" />
@@ -141,9 +146,14 @@
       The default-sender hint renders as the default row's logo_url mark when set (camelCased to logoUrl by the API layer, like as_of → asOf) (BRANDS-UX-SPEC D8;
       default-row-only: a tagged list's logo_url is deliberately unused). -->
       <b-table-column v-slot="props" field="health" :label="$t('lists.health.column')" header-class="cy-health">
-        <health-chip v-if="props.row.health" :status="props.row.health.status" :note="props.row.health.note || ''"
+        <!-- Fork (brand analytics, D9): without brands:get the chip is not a link, and the
+        default-sender variant (an untagged list showing the default brand) is not rendered at all --
+        it is another brand's data. -->
+        <span v-if="props.row.health && props.row.health.default && !props.row.healthTag && !canViewBrand"
+          data-cy="health-hidden" />
+        <health-chip v-else-if="props.row.health" :status="props.row.health.status" :note="props.row.health.note || ''"
           :detail="props.row.health.asOf ? $t('brands.asOf', { date: props.row.health.asOf }) : ''"
-          :to="{ name: 'brand', params: { brand: props.row.health.brand } }"
+          :to="canViewBrand ? { name: 'brand', params: { brand: props.row.health.brand } } : null"
           :hint="props.row.health.default && !props.row.healthTag ? $t('lists.health.defaultSender') : ''"
           :hint-img="props.row.health.default && !props.row.healthTag ? (props.row.health.logoUrl || '') : ''" />
         <health-chip v-else :missing-tag="props.row.healthTag || ''" />
@@ -215,7 +225,7 @@
             </b-tooltip>
           </router-link>
 
-          <a v-if="$can('lists:manage') || $canList(props.row.id, 'list:manage')" href="#"
+          <a v-if="canManageList(props.row.id)" href="#"
             @click.prevent="showEditForm(props.row)" data-cy="btn-edit" :aria-label="$t('globals.buttons.edit')">
             <b-tooltip :label="$t('globals.buttons.edit')" type="is-dark">
               <b-icon icon="pencil-outline" size="is-small" />
@@ -229,7 +239,7 @@
             </b-tooltip>
           </router-link>
 
-          <a v-if="$can('lists:manage') || $canList(props.row.id, 'list:manage')" href="#"
+          <a v-if="canManageList(props.row.id)" href="#"
             @click.prevent="deleteList(props.row)" data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
             <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
               <b-icon icon="trash-can-outline" size="is-small" />
@@ -265,6 +275,7 @@ import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import ListForm from './ListForm.vue';
 import HealthChip from '../components/HealthChip.vue';
 import { isSendPlus, sendLangCode } from '../langs';
+import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 
 // Fork (list grid). Send-language lines in display order. The API's en already includes none.
 const GRID_LANGS = ['en', 'fr', 'es', 'de', 'it', 'other'];
@@ -367,6 +378,12 @@ export default Vue.extend({
       this.queryParams.orderBy = field;
       this.queryParams.order = order;
       this.getLists();
+    },
+
+    // Fork (brand analytics, D9) -- Super Admin, lists:manage_all or per-list list:manage; unlike
+    // $canList, lists:get_all alone is not enough.
+    canManageList(id) {
+      return canManageList(this.profile, id);
     },
 
     // Show the edit list form.
@@ -587,7 +604,12 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['loading', 'settings', 'serverConfig']),
+    ...mapState(['loading', 'settings', 'serverConfig', 'profile']),
+
+    // Fork (brand analytics, BRAND-ANALYTICS-SPEC D9) -- accessPolicy.mjs.
+    canViewBrand() {
+      return canViewBrand(this.profile);
+    },
 
     // Without a subscribers permission the grid is plain numbers.
     canViewSubs() {

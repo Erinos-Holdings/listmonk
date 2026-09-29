@@ -971,6 +971,65 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker's page cap.
+const (
+	analyticsPickerPerPage    = 20
+	analyticsPickerMaxPerPage = 50
+)
+
+// GetAnalyticsCampaigns (fork, brand analytics, BRAND-ANALYTICS-SPEC D3/D4/D11) is the Campaign
+// Analytics picker: GET /api/analytics/campaigns behind campaigns:get_analytics, for every user
+// (search and the ?id= prefill). Scoped by the rule GetCampaigns and checkCampaignPerm use (D2),
+// so it never offers a campaign the analytics endpoint would refuse. Repeatable id returns the
+// permitted subset of those ids (unpermitted/unknown silently absent; query and per_page ignored);
+// otherwise query + per_page (default 20, max 50). Analytics-only users see started campaigns only.
+func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
+	user := auth.GetUser(c)
+
+	ids, err := parseStringIDs(c.QueryParams()["id"])
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
+	}
+
+	var (
+		allCampaigns   = user.HasPerm(auth.PermCampaignsGetAll)
+		permittedLists []int
+	)
+	if !allCampaigns {
+		allCampaigns, permittedLists = user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
+	}
+
+	query := ""
+	perPage := analyticsPickerPerPage
+	if len(ids) == 0 {
+		query = strings.TrimSpace(c.QueryParam("query"))
+		if n, err := strconv.Atoi(c.QueryParam("per_page")); err == nil && n > 0 {
+			perPage = min(n, analyticsPickerMaxPerPage)
+		}
+	}
+
+	out, err := a.core.QueryAnalyticsCampaigns(ids, query, allCampaigns, permittedLists, isAnalyticsOnly(user), perPage)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// isAnalyticsOnly (fork, brand analytics, BRAND-ANALYTICS-SPEC D1) -- not Super Admin, holds
+// campaigns:get_analytics and neither campaigns:get nor campaigns:get_all. Derived from grants,
+// never a role id. Mirrors frontend/src/accessPolicy.mjs isAnalyticsOnly.
+func isAnalyticsOnly(u auth.User) bool {
+	if u.UserRoleID == auth.SuperAdminRoleID || u.UserRole.ID == auth.SuperAdminRoleID {
+		return false
+	}
+	_, analytics := u.PermissionsMap[auth.PermCampaignsGetAnalytics]
+	_, get := u.PermissionsMap[auth.PermCampaignsGet]
+	_, getAll := u.PermissionsMap[auth.PermCampaignsGetAll]
+	return analytics && !get && !getAll
+}
+
 // renderWarnings renders the campaign the way preview does — dummy subscriber, and
 // the campaign UUID swapped for a dummy so {{ TrackView }}/{{ TrackLink }} register
 // nothing — and returns non-blocking send-quality warnings (Gmail clip size measured

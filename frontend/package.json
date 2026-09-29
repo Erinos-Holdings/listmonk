@@ -13,6 +13,7 @@
     "test:official-sweep": "node --test src/officialSweep.test.mjs",
     "test:structure-brief": "node --test src/structureBrief.test.mjs",
     "test:countries": "node --test src/countryRows.test.mjs",
+    "test:access": "node --test src/accessPolicy.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },
   "dependencies": {

@@ -3,6 +3,8 @@ package core
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -78,6 +80,35 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 	}
 
 	return out, total, nil
+}
+
+// QueryAnalyticsCampaigns (fork, brand analytics, BRAND-ANALYTICS-SPEC D3/D4/D11) returns the
+// Campaign Analytics picker rows. ids non-empty returns exactly those that pass scoping (search and
+// limit ignored); otherwise searchStr uses the query-campaigns predicate, plus exact id match when
+// it is numeric. allCampaigns lifts the list filter; else permittedLists is the ANY-list scope (D2).
+// startedOnly hides campaigns that never started (analytics-only users).
+func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns bool, permittedLists []int, startedOnly bool, limit int) ([]models.AnalyticsCampaign, error) {
+	if ids == nil {
+		ids = []int{}
+	}
+	if permittedLists == nil {
+		permittedLists = []int{}
+	}
+
+	idMatch, _ := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(searchStr), "#"))
+	if idMatch < 0 {
+		idMatch = 0
+	}
+
+	out := []models.AnalyticsCampaign{}
+	if err := c.q.QueryAnalyticsCampaigns.Select(&out, pq.Array(ids), makeSearchString(searchStr), idMatch,
+		allCampaigns, pq.Array(permittedLists), startedOnly, limit); err != nil {
+		c.log.Printf("error fetching analytics campaigns: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
 }
 
 // GetCampaign retrieves a campaign.

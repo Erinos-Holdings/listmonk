@@ -14,6 +14,10 @@ type Queries struct {
 	GetDashboardCharts *sqlx.Stmt `query:"get-dashboard-charts"`
 	GetDashboardCounts *sqlx.Stmt `query:"get-dashboard-counts"`
 
+	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D7) -- live Dashboard reads for list-scoped users.
+	GetDashboardCountsScoped *sqlx.Stmt `query:"get-dashboard-counts-scoped"`
+	GetDashboardChartsScoped *sqlx.Stmt `query:"get-dashboard-charts-scoped"`
+
 	InsertSubscriber                *sqlx.Stmt `query:"insert-subscriber"`
 	UpsertSubscriber                *sqlx.Stmt `query:"upsert-subscriber"`
 	UpsertSubscriberFill            *sqlx.Stmt `query:"upsert-subscriber-fill"`
@@ -70,6 +74,9 @@ type Queries struct {
 	GetCampaignStatus     *sqlx.Stmt `query:"get-campaign-status"`
 	GetArchivedCampaigns  *sqlx.Stmt `query:"get-archived-campaigns"`
 	CampaignHasLists      *sqlx.Stmt `query:"campaign-has-lists"`
+
+	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker.
+	QueryAnalyticsCampaigns *sqlx.Stmt `query:"query-analytics-campaigns"`
 
 	// These two queries are read as strings and based on settings.individual_tracking=on/off,
 	// are interpolated and copied to view and click counts. Same query, different tables.

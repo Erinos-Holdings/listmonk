@@ -3,6 +3,14 @@
     <b-menu-item :to="{ name: 'dashboard' }" tag="router-link" :active="activeItem.dashboard"
       icon="view-dashboard-variant-outline" :label="$t('menu.dashboard')" /><!-- dashboard -->
 
+    <!-- Fork (brand analytics, integrations BRAND-ANALYTICS-SPEC D8). An analytics-only user (a
+    brand creator) has one campaigns screen, so Analytics is a top-level item directly under
+    Dashboard and the Campaigns group, Forms and Documentation are hidden. Every other user's menu
+    is unchanged. -->
+    <b-menu-item v-if="analyticsOnly" :to="{ name: 'campaignAnalytics' }" tag="router-link"
+      :active="activeItem.campaignAnalytics" data-cy="analytics" icon="chart-bar"
+      :label="$t('globals.terms.analytics')" /><!-- analytics (analytics-only users) -->
+
     <!-- Fork (brand health, BRAND-HEALTH-SPEC D10/D12; directly under
     Dashboard since BRANDS-UX-SPEC D1). Gated on brands:get; the Lists chip
     needs no permission beyond the list's own. The icon is from the fontello subset. -->
@@ -15,7 +23,7 @@
       :label="$t('globals.terms.lists')">
       <b-menu-item :to="{ name: 'lists' }" tag="router-link" :active="activeItem.lists" data-cy="all-lists"
         icon="format-list-bulleted-square" :label="$t('menu.allLists')" />
-      <b-menu-item :to="{ name: 'forms' }" tag="router-link" :active="activeItem.forms" class="forms"
+      <b-menu-item v-if="!analyticsOnly" :to="{ name: 'forms' }" tag="router-link" :active="activeItem.forms" class="forms"
         icon="newspaper-variant-outline" :label="$t('menu.forms')" />
     </b-menu-item><!-- lists -->
 
@@ -31,7 +39,7 @@
         data-cy="bounces" icon="email-bounce" :label="$t('globals.terms.bounces')" />
     </b-menu-item><!-- subscribers -->
 
-    <b-menu-item v-if="$can('campaigns:*')" :expanded="activeGroup.campaigns" :active="activeGroup.campaigns"
+    <b-menu-item v-if="$can('campaigns:*') && !analyticsOnly" :expanded="activeGroup.campaigns" :active="activeGroup.campaigns"
       data-cy="campaigns" @update:active="(state) => toggleGroup('campaigns', state)" icon="rocket-launch-outline"
       :label="$t('globals.terms.campaigns')">
       <b-menu-item v-if="$can('campaigns:get')" :to="{ name: 'campaigns' }" tag="router-link"
@@ -76,13 +84,14 @@
          The icon must come from listmonk's fontello build, which is a 45-glyph subset
          of only the icons upstream uses — any other mdi name renders as an empty box,
          and the subset contains no help/question/book glyph at all. -->
-    <b-menu-item tag="a" href="https://listmonk.app/docs" target="_blank" rel="noopener noreferrer"
+    <b-menu-item v-if="!analyticsOnly" tag="a" href="https://listmonk.app/docs" target="_blank" rel="noopener noreferrer"
       data-cy="docs" icon="file-multiple-outline" label="Documentation" /><!-- docs -->
   </b-menu-list>
 </template>
 
 <script>
 import { mapState } from 'vuex';
+import { isAnalyticsOnly } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 
 export default {
   name: 'Navigation',
@@ -132,6 +141,11 @@ export default {
 
   computed: {
     ...mapState(['profile']),
+
+    // Fork (brand analytics, D8) -- derived from grants (accessPolicy.mjs), never a role id.
+    analyticsOnly() {
+      return isAnalyticsOnly(this.profile);
+    },
   },
 
   mounted() {

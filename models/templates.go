@@ -119,6 +119,17 @@ type CampaignAnalyticsCountry struct {
 	Clicks  int    `db:"clicks" json:"clicks"`
 }
 
+// AnalyticsCampaign is one row of the Campaign Analytics picker (fork, brand analytics,
+// BRAND-ANALYTICS-SPEC D3): exactly the fields the picker needs, nothing a creator must not read.
+type AnalyticsCampaign struct {
+	ID        int       `db:"id" json:"id"`
+	Name      string    `db:"name" json:"name"`
+	Status    string    `db:"status" json:"status"`
+	Evergreen bool      `db:"evergreen" json:"evergreen"`
+	StartedAt null.Time `db:"started_at" json:"started_at"`
+	CreatedAt null.Time `db:"created_at" json:"created_at"`
+}
+
 type CampaignViewExport struct {
 	CampaignID     int       `db:"campaign_id"`
 	CampaignUUID   string    `db:"campaign_uuid"`

@@ -21,7 +21,7 @@
             <b-taginput v-model="form.campaigns" :data="queriedCampaigns" name="campaigns" ellipsis icon="tag-outline"
               :placeholder="$t('globals.terms.campaigns')" autocomplete :allow-new="false" :open-on-focus="true"
               :before-adding="isCampaignSelected" @typing="queryCampaigns" @focus="queryCampaigns" field="name"
-              :loading="isSearchLoading" />
+              :loading="isSearchLoading" @add="applyDefaultDates" @remove="applyDefaultDates" />
           </b-field>
         </div>
 
@@ -40,6 +40,8 @@
               </b-field>
             </div>
           </div><!-- columns -->
+          <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D11) -->
+          <p class="is-size-7 has-text-grey date-hint" data-cy="date-hint">{{ $t('analytics.dateRangeHint') }}</p>
         </div><!-- columns -->
 
         <div class="column is-1">
@@ -99,6 +101,10 @@ import { mapState } from 'vuex';
 import { colors } from '../constants';
 import Chart from '../components/Chart.vue';
 import { DEFAULT_SORT, shapeCountryRows, sortCountryRows } from '../countryRows.mjs'; // eslint-disable-line import/extensions
+import { defaultFromDate } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
+
+// The view's end-of-day convention for To: today 23:59.
+const endOfToday = () => dayjs().set('hour', 23).set('minute', 59).set('seconds', 0);
 
 const chartColorRed = '#ee7d5b';
 const chartColors = [
@@ -203,6 +209,19 @@ export default Vue.extend({
       return dayjs(s).format('YYYY-MM-DD HH:mm');
     },
 
+    // Fork (brand analytics, BRAND-ANALYTICS-SPEC D11) -- From = start of the day of the earliest
+    // send start of the selection (created_at for a campaign that never started), To = today 23:59.
+    // Called from the picker's @add/@remove and after an ?id= prefill without from/to -- never a
+    // watcher on form.campaigns, which the prefill also mutates. An empty selection leaves both.
+    applyDefaultDates() {
+      const from = defaultFromDate(this.form.campaigns);
+      if (!from) {
+        return;
+      }
+      this.form.from = from;
+      this.form.to = endOfToday().toDate();
+    },
+
     isCampaignSelected(camp) {
       return !this.form.campaigns.find(({ id }) => id === camp.id);
     },
@@ -279,15 +298,15 @@ export default Vue.extend({
       this.$router.push({ query: { id: this.form.campaigns.map((c) => c.id), from: dayjs(this.form.from).unix(), to: dayjs(this.form.to).unix() } });
     },
 
+    // Fork (brand analytics, BRAND-ANALYTICS-SPEC D3/D4) -- the narrow, list-scoped picker endpoint
+    // for every user, so the picker never offers a campaign the analytics endpoint would refuse.
     queryCampaigns(q) {
       this.isSearchLoading = true;
-      this.$api.getCampaigns({
+      this.$api.getAnalyticsCampaigns({
         query: q,
-        order_by: 'created_at',
-        order: 'DESC',
       }).then((data) => {
         this.isSearchLoading = false;
-        this.queriedCampaigns = data.results.map((c) => {
+        this.queriedCampaigns = data.map((c) => {
           // Change the name to include the ID in the auto-suggest results.
           const camp = c;
           camp.name = `#${c.id}: ${c.name}`;
@@ -358,7 +377,7 @@ export default Vue.extend({
   },
 
   created() {
-    const now = dayjs().set('hour', 23).set('minute', 59).set('seconds', 0);
+    const now = endOfToday();
     const weekAgo = now.subtract(7, 'day').set('hour', 0).set('minute', 0);
     const from = this.$route.query.from ? dayjs.unix(this.$route.query.from) : weekAgo;
     const to = this.$route.query.to ? dayjs.unix(this.$route.query.to) : now;
@@ -371,20 +390,30 @@ export default Vue.extend({
     // to finish, add them to the campaign selector and submit the form.
     const ids = this.$utils.parseQueryIDs(this.$route.query.id);
     if (ids.length > 0) {
+      // Fork (brand analytics, D4) -- one read through the picker endpoint; ids the user may not
+      // see (or that do not exist) are simply absent, so a shared link degrades to the permitted
+      // subset. Kept in the URL's order.
       this.isSearchLoading = true;
-      Promise.allSettled(ids.map((id) => this.$api.getCampaign(id))).then((data) => {
-        data.forEach((d) => {
-          if (d.status !== 'fulfilled') {
-            return;
-          }
-
-          const camp = d.value;
+      this.$api.getAnalyticsCampaigns({ id: ids }).catch(() => []).then((data) => {
+        [...data].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)).forEach((c) => {
+          const camp = c;
           camp.name = `#${camp.id}: ${camp.name}`;
           this.form.campaigns.push(camp);
         });
 
+        // D11 (b): the Campaigns-page link carries only id -- default the range to the selection.
+        // A URL with from/to is honoured as-is.
+        if (!this.$route.query.from && !this.$route.query.to) {
+          this.applyDefaultDates();
+        }
+
         this.$nextTick(() => {
           this.isSearchLoading = false;
+
+          // Nothing permitted to show: no analytics requests (they would 400 on an empty id set).
+          if (this.form.campaigns.length === 0) {
+            return;
+          }
 
           // Fetch count for each analytics type (views, counts, bounces);
           Object.keys(this.charts).forEach((k) => {

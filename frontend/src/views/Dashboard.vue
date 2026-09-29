@@ -110,7 +110,9 @@
                         <label for="#">{{ $utils.niceNumber(counts.subscribers.blocklisted) }}</label>
                         {{ $t('subscribers.status.blocklisted') }}
                       </li>
-                      <li>
+                      <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7): a list-scoped user's counts
+                      are scoped to their lists, where orphans (no list at all) are 0 by definition. -->
+                      <li v-if="!counts.scoped">
                         <label for="#">{{ $utils.niceNumber(counts.subscribers.orphans) }}</label>
                         {{ $t('dashboard.orphanSubs') }}
                       </li>
