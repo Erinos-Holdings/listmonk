@@ -42,6 +42,8 @@
           </div><!-- columns -->
           <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D11) -->
           <p class="is-size-7 has-text-grey date-hint" data-cy="date-hint">{{ $t('analytics.dateRangeHint') }}</p>
+          <!-- Fork (campaign rates, CAMPAIGN-RATES-SPEC follow-up) -->
+          <p class="is-size-7 has-text-grey date-hint" data-cy="rate-hint">{{ $t('analytics.rateHint') }}</p>
         </div><!-- columns -->
 
         <div class="column is-1">
@@ -56,10 +58,14 @@
         <div class="columns">
           <div class="column is-9">
             <b-loading v-if="v.loading" :active="v.loading" :is-full-page="false" />
-            <h4>
+            <!-- Fork (campaign rates) -- the total as a rate over the selection's Sent, count in grey,
+                 the campaigns list's shape; the count alone when nothing was sent. -->
+            <h4 v-if="v.type !== 'bar'" :set="cell = totalCell(k)">
               {{ v.name }}
-              <span v-if="v.type !== 'bar'" class="has-text-grey-light">({{ $utils.niceNumber(counts[k]) }})</span>
+              <template v-if="cell.pct">{{ cell.pct }}</template>
+              <span class="has-text-grey-light">({{ cell.count }})</span>
             </h4>
+            <h4 v-else>{{ v.name }}</h4>
             <chart :type="v.type" v-if="!v.loading" :data="v.data" :on-click="v.onClick" />
           </div>
           <div class="column is-2 donut-container">
@@ -80,11 +86,20 @@
         <b-table-column v-slot="props" field="name" :label="$t('analytics.locationCountry')" sortable>
           <span :class="{ 'has-text-grey': props.row.unknown }" :title="props.row.country">{{ props.row.name }}</span>
         </b-table-column>
+        <!-- Fork (campaign rates) -- per country over the selection's Sent, the same shape as above. -->
         <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
-          {{ $utils.niceNumber(props.row.views) }}
+          <template v-if="countryCell(props.row.views).pct">
+            {{ countryCell(props.row.views).pct }}
+            <span class="is-size-7 has-text-grey">({{ countryCell(props.row.views).count }})</span>
+          </template>
+          <template v-else>{{ countryCell(props.row.views).count }}</template>
         </b-table-column>
         <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
-          {{ $utils.niceNumber(props.row.clicks) }}
+          <template v-if="countryCell(props.row.clicks).pct">
+            {{ countryCell(props.row.clicks).pct }}
+            <span class="is-size-7 has-text-grey">({{ countryCell(props.row.clicks).count }})</span>
+          </template>
+          <template v-else>{{ countryCell(props.row.clicks).count }}</template>
         </b-table-column>
         <template #empty v-if="!countries.loading">
           <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
@@ -102,6 +117,10 @@ import { colors } from '../constants';
 import Chart from '../components/Chart.vue';
 import { DEFAULT_SORT, shapeCountryRows, sortCountryRows } from '../countryRows.mjs'; // eslint-disable-line import/extensions
 import { defaultFromDate } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
+import { rateCell } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
+
+// Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
+const RATE_DIGITS = { views: 1, clicks: 1, bounces: 2 };
 
 // The view's end-of-day convention for To: today 23:59.
 const endOfToday = () => dayjs().set('hour', 23).set('minute', 59).set('seconds', 0);
@@ -136,6 +155,10 @@ export default Vue.extend({
         links: 0,
       },
       urls: [],
+      // Fork (campaign rates) -- the Sent of the campaigns the charts were fetched for: the
+      // total (headers, Location) and per id (the ring). Set at fetch time, so editing the picker
+      // before the next search does not move the denominators under the numbers.
+      sent: { total: 0, byId: {} },
       charts: {
         views: {
           name: this.$t('campaigns.views'),
@@ -285,10 +308,13 @@ export default Vue.extend({
         return sum;
       });
 
+      // Fork (campaign rates) -- each slice's rate over its own campaign's Sent (Chart.vue's donut
+      // tooltip shows it rate-first when present).
+      const rates = campIDs.map((id, i) => rateCell(points[i], this.sent.byId[id], RATE_DIGITS[typ]).pct);
       const donut = {
         labels,
         datasets: [{
-          data: points, backgroundColor: chartColors, borderWidth: 6,
+          data: points, backgroundColor: chartColors, borderWidth: 6, rates,
         }],
       };
       return { points: { datasets: lines }, donut };
@@ -313,6 +339,26 @@ export default Vue.extend({
           return camp;
         });
       });
+    },
+
+    // Fork (campaign rates) -- the Sent denominators for one fetch of the charts and the table.
+    setSent(camps) {
+      const byId = {};
+      let total = 0;
+      camps.forEach((c) => {
+        const n = Number.isFinite(c.sent) ? c.sent : 0;
+        byId[c.id] = n;
+        total += n;
+      });
+      this.sent = { total, byId };
+    },
+
+    totalCell(typ) {
+      return rateCell(this.counts[typ], this.sent.total, RATE_DIGITS[typ], this.$utils.formatNumber.bind(this.$utils));
+    },
+
+    countryCell(n) {
+      return rateCell(n, this.sent.total, 1, this.$utils.formatNumber.bind(this.$utils));
     },
 
     getData(typ, camps) {
@@ -414,6 +460,8 @@ export default Vue.extend({
           if (this.form.campaigns.length === 0) {
             return;
           }
+
+          this.setSent(this.form.campaigns);
 
           // Fetch count for each analytics type (views, counts, bounces);
           Object.keys(this.charts).forEach((k) => {

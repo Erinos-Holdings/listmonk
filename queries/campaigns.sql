@@ -106,7 +106,8 @@ ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 --   $4 all campaigns (campaigns get_all, or blanket list access); else $5 permitted list ids
 --   $6 started campaigns only (analytics-only users, D11)
 --   $7 limit in search mode
-SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.created_at
+--   c.sent feeds the page's rates (views / clicks / bounces over Sent, the campaigns list's rule).
+SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.created_at, c.sent
 FROM campaigns c
 WHERE (
     CASE WHEN CARDINALITY($1::INT[]) > 0 THEN c.id = ANY($1::INT[])

@@ -128,6 +128,8 @@ type AnalyticsCampaign struct {
 	Evergreen bool      `db:"evergreen" json:"evergreen"`
 	StartedAt null.Time `db:"started_at" json:"started_at"`
 	CreatedAt null.Time `db:"created_at" json:"created_at"`
+	// The denominator of the page's rates (integrations CAMPAIGN-RATES-SPEC, analytics follow-up).
+	Sent int `db:"sent" json:"sent"`
 }
 
 type CampaignViewExport struct {

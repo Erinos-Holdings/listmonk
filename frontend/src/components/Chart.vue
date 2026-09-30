@@ -32,8 +32,15 @@ const DEFAULT_DONUT = {
         callbacks: {
           label: (item) => {
             const data = item.chart.data.datasets[item.datasetIndex];
-            const total = data.data.reduce((acc, val) => acc + val, 0);
             const val = data.data[item.dataIndex];
+            // Fork (campaign rates) -- a dataset carrying `rates` (rate over that campaign's Sent,
+            // already formatted, null with nothing sent) shows it rate-first like the campaigns
+            // list; otherwise the upstream share of the ring.
+            if (data.rates) {
+              const rate = data.rates[item.dataIndex];
+              return rate ? `${rate} (${val})` : `${val}`;
+            }
+            const total = data.data.reduce((acc, n) => acc + n, 0);
             const percentage = ((val / total) * 100).toFixed(2);
             return `${val} (${percentage}%)`;
           },

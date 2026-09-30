@@ -220,7 +220,7 @@ func TestBrandAnalyticsPicker(t *testing.T) {
 		if err := json.Unmarshal([]byte(body), &resp); err != nil || len(resp.Data) == 0 {
 			t.Fatalf("I2 %v: %s (%v)", q, body, err)
 		}
-		want := []string{"created_at", "evergreen", "id", "name", "started_at", "status"}
+		want := []string{"created_at", "evergreen", "id", "name", "sent", "started_at", "status"}
 		for _, r := range resp.Data {
 			keys := []string{}
 			for k := range r {
