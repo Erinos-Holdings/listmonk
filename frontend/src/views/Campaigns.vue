@@ -205,22 +205,22 @@
           <!-- Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5-D7) -- Views, Clicks and Bounces
                show the rate over Sent (props.row.sent, the same fetch as the counts) with the
                count in grey; with nothing sent the count stands alone and there is no hover. -->
-          <p v-for="f in rateFields" :key="f.field">
+          <p v-for="f in rateFields" :key="f.field" :set="cell = rateOf(props.row, f)">
             <label for="#">{{ $t(f.label) }}</label>
             <span :title="rateTip(props.row)">
               <router-link v-if="f.field === 'bounces'"
                 :to="{ name: 'bounces', query: { campaign_id: props.row.id } }">
-                <template v-if="rateOf(props.row, f).pct">
-                  {{ rateOf(props.row, f).pct }}
-                  <span class="is-size-7 has-text-grey">({{ rateOf(props.row, f).count }})</span>
+                <template v-if="cell.pct">
+                  {{ cell.pct }}
+                  <span class="is-size-7 has-text-grey">({{ cell.count }})</span>
                 </template>
-                <template v-else>{{ rateOf(props.row, f).count }}</template>
+                <template v-else>{{ cell.count }}</template>
               </router-link>
-              <template v-else-if="rateOf(props.row, f).pct">
-                {{ rateOf(props.row, f).pct }}
-                <span class="is-size-7 has-text-grey">({{ rateOf(props.row, f).count }})</span>
+              <template v-else-if="cell.pct">
+                {{ cell.pct }}
+                <span class="is-size-7 has-text-grey">({{ cell.count }})</span>
               </template>
-              <template v-else>{{ rateOf(props.row, f).count }}</template>
+              <template v-else>{{ cell.count }}</template>
             </span>
           </p>
           <p v-if="stats.rate">
