@@ -86,20 +86,16 @@
         <b-table-column v-slot="props" field="name" :label="$t('analytics.locationCountry')" sortable>
           <span :class="{ 'has-text-grey': props.row.unknown }" :title="props.row.country">{{ props.row.name }}</span>
         </b-table-column>
-        <!-- Fork (campaign rates) -- per country over the selection's Sent, the same shape as above. -->
+        <!-- Fork (campaign rates) -- per country the COUNT first, then its share of the column's
+             own total (Unknown included) in grey: a share of the table, not a rate over Sent, hence
+             the reversed order. The count alone when the column is empty. -->
         <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
-          <template v-if="countryCell(props.row.views).pct">
-            {{ countryCell(props.row.views).pct }}
-            <span class="is-size-7 has-text-grey">({{ countryCell(props.row.views).count }})</span>
-          </template>
-          <template v-else>{{ countryCell(props.row.views).count }}</template>
+          {{ $utils.formatNumber(props.row.views) }}
+          <span v-if="countryShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ countryShare(props.row.views, 'views') }})</span>
         </b-table-column>
         <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
-          <template v-if="countryCell(props.row.clicks).pct">
-            {{ countryCell(props.row.clicks).pct }}
-            <span class="is-size-7 has-text-grey">({{ countryCell(props.row.clicks).count }})</span>
-          </template>
-          <template v-else>{{ countryCell(props.row.clicks).count }}</template>
+          {{ $utils.formatNumber(props.row.clicks) }}
+          <span v-if="countryShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ countryShare(props.row.clicks, 'clicks') }})</span>
         </b-table-column>
         <template #empty v-if="!countries.loading">
           <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
@@ -357,8 +353,10 @@ export default Vue.extend({
       return rateCell(this.counts[typ], this.sent.total, RATE_DIGITS[typ], this.$utils.formatNumber.bind(this.$utils));
     },
 
-    countryCell(n) {
-      return rateCell(n, this.sent.total, 1, this.$utils.formatNumber.bind(this.$utils));
+    // A country's share of the column's own total (the rows' sum, Unknown included), so every
+    // table sums to 100% even though the column total legitimately differs from the header.
+    countryShare(n, field) {
+      return rateCell(n, this.countryTotals[field], 1).pct;
     },
 
     getData(typ, camps) {
@@ -414,6 +412,10 @@ export default Vue.extend({
 
     locale() {
       return (this.$i18n && this.$i18n.locale) || 'en';
+    },
+
+    countryTotals() {
+      return this.countries.rows.reduce((t, r) => ({ views: t.views + (r.views || 0), clicks: t.clicks + (r.clicks || 0) }), { views: 0, clicks: 0 });
     },
 
     countryTableRows() {

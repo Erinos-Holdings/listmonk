@@ -10,7 +10,7 @@
     "analytics.rateHint": "Views, clicks and bounces are shown as a rate over the selected campaigns' Sent (each campaign over its own Sent in the ring), with the count in parentheses.",
     "analytics.location": "Location",
     "analytics.locationCountry": "Country",
-    "analytics.locationHint": "Location is recorded as of 29 Sept. 2026; older activity shows as Unknown. Views are located by the mail client's image proxy (Gmail, Apple Mail), so view countries skew toward the proxy's location, while clicks come from the reader's device. A subscriber seen in two countries counts once in each, so the columns need not add up to the totals above.",
+    "analytics.locationHint": "Location is recorded as of 29 Sept. 2026; older activity shows as Unknown. Views are located by the mail client's image proxy (Gmail, Apple Mail), so view countries skew toward the proxy's location, while clicks come from the reader's device. A subscriber seen in two countries counts once in each, so the columns need not add up to the totals above. Percentages are each country's share of the views or clicks in this table, not a rate over Sent.",
     "analytics.locationUnknown": "Unknown",
     "analytics.nonIndividualTracking": "The counts are non-unique as individual subscriber tracking is turned off.",
     "analytics.trackingDisabled": "E-mail tracking is globally disabled. No new views or clicks are being recorded.",
