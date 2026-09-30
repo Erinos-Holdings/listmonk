@@ -279,7 +279,7 @@ func (a *App) ForgotPage(c echo.Context) error {
 	}
 
 	// Render the forgot page.
-	out := forgotPasswordTpl{Title: a.i18n.T("users.forgotPassword")}
+	out := forgotPasswordTpl{Title: a.i18n.T("users.forgotPasswordNewUser")}
 	return c.Render(http.StatusOK, "admin-forgot-password", out)
 }
 
