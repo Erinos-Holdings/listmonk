@@ -117,7 +117,8 @@ input[disabled] {
   max-width: 150px;
 }
 .header .logo img.logo-light {
-  max-width: 260px;
+  width: 300px;
+  max-width: 100%;
 }
 
 .unsub-all {

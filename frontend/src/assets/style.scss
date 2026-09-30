@@ -39,6 +39,11 @@ $colors: map-merge($colors, (
     "danger": ($red, $green-invert),
 ));
 
+// Fork: the navbar carries the Curated lockup at its natural 300x83 size, so it is taller
+// than Bulma's 3.25rem default; the sticky sidebar and the TinyMCE sticky toolbar below
+// offset from this value.
+$navbar-height: 5.5rem;
+
 $sidebar-box-shadow: none;
 $sidebar-width: 240px;
 $menu-item-active-background-color: $white-bis;
@@ -241,8 +246,10 @@ section {
     display: none;
   }
   .full {
-    max-height: 32px;
-    margin-top: 10px;
+    width: 300px;
+    height: 83px;
+    max-height: none;
+    margin-top: 2px;
   }
   .favicon {
     margin-top: 12px;
@@ -252,7 +259,7 @@ section {
 
 .b-sidebar {
   position: sticky;
-  top: 75px;
+  top: 111px; // $navbar-height (88px) + the 23px the upstream 75px allowed over 52px
 
   .sidebar-content {
     background: transparent;
@@ -370,7 +377,7 @@ body.is-noscroll {
   }
 
   .tox-tinymce--toolbar-sticky-on .tox-editor-header {
-    padding-top: 48px !important;
+    padding-top: 84px !important; // 48px + the navbar's extra 36px
   }
 }
 
