@@ -60,10 +60,10 @@
             <b-loading v-if="v.loading" :active="v.loading" :is-full-page="false" />
             <!-- Fork (campaign rates) -- the total as a rate over the selection's Sent, count in grey,
                  the campaigns list's shape; the count alone when nothing was sent. -->
-            <h4 v-if="v.type !== 'bar'" :set="cell = totalCell(k)">
+            <h4 v-if="v.type !== 'bar'">
               {{ v.name }}
-              <template v-if="cell.pct">{{ cell.pct }}</template>
-              <span class="has-text-grey-light">({{ cell.count }})</span>
+              <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
+              <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
             </h4>
             <h4 v-else>{{ v.name }}</h4>
             <chart :type="v.type" v-if="!v.loading" :data="v.data" :on-click="v.onClick" />
@@ -349,10 +349,6 @@ export default Vue.extend({
       this.sent = { total, byId };
     },
 
-    totalCell(typ) {
-      return rateCell(this.counts[typ], this.sent.total, RATE_DIGITS[typ], this.$utils.formatNumber.bind(this.$utils));
-    },
-
     // A country's share of the column's own total (the rows' sum, Unknown included), so every
     // table sums to 100% even though the column total legitimately differs from the header.
     countryShare(n, field) {
@@ -412,6 +408,12 @@ export default Vue.extend({
 
     locale() {
       return (this.$i18n && this.$i18n.locale) || 'en';
+    },
+
+    // The chart headers' { pct, count } per metric (review tidy: a computed, not a :set attribute).
+    totalCells() {
+      const fmt = this.$utils.formatNumber.bind(this.$utils);
+      return Object.fromEntries(Object.keys(RATE_DIGITS).map((k) => [k, rateCell(this.counts[k], this.sent.total, RATE_DIGITS[k], fmt)]));
     },
 
     countryTotals() {
