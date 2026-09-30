@@ -18,10 +18,14 @@ import (
 //     'all') and the modes. The legacy campaign_structure_verifications table (v6.2.14) is left
 //     untouched: the older image still upserts into it, and the review Lambda's legacy D4 path
 //     (STRUCTURE_GATE off) still reads it.
-//   - the permission campaigns:review_structure lives in permissions.json. NO role is granted it
-//     here: role ids are environment-specific, Super Admin holds every permission implicitly
-//     (auth.User.HasPerm), and the "Re-save API" role (the record script's credential) is granted
-//     it BY HAND at release -- the v6.2.14 pattern.
+//   - the permission campaigns:review_structure lives in permissions.json. This migration grants
+//     it to NO role -- which was a BUG, corrected by v6.2.17: the assumption "Super Admin holds
+//     every permission implicitly (auth.User.HasPerm)" is false on an upgraded database, because
+//     core.setupUserFields zeroes User.UserRoleID after copying it into UserRole.ID, so the
+//     short-circuit never fires and Super Admin holds exactly the permissions stored on role 1.
+//     Only cmd/install.go (a fresh install) grants role 1 everything; an upgrade must grant each
+//     new permission by migration -- the v6.2.14 pattern, which v6.2.17 applies. The "Re-save API"
+//     role (the record script's credential) is granted it BY HAND at release.
 //
 // ROLLBACK: the table and the new routes are inert to an older binary, but a role carrying
 // campaigns:review_structure cannot be re-saved on one (role save validates against that binary's

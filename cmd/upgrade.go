@@ -77,6 +77,8 @@ var migList = []migFunc{
 	{"v6.2.15", migrations.V6_2_15},
 	// Fork migration (erinos): location stats -- country CHAR(2) on campaign_views and link_clicks (LOCATION-STATS-SPEC) — see internal/migrations/v6.2.16.go.
 	{"v6.2.16", migrations.V6_2_16},
+	// Fork migration (erinos): campaigns:review_structure grant for Super Admin (role 1) -- the grant v6.2.15 omitted — see internal/migrations/v6.2.17.go.
+	{"v6.2.17", migrations.V6_2_17},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

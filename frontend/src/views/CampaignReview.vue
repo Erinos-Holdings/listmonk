@@ -421,7 +421,10 @@ export default Vue.extend({
       return Object.values(this.staged).filter((s) => s.action === 'fixed' && s.fix);
     },
 
-    // Done when the verdict is pass, or every open entry has a decision (recorded or staged).
+    // Done when the verdict is pass, or nothing is left that THIS user can decide here: every open
+    // entry has a decision (recorded or staged), and -- for a structure admin -- so does D4.2's
+    // structure finding (excluded from `entries`; its Acknowledge lives in the Structure section).
+    // A user without the permission cannot act on it, so it never holds their Done hostage.
     isDone() {
       if (this.isRunning || !this.report) {
         return false;
@@ -429,7 +432,12 @@ export default Vue.extend({
       if (this.verdictName === 'pass') {
         return true;
       }
-      return this.entries.every((e) => this.staged[e.key] || this.latest[e.key]);
+      const decided = (key) => !!(this.staged[key] || this.latest[key]);
+      if (this.structureUi.acknowledge && this.structure && this.structure.finding
+        && !decided(this.structure.finding.key)) {
+        return false;
+      }
+      return this.entries.every((e) => decided(e.key));
     },
   },
 
