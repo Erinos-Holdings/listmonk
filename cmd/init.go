@@ -424,12 +424,18 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 		// count ROW(NULL, id).
 		countrySel    = "*"
 		countryFilter = ""
+
+		// Fork (campaign list rates, CAMPAIGN-RATES-SPEC D1) -- the campaigns list's views and
+		// clicks count the way the analytics page does: each subscriber once when ON, raw rows
+		// when OFF. Bounces are always raw (D3).
+		statsSel = "campaign_id"
 	)
 	if ko.Bool("privacy.individual_tracking") {
 		countQuery = "get-campaign-analytics-unique-counts"
 		linkSel = "DISTINCT subscriber_id"
 		countrySel = "DISTINCT (subscriber_id, campaign_id)"
 		countryFilter = "AND subscriber_id IS NOT NULL"
+		statsSel = "DISTINCT subscriber_id"
 	}
 
 	// These don't exist in the SQL file but are in the queries struct to be prepared.
@@ -443,6 +449,7 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	}
 	qMap["get-campaign-link-counts"].Query = fmt.Sprintf(qMap["get-campaign-link-counts"].Query, linkSel)
 	qMap["get-campaign-country-counts"].Query = fmt.Sprintf(qMap["get-campaign-country-counts"].Query, countrySel, countryFilter)
+	qMap["get-campaign-stats"].Query = fmt.Sprintf(qMap["get-campaign-stats"].Query, statsSel)
 
 	// Scan and prepare all queries.
 	var q models.Queries

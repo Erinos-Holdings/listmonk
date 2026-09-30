@@ -181,14 +181,6 @@
 
       <b-table-column v-slot="props" field="stats" :label="$t('campaigns.stats')" width="15%">
         <div class="fields stats" :set="stats = getCampaignStats(props.row)">
-          <p>
-            <label for="#">{{ $t('campaigns.views') }}</label>
-            <span>{{ $utils.formatNumber(props.row.views) }}</span>
-          </p>
-          <p>
-            <label for="#">{{ $t('campaigns.clicks') }}</label>
-            <span>{{ $utils.formatNumber(props.row.clicks) }}</span>
-          </p>
           <!-- Fork (list-page audience) -- a broadcast that has not started shows the LIVE
                count it would send to now (its lists, opt-in rules and language), not the
                stored to_send, which stays 0 until the send-time claim. Zero is a warning. -->
@@ -210,12 +202,25 @@
               {{ $utils.formatNumber(stats.toSend) }}
             </span>
           </p>
-          <p>
-            <label for="#">{{ $t('globals.terms.bounces') }}</label>
-            <span>
-              <router-link :to="{ name: 'bounces', query: { campaign_id: props.row.id } }">
-                {{ $utils.formatNumber(props.row.bounces) }}
+          <!-- Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5-D7) -- Views, Clicks and Bounces
+               show the rate over Sent (props.row.sent, the same fetch as the counts) with the
+               count in grey; with nothing sent the count stands alone and there is no hover. -->
+          <p v-for="f in rateFields" :key="f.field">
+            <label for="#">{{ $t(f.label) }}</label>
+            <span :title="rateTip(props.row)">
+              <router-link v-if="f.field === 'bounces'"
+                :to="{ name: 'bounces', query: { campaign_id: props.row.id } }">
+                <template v-if="rateOf(props.row, f).pct">
+                  {{ rateOf(props.row, f).pct }}
+                  <span class="is-size-7 has-text-grey">({{ rateOf(props.row, f).count }})</span>
+                </template>
+                <template v-else>{{ rateOf(props.row, f).count }}</template>
               </router-link>
+              <template v-else-if="rateOf(props.row, f).pct">
+                {{ rateOf(props.row, f).pct }}
+                <span class="is-size-7 has-text-grey">({{ rateOf(props.row, f).count }})</span>
+              </template>
+              <template v-else>{{ rateOf(props.row, f).count }}</template>
             </span>
           </p>
           <p v-if="stats.rate">
@@ -356,6 +361,15 @@ import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus, sendLangCode } from '../langs';
 import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
+import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
+
+// Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
+// Sent / To send. Bounces keep two decimals (the Dashboard's bounce digits).
+const RATE_FIELDS = [
+  { field: 'views', label: 'campaigns.views', digits: 1 },
+  { field: 'clicks', label: 'campaigns.clicks', digits: 1 },
+  { field: 'bounces', label: 'globals.terms.bounces', digits: 2 },
+];
 
 export default Vue.extend({
   components: {
@@ -367,6 +381,7 @@ export default Vue.extend({
   data() {
     return {
       previewItem: null,
+      rateFields: RATE_FIELDS,
       queryParams: {
         page: 1,
         query: '',
@@ -433,6 +448,19 @@ export default Vue.extend({
     // (core.wantsAudience -- not-yet-started broadcasts); null means "no estimate", never zero.
     hasAudience(c) {
       return c.audience !== null && c.audience !== undefined;
+    },
+
+    // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5) -- a Views/Clicks/Bounces cell's
+    // { pct, count }, the rate over the row's own sent (null with nothing sent).
+    rateOf(c, f) {
+      return rateCell(c[f.field], c.sent, f.digits, (n) => this.$utils.formatNumber(n));
+    },
+
+    // D7 -- the hover names the denominator and the counting mode; none when there is no rate.
+    rateTip(c) {
+      const unique = !!(this.serverConfig.privacy && this.serverConfig.privacy.individual_tracking);
+      const key = rateTipKey(unique, c.sent);
+      return key ? this.$t(key, { sent: this.$utils.formatNumber(c.sent) }) : null;
     },
 
     // An English audience with no-language rows hovers as the Lists grid's EN+ split
