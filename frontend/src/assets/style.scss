@@ -39,8 +39,7 @@ $colors: map-merge($colors, (
     "danger": ($red, $green-invert),
 ));
 
-// Fork: the navbar carries the Curated lockup scaled to the sidebar's width (215x57 — 240px
-// sidebar minus the 25px brand padding), so it is taller than Bulma's 3.25rem default; the
+// Fork: the navbar carries the Curated lockup scaled to the sidebar's width (215x57), so it is taller than Bulma's 3.25rem default; the
 // sticky sidebar and the TinyMCE sticky toolbar below offset from this value.
 $navbar-height: 4.5rem;
 
@@ -241,7 +240,7 @@ section {
   box-shadow: 0 0 3px $grey-lighter;
 }
 .navbar-brand {
-  padding: 0 0 0 25px;
+  padding: 0 0 0 20px; // the lockup's ink then left-aligns with the sidebar menu glyphs
   .favicon {
     display: none;
   }

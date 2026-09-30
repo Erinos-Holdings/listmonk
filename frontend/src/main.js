@@ -42,7 +42,7 @@ router.beforeEach((to, from, next) => {
 router.afterEach((to) => {
   Vue.nextTick(() => {
     const t = to.meta.title && i18n.te(to.meta.title) ? `${i18n.tc(to.meta.title, 0)} /` : '';
-    document.title = `${t} listmonk`;
+    document.title = `${t} Curated Email Campaign Manager`;
   });
 });
 
@@ -107,7 +107,7 @@ async function initConfig(app) {
   // Set the page title after i18n has loaded.
   const to = router.history.current;
   const title = to.meta.title ? `${i18n.tc(to.meta.title, 0)} /` : '';
-  document.title = `${title} listmonk`;
+  document.title = `${title} Curated Email Campaign Manager`;
 
   if (app) {
     app.$mount('#app');
