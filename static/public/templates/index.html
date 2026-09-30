@@ -27,7 +27,9 @@
 		<header class="header">
 			<div class="logo">
 				<a href="{{ if .EnablePublicSubPage }}{{ .RootURL}}/subscription/form{{ end }}">
-				{{ if ne .LogoURL "" }}
+				{{ if .AuthPage }}
+					<img class="logo-light" src="/public/static/curated-ecm-logo.png?v={{ .AssetVersion }}" alt="{{ .SiteName }}" />
+				{{ else if ne .LogoURL "" }}
 					<img src="{{ .LogoURL }}" alt="{{ .Data.Title }}" />
 				{{ else }}
 					<img src="/public/static/logo.svg?v={{ .AssetVersion }}" alt="{{ .Data.Title }}" />
@@ -40,9 +42,11 @@
 {{ define "footer" }}
 	</div>
 	
+	{{ if not .AuthPage }}
 	<footer class="container">
 		{{ L.T "public.poweredBy" }} <a target="_blank" rel="noreferrer" href="https://listmonk.app">listmonk</a>
 	</footer>
+	{{ end }}
 </body>
 </html>
 {{ end }}

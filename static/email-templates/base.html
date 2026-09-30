@@ -80,18 +80,13 @@
     <div class="gutter">&nbsp;</div>
     <div class="wrap">
         <div class="header">
-            {{ if ne LogoURL "" }}
-                <img src="{{ LogoURL }}" alt="listmonk" />
-            {{ end }}
+            <img src="{{ RootURL }}/public/static/curated-ecm-logo.png" width="220" style="width: 220px; max-width: 100%; height: auto;" alt="Curated Email Campaign Manager" />
         </div>
 {{ end }}
 
 {{ define "footer" }}
     </div>
     
-    <div class="footer">
-        <p>{{ L.T "public.poweredBy" }} <a href="https://listmonk.app" target="_blank" rel="noreferrer">listmonk</a></p>
-    </div>
     <div class="gutter">&nbsp;</div>
 </body>
 </html>

@@ -50,8 +50,11 @@ type tplData struct {
 	EnablePublicSubPage bool
 	EnablePublicArchive bool
 	IndividualTracking  bool
-	Data                any
-	L                   *i18n.I18n
+	// AuthPage is true for the admin auth pages (login, forgot/reset password, first-run
+	// setup): light-mode pages that take the bundled light logo and no vendor footer.
+	AuthPage bool
+	Data     any
+	L        *i18n.I18n
 }
 
 type publicTpl struct {
@@ -125,6 +128,7 @@ func (t *tplRenderer) Render(w io.Writer, name string, data any, c echo.Context)
 		EnablePublicSubPage: t.EnablePublicSubPage,
 		EnablePublicArchive: t.EnablePublicArchive,
 		IndividualTracking:  t.IndividualTracking,
+		AuthPage:            strings.HasPrefix(name, "admin-"),
 		Data:                data,
 		L:                   c.Get("app").(*App).i18n,
 	})
