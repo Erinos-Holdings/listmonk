@@ -291,6 +291,13 @@ func (a *App) ServeS3Media(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing media file path")
 	}
 
+	// Fork (uploads hardening) -- integrations UPLOADS-HARDENING-SPEC D3. The store resolves a key
+	// as a URL and drops a query or fragment, so "x.woff2?a.svg" would fetch x.woff2 but be typed
+	// by ".svg". No stored key holds either character.
+	if strings.ContainsAny(key, "?#") {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid media file path")
+	}
+
 	b, err := a.media.GetBlob(key)
 	if err != nil {
 		a.log.Printf("error fetching media from s3 %s: %v", key, err)

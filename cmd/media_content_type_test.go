@@ -196,6 +196,14 @@ func TestSandboxedHTMLIsOnlyHTML(t *testing.T) {
 			"a stored body answered as a page must go through sandboxedHTML (integrations UPLOADS-HARDENING-SPEC D4)",
 			len(got), strings.Join(got, "\n"))
 	}
+
+	// The other way to answer an HTML page. Its one use is the admin UI's own index.html; a
+	// second one is a new page that must be looked at.
+	blob := selectorsIn(t, "HTMLBlob", 2, nil, ".")
+	if len(blob) != 1 || !strings.HasSuffix(blob[0], " in AdminPage") {
+		t.Fatalf("want exactly one c.HTMLBlob call in cmd/, inside AdminPage; found %d:\n%s",
+			len(blob), strings.Join(blob, "\n"))
+	}
 }
 
 // ---- K5: the app's own /uploads route ------------------------------------------------------
@@ -213,6 +221,27 @@ func TestServeS3MediaTypeAndHeaders(t *testing.T) {
 		{"x.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`), "image/svg+xml"},
 		{"x.gif", png, "image/png"}, // a reprocess repair under a .gif key: truthful
 		{"x.png", png, "image/png"},
+	}
+
+	// A parameter with a query or fragment is refused: the S3 provider would fetch the key before
+	// it and the type would come from what follows it.
+	for _, key := range []string{"x.woff2?a.svg", "x.woff2#a.svg"} {
+		t.Run(key, func(t *testing.T) {
+			s := newFakeStore()
+			s.objects["x.woff2"] = []byte(htmlDoc)
+			s.objects[key] = []byte(htmlDoc)
+			a := &App{media: s}
+
+			e := echo.New()
+			rec := httptest.NewRecorder()
+			ctx := e.NewContext(httptest.NewRequest(http.MethodGet, "/uploads/x", nil), rec)
+			ctx.SetParamNames("filepath")
+			ctx.SetParamValues(key)
+			err := a.ServeS3Media(ctx)
+			if he, ok := err.(*echo.HTTPError); !ok || he.Code != http.StatusBadRequest {
+				t.Fatalf("ServeS3Media(%q) = %v (status %d), want a 400", key, err, rec.Code)
+			}
+		})
 	}
 
 	for _, c := range cases {

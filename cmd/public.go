@@ -218,8 +218,8 @@ const (
 	previewCSP = "sandbox"
 
 	// publicPageCSP is for the view-in-browser and public archive pages: links still navigate,
-	// target="_blank" opens a normal tab, and forms still submit.
-	publicPageCSP = "sandbox allow-popups allow-popups-to-escape-sandbox allow-forms"
+	// target="_blank" opens a normal tab, forms still submit and a linked file still downloads.
+	publicPageCSP = "sandbox allow-popups allow-popups-to-escape-sandbox allow-forms allow-downloads"
 )
 
 // sandboxedHTML answers a stored body as an HTML page under the given policy. It is the only

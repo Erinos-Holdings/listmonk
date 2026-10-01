@@ -233,7 +233,7 @@ func TestStoredBodiesAreSandboxed(t *testing.T) {
 
 	wantPolicy := map[string]string{
 		previewCSP:    "sandbox",
-		publicPageCSP: "sandbox allow-popups allow-popups-to-escape-sandbox allow-forms",
+		publicPageCSP: "sandbox allow-popups allow-popups-to-escape-sandbox allow-forms allow-downloads",
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
