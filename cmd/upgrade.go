@@ -79,6 +79,8 @@ var migList = []migFunc{
 	{"v6.2.16", migrations.V6_2_16},
 	// Fork migration (erinos): campaigns:review_structure grant for Super Admin (role 1) -- the grant v6.2.15 omitted — see internal/migrations/v6.2.17.go.
 	{"v6.2.17", migrations.V6_2_17},
+	// Fork migration (erinos): two-factor -- user_passkeys table, security.require_twofa seeded false (PASSKEY-2FA-SPEC) — see internal/migrations/v6.2.18.go.
+	{"v6.2.18", migrations.V6_2_18},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

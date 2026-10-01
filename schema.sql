@@ -394,6 +394,7 @@ INSERT INTO settings (key, value) VALUES
     ('security.captcha', '{"altcha": {"enabled": false, "complexity": 300000}, "hcaptcha": {"enabled": false, "key": "", "secret": ""}}'),
     ('security.oidc', '{"enabled": false, "provider_url": "", "provider_name": "", "client_id": "", "client_secret": "", "auto_create_users": false, "default_user_role_id": null, "default_list_role_id": null}'),
     ('security.trusted_urls', '[]'),
+    ('security.require_twofa', 'false'),
     ('upload.provider', '"filesystem"'),
     ('upload.max_file_size', '5000'),
     ('upload.extensions', '["jpg","jpeg","png","gif","svg","*"]'),
@@ -745,3 +746,16 @@ CREATE TABLE IF NOT EXISTS campaign_structure_records (
     modes            TEXT[] NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_campaign_structure_records_fingerprint ON campaign_structure_records (fingerprint);
+
+-- Fork (two-factor): passkeys as a second factor (v6.2.18, PASSKEY-2FA-SPEC D1).
+DROP TABLE IF EXISTS user_passkeys CASCADE;
+CREATE TABLE IF NOT EXISTS user_passkeys (
+    id               SERIAL PRIMARY KEY,
+    user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    credential_id    BYTEA NOT NULL UNIQUE,
+    credential       JSONB NOT NULL,
+    name             TEXT NOT NULL,
+    created_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    last_used_at     TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE INDEX IF NOT EXISTS idx_user_passkeys_user ON user_passkeys (user_id);

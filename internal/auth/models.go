@@ -117,6 +117,13 @@ type User struct {
 	UserRolePerms pq.StringArray   `db:"user_role_permissions" json:"-"`
 	ListsPermsRaw *json.RawMessage `db:"list_role_perms" json:"-"`
 
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D1). PasskeyCount is a get-user/get-users
+	// subselect (zero on a login-user row). TwofaEnforced is IsTwofaEnforced() and TwofaRequired is
+	// enforced AND the running process's security.require_twofa, both filled in setupUserFields.
+	PasskeyCount  int  `db:"passkey_count" json:"passkey_count"`
+	TwofaEnforced bool `db:"-" json:"twofa_enforced"`
+	TwofaRequired bool `db:"-" json:"twofa_required"`
+
 	// Non-DB fields filled post-retrieval.
 	UserRole struct {
 		ID          int      `db:"-" json:"id"`

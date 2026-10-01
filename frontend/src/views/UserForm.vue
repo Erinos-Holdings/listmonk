@@ -116,6 +116,10 @@
         </div>
       </section>
       <footer class="modal-card-foot has-text-right">
+        <!-- Fork (two-factor, integrations PASSKEY-2FA-SPEC D8): admin recovery. -->
+        <b-button v-if="canResetTwofa" type="is-danger is-outlined" @click="onResetTwofa" data-cy="btn-reset-twofa">
+          {{ $t('users.twoFAReset') }}
+        </b-button>
         <b-button @click="$parent.close()">
           {{ $t('globals.buttons.close') }}
         </b-button>
@@ -132,6 +136,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import CopyText from '../components/CopyText.vue';
+import stepUp from '../stepUp';
 
 export default Vue.extend({
   name: 'UserForm',
@@ -216,6 +221,21 @@ export default Vue.extend({
       });
     },
 
+    // Fork (two-factor, integrations PASSKEY-2FA-SPEC D8) -- clears the user's TOTP, passkeys and
+    // sessions after a step-up; they enrol again at their next login.
+    onResetTwofa() {
+      this.$utils.confirm(this.$t('users.twoFAResetConfirm', { name: this.data.name }), () => {
+        stepUp(this)
+          .then(() => this.$api.resetUserTwofa(this.data.id))
+          .then(() => {
+            this.$utils.toast(this.$t('globals.messages.done'));
+            this.$emit('finished');
+            this.$parent.close();
+          })
+          .catch(() => {});
+      });
+    },
+
     hasType(t) {
       // If the user being edited is API, then the only valid field is API.
       // Otherwise, all fields are valid except API.
@@ -224,7 +244,14 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['loading', 'userRoles', 'listRoles']),
+    ...mapState(['loading', 'userRoles', 'listRoles', 'profile']),
+
+    canResetTwofa() {
+      const d = this.data;
+      return this.isEditing && this.$can('users:manage') && d.type !== 'api'
+        && (!this.profile || d.id !== this.profile.id)
+        && (d.twofaType === 'totp' || d.passkeyCount > 0);
+    },
   },
 
   mounted() {

@@ -266,6 +266,14 @@ func (a *App) UpdateUserProfile(c echo.Context) error {
 		u.Email = null.String{String: email, Valid: true}
 	}
 
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D6) -- a session alone may change the name,
+	// but replacing the password or the email (the reset mailbox) needs a step-up stamp.
+	if user.PasswordLogin && (u.Password.String != "" || email != user.Email.String) {
+		if err := a.requireStepUp(c); err != nil {
+			return err
+		}
+	}
+
 	if u.PasswordLogin && u.Password.String != "" {
 		// Fork (password policy, PASSWORD-POLICY-SPEC D3) -- the rule, not strHasLen(…, 8, …).
 		if !validatePassword(u.Password.String) {
@@ -294,6 +302,11 @@ func (a *App) UpdateUserProfile(c echo.Context) error {
 
 // EnableTOTP enables TOTP 2FA for a user after verifying the code.
 func (a *App) EnableTOTP(c echo.Context) error {
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D6) -- a session alone never changes a factor.
+	if err := a.requireStepUp(c); err != nil {
+		return err
+	}
+
 	var (
 		u      = c.Get(auth.UserHTTPCtxKey).(auth.User)
 		secret = strings.TrimSpace(c.FormValue("secret"))
@@ -320,40 +333,37 @@ func (a *App) EnableTOTP(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("users.invalidTOTPCode"))
 	}
 
-	// Enable TOTP in the DB.
-	if err := a.core.SetTwoFA(u.ID, models.TwofaTypeTOTP, secret); err != nil {
+	// Enable TOTP in the DB (fork: in the per-user factor transaction), then end the user's other
+	// sessions.
+	if err := a.core.EnableTOTPFactor(u.ID, secret, core.FactorRule{}); err != nil {
 		return err
 	}
+	a.endOtherSessions(u.ID, auth.GetSessionID(c))
 
 	return c.JSON(http.StatusOK, okResp{true})
 }
 
-// DisableTOTP disables TOTP 2FA for a user after verifying the password.
+// DisableTOTP disables TOTP 2FA for a user.
+// Fork (two-factor, integrations PASSKEY-2FA-SPEC D6/D7/D9) -- upstream asked only for the
+// password, so the password undid the factor meant to back it up. It now needs a step-up stamp,
+// takes no password, and (switch ON, enforced user) refuses to remove the last factor.
 func (a *App) DisableTOTP(c echo.Context) error {
-	var (
-		u        = c.Get(auth.UserHTTPCtxKey).(auth.User)
-		password = c.FormValue("password")
-	)
+	if err := a.requireStepUp(c); err != nil {
+		return err
+	}
+
+	u := c.Get(auth.UserHTTPCtxKey).(auth.User)
 
 	// TOTP isn't enabled.
 	if u.TwofaType != models.TwofaTypeTOTP {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("users.twoFANotEnabled"))
 	}
 
-	// Validate password.
-	if !strHasLen(password, 8, stdInputMaxLen) {
-		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "password"))
-	}
-
-	// Verify the password.
-	if _, err := a.core.LoginUser(u.Username, password); err != nil {
-		return echo.NewHTTPError(http.StatusForbidden, a.i18n.T("users.invalidPassword"))
-	}
-
 	// Disable TOTP in the DB.
-	if err := a.core.SetTwoFA(u.ID, models.TwofaTypeNone, ""); err != nil {
+	if err := a.core.DisableTOTPFactor(u.ID, a.keepLastRule(u)); err != nil {
 		return err
 	}
+	a.endOtherSessions(u.ID, auth.GetSessionID(c))
 
 	return c.JSON(http.StatusOK, okResp{true})
 }

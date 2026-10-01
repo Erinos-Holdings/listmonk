@@ -600,6 +600,7 @@ func initCore(fnNotify func(sub models.Subscriber, listIDs []int) (int, error), 
 			SendOptinConfirmation: ko.Bool("app.send_optin_confirmation"),
 			CacheSlowQueries:      ko.Bool("app.cache_slow_queries"),
 			EvergreenEnabled:      ko.Bool("app.evergreen_enable"),
+			RequireTwofa:          ko.Bool("security.require_twofa"),
 		},
 		Queries: queries,
 		DB:      db,
@@ -1206,7 +1207,8 @@ func initAuth(co *core.Core, db *sql.DB, ko *koanf.Koanf) (bool, *auth.Auth) {
 	}
 
 	// Initiaize the auth module.
-	a, err := auth.New(auth.Config{OIDC: oidcCfg}, db, cb, lo)
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- the switch, absent => false.
+	a, err := auth.New(auth.Config{OIDC: oidcCfg, RequireTwofa: ko.Bool("security.require_twofa")}, db, cb, lo)
 	if err != nil {
 		lo.Fatalf("error initializing auth: %v", err)
 	}

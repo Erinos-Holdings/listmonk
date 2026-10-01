@@ -193,6 +193,16 @@ type Queries struct {
 	LoginUser          *sqlx.Stmt `query:"login-user"`
 	DeleteUserSessions *sqlx.Stmt `query:"delete-user-sessions"`
 
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC).
+	LockUserFactors        *sqlx.Stmt `query:"lock-user-factors"`
+	GetUserFactors         *sqlx.Stmt `query:"get-user-factors"`
+	GetUserPasskeys        *sqlx.Stmt `query:"get-user-passkeys"`
+	InsertUserPasskey      *sqlx.Stmt `query:"insert-user-passkey"`
+	UpdateUserPasskeyLogin *sqlx.Stmt `query:"update-user-passkey-login"`
+	DeleteUserPasskey      *sqlx.Stmt `query:"delete-user-passkey"`
+	DeleteUserPasskeys     *sqlx.Stmt `query:"delete-user-passkeys"`
+	VerifyUserPassword     *sqlx.Stmt `query:"verify-user-password"`
+
 	CreateRole            *sqlx.Stmt `query:"create-role"`
 	GetUserRoles          *sqlx.Stmt `query:"get-user-roles"`
 	GetListRoles          *sqlx.Stmt `query:"get-list-roles"`

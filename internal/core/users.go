@@ -236,6 +236,10 @@ func (c *Core) setupUserFields(users []auth.User) []auth.User {
 			}
 		}
 
+		// Fork (two-factor, integrations PASSKEY-2FA-SPEC D1/D3) -- after the role fields above.
+		u.TwofaEnforced = u.IsTwofaEnforced()
+		u.TwofaRequired = u.TwofaEnforced && c.consts.RequireTwofa
+
 		users[n] = u
 	}
 

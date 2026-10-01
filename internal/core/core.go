@@ -49,6 +49,9 @@ type Constants struct {
 	CacheSlowQueries bool
 	// Fork (evergreen) -- app.evergreen_enable. Off, an evergreen campaign cannot be started.
 	EvergreenEnabled bool
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D1) -- security.require_twofa as the
+	// running process read it; setupUserFields derives User.TwofaRequired from it.
+	RequireTwofa bool
 }
 
 // Hooks contains external function hooks that are required by the core package.

@@ -75,6 +75,7 @@ import PerformanceSettings from './settings/performance.vue';
 import PrivacySettings from './settings/privacy.vue';
 import SecuritySettings from './settings/security.vue';
 import SmtpSettings from './settings/smtp.vue';
+import stepUp from '../stepUp';
 
 export default Vue.extend({
   components: {
@@ -229,6 +230,16 @@ export default Vue.extend({
       }
       if (!Array.isArray(form['app.utm_hosts'])) {
         form['app.utm_hosts'] = [];
+      }
+
+      // Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- a save that changes the
+      // enforcement switch needs a step-up first (the server refuses it without one).
+      if (!!form['security.require_twofa'] !== !!JSON.parse(this.formCopy)['security.require_twofa']) {
+        try {
+          await stepUp(this);
+        } catch (e) {
+          return false;
+        }
       }
 
       this.isLoading = true;

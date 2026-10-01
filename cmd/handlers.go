@@ -237,6 +237,15 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 
 		g.GET("/api/profile", a.GetUserProfile)
 		g.PUT("/api/profile", a.UpdateUserProfile)
+		// Fork (two-factor, integrations PASSKEY-2FA-SPEC D6). Factor changes need a step-up stamp
+		// on the session (checked in the handlers); an API token never holds one.
+		g.GET("/api/profile/twofa", a.GetProfileTwofa)
+		g.POST("/api/profile/twofa/stepup", a.StepUp)
+		g.POST("/api/profile/twofa/stepup/passkey/begin", a.StepUpPasskeyBegin)
+		g.POST("/api/profile/twofa/stepup/passkey/finish", a.StepUpPasskeyFinish)
+		g.POST("/api/profile/passkeys/begin", a.AddPasskeyBegin)
+		g.POST("/api/profile/passkeys/finish", a.AddPasskeyFinish)
+		g.DELETE("/api/profile/passkeys/:id", hasID(a.DeletePasskey))
 		g.GET("/api/users", pm(a.GetUsers, "users:get"))
 		g.GET("/api/users/:id", pm(hasID(a.GetUser), "users:get"))
 		g.POST("/api/users", pm(a.CreateUser, "users:manage"))
@@ -249,6 +258,8 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/users/:id/twofa/totp", hasID(a.GenerateTOTPQR))
 		g.PUT("/api/users/:id/twofa", hasID(a.EnableTOTP))
 		g.DELETE("/api/users/:id/twofa", hasID(a.DisableTOTP))
+		// Fork (two-factor, integrations PASSKEY-2FA-SPEC D8) -- admin "Reset two-factor".
+		g.DELETE("/api/users/:id/factors", pm(hasID(a.ResetUserTwofa), "users:manage"))
 
 		g.GET("/api/roles/users", pm(a.GetUserRoles, "roles:get"))
 		g.GET("/api/roles/lists", pm(a.GeListRoles, "roles:get"))
@@ -285,6 +296,14 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST(path.Join(uriAdmin, "/login"), a.LoginPage)
 		g.GET(path.Join(uriAdmin, "/login/twofa"), a.TwofaPage)
 		g.POST(path.Join(uriAdmin, "/login/twofa"), a.TwofaPage)
+		// Fork (two-factor, integrations PASSKEY-2FA-SPEC D5). All under /admin/login/, so the edge
+		// login rate limit covers them.
+		g.POST(path.Join(uriAdmin, "/login/twofa/passkey/begin"), a.TwofaPasskeyBegin)
+		g.POST(path.Join(uriAdmin, "/login/twofa/passkey/finish"), a.TwofaPasskeyFinish)
+		g.GET(path.Join(uriAdmin, "/login/enroll"), a.EnrollPage)
+		g.POST(path.Join(uriAdmin, "/login/enroll"), a.EnrollPage)
+		g.POST(path.Join(uriAdmin, "/login/enroll/passkey/begin"), a.EnrollPasskeyBegin)
+		g.POST(path.Join(uriAdmin, "/login/enroll/passkey/finish"), a.EnrollPasskeyFinish)
 		g.GET(path.Join(uriAdmin, "/forgot"), a.ForgotPage)
 		g.POST(path.Join(uriAdmin, "/forgot"), a.ForgotPage)
 		g.GET(path.Join(uriAdmin, "/reset"), a.ResetPage)

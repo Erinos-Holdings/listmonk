@@ -83,6 +83,21 @@
         </div>
       </b-table-column>
 
+      <!-- Fork (two-factor, integrations PASSKEY-2FA-SPEC D8): each user's factor state. -->
+      <b-table-column v-slot="props" field="twofa" :label="$t('users.twoFAState')" header-class="cy-twofa">
+        <template v-if="props.row.type !== 'api'">
+          <b-tag v-if="props.row.twofaType === 'totp'">TOTP</b-tag>
+          <b-tag v-if="props.row.passkeyCount > 0">
+            {{ $t('users.twoFAPasskeyCount', { num: props.row.passkeyCount }) }}
+          </b-tag>
+          <span v-if="props.row.twofaType !== 'totp' && !props.row.passkeyCount"
+            :class="props.row.twofaRequired ? 'has-text-danger' : 'has-text-grey'">
+            {{ $t('globals.terms.none') }}
+          </span>
+          <b-tag v-if="props.row.twofaRequired" type="is-warning">{{ $t('users.twoFARequiredTag') }}</b-tag>
+        </template>
+      </b-table-column>
+
       <b-table-column v-slot="props" field="created_at" :label="$t('globals.fields.createdAt')"
         header-class="cy-created_at" sortable>
         {{ $utils.niceDate(props.row.createdAt) }}

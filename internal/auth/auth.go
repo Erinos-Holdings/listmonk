@@ -51,6 +51,10 @@ type BasicAuthConfig struct {
 type Config struct {
 	OIDC      OIDCConfig
 	BasicAuth BasicAuthConfig
+
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- security.require_twofa, read once at
+	// init; a settings save reloads the app, which is how a flip takes effect.
+	RequireTwofa bool
 }
 
 // Callbacks takes two callback functions required by simplesessions.
@@ -348,6 +352,17 @@ func (o *Auth) Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 		// Is it a cookie based session?
 		sess, user, err := o.validateSession(c)
 		if err != nil {
+			c.Set(UserHTTPCtxKey, echo.NewHTTPError(http.StatusForbidden, "invalid session"))
+			return next(c)
+		}
+
+		// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- switch ON: a cookie session whose
+		// user is enforced and holds no factor (a session from before the flip, a role upgraded
+		// past read, factors cleared by an admin) is ended and answered as an invalid session.
+		if o.cfg.RequireTwofa && user.IsTwofaEnforced() && !user.HasTwofaFactor() {
+			if err := sess.Destroy(); err != nil {
+				o.log.Printf("error destroying factorless session: %v", err)
+			}
 			c.Set(UserHTTPCtxKey, echo.NewHTTPError(http.StatusForbidden, "invalid session"))
 			return next(c)
 		}

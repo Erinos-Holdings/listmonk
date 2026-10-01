@@ -74,6 +74,10 @@ type twofaTpl struct {
 	Token       string
 	NextURI     string
 	Error       string
+
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D5) -- which factors the page offers.
+	TOTP    bool
+	Passkey bool
 }
 
 var (
@@ -139,33 +143,30 @@ func (a *App) TwofaPage(c echo.Context) error {
 		next = utils.SanitizeURI(c.QueryParam("next"))
 	}
 
-	// If there's no token, redirect.
-	if len(token) < tmpAuthTokenLen {
-		return c.Redirect(http.StatusFound, uriAdmin)
-	}
-
 	if next == "" || next == "/" {
 		next = uriAdmin
 	}
 
-	// Validate the 2FA temp token.
-	data, err := tmptokens.Check(token)
-	if err != nil {
-		return c.Redirect(http.StatusFound, uriAdmin)
-	}
-
-	userID, ok := data.(int)
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D5) -- the token must be a challenge token
+	// bound to this browser's nonce cookie; anything else (missing, expired, used up, an enrol
+	// token, a reset entry) goes back to the login page.
+	tk, ok := a.checkTwofaToken(c, token, twofaPurposeChallenge)
 	if !ok {
-		return a.renderTwofaPage(c, token, next, a.i18n.T("users.invalidRequest"))
+		return c.Redirect(http.StatusFound, uriLogin)
+	}
+	user, err := a.twofaUser(tk.UserID)
+	if err != nil || !user.HasTwofaFactor() {
+		// No factor left to challenge (an admin reset it meanwhile): start over at login.
+		return c.Redirect(http.StatusFound, uriLogin)
 	}
 
 	// Process the 2FA verification POST request.
 	if c.Request().Method == http.MethodPost {
-		return a.doTwofaVerify(c, token, userID, next)
+		return a.doTwofaVerify(c, token, user, next)
 	}
 
 	// Render the 2FA verification page.
-	return a.renderTwofaPage(c, token, next, "")
+	return a.renderTwofaPage(c, token, next, user, "")
 }
 
 // Logout logs a user out.
@@ -475,26 +476,27 @@ func (a *App) doLogin(c echo.Context) error {
 	}
 
 	// Log the user in by fetching and verifying credentials from the DB.
-	user, err := a.core.LoginUser(username, password)
+	login, err := a.core.LoginUser(username, password)
 	if err != nil {
 		return err
 	}
 
-	// If TOTP is enabled for the user, create a temp token and redirect to the 2FA page.
-	if user.TwofaType == models.TwofaTypeTOTP {
-		// Generate a random token.
-		token, err := generateRandomString(tmpAuthTokenLen)
-		if err != nil {
-			a.log.Printf("error generating 2FA token: %v", err)
-			return echo.NewHTTPError(http.StatusInternalServerError, a.i18n.T("globals.messages.internalError"))
-		}
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D3/D5) -- login-user returns only the users
+	// columns (no role, no permissions, no passkey count), so the full user is loaded before any
+	// factor or enforcement question; on the login-user row every Super Admin reads as read-only.
+	user, err := a.core.GetUser(login.ID, "", "")
+	if err != nil {
+		return err
+	}
 
-		// Set the token.
-		tmptokens.Set(token, twofaTokenTTL, user.ID)
+	// A user who holds a factor (TOTP or a passkey) is always challenged.
+	if user.HasTwofaFactor() {
+		return a.issueTwofaToken(c, user.ID, twofaPurposeChallenge)
+	}
 
-		// Redirect to 2FA page.
-		next := utils.SanitizeURI(c.FormValue("next"))
-		return c.Redirect(http.StatusFound, fmt.Sprintf("%s/login/twofa?token=%s&next=%s", uriAdmin, token, url.QueryEscape(next)))
+	// Switch ON: an enforced user with no factor enrols one before getting a session.
+	if a.auth.RequireTwofa() && user.IsTwofaEnforced() {
+		return a.issueTwofaToken(c, user.ID, twofaPurposeEnroll)
 	}
 
 	// Set the session in the DB and cookie.
@@ -700,58 +702,55 @@ func (a *App) doResetPassword(c echo.Context, token, email string) error {
 		a.log.Printf("error destroying sessions after password reset for user_id=%d: %v", user.ID, err)
 	}
 
-	// Log the user in directly without forcing a manual login right after password change.
-	if err := a.auth.SaveSession(user, "", c); err != nil {
-		return err
-	}
-
-	// Redirect to the admin page.
-	return c.Redirect(http.StatusFound, uriAdmin)
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D9) -- the reset link only resets the
+	// password. It never creates a session (upstream logged the user in here, so the mailbox alone
+	// was a full login past any second factor); the user signs in, and is challenged, as usual.
+	return c.Redirect(http.StatusFound, uriLogin)
 }
 
 // renderTwofaPage renders the 2FA verification page.
-func (a *App) renderTwofaPage(c echo.Context, token, next, errMsg string) error {
+func (a *App) renderTwofaPage(c echo.Context, token, next string, user auth.User, errMsg string) error {
 	out := twofaTpl{
 		Title:       a.i18n.T("users.twoFA"),
 		Description: "",
 		Token:       token,
 		NextURI:     next,
 		Error:       errMsg,
+		TOTP:        user.TwofaType == models.TwofaTypeTOTP,
+		Passkey:     user.PasskeyCount > 0,
 	}
 	return c.Render(http.StatusOK, "admin-twofa", out)
 }
 
-// doTwofaVerify handles the 2FA verification form submission.
-func (a *App) doTwofaVerify(c echo.Context, token string, userID int, next string) error {
+// doTwofaVerify handles the 2FA verification form submission. The caller reloaded the user and
+// refused a disabled one (twofaUser).
+func (a *App) doTwofaVerify(c echo.Context, token string, user auth.User, next string) error {
 	totpCode := strings.TrimSpace(c.FormValue("totp_code"))
 
 	// Validate.
 	if !strHasLen(totpCode, 6, 6) {
-		return a.renderTwofaPage(c, token, next, a.i18n.T("globals.messages.invalidValue"))
-	}
-
-	// Get the user.
-	user, err := a.core.GetUser(userID, "", "")
-	if err != nil {
-		return a.renderTwofaPage(c, token, next, a.i18n.T("users.invalidRequest"))
+		return a.renderTwofaPage(c, token, next, user, a.i18n.T("globals.messages.invalidValue"))
 	}
 
 	// Verify that TOTP is actually enabled for the user.
 	if user.TwofaType != models.TwofaTypeTOTP {
-		return a.renderTwofaPage(c, token, next, a.i18n.T("users.twoFANotEnabled"))
+		return a.renderTwofaPage(c, token, next, user, a.i18n.T("users.twoFANotEnabled"))
+	}
+
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D5) -- per-user TOTP guess limit.
+	if totpGuesses.limited(user.ID) {
+		return a.renderTwofaPage(c, token, next, user, a.i18n.T("users.totpLimited"))
 	}
 
 	// Verify the TOTP code.
 	valid := totp.Validate(totpCode, user.TwofaKey.String)
 	if !valid {
-		return a.renderTwofaPage(c, token, next, a.i18n.T("globals.messages.invalidValue"))
+		totpGuesses.fail(user.ID)
+		return a.renderTwofaPage(c, token, next, user, a.i18n.T("globals.messages.invalidValue"))
 	}
 
-	// Invalidate the token.
-	tmptokens.Delete(token)
-
-	// Set the session.
-	if err := a.auth.SaveSession(user, "", c); err != nil {
+	// Invalidate the token and set the session.
+	if err := a.completeTwofaLogin(c, token, user); err != nil {
 		return err
 	}
 

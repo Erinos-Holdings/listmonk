@@ -1,5 +1,19 @@
 <template>
   <div class="items">
+    <!-- Fork (two-factor, integrations PASSKEY-2FA-SPEC D4): the enforcement switch. Settings.vue asks
+      for a step-up before a save that changes it. -->
+    <div class="columns">
+      <div class="column is-12">
+        <b-field :message="$t('settings.security.requireTwofaHelp')">
+          <b-switch v-model="data['security.require_twofa']" name="security.require_twofa"
+            data-cy="require-twofa">
+            {{ $t('settings.security.requireTwofa') }}
+          </b-switch>
+        </b-field>
+      </div>
+    </div>
+    <hr />
+
     <div class="columns">
       <div class="column is-3">
         <b-field :message="$t('settings.security.OIDCHelp')">

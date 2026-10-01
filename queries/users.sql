@@ -81,6 +81,8 @@ lp AS (
 )
 SELECT
     users.*,
+    -- Fork (two-factor, integrations PASSKEY-2FA-SPEC D1).
+    (SELECT COUNT(*) FROM user_passkeys p WHERE p.user_id = users.id) AS passkey_count,
     ur.id AS user_role_id,
     ur.name AS user_role_name,
     ur.permissions AS user_role_permissions,
@@ -107,6 +109,8 @@ WITH sel AS (
 )
 SELECT
     sel.*,
+    -- Fork (two-factor, integrations PASSKEY-2FA-SPEC D1).
+    (SELECT COUNT(*) FROM user_passkeys p WHERE p.user_id = sel.id) AS passkey_count,
     ur.id AS user_role_id,
     ur.name AS user_role_name,
     ur.permissions AS user_role_permissions,
@@ -158,7 +162,38 @@ UPDATE users SET name=$2, email=(CASE WHEN password_login THEN $3 ELSE email END
 UPDATE users SET loggedin_at=NOW(), avatar=(CASE WHEN $2 != '' THEN $2 ELSE avatar END) WHERE id=$1;
 
 -- name: set-user-twofa
-UPDATE users SET twofa_type=$2::twofa_type, twofa_key=$3, updated_at=NOW() WHERE id=$1;
+-- Fork (two-factor, integrations PASSKEY-2FA-SPEC D8) -- a cleared key is NULL, not ''.
+UPDATE users SET twofa_type=$2::twofa_type, twofa_key=NULLIF($3, ''), updated_at=NOW() WHERE id=$1;
 
 -- name: delete-user-sessions
 DELETE FROM sessions WHERE data->>'user_id' = $1 AND ($2 = '' OR id != $2);
+
+-- Fork (two-factor, integrations PASSKEY-2FA-SPEC D5 to D8). Every factor writer runs in one
+-- transaction that first takes lock-user-factors, then reads get-user-factors (a new snapshot under
+-- READ COMMITTED, so it sees any writer that held the lock before), then writes. A check and its
+-- write therefore cannot interleave with another factor change for the same user.
+
+-- name: lock-user-factors
+SELECT id FROM users WHERE id = $1 FOR UPDATE;
+
+-- name: get-user-factors
+SELECT twofa_type, (SELECT COUNT(*) FROM user_passkeys WHERE user_id = $1) AS passkey_count FROM users WHERE id = $1;
+
+-- name: get-user-passkeys
+SELECT * FROM user_passkeys WHERE user_id = $1 ORDER BY id;
+
+-- name: insert-user-passkey
+INSERT INTO user_passkeys (user_id, credential_id, credential, name) VALUES ($1, $2, $3::JSONB, $4) RETURNING id;
+
+-- name: update-user-passkey-login
+UPDATE user_passkeys SET credential = $3::JSONB, last_used_at = NOW() WHERE id = $1 AND user_id = $2;
+
+-- name: delete-user-passkey
+DELETE FROM user_passkeys WHERE id = $1 AND user_id = $2;
+
+-- name: delete-user-passkeys
+DELETE FROM user_passkeys WHERE user_id = $1;
+
+-- name: verify-user-password
+-- Step-up by password. Read-only, unlike login-user, so it never rewrites loggedin_at.
+SELECT id FROM users WHERE id = $1 AND password_login = TRUE AND CRYPT($2, password) = password;

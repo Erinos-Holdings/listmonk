@@ -15,6 +15,7 @@
     "test:countries": "node --test src/countryRows.test.mjs",
     "test:access": "node --test src/accessPolicy.test.mjs",
     "test:rates": "node --test src/campaignRates.test.mjs",
+    "test:webauthn": "node --test src/webauthnCodec.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },
   "dependencies": {

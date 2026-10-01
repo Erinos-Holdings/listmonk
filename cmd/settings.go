@@ -284,6 +284,15 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		}
 	}
 
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- absent keeps the stored switch;
+	// changing it needs a step-up stamp.
+	if set.SecurityRequireTwofa == nil {
+		set.SecurityRequireTwofa = cur.SecurityRequireTwofa
+	}
+	if err := a.guardRequireTwofa(c, boolValue(set.SecurityRequireTwofa), boolValue(cur.SecurityRequireTwofa)); err != nil {
+		return err
+	}
+
 	// Update the settings in the DB.
 	if err := a.core.UpdateSettings(set); err != nil {
 		return err
@@ -314,6 +323,22 @@ func (a *App) UpdateSettingsByKey(c echo.Context) error {
 			return err
 		}
 		b = resolved
+	}
+
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- the switch takes a bool, and
+	// changing it needs a step-up stamp.
+	if key == settingRequireTwofa {
+		var v bool
+		if err := json.Unmarshal(b, &v); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
+		}
+		cur, err := a.core.GetSettings()
+		if err != nil {
+			return err
+		}
+		if err := a.guardRequireTwofa(c, v, boolValue(cur.SecurityRequireTwofa)); err != nil {
+			return err
+		}
 	}
 
 	// Update the value in the DB.

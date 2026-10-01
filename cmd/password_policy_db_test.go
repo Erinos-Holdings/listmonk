@@ -3,10 +3,13 @@ package main
 // Fork (password policy) -- integrations PASSWORD-POLICY-SPEC I2, I3, I5, I6, I7 against a real
 // database, through the handlers. The five SET sites (CreateUser, UpdateUser, UpdateUserProfile,
 // doFirstTimeSetup, doResetPassword) refuse a 16+ character password missing one class with the
-// users.passwordPolicy text and accept a compliant one; the two VERIFY sites (doLogin,
-// DisableTOTP) still take an 8-character password seeded by SQL at bcrypt cost 6; an API user is
-// created with no rule on its token; every set query stores a cost-12 hash; doLogin answers no
-// faster than loginMinDuration for a wrong password and for an unknown username.
+// users.passwordPolicy text and accept a compliant one; the two VERIFY sites (doLogin, and --
+// amended by PASSKEY-2FA-SPEC D9/I21 -- the step-up handler, which replaced DisableTOTP's password)
+// still take an 8-character password seeded by SQL at bcrypt cost 6; an API user is created with
+// no rule on its token; every set query stores a cost-12 hash; doLogin answers no faster than
+// loginMinDuration for a wrong password, for an unknown username and (PASSKEY-2FA-SPEC I29) on
+// the challenge and enrolment redirects. Also amended by PASSKEY-2FA-SPEC: a profile password
+// change carries a step-up stamp (D6), and doResetPassword creates no session (D9).
 // Shares newLinkHarness (LISTMONK_TEST_PG opt-in; see link_redirect_db_test.go), plus a real
 // auth.Auth (the success paths call SaveSession) and a capturing renderer (stubRenderer discards
 // template data, which would hide the reset page's error line).
@@ -140,6 +143,28 @@ func (h *ppHarness) sessions() int {
 	return n
 }
 
+// stepUpSession returns a setup that puts a real, step-up-stamped session for the user on the
+// request (PASSKEY-2FA-SPEC D6: a profile password change needs the stamp).
+func (h *ppHarness) stepUpSession(userID int) func(echo.Context) {
+	return func(c echo.Context) {
+		u, err := h.app.core.GetUser(userID, "", "")
+		if err != nil {
+			h.t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		if err := h.app.auth.SaveSession(u, "", echo.New().NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec)); err != nil {
+			h.t.Fatal(err)
+		}
+		for _, ck := range rec.Result().Cookies() {
+			c.Request().AddCookie(ck)
+		}
+		h.app.auth.Middleware(func(echo.Context) error { return nil })(c)
+		if err := h.app.auth.StampStepUp(c); err != nil {
+			h.t.Fatal(err)
+		}
+	}
+}
+
 func (h *ppHarness) userJSON(username, email, password string) string {
 	return fmt.Sprintf(`{"username": %q, "name": %q, "email": %q, "type": "user", "user_role_id": 1, "status": "enabled", "password_login": true, "password": %q}`,
 		username, username, email, password)
@@ -201,14 +226,9 @@ func TestPasswordPolicySetPaths(t *testing.T) {
 		t.Fatalf("UpdateUser, request type=api refused: type %q, hash changed %v", typ, h.hash("createme") != before)
 	}
 
-	// I2 + I6 -- UpdateUserProfile, as the user themself.
-	asSelf := func(c echo.Context) {
-		u, err := app.core.GetUser(editID, "", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.Set(auth.UserHTTPCtxKey, u)
-	}
+	// I2 + I6 -- UpdateUserProfile, as the user themself, in a step-up-stamped session
+	// (PASSKEY-2FA-SPEC D6).
+	asSelf := h.stepUpSession(editID)
 	const profiled = "Profile Pass 2026"
 	before = h.hash("createme")
 	profile := func(pw string) string {
@@ -279,8 +299,9 @@ func TestPasswordPolicySetPaths(t *testing.T) {
 	}
 	sess = h.sessions()
 	code, _, hdr := h.form(reset, pwForm(resetPw), nil)
-	if code != http.StatusFound || hdr.Get("Location") != uriAdmin {
-		t.Fatalf("doResetPassword, compliant: want 302 to %s, got %d %q", uriAdmin, code, hdr.Get("Location"))
+	// PASSKEY-2FA-SPEC D9 -- the reset ends at the login page, with no session.
+	if code != http.StatusFound || hdr.Get("Location") != uriLogin {
+		t.Fatalf("doResetPassword, compliant: want 302 to %s, got %d %q", uriLogin, code, hdr.Get("Location"))
 	}
 	if pw := h.hash("createme"); !reCost12.MatchString(pw) || pw == before {
 		t.Fatalf("doResetPassword stored %q (before %q), want a new cost-12 bcrypt hash", pw, before)
@@ -288,8 +309,8 @@ func TestPasswordPolicySetPaths(t *testing.T) {
 	if _, err := app.core.LoginUser("createme", resetPw); err != nil {
 		t.Fatalf("doResetPassword: the new password does not verify: %v", err)
 	}
-	if h.sessions() != sess+1 {
-		t.Fatal("doResetPassword, compliant: no session saved")
+	if n := h.sessions(); n > sess {
+		t.Fatalf("doResetPassword, compliant: %d sessions after, %d before -- the reset link must not log in", n, sess)
 	}
 
 	// I5 -- an API user is created with no rule on its token (a short "password" in the body
@@ -335,17 +356,33 @@ func TestPasswordPolicySetPaths(t *testing.T) {
 		t.Fatal("doLogin with the 8-character password: no session saved")
 	}
 
+	// PASSKEY-2FA-SPEC D9 -- the second VERIFY site is now the step-up handler (DisableTOTP takes
+	// no password). A user with no factor steps up with the 8-character cost-6 password.
 	legacyID := h.userID("legacy")
-	h.db.MustExec(`UPDATE users SET twofa_type = 'totp', twofa_key = 'JBSWY3DPEHPK3PXP' WHERE id = $1`, legacyID)
-	asLegacy := func(c echo.Context) {
+	var stamped echo.Context
+	inSession := func(c echo.Context) {
 		u, err := app.core.GetUser(legacyID, "", "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		c.Set(auth.UserHTTPCtxKey, u)
+		rec := httptest.NewRecorder()
+		if err := app.auth.SaveSession(u, "", echo.New().NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec)); err != nil {
+			t.Fatal(err)
+		}
+		for _, ck := range rec.Result().Cookies() {
+			c.Request().AddCookie(ck)
+		}
+		app.auth.Middleware(func(echo.Context) error { return nil })(c)
+		stamped = c
 	}
-	if code, msg, _ := h.form(app.DisableTOTP, url.Values{"password": {legacyPw}}, asLegacy); code != http.StatusOK {
-		t.Fatalf("DisableTOTP with the 8-character password: want 200, got %d %s", code, msg)
+	if code, msg, _ := h.form(app.StepUp, url.Values{"password": {legacyPw}}, inSession); code != http.StatusOK || !app.auth.HasStepUp(stamped) {
+		t.Fatalf("StepUp with the 8-character password: want 200 and a stamp, got %d %s", code, msg)
+	}
+
+	// ... and DisableTOTP, in a stamped session, takes no password.
+	h.db.MustExec(`UPDATE users SET twofa_type = 'totp', twofa_key = 'JBSWY3DPEHPK3PXP' WHERE id = $1`, legacyID)
+	if code, msg, _ := h.form(app.DisableTOTP, url.Values{}, h.stepUpSession(legacyID)); code != http.StatusOK {
+		t.Fatalf("DisableTOTP in a stamped session: want 200, got %d %s", code, msg)
 	}
 	var twofa string
 	h.db.Get(&twofa, `SELECT twofa_type FROM users WHERE id = $1`, legacyID)
@@ -359,5 +396,28 @@ func TestPasswordPolicySetPaths(t *testing.T) {
 	}
 	if code, _, took := login("no-such-user", "wrong-password"); code != http.StatusForbidden || took < loginMinDuration {
 		t.Fatalf("doLogin, unknown username: want 403 in >= %s, got %d in %s", loginMinDuration, code, took)
+	}
+
+	// PASSKEY-2FA-SPEC I29 -- the floor holds on the challenge and enrolment redirects too.
+	h.db.MustExec(`UPDATE users SET twofa_type = 'totp', twofa_key = 'JBSWY3DPEHPK3PXP' WHERE id = $1`, legacyID)
+	start := time.Now()
+	code, _, hdr = h.form(app.doLogin, url.Values{"username": {"legacy"}, "password": {legacyPw}}, nil)
+	if took := time.Since(start); code != http.StatusFound || !strings.HasPrefix(hdr.Get("Location"), "/admin/login/twofa?") || took < loginMinDuration {
+		t.Fatalf("doLogin, challenge redirect: want 302 to the challenge in >= %s, got %d %q in %s", loginMinDuration, code, hdr.Get("Location"), took)
+	}
+	h.db.MustExec(`UPDATE users SET twofa_type = 'none', twofa_key = NULL WHERE id = $1`, legacyID)
+	enforcing, err := auth.New(auth.Config{RequireTwofa: true}, h.db.DB, &auth.Callbacks{
+		GetCookie: func(name string, r any) (*http.Cookie, error) { return r.(echo.Context).Cookie(name) },
+		SetCookie: func(cookie *http.Cookie, w any) error { w.(echo.Context).SetCookie(cookie); return nil },
+		GetUser:   func(id int) (auth.User, error) { return h.app.core.GetUser(id, "", "") },
+	}, log.New(os.Stderr, "", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.auth = enforcing
+	start = time.Now()
+	code, _, hdr = h.form(app.doLogin, url.Values{"username": {"legacy"}, "password": {legacyPw}}, nil)
+	if took := time.Since(start); code != http.StatusFound || !strings.HasPrefix(hdr.Get("Location"), "/admin/login/enroll?") || took < loginMinDuration {
+		t.Fatalf("doLogin, enrolment redirect: want 302 to the enrolment page in >= %s, got %d %q in %s", loginMinDuration, code, hdr.Get("Location"), took)
 	}
 }

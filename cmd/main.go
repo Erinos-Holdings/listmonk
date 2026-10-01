@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/v2"
@@ -61,6 +62,11 @@ type App struct {
 	// error) serves a 503 from GET /api/campaigns/render-canary.
 	renderCanary    *renderCanary
 	renderCanaryErr error
+
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D2) -- the WebAuthn relying party, built
+	// once from app.root_url; nil (with the error) makes the passkey routes answer 503.
+	webAuthn    *webauthn.WebAuthn
+	webAuthnErr error
 
 	about         about
 	fnOptinNotify func(models.Subscriber, []int) (int, error)
@@ -325,6 +331,9 @@ func main() {
 		// If there are no users, then the app needs to prompt for new user setup.
 		needsUserSetup: !hasUsers,
 	}
+
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D2): a bad root URL never fails boot.
+	app.webAuthn, app.webAuthnErr = initWebAuthn(urlCfg.RootURL, cfg.SiteName)
 
 	// Fork (render canary, INSPECT-SCOPE-SPEC §2.1): render the packed canary through the send
 	// path now that the manager exists. A failure is logged; the endpoint then answers 503.

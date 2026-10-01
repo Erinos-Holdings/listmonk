@@ -79,6 +79,11 @@ type Settings struct {
 
 	SecurityTrustedURLs []string `json:"security.trusted_urls"`
 
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4). A pointer so a body that omits the key
+	// (a tab loaded before the release, an older client) is told apart from false: absent keeps
+	// the stored value.
+	SecurityRequireTwofa *bool `json:"security.require_twofa,omitempty"`
+
 	UploadProvider             string   `json:"upload.provider"`
 	UploadExtensions           []string `json:"upload.extensions"`
 	UploadFilesystemUploadPath string   `json:"upload.filesystem.upload_path"`

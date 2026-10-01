@@ -764,3 +764,31 @@ export const disableTOTP = (id, data) => http.delete(
   `/api/users/${id}/twofa`,
   { data },
 );
+
+// Fork (two-factor, integrations PASSKEY-2FA-SPEC D6/D8). WebAuthn options travel as the server
+// marshals them (camelCase: false), straight into static/public/static/webauthn.js.
+export const getProfileTwofa = () => http.get('/api/profile/twofa');
+
+export const stepUp = (data) => http.post('/api/profile/twofa/stepup', data);
+
+export const stepUpPasskeyBegin = () => http.post(
+  '/api/profile/twofa/stepup/passkey/begin',
+  {},
+  { camelCase: false },
+);
+
+export const stepUpPasskeyFinish = (credential) => http.post(
+  '/api/profile/twofa/stepup/passkey/finish',
+  { credential },
+);
+
+export const addPasskeyBegin = () => http.post('/api/profile/passkeys/begin', {}, { camelCase: false });
+
+export const addPasskeyFinish = (name, credential) => http.post(
+  '/api/profile/passkeys/finish',
+  { name, credential },
+);
+
+export const deletePasskey = (id) => http.delete(`/api/profile/passkeys/${id}`);
+
+export const resetUserTwofa = (id) => http.delete(`/api/users/${id}/factors`, { loading: models.users });
