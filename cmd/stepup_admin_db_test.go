@@ -340,7 +340,7 @@ func (f *suFixture) apiClient(t *testing.T, username string, roleID int) *twofaC
 
 // J5 -- an API token whose role holds the three permissions, and a Super Admin token, get 403 with
 // the no-token text on each of the 14 routes and nothing changes; a cookie session without a
-// stamp gets the step-up-required text.
+// stamp -- a Super Admin's, and a non-Super-Admin role holder's -- gets the step-up-required text.
 func TestAdminWritesRefuseTokens(t *testing.T) {
 	f := newSUFixture(t)
 	h := f.h
@@ -354,6 +354,8 @@ func TestAdminWritesRefuseTokens(t *testing.T) {
 		{"token with the three permissions", f.apiClient(t, "adminbot", adminRole), h.app.i18n.T("users.stepUpNoToken")},
 		{"Super Admin token", f.apiClient(t, "superbot", auth.SuperAdminRoleID), h.app.i18n.T("users.stepUpNoToken")},
 		{"cookie session without a stamp", h.sessionClient(f.boss), h.app.i18n.T("users.stepUpRequired")},
+		// Not a Super Admin: auth.Perm takes its permission-map branch for this one.
+		{"cookie session of a role holder without a stamp", h.sessionClient(h.user("deputy", adminRole)), h.app.i18n.T("users.stepUpRequired")},
 	}
 	cases := f.cases(t, clients[0].cl)
 	before := f.adminState()
@@ -371,6 +373,16 @@ func TestAdminWritesRefuseTokens(t *testing.T) {
 	}
 	if f.adminState() != before {
 		t.Error("a refused token or session request changed users, roles or settings")
+	}
+
+	// The same role holder, stamped, gets through (the gate is not Super Admin only either way).
+	deputy := clients[3].cl
+	if rec := deputy.stepUpPassword(); rec.Code != http.StatusOK {
+		t.Fatalf("step-up: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := deputy.do(http.MethodPost, "/api/roles/users", echo.MIMEApplicationJSON, `{"name": "Deputy role", "permissions": ["campaigns:get"]}`); rec.Code != http.StatusOK ||
+		f.count(`SELECT COUNT(*) FROM roles WHERE name = 'Deputy role'`) != 1 {
+		t.Errorf("stamped role holder, POST /api/roles/users: %d %s", rec.Code, rec.Body.String())
 	}
 }
 

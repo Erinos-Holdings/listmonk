@@ -1,6 +1,6 @@
 <template>
   <!-- Fork (two-factor, integrations PASSKEY-2FA-SPEC D6/D11): the one step-up dialog, shared by the
-    profile page (factor, password and email changes) and the security settings (the switch). -->
+    profile page (factor, password and email changes) and every user, role and settings write. -->
   <div class="modal-card content" style="width: auto">
     <header class="modal-card-head">
       <h4>{{ $t('users.stepUpTitle') }}</h4>

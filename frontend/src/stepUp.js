@@ -9,8 +9,20 @@ import StepUpDialog from './components/StepUpDialog.vue';
 
 const MIN_TTL = 60;
 
+// A second call while the server is being asked (a double click during the round trip) is dropped
+// as a cancel, so it neither opens a second dialog nor sends a second request. Only the round
+// trip is guarded: once the dialog is open it covers the page, and a flag held for the dialog's
+// life could stick if the dialog went away without an answer.
+let probing = false;
+
 export default function stepUp(vm) {
-  return vm.$api.getProfileTwofa().then((tf) => {
+  if (probing) {
+    return Promise.reject(new Error('cancelled'));
+  }
+  probing = true;
+  return vm.$api.getProfileTwofa().finally(() => {
+    probing = false;
+  }).then((tf) => {
     if ((tf.stepupTtl || 0) >= MIN_TTL) {
       return undefined;
     }

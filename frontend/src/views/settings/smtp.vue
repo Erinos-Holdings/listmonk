@@ -346,15 +346,12 @@ export default Vue.extend({
 
       this.errMsg = '';
       // Fork (integrations STEPUP-ADMIN-SPEC D4) -- the SMTP test steps up first.
-      stepUp(this).then(() => this.$api.testSMTP({ ...item, email: this.testEmail })).then(() => {
+      // Only the test request's own error goes to errMsg (it is sent with the toast disabled).
+      stepUp(this).then(() => this.$api.testSMTP({ ...item, email: this.testEmail }).then(() => {
         this.$utils.toast(this.$t('campaigns.testSent'));
-      }).catch((err) => {
-        if (err.response?.data?.message) {
-          this.errMsg = err.response.data.message;
-          return;
-        }
-        stepUpError(this)(err);
-      });
+      }, (err) => {
+        this.errMsg = err.response?.data?.message || err.toString();
+      })).catch(stepUpError(this));
     },
 
     showTestForm(n) {
