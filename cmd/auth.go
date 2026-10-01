@@ -105,7 +105,9 @@ func (a *App) LoginPage(c echo.Context) error {
 	if c.Request().Method == http.MethodPost {
 		loginErr = a.doLogin(c)
 		if loginErr == nil {
-			return c.Redirect(http.StatusFound, utils.SanitizeURI(c.FormValue("next")))
+			// Fork (two-factor, integrations PASSKEY-2FA-SPEC I33) -- twofaNext, not SanitizeURI
+			// alone, which lets a backslash path through (browsers read "/\host" as "//host").
+			return c.Redirect(http.StatusFound, twofaNext(c.FormValue("next")))
 		}
 	}
 
@@ -123,7 +125,7 @@ func (a *App) LoginSetupPage(c echo.Context) error {
 			a.Lock()
 			a.needsUserSetup = false
 			a.Unlock()
-			return c.Redirect(http.StatusFound, utils.SanitizeURI(c.FormValue("next")))
+			return c.Redirect(http.StatusFound, twofaNext(c.FormValue("next")))
 		}
 	}
 

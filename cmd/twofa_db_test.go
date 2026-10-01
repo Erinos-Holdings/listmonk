@@ -1401,9 +1401,11 @@ func TestSelfUpdateViaUsersRouteNeedsStepUp(t *testing.T) {
 		t.Fatalf("own save with no credential change: %d %s", rec.Code, rec.Body.String())
 	}
 
-	// A differently cased copy of the same email is no change.
+	// A STORED mixed-case email (the profile route can store one) is no change either: the gate
+	// lower-cases both sides. The save itself rewrites the stored value in lower case.
+	h.db.MustExec(`UPDATE users SET email = 'SelfAdmin@Example.test' WHERE id = $1`, me)
 	if rec := put(cl, me, "selfadmin", "SelfAdmin@Example.test", ""); rec.Code != http.StatusOK {
-		t.Fatalf("own save with the same email in another case: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("own save with the same stored mixed-case email: %d %s", rec.Code, rec.Body.String())
 	}
 
 	// The gate cannot be switched off first: flipping password_login or type on your own account
@@ -1442,5 +1444,16 @@ func TestSelfUpdateViaUsersRouteNeedsStepUp(t *testing.T) {
 	h.db.Get(&email, `SELECT email FROM users WHERE id = $1`, me)
 	if email != "new-self@example.test" || h.hash("selfadmin") == before {
 		t.Fatal("the stamped self-edit did not land")
+	}
+
+	// With a stamp the gated flips are allowed too. (The password change above ended every
+	// session of the user, so this is a new one.)
+	cl2 := h.sessionClient(me)
+	if rec := cl2.stepUpTOTP(); rec.Code != http.StatusOK {
+		t.Fatalf("step-up on the new session: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := cl2.do(http.MethodPut, "/api/users/"+strconv.Itoa(me), echo.MIMEApplicationJSON,
+		`{"username": "selfadmin", "name": "selfadmin", "email": "new-self@example.test", "type": "user", "user_role_id": 1, "status": "enabled", "password_login": false}`); rec.Code != http.StatusOK {
+		t.Fatalf("own password_login flip with a stamp: want 200, got %d %s", rec.Code, rec.Body.String())
 	}
 }

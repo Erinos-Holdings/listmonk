@@ -759,9 +759,10 @@ func (a *App) endOtherSessions(userID int, keepID string) {
 func (a *App) stepUpAttempt(c echo.Context, userID int) (int, error) {
 	n, ok := a.auth.StepUpAttempt(c)
 	if !ok {
-		// Over the limit (the session was destroyed just now), or the session row is already gone
-		// or unreadable (auth logs a database error itself).
-		if n > auth.StepUpMaxFails {
+		// Over the limit (the first such attempt is the one that destroys the session; later ones
+		// in the same burst find it already condemned), or the session row is already gone or
+		// unreadable (auth logs a database error itself).
+		if n == auth.StepUpMaxFails+1 {
 			a.log.Printf("2FA: session destroyed by the step-up attempt limit for user_id=%d", userID)
 		} else {
 			a.log.Printf("2FA: step-up attempt refused for user_id=%d (no usable session)", userID)
