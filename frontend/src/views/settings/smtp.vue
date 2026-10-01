@@ -236,6 +236,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import { regDuration } from '../../constants';
+import stepUp, { stepUpError } from '../../stepUp';
 
 const smtpTemplates = {
   gmail: {
@@ -344,12 +345,15 @@ export default Vue.extend({
       }
 
       this.errMsg = '';
-      this.$api.testSMTP({ ...item, email: this.testEmail }).then(() => {
+      // Fork (integrations STEPUP-ADMIN-SPEC D4) -- the SMTP test steps up first.
+      stepUp(this).then(() => this.$api.testSMTP({ ...item, email: this.testEmail })).then(() => {
         this.$utils.toast(this.$t('campaigns.testSent'));
       }).catch((err) => {
         if (err.response?.data?.message) {
           this.errMsg = err.response.data.message;
+          return;
         }
+        stepUpError(this)(err);
       });
     },
 

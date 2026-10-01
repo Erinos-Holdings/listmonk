@@ -83,6 +83,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
+import stepUp, { stepUpError } from '../stepUp';
 import RoleForm from './RoleForm.vue';
 
 export default Vue.extend({
@@ -148,21 +149,22 @@ export default Vue.extend({
         form.lists = item.lists;
       }
 
-      fn(form).then(() => {
+      // Fork (integrations STEPUP-ADMIN-SPEC D4) -- every role write steps up first.
+      stepUp(this).then(() => fn(form)).then(() => {
         this.fetchRoles();
         this.$utils.toast(this.$t('globals.messages.created', { name }));
-      });
+      }).catch(stepUpError(this));
     },
 
     onDeleteRole(item) {
       this.$utils.confirm(
         this.$t('globals.messages.confirm'),
         () => {
-          this.$api.deleteRole(item.id).then(() => {
+          stepUp(this).then(() => this.$api.deleteRole(item.id)).then(() => {
             this.fetchRoles();
 
             this.$utils.toast(this.$t('globals.messages.deleted', { name: item.name }));
-          });
+          }).catch(stepUpError(this));
         },
       );
     },

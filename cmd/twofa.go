@@ -728,17 +728,39 @@ func (a *App) requireStepUp(c echo.Context) error {
 	return nil
 }
 
-// guardRequireTwofa refuses a change of security.require_twofa without a step-up stamp. A save
-// that keeps the value needs none.
-func (a *App) guardRequireTwofa(c echo.Context, next, cur bool) error {
-	if next == cur {
-		return nil
-	}
-	return a.requireStepUp(c)
+// stepUpPerms are the permissions whose routes need a fresh step-up stamp on a cookie session
+// (integrations STEPUP-ADMIN-SPEC D1): every user, role and settings write. An API token has no
+// session, so it is refused on them.
+var stepUpPerms = map[string]bool{
+	"users:manage":    true,
+	"roles:manage":    true,
+	"settings:manage": true,
 }
 
-func boolValue(b *bool) bool {
-	return b != nil && *b
+// needsStepUp reports whether a route registered under perms is behind step-up: true when any of
+// them is in stepUpPerms.
+func needsStepUp(perms ...string) bool {
+	for _, p := range perms {
+		if stepUpPerms[p] {
+			return true
+		}
+	}
+	return false
+}
+
+// stepUpGate wraps a handler with the step-up check (integrations STEPUP-ADMIN-SPEC D1/D2). It
+// runs after the permission check (the caller wraps the result in auth.Perm), so a stamp grants
+// nothing. A request with no cookie session (an API token) gets its own message.
+func (a *App) stepUpGate(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if a.auth.HasStepUp(c) {
+			return next(c)
+		}
+		if auth.GetSessionID(c) == "" {
+			return echo.NewHTTPError(http.StatusForbidden, a.i18n.T("users.stepUpNoToken"))
+		}
+		return echo.NewHTTPError(http.StatusForbidden, a.i18n.T("users.stepUpRequired"))
+	}
 }
 
 // keepLastRule is D7: with the switch ON, an enforced user cannot remove their last factor.
@@ -783,7 +805,9 @@ func (a *App) stepUpFail(c echo.Context, userID, n int, msg string) error {
 	return echo.NewHTTPError(http.StatusForbidden, msg)
 }
 
-// GetProfileTwofa returns the caller's factor state. Never any key material.
+// GetProfileTwofa returns the caller's factor state. Never any key material. stepup_ttl is the
+// seconds left on the session's step-up stamp (integrations STEPUP-ADMIN-SPEC D4), 0 for none or
+// for an API token; the browser skips the dialog on it, the server still checks every request.
 func (a *App) GetProfileTwofa(c echo.Context) error {
 	u := auth.GetUser(c)
 	passkeys, err := a.core.GetPasskeys(u.ID)
@@ -791,11 +815,12 @@ func (a *App) GetProfileTwofa(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, okResp{struct {
-		TOTP     bool           `json:"totp"`
-		Passkeys []auth.Passkey `json:"passkeys"`
-		Required bool           `json:"required"`
-		Enforced bool           `json:"enforced"`
-	}{u.TwofaType == models.TwofaTypeTOTP, passkeys, u.TwofaRequired, u.TwofaEnforced}})
+		TOTP      bool           `json:"totp"`
+		Passkeys  []auth.Passkey `json:"passkeys"`
+		Required  bool           `json:"required"`
+		Enforced  bool           `json:"enforced"`
+		StepUpTTL int            `json:"stepup_ttl"`
+	}{u.TwofaType == models.TwofaTypeTOTP, passkeys, u.TwofaRequired, u.TwofaEnforced, a.auth.StepUpRemaining(c)}})
 }
 
 // StepUp stamps the session after a TOTP code or, for a user with no factor at all, the password.

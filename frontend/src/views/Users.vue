@@ -147,6 +147,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
+import stepUp, { stepUpError } from '../stepUp';
 
 import UserForm from './UserForm.vue';
 
@@ -224,11 +225,12 @@ export default Vue.extend({
       this.$utils.confirm(
         this.$t('globals.messages.confirm'),
         () => {
-          this.$api.deleteUser(item.id).then(() => {
+          // Fork (integrations STEPUP-ADMIN-SPEC D4) -- step up after the confirmation.
+          stepUp(this).then(() => this.$api.deleteUser(item.id)).then(() => {
             this.getUsers();
 
             this.$utils.toast(this.$t('globals.messages.deleted', { name: item.name }));
-          });
+          }).catch(stepUpError(this));
         },
       );
     },

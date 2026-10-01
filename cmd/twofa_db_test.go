@@ -1164,8 +1164,9 @@ func TestProfileCredentialChangeNeedsStepUp(t *testing.T) {
 	}
 }
 
-// I24 -- a full settings PUT whose body lacks security.require_twofa leaves the stored value;
-// changing the value is 403 without a stamp; a save that keeps the value needs none.
+// I24, as amended by integrations STEPUP-ADMIN-SPEC J9 -- a full settings PUT whose body lacks
+// security.require_twofa leaves the stored value; every settings save, one that keeps the value
+// included, is 403 without a stamp; a stamped non-boolean value for the key is 400.
 func TestRequireTwofaSettingGuard(t *testing.T) {
 	h := newTwofaHarness(t)
 	ensureManager(h.linkHarness)
@@ -1197,12 +1198,13 @@ func TestRequireTwofaSettingGuard(t *testing.T) {
 		return cl.json(http.MethodPut, "/api/settings", body)
 	}
 
-	// Keeping the value needs no stamp.
-	if rec := put(set); rec.Code != http.StatusOK {
-		t.Fatalf("full PUT keeping false: %d %s", rec.Code, rec.Body.String())
+	// Without a stamp every save is refused: keeping the value, changing it, on both routes.
+	if rec := put(set); rec.Code != http.StatusForbidden || stored() != "false" {
+		t.Fatalf("full PUT keeping false without a stamp: %d, stored %s", rec.Code, stored())
 	}
-
-	// Changing it needs one, on both routes.
+	if rec := cl.do(http.MethodPut, "/api/settings/"+settingRequireTwofa, echo.MIMEApplicationJSON, "false"); rec.Code != http.StatusForbidden {
+		t.Fatalf("PUT by key keeping false without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
 	set[settingRequireTwofa] = json.RawMessage(`true`)
 	if rec := put(set); rec.Code != http.StatusForbidden || stored() != "false" {
 		t.Fatalf("full PUT to true without a stamp: %d, stored %s", rec.Code, stored())
@@ -1210,11 +1212,13 @@ func TestRequireTwofaSettingGuard(t *testing.T) {
 	if rec := cl.do(http.MethodPut, "/api/settings/"+settingRequireTwofa, echo.MIMEApplicationJSON, "true"); rec.Code != http.StatusForbidden || stored() != "false" {
 		t.Fatalf("PUT by key to true without a stamp: %d, stored %s", rec.Code, stored())
 	}
-	if rec := cl.do(http.MethodPut, "/api/settings/"+settingRequireTwofa, echo.MIMEApplicationJSON, "false"); rec.Code != http.StatusOK {
-		t.Fatalf("PUT by key keeping false: %d %s", rec.Code, rec.Body.String())
-	}
+
 	if rec := cl.stepUpPassword(); rec.Code != http.StatusOK {
 		t.Fatalf("step-up: %d", rec.Code)
+	}
+	// Stamped, the key still takes a bool only.
+	if rec := cl.do(http.MethodPut, "/api/settings/"+settingRequireTwofa, echo.MIMEApplicationJSON, `"yes"`); rec.Code != http.StatusBadRequest || stored() != "false" {
+		t.Fatalf("stamped PUT by key with a non-boolean: want 400, got %d %s, stored %s", rec.Code, rec.Body.String(), stored())
 	}
 	if rec := put(set); rec.Code != http.StatusOK || stored() != "true" {
 		t.Fatalf("full PUT to true with a stamp: %d %s, stored %s", rec.Code, rec.Body.String(), stored())
@@ -1223,6 +1227,12 @@ func TestRequireTwofaSettingGuard(t *testing.T) {
 	// A body that lacks the key (a tab loaded before the release) keeps the stored true.
 	delete(set, settingRequireTwofa)
 	cl2 := h.sessionClient(id)
+	if rec := cl2.json(http.MethodPut, "/api/settings", set); rec.Code != http.StatusForbidden {
+		t.Fatalf("full PUT without the key, no stamp: want 403, got %d", rec.Code)
+	}
+	if rec := cl2.stepUpPassword(); rec.Code != http.StatusOK {
+		t.Fatalf("step-up on the second session: %d", rec.Code)
+	}
 	if rec := cl2.json(http.MethodPut, "/api/settings", set); rec.Code != http.StatusOK || stored() != "true" {
 		t.Fatalf("full PUT without the key: %d %s, stored %s (want true kept)", rec.Code, rec.Body.String(), stored())
 	}
@@ -1382,9 +1392,9 @@ func TestTwofaReadAndTokenCallers(t *testing.T) {
 	}
 }
 
-// F5 of the stage-4 review (D6): editing YOUR OWN account through PUT /api/users/:id needs the
-// same step-up as the profile route when it changes the password or the email; editing another
-// user stays ungated (user administration is a stated non-goal).
+// I31, as amended by integrations STEPUP-ADMIN-SPEC J8 -- every PUT /api/users/:id needs the
+// stamp: your own account (a name-only change included) and anyone else's. With a stamp the edits
+// land, including a stored mixed-case email kept as is and a password_login flip.
 func TestSelfUpdateViaUsersRouteNeedsStepUp(t *testing.T) {
 	h := newTwofaHarness(t)
 	me := h.user("selfadmin", auth.SuperAdminRoleID)
@@ -1395,56 +1405,55 @@ func TestSelfUpdateViaUsersRouteNeedsStepUp(t *testing.T) {
 	put := func(cl *twofaClient, id int, username, email, password string) *httptest.ResponseRecorder {
 		return cl.do(http.MethodPut, "/api/users/"+strconv.Itoa(id), echo.MIMEApplicationJSON, h.userJSON(username, email, password))
 	}
-	before := h.hash("selfadmin")
-	if rec := put(cl, me, "selfadmin", "selfadmin@example.test", ppGoodPassword); rec.Code != http.StatusForbidden {
-		t.Fatalf("own password via /api/users without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
-	}
-	if rec := put(cl, me, "selfadmin", "new-self@example.test", ""); rec.Code != http.StatusForbidden {
-		t.Fatalf("own email via /api/users without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
-	}
-	var email string
-	h.db.Get(&email, `SELECT email FROM users WHERE id = $1`, me)
-	if email != "selfadmin@example.test" || h.hash("selfadmin") != before {
-		t.Fatal("a refused self-edit changed the email or the password")
-	}
-	// Neither changed: no stamp needed.
-	if rec := put(cl, me, "selfadmin", "selfadmin@example.test", ""); rec.Code != http.StatusOK {
-		t.Fatalf("own save with no credential change: %d %s", rec.Code, rec.Body.String())
-	}
-
-	// A STORED mixed-case email (the profile route can store one) is no change either: the gate
-	// lower-cases both sides. The save itself rewrites the stored value in lower case.
-	h.db.MustExec(`UPDATE users SET email = 'SelfAdmin@Example.test' WHERE id = $1`, me)
-	if rec := put(cl, me, "selfadmin", "SelfAdmin@Example.test", ""); rec.Code != http.StatusOK {
-		t.Fatalf("own save with the same stored mixed-case email: %d %s", rec.Code, rec.Body.String())
-	}
-
-	// The gate cannot be switched off first: flipping password_login or type on your own account
-	// needs the stamp too (either would open the way to a new email and password in a second
-	// request, and password_login=false alone drops the password).
-	raw := func(body string) *httptest.ResponseRecorder {
+	raw := func(cl *twofaClient, body string) *httptest.ResponseRecorder {
 		return cl.do(http.MethodPut, "/api/users/"+strconv.Itoa(me), echo.MIMEApplicationJSON, body)
 	}
-	if rec := raw(`{"username": "selfadmin", "name": "selfadmin", "email": "selfadmin@example.test", "type": "user", "user_role_id": 1, "status": "enabled", "password_login": false}`); rec.Code != http.StatusForbidden {
-		t.Fatalf("own password_login flip without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
+	refused := func(label string, rec *httptest.ResponseRecorder) {
+		t.Helper()
+		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), h.app.i18n.T("users.stepUpRequired")) {
+			t.Fatalf("%s without a stamp: want 403 step-up required, got %d %s", label, rec.Code, rec.Body.String())
+		}
 	}
-	if rec := raw(`{"username": "selfadmin", "name": "selfadmin", "type": "api", "user_role_id": 1, "status": "enabled", "password_login": true}`); rec.Code != http.StatusForbidden {
-		t.Fatalf("own type flip without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
-	}
-	var typ string
+	nameOnly := `{"username": "selfadmin", "name": "Self Renamed", "email": "selfadmin@example.test", "type": "user", "user_role_id": 1, "status": "enabled", "password_login": true}`
+
+	before := h.hash("selfadmin")
+	refused("own name-only edit", raw(cl, nameOnly))
+	refused("own save with no change", put(cl, me, "selfadmin", "selfadmin@example.test", ""))
+	refused("own password", put(cl, me, "selfadmin", "selfadmin@example.test", ppGoodPassword))
+	refused("own email", put(cl, me, "selfadmin", "new-self@example.test", ""))
+	refused("own password_login flip", raw(cl, `{"username": "selfadmin", "name": "selfadmin", "email": "selfadmin@example.test", "type": "user", "user_role_id": 1, "status": "enabled", "password_login": false}`))
+	refused("own type flip", raw(cl, `{"username": "selfadmin", "name": "selfadmin", "type": "api", "user_role_id": 1, "status": "enabled", "password_login": true}`))
+	refused("another user's password", put(cl, other, "otheruser", "otheruser@example.test", ppGoodPassword))
+	var (
+		typ, email, name string
+		otherHash        = h.hash("otheruser")
+	)
 	h.db.Get(&typ, `SELECT type FROM users WHERE id = $1`, me)
 	h.db.Get(&email, `SELECT email FROM users WHERE id = $1`, me)
-	if typ != "user" || email != "selfadmin@example.test" || h.hash("selfadmin") != before {
-		t.Fatalf("a refused self-edit changed the account: type=%s email=%s", typ, email)
-	}
-
-	// Editing ANOTHER user needs no stamp, password included.
-	if rec := put(cl, other, "otheruser", "otheruser@example.test", ppGoodPassword); rec.Code != http.StatusOK {
-		t.Fatalf("edit another user without a stamp: want 200, got %d %s", rec.Code, rec.Body.String())
+	h.db.Get(&name, `SELECT name FROM users WHERE id = $1`, me)
+	if typ != "user" || email != "selfadmin@example.test" || name != "selfadmin" || h.hash("selfadmin") != before {
+		t.Fatalf("a refused edit changed the account: type=%s email=%s name=%s", typ, email, name)
 	}
 
 	if rec := cl.stepUpTOTP(); rec.Code != http.StatusOK {
 		t.Fatalf("step-up: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := raw(cl, nameOnly); rec.Code != http.StatusOK {
+		t.Fatalf("own name-only edit with a stamp: %d %s", rec.Code, rec.Body.String())
+	}
+	h.db.Get(&name, `SELECT name FROM users WHERE id = $1`, me)
+	if name != "Self Renamed" {
+		t.Fatalf("the stamped name-only edit did not land: %s", name)
+	}
+
+	// A STORED mixed-case email (the profile route can store one) saves with a stamp; the save
+	// rewrites the stored value in lower case.
+	h.db.MustExec(`UPDATE users SET email = 'SelfAdmin@Example.test' WHERE id = $1`, me)
+	if rec := put(cl, me, "selfadmin", "SelfAdmin@Example.test", ""); rec.Code != http.StatusOK {
+		t.Fatalf("own save with the same stored mixed-case email: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := put(cl, other, "otheruser", "otheruser@example.test", ppGoodPassword); rec.Code != http.StatusOK || h.hash("otheruser") == otherHash {
+		t.Fatalf("another user's password with a stamp: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := put(cl, me, "selfadmin", "new-self@example.test", ""); rec.Code != http.StatusOK {
 		t.Fatalf("own email with a stamp: %d %s", rec.Code, rec.Body.String())
@@ -1457,14 +1466,13 @@ func TestSelfUpdateViaUsersRouteNeedsStepUp(t *testing.T) {
 		t.Fatal("the stamped self-edit did not land")
 	}
 
-	// With a stamp the gated flips are allowed too. (The password change above ended every
+	// With a stamp a password_login flip is allowed too. (The password change above ended every
 	// session of the user, so this is a new one.)
 	cl2 := h.sessionClient(me)
 	if rec := cl2.stepUpTOTP(); rec.Code != http.StatusOK {
 		t.Fatalf("step-up on the new session: %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := cl2.do(http.MethodPut, "/api/users/"+strconv.Itoa(me), echo.MIMEApplicationJSON,
-		`{"username": "selfadmin", "name": "selfadmin", "email": "new-self@example.test", "type": "user", "user_role_id": 1, "status": "enabled", "password_login": false}`); rec.Code != http.StatusOK {
+	if rec := raw(cl2, `{"username": "selfadmin", "name": "selfadmin", "email": "new-self@example.test", "type": "user", "user_role_id": 1, "status": "enabled", "password_login": false}`); rec.Code != http.StatusOK {
 		t.Fatalf("own password_login flip with a stamp: want 200, got %d %s", rec.Code, rec.Body.String())
 	}
 }

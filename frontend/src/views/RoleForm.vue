@@ -126,6 +126,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import CopyText from '../components/CopyText.vue';
+import stepUp, { stepUpError } from '../stepUp';
 
 export default Vue.extend({
   name: 'RoleForm',
@@ -206,11 +207,12 @@ export default Vue.extend({
         }, []);
       }
 
-      fn(form).then((data) => {
+      // Fork (integrations STEPUP-ADMIN-SPEC D4) -- every role write steps up first.
+      stepUp(this).then(() => fn(form)).then((data) => {
         this.$emit('finished');
         this.$utils.toast(this.$t('globals.messages.created', { name: data.name }));
         this.$parent.close();
-      });
+      }).catch(stepUpError(this));
     },
 
     updateRole() {
@@ -228,11 +230,11 @@ export default Vue.extend({
         }, []);
       }
 
-      fn(form).then((data) => {
+      stepUp(this).then(() => fn(form)).then((data) => {
         this.$emit('finished');
         this.$utils.toast(this.$t('globals.messages.updated', { name: data.name }));
         this.$parent.close();
-      });
+      }).catch(stepUpError(this));
     },
   },
 

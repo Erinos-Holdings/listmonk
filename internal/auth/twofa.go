@@ -145,6 +145,26 @@ func (o *Auth) HasStepUp(c echo.Context) bool {
 	return time.Since(time.Unix(at, 0)) <= StepUpTTL
 }
 
+// StepUpRemaining returns the whole seconds of life left on the request's step-up stamp, 0 when
+// there is none, it has expired, or the request has no cookie session. It reads the same session
+// value as HasStepUp and is for display only (the browser's decision to skip the dialog); the
+// gate is HasStepUp.
+func (o *Auth) StepUpRemaining(c echo.Context) int {
+	sess := session(c)
+	if sess == nil {
+		return 0
+	}
+	at, err := o.sessStore.Int64(sess.Get(sessKeyStepUpAt))
+	if err != nil || at <= 0 {
+		return 0
+	}
+	left := int((StepUpTTL - time.Since(time.Unix(at, 0))) / time.Second)
+	if left < 0 {
+		return 0
+	}
+	return left
+}
+
 // StepUpAttempt reserves one step-up attempt on the request's session BEFORE the guess is
 // evaluated, in one atomic statement, and returns its number. When the number exceeds
 // StepUpMaxFails the session is destroyed and ok is false: the guess must not be evaluated. So at

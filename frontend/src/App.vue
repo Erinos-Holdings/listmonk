@@ -117,6 +117,7 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import { clearAllDrafts } from './drafts';
 import { uris } from './constants';
+import stepUp, { stepUpError } from './stepUp';
 
 import Navigation from './components/Navigation.vue';
 
@@ -161,8 +162,9 @@ export default Vue.extend({
       this.$root.$emit('page.refresh');
     },
 
+    // Fork (integrations STEPUP-ADMIN-SPEC D4) -- the reload steps up first.
     reloadApp() {
-      this.$api.reloadApp().then(() => {
+      stepUp(this).then(() => this.$api.reloadApp()).then(() => {
         this.$utils.toast('Reloading app ...');
 
         // Poll until there's a 200 response, waiting for the app
@@ -173,7 +175,7 @@ export default Vue.extend({
             document.location.reload();
           });
         }, 500);
-      });
+      }).catch(stepUpError(this));
     },
 
     doLogout() {

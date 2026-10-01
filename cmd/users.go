@@ -127,23 +127,6 @@ func (a *App) UpdateUser(c echo.Context) error {
 	// Get the user ID.
 	id := getID(c)
 
-	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D6) -- editing YOUR OWN account here must not
-	// bypass the profile route's step-up: on a cookie session, a request for the caller's own id
-	// that sets a password, changes the email, or changes password_login or type needs the stamp.
-	// The last two are gated because flipping either first would switch this very gate off (and
-	// password_login=false also drops the password). Edits of other users (user administration)
-	// and API-token callers stay ungated (a stated non-goal).
-	if caller, ok := c.Get(auth.UserHTTPCtxKey).(auth.User); ok && id == caller.ID && auth.GetSessionID(c) != "" {
-		if u.Password.String != "" ||
-			(u.Email.Valid && email != strings.ToLower(strings.TrimSpace(caller.Email.String))) ||
-			u.PasswordLogin != caller.PasswordLogin ||
-			(u.Type != "" && u.Type != caller.Type) {
-			if err := a.requireStepUp(c); err != nil {
-				return err
-			}
-		}
-	}
-
 	if u.Type != auth.UserTypeAPI {
 		if !utils.ValidateEmail(email) {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "email"))

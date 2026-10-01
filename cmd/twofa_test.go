@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"html/template"
 	"net/http/httptest"
 	"os"
@@ -115,5 +116,74 @@ func TestTwofaTemplatesRender(t *testing.T) {
 		if !strings.Contains(html, want) {
 			t.Errorf("admin-enroll lacks %s", want)
 		}
+	}
+}
+
+// permissionKeys reads every permission key from the repo's permissions.json (the file the app
+// loads at boot, initConstConfig).
+func permissionKeys(t *testing.T) []string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "permissions.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var groups []struct {
+		Permissions []string `json:"permissions"`
+	}
+	if err := json.Unmarshal(b, &groups); err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, g := range groups {
+		out = append(out, g.Permissions...)
+	}
+	return out
+}
+
+// Fork (integrations STEPUP-ADMIN-SPEC J1) -- step-up is keyed on exactly users:manage,
+// roles:manage and settings:manage, all three exist in permissions.json (an upstream rename would
+// otherwise drop the gate silently), and any one of several listed permissions is enough.
+func TestStepUpPermSet(t *testing.T) {
+	want := map[string]bool{"users:manage": true, "roles:manage": true, "settings:manage": true}
+	seen := map[string]bool{}
+	for _, p := range permissionKeys(t) {
+		if got := needsStepUp(p); got != want[p] {
+			t.Errorf("needsStepUp(%q) = %v, want %v", p, got, want[p])
+		}
+		seen[p] = true
+	}
+	for p := range want {
+		if !seen[p] {
+			t.Errorf("%s is not in permissions.json", p)
+		}
+	}
+	if len(stepUpPerms) != len(want) {
+		t.Errorf("stepUpPerms has %d entries, want %d", len(stepUpPerms), len(want))
+	}
+	if !needsStepUp("users:get", "settings:manage") || !needsStepUp("roles:manage", "campaigns:get") {
+		t.Error("needsStepUp is false for a list holding one step-up permission")
+	}
+	if needsStepUp() || needsStepUp("users:get", "roles:get", "settings:get", "settings:maintain") {
+		t.Error("needsStepUp is true for a list holding no step-up permission")
+	}
+}
+
+// Fork (integrations STEPUP-ADMIN-SPEC J14) -- cmd/handlers.go uses the auth middleware's Perm in
+// exactly one place, the pm wrapper that adds the step-up gate, so no route can be registered
+// around the gate by calling it directly.
+func TestPermWrapperIsOnlyPermUse(t *testing.T) {
+	b, err := os.ReadFile("handlers.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	if n := len(regexp.MustCompile(`\.Perm\b`).FindAllString(src, -1)); n != 1 {
+		t.Fatalf("cmd/handlers.go refers to .Perm %d times, want 1 (inside the pm wrapper)", n)
+	}
+	if !strings.Contains(src, "return a.auth.Perm(next, perms...)") {
+		t.Fatal("the one .Perm reference in cmd/handlers.go is not the pm wrapper's return")
+	}
+	if !regexp.MustCompile(`if needsStepUp\(perms\.\.\.\) \{\s*next = a\.stepUpGate\(next\)\s*\}\s*return a\.auth\.Perm\(next, perms\.\.\.\)`).MatchString(src) {
+		t.Fatal("the pm wrapper in cmd/handlers.go no longer wraps step-up permissions with stepUpGate")
 	}
 }

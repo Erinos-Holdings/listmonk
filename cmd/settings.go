@@ -100,14 +100,10 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		return err
 	}
 
-	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- absent keeps the stored switch;
-	// changing it needs a step-up stamp. Checked before any other validation, so a refused change
-	// never depends on the rest of the body.
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- absent keeps the stored switch. The
+	// step-up for every settings save is the route's (integrations STEPUP-ADMIN-SPEC D1).
 	if set.SecurityRequireTwofa == nil {
 		set.SecurityRequireTwofa = cur.SecurityRequireTwofa
-	}
-	if err := a.guardRequireTwofa(c, boolValue(set.SecurityRequireTwofa), boolValue(cur.SecurityRequireTwofa)); err != nil {
-		return err
 	}
 
 	// Validate and sanitize postback Messenger names along with SMTP names
@@ -326,19 +322,12 @@ func (a *App) UpdateSettingsByKey(c echo.Context) error {
 		b = resolved
 	}
 
-	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- the switch takes a bool, and
-	// changing it needs a step-up stamp.
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- the switch takes a bool. The step-up
+	// for every settings save is the route's (integrations STEPUP-ADMIN-SPEC D1).
 	if key == settingRequireTwofa {
 		var v bool
 		if err := json.Unmarshal(b, &v); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
-		}
-		cur, err := a.core.GetSettings()
-		if err != nil {
-			return err
-		}
-		if err := a.guardRequireTwofa(c, v, boolValue(cur.SecurityRequireTwofa)); err != nil {
-			return err
 		}
 	}
 

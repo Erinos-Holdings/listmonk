@@ -81,7 +81,17 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 	{
 		var (
 			// Permission check middleware.
-			pm = a.auth.Perm
+			// Fork (integrations STEPUP-ADMIN-SPEC D1) -- a handler registered under a step-up
+			// permission (users, roles, settings writes) is wrapped with the stamp check, which
+			// runs after the permission check. The return line below is the file's only use of the
+			// auth middleware's Perm: a route registered with it directly would escape the gate
+			// (TestPermWrapperIsOnlyPermUse).
+			pm = func(next echo.HandlerFunc, perms ...string) echo.HandlerFunc {
+				if needsStepUp(perms...) {
+					next = a.stepUpGate(next)
+				}
+				return a.auth.Perm(next, perms...)
+			}
 
 			// Attach a middleware to the group that checks for auth.
 			g = e.Group("", a.auth.Middleware, func(next echo.HandlerFunc) echo.HandlerFunc {

@@ -183,6 +183,7 @@
 import dayjs from 'dayjs';
 import Vue from 'vue';
 import { mapState } from 'vuex';
+import stepUp, { stepUpError } from '../stepUp';
 
 export default Vue.extend({
   components: {
@@ -262,11 +263,24 @@ export default Vue.extend({
       });
     },
 
+    // Fork (integrations STEPUP-ADMIN-SPEC D4) -- a settings save steps up first, before the
+    // loading flag; a failed save clears the flag (the API layer has toasted the error).
     async onUpdateDBSettings() {
+      try {
+        await stepUp(this);
+      } catch (e) {
+        stepUpError(this)(e);
+        return;
+      }
       this.isLoading = true;
-      const data = await this.$api.updateSettingsByKey('maintenance.db', this.dbSettings);
-      await this.$root.awaitRestart(data);
-      this.isLoading = false;
+      try {
+        const data = await this.$api.updateSettingsByKey('maintenance.db', this.dbSettings);
+        await this.$root.awaitRestart(data);
+      } catch (e) {
+        stepUpError(this)(e);
+      } finally {
+        this.isLoading = false;
+      }
     },
   },
 
