@@ -137,15 +137,14 @@ func (a *App) TwofaPage(c echo.Context) error {
 
 	if c.Request().Method == http.MethodPost {
 		token = strings.TrimSpace(c.FormValue("token"))
-		next = utils.SanitizeURI(c.FormValue("next"))
+		next = c.FormValue("next")
 	} else {
 		token = strings.TrimSpace(c.QueryParam("token"))
-		next = utils.SanitizeURI(c.QueryParam("next"))
+		next = c.QueryParam("next")
 	}
 
-	if next == "" || next == "/" {
-		next = uriAdmin
-	}
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D5) -- a plain local path or the admin home.
+	next = twofaNext(next)
 
 	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D5) -- the token must be a challenge token
 	// bound to this browser's nonce cookie; anything else (missing, expired, used up, an enrol
@@ -737,15 +736,13 @@ func (a *App) doTwofaVerify(c echo.Context, token string, user auth.User, next s
 		return a.renderTwofaPage(c, token, next, user, a.i18n.T("users.twoFANotEnabled"))
 	}
 
-	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D5) -- per-user TOTP guess limit.
-	if totpGuesses.limited(user.ID) {
+	// Verify the TOTP code. Fork (two-factor, integrations PASSKEY-2FA-SPEC D5) -- under the
+	// per-user TOTP guess limit.
+	valid, limited := a.checkTOTPGuess(user, totpCode, "the login challenge")
+	if limited {
 		return a.renderTwofaPage(c, token, next, user, a.i18n.T("users.totpLimited"))
 	}
-
-	// Verify the TOTP code.
-	valid := totp.Validate(totpCode, user.TwofaKey.String)
 	if !valid {
-		totpGuesses.fail(user.ID)
 		return a.renderTwofaPage(c, token, next, user, a.i18n.T("globals.messages.invalidValue"))
 	}
 

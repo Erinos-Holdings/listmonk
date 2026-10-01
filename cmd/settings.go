@@ -100,6 +100,16 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		return err
 	}
 
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- absent keeps the stored switch;
+	// changing it needs a step-up stamp. Checked before any other validation, so a refused change
+	// never depends on the rest of the body.
+	if set.SecurityRequireTwofa == nil {
+		set.SecurityRequireTwofa = cur.SecurityRequireTwofa
+	}
+	if err := a.guardRequireTwofa(c, boolValue(set.SecurityRequireTwofa), boolValue(cur.SecurityRequireTwofa)); err != nil {
+		return err
+	}
+
 	// Validate and sanitize postback Messenger names along with SMTP names
 	// (where each SMTP is also considered as a standalone messenger).
 	// Duplicates are disallowed and "email" is a reserved name.
@@ -282,15 +292,6 @@ func (a *App) UpdateSettings(c echo.Context) error {
 		if _, err := cron.ParseStandard(set.CacheSlowQueriesInterval); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidData")+": slow query cron: "+err.Error())
 		}
-	}
-
-	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D4) -- absent keeps the stored switch;
-	// changing it needs a step-up stamp.
-	if set.SecurityRequireTwofa == nil {
-		set.SecurityRequireTwofa = cur.SecurityRequireTwofa
-	}
-	if err := a.guardRequireTwofa(c, boolValue(set.SecurityRequireTwofa), boolValue(cur.SecurityRequireTwofa)); err != nil {
-		return err
 	}
 
 	// Update the settings in the DB.

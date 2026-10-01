@@ -4,6 +4,7 @@ package auth
 // relying party derivation, the stored passkey row, and the session step-up stamp.
 
 import (
+	"database/sql"
 	"errors"
 	"net/url"
 	"strings"
@@ -102,7 +103,12 @@ func RelyingPartyFromRootURL(root string) (rpID, origin string, err error) {
 	if (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return "", "", errors.New("app.root_url is not an absolute http(s) URL")
 	}
-	return strings.ToLower(u.Hostname()), u.Scheme + "://" + strings.ToLower(u.Host), nil
+	// An explicit default port is not part of the origin a browser reports.
+	host := strings.ToLower(u.Host)
+	if (u.Scheme == "https" && u.Port() == "443") || (u.Scheme == "http" && u.Port() == "80") {
+		host = strings.TrimSuffix(host, ":"+u.Port())
+	}
+	return strings.ToLower(u.Hostname()), u.Scheme + "://" + host, nil
 }
 
 // RequireTwofa returns the running process's security.require_twofa.
@@ -139,23 +145,44 @@ func (o *Auth) HasStepUp(c echo.Context) bool {
 	return time.Since(time.Unix(at, 0)) <= StepUpTTL
 }
 
-// StepUpFailed counts a failed step-up on the request's session and destroys the session on the
-// StepUpMaxFails-th failure. It reports whether the session was destroyed.
-func (o *Auth) StepUpFailed(c echo.Context) bool {
+// StepUpAttempt reserves one step-up attempt on the request's session BEFORE the guess is
+// evaluated, in one atomic statement, and returns its number. When the number exceeds
+// StepUpMaxFails the session is destroyed and ok is false: the guess must not be evaluated. So at
+// most StepUpMaxFails guesses are ever evaluated per session, however concurrent; a successful
+// step-up (StampStepUp) resets the count.
+func (o *Auth) StepUpAttempt(c echo.Context) (n int, ok bool) {
 	sess := session(c)
 	if sess == nil {
+		return 0, false
+	}
+	if err := o.stepUpCount.QueryRow(sess.ID()).Scan(&n); err != nil {
+		// No row: the session is already gone (a concurrent attempt destroyed it).
+		if err != sql.ErrNoRows {
+			o.log.Printf("error counting a step-up attempt: %v", err)
+		}
+		return n, false
+	}
+	if n > StepUpMaxFails {
+		o.destroyStepUpSession(sess)
+		return n, false
+	}
+	return n, true
+}
+
+// StepUpFailed records that attempt n failed. The StepUpMaxFails-th failure destroys the session;
+// it reports whether it did.
+func (o *Auth) StepUpFailed(c echo.Context, n int) bool {
+	if n < StepUpMaxFails {
 		return false
 	}
-	n, _ := o.sessStore.Int(sess.Get(sessKeyStepUpFails))
-	n++
-	if n >= StepUpMaxFails {
-		if err := sess.Destroy(); err != nil {
-			o.log.Printf("error destroying session after failed step-ups: %v", err)
-		}
-		return true
+	if sess := session(c); sess != nil {
+		o.destroyStepUpSession(sess)
 	}
-	if err := sess.Set(sessKeyStepUpFails, n); err != nil {
-		o.log.Printf("error counting a failed step-up: %v", err)
+	return true
+}
+
+func (o *Auth) destroyStepUpSession(sess *simplesessions.Session) {
+	if err := sess.Destroy(); err != nil {
+		o.log.Printf("error destroying session after failed step-ups: %v", err)
 	}
-	return false
 }

@@ -214,11 +214,18 @@ export default Vue.extend({
       const form = {
         ...this.form, password_login: this.form.passwordLogin, user_role_id: this.form.userRoleId, list_role_id: this.form.listRoleId || null,
       };
-      this.$api.updateUser({ id: this.data.id, ...form }).then((data) => {
+      // Fork (two-factor, integrations PASSKEY-2FA-SPEC D6) -- changing your OWN password, email,
+      // password login or type here needs the same step-up as the profile page (the server
+      // refuses it without one).
+      const self = this.profile && this.data.id === this.profile.id;
+      const lower = (v) => (v || '').trim().toLowerCase();
+      const credentials = self && (this.form.password || lower(this.form.email) !== lower(this.data.email)
+        || this.form.passwordLogin !== this.data.passwordLogin || this.form.type !== this.data.type);
+      (credentials ? stepUp(this) : Promise.resolve()).then(() => this.$api.updateUser({ id: this.data.id, ...form })).then((data) => {
         this.$emit('finished');
         this.$parent.close();
         this.$utils.toast(this.$t('globals.messages.updated', { name: data.name }));
-      });
+      }).catch(() => {});
     },
 
     // Fork (two-factor, integrations PASSKEY-2FA-SPEC D8) -- clears the user's TOTP, passkeys and

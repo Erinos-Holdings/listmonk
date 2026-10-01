@@ -115,10 +115,51 @@ func (l *totpGuessLimiter) limited(userID int) bool {
 	return len(l.prune(userID)) >= totpMaxFails
 }
 
-func (l *totpGuessLimiter) fail(userID int) {
+// reserve counts one TOTP guess for the user BEFORE it is evaluated, under one lock, refusing
+// when totpMaxFails guesses are already inside the window. A correct code hands the reservation
+// back with release, so only wrong codes count -- and however concurrent the guesses, no more than
+// totpMaxFails are ever evaluated per window.
+func (l *totpGuessLimiter) reserve(userID int) (time.Time, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.fails[userID] = append(l.prune(userID), time.Now())
+	keep := l.prune(userID)
+	if len(keep) >= totpMaxFails {
+		return time.Time{}, false
+	}
+	t := time.Now()
+	l.fails[userID] = append(keep, t)
+	return t, true
+}
+
+// release removes the reservation made at t (the guess was correct).
+func (l *totpGuessLimiter) release(userID int, t time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	fails := l.fails[userID]
+	for i, f := range fails {
+		if f.Equal(t) {
+			l.fails[userID] = append(fails[:i:i], fails[i+1:]...)
+			break
+		}
+	}
+	l.prune(userID)
+}
+
+// checkTOTPGuess evaluates one TOTP code against the user's enabled TOTP under the per-user guess
+// limit (D5), logging every wrong code and every refusal by user id (never the code). where names
+// the page for the log.
+func (a *App) checkTOTPGuess(u auth.User, code, where string) (valid, limited bool) {
+	at, ok := totpGuesses.reserve(u.ID)
+	if !ok {
+		a.log.Printf("2FA: TOTP attempt refused at %s for user_id=%d: per-user guess limit reached", where, u.ID)
+		return false, true
+	}
+	if strHasLen(code, 6, 6) && totp.Validate(code, u.TwofaKey.String) {
+		totpGuesses.release(u.ID, at)
+		return true, false
+	}
+	a.log.Printf("2FA: wrong TOTP code at %s for user_id=%d", where, u.ID)
+	return false, false
 }
 
 func (l *totpGuessLimiter) reset() {
@@ -429,10 +470,24 @@ func (a *App) completeTwofaLogin(c echo.Context, token string, u auth.User) erro
 	return a.auth.SaveSession(u, "", c)
 }
 
+// twofaNext is the local path a finished challenge or enrolment redirects to. Anything that is
+// not a plain local path -- a backslash (browsers read one as a slash), a leading "//" (before or
+// after SanitizeURI), or no leading "/" -- falls back to the admin home.
 func twofaNext(next string) string {
-	next = utils.SanitizeURI(next)
-	if next == "" || next == "/" {
+	if raw := strings.TrimSpace(next); strings.HasPrefix(raw, "//") || strings.Contains(raw, `\`) {
 		return uriAdmin
+	}
+	next = utils.SanitizeURI(next)
+	if next == "" || next == "/" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.Contains(next, `\`) {
+		return uriAdmin
+	}
+	// A control character (a tab or newline decoded from %09/%0A) is stripped by browsers when
+	// they parse a URL, which would turn "/<tab>/host" into "//host". A "%" is refused as well --
+	// this runs at page render and again at finish, and each pass decodes one more layer.
+	for i := 0; i < len(next); i++ {
+		if next[i] < 0x20 || next[i] == 0x7f || next[i] == '%' {
+			return uriAdmin
+		}
 	}
 	return next
 }
@@ -698,10 +753,30 @@ func (a *App) endOtherSessions(userID int, keepID string) {
 	}
 }
 
-// stepUpFail counts a failed step-up and answers it. When the session was destroyed the answer is
-// the invalid-session error, which the admin UI turns into a redirect to the login page.
-func (a *App) stepUpFail(c echo.Context, msg string) error {
-	if a.auth.StepUpFailed(c) {
+// stepUpAttempt reserves a step-up attempt on the session before the guess is evaluated
+// (auth.StepUpAttempt). When it is refused the session is gone, and the answer is the
+// invalid-session error, which the admin UI turns into a redirect to the login page.
+func (a *App) stepUpAttempt(c echo.Context, userID int) (int, error) {
+	n, ok := a.auth.StepUpAttempt(c)
+	if !ok {
+		// Over the limit (the session was destroyed just now), or the session row is already gone
+		// or unreadable (auth logs a database error itself).
+		if n > auth.StepUpMaxFails {
+			a.log.Printf("2FA: session destroyed by the step-up attempt limit for user_id=%d", userID)
+		} else {
+			a.log.Printf("2FA: step-up attempt refused for user_id=%d (no usable session)", userID)
+		}
+		return n, echo.NewHTTPError(http.StatusForbidden, "invalid session")
+	}
+	return n, nil
+}
+
+// stepUpFail answers failed step-up attempt n. The StepUpMaxFails-th failure destroys the session
+// and answers as an invalid session.
+func (a *App) stepUpFail(c echo.Context, userID, n int, msg string) error {
+	a.log.Printf("2FA: failed step-up attempt %d for user_id=%d", n, userID)
+	if a.auth.StepUpFailed(c, n) {
+		a.log.Printf("2FA: session destroyed by the step-up attempt limit for user_id=%d", userID)
 		return echo.NewHTTPError(http.StatusForbidden, "invalid session")
 	}
 	return echo.NewHTTPError(http.StatusForbidden, msg)
@@ -733,39 +808,46 @@ func (a *App) StepUp(c echo.Context) error {
 		password = c.FormValue("password")
 	)
 
-	switch {
-	case code != "":
-		if u.TwofaType != models.TwofaTypeTOTP {
-			return a.stepUpFail(c, a.i18n.T("users.twoFANotEnabled"))
-		}
-		if totpGuesses.limited(u.ID) {
-			return a.stepUpFail(c, a.i18n.T("users.totpLimited"))
-		}
-		if !strHasLen(code, 6, 6) || !totp.Validate(code, u.TwofaKey.String) {
-			totpGuesses.fail(u.ID)
-			return a.stepUpFail(c, a.i18n.T("users.invalidTOTPCode"))
-		}
+	// A malformed request consumes no attempt.
+	if code == "" && password == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "totp_code"))
+	}
 
-	case password != "":
+	// The attempt is counted before the guess is evaluated (at most StepUpMaxFails per session).
+	n, err := a.stepUpAttempt(c, u.ID)
+	if err != nil {
+		return err
+	}
+
+	if code != "" {
+		if u.TwofaType != models.TwofaTypeTOTP {
+			return a.stepUpFail(c, u.ID, n, a.i18n.T("users.twoFANotEnabled"))
+		}
+		// Wrong codes here count toward the per-user TOTP limit too.
+		valid, limited := a.checkTOTPGuess(u, code, "step-up")
+		if limited {
+			return a.stepUpFail(c, u.ID, n, a.i18n.T("users.totpLimited"))
+		}
+		if !valid {
+			return a.stepUpFail(c, u.ID, n, a.i18n.T("users.invalidTOTPCode"))
+		}
+	} else {
 		// A password proves nothing a session does not, once the user holds a factor.
 		if u.HasTwofaFactor() {
-			return a.stepUpFail(c, a.i18n.T("users.stepUpNeedsFactor"))
+			return a.stepUpFail(c, u.ID, n, a.i18n.T("users.stepUpNeedsFactor"))
 		}
 		// A VERIFY site (PASSWORD-POLICY-SPEC I3 as amended by PASSKEY-2FA-SPEC D9) -- upstream's
 		// 8-character check, never validatePassword.
 		if !strHasLen(password, 8, stdInputMaxLen) {
-			return a.stepUpFail(c, a.i18n.T("users.invalidPassword"))
+			return a.stepUpFail(c, u.ID, n, a.i18n.T("users.invalidPassword"))
 		}
 		ok, err := a.core.VerifyUserPassword(u.ID, password)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			return a.stepUpFail(c, a.i18n.T("users.invalidPassword"))
+			return a.stepUpFail(c, u.ID, n, a.i18n.T("users.invalidPassword"))
 		}
-
-	default:
-		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "totp_code"))
 	}
 
 	if err := a.auth.StampStepUp(c); err != nil {
@@ -803,8 +885,13 @@ func (a *App) StepUpPasskeyFinish(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return err
 	}
-	if err := a.finishPasskeyLogin(auth.GetUser(c), "wa:stepup:"+sessID, req.Credential); err != nil {
-		return a.stepUpFail(c, a.i18n.T("users.passkeyFailed"))
+	u := auth.GetUser(c)
+	n, err := a.stepUpAttempt(c, u.ID)
+	if err != nil {
+		return err
+	}
+	if err := a.finishPasskeyLogin(u, "wa:stepup:"+sessID, req.Credential); err != nil {
+		return a.stepUpFail(c, u.ID, n, a.i18n.T("users.passkeyFailed"))
 	}
 	if err := a.auth.StampStepUp(c); err != nil {
 		return err

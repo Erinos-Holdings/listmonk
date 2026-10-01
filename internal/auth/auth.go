@@ -77,6 +77,9 @@ type Auth struct {
 	sessTouch *sql.Stmt
 	cb        *Callbacks
 	log       *log.Logger
+
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D6) -- the atomic step-up attempt counter.
+	stepUpCount *sql.Stmt
 }
 
 var sessPruneInterval = time.Hour * 12
@@ -128,6 +131,17 @@ func New(cfg Config, db *sql.DB, cb *Callbacks, lo *log.Logger) (*Auth, error) {
 		return nil, err
 	}
 	a.sessTouch = touch
+
+	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D6). One statement reserves a step-up attempt
+	// on the session row (data is JSONB; the store writes values as JSON numbers), so concurrent
+	// guesses on one session are counted exactly. See StepUpAttempt.
+	stepUpCount, err := db.Prepare(`UPDATE sessions SET data = jsonb_set(data, '{stepup_fails}',
+		TO_JSONB(COALESCE((data->>'stepup_fails')::INT, 0) + 1)) WHERE id = $1
+		RETURNING (data->>'stepup_fails')::INT`)
+	if err != nil {
+		return nil, err
+	}
+	a.stepUpCount = stepUpCount
 
 	// Prune dead sessions from the DB periodically.
 	// Fork (session expiry). Upstream ran this once at boot (no loop); rows only died at restart.

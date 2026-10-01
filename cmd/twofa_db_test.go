@@ -8,6 +8,7 @@ package main
 // passkey-specific invariants are in passkey_db_test.go.
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"log"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -176,6 +178,14 @@ func (cl *twofaClient) keep(rec *httptest.ResponseRecorder) {
 }
 
 func (cl *twofaClient) do(method, target, ctype, body string) *httptest.ResponseRecorder {
+	rec := cl.fire(method, target, ctype, body)
+	cl.keep(rec)
+	return rec
+}
+
+// fire sends one request with the client's cookies and leaves the jar alone, so one client can
+// fire from many goroutines at once.
+func (cl *twofaClient) fire(method, target, ctype, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	if ctype != "" {
 		req.Header.Set(echo.HeaderContentType, ctype)
@@ -188,8 +198,50 @@ func (cl *twofaClient) do(method, target, ctype, body string) *httptest.Response
 	}
 	rec := httptest.NewRecorder()
 	cl.h.e.ServeHTTP(rec, req)
-	cl.keep(rec)
 	return rec
+}
+
+// burst fires n copies of one request concurrently from the client and returns the response bodies.
+func (cl *twofaClient) burst(n int, method, target, ctype, body string) []string {
+	out := make([]string, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			out[i] = cl.fire(method, target, ctype, body).Body.String()
+		}(i)
+	}
+	wg.Wait()
+	return out
+}
+
+// syncBuffer is a bytes.Buffer safe for the concurrent writes of a burst's log lines.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func countContaining(bodies []string, sub string) int {
+	n := 0
+	for _, b := range bodies {
+		if strings.Contains(b, sub) {
+			n++
+		}
+	}
+	return n
 }
 
 func (cl *twofaClient) form(method, target string, v url.Values) *httptest.ResponseRecorder {
@@ -958,6 +1010,85 @@ func TestSecondFactorAttemptLimits(t *testing.T) {
 		t.Fatalf("passkey finish while TOTP is limited: %d %s", rec.Code, rec.Body.String())
 	}
 
+	// (a) A concurrent burst of wrong step-up passwords on one session evaluates at most
+	// StepUpMaxFails of them: every other answer is the invalid-session one, and the session is gone.
+	// Evaluations are counted from the app log: stepUpFail logs one line per EVALUATED failure
+	// (the last evaluated one answers invalid-session too, so the answers alone cannot tell).
+	var logBuf syncBuffer
+	appLog := h.app.log
+	h.app.log = log.New(&logBuf, "", 0)
+	burster := h.user("burster", h.writerRole)
+	bcl := h.sessionClient(burster)
+	bodies := bcl.burst(40, http.MethodPost, "/api/profile/twofa/stepup", echo.MIMEApplicationForm, "password=wrong-password")
+	h.app.log = appLog
+	wrong, ended := countContaining(bodies, h.app.i18n.T("users.invalidPassword")), countContaining(bodies, "invalid session")
+	evaluated := strings.Count(logBuf.String(), "2FA: failed step-up attempt")
+	if evaluated > auth.StepUpMaxFails || wrong > auth.StepUpMaxFails || wrong+ended != len(bodies) {
+		t.Fatalf("burst of 40 wrong step-up passwords: %d evaluated (log), %d answered wrong-password, %d invalid-session (want <= %d evaluated, the rest invalid-session)", evaluated, wrong, ended, auth.StepUpMaxFails)
+	}
+	if h.sessionsOf(burster) != 0 {
+		t.Fatal("burst of wrong step-up passwords: the session survived")
+	}
+
+	// A malformed step-up (neither field) consumes no attempt: 10 of them, then a correct
+	// password still works on a fresh session.
+	mcl := h.sessionClient(h.user("malformed", h.writerRole))
+	for i := 0; i < 10; i++ {
+		if rec := mcl.form(http.MethodPost, "/api/profile/twofa/stepup", url.Values{}); rec.Code != http.StatusBadRequest {
+			t.Fatalf("malformed step-up %d: %d", i, rec.Code)
+		}
+	}
+	if rec := mcl.stepUpPassword(); rec.Code != http.StatusOK {
+		t.Fatalf("step-up after 10 malformed requests: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// (b) A concurrent burst of wrong TOTP codes for ONE user, one per session (so no session
+	// limit applies), evaluates at most totpMaxFails; the rest are refused by the per-user limit.
+	tuser := h.user("totpburst", h.writerRole)
+	h.setTOTP(tuser)
+	clients := make([]*twofaClient, 40)
+	for i := range clients {
+		clients[i] = h.sessionClient(tuser)
+	}
+	tbodies := make([]string, len(clients))
+	var wg sync.WaitGroup
+	for i, c := range clients {
+		wg.Add(1)
+		go func(i int, c *twofaClient) {
+			defer wg.Done()
+			tbodies[i] = c.fire(http.MethodPost, "/api/profile/twofa/stepup", echo.MIMEApplicationForm, "totp_code=000000").Body.String()
+		}(i, c)
+	}
+	wg.Wait()
+	evaluated, refused := countContaining(tbodies, h.app.i18n.T("users.invalidTOTPCode")), countContaining(tbodies, h.app.i18n.T("users.totpLimited"))
+	if evaluated > totpMaxFails || evaluated+refused != len(tbodies) {
+		t.Fatalf("burst of 40 wrong TOTP codes for one user: %d evaluated, %d refused (want <= %d evaluated, the rest refused)", evaluated, refused, totpMaxFails)
+	}
+
+	// (c) Those wrong codes were made AT STEP-UP, and they count toward the per-user limit: the
+	// login challenge now refuses even the correct code for that user.
+	ccl := h.client()
+	ctk := ccl.mint(tuser, twofaPurposeChallenge, twofaTokenTTL)
+	code, _ = totp.GenerateCode(twofaSecret, time.Now())
+	h.render.data = nil
+	rec = ccl.form(http.MethodPost, "/admin/login/twofa", url.Values{"token": {ctk}, "next": {twofaNextURI}, "totp_code": {code}})
+	if tpl, _ := h.render.data.(twofaTpl); rec.Code != http.StatusOK || tpl.Error != h.app.i18n.T("users.totpLimited") || ccl.jar["session"] != "" {
+		t.Fatalf("challenge after wrong step-up codes: want the TOTP limit, got %d %#v", rec.Code, h.render.data)
+	}
+
+	// A correct code is never counted: a fresh user, 15 correct step-ups across sessions, and
+	// the user is not limited.
+	ok := h.user("correct", h.writerRole)
+	h.setTOTP(ok)
+	for i := 0; i < 15; i++ {
+		if rec := h.sessionClient(ok).stepUpTOTP(); rec.Code != http.StatusOK {
+			t.Fatalf("correct step-up %d: %d %s", i, rec.Code, rec.Body.String())
+		}
+	}
+	if totpGuesses.limited(ok) {
+		t.Fatal("correct TOTP codes were counted toward the guess limit")
+	}
+
 	// A wrong code while ENROLLING TOTP is not counted: another user, 12 wrong enrolment codes,
 	// then the challenge's correct code still works.
 	other := h.user("enroller", auth.SuperAdminRoleID)
@@ -1207,10 +1338,109 @@ func TestTwofaReadAndTokenCallers(t *testing.T) {
 			t.Fatalf("API token %s %s: want 403, got %d %s", r.method, r.path, rec.Code, rec.Body.String())
 		}
 	}
+	// A full settings PUT that changes the switch is refused to a token caller too.
+	h.db.MustExec(`UPDATE settings SET value = (SELECT jsonb_agg(e || jsonb_build_object('uuid', gen_random_uuid()::TEXT)) FROM jsonb_array_elements(value) e) WHERE key = 'smtp'`)
+	var set map[string]json.RawMessage
+	if err := json.Unmarshal(dataOf(t, tok.do(http.MethodGet, "/api/settings", "", "")), &set); err != nil {
+		t.Fatal(err)
+	}
+	set[settingRequireTwofa] = json.RawMessage(`true`)
+	if rec := tok.json(http.MethodPut, "/api/settings", set); rec.Code != http.StatusForbidden {
+		t.Fatalf("API token full settings PUT changing the switch: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
+	var sw string
+	h.db.Get(&sw, `SELECT value::TEXT FROM settings WHERE key = 'security.require_twofa'`)
+	if sw != "false" {
+		t.Fatalf("a token caller changed the switch to %s", sw)
+	}
+
 	if h.passkeysOf(id) != 1 {
 		t.Fatal("a token caller changed a factor")
 	}
 	if typ, _ := h.twofaType(id); typ != "totp" {
 		t.Fatal("a token caller reset a factor")
+	}
+
+	// A token caller's PUT /api/profile with a name and an email answers as upstream does (200):
+	// the step-up gate is for password-login USERS only.
+	if rec := tok.json(http.MethodPut, "/api/profile", map[string]string{"name": "bot renamed", "email": "bot@example.test"}); rec.Code != http.StatusOK {
+		t.Fatalf("API token PUT /api/profile: want 200 as at base, got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := tok.do(http.MethodGet, "/api/profile", "", ""); rec.Code != http.StatusOK {
+		t.Fatalf("the token stopped working after its profile save: %d", rec.Code)
+	}
+}
+
+// F5 of the stage-4 review (D6): editing YOUR OWN account through PUT /api/users/:id needs the
+// same step-up as the profile route when it changes the password or the email; editing another
+// user stays ungated (user administration is a stated non-goal).
+func TestSelfUpdateViaUsersRouteNeedsStepUp(t *testing.T) {
+	h := newTwofaHarness(t)
+	me := h.user("selfadmin", auth.SuperAdminRoleID)
+	h.setTOTP(me)
+	other := h.user("otheruser", h.writerRole)
+
+	cl := h.sessionClient(me)
+	put := func(cl *twofaClient, id int, username, email, password string) *httptest.ResponseRecorder {
+		return cl.do(http.MethodPut, "/api/users/"+strconv.Itoa(id), echo.MIMEApplicationJSON, h.userJSON(username, email, password))
+	}
+	before := h.hash("selfadmin")
+	if rec := put(cl, me, "selfadmin", "selfadmin@example.test", ppGoodPassword); rec.Code != http.StatusForbidden {
+		t.Fatalf("own password via /api/users without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := put(cl, me, "selfadmin", "new-self@example.test", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("own email via /api/users without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
+	var email string
+	h.db.Get(&email, `SELECT email FROM users WHERE id = $1`, me)
+	if email != "selfadmin@example.test" || h.hash("selfadmin") != before {
+		t.Fatal("a refused self-edit changed the email or the password")
+	}
+	// Neither changed: no stamp needed.
+	if rec := put(cl, me, "selfadmin", "selfadmin@example.test", ""); rec.Code != http.StatusOK {
+		t.Fatalf("own save with no credential change: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// A differently cased copy of the same email is no change.
+	if rec := put(cl, me, "selfadmin", "SelfAdmin@Example.test", ""); rec.Code != http.StatusOK {
+		t.Fatalf("own save with the same email in another case: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// The gate cannot be switched off first: flipping password_login or type on your own account
+	// needs the stamp too (either would open the way to a new email and password in a second
+	// request, and password_login=false alone drops the password).
+	raw := func(body string) *httptest.ResponseRecorder {
+		return cl.do(http.MethodPut, "/api/users/"+strconv.Itoa(me), echo.MIMEApplicationJSON, body)
+	}
+	if rec := raw(`{"username": "selfadmin", "name": "selfadmin", "email": "selfadmin@example.test", "type": "user", "user_role_id": 1, "status": "enabled", "password_login": false}`); rec.Code != http.StatusForbidden {
+		t.Fatalf("own password_login flip without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := raw(`{"username": "selfadmin", "name": "selfadmin", "type": "api", "user_role_id": 1, "status": "enabled", "password_login": true}`); rec.Code != http.StatusForbidden {
+		t.Fatalf("own type flip without a stamp: want 403, got %d %s", rec.Code, rec.Body.String())
+	}
+	var typ string
+	h.db.Get(&typ, `SELECT type FROM users WHERE id = $1`, me)
+	h.db.Get(&email, `SELECT email FROM users WHERE id = $1`, me)
+	if typ != "user" || email != "selfadmin@example.test" || h.hash("selfadmin") != before {
+		t.Fatalf("a refused self-edit changed the account: type=%s email=%s", typ, email)
+	}
+
+	// Editing ANOTHER user needs no stamp, password included.
+	if rec := put(cl, other, "otheruser", "otheruser@example.test", ppGoodPassword); rec.Code != http.StatusOK {
+		t.Fatalf("edit another user without a stamp: want 200, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	if rec := cl.stepUpTOTP(); rec.Code != http.StatusOK {
+		t.Fatalf("step-up: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := put(cl, me, "selfadmin", "new-self@example.test", ""); rec.Code != http.StatusOK {
+		t.Fatalf("own email with a stamp: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := put(cl, me, "selfadmin", "new-self@example.test", ppGoodPassword); rec.Code != http.StatusOK {
+		t.Fatalf("own password with a stamp: %d %s", rec.Code, rec.Body.String())
+	}
+	h.db.Get(&email, `SELECT email FROM users WHERE id = $1`, me)
+	if email != "new-self@example.test" || h.hash("selfadmin") == before {
+		t.Fatal("the stamped self-edit did not land")
 	}
 }

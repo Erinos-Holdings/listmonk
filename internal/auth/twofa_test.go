@@ -151,6 +151,12 @@ func TestRelyingPartyFromRootURL(t *testing.T) {
 		{"https://mail.example.test:8443/sub", "mail.example.test", "https://mail.example.test:8443"},
 		{"http://localhost:9000", "localhost", "http://localhost:9000"},
 		{" http://localhost ", "localhost", "http://localhost"},
+		// An explicit default port is not part of the origin.
+		{"https://mail.example.test:443", "mail.example.test", "https://mail.example.test"},
+		{"http://localhost:80/x", "localhost", "http://localhost"},
+		// A non-default port is.
+		{"http://localhost:443", "localhost", "http://localhost:443"},
+		{"https://mail.example.test:80", "mail.example.test", "https://mail.example.test:80"},
 	}
 	for _, c := range ok {
 		id, origin, err := RelyingPartyFromRootURL(c.in)
