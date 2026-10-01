@@ -72,8 +72,9 @@ func (a *App) CreateUser(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "email"))
 		}
 		if u.PasswordLogin {
-			if !strHasLen(u.Password.String, 8, stdInputMaxLen) {
-				return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "password"))
+			// Fork (password policy, PASSWORD-POLICY-SPEC D3) -- the rule, not strHasLen(…, 8, …).
+			if !validatePassword(u.Password.String) {
+				return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("users.passwordPolicy"))
 			}
 		}
 
@@ -134,8 +135,9 @@ func (a *App) UpdateUser(c echo.Context) error {
 		if u.PasswordLogin {
 			if u.Password.String != "" {
 				// If a password is sent, validate it before updating in the DB. If it's not set, leave the password in the DB untouched.
-				if !strHasLen(u.Password.String, 8, stdInputMaxLen) {
-					return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "password"))
+				// Fork (password policy, PASSWORD-POLICY-SPEC D3) -- the rule, not strHasLen(…, 8, …).
+				if !validatePassword(u.Password.String) {
+					return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("users.passwordPolicy"))
 				}
 			} else {
 				// Get the user from the DB.
@@ -255,8 +257,9 @@ func (a *App) UpdateUserProfile(c echo.Context) error {
 	}
 
 	if u.PasswordLogin && u.Password.String != "" {
-		if !strHasLen(u.Password.String, 8, stdInputMaxLen) {
-			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "password"))
+		// Fork (password policy, PASSWORD-POLICY-SPEC D3) -- the rule, not strHasLen(…, 8, …).
+		if !validatePassword(u.Password.String) {
+			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("users.passwordPolicy"))
 		}
 	}
 

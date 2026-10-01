@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 var (
@@ -94,6 +96,47 @@ func generateRandomString(n int) (string, error) {
 // strHasLen checks if the given string has a length within min-max.
 func strHasLen(str string, min, max int) bool {
 	return len(str) >= min && len(str) <= max
+}
+
+// Fork (password policy, integrations PASSWORD-POLICY-SPEC D1/D2/D3). The only definition of
+// the password rule, called where a password is SET (CreateUser, UpdateUser,
+// UpdateUserProfile, doFirstTimeSetup, doResetPassword) and never where one is verified
+// (doLogin, DisableTOTP keep strHasLen(…, 8, …)).
+const (
+	passwordMinChars = 16
+	// bcrypt reads only the first 72 bytes and silently ignores the rest.
+	passwordMaxBytes = 72
+)
+
+// validatePassword reports whether p is valid UTF-8 with no control characters, has no
+// leading or trailing whitespace (doLogin trims the submitted password), has at least 16 code
+// points and at most 72 bytes, and holds an upper-case letter, a lower-case letter, a digit and a
+// special character (anything that is neither a letter nor a digit; an inner space counts).
+func validatePassword(p string) bool {
+	if !utf8.ValidString(p) || p != strings.TrimSpace(p) {
+		return false
+	}
+	if utf8.RuneCountInString(p) < passwordMinChars || len(p) > passwordMaxBytes {
+		return false
+	}
+
+	var upper, lower, digit, special bool
+	for _, r := range p {
+		switch {
+		case unicode.IsControl(r):
+			return false
+		case unicode.IsUpper(r):
+			upper = true
+		case unicode.IsLower(r):
+			lower = true
+		case unicode.IsDigit(r):
+			digit = true
+		case !unicode.IsLetter(r):
+			special = true
+		}
+	}
+
+	return upper && lower && digit && special
 }
 
 // getQueryInts parses the list of given query param values into ints.

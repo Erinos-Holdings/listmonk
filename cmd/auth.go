@@ -29,6 +29,10 @@ const (
 	passwordResetTTL = 30 * time.Minute
 	twofaTokenTTL    = 5 * time.Minute
 
+	// Fork (password policy, PASSWORD-POLICY-SPEC D8). doLogin's minimum response time; it
+	// must stay above the cost-12 bcrypt time (gate G1 measures it under 500 ms).
+	loginMinDuration = 1 * time.Second
+
 	// Length of reset and 2FA auth tokens.
 	tmpAuthTokenLen = 64
 )
@@ -455,9 +459,11 @@ func (a *App) doLogin(c echo.Context) error {
 	)
 
 	// Ensure timing mitigation is applied regardless of early returns
+	// Fork (password policy, PASSWORD-POLICY-SPEC D8) -- the floor is loginMinDuration (1 s, was
+	// 100 ms) so a cost-12 crypt() on a real username is not distinguishable from an unknown one.
 	defer func() {
-		if elapsed := time.Since(startTime).Milliseconds(); elapsed < 100 {
-			time.Sleep(time.Duration(100-elapsed) * time.Millisecond)
+		if elapsed := time.Since(startTime); elapsed < loginMinDuration {
+			time.Sleep(loginMinDuration - elapsed)
 		}
 	}()
 
@@ -513,8 +519,9 @@ func (a *App) doFirstTimeSetup(c echo.Context) error {
 	if !strHasLen(username, 3, stdInputMaxLen) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "username"))
 	}
-	if !strHasLen(password, 8, stdInputMaxLen) {
-		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "password"))
+	// Fork (password policy, PASSWORD-POLICY-SPEC D3) -- the rule, not strHasLen(…, 8, …).
+	if !validatePassword(password) {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("users.passwordPolicy"))
 	}
 	if password != password2 {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("users.passwordMismatch"))
@@ -652,8 +659,9 @@ func (a *App) doResetPassword(c echo.Context, token, email string) error {
 	)
 
 	// Validate password.
-	if !strHasLen(password, 8, stdInputMaxLen) {
-		return a.renderResetPasswordPage(c, token, email, a.i18n.Ts("globals.messages.invalidFields", "name", "password"))
+	// Fork (password policy, PASSWORD-POLICY-SPEC D3) -- the rule, not strHasLen(…, 8, …).
+	if !validatePassword(password) {
+		return a.renderResetPasswordPage(c, token, email, a.i18n.T("users.passwordPolicy"))
 	}
 	if password != password2 {
 		return a.renderResetPasswordPage(c, token, email, a.i18n.T("users.passwordMismatch"))

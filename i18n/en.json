@@ -1061,6 +1061,7 @@
     "users.password": "Password",
     "users.passwordEnable": "Enable password login",
     "users.passwordMismatch": "Passwords don't match",
+    "users.passwordPolicy": "Password must be at least 16 characters (72 at most) with at least one upper case letter, one lower case letter, one number and one special character, and no spaces at the start or end.",
     "users.passwordRepeat": "Repeat password",
     "users.perms": "Permissions",
     "users.profile": "Profile",

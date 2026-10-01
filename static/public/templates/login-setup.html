@@ -19,11 +19,13 @@
 			</p>
 			<p>
 				<label for="password">{{ .L.T "users.password" }}</label>
-				<input id="password" type="password" name="password" required minlength="8" />
+				<input id="password" type="password" name="password" required minlength="16" maxlength="72" />
+				<!-- Fork (password policy, integrations PASSWORD-POLICY-SPEC D5) -- the server rule as help. -->
+				<small>{{ .L.T "users.passwordPolicy" }}</small>
 			</p>
 			<p>
 				<label for="password2">{{ .L.T "users.passwordRepeat" }}</label>
-				<input id="password2" type="password" name="password2" required minlength="8" />
+				<input id="password2" type="password" name="password2" required minlength="16" maxlength="72" />
 			</p>
 
 			{{ if .Data.Error }}<p><span class="error">{{ .Data.Error }}</span></p>{{ end }}

@@ -3,8 +3,9 @@ INSERT INTO users (username, password_login, password, email, name, type, user_r
     VALUES($1, $2, (
         CASE
             -- For user types with password_login enabled, bcrypt and store the hash of the password.
+            -- Fork (password policy, PASSWORD-POLICY-SPEC D8) -- bcrypt cost 12 (upstream 6).
             WHEN $6::user_type != 'api' AND $2 AND $3 != ''
-                THEN CRYPT($3, GEN_SALT('bf'))
+                THEN CRYPT($3, GEN_SALT('bf', 12))
             WHEN $6 = 'api'
             -- For APIs, store the password (token) as-is.
                 THEN $3
@@ -26,10 +27,11 @@ WITH u AS (
 UPDATE users SET
     username=(CASE WHEN $2 != '' THEN $2 ELSE username END),
     password_login=$3,
+    -- Fork (password policy, PASSWORD-POLICY-SPEC D8) -- bcrypt cost 12 (upstream 6).
     password=(
         CASE
             WHEN users.type = 'api' AND ($7 = '' OR $7 = 'api') THEN password
-            WHEN $3 = TRUE THEN (CASE WHEN $4 != '' THEN CRYPT($4, GEN_SALT('bf')) ELSE password END)
+            WHEN $3 = TRUE THEN (CASE WHEN $4 != '' THEN CRYPT($4, GEN_SALT('bf', 12)) ELSE password END)
             ELSE NULL
         END
     ),
@@ -147,8 +149,9 @@ WITH u AS (
 UPDATE users SET loggedin_at = NOW() WHERE id = (SELECT id FROM u) RETURNING *;
 
 -- name: update-user-profile
+-- Fork (password policy, PASSWORD-POLICY-SPEC D8) -- bcrypt cost 12 (upstream 6).
 UPDATE users SET name=$2, email=(CASE WHEN password_login THEN $3 ELSE email END),
-    password=(CASE WHEN $4 = TRUE THEN (CASE WHEN $5 != '' THEN CRYPT($5, GEN_SALT('bf')) ELSE password END) ELSE NULL END)
+    password=(CASE WHEN $4 = TRUE THEN (CASE WHEN $5 != '' THEN CRYPT($5, GEN_SALT('bf', 12)) ELSE password END) ELSE NULL END)
     WHERE id=$1;
 
 -- name: update-user-login

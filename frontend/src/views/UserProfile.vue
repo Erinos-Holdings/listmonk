@@ -18,16 +18,19 @@
         <b-input :maxlength="200" v-model="form.name" name="name" :placeholder="$t('globals.fields.name')" />
       </b-field>
 
+      <!-- Fork (password policy, integrations PASSWORD-POLICY-SPEC D5) -- the server rule's bounds and
+        text as a convenience; the server (validatePassword) is the enforcement. The DisableTOTP
+        password below is a verify path and stays minlength="8". -->
       <div v-if="data.passwordLogin" class="columns">
         <div class="column is-6">
-          <b-field :label="$t('users.password')" label-position="on-border">
-            <b-input minlength="8" :maxlength="200" v-model="form.password" type="password" name="password"
+          <b-field :label="$t('users.password')" label-position="on-border" :message="$t('users.passwordPolicy')">
+            <b-input minlength="16" :maxlength="72" v-model="form.password" type="password" name="password"
               :placeholder="$t('users.password')" />
           </b-field>
         </div>
         <div class="column is-6">
           <b-field :label="$t('users.passwordRepeat')" label-position="on-border">
-            <b-input minlength="8" :maxlength="200" v-model="form.password2" type="password" name="password2" />
+            <b-input minlength="16" :maxlength="72" v-model="form.password2" type="password" name="password2" />
           </b-field>
         </div>
       </div>

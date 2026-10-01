@@ -64,17 +64,19 @@
               </b-checkbox>
             </b-field>
 
+            <!-- Fork (password policy, integrations PASSWORD-POLICY-SPEC D5) -- the server rule's bounds
+              and text as a convenience; the server (validatePassword) is the enforcement. -->
             <div class="columns">
               <div class="column is-6">
-                <b-field :label="$t('users.password')" label-position="on-border">
-                  <b-input :disabled="!form.passwordLogin" minlength="8" :maxlength="200" v-model="form.password"
+                <b-field :label="$t('users.password')" label-position="on-border" :message="$t('users.passwordPolicy')">
+                  <b-input :disabled="!form.passwordLogin" minlength="16" :maxlength="72" v-model="form.password"
                     type="password" name="password" :placeholder="$t('users.password')"
                     :required="form.passwordLogin && !isEditing" />
                 </b-field>
               </div>
               <div class="column is-6">
                 <b-field :label="$t('users.passwordRepeat')" label-position="on-border">
-                  <b-input :disabled="!form.passwordLogin" minlength="8" :maxlength="200" v-model="form.password2"
+                  <b-input :disabled="!form.passwordLogin" minlength="16" :maxlength="72" v-model="form.password2"
                     type="password" name="password2" :required="form.passwordLogin && !isEditing && form.password" />
                 </b-field>
               </div>
