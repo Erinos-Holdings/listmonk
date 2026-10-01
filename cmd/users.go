@@ -155,6 +155,16 @@ func (a *App) UpdateUser(c echo.Context) error {
 		}
 
 		u.Email = null.String{String: email, Valid: true}
+	} else if u.PasswordLogin && u.Password.String != "" {
+		// Fork (password policy, PASSWORD-POLICY-SPEC D3) -- update-user hashes a sent password
+		// whenever the STORED row is not api, so the stored type, not the request's, decides.
+		stored, err := a.core.GetUser(id, "", "")
+		if err != nil {
+			return err
+		}
+		if stored.Type != auth.UserTypeAPI && !validatePassword(u.Password.String) {
+			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("users.passwordPolicy"))
+		}
 	}
 
 	// Default the name to username if not set.

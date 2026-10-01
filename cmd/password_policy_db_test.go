@@ -188,6 +188,19 @@ func TestPasswordPolicySetPaths(t *testing.T) {
 		t.Fatalf("UpdateUser: the new password does not verify: %v", err)
 	}
 
+	// I2 -- UpdateUser on a stored user row with a request claiming type=api: update-user hashes
+	// the sent password because the STORED row is not api, so the rule still applies.
+	before = h.hash("createme")
+	asAPI := fmt.Sprintf(`{"username": "createme", "name": "createme", "type": "api", "user_role_id": 1, "status": "enabled", "password_login": true, "password": %q}`, ppBadPassword)
+	if code, msg := h.json(app.UpdateUser, http.MethodPut, asAPI, setID); code != http.StatusBadRequest || msg != h.policy {
+		t.Fatalf("UpdateUser, stored user row, request type=api: want 400 %q, got %d %q", h.policy, code, msg)
+	}
+	var typ string
+	h.db.Get(&typ, `SELECT type FROM users WHERE id = $1`, editID)
+	if typ != "user" || h.hash("createme") != before {
+		t.Fatalf("UpdateUser, request type=api refused: type %q, hash changed %v", typ, h.hash("createme") != before)
+	}
+
 	// I2 + I6 -- UpdateUserProfile, as the user themself.
 	asSelf := func(c echo.Context) {
 		u, err := app.core.GetUser(editID, "", "")
@@ -287,6 +300,19 @@ func TestPasswordPolicySetPaths(t *testing.T) {
 	}
 	if pw := h.hash("apibot"); !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(pw) {
 		t.Fatalf("CreateUser type=api stored %q, want a SHA-256 token hash", pw)
+	}
+	// ... and a stored api row is still updated through UpdateUser with type=api: its token is
+	// never validated and never replaced.
+	apiID := h.userID("apibot")
+	apiHash := h.hash("apibot")
+	apiUpdate := `{"username": "apibot", "name": "apibot renamed", "type": "api", "user_role_id": 1, "status": "enabled", "password_login": true, "password": "x"}`
+	if code, msg := h.json(app.UpdateUser, http.MethodPut, apiUpdate, func(c echo.Context) { c.Set("id", apiID) }); code != http.StatusOK {
+		t.Fatalf("UpdateUser, stored api row, type=api: want 200, got %d %s", code, msg)
+	}
+	var apiName string
+	h.db.Get(&apiName, `SELECT name FROM users WHERE id = $1`, apiID)
+	if apiName != "apibot renamed" || h.hash("apibot") != apiHash {
+		t.Fatalf("UpdateUser, stored api row: name %q, token hash changed %v", apiName, h.hash("apibot") != apiHash)
 	}
 
 	// I3 + I6 -- a user whose stored password is 8 characters at bcrypt cost 6, seeded by SQL.
