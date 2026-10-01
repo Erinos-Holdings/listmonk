@@ -21,21 +21,23 @@ import (
 
 type fakeStore struct {
 	objects map[string][]byte
+	types   map[string]string // the content type of each object's last Put (integrations UPLOADS-HARDENING-SPEC K2/K3)
 	puts    []string
 	deletes []string
 	getErr  map[string]error
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{objects: map[string][]byte{}, getErr: map[string]error{}}
+	return &fakeStore{objects: map[string][]byte{}, types: map[string]string{}, getErr: map[string]error{}}
 }
 
-func (f *fakeStore) Put(name, _ string, r io.ReadSeeker) (string, error) {
+func (f *fakeStore) Put(name, contentType string, r io.ReadSeeker) (string, error) {
 	b, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
 	}
 	f.objects[name] = b
+	f.types[name] = contentType
 	f.puts = append(f.puts, name)
 	return name, nil
 }
@@ -76,7 +78,7 @@ func TestPutOriginalNeverOverwrites(t *testing.T) {
 	s := newFakeStore()
 
 	first := []byte("the true original")
-	if _, err := putOriginal(s, "logo.png", "image/png", first); err != nil {
+	if _, err := putOriginal(s, "logo.png", "png", first); err != nil {
 		t.Fatal(err)
 	}
 	if got := string(s.objects["orig_logo.png"]); got != string(first) {
@@ -85,7 +87,7 @@ func TestPutOriginalNeverOverwrites(t *testing.T) {
 
 	// H4: a second call -- a reprocess -- must NOT replace it. Overwriting would make the
 	// repair irreversible and make the next reprocess repair already-repaired bytes.
-	if _, err := putOriginal(s, "logo.png", "image/png", []byte("repaired bytes")); err != nil {
+	if _, err := putOriginal(s, "logo.png", "png", []byte("repaired bytes")); err != nil {
 		t.Fatal(err)
 	}
 	if got := string(s.objects["orig_logo.png"]); got != string(first) {
@@ -167,7 +169,7 @@ func TestUploadClassificationStoresAnOriginalOnlyWhenPixelsChange(t *testing.T) 
 				if bytes.Equal(out, raw) {
 					t.Fatal("fixed=true but the bytes are identical")
 				}
-				if _, err := putOriginal(s, c.file, "image/png", raw); err != nil {
+				if _, err := putOriginal(s, c.file, ext, raw); err != nil {
 					t.Fatal(err)
 				}
 			}

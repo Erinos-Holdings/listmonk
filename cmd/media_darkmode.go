@@ -81,14 +81,15 @@ func classifyAndRepair(raw []byte, ext string) ([]byte, string, optimizer.Verdic
 // putOriginal stores the untouched upload bytes under orig_<filename>, but NEVER over an
 // existing one (H4): the first original is the only true original, and a reprocess that
 // overwrote it would make the repair irreversible and, worse, make the next reprocess
-// repair an already-repaired image.
-func putOriginal(s media.Store, fName, contentType string, raw []byte) (string, error) {
+// repair an already-repaired image. ext is the format of raw (the uploaded filename's
+// extension), which types the object (putMedia; integrations UPLOADS-HARDENING-SPEC D1).
+func putOriginal(s media.Store, fName, ext string, raw []byte) (string, error) {
 	key := origPrefix + fName
 	if b, err := s.GetBlob(key); err == nil && len(b) > 0 {
 		return key, nil
 	}
 
-	return s.Put(key, contentType, bytes.NewReader(raw))
+	return putMedia(s, key, ext, bytes.NewReader(raw))
 }
 
 // originalBytes returns the untouched upload when one was kept, else the stored object.
@@ -150,8 +151,11 @@ func reprocessStored(s media.Store, m mediaLike, force bool) (models.JSON, map[s
 
 	if fixed {
 		// Keep the untouched bytes first (never over an existing original), then write the
-		// repair over the live key and refresh the thumbnail from the new pixels.
-		if _, err := putOriginal(s, m.Filename, m.ContentType, raw); err != nil {
+		// repair over the live key and refresh the thumbnail from the new pixels. When no
+		// original was kept, raw is the stored object, whose format is its filename's
+		// extension; the row's content_type column is never trusted for the type
+		// (integrations UPLOADS-HARDENING-SPEC D1).
+		if _, err := putOriginal(s, m.Filename, ext, raw); err != nil {
 			return nil, nil, err
 		}
 		meta[originalMetaKey] = true
@@ -165,11 +169,11 @@ func reprocessStored(s media.Store, m mediaLike, force bool) (models.JSON, map[s
 		}
 		out, outExt = opt.Data, opt.Ext
 
-		// The object keeps its filename and DB content_type: the store serves the PNG bytes
-		// with the content type given here, which is what a client reads. (A still GIF that
-		// repairs therefore stores PNG bytes under a .gif key -- browsers sniff, and it is a
-		// case no live asset hits.)
-		if _, err := s.Put(m.Filename, optimizer.RasterContentType(outExt), bytes.NewReader(out)); err != nil {
+		// The object keeps its filename and DB content_type; the stored object is typed by its
+		// bytes' format (outExt, PNG), which is what a client reads. A still GIF that repairs
+		// therefore stores PNG bytes typed image/png under a .gif key -- a case no live asset
+		// hits; the app's /uploads route answers it by the sniffed type (servedMediaType).
+		if _, err := putMedia(s, m.Filename, outExt, bytes.NewReader(out)); err != nil {
 			return nil, nil, err
 		}
 
@@ -177,7 +181,7 @@ func reprocessStored(s media.Store, m mediaLike, force bool) (models.JSON, map[s
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, err := s.Put(thumbPrefix+m.Filename, optimizer.RasterContentType(outExt), thumb); err != nil {
+		if _, err := putMedia(s, thumbPrefix+m.Filename, outExt, thumb); err != nil {
 			return nil, nil, err
 		}
 	}

@@ -205,7 +205,29 @@ func (a *App) ViewCampaignMessage(c echo.Context) error {
 			makeMsgTpl(a.i18n.T("public.errorTitle"), "", a.i18n.Ts("public.errorFetchingCampaign")))
 	}
 
-	return c.HTML(http.StatusOK, string(msg.Body()))
+	return sandboxedHTML(c, publicPageCSP, string(msg.Body()))
+}
+
+// Fork (uploads hardening) -- integrations UPLOADS-HARDENING-SPEC D4. A campaign or template body
+// is user-supplied HTML served from the admin host, so every response returning one as a page
+// is sandboxed: script off and an opaque origin, so it never runs with an administrator's
+// session. Only the stored-body answer carries it; the error pages rendered from the public
+// template load the site's own script and are not sandboxed.
+const (
+	// previewCSP is for the admin preview routes.
+	previewCSP = "sandbox"
+
+	// publicPageCSP is for the view-in-browser and public archive pages: links still navigate,
+	// target="_blank" opens a normal tab, and forms still submit.
+	publicPageCSP = "sandbox allow-popups allow-popups-to-escape-sandbox allow-forms"
+)
+
+// sandboxedHTML answers a stored body as an HTML page under the given policy. It is the only
+// c.HTML call in cmd/ (cmd/media_content_type_test.go asserts it): a new route answering a body
+// goes through here.
+func sandboxedHTML(c echo.Context, policy, body string) error {
+	c.Response().Header().Set(echo.HeaderContentSecurityPolicy, policy)
+	return c.HTML(http.StatusOK, body)
 }
 
 // SubscriptionPage renders the subscription management page and handles unsubscriptions.

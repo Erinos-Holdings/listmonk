@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/disintegration/imaging"
+	"github.com/knadh/listmonk/internal/media"
 	"github.com/knadh/listmonk/internal/media/optimizer"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
@@ -51,11 +53,11 @@ func (a *App) UploadMedia(c echo.Context) error {
 	}
 	defer src.Close()
 
-	var (
-		// Naive check for content type and extension.
-		ext         = strings.TrimPrefix(strings.ToLower(filepath.Ext(file.Filename)), ".")
-		contentType = file.Header.Get("Content-Type")
-	)
+	// Naive check for the extension. Fork (uploads hardening) -- integrations
+	// UPLOADS-HARDENING-SPEC D1: the part's client-supplied Content-Type is not read at all;
+	// every stored type is derived by the server from the format it knows the bytes to be
+	// (putMedia).
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(file.Filename)), ".")
 
 	// Validate file extension.
 	if !inArray("*", a.cfg.MediaUpload.Extensions) {
@@ -80,10 +82,10 @@ func (a *App) UploadMedia(c echo.Context) error {
 	// always encodes PNG (alpha), and is then optimized like any other upload. The untouched
 	// upload bytes are kept under orig_<filename> whenever pixels changed.
 	var (
-		darkVerdict     optimizer.Verdict
-		darkFixed       bool
-		origRaw         []byte
-		origContentType string
+		darkVerdict optimizer.Verdict
+		darkFixed   bool
+		origRaw     []byte
+		origExt     string
 	)
 	isImage := inArray(ext, imageExts)
 	if isImage {
@@ -95,8 +97,8 @@ func (a *App) UploadMedia(c echo.Context) error {
 		}
 		darkVerdict, darkFixed = v, fixed
 		if fixed {
-			origRaw, origContentType = raw, contentType
-			raw, ext, contentType = out, outExt, optimizer.RasterContentType(outExt)
+			origRaw, origExt = raw, ext
+			raw, ext = out, outExt
 		}
 	}
 
@@ -117,7 +119,6 @@ func (a *App) UploadMedia(c echo.Context) error {
 				a.i18n.Ts("media.errorResizing", "error", err.Error()))
 		}
 		raw = opt.Data
-		contentType = opt.ContentType
 		width, height = opt.Width, opt.Height
 		if opt.Ext != ext {
 			ext = opt.Ext
@@ -157,7 +158,7 @@ func (a *App) UploadMedia(c echo.Context) error {
 	// A later reprocess always classifies and repairs from the original rather than from
 	// repaired bytes. Never over an existing original (putOriginal enforces that).
 	if darkFixed {
-		if _, err := putOriginal(a.media, fName, origContentType, origRaw); err != nil {
+		if _, err := putOriginal(a.media, fName, origExt, origRaw); err != nil {
 			cleanUp = true
 			a.log.Printf("error storing original: %v", err)
 			return echo.NewHTTPError(http.StatusInternalServerError,
@@ -166,7 +167,7 @@ func (a *App) UploadMedia(c echo.Context) error {
 	}
 
 	// Upload the file to the media store.
-	if _, err := a.media.Put(fName, contentType, bytes.NewReader(raw)); err != nil {
+	if _, err := putMedia(a.media, fName, ext, bytes.NewReader(raw)); err != nil {
 		cleanUp = true
 		a.log.Printf("error uploading file: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,
@@ -186,7 +187,7 @@ func (a *App) UploadMedia(c echo.Context) error {
 		}
 
 		// Upload thumbnail.
-		tf, err := a.media.Put(thumbPrefix+fName, contentType, thumbFile)
+		tf, err := putMedia(a.media, thumbPrefix+fName, ext, thumbFile)
 		if err != nil {
 			cleanUp = true
 			a.log.Printf("error saving thumbnail: %v", err)
@@ -214,7 +215,7 @@ func (a *App) UploadMedia(c echo.Context) error {
 	}
 
 	// Insert the media into the DB.
-	m, err := a.core.InsertMedia(fName, thumbfName, contentType, meta, tags, a.cfg.MediaUpload.Provider, a.media)
+	m, err := a.core.InsertMedia(fName, thumbfName, mediaContentType(ext), meta, tags, a.cfg.MediaUpload.Provider, a.media)
 	if err != nil {
 		cleanUp = true
 		return err
@@ -296,7 +297,63 @@ func (a *App) ServeS3Media(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "error fetching media")
 	}
 
-	return c.Stream(http.StatusOK, http.DetectContentType(b), bytes.NewReader(b))
+	// Fork (uploads hardening) -- integrations UPLOADS-HARDENING-SPEC D3. This route is the CDN's
+	// rollback path, so it answers exactly as the CDN's /uploads/* behaviour does: never a
+	// sniffed text/html, never script.
+	h := c.Response().Header()
+	h.Set(echo.HeaderXContentTypeOptions, "nosniff")
+	h.Set(echo.HeaderContentSecurityPolicy, uploadsCSP)
+
+	return c.Stream(http.StatusOK, servedMediaType(key, b), bytes.NewReader(b))
+}
+
+// Fork (uploads hardening) -- integrations UPLOADS-HARDENING-SPEC D1-D3. The admin host also
+// serves user-supplied objects, so a stored object's type comes from the server, never from the
+// client or the media row, and a served object never runs script.
+
+// uploadsCSP is the Content-Security-Policy on every served media object, here and on the CDN's
+// /uploads/* behaviour (cdk/listmonk_cdn_stack.ts, Listmonk-Uploads) -- keep the two equal. It
+// applies only when the object is itself opened as a document; pages embedding it are unaffected.
+const uploadsCSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+
+// mediaContentType maps a lowercased file extension to the type stored and served for it.
+// Anything not listed is application/octet-stream, which a browser downloads and never renders.
+func mediaContentType(ext string) string {
+	switch ext {
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	case "gif":
+		return "image/gif"
+	case "webp":
+		return "image/webp"
+	case "svg":
+		return "image/svg+xml"
+	case "woff2":
+		return "font/woff2"
+	}
+	return "application/octet-stream"
+}
+
+// putMedia is the only place an object is written to the media store (cmd/media_content_type_test.go
+// asserts it). ext is the format the SERVER knows the bytes to be -- the encoder's output for
+// anything optimized or repaired, else the validated upload extension -- not the key's extension:
+// a repaired still GIF keeps its GIF bytes under orig_x.png, and a reprocess repair writes PNG
+// bytes under a .gif key, and each is typed by what it holds.
+func putMedia(s media.Store, key, ext string, body io.ReadSeeker) (string, error) {
+	return s.Put(key, mediaContentType(ext), body)
+}
+
+// servedMediaType is the type ServeS3Media answers with: the sniffed type when the bytes are one
+// of the raster formats (so PNG bytes under a .gif key stay truthful), otherwise the type of the
+// key's extension -- never a sniffed text/html.
+func servedMediaType(key string, b []byte) string {
+	switch t := http.DetectContentType(b); t {
+	case "image/jpeg", "image/png", "image/gif", "image/webp":
+		return t
+	}
+	return mediaContentType(strings.TrimPrefix(strings.ToLower(path.Ext(key)), "."))
 }
 
 // makeThumbnail renders a thumbnail from the stored image bytes, encoded

@@ -170,7 +170,7 @@ func (a *App) CampaignArchivePage(c echo.Context) error {
 			makeMsgTpl(a.i18n.T("public.errorTitle"), "", a.i18n.Ts("public.errorFetchingCampaign")))
 	}
 
-	return c.HTML(http.StatusOK, string(msg.Body()))
+	return sandboxedHTML(c, publicPageCSP, string(msg.Body()))
 }
 
 // CampaignArchivePageLatest renders the latest public campaign.
@@ -187,7 +187,7 @@ func (a *App) CampaignArchivePageLatest(c echo.Context) error {
 	}
 	camp := camps[0]
 
-	return c.HTML(http.StatusOK, camp.Content)
+	return sandboxedHTML(c, publicPageCSP, camp.Content)
 }
 
 // getCampaignArchives fetches the public campaign archives from the DB.
