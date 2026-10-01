@@ -433,6 +433,17 @@ func TestLoginSwitchOffIsUnchanged(t *testing.T) {
 	if h.sessionsOf(id) != 1 || cl.jar["session"] == "" {
 		t.Fatalf("login, switch off: sessions %d, cookie %q", h.sessionsOf(id), cl.jar["session"])
 	}
+	// I33 at the plain login: the redirect after a password-only login goes through twofaNext, so
+	// an empty next lands on the admin home and a backslash path (which browsers read as
+	// "//host") never reaches Location.
+	for next, want := range map[string]string{"": uriAdmin, "/": uriAdmin, `/\evil.example`: uriAdmin, "/%2509/evil.example": uriAdmin, "/admin/lists": "/admin/lists"} {
+		rec := h.client().form(http.MethodPost, uriLogin, url.Values{"username": {"boss"}, "password": {twofaPw}, "next": {next}})
+		if rec.Code != http.StatusFound || location(rec) != want {
+			t.Fatalf("login with next=%q: want 302 to %q, got %d %q", next, want, rec.Code, location(rec))
+		}
+	}
+	h.db.MustExec(`DELETE FROM sessions WHERE id != $1`, cl.jar["session"])
+
 	// The session works, and a factorless enforced session is left alone with the switch off.
 	if rec := cl.do(http.MethodGet, "/api/profile", "", ""); rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/profile: %d %s", rec.Code, rec.Body.String())
