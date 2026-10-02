@@ -1,7 +1,7 @@
 {
   "_comment": "CONTAINER-NESTING-SPEC I8 standing tripwire: compiled HTML of every builder-document fixture at baseCommit. Regenerate ONLY for an intentional compile change, with: node test/capture-compile-snapshot.cjs <commit>",
-  "baseCommit": "c9c3596a1dc289a6987df6b10a83f18b04acea8c",
-  "bundleSha256": "0ff803fccc251e2b058b89c4bfdd276c9e867898b00860571c4877f49e367bce",
+  "baseCommit": "4e2065a451108fe0e274ab402287817a0360a028",
+  "bundleSha256": "e9b8d6d1b0d3bc7effbba982cfa341031690092fd3ea3e152424a876a5263a7b",
   "context": {
     "lang": "en",
     "brand": "ruze"
