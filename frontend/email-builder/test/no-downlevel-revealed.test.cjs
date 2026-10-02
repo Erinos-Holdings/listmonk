@@ -29,6 +29,12 @@ check('full-width twin table carries the lm-nomso class', wideTable && /\blm-nom
 const wideCells = wideTable ? Array.from(wideTable.querySelectorAll('td')) : [];
 check('every cell of the full-width twin carries mso-hide:all', wideCells.length > 0 && wideCells.every((td) => /mso-hide:\s*all/.test(td.getAttribute('style') || '')));
 check('full-width twin keeps width=100% (fluid for Outlook mobile)', wideTable && wideTable.getAttribute('width') === '100%');
+// BIBLE-OUTLOOK-FIXES-SPEC §14 (SC1): Word ignored the per-cell declaration and painted the
+// twin beneath the VML copy (Outlook 2024, bible sheet 5, 2026-10-02); the twin table is also
+// wrapped in the block div Word honours for the inline Button. Fails with the fix reverted.
+check('full-width twin table is wrapped in a block div carrying mso-hide:all and lm-nomso',
+  wideTable && wideTable.parentElement.tagName === 'DIV' && /mso-hide:\s*all/.test(wideTable.parentElement.getAttribute('style') || '') && /\blm-nomso\b/.test(wideTable.parentElement.getAttribute('class') || ''));
+check('the wrapper holds the twin table alone', wideTable && wideTable.parentElement.children.length === 1);
 
 // BIBLE-OUTLOOK-FIXES-SPEC §12 (IA15): the fallback Button's Word copy (the stamped table cell)
 // rides in a downlevel-HIDDEN conditional, and its non-Word twin in an mso-hide:all block.
