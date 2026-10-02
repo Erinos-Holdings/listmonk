@@ -1126,7 +1126,7 @@
         "fontSize": 40
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
@@ -1171,7 +1171,7 @@
         "fontSize": 40
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
@@ -2546,7 +2546,7 @@
         "fontSize": 40
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
@@ -2573,7 +2573,7 @@
         "fontSize": 40
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,

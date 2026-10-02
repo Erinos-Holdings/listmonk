@@ -85,7 +85,9 @@
         "b5-r38-label",
         "b5-r38-x",
         "b5-r39-label",
-        "b5-r39-x"
+        "b5-r39-x",
+        "b5-r40-label",
+        "b5-r40-x"
       ]
     }
   },
@@ -1346,7 +1348,7 @@
       },
       "props": {
         "markdown": true,
-        "text": "B5.31 · Button, pill, custom width"
+        "text": "B5.31 · Button, pill, custom width and height"
       }
     }
   },
@@ -1370,7 +1372,8 @@
         "buttonStyle": "pill",
         "buttonBackgroundColor": "#003B4D",
         "buttonTextColor": "#FFFFFF",
-        "customWidth": 200
+        "customWidth": 200,
+        "customHeight": 48
       }
     }
   },
@@ -1389,11 +1392,54 @@
       },
       "props": {
         "markdown": true,
-        "text": "B5.32 · Button, bordered"
+        "text": "B5.32 · Button, custom width, auto height, no border"
       }
     }
   },
   "b5-r32-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Wide",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 200
+      }
+    }
+  },
+  "b5-r33-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.33 · Button, bordered"
+      }
+    }
+  },
+  "b5-r33-x": {
     "type": "Button",
     "data": {
       "style": {
@@ -1418,42 +1464,6 @@
       }
     }
   },
-  "b5-r33-label": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "fontSize": 12,
-        "fontWeight": "normal",
-        "padding": {
-          "top": 12,
-          "bottom": 4,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "markdown": true,
-        "text": "B5.33 · Divider"
-      }
-    }
-  },
-  "b5-r33-x": {
-    "type": "Divider",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "lineColor": "#CCCCCC",
-        "lineHeight": 1
-      }
-    }
-  },
   "b5-r34-label": {
     "type": "Text",
     "data": {
@@ -1469,15 +1479,24 @@
       },
       "props": {
         "markdown": true,
-        "text": "B5.34 · Spacer"
+        "text": "B5.34 · Divider"
       }
     }
   },
   "b5-r34-x": {
-    "type": "Spacer",
+    "type": "Divider",
     "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
       "props": {
-        "height": 32
+        "lineColor": "#CCCCCC",
+        "lineHeight": 1
       }
     }
   },
@@ -1496,11 +1515,38 @@
       },
       "props": {
         "markdown": true,
-        "text": "B5.35 · Avatar, centred"
+        "text": "B5.35 · Spacer"
       }
     }
   },
   "b5-r35-x": {
+    "type": "Spacer",
+    "data": {
+      "props": {
+        "height": 32
+      }
+    }
+  },
+  "b5-r36-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.36 · Avatar, centred"
+      }
+    }
+  },
+  "b5-r36-x": {
     "type": "Avatar",
     "data": {
       "style": {
@@ -1520,7 +1566,7 @@
       }
     }
   },
-  "b5-r36-label": {
+  "b5-r37-label": {
     "type": "Text",
     "data": {
       "style": {
@@ -1535,11 +1581,11 @@
       },
       "props": {
         "markdown": true,
-        "text": "B5.36 · Image, unsized"
+        "text": "B5.37 · Image, unsized"
       }
     }
   },
-  "b5-r36-x": {
+  "b5-r37-x": {
     "type": "Image",
     "data": {
       "style": {
@@ -1558,41 +1604,6 @@
       }
     }
   },
-  "b5-r37-label": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "fontSize": 12,
-        "fontWeight": "normal",
-        "padding": {
-          "top": 12,
-          "bottom": 4,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "markdown": true,
-        "text": "B5.37 · Html, a table with a style element and a link"
-      }
-    }
-  },
-  "b5-r37-x": {
-    "type": "Html",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "contents": "<style>.bible-cell{padding:8px;border:1px solid #CCCCCC;}</style>\n<table role=\"presentation\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 auto;\">\n  <tr>\n    <td class=\"bible-cell\" style=\"color:#262626;\">Html cell</td>\n    <td class=\"bible-cell\"><a href=\"https://canary.invalid/bible-html\" style=\"color:#003B4D;\">Html link</a></td>\n  </tr>\n</table>"
-      }
-    }
-  },
   "b5-r38-label": {
     "type": "Text",
     "data": {
@@ -1608,15 +1619,23 @@
       },
       "props": {
         "markdown": true,
-        "text": "B5.38 · OfficialFooter, brand"
+        "text": "B5.38 · Html, a table with a style element and a link"
       }
     }
   },
   "b5-r38-x": {
-    "type": "OfficialFooter",
+    "type": "Html",
     "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
       "props": {
-        "kind": "brand"
+        "contents": "<style>.bible-cell{padding:8px;border:1px solid #CCCCCC;}</style>\n<table role=\"presentation\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 auto;\">\n  <tr>\n    <td class=\"bible-cell\" style=\"color:#262626;\">Html cell</td>\n    <td class=\"bible-cell\"><a href=\"https://canary.invalid/bible-html\" style=\"color:#003B4D;\">Html link</a></td>\n  </tr>\n</table>"
       }
     }
   },
@@ -1635,11 +1654,38 @@
       },
       "props": {
         "markdown": true,
-        "text": "B5.39 · OfficialFooter, corporate"
+        "text": "B5.39 · OfficialFooter, brand"
       }
     }
   },
   "b5-r39-x": {
+    "type": "OfficialFooter",
+    "data": {
+      "props": {
+        "kind": "brand"
+      }
+    }
+  },
+  "b5-r40-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.40 · OfficialFooter, corporate"
+      }
+    }
+  },
+  "b5-r40-x": {
     "type": "OfficialFooter",
     "data": {
       "props": {

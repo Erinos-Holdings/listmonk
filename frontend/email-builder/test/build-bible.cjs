@@ -7,7 +7,8 @@
 // preceded by a small label Text block `B<sheet>.<row> · <what it shows>`.
 //
 //   B1 flat alignment            the four types x every alignment at top level, and each alone in a Container;
-//                                a height-only Image at -, center and right at top level (amendment A1)
+//                                a height-only Image at -, center and right at top level (amendment A1);
+//                                a plain Button (auto width, no border) at -, left and right at top level (review L6)
 //   B2 two columns               the four types x every alignment, the same block in both columns;
 //                                gap none, valign top/bottom, one fixed-width row
 //   B3 three columns + real mixes the four types x every alignment in all three columns; then the
@@ -98,6 +99,9 @@ function layoutOf(descriptor) {
 
 const runOf = (s) => String(s).split(/[ \t\r\n]+|-|\//).reduce((a, r) => ([...r].length > [...a].length ? r : a), '');
 const runWidth = (s, size, bold) => [...runOf(s)].length * size * (bold ? 0.65 : 0.6);
+// A custom-width Button's label is ONE nowrap line (Button.tsx: white-space: nowrap when
+// customWidth > 0) -- the whole label is measured, never its longest word (re-review R1).
+const labelWidth = (s, size, bold) => [...String(s).replace(/\s+/g, ' ').trim()].length * size * (bold ? 0.65 : 0.6);
 const columnWidth = (w, n, gap = GAP) => (w - gap * (n - 1)) / n;
 
 // ---------------------------------------------------------------------------------------------
@@ -145,7 +149,8 @@ function tryBlock(type, align, size, pad, level, avail, sizing = 'width') {
     case 'Button': {
       // The census's most common Button: pill, inline, custom width, bordered (label nowrap inside it).
       const room = Math.min(140, Math.floor(avail - pad));
-      const text = WORDS.find((w) => runWidth(w, size, true) + 8 <= room);
+      // The whole label plus twice the 1 px border must fit inside the custom width (D4.4's model).
+      const text = WORDS.find((w) => labelWidth(w, size, true) + 2 <= room);
       return text && {
         type: 'Button',
         data: {
@@ -400,8 +405,11 @@ function b5Specs() {
     imgOn('Logo on white, on a dark ground', ASSETS.logoOnWhite, '#262626', 240),
     // Button shape x full/inline, a custom-width and a bordered Button
     ...['rectangle', 'rounded', 'pill'].flatMap((shape) => [false, true].map((full) => ({ what: `Button, ${shape}, ${full ? 'full width' : 'inline'}`, build: single(button(`${shape} ${full ? 'full' : 'inline'}`, { buttonStyle: shape, fullWidth: full })) }))),
-    // The custom-width row takes the census's most common unbordered Button shape (pill).
-    { what: 'Button, pill, custom width', build: single(button('Custom', { customWidth: 200, buttonStyle: 'pill' })) },
+    // The custom-size row takes the census's most common unbordered Button: pill, custom width AND
+    // custom height (version 2 tells the two apart -- review L3).
+    { what: 'Button, pill, custom width and height', build: single(button('Custom', { customWidth: 200, customHeight: 48, buttonStyle: 'pill' })) },
+    // Re-review R2: custom width, auto height, no border.
+    { what: 'Button, custom width, auto height, no border', build: single(button('Wide', { customWidth: 200 })) },
     { what: 'Button, bordered', build: single(button('Bordered', { borderSize: 2, borderColor: '#262626', buttonBackgroundColor: '#FFFFFF', buttonTextColor: '#262626' })) },
     // The other blocks
     { what: 'Divider', build: single({ type: 'Divider', data: { style: { padding: padding(48, 16) }, props: { lineColor: '#CCCCCC', lineHeight: 1 } } }) },
@@ -522,9 +530,26 @@ function buildBible(EB) {
     what: `Image sized by height only, ${alignLabel(align)}, top level`,
     build: (p, i) => ({ id: `${p}-x`, blocks: { [`${p}-x`]: contentBlock('Image', align, i, NARROW, 'height-only') } }),
   }));
-  const b1 = [...cells('top'), ...cells('container'), ...heightOnly];
+  // Review L6: a plain Button (auto width, no border) at -, left and right, top level (centre is in B5).
+  const plainButtons = ['-', 'left', 'right'].map((align) => ({
+    what: `Button, plain (auto width, no border), ${alignLabel(align)}, top level`,
+    build: single(button('Go', { buttonStyle: 'rounded' }, align === '-' ? { textAlign: undefined } : { textAlign: align })),
+  }));
+  // Re-review R2: the width/height split leaves these Button combinations in no other document.
+  const sizedButtons = [
+    { what: 'Button, auto width, custom height, centred, top level', build: single(button('Tall', { customHeight: 56 })) },
+    { what: 'Button, pill, custom width and height, bordered, centred, top level', build: single(button('Boxed', { buttonStyle: 'pill', customWidth: 180, customHeight: 52, borderSize: 2, borderColor: '#FFFFFF' })) },
+  ];
+  const b1 = [...cells('top'), ...cells('container'), ...heightOnly, ...plainButtons, ...sizedButtons];
   record(SHEETS[0], buildDoc(common, b1, 1), b1);
-  const b2 = [...cells('col2'), ...b2Extras()];
+  // Re-review R3: the plain Button (auto width, no border) in its other two shapes at -, left, right.
+  const plainShapes = ['pill', 'rectangle'].flatMap((shape) =>
+    ['-', 'left', 'right'].map((align) => ({
+      what: `Button, plain ${shape} (auto width, no border), ${alignLabel(align)}, top level`,
+      build: single(button('Go', { buttonStyle: shape }, align === '-' ? { textAlign: undefined } : { textAlign: align })),
+    })),
+  );
+  const b2 = [...cells('col2'), ...b2Extras(), ...plainShapes];
   record(SHEETS[1], buildDoc(common, b2, 2), b2);
   // B4 before B3, so B3's census rows skip what B4 already holds. Over a limit, first the §3.6
   // `left` fallback (explicit left beyond top level does not fit: those rows go, the gap is

@@ -7,7 +7,7 @@
   "sheets": [
     {
       "stem": "bible-01-flat-alignment",
-      "rows": 35,
+      "rows": 40,
       "cells": [
         "Text@-@top",
         "Text@left@top",
@@ -46,7 +46,7 @@
     },
     {
       "stem": "bible-02-two-columns",
-      "rows": 20,
+      "rows": 26,
       "cells": [
         "Text@-@col2",
         "Text@left@col2",
@@ -145,7 +145,7 @@
     },
     {
       "stem": "bible-05-colour-and-blocks",
-      "rows": 39,
+      "rows": 40,
       "cells": [],
       "dropped": []
     },

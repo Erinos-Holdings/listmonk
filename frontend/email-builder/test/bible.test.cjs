@@ -130,7 +130,11 @@ function needed(b) {
   const p = (b.data && b.data.props) || {};
   if (b.type === 'Heading') return [...run(p.text)].length * HEADING_SIZE[p.level || 'h2'] * (s.fontWeight === 'normal' ? 0.6 : 0.65) + hpadOf(b);
   if (b.type === 'Button') {
-    if (!p.fullWidth && p.customWidth > 0) return p.customWidth + hpadOf(b);
+    // Re-review R1: the custom-width label is one nowrap line — the whole label plus twice the border must fit inside it.
+    if (!p.fullWidth && p.customWidth > 0) {
+      const label = [...String(p.text || '').replace(/\{\{[\s\S]*?\}\}/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()].length * (s.fontSize || 16) * (s.fontWeight === 'normal' ? 0.6 : 0.65) + 2 * (p.borderSize || 0);
+      return label > p.customWidth ? Infinity : p.customWidth + hpadOf(b);
+    }
     return [...run(p.text)].length * (s.fontSize || 16) * (s.fontWeight === 'normal' ? 0.6 : 0.65) + hpadOf(b) + 2 * (PRESET[p.size || 'medium'] || 20) + 2 * (p.borderSize || 0);
   }
   if (b.type === 'Text') return [...run(p.text)].length * (s.fontSize || 16) * (s.fontWeight === 'bold' ? 0.65 : 0.6) + hpadOf(b);
@@ -183,6 +187,31 @@ try {
     }
   }
   check('a height-only Image at -, center and right at top level (amendment A1)', ['-', 'center', 'right'].every((a) => heightOnly.has(a)), [...heightOnly].join(','));
+
+  // Review L6: a plain Button (auto width, auto height, no border) at -, left and right at top level.
+  const plain = new Set();
+  for (const s of stems) {
+    const par = parents(docs[s]);
+    for (const [id, b] of Object.entries(docs[s])) {
+      const p = (b && b.type === 'Button' && b.data.props) || null;
+      if (p && !(p.customWidth > 0) && !(p.customHeight > 0) && !(p.borderSize > 0) && !p.fullWidth && contextOf(docs[s], par, id) === 'top') plain.add(alignOf(b));
+    }
+  }
+  check('a plain Button at -, left and right at top level (review L6)', ['-', 'left', 'right'].every((a) => plain.has(a)), [...plain].join(','));
+
+  // Re-review R2/R3: the Button width x height x border combinations, and the plain shapes.
+  const buttons = stems.flatMap((s) => {
+    const par = parents(docs[s]);
+    return Object.entries(docs[s]).filter(([id, b]) => b && b.type === 'Button' && contextOf(docs[s], par, id) === 'top').map(([, b]) => b);
+  });
+  const has = (pred) => buttons.some((b) => pred(b.data.props || {}, b));
+  check('R2: custom width, auto height, no border', has((p) => p.customWidth > 0 && !(p.customHeight > 0) && !(p.borderSize > 0)));
+  check('R2: auto width, custom height', has((p) => !(p.customWidth > 0) && p.customHeight > 0));
+  check('R2: pill, custom width and height, bordered', has((p) => p.buttonStyle === 'pill' && p.customWidth > 0 && p.customHeight > 0 && p.borderSize > 0));
+  for (const shape of ['pill', 'rectangle']) {
+    const aligns = new Set(buttons.filter((b) => (b.data.props || {}).buttonStyle === shape && !(b.data.props.customWidth > 0) && !(b.data.props.customHeight > 0) && !(b.data.props.borderSize > 0) && !b.data.props.fullWidth).map(alignOf));
+    check(`R3: a plain ${shape} Button at -, left and right at top level`, ['-', 'left', 'right'].every((a) => aligns.has(a)), [...aligns].join(','));
+  }
 
   // Spread (U7): per context class, the smallest and the largest of each dropped value.
   for (const ctx of CONTEXTS) {

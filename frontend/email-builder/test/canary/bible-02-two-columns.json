@@ -47,7 +47,19 @@
         "b2-r19-label",
         "b2-r19",
         "b2-r20-label",
-        "b2-r20"
+        "b2-r20",
+        "b2-r21-label",
+        "b2-r21-x",
+        "b2-r22-label",
+        "b2-r22-x",
+        "b2-r23-label",
+        "b2-r23-x",
+        "b2-r24-label",
+        "b2-r24-x",
+        "b2-r25-label",
+        "b2-r25-x",
+        "b2-r26-label",
+        "b2-r26-x"
       ]
     }
   },
@@ -904,7 +916,7 @@
         "fontSize": 40
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
@@ -931,7 +943,7 @@
         "fontSize": 40
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
@@ -1928,6 +1940,256 @@
             "childrenIds": []
           }
         ]
+      }
+    }
+  },
+  "b2-r21-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B2.21 · Button, plain pill (auto width, no border), no alignment, top level"
+      }
+    }
+  },
+  "b2-r21-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b2-r22-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B2.22 · Button, plain pill (auto width, no border), aligned left, top level"
+      }
+    }
+  },
+  "b2-r22-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b2-r23-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B2.23 · Button, plain pill (auto width, no border), aligned right, top level"
+      }
+    }
+  },
+  "b2-r23-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b2-r24-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B2.24 · Button, plain rectangle (auto width, no border), no alignment, top level"
+      }
+    }
+  },
+  "b2-r24-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b2-r25-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B2.25 · Button, plain rectangle (auto width, no border), aligned left, top level"
+      }
+    }
+  },
+  "b2-r25-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b2-r26-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B2.26 · Button, plain rectangle (auto width, no border), aligned right, top level"
+      }
+    }
+  },
+  "b2-r26-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
       }
     }
   }
