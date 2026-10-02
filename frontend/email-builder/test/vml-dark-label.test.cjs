@@ -71,8 +71,44 @@ for (const [name, html] of Object.entries(cases)) {
   check(`S5 ${name}: one href marker (one shape)`, (raw.match(/<span data-lm-vml-href=/g) || []).length === 1);
 }
 check('S5: a one-line full-width Button is NOT a fallback', /<v:group /.test(word(fullWidthButton)) && /string="Wide CTA"/.test(word(fullWidthButton)));
-check('S5: a #RRGGBB / #RGB label at the range edges (U+0020, U+024F, U+2000-U+206F, U+20A0-U+20CF) is NOT a fallback',
+check('S5: a label of U+0020, U+024F, U+2014 and U+20AC is NOT a fallback',
   /<v:group /.test(word(inline('A ɏ — €'))));
 check('S5: a non-hex keyword colour IS a fallback', /<center /.test(word(inline('Go', 'white'))));
+
+
+// ---- review fix F3: a custom-width inline Button whose label does not fit wraps in CSS, so it
+// keeps the wrapping <center> shape; a label that fits still gets the group. Literal captured
+// from b5ceb3ce's postProcess.ts.
+const custom = (label) => `<div style="text-align:center;padding:0px 24px 20px 24px"><a href="https://x.test/go" target="_blank" style="color:#FFFFFF;font-size:16px;font-weight:bold;background-color:#000000;border-radius:64px;display:inline-block;padding:12px 20px 12px 20px;text-decoration:none;border:2px solid #fbf00b;width:120px;box-sizing:border-box">${label}</a></div>`;
+const NARROW_188 = "<!--[if mso]><v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"https://x.test/go\" style=\"height:33.75pt;v-text-anchor:middle;width:90pt;\" arcsize=\"50%\" strokecolor=\"#fbf00b\" strokeweight=\"1.5pt\" fillcolor=\"#000000\"><w:anchorlock/><center style=\"color:#fbf00b;font-family:Arial, sans-serif;font-size:12pt;font-weight:bold;\">Shop the whole autumn collection</center></v:roundrect><![endif]-->";
+check('F3: a width:120px Button with a long label is exactly the erinos.188 output', word(custom('Shop the whole autumn collection')) === NARROW_188, word(custom('Shop the whole autumn collection')));
+// Re-review R1/R3: the fit model is characters x 16 x 0.65 + side padding (40) + both borders (4)
+// inside the 120 px box. "Shop now" (8 characters, 83.2) fits alone but not with padding.
+check('F3: a label that fits alone but not with its padding and borders is a fallback', /^<!--\[if mso\]><v:roundrect [\s\S]*<center /.test(word(custom('Shop now'))), word(custom('Shop now')).slice(0, 60));
+check('F3: a seven-character label (72.8 + 44 = 116.8) fits and gets the group', /^<!--\[if mso\]><v:group /.test(word(custom('Shop it'))), word(custom('Shop it')).slice(0, 60));
+check('F3: a width:120px Button whose label fits still gets the group', /^<!--\[if mso\]><v:group [^>]*style="width:90pt;/.test(word(custom('Go'))) && /string="Go"/.test(word(custom('Go'))));
+
+// ---- review fix F4: the label's printable set, and the colour forms ---------------------------
+const cp = (n) => String.fromCodePoint(n);
+const hex = (n) => `U+${n.toString(16).toUpperCase().padStart(4, '0')}`;
+const FALLS_BACK = [0x007F, 0x0080, 0x0085, 0x009F, 0x00AD, 0x200C, 0x200D, 0x200F, 0x0250, 0x1FFF, 0x2000, 0x200B, 0x202E, 0x205F, 0x2060, 0x2070, 0x209F, 0x20D0];
+const ALLOWED = [0x007E, 0x00A0, 0x00AC, 0x00AE, 0x024F, 0x2010, 0x2027, 0x2030, 0x205E, 0x20A0, 0x20CF];
+for (const n of FALLS_BACK) check(`F4: ${hex(n)} is outside the label set`, pp.textpathLabelAllowed(`Go${cp(n)}far`) === false);
+for (const n of ALLOWED) check(`F4: ${hex(n)} is inside the label set`, pp.textpathLabelAllowed(`Go${cp(n)}far`) === true);
+// Through the compile: a label is whitespace-collapsed first (/\s+/ -> ' ', unchanged by this
+// fix), so U+2000 and U+205F (JS whitespace) arrive as a plain space and never reach the check;
+// every other character arrives as typed.
+const JS_SPACE = new Set([0x00A0, 0x2000, 0x205F]);
+for (const n of FALLS_BACK.filter((x) => !JS_SPACE.has(x))) {
+  check(`F4: a label holding ${hex(n)} compiles to the fallback`, /^<!--\[if mso\]><v:roundrect [\s\S]*<center /.test(word(inline(`Go${cp(n)}far`))));
+}
+for (const n of ALLOWED.filter((x) => !JS_SPACE.has(x))) {
+  check(`F4: a label holding ${hex(n)} compiles to the group`, /^<!--\[if mso\]><v:group /.test(word(inline(`Go${cp(n)}far`))));
+}
+for (const n of [0x2000, 0x205F]) {
+  check(`F4: ${hex(n)} in a label is collapsed to a plain space before the check (never drawn)`, word(inline(`Go${cp(n)}far`)).includes('string="Go far"'));
+}
+check('F4: #ffff (4 digits) falls back', /<center /.test(word(inline('Go', '#ffff'))));
+check('F4: #ffffffff (8 digits) falls back', /<center /.test(word(inline('Go', '#ffffffff'))));
 
 done();

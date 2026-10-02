@@ -160,6 +160,11 @@ try {
     const bytes = compiledBytes(EB, docs[s]);
     check(`${s}: ${rows} rows (<= ${LIMITS.rows}), each preceded by its label`, rows <= LIMITS.rows && labels === rows && docs[s].root.data.childrenIds.every((k, i) => (i % 2 === 0) === k.endsWith('-label')));
     check(`${s}: compiles to ${bytes} bytes (<= ${LIMITS.bytes})`, bytes <= LIMITS.bytes);
+    // BIBLE-OUTLOOK-FIXES-SPEC S5: no bible Button is a fallback — every Word copy is the
+    // VML-text group, never the old <w:anchorlock/> + <center> shape (flag-off sheets have none).
+    const { context, refs } = JSON.parse(fs.readFileSync(path.join(CANARY_DIR, '_context.json'), 'utf8'));
+    const html = EB.compileDocument(JSON.parse(JSON.stringify(docs[s])), context, refs);
+    check(`${s}: no Button compiles to the fallback Word shape`, !/anchorlock/.test(html));
   }
 
   // Cells.

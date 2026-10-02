@@ -572,11 +572,12 @@ function addWordFontFallbacks(doc: Document) {
 // never reached it — it wraps only a div whose children are text flow, and a top-level or
 // in-column Heading has no such div — so Outlook 2016 drew it in Times New Roman. Each Heading
 // block therefore becomes one presentation table whose cell carries what Word drops from the
-// heading: the padding (read with getPaddingValues, shorthand and longhands, written as one
-// shorthand; none when all four are 0), the background colour (attribute and style, so the
+// heading: the padding (only when every value it states is px or a bare 0 — see
+// headingPaddingTokens below; none when all four are 0), the background colour (attribute and style, so the
 // padded area is coloured in Word) and, only when the heading states one, its alignment
 // (never fabricated — the campaign-10 rule). The heading keeps `margin:0`, its own
-// text-align and everything else, and loses its padding and background. Its Word font
+// text-align and everything else, and loses its background and, when it moved, its padding.
+// Its Word font
 // wrapper (the same Safe payloads addWordFontFallbacks writes) sits INSIDE the heading,
 // around its content, so it is inside the element that carries the stack — the shape Text
 // uses — and is present exactly when the heading's EFFECTIVE stack (read before the element
@@ -592,6 +593,30 @@ function addWordFontFallbacks(doc: Document) {
 // addWordFontFallbacks. Proved by candidate render r1 row H2
 // (Downloads/inspect/outlook-fix-candidates-20261002/r1): Outlook 2016 sans with its 24 px
 // padding, Outlook 2024 padded.
+//
+// BIBLE-OUTLOOK-FIXES-SPEC §4.2 (review fix): a heading's padding moves to its cell only when
+// every padding declaration it states — each `padding` shorthand token and each
+// `padding-<side>` — is a px value (whole or fractional) or a bare 0, the only units the cell
+// can carry unchanged. Returns the four side values AS WRITTEN (never rounded; an unstated side
+// is 0px), or null when any declaration is something else (em, %, calc(), !important …): that
+// heading keeps its padding on itself and its cell carries none. A stated longhand wins over
+// the shorthand whatever their order (parseStyleMap keeps no declaration order — the same as
+// getPaddingValues); the builder's Heading emits the shorthand alone.
+const HEADING_PADDING_TOKEN = /^(?:\d+(?:\.\d+)?px|0)$/i;
+const PADDING_SIDES = ['top', 'right', 'bottom', 'left'] as const;
+
+function headingPaddingTokens(styleMap: TStyleMap): string[] | null {
+  const shorthand = styleMap.padding === undefined ? [] : styleMap.padding.trim().split(/\s+/);
+  const longhands = PADDING_SIDES.map((side) => styleMap[`padding-${side}`]);
+  const stated = [...shorthand, ...longhands.filter((value): value is string => value !== undefined)];
+  if (shorthand.length > 4 || !stated.every((token) => HEADING_PADDING_TOKEN.test(token.trim()))) {
+    return null;
+  }
+  const [top, right = top, bottom = top, left = right] = shorthand;
+  const fromShorthand = [top, right, bottom, left];
+  return PADDING_SIDES.map((_, i) => (longhands[i] ?? fromShorthand[i] ?? '0px').trim());
+}
+
 function transformHeadingBlocks(doc: Document) {
   const headings = Array.from(doc.querySelectorAll('h1, h2, h3, h4, h5, h6')).filter((heading) => {
     if (!isHeadingBlock(heading) || heading.closest('[data-lm-user-html]')) {
@@ -604,19 +629,16 @@ function transformHeadingBlocks(doc: Document) {
 
   headings.forEach((heading) => {
     const styleMap = parseStyleMap(heading.getAttribute('style'));
-    const padding = getPaddingValues(styleMap);
-    const hasPadding = padding.top !== 0 || padding.right !== 0 || padding.bottom !== 0 || padding.left !== 0;
+    const padding = headingPaddingTokens(styleMap);
+    const hasPadding = padding !== null && padding.some((token) => parseFloat(token) !== 0);
     const backgroundColor = styleMap['background-color'];
     const align = styleMap['text-align'];
     const stack = getEffectiveFontFamily(heading);
     const fallback = stack ? wordFontFallback(stack) : '';
 
     heading.setAttribute('style', setStyleValues(heading.getAttribute('style'), [
-      ['padding', null],
-      ['padding-top', null],
-      ['padding-right', null],
-      ['padding-bottom', null],
-      ['padding-left', null],
+      ...(padding === null ? [] : PADDING_SIDES.map((side): [string, null] => [`padding-${side}`, null])),
+      ...(padding === null ? [] : [['padding', null] as [string, null]]),
       ['background-color', null],
     ]));
     if (fallback) {
@@ -625,7 +647,7 @@ function transformHeadingBlocks(doc: Document) {
     }
 
     const tdStyle = [
-      hasPadding ? `padding:${formatPaddingShorthand(padding)}` : '',
+      hasPadding && padding ? `padding:${padding.join(' ')}` : '',
       backgroundColor ? `background-color:${backgroundColor}` : '',
       align ? `text-align:${align}` : '',
     ].filter(Boolean).join(';');
@@ -888,20 +910,29 @@ export const VML_LABEL_VARIANT: 'font' | 'bgcolor' | 'border' | 'textpath' = 'te
 
 // BIBLE-OUTLOOK-FIXES-SPEC S5. VML text draws ONE line in ONE named font with no proven glyph
 // substitution, and its colour must be a colour VML reads. A Button keeps today's Word copy
-// (the 'border' shape) when its label is empty, when a full-width Button's label is estimated
-// to need more than one line, when its text colour is not a #RGB or #RRGGBB hex, or when its
-// label holds a character outside Basic Latin through Latin Extended-B (U+0020–U+024F),
-// General Punctuation (U+2000–U+206F) and Currency Symbols (U+20A0–U+20CF). Hazard 54 still
-// applies to those.
+// (the 'border' shape) when its label is empty, when its label is estimated to need more than
+// one line (a full-width Button past one line, or an inline Button whose custom width is
+// narrower than its label), when its text colour is not a #RGB or #RRGGBB hex, or when its
+// label holds a character outside the printable set below: U+0020–U+007E, U+00A0–U+00AC,
+// U+00AE–U+024F (Latin-1 and Latin Extended without the C1 controls and the soft hyphen),
+// U+2010–U+2027 and U+2030–U+205E (General Punctuation without the U+2000–U+200F spaces and
+// marks, the U+2028–U+202F separators and embedding controls, and U+205F–U+206F) and
+// U+20A0–U+20CF (Currency Symbols). Hazard 54 still applies to those.
 const TEXTPATH_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-const TEXTPATH_LABEL = /^[\u0020-\u024F\u2000-\u206F\u20A0-\u20CF]+$/;
+const TEXTPATH_LABEL = /^[\u0020-\u007E\u00A0-\u00AC\u00AE-\u024F\u2010-\u2027\u2030-\u205E\u20A0-\u20CF]+$/;
+
+// Exported for the range test (vml-dark-label.test.cjs): a label passes only when every
+// character is in the set above.
+export function textpathLabelAllowed(text: string) {
+  return TEXTPATH_LABEL.test(text);
+}
 
 function useTextpathLabel(options: TVmlButtonOptions) {
   return VML_LABEL_VARIANT === 'textpath'
     && options.text !== ''
     && (options.lines ?? 1) <= 1
     && TEXTPATH_COLOR.test(options.textColor)
-    && TEXTPATH_LABEL.test(options.text);
+    && textpathLabelAllowed(options.text);
 }
 
 // The VML text weight: VML has bold or not. `bold`, `bolder` or a numeric weight >= 600.
@@ -1086,6 +1117,16 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
     borderRadius,
     width: estimatedWidth,
     height: estimatedHeight,
+    // BIBLE-OUTLOOK-FIXES-SPEC S5 (review fixes): a custom width too narrow for the label
+    // keeps the old shape, whose <center> wraps inside the pill in Word — VML text draws one
+    // line that would run past it. (The CSS label is nowrap and overflows either way.) The
+    // fit model is the review's D4.4 and the bible generator's, so the three agree on what
+    // "fits": characters x font size x 0.65 (0.6 when not bold), plus side padding and both
+    // borders, inside a border-box width. A hand-typed content-box width over-triggers, which
+    // only selects the old shape.
+    lines: explicitWidth !== null
+      && [...text].length * fontSize * (textpathWeight(fontWeight) === 'bold' ? 0.65 : 0.6)
+        + paddingValues.left + paddingValues.right + 2 * borderWidth > explicitWidth ? 2 : 1,
   });
   // The VML must ride inside the Safe template WITH its conditional markers:
   // emitted raw, the fragment parser rewrites <w:anchorlock/> into an OPEN tag
@@ -1506,7 +1547,7 @@ function clampImageWidths(node: Element, available: number) {
         // width attribute and no inline width: a px-pinned cell breaks Outlook mobile and the
         // Gmail apps (hazard 91). An explicit-width cell already carries its width; a table
         // inside a user Html fence does not follow the column model.
-        if (explicit === null && innerWidth > 0 && !fenced) {
+        if (cell.tagName === 'TD' && explicit === null && innerWidth > 0 && !fenced) {
           cell.setAttribute('class', `${cell.getAttribute('class') || ''} lm-cw-${innerWidth}`.trim());
         }
         Array.from(cell.children).forEach((child) => clampImageWidths(child, innerWidth));
@@ -1517,8 +1558,11 @@ function clampImageWidths(node: Element, available: number) {
 
   let innerWidth = available;
   if (node.tagName === 'DIV' || node.tagName === 'TD' || node.tagName === 'TH') {
-    const padding = getPaddingValues(parseStyleMap(node.getAttribute('style')));
-    innerWidth = available - padding.left - padding.right;
+    // BIBLE-OUTLOOK-FIXES-SPEC §4.4 (review fix): the width inside a block is its share less
+    // its padding AND its left and right borders (getHorizontalInset reads the border shorthand
+    // and longhands), so a column row or an image inside a bordered Container gets the width
+    // actually inside the border — the lm-cw-<n> class and the image clamp alike.
+    innerWidth = available - getHorizontalInset(parseStyleMap(node.getAttribute('style')));
   }
 
   Array.from(node.children).forEach((child) => clampImageWidths(child, innerWidth));
@@ -1605,14 +1649,25 @@ function markFencedTables(doc: Document) {
 // column's text at 320 px, Outlook for Mac unchanged; `mso-table-layout-alt:fixed` alone and a
 // conditional <colgroup> did not work (F1, F5). Runs last, after the final hardenImages.
 function addWordColumnWidthStyles(doc: Document) {
+  // Rules only for the widths clampImageWidths stamped: the direct td cells of a builder
+  // (table-layout:fixed) table outside every fence — read BEFORE the fence marks are removed —
+  // never a `lm-cw-` class a user typed inside an Html block.
+  const widths = new Set<number>();
+  doc.querySelectorAll('table').forEach((table) => {
+    if (table.hasAttribute(WORD_COLUMN_FENCE_ATTR)
+      || (parseStyleMap(table.getAttribute('style'))['table-layout'] || '').toLowerCase() !== 'fixed') {
+      return;
+    }
+    getDirectRows(table).forEach((row) => {
+      Array.from(row.children).filter((cell) => cell.tagName === 'TD').forEach((cell) => {
+        for (const match of (cell.getAttribute('class') || '').matchAll(/(?:^|\s)lm-cw-(\d+)(?=\s|$)/g)) {
+          widths.add(Number(match[1]));
+        }
+      });
+    });
+  });
   doc.querySelectorAll(`[${WORD_COLUMN_FENCE_ATTR}]`).forEach((table) => table.removeAttribute(WORD_COLUMN_FENCE_ATTR));
 
-  const widths = new Set<number>();
-  doc.querySelectorAll('td[class*="lm-cw-"]').forEach((cell) => {
-    for (const match of (cell.getAttribute('class') || '').matchAll(/(?:^|\s)lm-cw-(\d+)(?=\s|$)/g)) {
-      widths.add(Number(match[1]));
-    }
-  });
   if (widths.size === 0 || !doc.head) {
     return;
   }

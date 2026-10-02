@@ -70,6 +70,37 @@ const H_PADDED = 'background-color:#FFEECC;font-weight:bold;text-align:center;ma
   check('I2 zero padding: the heading carries no padding', !Object.keys(styleMap(headingNamed(doc, 'Bare heading'))).some((k) => k.startsWith('padding')));
 }
 
+// Review fix F1: only px or bare-0 padding moves to the cell, carried AS WRITTEN (never rounded);
+// any other unit stays on the heading and the cell gets none.
+{
+  const { doc } = compile(heading('Em heading', 'font-weight:bold;margin:0;font-size:24px;padding:1em 2em')
+    + heading('Fractional heading', 'font-weight:bold;margin:0;font-size:24px;padding:12.5px 24px')
+    + heading('Mixed heading', 'font-weight:bold;margin:0;font-size:24px;padding:8px;padding-left:5%')
+    + heading('Zero heading', 'font-weight:bold;margin:0;font-size:24px;padding:0 10px')
+    + heading('Five heading', 'font-weight:bold;margin:0;font-size:24px;padding:1px 2px 3px 4px 5px')
+    + heading('Both heading', 'font-weight:bold;margin:0;font-size:24px;padding:8px;padding-top:0')
+    + heading('Upper heading', 'font-weight:bold;margin:0;font-size:24px;padding:10PX 0'));
+  const em = headingNamed(doc, 'Em heading');
+  const emCell = cellOf(em);
+  check('F1: padding:1em 2em stays on the heading', styleMap(em).padding === '1em 2em', em && em.getAttribute('style'));
+  check('F1: and that heading\'s cell carries no padding', emCell && !('padding' in styleMap(emCell.td)), emCell && emCell.td.outerHTML.slice(0, 160));
+  const frac = cellOf(headingNamed(doc, 'Fractional heading'));
+  check('F1: 12.5px is carried to the cell unrounded', frac && styleMap(frac.td).padding === '12.5px 24px 12.5px 24px', frac && frac.td.getAttribute('style'));
+  check('F1: and removed from the heading', !Object.keys(styleMap(headingNamed(doc, 'Fractional heading'))).some((k) => k.startsWith('padding')));
+  const mixed = headingNamed(doc, 'Mixed heading');
+  check('F1: one non-px longhand keeps ALL the heading\'s padding on the heading', styleMap(mixed).padding === '8px' && styleMap(mixed)['padding-left'] === '5%'
+    && !('padding' in styleMap(cellOf(mixed).td)), mixed && mixed.getAttribute('style'));
+  const zero = cellOf(headingNamed(doc, 'Zero heading'));
+  check('F1: a bare 0 token is accepted and written as written', zero && styleMap(zero.td).padding === '0 10px 0 10px', zero && zero.td.getAttribute('style'));
+  // Re-review R3: the guards a mutant survived.
+  const five = headingNamed(doc, 'Five heading');
+  check('F1: a five-token shorthand stays on the heading', styleMap(five).padding === '1px 2px 3px 4px 5px' && !('padding' in styleMap(cellOf(five).td)), five && five.getAttribute('style'));
+  const both = cellOf(headingNamed(doc, 'Both heading'));
+  check('F1: a px longhand beside a px shorthand wins for its side', both && styleMap(both.td).padding === '0 8px 8px 8px', both && both.td.getAttribute('style'));
+  const upper = cellOf(headingNamed(doc, 'Upper heading'));
+  check('F1: an upper-case PX unit is a px value', upper && /^10px 0 10px 0$/i.test(styleMap(upper.td).padding || ''), upper && upper.td.getAttribute('style'));
+}
+
 // ---- I2: in a Container ----------------------------------------------------------------------
 {
   const container = `<div style="border-radius:0;padding:8px 8px 8px 8px">${heading('Boxed one', H_PADDED)}${heading('Boxed two', 'font-weight:bold;margin:0;font-size:24px;padding:0px 24px 0px 24px')}</div>`;

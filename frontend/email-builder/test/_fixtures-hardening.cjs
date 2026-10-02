@@ -30,6 +30,15 @@ const spacerDiv = `<div style="height:8px;line-height:8px;font-size:8px">&nbsp;<
 const rhythmModernText = `<div style="padding:0px 24px 0px 24px"><p>Hai sbloccato il <strong>50%</strong>.</p></div>`;
 const borderedContainer = `<div style="border:1px solid #fbf00b;border-radius:0;padding:0px 24px 0px 24px"><div style="font-size:22px;font-weight:normal;padding:0px 0px 0px 0px"><p><strong>Scade il 15 ottobre</strong></p></div></div>`;
 
+// BIBLE-OUTLOOK-FIXES-SPEC I8 inputs: a Heading block (upstream shape, padded, on the layout
+// default stack — so it gains a cell and a Word font wrapper) and a builder two-column row (so
+// its cells gain lm-cw- classes and <head> the Word-only style payload).
+const headingBlock = '<h2 style="font-weight:bold;text-align:center;margin:0;font-size:24px;padding:16px 24px 16px 24px">Heading survives</h2>';
+const twoColumnRow = '<div style="padding:16px 24px 16px 24px"><table align="center" width="100%" cellpadding="0" border="0" style="table-layout:fixed;border-collapse:collapse"><tbody style="width:100%"><tr style="width:100%">'
+  + '<td style="box-sizing:content-box;vertical-align:top;padding-left:0;padding-right:8px"><div style="padding:8px 8px 8px 8px"><p>Left column survives</p></div></td>'
+  + '<td style="box-sizing:content-box;vertical-align:top;padding-left:8px;padding-right:0"><div style="padding:8px 8px 8px 8px"><p>Right column survives</p></div></td>'
+  + '</tr></tbody></table></div>';
+
 // Simulated Go render: Safe payloads decode and the href marker becomes its value.
 function decodeSafe(out) {
   return out.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
@@ -46,5 +55,5 @@ function makeChecker() {
 
 module.exports = {
   JSDOM, pp, canvas, decodeSafe, makeChecker,
-  MODERN_SANS, ARIAL, inlineButton, fullWidthButton, wideImage, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv,
+  MODERN_SANS, ARIAL, headingBlock, twoColumnRow, inlineButton, fullWidthButton, wideImage, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv,
 };

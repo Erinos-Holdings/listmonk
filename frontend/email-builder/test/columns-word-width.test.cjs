@@ -88,6 +88,39 @@ function noPinnedWidth(doc) {
   check('I7 mixed: one rule, for the auto cell only', headRules(raw).decoded.join() === '<!--[if mso]><style>td.lm-cw-336{width:336px}</style><![endif]-->');
 }
 
+// ---- review fix F2: a bordered Container's border is inside no column's share ------------------
+// Canvas 600; Container border 10 px a side + padding 20 px a side → 540; the row's own block
+// padding 24 px a side → 492; two 246 tracks less the 8 px gap half → 238 (248 if the border
+// were ignored).
+{
+  const container = (inner) => `<div style="border:10px solid #fbf00b;padding:20px 20px 20px 20px">${inner}</div>`;
+  const { raw, doc } = compile(container(columns([['padding-left:0;padding-right:8px', text('Boxed left')], ['padding-left:8px;padding-right:0', text('Boxed right')]])));
+  check('F2: a row inside a 10px-bordered, 20px-padded Container gets lm-cw-238', cwClasses(cellWith(doc, 'Boxed left')).join() === 'lm-cw-238' && cwClasses(cellWith(doc, 'Boxed right')).join() === 'lm-cw-238',
+    `${cwClasses(cellWith(doc, 'Boxed left'))} ${cwClasses(cellWith(doc, 'Boxed right'))}`);
+  check('F2: and its rule is 238', headRules(raw).decoded.join() === '<!--[if mso]><style>td.lm-cw-238{width:238px}</style><![endif]-->', headRules(raw).decoded.join());
+  // An over-wide image in the same Container is clamped to the width inside the border: 540.
+  const img = compile(container('<div style="padding:0px 0px 0px 0px"><img alt="wide" src="https://x.test/w.png" width="700" style="width:700px;max-width:100%"></div>'));
+  const w = (img.raw.match(/<img[^>]*alt="wide"[^>]*>/) || [''])[0].match(/ width="(\d+)"/);
+  check('F2: an over-wide image in a bordered Container is clamped inside the border (540)', w && w[1] === '540', w && w[1]);
+}
+
+// ---- review fix F5: a th never gets a class; a user-typed lm-cw- class makes no rule ------------
+{
+  const thRow = `<div style="padding:16px 24px 16px 24px"><table align="center" width="100%" cellpadding="0" border="0" style="table-layout:fixed;border-collapse:collapse"><tbody><tr>`
+    + '<th style="padding-right:8px">Head cell</th><td style="box-sizing:content-box;vertical-align:top;padding-left:8px;padding-right:0">Data cell</td></tr></tbody></table></div>';
+  const { raw, doc } = compile(thRow);
+  const th = doc.querySelector('th');
+  check('F5: a th cell gets no lm-cw- class', th && !th.hasAttribute('class'), th && th.outerHTML);
+  check('F5: the td beside it still does', cwClasses(cellWith(doc, 'Data cell')).length === 1);
+  const typed = compile(`<div data-lm-user-html="true" style="padding:16px 24px 16px 24px"><table width="100%"><tbody><tr><td class="lm-cw-777">typed</td></tr></tbody></table>`
+    + '<table width="100%" style="table-layout:fixed"><tbody><tr><td class="lm-cw-777">typed fixed</td></tr></tbody></table></div>'
+    + columns([['padding-left:0;padding-right:8px', text('Real left')], ['padding-left:8px;padding-right:0', text('Real right')]]));
+  check('F5: a user-typed class="lm-cw-777" inside an Html block produces no lm-cw-777 rule', !/td\.lm-cw-777/.test(typed.raw) && headRules(typed.raw).decoded.join() === '<!--[if mso]><style>td.lm-cw-268{width:268px}</style><![endif]-->', headRules(typed.raw).decoded.join());
+  check('F5: and the typed class itself is left as typed', (typed.raw.match(/class="lm-cw-777"/g) || []).length === 2);
+  const typedOnly = compile('<div data-lm-user-html="true"><table width="100%"><tbody><tr><td class="lm-cw-777">only typed</td></tr></tbody></table></div>');
+  check('F5: a body whose only lm-cw- class is user-typed gets no style payload', headRules(typedOnly.raw).count === 0);
+}
+
 // ---- no columns: no payload; a user Html fence: nothing; the flag off: nothing ------------------
 {
   const { raw } = compile(text('Just text'));

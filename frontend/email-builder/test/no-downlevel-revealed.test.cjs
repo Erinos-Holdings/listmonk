@@ -2,10 +2,10 @@
 // downlevel-revealed conditional comment, so compiled output must never contain one; the
 // non-Word twin of every VML button and clamped image rides in an element carrying
 // mso-hide:all (a block wrapper; for a table twin, the table AND each of its cells).
-const { pp, canvas, decodeSafe, makeChecker, JSDOM, inlineButton, fullWidthButton, wideImage } = require('./_fixtures-hardening.cjs');
+const { pp, canvas, decodeSafe, makeChecker, JSDOM, inlineButton, fullWidthButton, wideImage, headingBlock, twoColumnRow } = require('./_fixtures-hardening.cjs');
 const { check, done } = makeChecker();
 
-const out = pp.postProcess(canvas(inlineButton + fullWidthButton + wideImage), { outlook: true });
+const out = pp.postProcess(canvas(inlineButton + fullWidthButton + wideImage + headingBlock + twoColumnRow), { outlook: true });
 const rendered = decodeSafe(out);
 
 // I1 — nowhere, in either the stored (Safe-encoded) or the rendered form.
@@ -39,5 +39,13 @@ check('no image rides inside <!--[if mso]> … <![endif]-->', !/<!--\[if mso\]><
 const clampedImg = doc.querySelector('img[src="https://x.test/photo.png"]');
 check('the one real image is clamped to 552 and not wrapped in an mso-hide:all block',
   clampedImg && clampedImg.getAttribute('width') === '552' && !(clampedImg.parentElement.tagName === 'DIV' && /mso-hide:\s*all/.test(clampedImg.parentElement.getAttribute('style') || '')));
+
+// BIBLE-OUTLOOK-FIXES-SPEC I8: the Heading cell's font wrapper and the column-width style block
+// are Word-only and ride in downlevel-HIDDEN conditionals (checked by I1 above for the whole
+// body); the content they decorate is ordinary markup every client reads.
+check('the heading font wrapper is a downlevel-hidden conditional', /<h2 [^>]*><!--\[if mso\]><font face="Arial"><!\[endif\]-->Heading survives<!--\[if mso\]><\/font><!\[endif\]--><\/h2>/.test(rendered));
+check('the column style block is a downlevel-hidden conditional in <head>', /<head>[\s\S]*<!--\[if mso\]><style>td\.lm-cw-268\{width:268px\}<\/style><!\[endif\]-->[\s\S]*<\/head>/.test(rendered));
+check('the heading and both columns are real elements', !!doc.querySelector('h2') && /Heading survives/.test(doc.querySelector('h2').textContent)
+  && doc.querySelectorAll('td.lm-cw-268').length === 2 && /Left column survives/.test(doc.querySelectorAll('td.lm-cw-268')[0].textContent) && /Right column survives/.test(doc.querySelectorAll('td.lm-cw-268')[1].textContent));
 
 done();
