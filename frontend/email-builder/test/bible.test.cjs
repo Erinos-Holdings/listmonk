@@ -381,6 +381,26 @@ try {
     check('B3 holds no census rows and no evidence rows (SA11, SA5)', b3labels.every((l) => !/census composition| · evidence/.test(l)), b3labels.join(' | '));
   }
 
+  // IA14 / SA22: B1 ends at row 35; its five former last rows (the plain Button at -, left and right,
+  // the custom-height Button, the bordered custom-size Button) are B3's rows directly after its grid.
+  {
+    const SA22 = [
+      'Button, plain (auto width, no border), no alignment, top level',
+      'Button, plain (auto width, no border), aligned left, top level',
+      'Button, plain (auto width, no border), aligned right, top level',
+      'Button, auto width, custom height, centred, top level',
+      'Button, pill, custom width and height, bordered, centred, top level',
+    ];
+    const labelsOf = (s) => docs[s].root.data.childrenIds.filter((k) => k.endsWith('-label')).map((k) => docs[s][k].data.props.text.replace(/^B\d+\.\d+ · /, ''));
+    const b1 = labelsOf('bible-01-flat-alignment');
+    check('SA22: B1 holds exactly 35 rows', b1.length === 35, String(b1.length));
+    check('SA22: B1 holds none of the five Button rows', SA22.every((w) => !b1.includes(w)));
+    const b3 = labelsOf('bible-03-three-columns');
+    const grid = manifest.sheets.find((x) => x.stem === 'bible-03-three-columns').cells.filter((c) => c.endsWith('@col3')).length;
+    check('SA22: B3 holds the five Button rows directly after its three-column grid, in order', grid === 16 && JSON.stringify(b3.slice(grid, grid + 5)) === JSON.stringify(SA22), JSON.stringify(b3.slice(grid, grid + 5)));
+    check('SA22: B3 rows after the five are only Heading rows moved from B4', b3.slice(grid + 5).every((w) => /^Heading, .* \(moved from B4\)$/.test(w)), JSON.stringify(b3.slice(grid + 5)));
+  }
+
   // IA14 / SA11 / SA13: B7, the real arrangements.
   {
     const d7 = docs['bible-07-real-arrangements'];

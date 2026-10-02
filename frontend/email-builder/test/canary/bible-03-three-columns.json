@@ -41,7 +41,17 @@
         "b3-r16-label",
         "b3-r16",
         "b3-r17-label",
-        "b3-r17"
+        "b3-r17-x",
+        "b3-r18-label",
+        "b3-r18-x",
+        "b3-r19-label",
+        "b3-r19-x",
+        "b3-r20-label",
+        "b3-r20-x",
+        "b3-r21-label",
+        "b3-r21-x",
+        "b3-r22-label",
+        "b3-r22"
       ]
     }
   },
@@ -1944,11 +1954,225 @@
       },
       "props": {
         "markdown": true,
-        "text": "B3.17 · Heading, aligned right, as a two-column row in a Container (moved from B4)"
+        "text": "B3.17 · Button, plain (auto width, no border), no alignment, top level"
       }
     }
   },
-  "b3-r17-c0": {
+  "b3-r17-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r18-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.18 · Button, plain (auto width, no border), aligned left, top level"
+      }
+    }
+  },
+  "b3-r18-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r19-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.19 · Button, plain (auto width, no border), aligned right, top level"
+      }
+    }
+  },
+  "b3-r19-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r20-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.20 · Button, auto width, custom height, centred, top level"
+      }
+    }
+  },
+  "b3-r20-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Tall",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 56
+      }
+    }
+  },
+  "b3-r21-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.21 · Button, pill, custom width and height, bordered, centred, top level"
+      }
+    }
+  },
+  "b3-r21-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Boxed",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 180,
+        "customHeight": 52,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r22-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.22 · Heading, aligned right, as a two-column row in a Container (moved from B4)"
+      }
+    }
+  },
+  "b3-r22-c0": {
     "type": "Heading",
     "data": {
       "style": {
@@ -1966,7 +2190,7 @@
       }
     }
   },
-  "b3-r17-c1": {
+  "b3-r22-c1": {
     "type": "Heading",
     "data": {
       "style": {
@@ -1984,7 +2208,7 @@
       }
     }
   },
-  "b3-r17-cols": {
+  "b3-r22-cols": {
     "type": "ColumnsContainer",
     "data": {
       "style": {
@@ -2002,12 +2226,12 @@
         "columns": [
           {
             "childrenIds": [
-              "b3-r17-c0"
+              "b3-r22-c0"
             ]
           },
           {
             "childrenIds": [
-              "b3-r17-c1"
+              "b3-r22-c1"
             ]
           },
           {
@@ -2017,20 +2241,20 @@
       }
     }
   },
-  "b3-r17": {
+  "b3-r22": {
     "type": "Container",
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 16,
-          "right": 16
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
         "childrenIds": [
-          "b3-r17-cols"
+          "b3-r22-cols"
         ]
       }
     }

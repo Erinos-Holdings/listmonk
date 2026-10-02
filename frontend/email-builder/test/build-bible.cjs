@@ -7,12 +7,16 @@
 // preceded by a small label Text block `B<sheet>.<row> · <what it shows>`.
 //
 //   B1 flat alignment            the four types x every alignment at top level, and each alone in a Container;
-//                                a height-only Image at -, center and right at top level (amendment A1);
-//                                a plain Button (auto width, no border) at -, left and right at top level (review L6)
+//                                a height-only Image at -, center and right at top level (amendment A1).
+//                                Exactly 35 rows (BIBLE-OUTLOOK-FIXES-SPEC SA22: Inspect's Gmail iOS
+//                                capture ends at about 15,500 px)
 //   B2 two columns               the four types x every alignment, the same block in both columns;
 //                                gap none, valign top/bottom, one fixed-width row
 //   B3 three columns             the four types x every alignment in all three columns (the whole grid,
-//                                explicit left included); then any Heading rows moved from B4 (SA12)
+//                                explicit left included); then B1's former last five rows (SA22): a plain
+//                                Button (auto width, no border) at -, left and right at top level (review
+//                                L6), a custom-height Button and a bordered custom-size Button; then any
+//                                Heading rows moved from B4 (SA12)
 //   B4 nesting                   the four types x every alignment as a Container in each of two
 //                                columns, and as a two-column row inside a Container
 //   B5 colour bands, other blocks ink x ground pairings, Button label x fill, rows either side of both band
@@ -749,7 +753,12 @@ function buildBible(EB) {
     { what: 'Button, auto width, custom height, centred, top level', build: single(button('Tall', { customHeight: 56 })) },
     { what: 'Button, pill, custom width and height, bordered, centred, top level', build: single(button('Boxed', { buttonStyle: 'pill', customWidth: 180, customHeight: 52, borderSize: 2, borderColor: '#FFFFFF' })) },
   ];
-  const b1 = [...cells('top'), ...cells('container'), ...heightOnly, ...plainButtons, ...sizedButtons];
+  // BIBLE-OUTLOOK-FIXES-SPEC SA22: B1 ends at row 35 -- Inspect's Gmail iOS capture stops at about
+  // 15,500 px and cut the padded sheet at B1.40. Its last five rows (the plain and sized Buttons)
+  // are built on B3 after its grid, with their own values pinned first.
+  const b1All = pinCycles([...cells('top'), ...cells('container'), ...heightOnly, ...plainButtons, ...sizedButtons]);
+  const b1 = b1All.slice(0, 35);
+  const b1ToB3 = b1All.slice(35);
   record(SHEETS[0], buildDoc(common, b1, 1), b1);
   // Re-review R3: the plain Button (auto width, no border) in its other two shapes at -, left, right.
   const plainShapes = ['pill', 'rectangle'].flatMap((shape) =>
@@ -784,8 +793,9 @@ function buildBible(EB) {
   }
   const movedRow = (spec, to) => ({ ...spec, what: `${spec.what} (moved from B4)`, movedTo: to });
 
-  // B3: the whole three-column grid, then the moved Heading rows (document order) while B3 fits.
-  const b3 = pinCycles(cells('col3'));
+  // B3: the whole three-column grid, B1's five Button rows (SA22), then the moved Heading rows
+  // (document order) while B3 fits. A B3 over a limit throws (record()).
+  const b3 = [...pinCycles(cells('col3')), ...b1ToB3];
   const toB7 = [];
   for (const spec of movedOut) {
     const row = movedRow(spec, 3);
