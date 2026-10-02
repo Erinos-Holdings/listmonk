@@ -7,11 +7,14 @@
 //     T (T's own key included) and no other (the per-type invalidation integrations' coverage.ts
 //     reads);
 //   - Body hashes the raw file.
+//   - version 2 (integrations RENDERING-BIBLE-SPEC I14): `docs` holds one hash per corpus
+//     document, each the sha256 of that document's compiled html, and a change to ONE document
+//     moves only that document's hash.
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { loadUmd } = require('./_umd.cjs');
-const { CANARY_DIR, buildCanary, corpus, itemsOf, typesOf } = require('./build-canary.cjs');
+const { CANARY_DIR, buildCanary, corpus, docsOf, itemsOf, typesOf } = require('./build-canary.cjs');
 
 let failed = 0;
 function check(name, ok, detail) {
@@ -26,7 +29,7 @@ try {
   const a = buildCanary(EB);
   const b = buildCanary(EB);
   check('two builds are byte-identical', JSON.stringify(a) === JSON.stringify(b));
-  check('version 1', a.version === 1);
+  check('version 2', a.version === 2);
 
   const keys = Object.keys(a.items).sort();
   check('every block type has a key, plus Body', [...TYPES, 'Body'].sort().join(',') === keys.join(','), keys.join(','));
@@ -66,6 +69,17 @@ try {
     const moved = keys.filter((k) => after[k] !== a.items[k]).sort();
     check(`a compile change to ${T} moves exactly the keys sharing a document with it`, moved.join(',') === [...sharing].sort().join(','), `${moved.join(',')} vs ${[...sharing].sort().join(',')}`);
   }
+
+  // I14: one hash per document; a change to one document moves exactly its own.
+  const sha = (x) => crypto.createHash('sha256').update(x, 'utf8').digest('hex');
+  check('docs: one hash per corpus document', JSON.stringify(Object.keys(a.docs)) === JSON.stringify(Object.keys(a.documents)));
+  check('docs[stem] is sha256 of that document\'s compiled html', Object.keys(a.documents).every((st) => a.docs[st] === sha(a.documents[st].html)));
+  const stems = Object.keys(a.documents);
+  const victim = stems[Math.floor(stems.length / 2)];
+  const edited = { ...a.documents, [victim]: { ...a.documents[victim], html: `${a.documents[victim].html}<!-- edited -->` } };
+  const after = docsOf(edited);
+  const movedDocs = stems.filter((st) => after[st] !== a.docs[st]);
+  check('a change to one document moves only that document\'s docs hash', movedDocs.length === 1 && movedDocs[0] === victim, movedDocs.join(','));
 
   check('Body hashes the raw file', a.items.Body === crypto.createHash('sha256').update(fs.readFileSync(path.join(CANARY_DIR, 'body.html'), 'utf8'), 'utf8').digest('hex'));
   check('the file carries the raw body for the server half', a.body === fs.readFileSync(path.join(CANARY_DIR, 'body.html'), 'utf8'));

@@ -27,12 +27,18 @@ package main
 //
 // GET /api/campaigns/render-canary (campaigns:review) returns the startup result; a missing or
 // unparseable file, or a render error, is a 503 -- the review then fails closed (S11).
+//
+// VERSION 2 (integrations RENDERING-BIBLE-SPEC §3.4). The builder file carries `docs` (one hash
+// per document) and this serves `docItems`: sha256 of each document's SEND-rendered html alone.
+// A change to one document moves only its own docItems hash (I14). integrations' coverage reads it
+// to treat a record whose documents all still render byte-identically as render-equivalent, so
+// an editor-only or unrelated-document change no longer voids every record. A version 1 file is
+// refused (a 503): the builder and server halves ship in one image, so a mismatch is a build bug.
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -45,8 +51,10 @@ import (
 
 const (
 	renderCanaryPath = "/admin/static/email-builder/render-canary.json"
-	canaryCampUUID   = "00000000-0000-4000-8000-00000000ca11"
-	canarySubUUID    = "00000000-0000-4000-8000-000000000501"
+	// renderCanaryVersion is the only builder-file version this server accepts.
+	renderCanaryVersion = 2
+	canaryCampUUID      = "00000000-0000-4000-8000-00000000ca11"
+	canarySubUUID       = "00000000-0000-4000-8000-000000000501"
 	// canaryBodyKey is the key grammar's non-visual entry (canary/body.html).
 	canaryBodyKey = "Body"
 )
@@ -67,14 +75,18 @@ type renderCanaryFile struct {
 	} `json:"documents"`
 	Body  string            `json:"body"`
 	Items map[string]string `json:"items"`
+	// Docs: version 2's per-document compiled-html hashes (the builder half).
+	Docs map[string]string `json:"docs"`
 }
 
 // renderCanary is what the endpoint serves.
 type renderCanary struct {
-	Version      int                        `json:"version"`
-	Items        map[string]string          `json:"items"`
-	BuilderItems map[string]string          `json:"builderItems"`
-	Documents    map[string]json.RawMessage `json:"documents"`
+	Version      int               `json:"version"`
+	Items        map[string]string `json:"items"`
+	BuilderItems map[string]string `json:"builderItems"`
+	// DocItems: per document stem, sha256 of its send-rendered html alone (version 2).
+	DocItems  map[string]string          `json:"docItems"`
+	Documents map[string]json.RawMessage `json:"documents"`
 }
 
 // canaryRenderFunc renders one body of the given content type through the send path.
@@ -137,13 +149,17 @@ func buildRenderCanary(raw []byte, render canaryRenderFunc) (*renderCanary, erro
 	if err := json.Unmarshal(raw, &f); err != nil {
 		return nil, fmt.Errorf("render-canary.json: %v", err)
 	}
-	if f.Version != 1 || len(f.Documents) == 0 || len(f.Items) == 0 {
-		return nil, errors.New("render-canary.json: not a version 1 canary with documents and items")
+	if f.Version != renderCanaryVersion || len(f.Documents) == 0 || len(f.Items) == 0 || len(f.Docs) != len(f.Documents) {
+		return nil, fmt.Errorf("render-canary.json: not a version %d canary with documents, items and a docs hash per document", renderCanaryVersion)
 	}
 	types := map[string]map[string]bool{}
 	html := map[string]string{}
 	docs := map[string]json.RawMessage{}
+	docItems := map[string]string{}
 	for stem, d := range f.Documents {
+		if f.Docs[stem] == "" {
+			return nil, fmt.Errorf("render-canary.json: document %s has no docs hash", stem)
+		}
 		t, err := blockTypes(d.Doc)
 		if err != nil {
 			return nil, fmt.Errorf("render-canary.json: document %s: %v", stem, err)
@@ -152,13 +168,13 @@ func buildRenderCanary(raw []byte, render canaryRenderFunc) (*renderCanary, erro
 		if err != nil {
 			return nil, fmt.Errorf("render canary document %s: %v", stem, err)
 		}
-		types[stem], html[stem], docs[stem] = t, out, d.Doc
+		types[stem], html[stem], docs[stem], docItems[stem] = t, out, d.Doc, sha256Hex(out)
 	}
 	body, err := render(f.Body, models.CampaignContentTypeHTML)
 	if err != nil {
 		return nil, fmt.Errorf("render canary body: %v", err)
 	}
-	return &renderCanary{Version: f.Version, Items: canaryItems(types, html, body), BuilderItems: f.Items, Documents: docs}, nil
+	return &renderCanary{Version: f.Version, Items: canaryItems(types, html, body), BuilderItems: f.Items, DocItems: docItems, Documents: docs}, nil
 }
 
 // canaryRender is the campaign preview path (cmd/campaigns.go PreviewCampaign) over a synthetic

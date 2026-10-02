@@ -6,6 +6,10 @@ package main
 // (two fresh managers over the same link store), follow the key grammar, and a missing canary
 // file is a 503. No database: the manager's store is a fake whose CreateLink is deterministic,
 // like the real upsert on links.url.
+//
+// Version 2 (integrations RENDERING-BIBLE-SPEC I14): docItems carries one send-rendered hash per
+// document, and a change to one document moves only that document's hash; a version 1 file is
+// refused.
 
 import (
 	"crypto/sha256"
@@ -72,7 +76,8 @@ func canaryFile(t *testing.T) []byte {
 		"EmailLayout": sum("\n--text-only--\n" + html("text-only") + "\n--with-link--\n" + html("with-link")),
 		"Body":        sum("<p>body</p>"),
 	}
-	b, err := json.Marshal(map[string]any{"version": 1, "documents": docs, "body": "<p>body</p>", "items": items})
+	b, err := json.Marshal(map[string]any{"version": 2, "documents": docs, "body": "<p>body</p>", "items": items,
+		"docs": map[string]string{"with-link": sum(html("with-link")), "text-only": sum(html("text-only"))}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +124,7 @@ func TestRenderCanaryServerHalf(t *testing.T) {
 	if a, b := mustJSON(t, c1), mustJSON(t, c2); a != b {
 		t.Fatalf("two startups disagree:\n%s\n%s", a, b)
 	}
-	if len(c1.Documents) != 2 || c1.Version != 1 {
+	if len(c1.Documents) != 2 || c1.Version != 2 {
 		t.Fatalf("documents/version = %d/%d", len(c1.Documents), c1.Version)
 	}
 
@@ -133,6 +138,59 @@ func TestRenderCanaryServerHalf(t *testing.T) {
 	sum := sha256.Sum256([]byte("\n--text-only--\n" + render("text-only") + "\n--with-link--\n" + render("with-link")))
 	if c1.Items["EmailLayout"] != hex.EncodeToString(sum[:]) {
 		t.Fatal("EmailLayout is not the stem-ordered hash of every document")
+	}
+}
+
+// I14: docItems is one send-rendered hash per document, and editing ONE document moves only its own.
+func TestRenderCanaryDocItems(t *testing.T) {
+	raw := canaryFile(t)
+	a := canaryApp()
+	c1, err := buildRenderCanary(raw, a.canaryRender)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c1.DocItems) != 2 {
+		t.Fatalf("docItems = %v, want one per document", c1.DocItems)
+	}
+	for stem, h := range c1.DocItems {
+		var f renderCanaryFile
+		json.Unmarshal(raw, &f)
+		out, _ := a.canaryRender(f.Documents[stem].HTML, "visual")
+		if h != sha256Hex(out) {
+			t.Fatalf("docItems[%s] is not sha256 of its send-rendered html", stem)
+		}
+	}
+
+	// Edit the text-only document's compiled html: its docItems hash moves, with-link's does not.
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	d := m["documents"].(map[string]any)["text-only"].(map[string]any)
+	d["html"] = strings.Replace(d["html"].(string), "Hello", "Hello again", 1)
+	edited, _ := json.Marshal(m)
+	c2, err := buildRenderCanary(edited, a.canaryRender)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2.DocItems["text-only"] == c1.DocItems["text-only"] {
+		t.Fatal("the edited document's docItems hash did not move")
+	}
+	if c2.DocItems["with-link"] != c1.DocItems["with-link"] {
+		t.Fatal("an unedited document's docItems hash moved")
+	}
+
+	// A version 1 file, or a version 2 file without a docs hash per document, is refused.
+	m["version"] = 1
+	v1, _ := json.Marshal(m)
+	if _, err := buildRenderCanary(v1, a.canaryRender); err == nil {
+		t.Fatal("a version 1 canary was accepted")
+	}
+	m["version"] = 2
+	delete(m["docs"].(map[string]any), "text-only")
+	short, _ := json.Marshal(m)
+	if _, err := buildRenderCanary(short, a.canaryRender); err == nil {
+		t.Fatal("a canary missing a document's docs hash was accepted")
 	}
 }
 
@@ -213,5 +271,8 @@ func TestRenderCanaryRealCorpus(t *testing.T) {
 	}
 	if c.Items["Html"] == c.BuilderItems["Html"] {
 		t.Fatal("the Html canary document carries a link: its server hash must differ from the builder's")
+	}
+	if len(c.DocItems) != len(f.Documents) {
+		t.Fatalf("docItems has %d entries for %d documents", len(c.DocItems), len(f.Documents))
 	}
 }

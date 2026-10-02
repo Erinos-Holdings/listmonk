@@ -1,0 +1,2963 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "b3-r01-label",
+        "b3-r01",
+        "b3-r02-label",
+        "b3-r02",
+        "b3-r03-label",
+        "b3-r03",
+        "b3-r04-label",
+        "b3-r04",
+        "b3-r05-label",
+        "b3-r05",
+        "b3-r06-label",
+        "b3-r06",
+        "b3-r07-label",
+        "b3-r07",
+        "b3-r08-label",
+        "b3-r08",
+        "b3-r09-label",
+        "b3-r09",
+        "b3-r10-label",
+        "b3-r10",
+        "b3-r11-label",
+        "b3-r11",
+        "b3-r12-label",
+        "b3-r12",
+        "b3-r13-label",
+        "b3-r13",
+        "b3-r14-label",
+        "b3-r14",
+        "b3-r15-label",
+        "b3-r15",
+        "b3-r16-label",
+        "b3-r16",
+        "b3-r17-label",
+        "b3-r17-0",
+        "b3-r18-label",
+        "b3-r18-0",
+        "b3-r19-label",
+        "b3-r19-0",
+        "b3-r20-label",
+        "b3-r20-0",
+        "b3-r21-label",
+        "b3-r21-0",
+        "b3-r22-label",
+        "b3-r22-0",
+        "b3-r23-label",
+        "b3-r23-0",
+        "b3-r24-label",
+        "b3-r24-0",
+        "b3-r25-label",
+        "b3-r25-0",
+        "b3-r26-label",
+        "b3-r26-0"
+      ]
+    }
+  },
+  "b3-r01-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.1 · Text, no alignment, in all three columns"
+      }
+    }
+  },
+  "b3-r01-c0": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 11,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r01-c1": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 11,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r01-c2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 11,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r01": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r01-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r01-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r01-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r02-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.2 · Text, aligned left, in all three columns"
+      }
+    }
+  },
+  "b3-r02-c0": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        },
+        "fontSize": 14,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r02-c1": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        },
+        "fontSize": 14,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r02-c2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        },
+        "fontSize": 14,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r02": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r02-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r02-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r02-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r03-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.3 · Text, aligned center, in all three columns"
+      }
+    }
+  },
+  "b3-r03-c0": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r03-c1": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r03-c2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r03": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r03-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r03-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r03-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r04-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.4 · Text, aligned right, in all three columns"
+      }
+    }
+  },
+  "b3-r04-c0": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 20,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r04-c1": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 20,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r04-c2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 20,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r04": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r04-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r04-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r04-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r05-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.5 · Heading, no alignment, in all three columns"
+      }
+    }
+  },
+  "b3-r05-c0": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "level": "h3",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r05-c1": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "level": "h3",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r05-c2": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "level": "h3",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r05": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r05-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r05-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r05-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r06-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.6 · Heading, aligned left, in all three columns"
+      }
+    }
+  },
+  "b3-r06-c0": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        }
+      },
+      "props": {
+        "level": "h2",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r06-c1": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        }
+      },
+      "props": {
+        "level": "h2",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r06-c2": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        }
+      },
+      "props": {
+        "level": "h2",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r06": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r06-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r06-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r06-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r07-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.7 · Heading, aligned center, in all three columns"
+      }
+    }
+  },
+  "b3-r07-c0": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "level": "h1",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r07-c1": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "level": "h1",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r07-c2": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "level": "h1",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r07": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r07-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r07-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r07-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r08-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.8 · Heading, aligned right, in all three columns"
+      }
+    }
+  },
+  "b3-r08-c0": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "level": "h3",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r08-c1": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "level": "h3",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r08-c2": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "level": "h3",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r08": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r08-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r08-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r08-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r09-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.9 · Button, no alignment, in all three columns"
+      }
+    }
+  },
+  "b3-r09-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 28
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 109,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r09-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 28
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 109,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r09-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 28
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 109,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r09": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r09-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r09-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r09-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r10-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.10 · Button, aligned left, in all three columns"
+      }
+    }
+  },
+  "b3-r10-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        },
+        "fontSize": 40
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 101,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r10-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        },
+        "fontSize": 40
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 101,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r10-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        },
+        "fontSize": 40
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 101,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r10": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r10-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r10-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r10-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r11-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.11 · Button, aligned center, in all three columns"
+      }
+    }
+  },
+  "b3-r11-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 11
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 85,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r11-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 11
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 85,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r11-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 11
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 85,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r11": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r11-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r11-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r11-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r12-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.12 · Button, aligned right, in all three columns"
+      }
+    }
+  },
+  "b3-r12-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 14
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 61,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r12-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 14
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 61,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r12-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 14
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 61,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r12": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r12-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r12-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r12-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r13-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.13 · Image sized by width, no alignment, in all three columns"
+      }
+    }
+  },
+  "b3-r13-c0": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r13-c1": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r13-c2": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r13": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r13-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r13-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r13-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r14-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.14 · Image sized by width, aligned left, in all three columns"
+      }
+    }
+  },
+  "b3-r14-c0": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r14-c1": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r14-c2": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r14": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r14-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r14-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r14-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r15-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.15 · Image sized by width, aligned center, in all three columns"
+      }
+    }
+  },
+  "b3-r15-c0": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r15-c1": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r15-c2": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
+      }
+    }
+  },
+  "b3-r15": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r15-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r15-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r15-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r16-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.16 · Image sized by width, aligned right, in all three columns"
+      }
+    }
+  },
+  "b3-r16-c0": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 61
+      }
+    }
+  },
+  "b3-r16-c1": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 61
+      }
+    }
+  },
+  "b3-r16-c2": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 61
+      }
+    }
+  },
+  "b3-r16": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r16-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r16-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r16-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b3-r17-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.17 · census composition, 21 items: Container ( Container ( Text@- ) )"
+      }
+    }
+  },
+  "b3-r17-2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r17-1": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r17-2"
+        ]
+      }
+    }
+  },
+  "b3-r17-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r17-1"
+        ]
+      }
+    }
+  },
+  "b3-r18-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.18 · census composition, 11 items: Container ( Container ( Text@center + Button@center + Image:width@- + Container ( Text@center + Text@- ) + Text@center + Button@center ) )"
+      }
+    }
+  },
+  "b3-r18-2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r18-3": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 140,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r18-4": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 240
+      }
+    }
+  },
+  "b3-r18-6": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r18-7": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r18-5": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r18-6",
+          "b3-r18-7"
+        ]
+      }
+    }
+  },
+  "b3-r18-8": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r18-9": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 140,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r18-1": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r18-2",
+          "b3-r18-3",
+          "b3-r18-4",
+          "b3-r18-5",
+          "b3-r18-8",
+          "b3-r18-9"
+        ]
+      }
+    }
+  },
+  "b3-r18-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r18-1"
+        ]
+      }
+    }
+  },
+  "b3-r19-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.19 · census composition, 10 items: Container ( Container ( Text@center + Button@center + Image:width@center + Container ( Text@center ) + Button@center ) )"
+      }
+    }
+  },
+  "b3-r19-2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r19-3": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 140,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r19-4": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 240
+      }
+    }
+  },
+  "b3-r19-6": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r19-5": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r19-6"
+        ]
+      }
+    }
+  },
+  "b3-r19-7": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 140,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r19-1": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r19-2",
+          "b3-r19-3",
+          "b3-r19-4",
+          "b3-r19-5",
+          "b3-r19-7"
+        ]
+      }
+    }
+  },
+  "b3-r19-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r19-1"
+        ]
+      }
+    }
+  },
+  "b3-r20-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.20 · census composition, 10 items: Container ( Image:height-only@center )"
+      }
+    }
+  },
+  "b3-r20-1": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Asset-2RUZE.png",
+        "alt": "Bible logo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "height": 24
+      }
+    }
+  },
+  "b3-r20-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r20-1"
+        ]
+      }
+    }
+  },
+  "b3-r21-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.21 · census composition, 5 items: Columns ( Text@center ; Image:width@- ; - )"
+      }
+    }
+  },
+  "b3-r21-1": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r21-2": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 140
+      }
+    }
+  },
+  "b3-r21-0": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r21-1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r21-2"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "b3-r22-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.22 · census composition, 5 items: Container ( Container ( Image:width@- ) )"
+      }
+    }
+  },
+  "b3-r22-2": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 240
+      }
+    }
+  },
+  "b3-r22-1": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r22-2"
+        ]
+      }
+    }
+  },
+  "b3-r22-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r22-1"
+        ]
+      }
+    }
+  },
+  "b3-r23-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.23 · census composition, 4 items: Container ( - )"
+      }
+    }
+  },
+  "b3-r23-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": []
+      }
+    }
+  },
+  "b3-r24-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.24 · census composition, 3 items: Container ( Container ( - ) )"
+      }
+    }
+  },
+  "b3-r24-1": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": []
+      }
+    }
+  },
+  "b3-r24-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r24-1"
+        ]
+      }
+    }
+  },
+  "b3-r25-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.25 · census composition, 3 items: Container ( Container ( Image:width@- ) + Image:height-only@center )"
+      }
+    }
+  },
+  "b3-r25-2": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 240
+      }
+    }
+  },
+  "b3-r25-1": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r25-2"
+        ]
+      }
+    }
+  },
+  "b3-r25-3": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Asset-2RUZE.png",
+        "alt": "Bible logo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "height": 24
+      }
+    }
+  },
+  "b3-r25-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r25-1",
+          "b3-r25-3"
+        ]
+      }
+    }
+  },
+  "b3-r26-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B3.26 · census composition, 3 items: Container ( Image:width@- + Text@- + Button@center )"
+      }
+    }
+  },
+  "b3-r26-1": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 240
+      }
+    }
+  },
+  "b3-r26-2": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16,
+        "fontWeight": "normal"
+      },
+      "props": {
+        "markdown": true,
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r26-3": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 16
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 140,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b3-r26-0": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "b3-r26-1",
+          "b3-r26-2",
+          "b3-r26-3"
+        ]
+      }
+    }
+  }
+}

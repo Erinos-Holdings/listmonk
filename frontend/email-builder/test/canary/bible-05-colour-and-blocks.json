@@ -1,0 +1,1650 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "b5-r01-label",
+        "b5-r01-x",
+        "b5-r02-label",
+        "b5-r02-x",
+        "b5-r03-label",
+        "b5-r03-x",
+        "b5-r04-label",
+        "b5-r04-x",
+        "b5-r05-label",
+        "b5-r05-x",
+        "b5-r06-label",
+        "b5-r06-x",
+        "b5-r07-label",
+        "b5-r07-x",
+        "b5-r08-label",
+        "b5-r08-x",
+        "b5-r09-label",
+        "b5-r09-x",
+        "b5-r10-label",
+        "b5-r10-x",
+        "b5-r11-label",
+        "b5-r11-x",
+        "b5-r12-label",
+        "b5-r12-x",
+        "b5-r13-label",
+        "b5-r13-x",
+        "b5-r14-label",
+        "b5-r14-x",
+        "b5-r15-label",
+        "b5-r15-x",
+        "b5-r16-label",
+        "b5-r16-x",
+        "b5-r17-label",
+        "b5-r17-x",
+        "b5-r18-label",
+        "b5-r18-x",
+        "b5-r19-label",
+        "b5-r19-x",
+        "b5-r20-label",
+        "b5-r20-x",
+        "b5-r21-label",
+        "b5-r21-x",
+        "b5-r22-label",
+        "b5-r22-x",
+        "b5-r23-label",
+        "b5-r23-x",
+        "b5-r24-label",
+        "b5-r24-x",
+        "b5-r25-label",
+        "b5-r25-x",
+        "b5-r26-label",
+        "b5-r26-x",
+        "b5-r27-label",
+        "b5-r27-x",
+        "b5-r28-label",
+        "b5-r28-x",
+        "b5-r29-label",
+        "b5-r29-x",
+        "b5-r30-label",
+        "b5-r30-x",
+        "b5-r31-label",
+        "b5-r31-x",
+        "b5-r32-label",
+        "b5-r32-x",
+        "b5-r33-label",
+        "b5-r33-x",
+        "b5-r34-label",
+        "b5-r34-x",
+        "b5-r35-label",
+        "b5-r35-x",
+        "b5-r36-label",
+        "b5-r36-x",
+        "b5-r37-label",
+        "b5-r37-x",
+        "b5-r38-label",
+        "b5-r38-x",
+        "b5-r39-label",
+        "b5-r39-x"
+      ]
+    }
+  },
+  "b5-r01-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.1 · Text, dark ink on a light ground"
+      }
+    }
+  },
+  "b5-r01-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#262626",
+        "backgroundColor": "#F9F9F9",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Dark on light"
+      }
+    }
+  },
+  "b5-r02-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.2 · Text, light ink on a dark ground"
+      }
+    }
+  },
+  "b5-r02-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#FFFFFF",
+        "backgroundColor": "#262626",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Light on dark"
+      }
+    }
+  },
+  "b5-r03-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.3 · Text, mid ink on a light ground"
+      }
+    }
+  },
+  "b5-r03-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#555555",
+        "backgroundColor": "#FFFFFF",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Mid on light"
+      }
+    }
+  },
+  "b5-r04-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.4 · Text, mid ink on a dark ground"
+      }
+    }
+  },
+  "b5-r04-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#8A8A8A",
+        "backgroundColor": "#1A1A1A",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Mid on dark"
+      }
+    }
+  },
+  "b5-r05-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.5 · Text, dark ink on a mid ground"
+      }
+    }
+  },
+  "b5-r05-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#000000",
+        "backgroundColor": "#8A8A8A",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Dark on mid"
+      }
+    }
+  },
+  "b5-r06-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.6 · Text, light ink on a mid ground"
+      }
+    }
+  },
+  "b5-r06-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#FFFFFF",
+        "backgroundColor": "#5A5A5A",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Light on mid"
+      }
+    }
+  },
+  "b5-r07-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.7 · Button, light label on a dark fill"
+      }
+    }
+  },
+  "b5-r07-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Light on dark",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b5-r08-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.8 · Button, dark label on a light fill"
+      }
+    }
+  },
+  "b5-r08-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Dark on light",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#F2F2F2",
+        "buttonTextColor": "#262626",
+        "borderSize": 1,
+        "borderColor": "#262626"
+      }
+    }
+  },
+  "b5-r09-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.9 · Button, light label on a mid fill"
+      }
+    }
+  },
+  "b5-r09-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Light on mid",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#5A5A5A",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b5-r10-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.10 · Button, dark label on a mid fill"
+      }
+    }
+  },
+  "b5-r10-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Dark on mid",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#8A8A8A",
+        "buttonTextColor": "#000000"
+      }
+    }
+  },
+  "b5-r11-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.11 · Text on a ground just inside dark (luma 0.290)"
+      }
+    }
+  },
+  "b5-r11-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#FFFFFF",
+        "backgroundColor": "#4A4A4A",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Edge dark"
+      }
+    }
+  },
+  "b5-r12-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.12 · Text on a ground just inside mid (luma 0.310)"
+      }
+    }
+  },
+  "b5-r12-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#FFFFFF",
+        "backgroundColor": "#4F4F4F",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Edge mid low"
+      }
+    }
+  },
+  "b5-r13-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.13 · Text on a ground just inside mid (luma 0.588)"
+      }
+    }
+  },
+  "b5-r13-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#000000",
+        "backgroundColor": "#969696",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Edge mid high"
+      }
+    }
+  },
+  "b5-r14-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.14 · Text on a ground just inside light (luma 0.612)"
+      }
+    }
+  },
+  "b5-r14-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#000000",
+        "backgroundColor": "#9C9C9C",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Edge light"
+      }
+    }
+  },
+  "b5-r15-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.15 · Text on a dark teal ground"
+      }
+    }
+  },
+  "b5-r15-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#FFFFFF",
+        "backgroundColor": "#003B4D",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Teal"
+      }
+    }
+  },
+  "b5-r16-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.16 · Text on a dark purple ground"
+      }
+    }
+  },
+  "b5-r16-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#FFFFFF",
+        "backgroundColor": "#220258",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Purple"
+      }
+    }
+  },
+  "b5-r17-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.17 · Text on a mid pink ground"
+      }
+    }
+  },
+  "b5-r17-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#FFFFFF",
+        "backgroundColor": "#E54582",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Pink"
+      }
+    }
+  },
+  "b5-r18-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.18 · Text on a mid amber ground"
+      }
+    }
+  },
+  "b5-r18-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#000000",
+        "backgroundColor": "#CA8A04",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Amber"
+      }
+    }
+  },
+  "b5-r19-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.19 · Text on a light yellow ground"
+      }
+    }
+  },
+  "b5-r19-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#262626",
+        "backgroundColor": "#FDE68A",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Yellow"
+      }
+    }
+  },
+  "b5-r20-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.20 · Text on a light blue ground"
+      }
+    }
+  },
+  "b5-r20-x": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "color": "#262626",
+        "backgroundColor": "#E0F2FE",
+        "fontSize": 20,
+        "fontWeight": "bold",
+        "textAlign": "center",
+        "padding": {
+          "top": 12,
+          "bottom": 12,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "Blue"
+      }
+    }
+  },
+  "b5-r21-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.21 · Logo on transparency, on a light ground"
+      }
+    }
+  },
+  "b5-r21-x": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "backgroundColor": "#FFFFFF",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Asset-2RUZE.png",
+        "alt": "Bible logo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 200
+      }
+    }
+  },
+  "b5-r22-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.22 · Logo on transparency, on a dark ground"
+      }
+    }
+  },
+  "b5-r22-x": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "backgroundColor": "#262626",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Asset-2RUZE.png",
+        "alt": "Bible logo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 200
+      }
+    }
+  },
+  "b5-r23-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.23 · Logo on white, on a light ground"
+      }
+    }
+  },
+  "b5-r23-x": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "backgroundColor": "#FFFFFF",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Bible logo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 240
+      }
+    }
+  },
+  "b5-r24-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.24 · Logo on white, on a dark ground"
+      }
+    }
+  },
+  "b5-r24-x": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "backgroundColor": "#262626",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Bible logo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 240
+      }
+    }
+  },
+  "b5-r25-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.25 · Button, rectangle, inline"
+      }
+    }
+  },
+  "b5-r25-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "rectangle inline",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b5-r26-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.26 · Button, rectangle, full width"
+      }
+    }
+  },
+  "b5-r26-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "rectangle full",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b5-r27-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.27 · Button, rounded, inline"
+      }
+    }
+  },
+  "b5-r27-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "rounded inline",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b5-r28-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.28 · Button, rounded, full width"
+      }
+    }
+  },
+  "b5-r28-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "rounded full",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b5-r29-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.29 · Button, pill, inline"
+      }
+    }
+  },
+  "b5-r29-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "pill inline",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b5-r30-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.30 · Button, pill, full width"
+      }
+    }
+  },
+  "b5-r30-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "pill full",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
+      }
+    }
+  },
+  "b5-r31-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.31 · Button, pill, custom width"
+      }
+    }
+  },
+  "b5-r31-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Custom",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 200
+      }
+    }
+  },
+  "b5-r32-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.32 · Button, bordered"
+      }
+    }
+  },
+  "b5-r32-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Bordered",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#FFFFFF",
+        "buttonTextColor": "#262626",
+        "borderSize": 2,
+        "borderColor": "#262626"
+      }
+    }
+  },
+  "b5-r33-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.33 · Divider"
+      }
+    }
+  },
+  "b5-r33-x": {
+    "type": "Divider",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "lineColor": "#CCCCCC",
+        "lineHeight": 1
+      }
+    }
+  },
+  "b5-r34-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.34 · Spacer"
+      }
+    }
+  },
+  "b5-r34-x": {
+    "type": "Spacer",
+    "data": {
+      "props": {
+        "height": 32
+      }
+    }
+  },
+  "b5-r35-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.35 · Avatar, centred"
+      }
+    }
+  },
+  "b5-r35-x": {
+    "type": "Avatar",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "circle",
+        "size": 64,
+        "alt": "Bible avatar"
+      }
+    }
+  },
+  "b5-r36-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.36 · Image, unsized"
+      }
+    }
+  },
+  "b5-r36-x": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo, unsized",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle"
+      }
+    }
+  },
+  "b5-r37-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.37 · Html, a table with a style element and a link"
+      }
+    }
+  },
+  "b5-r37-x": {
+    "type": "Html",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "contents": "<style>.bible-cell{padding:8px;border:1px solid #CCCCCC;}</style>\n<table role=\"presentation\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 auto;\">\n  <tr>\n    <td class=\"bible-cell\" style=\"color:#262626;\">Html cell</td>\n    <td class=\"bible-cell\"><a href=\"https://canary.invalid/bible-html\" style=\"color:#003B4D;\">Html link</a></td>\n  </tr>\n</table>"
+      }
+    }
+  },
+  "b5-r38-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.38 · OfficialFooter, brand"
+      }
+    }
+  },
+  "b5-r38-x": {
+    "type": "OfficialFooter",
+    "data": {
+      "props": {
+        "kind": "brand"
+      }
+    }
+  },
+  "b5-r39-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B5.39 · OfficialFooter, corporate"
+      }
+    }
+  },
+  "b5-r39-x": {
+    "type": "OfficialFooter",
+    "data": {
+      "props": {
+        "kind": "corporate"
+      }
+    }
+  }
+}

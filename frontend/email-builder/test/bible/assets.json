@@ -1,0 +1,32 @@
+{
+  "_comment": "Image assets the bible's rows use (integrations RENDERING-BIBLE-SPEC §3.6): existing listmonk media whose dark-mode verdict was current (classifier v3) and clean (no warnings) at the 2026-10-02 read-only media listing. Never an upload; a row with no suitable asset is a recorded gap.",
+  "checkedAt": "2026-10-02",
+  "photo": {
+    "mediaId": 104,
+    "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+    "width": 600,
+    "height": 400,
+    "darkmode": "photo"
+  },
+  "logoOnTransparent": {
+    "mediaId": 32,
+    "url": "https://email.curatedfor.you/uploads/Asset-2RUZE.png",
+    "width": 1200,
+    "height": 322,
+    "darkmode": "mono-on-transparent (fixed)"
+  },
+  "logoOnWhite": {
+    "mediaId": 36,
+    "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+    "width": 1200,
+    "height": 200,
+    "darkmode": "mono-on-white (fixed)"
+  },
+  "icon": {
+    "mediaId": 59,
+    "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+    "width": 104,
+    "height": 104,
+    "darkmode": "ok"
+  }
+}
