@@ -310,6 +310,7 @@ try {
   // IA6 / SA4 / SA5: the bare Containers and the styled ones.
   const bare = [];
   const badStyled = [];
+  const unpadded = [];
   for (const s of stems) {
     for (const [id, b] of Object.entries(docs[s])) {
       if (!b || b.type !== 'Container') continue;
@@ -322,13 +323,17 @@ try {
       const want = m ? CONTAINER_PADS[(Number(m[1]) - 1) % CONTAINER_PADS.length] : null;
       const st = b.data.style || {};
       const p = st.padding || {};
-      const ok = want !== null && ['top', 'right', 'bottom', 'left'].every((k) => p[k] === want) && !st.backgroundColor && !st.borderRadius;
+      const sides = ['top', 'right', 'bottom', 'left'];
+      if (sides.every((k) => p[k] === 0)) unpadded.push(`${s}:${id}`);
+      const background = s === 'bible-07-real-arrangements' && !!st.backgroundColor; // SA11 (a) background rows
+      const ok = (background ? sides.every((k) => p[k] === want) || sides.every((k) => p[k] === 0) : want !== null && sides.every((k) => p[k] === want) && !st.backgroundColor) && !st.borderRadius;
       if (!ok) badStyled.push(`${s}:${id} ${JSON.stringify(st)}`);
     }
   }
   check('IA6: exactly four bare Containers in the bible, all on B7', bare.length === 4 && bare.every((x) => x.s === 'bible-07-real-arrangements'), JSON.stringify(bare));
   check('IA6: one bare Container has a null style, the others zero padding (SA5)', bare.filter((x) => x.nullStyle).length === 1, JSON.stringify(bare));
-  check('SA4: every other Container has padding 8, 16 or 24 on all four sides by its row index, no background, no radius', badStyled.length === 0, badStyled.join(' | '));
+  check('SA4: every other Container has padding 8, 16 or 24 on all four sides by its row index, no background (B7\'s background rows excepted), no radius', badStyled.length === 0, badStyled.join(' | '));
+  check('SA11 (a): the zero-padding background row is the only non-bare Container with zero padding', unpadded.length === 1 && /^bible-07-real-arrangements:/.test(unpadded[0]), unpadded.join(', '));
 
   // SA5: three twin pairs on B7 at (c), after the bordered rows and the fallback Buttons; each wrapped
   // row directly follows its twin, names it, holds the twin's content inside bare Containers and
@@ -340,7 +345,7 @@ try {
     const evidence = rows.map((k, i) => ({ k, i, label: labelOf(k) })).filter((r) => / · evidence/.test(r.label));
     check('SA5: six evidence rows on B7 (three twin pairs)', evidence.length === 6, evidence.map((r) => r.label).join(' | '));
     const firstEvidence = evidence.length ? evidence[0].i : -1;
-    check('SA5: the evidence rows are B7 rows 6-11, after the three bordered rows and the two fallback Buttons', firstEvidence === 5
+    check('SA5: the evidence rows are B7 rows 8-13, after the three bordered rows, the two background rows and the two fallback Buttons', firstEvidence === 7
       && rows.slice(firstEvidence, firstEvidence + 6).every((k) => / · evidence/.test(labelOf(k))), String(firstEvidence));
     // Strip bare Containers from a subtree: the block types, alignments and props it renders.
     const shape = (doc, id) => {
@@ -392,11 +397,30 @@ try {
       && JSON.stringify(kidTypes(bordered[2])) === '["Text","Button"]');
     check('SA11 (a): bordered rows carry no radius and pad by their row index',
       bordered.every((k, i) => !d7[k].data.style.borderRadius && d7[k].data.style.padding.top === CONTAINER_PADS[i % CONTAINER_PADS.length]));
-    const buttons = rows.slice(3, 5).map((k) => d7[k]);
+    // SA11 (a), implementation review L6: two background rows after the bordered ones.
+    const bgRows = rows.slice(3, 5);
+    const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const canvas = d7.root.data.canvasColor || '#FFFFFF';
+    check('SA11 (a): two background rows follow, each a Container with its own background holding a Text then a Button',
+      bgRows.length === 2 && bgRows.every((k) => d7[k].type === 'Container' && d7[k].data.style.backgroundColor && d7[k].data.style.backgroundColor.toLowerCase() !== canvas.toLowerCase()
+        && !d7[k].data.style.borderColor && JSON.stringify(kidTypes(k)) === '["Text","Button"]'), bgRows.join(','));
+    check('SA11 (a): one background row padded from SA4\'s cycle, one with zero padding on all four sides',
+      bgRows.length === 2 && ['top', 'right', 'bottom', 'left'].every((side) => d7[bgRows[0]].data.style.padding[side] === CONTAINER_PADS[3 % CONTAINER_PADS.length])
+        && ['top', 'right', 'bottom', 'left'].every((side) => d7[bgRows[1]].data.style.padding[side] === 0));
+    // Descriptor `Container|box=cell|border=none|…|bg=own`: the box and border parts from the
+    // generator's own rule, and bg=own because the background differs from the canvas it inherits.
+    check('SA11 (a): both read Container|box=cell|border=none|…|bg=own', bgRows.every((k) => containerParts(d7[k]) === 'box=cell|border=none'), bgRows.map((k) => containerParts(d7[k])).join(', '));
+    check('SA11 (a): the Text and the Button inside read cleanly (D4.3: ink 4.5:1 on the background, label 3:1 on the fill)', bgRows.every((k) => {
+      const [t, b] = d7[k].data.props.childrenIds.map((x) => d7[x]);
+      const ink = (t.data.style && t.data.style.color) || d7.root.data.textColor || '#262626';
+      return ratio(ink, d7[k].data.style.backgroundColor) >= 4.5 && ratio(b.data.props.buttonTextColor, b.data.props.buttonBackgroundColor) >= 3;
+    }));
+    const buttons = rows.slice(5, 7).map((k) => d7[k]);
     check('SA13 (b): the next two rows are the fallback Buttons, labelled as such',
       buttons.length === 2 && buttons[0].type === 'Button' && buttons[0].data.props.fullWidth === true && buttons[0].data.props.text === FALLBACK_LINES_LABEL
       && buttons[1].type === 'Button' && !buttons[1].data.props.fullWidth && buttons[1].data.props.text === FALLBACK_CHARS_LABEL && FALLBACK_CHARS_LABEL.endsWith('→')
-      && /fallback Button/.test(labels[3]) && /fallback Button/.test(labels[4]));
+      && /fallback Button/.test(labels[5]) && /fallback Button/.test(labels[6]));
     // (d) census rows: most common first, after (a)-(c), none equal to a composition B1-B4 hold.
     const censusLabels = labels.map((l, i) => ({ l, i })).filter((x) => /census composition, (\d+) items/.test(x.l));
     const items = censusLabels.map((x) => Number(/census composition, (\d+) items/.exec(x.l)[1]));
@@ -412,7 +436,9 @@ try {
     // Every census composition is on some sheet B1-B4 or B7, or recorded as dropped on B7 (SA12 step 3).
     const all = new Set([...earlier, ...compositionsOf(d7)]);
     const b7Dropped = (manifest.sheets.find((x) => x.stem === 'bible-07-real-arrangements') || { dropped: [] }).dropped;
-    const missingComps = CENSUS.compositions.filter((c) => !all.has(c.value) && !b7Dropped.some((w) => w.startsWith(`census composition, ${c.items} items:`)));
+    // The generator's label spelling (build-bible.cjs censusRows): a drop is matched by its whole label.
+    const spell = (v) => v.replace(/\[/g, ' ( ').replace(/\]/g, ' ) ').replace(/;/g, ' ; ').replace(/\+/g, ' + ').replace(/\s+/g, ' ').trim();
+    const missingComps = CENSUS.compositions.filter((c) => !all.has(c.value) && !b7Dropped.some((w) => w === `census composition, ${c.items} items: ${spell(c.value)}`));
     check('IA14: every census composition is in the bible or recorded as dropped', missingComps.length === 0, missingComps.map((c) => c.value).join(' | '));
   }
 

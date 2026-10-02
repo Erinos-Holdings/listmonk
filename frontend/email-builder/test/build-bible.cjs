@@ -20,7 +20,8 @@
 //                                Button shape x full/inline (+ custom width, bordered), Divider, Spacer,
 //                                Avatar, Image unsized, an Html block, OfficialFooter brand and corporate
 //   B6 layout variants           under Outlook off: the key rows again (§3.10 "one factor at a time")
-//   B7 real arrangements         (BIBLE-OUTLOOK-FIXES-SPEC SA11) three bordered-Container rows, the two
+//   B7 real arrangements         (BIBLE-OUTLOOK-FIXES-SPEC SA11) three bordered-Container rows, two
+//                                Containers with their own background (one padded, one not), the two
 //                                fallback Buttons (SA13), the redundant-wrapper evidence rows (SA5:
 //                                three twin pairs, each a row followed by the same content in bare
 //                                Containers), any B4 Heading rows B3 had no room for, then the census's
@@ -39,7 +40,8 @@
 // padding on all four sides cycling 8, 16 and 24 px by the row's index on its sheet, no background,
 // no radius -- because a bare Container (style-less, zero padding) is transparent to the review's
 // version 2 matching and would vouch for nothing of its own. The fit estimate subtracts that padding
-// and a bordered Container's two borders. The only bare Containers are B7's four evidence wrappers.
+// and a bordered Container's two borders. The only bare Containers are B7's four evidence wrappers;
+// the only other unpadded one is B7's zero-padding background row (SA11 a).
 //
 // Limits (asserted by bible.test.cjs): at most 7 sheets, 40 rows a sheet, and 80,000 compiled bytes
 // a sheet. The overflow rule (SA12), in order: (1) explicit `left` that does not fit B4 is dropped
@@ -639,6 +641,30 @@ function borderedRows() {
   ];
 }
 
+// SA11 (a), implementation review L6: two background rows -- a Container with its own (light)
+// background holding a Text and a Button; one padded from SA4's cycle, one with zero padding on all
+// four sides, which still compiles to a table cell by its background alone (SA9 `box=cell`). The
+// tint keeps the sheet's dark ink and the Button's light-on-dark label within D4.3.
+const TINT = { backgroundColor: '#EAF2F5' };
+function backgroundRows() {
+  const row = (padded) => (p, i) => {
+    const cp = padded ? containerPadOf(i) : 0;
+    const style = { padding: { top: cp, bottom: cp, left: cp, right: cp }, ...TINT };
+    return {
+      id: p,
+      blocks: {
+        [p]: { type: 'Container', data: { style, props: { childrenIds: [`${p}-t`, `${p}-b`] } } },
+        [`${p}-t`]: contentBlock('Text', 'center', FIXED, NARROW - 2 * cp),
+        [`${p}-b`]: button('Go', { buttonStyle: 'rounded' }, { padding: padding(24) }),
+      },
+    };
+  };
+  return [
+    { what: 'a Container with its own background, padded, holding a Text and then a Button', background: 'padded', build: row(true) },
+    { what: 'a Container with its own background and zero padding (a table cell by its background alone), holding a Text and then a Button', background: 'zero', build: row(false) },
+  ];
+}
+
 // SA13 (b): the two Buttons that fall back in Outlook for Windows -- a full-width label the compile
 // estimates at two lines (cause `lines`) and an inline label ending in U+2192, outside the VML label
 // set (cause `chars`). No other bible Button falls back (bible.test.cjs, IA14).
@@ -776,28 +802,42 @@ function buildBible(EB) {
   const b6 = b6Specs();
   record(SHEETS[5], buildDoc(outlookOff, b6, 6), b6);
 
-  // B7 (SA11): (a) bordered rows, (b) the fallback Buttons, (c) the SA5 evidence rows, (d) the moved
+  // B7 (SA11): (a) bordered rows and the two background rows, (b) the fallback Buttons, (c) the SA5 evidence rows, (d) the moved
   // rows B3 had no room for, then (e) the census compositions not present on B1-B4 (B5 and B6 do not
   // count) or earlier on B7,
   // most common first. Over a limit, census rows go least common first (SA12 step 3).
-  const b7Lead = [...borderedRows(), ...fallbackRows()];
+  const b7Lead = [...borderedRows(), ...backgroundRows(), ...fallbackRows()];
   const b7Head = [...b7Lead, ...evidenceRows(b7Lead.length), ...toB7];
-  const present = new Set([...['bible-01-flat-alignment', 'bible-02-two-columns', 'bible-03-three-columns', 'bible-04-nesting'].map((st) => out[st]), buildDoc(common, b7Head, 7)].flatMap(compositionsOf));
-  const candidates = [];
-  for (const c of CENSUS.compositions) {
-    if (present.has(c.value)) continue;
-    // A kept row also brings its nested containers' compositions: a later census entry equal to
-    // one of them is already present.
-    compositionsOf(compositionRow('probe', c.value, 0).blocks).forEach((x) => present.add(x));
-    // The label spells the composition with spaces, so it wraps like any text (and reads clean).
-    const spelled = c.value.replace(/\[/g, ' ( ').replace(/\]/g, ' ) ').replace(/;/g, ' ; ').replace(/\+/g, ' + ').replace(/\s+/g, ' ').trim();
-    candidates.push({ what: `census composition, ${c.items} items: ${spelled}`, composition: c.value, items: c.items, build: (p, i) => compositionRow(p, c.value, i) });
-  }
-  // Drop least common first = keep the longest most-common-first prefix that fits.
-  let keep = candidates.length;
-  while (keep > 0 && !fits(buildDoc(common, [...b7Head, ...candidates.slice(0, keep)], 7))) keep -= 1;
-  const b7 = [...b7Head, ...candidates.slice(0, keep)];
-  record(SHEETS[6], buildDoc(common, b7, 7), b7, candidates.slice(keep).map((c) => c.what));
+  const base = [...['bible-01-flat-alignment', 'bible-02-two-columns', 'bible-03-three-columns', 'bible-04-nesting'].map((st) => out[st]), buildDoc(common, b7Head, 7)].flatMap(compositionsOf);
+  // The census rows with at most `n` kept, most common first. "Present" grows only from KEPT rows
+  // (implementation review F7): an entry equal to a nested composition of a row that is dropped
+  // is not skipped. Every entry neither present nor kept is a drop.
+  const censusRows = (n) => {
+    const present = new Set(base);
+    const kept = [];
+    const dropped = [];
+    for (const c of CENSUS.compositions) {
+      if (present.has(c.value)) continue;
+      // The label spells the composition with spaces, so it wraps like any text (and reads clean).
+      const spelled = c.value.replace(/\[/g, ' ( ').replace(/\]/g, ' ) ').replace(/;/g, ' ; ').replace(/\+/g, ' + ').replace(/\s+/g, ' ').trim();
+      const row = { what: `census composition, ${c.items} items: ${spelled}`, composition: c.value, items: c.items, build: (p, i) => compositionRow(p, c.value, i) };
+      if (kept.length >= n) {
+        dropped.push(row);
+        continue;
+      }
+      kept.push(row);
+      // A kept row also brings its nested containers' compositions: a later census entry equal to
+      // one of them is already present.
+      compositionsOf(compositionRow('probe', c.value, 0).blocks).forEach((x) => present.add(x));
+    }
+    return { kept, dropped };
+  };
+  // Drop least common first = keep the longest most-common-first run that fits.
+  let keep = censusRows(Infinity).kept.length;
+  while (keep > 0 && !fits(buildDoc(common, [...b7Head, ...censusRows(keep).kept], 7))) keep -= 1;
+  const { kept, dropped } = censusRows(keep);
+  const b7 = [...b7Head, ...kept];
+  record(SHEETS[6], buildDoc(common, b7, 7), b7, dropped.map((c) => c.what));
   manifest.sheets.sort((a, b) => (a.stem < b.stem ? -1 : 1));
   if (!leftEverywhere) manifest.gaps.push('the census found no explicit `left`: it is a cell at top level only');
   return { documents: out, manifest };

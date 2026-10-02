@@ -9,7 +9,7 @@
 // unwrapped (its children spliced into its slot), Outlook flag on and off, with the BUILT bundle.
 // Both outputs are parsed and serialized by the same jsdom; the wrapped one must equal the
 // unwrapped one once exactly one element — a `div` with no attribute, or only
-// `style="padding:0px 0px 0px 0px"` — is replaced by its children.
+// `style="padding:0px 0px 0px 0px"` and/or a zero radius — is replaced by its children.
 const { JSDOM } = require('jsdom');
 const { loadUmd, compileInputs } = require('./_umd.cjs');
 
@@ -38,7 +38,18 @@ const BLOCKS = {
   avatar: { type: 'Avatar', data: { style: { textAlign: 'center', padding: P(8, 24, 8, 24) }, props: { imageUrl: 'https://email.curatedfor.you/uploads/social-curated-instagram.png', shape: 'circle', size: 64, alt: 'Avatar' } } },
 };
 const SINGLE_KINDS = ['text', 'heading', 'button', 'buttonFull', 'buttonFallback', 'imageRight', 'imageWide', 'imageUnsized', 'html', 'divider', 'spacer', 'avatar'];
-const WRAPPER_STYLES = { null: null, absent: undefined, 'zero padding': { padding: P(0, 0, 0, 0) } };
+// Every bare style SA1 admits (implementation review F5): null, absent, empty, zero padding, a
+// radius of the number 0, null padding, all keys falsy with zero padding, all keys null.
+const WRAPPER_STYLES = {
+  null: null,
+  absent: undefined,
+  empty: {},
+  'zero padding': { padding: P(0, 0, 0, 0) },
+  'radius 0': { borderRadius: 0 },
+  'null padding': { padding: null },
+  'all falsy, zero padding': { backgroundColor: '', borderColor: '', borderRadius: 0, padding: P(0, 0, 0, 0) },
+  'all null': { backgroundColor: null, borderColor: null, borderRadius: null, padding: null },
+};
 
 const bare = (childrenIds, style) => (style === undefined
   ? { type: 'Container', data: { props: { childrenIds } } }
@@ -62,8 +73,11 @@ function unwrap(doc, w) {
 }
 
 const serialize = (html) => new JSDOM(html).window.document.documentElement.outerHTML;
+// The wrapper a bare Container compiles to: no attribute, or a style of zero padding and/or a zero
+// radius only (in either order).
+const WRAPPER_STYLE = /^(?:(?:padding:0px 0px 0px 0px|border-radius:0(?:px)?);?)+$/;
 const isWrapperDiv = (el) => el.tagName === 'DIV' && (el.attributes.length === 0
-  || (el.attributes.length === 1 && el.getAttribute('style') === 'padding:0px 0px 0px 0px'));
+  || (el.attributes.length === 1 && WRAPPER_STYLE.test(el.getAttribute('style') || '')));
 
 /** True when removing exactly one bare wrapper div from `wrapped` (keeping its children) gives `plain`. */
 function equalApartFromOneWrapper(wrapped, plain) {
@@ -111,7 +125,7 @@ for (const [styleName, style] of Object.entries(WRAPPER_STYLES)) {
     }
   }
 }
-check('IA18 ran every case (12 kinds x 4 places + 4, x 3 styles x 2 flags)', n === (SINGLE_KINDS.length * 4 + 4) * 3 * 2, String(n));
+check(`IA18 ran every case (12 kinds x 4 places + 4, x ${Object.keys(WRAPPER_STYLES).length} styles x 2 flags)`, n === (SINGLE_KINDS.length * 4 + 4) * Object.keys(WRAPPER_STYLES).length * 2, String(n));
 
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

@@ -5,6 +5,9 @@
 // colour, chars), the cell widths and height by §12.3's arithmetic — while everything outside the
 // Word copy compiles exactly as at erinos.190 (pinned by the non-Word twins below).
 //
+// integrations lib/campaign-review/value-rules.ts STAMP matches the table's opening attributes byte for
+// byte up to the stamp: reordering or adding an attribute before data-lm-btn-fallback makes D4.7
+// blind, and this fixture (copied to integrations) is what catches it.
 // FIXTURE is the compiled Word copy (the stored form: Safe payloads and the href marker) of one
 // fallback Button per cause. This file writes nothing. The SAME strings are copied into the
 // integrations repository's tests/fixtures/campaign-review/button-fallback.json, which the
@@ -14,7 +17,7 @@ const { pp, canvas, decodeSafe, makeChecker, inlineButton, fullWidthButton } = r
 const { check, done } = makeChecker();
 
 const inline = (label, color = '#FFFFFF', extra = '') => `<div style="text-align:center;padding:0px 24px 20px 24px"><a href="https://x.test/go" target="_blank" style="color:${color};font-size:16px;font-weight:bold;background-color:#000000;border-radius:64px;display:inline-block;padding:12px 20px 12px 20px;text-decoration:none;border:2px solid #fbf00b${extra}">${label}</a></div>`;
-const full = (label, color = '#FFFFFF') => `<div style="text-align:center;padding:0px 24px 8px 24px"><a href="https://x.test/wide" style="color:${color};font-size:16px;font-weight:bold;background-color:#2563EB;border-radius:4px;display:block;padding:12px 20px 12px 20px;text-decoration:none;width:100%">${label}</a></div>`;
+const full = (label, color = '#FFFFFF', extra = '') => `<div style="text-align:center;padding:0px 24px 8px 24px"><a href="https://x.test/wide" style="color:${color};font-size:16px;font-weight:bold;background-color:#2563EB;border-radius:4px;display:block;padding:12px 20px 12px 20px;text-decoration:none;width:100%${extra}">${label}</a></div>`;
 
 // One input per cause, plus several causes at once and a custom width and height.
 const INPUTS = {
@@ -25,6 +28,12 @@ const INPUTS = {
   chars: inline('Shop →'),
   several: inline('Shop 今日', 'white', ';width:60px;box-sizing:border-box'),
   sized: inline('Shop →', '#FFFFFF', ';width:120px;box-sizing:border-box;height:64px'),
+  // Implementation review F9: a full-width Button with a CSS height; `empty` and `lines` each with
+  // another cause; a full-width fallback carrying an author border.
+  fullHeight: full('Shop now →', '#FFFFFF', ';height:64px'),
+  emptyColour: inline('', 'white'),
+  linesColour: full('Discover everything new in the autumn collection, every single piece, today and tomorrow', 'rgb(255, 255, 255)'),
+  fullBorder: full('Discover everything new in the autumn collection, every single piece, today and tomorrow', '#FFFFFF', ';border:3px solid #FFCC00'),
 };
 
 const FIXTURE = {
@@ -55,6 +64,22 @@ const FIXTURE = {
   sized: {
     causes: "chars",
     word: "{{ Safe \"\\x3c!--[if\\x20mso]\\x3e\\x3ctable\\x20role=\\\"presentation\\\"\\x20border=\\\"0\\\"\\x20cellpadding=\\\"0\\\"\\x20cellspacing=\\\"0\\\"\\x20data-lm-btn-fallback=\\\"chars\\\"\\x20width=\\\"120\\\"\\x20style=\\\"border-collapse:separate\\\"\\x3e\\x3ctr\\x3e\\x3ctd\\x20align=\\\"center\\\"\\x20bgcolor=\\\"#000000\\\"\\x20width=\\\"76\\\"\\x20height=\\\"36\\\"\\x20valign=\\\"middle\\\"\\x20style=\\\"background-color:#000000;padding:12px\\x2020px\\x2012px\\x2020px;border:2px\\x20solid\\x20#fbf00b;\\\"\\x3e\\x3cfont\\x20face=\\\"Arial\\\"\\x3e\\x3ca\\x20href=\\\"\" }}<span data-lm-vml-href=\"https://x.test/go\"></span>{{ Safe \"\\\"\\x20style=\\\"color:#FFFFFF;font-family:Arial,\\x20sans-serif;font-size:16px;font-weight:bold;text-decoration:none\\\"\\x3e\\x3cspan\\x20style=\\\"color:#FFFFFF\\\"\\x3eShop\\x20→\\x3c/span\\x3e\\x3c/a\\x3e\\x3c/font\\x3e\\x3c/td\\x3e\\x3c/tr\\x3e\\x3c/table\\x3e\\x3c![endif]--\\x3e\" }}",
+  },
+  fullHeight: {
+    causes: "chars",
+    word: "{{ Safe \"\\x3c!--[if\\x20mso]\\x3e\\x3ctable\\x20role=\\\"presentation\\\"\\x20border=\\\"0\\\"\\x20cellpadding=\\\"0\\\"\\x20cellspacing=\\\"0\\\"\\x20data-lm-btn-fallback=\\\"chars\\\"\\x20width=\\\"552\\\"\\x20style=\\\"border-collapse:separate\\\"\\x3e\\x3ctr\\x3e\\x3ctd\\x20align=\\\"center\\\"\\x20bgcolor=\\\"#2563EB\\\"\\x20width=\\\"510\\\"\\x20height=\\\"38\\\"\\x20valign=\\\"middle\\\"\\x20style=\\\"background-color:#2563EB;padding:12px\\x2020px\\x2012px\\x2020px;border:1px\\x20solid\\x20#2563EB;\\\"\\x3e\\x3cfont\\x20face=\\\"Arial\\\"\\x3e\\x3ca\\x20href=\\\"\" }}<span data-lm-vml-href=\"https://x.test/wide\"></span>{{ Safe \"\\\"\\x20style=\\\"color:#FFFFFF;font-family:Arial,\\x20sans-serif;font-size:16px;font-weight:bold;text-decoration:none\\\"\\x3e\\x3cspan\\x20style=\\\"color:#FFFFFF\\\"\\x3eShop\\x20now\\x20→\\x3c/span\\x3e\\x3c/a\\x3e\\x3c/font\\x3e\\x3c/td\\x3e\\x3c/tr\\x3e\\x3c/table\\x3e\\x3c![endif]--\\x3e\" }}",
+  },
+  emptyColour: {
+    causes: "empty colour",
+    word: "{{ Safe \"\\x3c!--[if\\x20mso]\\x3e\\x3ctable\\x20role=\\\"presentation\\\"\\x20border=\\\"0\\\"\\x20cellpadding=\\\"0\\\"\\x20cellspacing=\\\"0\\\"\\x20data-lm-btn-fallback=\\\"empty\\x20colour\\\"\\x20style=\\\"border-collapse:separate\\\"\\x3e\\x3ctr\\x3e\\x3ctd\\x20align=\\\"center\\\"\\x20bgcolor=\\\"#000000\\\"\\x20style=\\\"background-color:#000000;padding:12px\\x2020px\\x2012px\\x2020px;border:2px\\x20solid\\x20#fbf00b;\\\"\\x3e\\x3cfont\\x20face=\\\"Arial\\\"\\x3e\\x3ca\\x20href=\\\"\" }}<span data-lm-vml-href=\"https://x.test/go\"></span>{{ Safe \"\\\"\\x20style=\\\"color:white;font-family:Arial,\\x20sans-serif;font-size:16px;font-weight:bold;text-decoration:none\\\"\\x3e\\x3cspan\\x20style=\\\"color:white\\\"\\x3e\\x3c/span\\x3e\\x3c/a\\x3e\\x3c/font\\x3e\\x3c/td\\x3e\\x3c/tr\\x3e\\x3c/table\\x3e\\x3c![endif]--\\x3e\" }}",
+  },
+  linesColour: {
+    causes: "lines colour",
+    word: "{{ Safe \"\\x3c!--[if\\x20mso]\\x3e\\x3ctable\\x20role=\\\"presentation\\\"\\x20border=\\\"0\\\"\\x20cellpadding=\\\"0\\\"\\x20cellspacing=\\\"0\\\"\\x20data-lm-btn-fallback=\\\"lines\\x20colour\\\"\\x20width=\\\"552\\\"\\x20style=\\\"border-collapse:separate\\\"\\x3e\\x3ctr\\x3e\\x3ctd\\x20align=\\\"center\\\"\\x20bgcolor=\\\"#2563EB\\\"\\x20width=\\\"510\\\"\\x20style=\\\"background-color:#2563EB;padding:12px\\x2020px\\x2012px\\x2020px;border:1px\\x20solid\\x20#2563EB;\\\"\\x3e\\x3cfont\\x20face=\\\"Arial\\\"\\x3e\\x3ca\\x20href=\\\"\" }}<span data-lm-vml-href=\"https://x.test/wide\"></span>{{ Safe \"\\\"\\x20style=\\\"color:rgb(255,\\x20255,\\x20255);font-family:Arial,\\x20sans-serif;font-size:16px;font-weight:bold;text-decoration:none\\\"\\x3e\\x3cspan\\x20style=\\\"color:rgb(255,\\x20255,\\x20255)\\\"\\x3eDiscover\\x20everything\\x20new\\x20in\\x20the\\x20autumn\\x20collection,\\x20every\\x20single\\x20piece,\\x20today\\x20and\\x20tomorrow\\x3c/span\\x3e\\x3c/a\\x3e\\x3c/font\\x3e\\x3c/td\\x3e\\x3c/tr\\x3e\\x3c/table\\x3e\\x3c![endif]--\\x3e\" }}",
+  },
+  fullBorder: {
+    causes: "lines",
+    word: "{{ Safe \"\\x3c!--[if\\x20mso]\\x3e\\x3ctable\\x20role=\\\"presentation\\\"\\x20border=\\\"0\\\"\\x20cellpadding=\\\"0\\\"\\x20cellspacing=\\\"0\\\"\\x20data-lm-btn-fallback=\\\"lines\\\"\\x20width=\\\"552\\\"\\x20style=\\\"border-collapse:separate\\\"\\x3e\\x3ctr\\x3e\\x3ctd\\x20align=\\\"center\\\"\\x20bgcolor=\\\"#2563EB\\\"\\x20width=\\\"506\\\"\\x20style=\\\"background-color:#2563EB;padding:12px\\x2020px\\x2012px\\x2020px;border:3px\\x20solid\\x20#FFCC00;\\\"\\x3e\\x3cfont\\x20face=\\\"Arial\\\"\\x3e\\x3ca\\x20href=\\\"\" }}<span data-lm-vml-href=\"https://x.test/wide\"></span>{{ Safe \"\\\"\\x20style=\\\"color:#FFFFFF;font-family:Arial,\\x20sans-serif;font-size:16px;font-weight:bold;text-decoration:none\\\"\\x3e\\x3cspan\\x20style=\\\"color:#FFFFFF\\\"\\x3eDiscover\\x20everything\\x20new\\x20in\\x20the\\x20autumn\\x20collection,\\x20every\\x20single\\x20piece,\\x20today\\x20and\\x20tomorrow\\x3c/span\\x3e\\x3c/a\\x3e\\x3c/font\\x3e\\x3c/td\\x3e\\x3c/tr\\x3e\\x3c/table\\x3e\\x3c![endif]--\\x3e\" }}",
   },
 };
 
@@ -89,6 +114,9 @@ check('several: w never below 1 (60 - 44 = 16)', /<td [^>]* width="16" style=/.t
 check('an auto-width Button carries no width', !/width=/.test(dec('chars').replace(/<a [\s\S]*$/, '')));
 check('the border part appears with a border of width above 0', /border:2px solid #fbf00b;/.test(dec('chars')));
 check('no border part without a border', !/border:\d/.test(decodeSafe((compile(inline('Shop →').replace(';border:2px solid #fbf00b', '')).match(WORD) || [''])[0])));
+check('fullHeight: a full-width CSS height gives h = 64 - 2 x 12 - 2 x 1 (the hairline) = 38', /<table [^>]* width="552" /.test(dec('fullHeight')) && /<td [^>]* width="510" height="38" valign="middle" style=/.test(dec('fullHeight')));
+check('fullBorder: the author border replaces the hairline, w = 552 - 40 - 2 x 3 = 506', /<td [^>]* width="506" style="[^"]*border:3px solid #FFCC00;"/.test(dec('fullBorder')));
+check('emptyColour / linesColour: empty and lines combine with another cause, in SA14 order', /data-lm-btn-fallback="empty colour"/.test(dec('emptyColour')) && /data-lm-btn-fallback="lines colour"/.test(dec('linesColour')));
 check('w and h never go below 1', /<td [^>]* width="1" height="1" valign="middle"/.test(decodeSafe((compile(inline('Shop →', '#FFFFFF', ';width:10px;box-sizing:border-box;height:10px')).match(WORD) || [''])[0])));
 check('the label is HTML-escaped; colours and the stack are attribute-escaped',
   /<span style="color:#FFFFFF">Tom &amp; Jerry &lt;3 →<\/span>/.test(decodeSafe((compile(inline('Tom &amp; Jerry &lt;3 →')).match(WORD) || [''])[0])));
