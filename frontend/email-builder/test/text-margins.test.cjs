@@ -92,8 +92,21 @@ for (const outlook of [true, false]) {
   check(`I1 ${tag}: only direct children are touched (nested <li><p> keeps marked's structure)`,
     !byText(doc, 'p', 'Nested item').hasAttribute('style'));
   check(`I1 ${tag}: side margins are never written on lists`, !/margin-(left|right)/.test(doc.querySelector('ul').getAttribute('style')));
-  check(`I1 ${tag}: a Container holding only Heading blocks leaves them byte-identical`,
-    out.includes(headingA) && out.includes(headingB));
+  if (!outlook) {
+    check(`I1 ${tag}: a Container holding only Heading blocks leaves them byte-identical`,
+      out.includes(headingA) && out.includes(headingB));
+  } else {
+    // BIBLE-OUTLOOK-FIXES-SPEC §4.2: with the Outlook flag on, each Heading block is its own
+    // table cell carrying the padding; the margin pass still never touches it (margin:0 only).
+    // (Their text now follows the Word font wrapper's Safe payload, so match on includes.)
+    const hA = Array.from(doc.querySelectorAll('h2')).find((h) => h.textContent.includes('Heading block A'));
+    const hB = Array.from(doc.querySelectorAll('h2')).find((h) => h.textContent.includes('Heading block B'));
+    check(`I1 ${tag}: a Container holding only Heading blocks gives them no margin but margin:0`,
+      [hA, hB].every((h) => h && styleMap(h).margin === '0' && !('margin-bottom' in styleMap(h)) && !('margin-top' in styleMap(h))),
+      hA && hA.getAttribute('style'));
+    check(`I1 ${tag}: each such Heading sits in its own padded cell`,
+      [hA, hB].every((h) => h && h.parentElement.tagName === 'TD' && styleMap(h.parentElement).padding === '16px 24px 16px 24px'));
+  }
 
   // ---- I3 -------------------------------------------------------------------------------
   check(`I3 ${tag}: fenced Html block with bare paragraphs compiles byte-identical inside the fence`,

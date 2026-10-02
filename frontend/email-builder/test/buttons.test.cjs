@@ -22,7 +22,10 @@ function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS'
 const msoVml = [...out.matchAll(/\{\{ Safe "[^}]*?v:roundrect[^}]*?href=\\"https:\/\/listmonk\.app[^}]*?\}\}/g)];
 check('8 mso VML button copies with href on the shape', msoVml.length === 8, `count=${msoVml.length}`);
 const markers = [...raw.matchAll(/<span data-lm-vml-href="https:\/\/listmonk\.app"><\/span>/g)];
-check('8 VML href markers emitted outside the Safe payloads', markers.length === 8, `count=${markers.length}`);
+// BIBLE-OUTLOOK-FIXES-SPEC §4.3: the textpath shape carries the href on its roundrect AND its
+// text shape, so each button emits two markers.
+check('16 VML href markers (8 buttons x 2 shapes) emitted outside the Safe payloads', markers.length === 16, `count=${markers.length}`);
+check('every button is the textpath shape (no S5 fallback in campaign 10)', (out.match(/v:textpath\\x20/g) || []).length === 8 && !/anchorlock/.test(out));
 check('all sized to the column budget 244px -> 183pt', msoVml.every((m) => /width:183pt/.test(m[0])));
 const h3675 = msoVml.filter((m) => /height:36.75pt/.test(m[0])).length;
 const h3375 = msoVml.filter((m) => /height:33.75pt/.test(m[0])).length;

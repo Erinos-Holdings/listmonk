@@ -8,6 +8,12 @@
 // whose output is the new truth:
 //
 //   node test/capture-compile-snapshot.cjs [<base commit>]      (default: 8b140ac4)
+//   node test/capture-compile-snapshot.cjs <commit> --only <fixture.json,...> --out <file.json>
+//
+// --only/--out (BIBLE-OUTLOOK-FIXES-SPEC I9) capture a subset into another file: the flag-off
+// fixture is pinned at b5ceb3ce, the commit before the Word fixes, in
+// test/fixtures/compile-snapshot-flag-off.json, which a later recapture of the main snapshot
+// never touches.
 //
 // The bundle is gitignored and run.cjs rebuilds it from the working tree, so a snapshot taken
 // from the working tree would prove nothing. Instead this script checks the base commit out
@@ -23,7 +29,13 @@ const path = require('path');
 const { SNAPSHOT, loadUmd, documentFixtures, compileInputs } = require('./_umd.cjs');
 
 const builderDir = path.join(__dirname, '..');
-const base = process.argv[2] || '8b140ac4';
+const base = (process.argv[2] && !process.argv[2].startsWith('--')) ? process.argv[2] : '8b140ac4';
+function opt(name) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : null;
+}
+const only = opt('--only') ? opt('--only').split(',').map((f) => f.trim()).filter(Boolean) : null;
+const outFile = opt('--out') ? path.resolve(opt('--out')) : SNAPSHOT;
 
 function git(args, opts = {}) {
   const r = spawnSync('git', args, { cwd: builderDir, encoding: 'utf8', ...opts });
@@ -65,21 +77,25 @@ try {
   const { dom, EB } = loadUmd(umdPath);
   const { context, refs } = compileInputs();
   const outputs = {};
-  for (const { file, document } of documentFixtures()) {
+  const fixtures = documentFixtures().filter(({ file }) => !only || only.includes(file));
+  if (only && fixtures.length !== only.length) throw new Error(`--only names a fixture that does not exist: ${only.join(',')}`);
+  for (const { file, document } of fixtures) {
     outputs[file] = EB.compileDocument(document, context, refs);
   }
   dom.window.close();
 
   const snapshot = {
-    _comment: 'CONTAINER-NESTING-SPEC I8 standing tripwire: compiled HTML of every builder-document fixture at baseCommit. Regenerate ONLY for an intentional compile change, with: node test/capture-compile-snapshot.cjs <commit>',
+    _comment: only
+      ? `BIBLE-OUTLOOK-FIXES-SPEC I9 pin: compiled HTML of ${only.join(', ')} at baseCommit. Never recapture from a later commit: it pins the flag-off output from before the Word fixes.`
+      : 'CONTAINER-NESTING-SPEC I8 standing tripwire: compiled HTML of every builder-document fixture at baseCommit. Regenerate ONLY for an intentional compile change, with: node test/capture-compile-snapshot.cjs <commit>',
     baseCommit,
     bundleSha256,
     context,
     refs: refs.map((r) => ({ id: r.id, name: r.name })),
     outputs,
   };
-  fs.writeFileSync(SNAPSHOT, JSON.stringify(snapshot, null, 2) + '\n');
-  console.log(`wrote ${path.relative(builderDir, SNAPSHOT)}: ${Object.keys(outputs).length} fixtures, bundle sha256 ${bundleSha256}`);
+  fs.writeFileSync(outFile, JSON.stringify(snapshot, null, 2) + '\n');
+  console.log(`wrote ${path.relative(builderDir, outFile)}: ${Object.keys(outputs).length} fixtures, bundle sha256 ${bundleSha256}`);
   exitCode = 0;
 } catch (e) {
   console.error(`capture failed: ${e.message}`);

@@ -268,11 +268,11 @@ function getWrapperOptions(style: string | null) {
   return { styleValue, styleMap, align, bgcolorAttr };
 }
 
-function buildPresentationTable(contents: string, width: string = '100%', align: string | null = null) {
+function buildPresentationTable(contents: string, width: string = '100%', align: string | null = null, extraStyle: string = '') {
   const widthAttr = width && width !== 'auto' ? ` width="${escapeAttribute(width)}"` : '';
   const alignAttr = align ? ` align="${escapeAttribute(align)}"` : '';
 
-  return `<table role="presentation"${widthAttr}${alignAttr} cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}">${contents}</table>`;
+  return `<table role="presentation"${widthAttr}${alignAttr} cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}${escapeAttribute(extraStyle)}">${contents}</table>`;
 }
 
 function hasSingleChildMatching(div: HTMLDivElement, predicate: (child: Element) => boolean) {
@@ -410,10 +410,18 @@ function transformImageBlocks(doc: Document) {
     // and was reverted (blind review F4): the wrapper only existed after Go template
     // execution, so the DOM never showed what CSS clients received, and a payload that
     // failed to render would degrade to literal template text plus a left-aligned image.
+    // BIBLE-OUTLOOK-FIXES-SPEC §4.1 (defect A): Outlook for Mac ignores the float and leaves a
+    // right-aligned image at the LEFT edge (rendering bible sheet 1, m365_mac13_lm_dt/_dm_dt);
+    // `center` works there. So `right` also carries `margin-left:auto;margin-right:0`, which
+    // the Mac client honours. Where the float is honoured an auto margin on a float computes
+    // to 0 and changes nothing (Outlook 2016 and 2024 unchanged). Proved by candidate render
+    // r1 row A1 (Downloads/inspect/outlook-fix-candidates-20261002/r1). Left, unset and centre
+    // are unchanged.
     const innerTable = buildPresentationTable(
       `<tbody><tr><td align="${escapeAttribute(align)}">${content}</td></tr></tbody>`,
       'auto',
-      align === 'center' || align === 'right' ? align : null
+      align === 'center' || align === 'right' ? align : null,
+      align === 'right' ? 'margin-left:auto;margin-right:0' : ''
     );
     const html = buildPresentationTable(
       `<tbody><tr><td align="${escapeAttribute(align)}"${bgcolorAttr} style="${escapeAttribute(styleValue)}">${innerTable}</td></tr></tbody>`
@@ -522,7 +530,8 @@ function getEffectiveFontFamily(element: Element): string | null {
 }
 
 // CAMPAIGN-52-HARDENING D4. Wraps the contents of every builder text block (a wrapper div
-// whose children are text flow — the Text/Heading readers' output) whose EFFECTIVE font
+// whose children are text flow — the Text reader's output; a Heading block is its own table
+// cell since transformHeadingBlocks, and carries its own wrapper) whose EFFECTIVE font
 // stack leads with a family Word cannot resolve in a Word-only `<font face="<fallback>">`,
 // where the fallback is the stack's first Windows/Office family (wordFontFallback). The
 // wrapper rides inside downlevel-hidden conditionals, so no other client sees it; Word
@@ -554,6 +563,79 @@ function addWordFontFallbacks(doc: Document) {
     }
     div.prepend(doc.createTextNode(makeSafeTemplate(`<!--[if mso]><font face="${escapeAttribute(fallback)}"><![endif]-->`)));
     div.append(doc.createTextNode(makeSafeTemplate('<!--[if mso]></font><![endif]-->')));
+  });
+}
+
+// BIBLE-OUTLOOK-FIXES-SPEC §4.2 (defects C and D). A Heading block compiled to a bare
+// <h1-3> carrying its own `padding`: Word ignores padding on a heading (every Outlook for
+// Windows render of rendering bible sheet 1 dropped the side padding), and addWordFontFallbacks
+// never reached it — it wraps only a div whose children are text flow, and a top-level or
+// in-column Heading has no such div — so Outlook 2016 drew it in Times New Roman. Each Heading
+// block therefore becomes one presentation table whose cell carries what Word drops from the
+// heading: the padding (read with getPaddingValues, shorthand and longhands, written as one
+// shorthand; none when all four are 0), the background colour (attribute and style, so the
+// padded area is coloured in Word) and, only when the heading states one, its alignment
+// (never fabricated — the campaign-10 rule). The heading keeps `margin:0`, its own
+// text-align and everything else, and loses its padding and background. Its Word font
+// wrapper (the same Safe payloads addWordFontFallbacks writes) sits INSIDE the heading,
+// around its content, so it is inside the element that carries the stack — the shape Text
+// uses — and is present exactly when the heading's EFFECTIVE stack (read before the element
+// is replaced) leads with a family off WORD_FONT_ALLOWLIST. Every Heading block converts,
+// padded or not: one shape. A Container holding only Headings no longer matches
+// addWordFontFallbacks (its children are tables); each heading carries its own wrapper.
+//
+// A Heading block is what isHeadingBlock accepts, outside every [data-lm-user-html] fence, and
+// not a hand-typed heading inside markdown: one whose parent div holds any other text-flow
+// child is skipped. A hand-typed `<h2 style="margin:0">` that is a Text block's ONLY flow child
+// converts, and the Text block then carries the heading's wrapper instead of its own (accepted
+// collateral, as isHeadingBlock says). Runs after transformImageBlocks and before
+// addWordFontFallbacks. Proved by candidate render r1 row H2
+// (Downloads/inspect/outlook-fix-candidates-20261002/r1): Outlook 2016 sans with its 24 px
+// padding, Outlook 2024 padded.
+function transformHeadingBlocks(doc: Document) {
+  const headings = Array.from(doc.querySelectorAll('h1, h2, h3, h4, h5, h6')).filter((heading) => {
+    if (!isHeadingBlock(heading) || heading.closest('[data-lm-user-html]')) {
+      return false;
+    }
+    const parent = heading.parentElement;
+    return !(parent?.tagName === 'DIV'
+      && Array.from(parent.children).some((child) => TEXT_FLOW_TAGS.test(child.tagName) && !isHeadingBlock(child)));
+  });
+
+  headings.forEach((heading) => {
+    const styleMap = parseStyleMap(heading.getAttribute('style'));
+    const padding = getPaddingValues(styleMap);
+    const hasPadding = padding.top !== 0 || padding.right !== 0 || padding.bottom !== 0 || padding.left !== 0;
+    const backgroundColor = styleMap['background-color'];
+    const align = styleMap['text-align'];
+    const stack = getEffectiveFontFamily(heading);
+    const fallback = stack ? wordFontFallback(stack) : '';
+
+    heading.setAttribute('style', setStyleValues(heading.getAttribute('style'), [
+      ['padding', null],
+      ['padding-top', null],
+      ['padding-right', null],
+      ['padding-bottom', null],
+      ['padding-left', null],
+      ['background-color', null],
+    ]));
+    if (fallback) {
+      heading.prepend(doc.createTextNode(makeSafeTemplate(`<!--[if mso]><font face="${escapeAttribute(fallback)}"><![endif]-->`)));
+      heading.append(doc.createTextNode(makeSafeTemplate('<!--[if mso]></font><![endif]-->')));
+    }
+
+    const tdStyle = [
+      hasPadding ? `padding:${formatPaddingShorthand(padding)}` : '',
+      backgroundColor ? `background-color:${backgroundColor}` : '',
+      align ? `text-align:${align}` : '',
+    ].filter(Boolean).join(';');
+    const alignAttr = align ? ` align="${escapeAttribute(align)}"` : '';
+    const bgcolorAttr = backgroundColor ? ` bgcolor="${escapeAttribute(backgroundColor)}"` : '';
+    const styleAttr = tdStyle ? ` style="${escapeAttribute(tdStyle)}"` : '';
+
+    replaceNodeWithHtml(heading, buildPresentationTable(
+      `<tbody><tr><td${alignAttr}${bgcolorAttr}${styleAttr}>${heading.outerHTML}</td></tr></tbody>`
+    ));
   });
 }
 
@@ -751,6 +833,9 @@ type TVmlButtonOptions = {
   borderRadius: number;
   width: number;
   height: number;
+  // The full-width caller's estimated wrapped line count (transformFullWidthButtonForMso);
+  // absent (one line) for an inline Button, whose VML box is sized to its label.
+  lines?: number;
 };
 
 // Canonical bulletproof VML button — the WHOLE shape is the link (href on the
@@ -784,7 +869,46 @@ const VML_HREF_SENTINEL = '\u0000LM_VML_HREF\u0000';
 // @media (prefers-color-scheme), mso-color-alt. If every candidate fails the fallback is a
 // light button, chosen by the campaign author. Flip the constant to switch; the shape test
 // (test/vml-dark-label.test.cjs) pins whichever variant is set here.
-export const VML_LABEL_VARIANT: 'font' | 'bgcolor' | 'border' = 'border';
+//   'textpath' — BIBLE-OUTLOOK-FIXES-SPEC §4.3 (defect B), SHIPPED. Word inverts the lightness
+//              of HTML text and HTML backgrounds and never touches a VML attribute (hazard 54),
+//              and every HTML label lives inside the shape as HTML text — so the 'border'
+//              label still went near-black on the unchanged dark fill in every Outlook for
+//              Windows dark render of rendering bible sheet 1. The label is now VML text
+//              (v:textpath), whose colour is the text shape's `fillcolor` attribute: never
+//              inverted, and it is the Button's OWN text colour (spec U8 — this replaces
+//              'border', so a bordered Button's Word label changes colour in light mode too).
+//              Every text-fill, outline, highlight and class candidate failed (candidate
+//              renders r1 B1–B6, r2); r2 T1 kept the label white in Outlook 2024 dark, and r3
+//              matched today's label position and size at 11–40 px, bordered, rectangle, long
+//              label, custom box and special characters in Outlook 2024 light and Outlook 2016
+//              at 120 dpi (Downloads/inspect/outlook-fix-candidates-20261002/r2, r3).
+//              A Button whose label VML text cannot carry falls back to exactly today's
+//              'border' output (useTextpathLabel, spec S5). 'font' and 'bgcolor' stay, unused.
+export const VML_LABEL_VARIANT: 'font' | 'bgcolor' | 'border' | 'textpath' = 'textpath';
+
+// BIBLE-OUTLOOK-FIXES-SPEC S5. VML text draws ONE line in ONE named font with no proven glyph
+// substitution, and its colour must be a colour VML reads. A Button keeps today's Word copy
+// (the 'border' shape) when its label is empty, when a full-width Button's label is estimated
+// to need more than one line, when its text colour is not a #RGB or #RRGGBB hex, or when its
+// label holds a character outside Basic Latin through Latin Extended-B (U+0020–U+024F),
+// General Punctuation (U+2000–U+206F) and Currency Symbols (U+20A0–U+20CF). Hazard 54 still
+// applies to those.
+const TEXTPATH_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+const TEXTPATH_LABEL = /^[\u0020-\u024F\u2000-\u206F\u20A0-\u20CF]+$/;
+
+function useTextpathLabel(options: TVmlButtonOptions) {
+  return VML_LABEL_VARIANT === 'textpath'
+    && options.text !== ''
+    && (options.lines ?? 1) <= 1
+    && TEXTPATH_COLOR.test(options.textColor)
+    && TEXTPATH_LABEL.test(options.text);
+}
+
+// The VML text weight: VML has bold or not. `bold`, `bolder` or a numeric weight >= 600.
+function textpathWeight(fontWeight: string) {
+  const weight = fontWeight.trim().toLowerCase();
+  return weight === 'bold' || weight === 'bolder' || (/^\d+$/.test(weight) && Number(weight) >= 600) ? 'bold' : 'normal';
+}
 
 function buildVmlLabel(options: TVmlButtonOptions) {
   const label = escapeHtml(options.text);
@@ -794,6 +918,8 @@ function buildVmlLabel(options: TVmlButtonOptions) {
   switch (VML_LABEL_VARIANT) {
     case 'bgcolor':
       return `<center style="${centerStyle(options.textColor, `background:${escapeAttribute(options.buttonColor)};`)}">${label}</center>`;
+    // 'textpath' reaches here only for an S5 fallback, which is exactly today's 'border' label.
+    case 'textpath':
     case 'border': {
       const color = options.borderColor ?? options.textColor;
       return `<center style="${centerStyle(color)}">${label}</center>`;
@@ -811,9 +937,35 @@ function buildVmlButton(options: TVmlButtonOptions) {
     ? `strokecolor="${escapeAttribute(options.borderColor)}" strokeweight="${pt(options.borderWidth)}pt"`
     : `strokecolor="${escapeAttribute(options.buttonColor)}"`;
 
-  // The canonical shape stays: <w:anchorlock/> then <center> (v-text-anchor:middle alone
-  // centers; a v:textbox is deliberately absent — see the comment above). Only the label
-  // markup inside the <center> varies (buildVmlLabel).
+  // BIBLE-OUTLOOK-FIXES-SPEC §4.3: the 'textpath' shape, byte for byte the markup candidate
+  // render r3 proved (Downloads/inspect/outlook-fix-candidates-20261002/r3, the rows marked
+  // NEW). A v:group in pt (the same pt sizing as the canonical shape, for display scaling)
+  // whose local coordinates are the px box x 10 holds two shapes over the whole box: the
+  // roundrect (fill and stroke exactly as today, self-closed — no label inside it) and a text
+  // shape whose straight centre-line path carries the label as v:textpath, filled in the
+  // Button's text colour. fitpath/fitshape off keep the label at its own size; v-text-align
+  // centres it on the line, and the line sits at half height. BOTH shapes carry the href so
+  // the label and the fill beside it are links (whether Word makes the whole surface
+  // clickable is human gate H1): buildVmlButton writes the sentinel twice and wrapMsoVml
+  // emits one marker per occurrence. No <w:anchorlock/>, no <center>, no v:textbox. The font
+  // is the stack's first Word-resolvable family (VML text names one font), else Arial.
+  if (useTextpathLabel(options)) {
+    const w10 = Math.round(options.width * 10);
+    const h10 = Math.round(options.height * 10);
+    const box = `position:absolute;left:0;top:0;width:${w10};height:${h10}`;
+    const font = parseFontStack(options.fontFamily).find((family) => WORD_FONT_ALLOWSET.has(family.toLowerCase())) ?? 'Arial';
+    const fontSize = String(Math.round(options.fontSize * 0.75 * 100) / 100);
+    return `<v:group xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" style="width:${pt(options.width)}pt;height:${pt(options.height)}pt" coordorigin="0,0" coordsize="${w10},${h10}">`
+      + `<v:roundrect href="${VML_HREF_SENTINEL}" style="${box}" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"/>`
+      + `<v:shape href="${VML_HREF_SENTINEL}" style="${box}" coordsize="21600,21600" path="m0,10800l21600,10800e" fillcolor="${escapeAttribute(options.textColor)}" stroked="f">`
+      + '<v:path textpathok="t"/>'
+      + `<v:textpath on="t" fitpath="f" fitshape="f" string="${escapeAttribute(options.text)}" style="font-family:&quot;${escapeAttribute(font)}&quot;;font-size:${fontSize}pt;font-weight:${textpathWeight(options.fontWeight)};v-text-align:center"/>`
+      + '</v:shape></v:group>';
+  }
+
+  // Every other variant, and the S5 fallback, keeps the canonical shape: <w:anchorlock/>
+  // then <center> (v-text-anchor:middle alone centers; a v:textbox is deliberately absent —
+  // see the comment above). Only the label markup inside the <center> varies (buildVmlLabel).
   return `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${VML_HREF_SENTINEL}" style="height:${pt(options.height)}pt;v-text-anchor:middle;width:${pt(options.width)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"><w:anchorlock/>${buildVmlLabel(options)}</v:roundrect>`;
 }
 
@@ -831,18 +983,20 @@ function buildVmlButton(options: TVmlButtonOptions) {
 // js-beautify) never line-wraps: span is on its inline list, and attribute values are never
 // broken. escapeAttribute keeps a typed quote/ampersand/angle bracket from terminating the
 // marker attribute; the Safe halves carry no part of the value at all.
+//
+// BIBLE-OUTLOOK-FIXES-SPEC §4.3: the 'textpath' shape carries the href on TWO shapes, so the
+// payload is split at EVERY sentinel and one marker is emitted per occurrence (N sentinels →
+// N markers between N+1 Safe parts; one sentinel is exactly the two-half form above).
+// models/campaigns.go replaces markers with a global regular expression.
 function wrapMsoVml(vml: string, href: string) {
-  const at = vml.indexOf(VML_HREF_SENTINEL);
-  if (at === -1) {
+  const parts = vml.split(VML_HREF_SENTINEL);
+  if (parts.length === 1) {
     return makeSafeTemplate(`<!--[if mso]>${vml}<![endif]-->`);
   }
-  const pre = vml.slice(0, at);
-  const post = vml.slice(at + VML_HREF_SENTINEL.length);
-  return [
-    makeSafeTemplate(`<!--[if mso]>${pre}`),
-    `<span data-lm-vml-href="${escapeAttribute(href)}"></span>`,
-    makeSafeTemplate(`${post}<![endif]-->`),
-  ].join('');
+  const last = parts.length - 1;
+  return parts
+    .map((part, i) => makeSafeTemplate(`${i === 0 ? '<!--[if mso]>' : ''}${part}${i === last ? '<![endif]-->' : ''}`))
+    .join(`<span data-lm-vml-href="${escapeAttribute(href)}"></span>`);
 }
 
 function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string) {
@@ -1206,6 +1360,8 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
     borderRadius: getPixelValue(anchorStyleMap['border-radius']) || 0,
     width,
     height,
+    // More than one line selects the S5 fallback: VML text draws a single line.
+    lines,
   });
 
   // The non-mso copy stays width="100%" — the fluid form is the only one
@@ -1336,11 +1492,23 @@ function clampImageWidths(node: Element, available: number) {
         0
       );
       const trackShare = autoTracks > 0 ? Math.floor(Math.max(0, tableWidth - fixedTotal) / autoTracks) : 0;
+      const fenced = node.hasAttribute(WORD_COLUMN_FENCE_ATTR);
 
       cells.forEach(({ cell, padding, explicit, colspan }) => {
         const innerWidth = explicit !== null
           ? explicit
           : trackShare * colspan - padding.left - padding.right;
+        // BIBLE-OUTLOOK-FIXES-SPEC §4.4 (defect F): Word ignores table-layout:fixed and shares
+        // the row in proportion to each column's CONTENT width, so unequal columns render
+        // unequal (rendering bible sheet 2, outlook2024_win_lm_dt rows B2.18/B2.19: predicted
+        // 344/457 px, rendered 343/458). An auto-width cell names its content-box share as a
+        // class, `lm-cw-<n>`, and addWordColumnWidthStyles gives Word alone a rule for it. No
+        // width attribute and no inline width: a px-pinned cell breaks Outlook mobile and the
+        // Gmail apps (hazard 91). An explicit-width cell already carries its width; a table
+        // inside a user Html fence does not follow the column model.
+        if (explicit === null && innerWidth > 0 && !fenced) {
+          cell.setAttribute('class', `${cell.getAttribute('class') || ''} lm-cw-${innerWidth}`.trim());
+        }
         Array.from(cell.children).forEach((child) => clampImageWidths(child, innerWidth));
       });
     });
@@ -1417,6 +1585,45 @@ function addGmailButtonPinStyles(doc: Document) {
   doc.head.appendChild(style);
 }
 
+// BIBLE-OUTLOOK-FIXES-SPEC §4.4: the user Html fence is gone by the time clampImageWidths runs
+// (transformSimpleDivBlocks rebuilds a padded fence wrapper as a td without its
+// data-lm-user-html attribute), so every table inside a fence is marked first and the mark is
+// removed again by addWordColumnWidthStyles: it never reaches compiled output.
+const WORD_COLUMN_FENCE_ATTR = 'data-lm-cw-fenced';
+
+function markFencedTables(doc: Document) {
+  doc.querySelectorAll('[data-lm-user-html] table').forEach((table) => table.setAttribute(WORD_COLUMN_FENCE_ATTR, ''));
+}
+
+// BIBLE-OUTLOOK-FIXES-SPEC §4.4 / S6 / S11: the Word half of the column-width fix. One
+// conditional <style> in <head>, carried in a Safe payload (the mechanism the document-settings
+// block in utils.tsx uses), with one flat rule per distinct `lm-cw-<n>` width, ascending:
+// `td.lm-cw-<n>{width:<n>px}`. Only Word reads it, so no other client's column changes. Flat
+// rules only: a nested rule would put `}}` inside the payload, which the review's template
+// check (D2.2) reads as an unbalanced action. Proved by candidate render r1 row F6
+// (Downloads/inspect/outlook-fix-candidates-20261002/r1): Outlook 2016 and 2024 put the second
+// column's text at 320 px, Outlook for Mac unchanged; `mso-table-layout-alt:fixed` alone and a
+// conditional <colgroup> did not work (F1, F5). Runs last, after the final hardenImages.
+function addWordColumnWidthStyles(doc: Document) {
+  doc.querySelectorAll(`[${WORD_COLUMN_FENCE_ATTR}]`).forEach((table) => table.removeAttribute(WORD_COLUMN_FENCE_ATTR));
+
+  const widths = new Set<number>();
+  doc.querySelectorAll('td[class*="lm-cw-"]').forEach((cell) => {
+    for (const match of (cell.getAttribute('class') || '').matchAll(/(?:^|\s)lm-cw-(\d+)(?=\s|$)/g)) {
+      widths.add(Number(match[1]));
+    }
+  });
+  if (widths.size === 0 || !doc.head) {
+    return;
+  }
+
+  const rules = Array.from(widths)
+    .sort((a, b) => a - b)
+    .map((w) => `td.lm-cw-${w}{width:${w}px}`)
+    .join('');
+  doc.head.appendChild(doc.createTextNode(makeSafeTemplate(`<!--[if mso]><style>${rules}</style><![endif]-->`)));
+}
+
 // Every compiled body passes through here (PARAGRAPH-SPACING-SPEC D4/D7). The margin pass
 // is not a Word idiom and runs for every document, first; everything after it is the
 // "Outlook compatibility" set and runs only when the document's flag is on. Consequence: an
@@ -1432,10 +1639,12 @@ export function postProcess(html: string, options: { outlook: boolean }) {
   normalizeTextMargins(doc);
 
   if (options.outlook) {
+    markFencedTables(doc);
     addTableDefaults(doc);
     hardenImages(doc);
     transformButtonBlocks(doc);
     transformImageBlocks(doc);
+    transformHeadingBlocks(doc);
     addWordFontFallbacks(doc);
     expandBorderShorthands(doc);
     transformSimpleDivBlocks(doc);
@@ -1444,6 +1653,7 @@ export function postProcess(html: string, options: { outlook: boolean }) {
     addGmailButtonPinStyles(doc);
     addTableDefaults(doc);
     hardenImages(doc);
+    addWordColumnWidthStyles(doc);
   }
 
   return `<!doctype html>\n${doc.documentElement.outerHTML}`;

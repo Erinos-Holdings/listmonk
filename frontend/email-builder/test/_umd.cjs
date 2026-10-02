@@ -8,6 +8,10 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 const DEFAULT_UMD = path.join(__dirname, '..', '..', 'public', 'static', 'email-builder', 'email-builder.umd.js');
 const FIXTURES = path.join(__dirname, 'fixtures');
 const SNAPSHOT = path.join(FIXTURES, 'compile-snapshot.json');
+// BIBLE-OUTLOOK-FIXES-SPEC I9: the flag-off fixture's output pinned at the commit BEFORE the
+// Word fixes (b5ceb3ce), so a recapture of SNAPSHOT from a later commit can never re-pin it.
+const FLAG_OFF_SNAPSHOT = path.join(FIXTURES, 'compile-snapshot-flag-off.json');
+const isSnapshotFile = (f) => /^compile-snapshot.*\.json$/.test(f);
 
 // Loads the bundle into a fresh jsdom window. `onWarn` receives console.warn lines;
 // `beforeScript(window)` runs before the bundle is evaluated (e.g. to stub localStorage).
@@ -34,11 +38,11 @@ function loadUmd(umdPath = DEFAULT_UMD, { onWarn, onError, beforeScript } = {}) 
   return { dom, EB: dom.window.EmailBuilder };
 }
 
-// The builder-document fixtures: every .json under test/fixtures except the snapshot itself.
-// Each is {id, name, body_source, ...}; the document is body_source.
+// The builder-document fixtures: every .json under test/fixtures except the snapshots
+// (compile-snapshot*.json). Each is {id, name, body_source, ...}; the document is body_source.
 function documentFixtures() {
   return fs.readdirSync(FIXTURES)
-    .filter((f) => f.endsWith('.json') && path.join(FIXTURES, f) !== SNAPSHOT)
+    .filter((f) => f.endsWith('.json') && !isSnapshotFile(f))
     .sort()
     .map((f) => ({ file: f, document: JSON.parse(fs.readFileSync(path.join(FIXTURES, f), 'utf8')).body_source }));
 }
@@ -51,4 +55,4 @@ function compileInputs() {
   return { context: { lang: 'en', brand: 'ruze' }, refs: [refOf(t30), refOf(t14)] };
 }
 
-module.exports = { DEFAULT_UMD, FIXTURES, SNAPSHOT, loadUmd, documentFixtures, compileInputs };
+module.exports = { DEFAULT_UMD, FIXTURES, SNAPSHOT, FLAG_OFF_SNAPSHOT, loadUmd, documentFixtures, compileInputs };

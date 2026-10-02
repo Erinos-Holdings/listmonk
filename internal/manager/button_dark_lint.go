@@ -20,6 +20,12 @@ import (
 // Word sees, stored bodies included. Light-on-dark is degraded in Word, not invisible, and is
 // deliberately not warned (spec §8 Q1). Anything it cannot read is a MISS, never a warning.
 //
+// Since integrations BIBLE-OUTLOOK-FIXES-SPEC §4.3 the builder emits the label as VML text
+// (v:textpath, coloured by a VML attribute Word never inverts) beside a SELF-CLOSED roundrect,
+// which the self-closing skip below already passes over: the lint now speaks only for stored
+// bodies not yet re-saved and for the spec's S5 fallbacks, which keep the <center> label.
+// Retiring it is a to-do after the re-save (S8); TestButtonDarkLintTextpath pins the silence.
+//
 // TWO-LANGUAGE CONSTANTS: the thresholds and the colour parser are ports of
 // frontend/email-builder/src/darkSim.js (DARK_INK, LIGHT_GROUND, parseCssColor, luma), so the
 // warning agrees with what the preview's Gmail-style scheme shows for the same CSS colour.

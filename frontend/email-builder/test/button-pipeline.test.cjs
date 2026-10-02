@@ -19,24 +19,27 @@ const { foldVmlMarkers } = require(path.join(__dirname, 'vml-marker-fold.cjs'));
 const out = foldVmlMarkers(postProcess(input, { outlook: true }));
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
-const mso = out.match(/\{\{ Safe "[^}]*?v:roundrect[^}]*?width:([\d.]+)pt[^}]*?fillcolor=\\"#0055d4\\"[^}]*?\}\}/);
+// BIBLE-OUTLOOK-FIXES-SPEC §4.3: a one-line full-width Button is the textpath group, sized in pt.
+const mso = out.match(/\{\{ Safe "[^}]*?v:group[^}]*?style=\\"width:([\d.]+)pt;height:[\d.]+pt[^}]*?v:roundrect[^}]*?fillcolor=\\"#0055d4\\"[^}]*?\}\}/);
 check('pipeline: mso VML copy emitted', !!mso, mso && `w=${mso[1]}pt`);
 check('pipeline: width = (600 - 48 td padding = 552px) -> 414pt', mso && mso[1] === '414');
-check('pipeline: height 43px + 1px fallback border -> 33pt', mso && /height:33pt/.test(mso[0]));
+check('pipeline: height 43px + 1px fallback border -> 33pt', mso && /;height:33pt/.test(mso[0]));
 check('pipeline: marker only on the non-mso original', (out.match(/data-lm-full-width-button/g) || []).length === 1);
 check('pipeline: original CSS anchor preserved', /display:block/.test(out) && (out.match(/SHOP NOW/g) || []).length === 1 && (out.match(/SHOP\\x20NOW/g) || []).length === 1);
 // Long label wraps in the CSS button -> VML height must cover the wrapped lines
 const longLabel = 'Discover Everything New In The August Collection Now';
 const wrapInput = input.replace('SHOP NOW', longLabel);
 const wrapOut = foldVmlMarkers(postProcess(wrapInput, { outlook: true }));
+// Two lines select the S5 fallback (VML text draws one line): today's canonical roundrect.
 const wh = wrapOut.match(/height:([\d.]+)pt;v-text-anchor/);
+check('wrapped 2-line label is the S5 fallback (anchorlock + center, no textpath)', /anchorlock/.test(wrapOut) && !/v:textpath/.test(wrapOut));
 check('wrapped 2-line label: 19*2+24+1 hairline=63px -> 47.25pt', wh && wh[1] === '47.25', wh && `h=${wh[1]}`);
 
 // Non-canonical border shorthand still yields the stroke
 const borderInput = input.replace('text-decoration:none">SHOP NOW', 'text-decoration:none;border:solid 5px #e01d1d !important">SHOP NOW');
 const borderOut = foldVmlMarkers(postProcess(borderInput, { outlook: true }));
 check('reordered border + !important -> stroke color kept', /strokecolor=\\"#e01d1d\\"/.test(borderOut) && /strokeweight=\\"3.75pt\\"/.test(borderOut));
-check('border width joins the height: 43+5=48px -> 36pt', /height:36pt;v-text-anchor/.test(borderOut));
+check('border width joins the height: 43+5=48px -> 36pt', /;height:36pt\\"\\x20coordorigin/.test(borderOut));
 
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

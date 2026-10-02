@@ -226,6 +226,12 @@ func TestTransformTrackLinksDynamic(t *testing.T) {
 			`{{ Safe "…href=\"" }}{{ TrackLink "{{ or .Subscriber.Attribs.site \"https://curatedfor.you\" }}" . }}{{ Safe "\"…" }}`,
 		},
 		{
+			"textpath button: TWO markers in one button → two TrackLink calls (BIBLE-OUTLOOK-FIXES-SPEC I6)",
+			CampaignContentTypeVisual,
+			`{{ Safe "…roundrect href=\"" }}` + fmt.Sprintf(marker, "https://x.test/go?a=1&amp;b=2") + `{{ Safe "\"…shape href=\"" }}` + fmt.Sprintf(marker, "https://x.test/go?a=1&amp;b=2") + `{{ Safe "\"…" }}`,
+			`{{ Safe "…roundrect href=\"" }}{{ TrackLink "https://x.test/go?a=1&b=2" . }}{{ Safe "\"…shape href=\"" }}{{ TrackLink "https://x.test/go?a=1&b=2" . }}{{ Safe "\"…" }}`,
+		},
+		{
 			"VML marker in a visual→HTML converted document (content_type=html) is still wrapped (I10)",
 			CampaignContentTypeHTML,
 			`{{ Safe "…href=\"" }}` + fmt.Sprintf(marker, "{{ .Subscriber.Attribs.site }}") + `{{ Safe "\"…" }}`,
@@ -318,5 +324,52 @@ func TestDynamicTrackLinkCompiles(t *testing.T) {
 	}
 	if !strings.Contains(b.String(), `href="/link/x"`) || !strings.Contains(b.String(), `href="/link/x"`) {
 		t.Fatalf("rendered body lacks the tracked hrefs:\n%s", b.String())
+	}
+}
+
+// BIBLE-OUTLOOK-FIXES-SPEC I6 and I14 -- the builder's new Word output compiles and renders:
+// the 'textpath' Button carries its href on two shapes, so two markers become two TrackLink
+// calls with the same value; and the Word-only column-width style block, a Safe payload in
+// <head> holding flat rules (`{width:<n>px}`, never `}}`), parses as one action and renders the
+// conditional <style>. The payloads are verbatim builder output (postProcess.ts).
+func TestBibleOutlookFixesCompile(t *testing.T) {
+	const textpathButton = `{{ Safe "\x3c!--[if\x20mso]\x3e\x3cv:group\x20xmlns:v=\"urn:schemas-microsoft-com:vml\"\x20xmlns:w=\"urn:schemas-microsoft-com:office:word\"\x20style=\"width:46.5pt;height:32.25pt\"\x20coordorigin=\"0,0\"\x20coordsize=\"620,430\"\x3e\x3cv:roundrect\x20href=\"" }}<span data-lm-vml-href="https://x.test/go"></span>{{ Safe "\"\x20style=\"position:absolute;left:0;top:0;width:620;height:430\"\x20arcsize=\"50%\"\x20strokecolor=\"#000000\"\x20fillcolor=\"#000000\"/\x3e\x3cv:shape\x20href=\"" }}<span data-lm-vml-href="https://x.test/go"></span>{{ Safe "\"\x20style=\"position:absolute;left:0;top:0;width:620;height:430\"\x20coordsize=\"21600,21600\"\x20path=\"m0,10800l21600,10800e\"\x20fillcolor=\"#FFFFFF\"\x20stroked=\"f\"\x3e\x3cv:path\x20textpathok=\"t\"/\x3e\x3cv:textpath\x20on=\"t\"\x20fitpath=\"f\"\x20fitshape=\"f\"\x20string=\"Go\"\x20style=\"font-family:\x26quot;Arial\x26quot;;font-size:12pt;font-weight:bold;v-text-align:center\"/\x3e\x3c/v:shape\x3e\x3c/v:group\x3e\x3c![endif]--\x3e" }}`
+	const wordColumnStyles = `{{ Safe "\x3c!--[if\x20mso]\x3e\x3cstyle\x3etd.lm-cw-268{width:268px}td.lm-cw-292{width:292px}\x3c/style\x3e\x3c![endif]--\x3e" }}`
+
+	var got []string
+	funcs := template.FuncMap{
+		"TrackLink": func(url string, _ any) string { got = append(got, url); return "/link/x" },
+		"TrackView": func(_ any) template.HTML { return "" },
+		"Safe":      func(s string) template.HTML { return template.HTML(s) },
+	}
+	c := &Campaign{
+		Subject:     "s",
+		ContentType: CampaignContentTypeVisual,
+		Body: `<!doctype html><html><head>` + wordColumnStyles + `</head><body>` + textpathButton +
+			`<table><tbody><tr><td class="lm-cw-268">a</td><td class="lm-cw-292">b</td></tr></tbody></table></body></html>`,
+	}
+	if err := c.CompileTemplate(funcs); err != nil {
+		t.Fatalf("CompileTemplate: %v", err)
+	}
+	var b bytes.Buffer
+	if err := c.Tpl.ExecuteTemplate(&b, BaseTpl, map[string]any{}); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	out := b.String()
+
+	if len(got) != 2 || got[0] != "https://x.test/go" || got[1] != "https://x.test/go" {
+		t.Fatalf("TrackLink received %#v, want the button URL twice (one per shape)", got)
+	}
+	if !strings.Contains(out, `<v:roundrect href="/link/x" style=`) || !strings.Contains(out, `<v:shape href="/link/x" style=`) {
+		t.Fatalf("both VML shapes must carry the tracked href:\n%s", out)
+	}
+	if strings.Contains(out, "data-lm-vml-href") {
+		t.Fatalf("a marker survived the compile:\n%s", out)
+	}
+	if !strings.Contains(out, `string="Go" style="font-family:&quot;Arial&quot;;`) {
+		t.Fatalf("the VML label did not render as written:\n%s", out)
+	}
+	if !strings.Contains(out, `<head><!--[if mso]><style>td.lm-cw-268{width:268px}td.lm-cw-292{width:292px}</style><![endif]--></head>`) {
+		t.Fatalf("the Word column style block did not render into <head>:\n%s", out)
 	}
 }

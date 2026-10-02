@@ -15,6 +15,8 @@ const input = `<!doctype html><html><body>
 <div data-lm-user-html="true" style="background-color:#FFF8F0;padding:16px 24px 16px 24px">
 <div style="max-width:480px;margin:0 auto;padding:12px 8px 12px 8px;background-color:#E8F0FE">user card</div>
 <div style="height:20px;padding:1px 0 1px 0"></div>
+<h2 style="margin:0;padding:12px 12px 12px 12px">user heading</h2>
+<table width="100%" style="table-layout:fixed"><tbody><tr><td style="padding:0 8px 0 0">user col a</td><td style="padding:0 0 0 8px">user col b</td></tr></tbody></table>
 </div>
 <div style="background-color:#CCD6E9;padding:16px 0px 16px 0px">
 <div style="text-align:center;padding:8px 24px 8px 24px"><p>builder text</p></div>
@@ -34,6 +36,15 @@ function check(name, ok, detail) {
 check('user card div is untouched', /<div style="max-width:480px;margin:0 auto;padding:12px 8px 12px 8px;background-color:#E8F0FE">user card<\/div>/.test(out));
 check('user card not converted to td', !/<td[^>]*#E8F0FE/.test(out));
 check('user spacer-shaped div not converted', !/<td[^>]*height="20"/.test(out));
+
+// BIBLE-OUTLOOK-FIXES-SPEC I4/I7: a margin:0 heading inside the fence is not a Heading block
+// (not converted, keeps its padding, no font wrapper), and a fixed-layout table inside the fence
+// gains no Word column class (user markup does not follow the column model) and no temporary
+// fence mark survives.
+check('fenced margin:0 heading is untouched', /<h2 style="margin:0;padding:12px 12px 12px 12px">user heading<\/h2>/.test(out));
+check('fenced fixed-layout table cells gain no lm-cw- class', !/lm-cw-/.test(out) && /<td style="padding:0 8px 0 0">user col a<\/td>/.test(out));
+check('no Word column style block for a fenced table', !/td\.lm-cw-/.test(out));
+check('the temporary fence mark never reaches the output', !/data-lm-cw-fenced/.test(out));
 
 // The Html wrapper itself (builder-owned padding) still converts.
 check(

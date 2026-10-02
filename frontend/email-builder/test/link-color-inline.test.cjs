@@ -200,11 +200,13 @@ check('I1c: not emitted for outlook:false documents', !/OfficeDocumentSettings/.
 // The inline pass runs first, so this is the shape postProcess receives.
 const vml = decodeSafe(foldVmlMarkers(outlookOut));
 check('VML: a roundrect was emitted at all (the pipeline really ran)', vml.includes('v:roundrect'));
+// The Word label is VML text since BIBLE-OUTLOOK-FIXES-SPEC §4.3: its colour is the text
+// shape's fillcolor.
 check('VML: button fill and label colours unchanged by the pass',
-  /fillcolor="#0055d4"/.test(vml) && /<center style="color:#ffffff/.test(vml),
-  (vml.match(/fillcolor="[^"]*"/) || [])[0]);
+  /<v:roundrect [^>]*fillcolor="#0055d4"/.test(vml) && /<v:shape [^>]*fillcolor="#ffffff"/.test(vml),
+  (vml.match(/fillcolor="[^"]*"/g) || []).join(' '));
 check('VML: the link colour never reached the button label',
-  !/<center style="color:#888888/.test(vml));
+  !/#888888/.test((vml.match(/<v:group[\s\S]*?<\/v:group>/) || [''])[0]));
 
 if (failed) {
   console.log(`\n${failed} FAILURES`);

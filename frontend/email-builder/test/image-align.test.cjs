@@ -76,20 +76,27 @@ for (const [label, inner] of [['bare img', logo], ['linked img', linked]]) {
   check(`${label} center: inner table is shrink-wrap (no width)`, c && c.innerWidth === null, c && c.innerWidth);
   check(`${label} center: inner table aligns itself (align="center")`, c && c.innerAlign === 'center', c && String(c.innerAlign));
   check(`${label} center: outer td still carries align="center" for Word`, c && c.outerTd && c.outerTd.getAttribute('align') === 'center');
+  check(`${label} center: inner table style unchanged (no auto margin, I1)`, c && c.inner.getAttribute('style') === 'border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;', c && c.inner.getAttribute('style'));
 
   const rightOut = render(block('padding:0px;text-align:right', inner));
   const r = imageTables(rightOut, 'logo');
   check(`${label} right: inner table aligns itself (align="right")`, r && r.innerAlign === 'right', r && String(r.innerAlign));
   check(`${label} right: outer td carries align="right"`, r && r.outerTd && r.outerTd.getAttribute('align') === 'right');
+  // BIBLE-OUTLOOK-FIXES-SPEC I1 (§4.1): Outlook for Mac ignores the float; the auto left margin
+  // right-aligns it there (candidate render r1 row A1).
+  const rStyle = (r && r.inner && r.inner.getAttribute('style')) || '';
+  check(`${label} right: inner table style gains margin-left:auto;margin-right:0`, /;margin-left:auto;margin-right:0$/.test(rStyle), rStyle);
   const payloads = [...rightOut.matchAll(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g)].map((m) => m[1]);
   check(`${label} right: alignment rides in the DOM, not in any Safe payload`, !payloads.some((p) => /align=\\"right\\"|align="right"/.test(p)));
   check(`${label} right: Word and CSS views are tag-balanced`, balanced(msoView(decodeSafe(rightOut))) && balanced(cssView(decodeSafe(rightOut))));
 
   const l = imageTables(render(block('padding:0px;text-align:left', inner)), 'logo');
   check(`${label} left: inner table carries NO align attribute`, l && l.innerAlign === null, l && String(l.innerAlign));
+  check(`${label} left: inner table style unchanged (no auto margin, I1)`, l && !/margin/.test(l.inner.getAttribute('style')), l && l.inner.getAttribute('style'));
 
   const u = imageTables(render(block('padding:0px', inner)), 'logo');
   check(`${label} unset: inner table carries NO align attribute`, u && u.innerAlign === null, u && String(u.innerAlign));
+  check(`${label} unset: inner table style unchanged (no auto margin, I1)`, u && !/margin/.test(u.inner.getAttribute('style')), u && u.inner.getAttribute('style'));
 }
 
 // PARAGRAPH-SPACING-SPEC D6 / I8 (runbook hazard 55(b), campaign 66): the linked image's

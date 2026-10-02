@@ -173,3 +173,46 @@ func TestButtonDarkParseColor(t *testing.T) {
 		}
 	}
 }
+
+// textpathButton is a Button as postProcess.ts emits it since BIBLE-OUTLOOK-FIXES-SPEC §4.3
+// (VML_LABEL_VARIANT = 'textpath'), rendered: a v:group holding a SELF-CLOSED roundrect (the
+// fill) and a text shape whose v:textpath carries the label, coloured by the shape's fillcolor
+// -- a VML attribute Word's dark transform never inverts. No <center>.
+func textpathButton(fill, label, text string) string {
+	return `<!--[if mso]><v:group xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" style="width:80.25pt;height:33.75pt" coordorigin="0,0" coordsize="1070,450">` +
+		`<v:roundrect href="https://x.test/l" style="position:absolute;left:0;top:0;width:1070;height:450" arcsize="50%" strokecolor="#FBF00B" strokeweight="1.5pt" fillcolor="` + fill + `"/>` +
+		`<v:shape href="https://x.test/l" style="position:absolute;left:0;top:0;width:1070;height:450" coordsize="21600,21600" path="m0,10800l21600,10800e" fillcolor="` + label + `" stroked="f">` +
+		`<v:path textpathok="t"/><v:textpath on="t" fitpath="f" fitshape="f" string="` + text + `" style="font-family:&quot;Arial&quot;;font-size:12pt;font-weight:bold;v-text-align:center"/></v:shape></v:group><![endif]-->` +
+		`<div class="lm-nomso" style="mso-hide:all"><a href="https://x.test/l" style="background-color:` + fill + `;color:` + label + `">` + text + `</a></div>`
+}
+
+// BIBLE-OUTLOOK-FIXES-SPEC I11 (S8) -- the lint stays (stored bodies keep the old label until
+// re-saved) but is silent on the textpath shape, including campaign 49's colours, and still
+// warns on the old <center> shape it warned on before -- also beside a textpath button.
+func TestButtonDarkLintTextpath(t *testing.T) {
+	for _, c := range []struct{ name, body string }{
+		{"campaign 49's colours as a textpath button", textpathButton("#F5F5F5", "#000000", "FOLLOW US TO STAY IN THE KNOW")},
+		{"light label on a dark fill", textpathButton("#000000", "#FFFFFF", "Shop")},
+		{"dark label on a white fill", textpathButton("#FFFFFF", "#262626", "Shop")},
+	} {
+		t.Run("silent: "+c.name, func(t *testing.T) {
+			if w := ButtonDarkModeWarnings(c.body); len(w) != 0 {
+				t.Fatalf("expected no warnings on the textpath shape, got %v", w)
+			}
+		})
+	}
+
+	t.Run("the old <center> shape still warns, beside a textpath button", func(t *testing.T) {
+		body := textpathButton("#F5F5F5", "#000000", "New") + vmlButton("#F5F5F5", "#000000", "Old") + textpathButton("#FFFFFF", "#000000", "Newer")
+		w := ButtonDarkModeWarnings(body)
+		if len(w) != 1 || w[0] != `Button "Old"`+buttonWarnSuffix {
+			t.Fatalf("expected exactly the old-shape warning, got %v", w)
+		}
+	})
+
+	t.Run("RenderWarnings is silent on a textpath-only body", func(t *testing.T) {
+		if w := RenderWarnings([]byte("<html><body>" + textpathButton("#F5F5F5", "#000000", "Follow") + "</body></html>")); len(w) != 0 {
+			t.Fatalf("expected no render warnings, got %v", w)
+		}
+	})
+}

@@ -4,7 +4,7 @@
 // stack gets no wrapper. A stack with no allowlisted family fails this suite (the build).
 const fs = require('fs');
 const path = require('path');
-const { pp, canvas, decodeSafe, makeChecker, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv } = require('./_fixtures-hardening.cjs');
+const { pp, canvas, decodeSafe, makeChecker, ARIAL, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv } = require('./_fixtures-hardening.cjs');
 const { check, done } = makeChecker();
 
 // The allowlist pinned by the spec (D4).
@@ -62,6 +62,14 @@ check('nbsp-only spacer div gets no wrapper', (outPlain.split(OPEN).length - 1) 
 check('ARIAL block gets no wrapper', !/<!--\[if mso\]><font face="[^"]*"><!\[endif\]--><p[^>]*>Le ricompense/.test(rendered));
 check('wrapper only inside downlevel-hidden conditionals (no raw <font face> outside Word)', !/(^|[^>])<font face=/.test(rendered.replace(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/g, '')));
 check('stored body: wrapper rides in Safe payloads (never a raw comment the DOM could eat)', out.includes('{{ Safe "\\x3c!--[if\\x20mso]\\x3e\\x3cfont\\x20face=\\"Arial\\"\\x3e\\x3c![endif]--\\x3e" }}'));
+
+// BIBLE-OUTLOOK-FIXES-SPEC I3 (§4.2): a Heading block has no text-block div, so it carries its
+// own wrapper INSIDE the heading (around its content); one on a compliant stack carries none.
+const headings = decodeSafe(pp.postProcess(canvas('<h2 style="font-weight:bold;margin:0;font-size:24px;padding:0px 24px 0px 24px">Top heading</h2>'
+  + `<h2 style="font-weight:bold;margin:0;font-family:${ARIAL};font-size:24px;padding:0px">Arial heading</h2>`), { outlook: true }));
+check('I3: a top-level Heading on the layout default gets the wrapper inside the heading',
+  /<h2 style="[^"]*"><!--\[if mso\]><font face="Arial"><!\[endif\]-->Top heading<!--\[if mso\]><\/font><!\[endif\]--><\/h2>/.test(headings), headings.slice(0, 600));
+check('I3: a Heading on an allowlisted lead family gets none', /<h2 style="[^"]*">Arial heading<\/h2>/.test(headings) && (headings.split(OPEN).length - 1) === 1);
 
 // Editor/reader parity is font-family-parity.test.cjs; the stacks themselves are unchanged
 // (Q5): the layout default still leads with Helvetica Neue.

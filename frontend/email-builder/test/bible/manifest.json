@@ -69,7 +69,7 @@
     },
     {
       "stem": "bible-03-three-columns",
-      "rows": 26,
+      "rows": 19,
       "cells": [
         "Text@-@col3",
         "Text@left@col3",
@@ -89,6 +89,13 @@
         "Image@right@col3"
       ],
       "dropped": [
+        "census composition, 10 items: Container ( Image:height-only@center )",
+        "census composition, 5 items: Columns ( Text@center ; Image:width@- ; - )",
+        "census composition, 5 items: Container ( Container ( Image:width@- ) )",
+        "census composition, 4 items: Container ( - )",
+        "census composition, 3 items: Container ( Container ( - ) )",
+        "census composition, 3 items: Container ( Container ( Image:width@- ) + Image:height-only@center )",
+        "census composition, 3 items: Container ( Image:width@- + Text@- + Button@center )",
         "census composition, 2 items: Columns ( Image:unsized@- ; Image:unsized@- ; Image:unsized@- )",
         "census composition, 2 items: Container ( Columns ( Image:unsized@- ; Image:unsized@- ; Image:unsized@- ) )",
         "census composition, 2 items: Container ( Image:width@- + Text@center + Columns ( Image:width@- ; Text@center ; - ) + Columns ( Text@center ; Image:width@- ; - ) + Text@center + Button@center )",

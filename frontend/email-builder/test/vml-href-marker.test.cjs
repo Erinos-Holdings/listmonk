@@ -62,6 +62,17 @@ check('no part of the URL inside either Safe payload', m && !/x\.test/.test(m[1]
 check('the non-mso <a> copy keeps its href untouched', /<a href="https:\/\/x\.test\/go\?a=1&amp;b=2"/.test(staticOut));
 check('every Safe payload is well-formed', safePayloadsWellFormed(staticOut));
 
+// 1b. BIBLE-OUTLOOK-FIXES-SPEC I6: the 'textpath' shape carries the href on the roundrect AND
+// the text shape, so wrapMsoVml splits the payload at EVERY sentinel: two markers with the same
+// value, three Safe parts, the middle one opening and closing with the escaped quote.
+const TWO_MARKERS_RE = /\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}<span data-lm-vml-href="([^"]*)"><\/span>\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}<span data-lm-vml-href="([^"]*)"><\/span>\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/;
+const t = staticOut.match(TWO_MARKERS_RE);
+check('textpath button: exactly two markers, three Safe parts, adjacent', !!t && (staticOut.match(/data-lm-vml-href=/g) || []).length === 2);
+check('textpath button: both markers carry the same value', t && t[2] === t[4] && t[2] === 'https://x.test/go?a=1&amp;b=2', t && `${t[2]} | ${t[4]}`);
+check('textpath button: first marker closes the roundrect href, second the text shape href',
+  t && /v:roundrect\\x20href=\\"$/.test(t[1]) && /^\\"/.test(t[3]) && /v:shape\\x20href=\\"$/.test(t[3]) && /^\\"/.test(t[5]));
+check('textpath button: no part of the URL inside any Safe part', t && ![t[1], t[3], t[5]].some((p) => /x\.test/.test(p)));
+
 // 2. Personalized URL with the `or` idiom (React stores the typed quotes as &quot;).
 const dyn = '{{ or .Subscriber.Attribs.site &quot;https://curatedfor.you&quot; }}';
 const dynOut = postProcess(button(dyn), { outlook: true });
