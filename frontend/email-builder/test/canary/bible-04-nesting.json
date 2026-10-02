@@ -53,9 +53,7 @@
         "b4-r22-label",
         "b4-r22",
         "b4-r23-label",
-        "b4-r23",
-        "b4-r24-label",
-        "b4-r24"
+        "b4-r23"
       ]
     }
   },
@@ -102,10 +100,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -139,10 +137,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -229,10 +227,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -267,10 +265,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -357,10 +355,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -395,10 +393,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -482,10 +480,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -517,10 +515,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -605,10 +603,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -641,10 +639,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -729,10 +727,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -765,10 +763,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -848,7 +846,7 @@
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 140,
+        "customWidth": 132,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -861,10 +859,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -892,7 +890,7 @@
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 140,
+        "customWidth": 132,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -905,10 +903,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -984,12 +982,12 @@
         "fontSize": 28
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 124,
+        "customWidth": 92,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -1002,10 +1000,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -1029,12 +1027,12 @@
         "fontSize": 28
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 124,
+        "customWidth": 92,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -1047,10 +1045,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -1131,7 +1129,7 @@
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 140,
+        "customWidth": 124,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -1144,10 +1142,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -1176,7 +1174,7 @@
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 140,
+        "customWidth": 124,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -1189,10 +1187,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -1279,10 +1277,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -1317,10 +1315,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -1399,7 +1397,7 @@
         "alt": "Bible photo",
         "linkHref": "https://canary.invalid/bible",
         "contentAlignment": "middle",
-        "width": 140
+        "width": 80
       }
     }
   },
@@ -1408,10 +1406,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -1438,7 +1436,7 @@
         "alt": "Bible photo",
         "linkHref": "https://canary.invalid/bible",
         "contentAlignment": "middle",
-        "width": 140
+        "width": 80
       }
     }
   },
@@ -1447,10 +1445,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -1529,7 +1527,7 @@
         "alt": "Bible photo",
         "linkHref": "https://canary.invalid/bible",
         "contentAlignment": "middle",
-        "width": 124
+        "width": 76
       }
     }
   },
@@ -1538,10 +1536,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -1568,7 +1566,7 @@
         "alt": "Bible photo",
         "linkHref": "https://canary.invalid/bible",
         "contentAlignment": "middle",
-        "width": 124
+        "width": 76
       }
     }
   },
@@ -1577,10 +1575,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -1718,10 +1716,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -1828,10 +1826,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -1938,10 +1936,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -2042,10 +2040,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -2148,10 +2146,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -2176,43 +2174,59 @@
       },
       "props": {
         "markdown": true,
-        "text": "B4.18 · Heading, aligned right, as a two-column row in a Container"
+        "text": "B4.18 · Button, no alignment, as a two-column row in a Container"
       }
     }
   },
   "b4-r18-c0": {
-    "type": "Heading",
+    "type": "Button",
     "data": {
       "style": {
-        "textAlign": "right",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 4,
-          "right": 4
-        }
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 20
       },
       "props": {
-        "level": "h1",
-        "text": "Go far"
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 124,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
       }
     }
   },
   "b4-r18-c1": {
-    "type": "Heading",
+    "type": "Button",
     "data": {
       "style": {
-        "textAlign": "right",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 4,
-          "right": 4
-        }
+          "left": 12,
+          "right": 12
+        },
+        "fontSize": 20
       },
       "props": {
-        "level": "h1",
-        "text": "Go far"
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "buttonStyle": "pill",
+        "fullWidth": false,
+        "size": "medium",
+        "customWidth": 124,
+        "borderSize": 1,
+        "borderColor": "#FFFFFF",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF"
       }
     }
   },
@@ -2254,10 +2268,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -2282,7 +2296,7 @@
       },
       "props": {
         "markdown": true,
-        "text": "B4.19 · Button, no alignment, as a two-column row in a Container"
+        "text": "B4.19 · Button, aligned center, as a two-column row in a Container"
       }
     }
   },
@@ -2290,13 +2304,14 @@
     "type": "Button",
     "data": {
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 12,
-          "right": 12
+          "left": 24,
+          "right": 24
         },
-        "fontSize": 20
+        "fontSize": 28
       },
       "props": {
         "text": "Go far",
@@ -2304,7 +2319,7 @@
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 140,
+        "customWidth": 116,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -2316,13 +2331,14 @@
     "type": "Button",
     "data": {
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 12,
-          "right": 12
+          "left": 24,
+          "right": 24
         },
-        "fontSize": 20
+        "fontSize": 28
       },
       "props": {
         "text": "Go far",
@@ -2330,7 +2346,7 @@
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 140,
+        "customWidth": 116,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -2376,10 +2392,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -2404,7 +2420,7 @@
       },
       "props": {
         "markdown": true,
-        "text": "B4.20 · Button, aligned center, as a two-column row in a Container"
+        "text": "B4.20 · Button, aligned right, as a two-column row in a Container"
       }
     }
   },
@@ -2412,22 +2428,22 @@
     "type": "Button",
     "data": {
       "style": {
-        "textAlign": "center",
+        "textAlign": "right",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 24,
-          "right": 24
+          "left": 0,
+          "right": 0
         },
-        "fontSize": 28
+        "fontSize": 40
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 124,
+        "customWidth": 140,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -2439,22 +2455,22 @@
     "type": "Button",
     "data": {
       "style": {
-        "textAlign": "center",
+        "textAlign": "right",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 24,
-          "right": 24
+          "left": 0,
+          "right": 0
         },
-        "fontSize": 28
+        "fontSize": 40
       },
       "props": {
-        "text": "Go far",
+        "text": "Go",
         "url": "https://canary.invalid/bible",
         "buttonStyle": "pill",
         "fullWidth": false,
         "size": "medium",
-        "customWidth": 124,
+        "customWidth": 140,
         "borderSize": 1,
         "borderColor": "#FFFFFF",
         "buttonBackgroundColor": "#003B4D",
@@ -2500,10 +2516,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
@@ -2528,61 +2544,47 @@
       },
       "props": {
         "markdown": true,
-        "text": "B4.21 · Button, aligned right, as a two-column row in a Container"
+        "text": "B4.21 · Image sized by width, no alignment, as a two-column row in a Container"
       }
     }
   },
   "b4-r21-c0": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "style": {
-        "textAlign": "right",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 40
+          "left": 4,
+          "right": 4
+        }
       },
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/bible",
-        "buttonStyle": "pill",
-        "fullWidth": false,
-        "size": "medium",
-        "customWidth": 140,
-        "borderSize": 1,
-        "borderColor": "#FFFFFF",
-        "buttonBackgroundColor": "#003B4D",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
       }
     }
   },
   "b4-r21-c1": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "style": {
-        "textAlign": "right",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 40
+          "left": 4,
+          "right": 4
+        }
       },
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/bible",
-        "buttonStyle": "pill",
-        "fullWidth": false,
-        "size": "medium",
-        "customWidth": 140,
-        "borderSize": 1,
-        "borderColor": "#FFFFFF",
-        "buttonBackgroundColor": "#003B4D",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo",
+        "linkHref": "https://canary.invalid/bible",
+        "contentAlignment": "middle",
+        "width": 80
       }
     }
   },
@@ -2624,10 +2626,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 24,
+          "bottom": 24,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -2652,7 +2654,7 @@
       },
       "props": {
         "markdown": true,
-        "text": "B4.22 · Image sized by width, no alignment, as a two-column row in a Container"
+        "text": "B4.22 · Image sized by width, aligned center, as a two-column row in a Container"
       }
     }
   },
@@ -2660,11 +2662,12 @@
     "type": "Image",
     "data": {
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 4,
-          "right": 4
+          "left": 12,
+          "right": 12
         }
       },
       "props": {
@@ -2680,11 +2683,12 @@
     "type": "Image",
     "data": {
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 4,
-          "right": 4
+          "left": 12,
+          "right": 12
         }
       },
       "props": {
@@ -2734,10 +2738,10 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
         }
       },
       "props": {
@@ -2762,7 +2766,7 @@
       },
       "props": {
         "markdown": true,
-        "text": "B4.23 · Image sized by width, aligned center, as a two-column row in a Container"
+        "text": "B4.23 · Image sized by width, aligned right, as a two-column row in a Container"
       }
     }
   },
@@ -2770,12 +2774,12 @@
     "type": "Image",
     "data": {
       "style": {
-        "textAlign": "center",
+        "textAlign": "right",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 12,
-          "right": 12
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -2783,7 +2787,7 @@
         "alt": "Bible photo",
         "linkHref": "https://canary.invalid/bible",
         "contentAlignment": "middle",
-        "width": 140
+        "width": 108
       }
     }
   },
@@ -2791,12 +2795,12 @@
     "type": "Image",
     "data": {
       "style": {
-        "textAlign": "center",
+        "textAlign": "right",
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 12,
-          "right": 12
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -2804,7 +2808,7 @@
         "alt": "Bible photo",
         "linkHref": "https://canary.invalid/bible",
         "contentAlignment": "middle",
-        "width": 140
+        "width": 108
       }
     }
   },
@@ -2846,127 +2850,15 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
         "childrenIds": [
           "b4-r23-cols"
-        ]
-      }
-    }
-  },
-  "b4-r24-label": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "fontSize": 12,
-        "fontWeight": "normal",
-        "padding": {
-          "top": 12,
-          "bottom": 4,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "markdown": true,
-        "text": "B4.24 · Image sized by width, aligned right, as a two-column row in a Container"
-      }
-    }
-  },
-  "b4-r24-c0": {
-    "type": "Image",
-    "data": {
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Bible photo",
-        "linkHref": "https://canary.invalid/bible",
-        "contentAlignment": "middle",
-        "width": 124
-      }
-    }
-  },
-  "b4-r24-c1": {
-    "type": "Image",
-    "data": {
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Bible photo",
-        "linkHref": "https://canary.invalid/bible",
-        "contentAlignment": "middle",
-        "width": 124
-      }
-    }
-  },
-  "b4-r24-cols": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "columns": [
-          {
-            "childrenIds": [
-              "b4-r24-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "b4-r24-c1"
-            ]
-          },
-          {
-            "childrenIds": []
-          }
-        ]
-      }
-    }
-  },
-  "b4-r24": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "childrenIds": [
-          "b4-r24-cols"
         ]
       }
     }

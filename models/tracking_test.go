@@ -373,3 +373,45 @@ func TestBibleOutlookFixesCompile(t *testing.T) {
 		t.Fatalf("the Word column style block did not render into <head>:\n%s", out)
 	}
 }
+
+// integrations BIBLE-OUTLOOK-FIXES-SPEC §12 (Amendment A) IA9: the S5 fallback Button's Word copy
+// is a table cell whose label is a link; its href rides outside the Safe payload as ONE
+// data-lm-vml-href marker (wrapMsoVml, unchanged), and the global marker rewrite turns it into a
+// TrackLink call inside the table exactly as it does inside a VML shape. The body below is the
+// fork's own compile output for the `chars` case (frontend/email-builder/test/button-fallback.test.cjs).
+func TestFallbackButtonMarkerTracked(t *testing.T) {
+	const fallbackButton = `{{ Safe "\x3c!--[if\x20mso]\x3e\x3ctable\x20role=\"presentation\"\x20border=\"0\"\x20cellpadding=\"0\"\x20cellspacing=\"0\"\x20data-lm-btn-fallback=\"chars\"\x20style=\"border-collapse:separate\"\x3e\x3ctr\x3e\x3ctd\x20align=\"center\"\x20bgcolor=\"#000000\"\x20style=\"background-color:#000000;padding:12px\x2020px\x2012px\x2020px;border:2px\x20solid\x20#fbf00b;\"\x3e\x3cfont\x20face=\"Arial\"\x3e\x3ca\x20href=\"" }}<span data-lm-vml-href="https://x.test/go"></span>{{ Safe "\"\x20style=\"color:#FFFFFF;font-family:Arial,\x20sans-serif;font-size:16px;font-weight:bold;text-decoration:none\"\x3e\x3cspan\x20style=\"color:#FFFFFF\"\x3eShop\x20→\x3c/span\x3e\x3c/a\x3e\x3c/font\x3e\x3c/td\x3e\x3c/tr\x3e\x3c/table\x3e\x3c![endif]--\x3e" }}`
+
+	var got []string
+	funcs := template.FuncMap{
+		"TrackLink": func(url string, _ any) string { got = append(got, url); return "/link/x" },
+		"TrackView": func(_ any) template.HTML { return "" },
+		"Safe":      func(s string) template.HTML { return template.HTML(s) },
+	}
+	c := &Campaign{
+		Subject:     "s",
+		ContentType: CampaignContentTypeVisual,
+		Body:        `<!doctype html><html><head></head><body>` + fallbackButton + `</body></html>`,
+	}
+	if err := c.CompileTemplate(funcs); err != nil {
+		t.Fatalf("CompileTemplate: %v", err)
+	}
+	var b bytes.Buffer
+	if err := c.Tpl.ExecuteTemplate(&b, BaseTpl, map[string]any{}); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	out := b.String()
+
+	if len(got) != 1 || got[0] != "https://x.test/go" {
+		t.Fatalf("TrackLink received %#v, want the button URL once", got)
+	}
+	if !strings.Contains(out, `<font face="Arial"><a href="/link/x" style="color:#FFFFFF;`) {
+		t.Fatalf("the fallback link must carry the tracked href:\n%s", out)
+	}
+	if !strings.Contains(out, `<table role="presentation" border="0" cellpadding="0" cellspacing="0" data-lm-btn-fallback="chars" style="border-collapse:separate">`) {
+		t.Fatalf("the stamped fallback table did not render as written:\n%s", out)
+	}
+	if strings.Contains(out, "data-lm-vml-href") {
+		t.Fatalf("a marker survived the compile:\n%s", out)
+	}
+}

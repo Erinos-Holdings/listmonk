@@ -41,11 +41,7 @@
         "b3-r16-label",
         "b3-r16",
         "b3-r17-label",
-        "b3-r17-0",
-        "b3-r18-label",
-        "b3-r18-0",
-        "b3-r19-label",
-        "b3-r19-0"
+        "b3-r17"
       ]
     }
   },
@@ -1948,485 +1944,93 @@
       },
       "props": {
         "markdown": true,
-        "text": "B3.17 · census composition, 21 items: Container ( Container ( Text@- ) )"
+        "text": "B3.17 · Heading, aligned right, as a two-column row in a Container (moved from B4)"
       }
     }
   },
-  "b3-r17-2": {
-    "type": "Text",
+  "b3-r17-c0": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        }
+      },
+      "props": {
+        "level": "h1",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r17-c1": {
+    "type": "Heading",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 4,
+          "right": 4
+        }
+      },
+      "props": {
+        "level": "h1",
+        "text": "Go far"
+      }
+    }
+  },
+  "b3-r17-cols": {
+    "type": "ColumnsContainer",
     "data": {
       "style": {
         "padding": {
           "top": 8,
           "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16,
-        "fontWeight": "normal"
-      },
-      "props": {
-        "markdown": true,
-        "text": "Go far"
-      }
-    }
-  },
-  "b3-r17-1": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
           "left": 0,
           "right": 0
         }
       },
       "props": {
-        "childrenIds": [
-          "b3-r17-2"
-        ]
-      }
-    }
-  },
-  "b3-r17-0": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "childrenIds": [
-          "b3-r17-1"
-        ]
-      }
-    }
-  },
-  "b3-r18-label": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "fontSize": 12,
-        "fontWeight": "normal",
-        "padding": {
-          "top": 12,
-          "bottom": 4,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "markdown": true,
-        "text": "B3.18 · census composition, 11 items: Container ( Container ( Text@center + Button@center + Image:width@- + Container ( Text@center + Text@- ) + Text@center + Button@center ) )"
-      }
-    }
-  },
-  "b3-r18-2": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16,
-        "fontWeight": "normal"
-      },
-      "props": {
-        "markdown": true,
-        "text": "Go far"
-      }
-    }
-  },
-  "b3-r18-3": {
-    "type": "Button",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16
-      },
-      "props": {
-        "text": "Go far",
-        "url": "https://canary.invalid/bible",
-        "buttonStyle": "pill",
-        "fullWidth": false,
-        "size": "medium",
-        "customWidth": 140,
-        "borderSize": 1,
-        "borderColor": "#FFFFFF",
-        "buttonBackgroundColor": "#003B4D",
-        "buttonTextColor": "#FFFFFF"
-      }
-    }
-  },
-  "b3-r18-4": {
-    "type": "Image",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        }
-      },
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Bible photo",
-        "linkHref": "https://canary.invalid/bible",
+        "columnsCount": 2,
+        "columnsGap": 16,
         "contentAlignment": "middle",
-        "width": 240
-      }
-    }
-  },
-  "b3-r18-6": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16,
-        "fontWeight": "normal"
-      },
-      "props": {
-        "markdown": true,
-        "text": "Go far"
-      }
-    }
-  },
-  "b3-r18-7": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16,
-        "fontWeight": "normal"
-      },
-      "props": {
-        "markdown": true,
-        "text": "Go far"
-      }
-    }
-  },
-  "b3-r18-5": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "childrenIds": [
-          "b3-r18-6",
-          "b3-r18-7"
+        "columns": [
+          {
+            "childrenIds": [
+              "b3-r17-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b3-r17-c1"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
         ]
       }
     }
   },
-  "b3-r18-8": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16,
-        "fontWeight": "normal"
-      },
-      "props": {
-        "markdown": true,
-        "text": "Go far"
-      }
-    }
-  },
-  "b3-r18-9": {
-    "type": "Button",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16
-      },
-      "props": {
-        "text": "Go far",
-        "url": "https://canary.invalid/bible",
-        "buttonStyle": "pill",
-        "fullWidth": false,
-        "size": "medium",
-        "customWidth": 140,
-        "borderSize": 1,
-        "borderColor": "#FFFFFF",
-        "buttonBackgroundColor": "#003B4D",
-        "buttonTextColor": "#FFFFFF"
-      }
-    }
-  },
-  "b3-r18-1": {
+  "b3-r17": {
     "type": "Container",
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 16,
+          "right": 16
         }
       },
       "props": {
         "childrenIds": [
-          "b3-r18-2",
-          "b3-r18-3",
-          "b3-r18-4",
-          "b3-r18-5",
-          "b3-r18-8",
-          "b3-r18-9"
-        ]
-      }
-    }
-  },
-  "b3-r18-0": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "childrenIds": [
-          "b3-r18-1"
-        ]
-      }
-    }
-  },
-  "b3-r19-label": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "fontSize": 12,
-        "fontWeight": "normal",
-        "padding": {
-          "top": 12,
-          "bottom": 4,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "markdown": true,
-        "text": "B3.19 · census composition, 10 items: Container ( Container ( Text@center + Button@center + Image:width@center + Container ( Text@center ) + Button@center ) )"
-      }
-    }
-  },
-  "b3-r19-2": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16,
-        "fontWeight": "normal"
-      },
-      "props": {
-        "markdown": true,
-        "text": "Go far"
-      }
-    }
-  },
-  "b3-r19-3": {
-    "type": "Button",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16
-      },
-      "props": {
-        "text": "Go far",
-        "url": "https://canary.invalid/bible",
-        "buttonStyle": "pill",
-        "fullWidth": false,
-        "size": "medium",
-        "customWidth": 140,
-        "borderSize": 1,
-        "borderColor": "#FFFFFF",
-        "buttonBackgroundColor": "#003B4D",
-        "buttonTextColor": "#FFFFFF"
-      }
-    }
-  },
-  "b3-r19-4": {
-    "type": "Image",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        }
-      },
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Bible photo",
-        "linkHref": "https://canary.invalid/bible",
-        "contentAlignment": "middle",
-        "width": 240
-      }
-    }
-  },
-  "b3-r19-6": {
-    "type": "Text",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16,
-        "fontWeight": "normal"
-      },
-      "props": {
-        "markdown": true,
-        "text": "Go far"
-      }
-    }
-  },
-  "b3-r19-5": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "childrenIds": [
-          "b3-r19-6"
-        ]
-      }
-    }
-  },
-  "b3-r19-7": {
-    "type": "Button",
-    "data": {
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 12,
-          "right": 12
-        },
-        "fontSize": 16
-      },
-      "props": {
-        "text": "Go far",
-        "url": "https://canary.invalid/bible",
-        "buttonStyle": "pill",
-        "fullWidth": false,
-        "size": "medium",
-        "customWidth": 140,
-        "borderSize": 1,
-        "borderColor": "#FFFFFF",
-        "buttonBackgroundColor": "#003B4D",
-        "buttonTextColor": "#FFFFFF"
-      }
-    }
-  },
-  "b3-r19-1": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "childrenIds": [
-          "b3-r19-2",
-          "b3-r19-3",
-          "b3-r19-4",
-          "b3-r19-5",
-          "b3-r19-7"
-        ]
-      }
-    }
-  },
-  "b3-r19-0": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "childrenIds": [
-          "b3-r19-1"
+          "b3-r17-cols"
         ]
       }
     }

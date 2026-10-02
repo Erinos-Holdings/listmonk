@@ -58,5 +58,17 @@ const tinyOut = postProcess(tiny, { outlook: true });
 const th = tinyOut.match(/;height:([\d.]+)pt\\"\\x20coordorigin/);
 check('explicit 20px height floored to 2x font: 32px -> 24pt', th && th[1] === '24', th && `h=${th[1]}`);
 
+// BIBLE-OUTLOOK-FIXES-SPEC §12 (IA8): the same Button with a label outside the VML label set
+// (U+2192) falls back to the table-cell button: one href marker between two Safe parts, no VML,
+// the cell width content-box (200 - 0 padding - 2 x 5 border = 190), and — unlike the VML shape —
+// no 2x-font floor on an explicit height (20 - 2 x 5 = 10).
+const fb = postProcess(tiny.replace('Outlook Test', 'Outlook Test →'), { outlook: true });
+check('fallback: the stamped table in two Safe parts around one href marker',
+  /\{\{ Safe "\\x3c!--\[if\\x20mso\]\\x3e\\x3ctable\\x20[^}]*data-lm-btn-fallback=\\"chars\\"[^}]*\\x3ca\\x20href=\\"" \}\}<span data-lm-vml-href="https:\/\/x\.test\/go"><\/span>\{\{ Safe "\\"[^}]*\\x3c!\[endif\]--\\x3e" \}\}/.test(fb)
+    && (fb.match(/<span data-lm-vml-href=/g) || []).length === 1);
+check('fallback: no VML element anywhere', !/v:group|v:roundrect|v:textpath|anchorlock/.test(fb));
+check('fallback: W 200, w 190, h 10 (no Word shape floor on a cell)', /width=\\"200\\"/.test(fb) && /width=\\"190\\"\\x20height=\\"10\\"\\x20valign=\\"middle\\"/.test(fb));
+check('fallback: the mso-hide:all twin is unchanged', /<div class="lm-nomso" style="mso-hide:all"><a href="https:\/\/x.test\/go"[^>]*white-space:nowrap[^>]*>Outlook Test →<\/a><\/div>/.test(fb));
+
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

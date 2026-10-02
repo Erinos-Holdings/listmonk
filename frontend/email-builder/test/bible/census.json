@@ -1,6 +1,6 @@
 {
-  "_comment": "Census facts the bible generator (test/build-bible.cjs) reads -- integrations RENDERING-BIBLE-SPEC §3.6/§3.8. Copied from the read-only census (integrations scripts/census-campaign-structures.ts) so regeneration is deterministic; re-run the census and update this file deliberately.",
-  "source": "structure-census-20261002T043224Z.json (integrations scripts/census-campaign-structures.ts, 2026-10-02T04:32:24Z; Image tokens in the amendment-A1 grammar)",
+  "_comment": "Census facts the bible generator (test/build-bible.cjs) reads -- integrations RENDERING-BIBLE-SPEC §3.6/§3.8. Copied from the read-only census (integrations scripts/census-campaign-structures.ts) so regeneration is deterministic; re-run the census and update this file deliberately. Since integrations BIBLE-OUTLOOK-FIXES-SPEC §12 (SA6) the compositions are read in the version 2 grammar with bare Containers transparent (looked through), so a census row is the arrangement a campaign holds once its bare wrappers are unwrapped.",
+  "source": "structure-census-20261002T180017Z.json (integrations scripts/census-campaign-structures.ts, 2026-10-02T18:00:17Z; version 2 grammar with bare Containers transparent, BIBLE-OUTLOOK-FIXES-SPEC SA2/SA6)",
   "scope": {
     "visualCampaigns": 63,
     "openCampaigns": 32,
@@ -41,32 +41,8 @@
       "items": 21
     },
     {
-      "value": "Container[Image:width@-]",
-      "items": 13
-    },
-    {
-      "value": "Container[Container[Text@center+Button@center+Image:width@-+Container[Text@center+Text@-]+Text@center+Button@center]]",
-      "items": 11
-    },
-    {
-      "value": "Container[Text@center+Button@center+Image:width@-+Container[Text@center+Text@-]+Text@center+Button@center]",
-      "items": 11
-    },
-    {
       "value": "Container[Text@center+Text@-]",
       "items": 11
-    },
-    {
-      "value": "Container[Container[Text@center+Button@center+Image:width@center+Container[Text@center]+Button@center]]",
-      "items": 10
-    },
-    {
-      "value": "Container[Image:height-only@center]",
-      "items": 10
-    },
-    {
-      "value": "Container[Text@center+Button@center+Image:width@center+Container[Text@center]+Button@center]",
-      "items": 10
     },
     {
       "value": "Container[Text@center]",
@@ -81,30 +57,6 @@
       "items": 5
     },
     {
-      "value": "Container[Container[Image:width@-]]",
-      "items": 5
-    },
-    {
-      "value": "Container[Image:width@center]",
-      "items": 5
-    },
-    {
-      "value": "Container[-]",
-      "items": 4
-    },
-    {
-      "value": "Container[Container[-]]",
-      "items": 3
-    },
-    {
-      "value": "Container[Container[Image:width@-]+Image:height-only@center]",
-      "items": 3
-    },
-    {
-      "value": "Container[Image:width@-+Text@-+Button@center]",
-      "items": 3
-    },
-    {
       "value": "Columns[Image:width@-;Image:width@-;-]",
       "items": 2
     },
@@ -117,7 +69,7 @@
       "items": 2
     },
     {
-      "value": "Container[Image:width@-+Text@center+Columns[Image:width@-;Text@center;-]+Columns[Text@center;Image:width@-;-]+Text@center+Button@center]",
+      "value": "Container[Image:height-only@center]",
       "items": 2
     },
     {
@@ -145,31 +97,7 @@
       "items": 1
     },
     {
-      "value": "Container[Columns[Image:width@-;Image:width@-;-]]",
-      "items": 1
-    },
-    {
-      "value": "Container[Container[Image:unsized@-]+Text@-+Image:height-only@center]",
-      "items": 1
-    },
-    {
-      "value": "Container[Container[Image:width@-]+Text@-+Image:height-only@center]",
-      "items": 1
-    },
-    {
-      "value": "Container[Image:unsized@-]",
-      "items": 1
-    },
-    {
-      "value": "Container[Image:width@-+Text@-+Button@center+Image:height-only@center]",
-      "items": 1
-    },
-    {
-      "value": "Container[Image:width@-+Text@center+Button@center+Text@center+Image:width@-]",
-      "items": 1
-    },
-    {
-      "value": "Container[Image:width@center+Text@center+Container[Columns[Image:width@-;Image:width@-;-]]+Text@center+Button@center+Text@center+Image:width@center]",
+      "value": "Container[-]",
       "items": 1
     }
   ]

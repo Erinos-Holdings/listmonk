@@ -2,10 +2,10 @@
 // downlevel-revealed conditional comment, so compiled output must never contain one; the
 // non-Word twin of every VML button and clamped image rides in an element carrying
 // mso-hide:all (a block wrapper; for a table twin, the table AND each of its cells).
-const { pp, canvas, decodeSafe, makeChecker, JSDOM, inlineButton, fullWidthButton, wideImage, headingBlock, twoColumnRow } = require('./_fixtures-hardening.cjs');
+const { pp, canvas, decodeSafe, makeChecker, JSDOM, inlineButton, fullWidthButton, fallbackButton, wideImage, headingBlock, twoColumnRow } = require('./_fixtures-hardening.cjs');
 const { check, done } = makeChecker();
 
-const out = pp.postProcess(canvas(inlineButton + fullWidthButton + wideImage + headingBlock + twoColumnRow), { outlook: true });
+const out = pp.postProcess(canvas(inlineButton + fullWidthButton + fallbackButton + wideImage + headingBlock + twoColumnRow), { outlook: true });
 const rendered = decodeSafe(out);
 
 // I1 — nowhere, in either the stored (Safe-encoded) or the rendered form.
@@ -29,6 +29,13 @@ check('full-width twin table carries the lm-nomso class', wideTable && /\blm-nom
 const wideCells = wideTable ? Array.from(wideTable.querySelectorAll('td')) : [];
 check('every cell of the full-width twin carries mso-hide:all', wideCells.length > 0 && wideCells.every((td) => /mso-hide:\s*all/.test(td.getAttribute('style') || '')));
 check('full-width twin keeps width=100% (fluid for Outlook mobile)', wideTable && wideTable.getAttribute('width') === '100%');
+
+// BIBLE-OUTLOOK-FIXES-SPEC §12 (IA15): the fallback Button's Word copy (the stamped table cell)
+// rides in a downlevel-HIDDEN conditional, and its non-Word twin in an mso-hide:all block.
+check('the fallback table is a downlevel-hidden conditional', /<!--\[if mso\]><table [^>]*data-lm-btn-fallback="chars"[\s\S]*?<\/table><!\[endif\]-->/.test(rendered));
+const fallbackAnchors = Array.from(doc.querySelectorAll('a[href="https://x.test/fallback"]'));
+check('the fallback\'s CSS anchor is wrapped in a block carrying mso-hide:all',
+  fallbackAnchors.length === 1 && fallbackAnchors[0].parentElement.tagName === 'DIV' && /mso-hide:\s*all/.test(fallbackAnchors[0].parentElement.getAttribute('style') || ''), `anchors=${fallbackAnchors.length}`);
 
 // 2026-09-25: an over-wide image is emitted ONCE, clamped, as a real element for every
 // client — no Word conditional and no mso-hide twin (the unclamped twin made the Gmail

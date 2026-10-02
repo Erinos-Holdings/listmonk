@@ -39,6 +39,10 @@ const twoColumnRow = '<div style="padding:16px 24px 16px 24px"><table align="cen
   + '<td style="box-sizing:content-box;vertical-align:top;padding-left:8px;padding-right:0"><div style="padding:8px 8px 8px 8px"><p>Right column survives</p></div></td>'
   + '</tr></tbody></table></div>';
 
+// BIBLE-OUTLOOK-FIXES-SPEC §12 (IA15): a Button outside the VML label set (U+2192), whose Word
+// copy is the stamped table-cell fallback.
+const fallbackButton = `<div style="text-align:center;padding:0px 24px 20px 24px"><a href="https://x.test/fallback" target="_blank" style="color:#FFFFFF;font-size:16px;font-weight:bold;background-color:#1F2937;border-radius:64px;display:inline-block;padding:12px 20px 12px 20px;text-decoration:none">Fallback CTA →</a></div>`;
+
 // Simulated Go render: Safe payloads decode and the href marker becomes its value.
 function decodeSafe(out) {
   return out.replace(/\{\{ Safe "((?:[^"\\]|\\.)*)" \}\}/g, (_, s) =>
@@ -55,5 +59,5 @@ function makeChecker() {
 
 module.exports = {
   JSDOM, pp, canvas, decodeSafe, makeChecker,
-  MODERN_SANS, ARIAL, headingBlock, twoColumnRow, inlineButton, fullWidthButton, wideImage, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv,
+  MODERN_SANS, ARIAL, headingBlock, twoColumnRow, inlineButton, fullWidthButton, fallbackButton, wideImage, modernText, arialText, rhythmModernText, borderedContainer, plainModernText, spacerDiv,
 };

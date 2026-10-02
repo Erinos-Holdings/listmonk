@@ -27,6 +27,9 @@ check('snapshot was taken with the same context and references', JSON.stringify(
 const fixtures = documentFixtures();
 check('fixtures include the three builder documents and the I6 c110-shaped fixture',
   ['campaign108-source.json', 'official-template-14.json', 'official-template-30.json', 'campaign110-shaped.json'].every((f) => fixtures.some((x) => x.file === f)));
+// integrations BIBLE-OUTLOOK-FIXES-SPEC §12 IA13: the snapshot covers the S5 fallback Button too, so
+// a recapture's diff shows exactly what the table-cell fallback changed (and nothing else).
+check('IA13: a fixture holds Buttons that fall back (fallback-buttons.json)', fixtures.some((x) => x.file === 'fallback-buttons.json'));
 check('every fixture has a snapshot entry (a new fixture needs a deliberate re-capture)', fixtures.every((f) => typeof snapshot.outputs[f.file] === 'string'),
   fixtures.filter((f) => typeof snapshot.outputs[f.file] !== 'string').map((f) => f.file).join(','));
 

@@ -858,6 +858,15 @@ type TVmlButtonOptions = {
   // The full-width caller's estimated wrapped line count (transformFullWidthButtonForMso);
   // absent (one line) for an inline Button, whose VML box is sized to its label.
   lines?: number;
+  // BIBLE-OUTLOOK-FIXES-SPEC SA14: an inline Button whose custom width is too narrow for its
+  // label (buildBulletproofButton's fit model) — the `width` cause.
+  narrow?: boolean;
+  // The fallback cell's inputs (§12.3): the anchor's own padding, the Button's width {W} (its
+  // custom width inline, the column budget full width; null when auto) and its explicit CSS
+  // `height` (null when absent).
+  padding?: { top: number; right: number; bottom: number; left: number };
+  boxWidth?: number | null;
+  boxHeight?: number | null;
 };
 
 // Canonical bulletproof VML button — the WHOLE shape is the link (href on the
@@ -904,20 +913,23 @@ const VML_HREF_SENTINEL = '\u0000LM_VML_HREF\u0000';
 //              matched today's label position and size at 11–40 px, bordered, rectangle, long
 //              label, custom box and special characters in Outlook 2024 light and Outlook 2016
 //              at 120 dpi (Downloads/inspect/outlook-fix-candidates-20261002/r2, r3).
-//              A Button whose label VML text cannot carry falls back to exactly today's
-//              'border' output (useTextpathLabel, spec S5). 'font' and 'bgcolor' stay, unused.
+//              A Button whose label VML text cannot carry (spec S5) fell back to the 'border'
+//              output until BIBLE-OUTLOOK-FIXES-SPEC §12 (DA3): it now compiles its Word copy to a
+//              table-cell button stamped with its causes (buildFallbackButton, SA14). 'font',
+//              'bgcolor' and 'border' stay, unused under 'textpath' (SA18).
 export const VML_LABEL_VARIANT: 'font' | 'bgcolor' | 'border' | 'textpath' = 'textpath';
 
 // BIBLE-OUTLOOK-FIXES-SPEC S5. VML text draws ONE line in ONE named font with no proven glyph
-// substitution, and its colour must be a colour VML reads. A Button keeps today's Word copy
-// (the 'border' shape) when its label is empty, when its label is estimated to need more than
+// substitution, and its colour must be a colour VML reads. A Button falls back (since §12, to the
+// table-cell button — buildFallbackButton) when its label is empty, when its label is estimated to need more than
 // one line (a full-width Button past one line, or an inline Button whose custom width is
 // narrower than its label), when its text colour is not a #RGB or #RRGGBB hex, or when its
 // label holds a character outside the printable set below: U+0020–U+007E, U+00A0–U+00AC,
 // U+00AE–U+024F (Latin-1 and Latin Extended without the C1 controls and the soft hyphen),
 // U+2010–U+2027 and U+2030–U+205E (General Punctuation without the U+2000–U+200F spaces and
 // marks, the U+2028–U+202F separators and embedding controls, and U+205F–U+206F) and
-// U+20A0–U+20CF (Currency Symbols). Hazard 54 still applies to those.
+// U+20A0–U+20CF (Currency Symbols). The table-cell fallback is inverted as a pair in dark mode
+// (hazard 54).
 const TEXTPATH_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 const TEXTPATH_LABEL = /^[\u0020-\u007E\u00A0-\u00AC\u00AE-\u024F\u2010-\u2027\u2030-\u205E\u20A0-\u20CF]+$/;
 
@@ -927,12 +939,54 @@ export function textpathLabelAllowed(text: string) {
   return TEXTPATH_LABEL.test(text);
 }
 
+// BIBLE-OUTLOOK-FIXES-SPEC SA14: the S5 causes that hold, in this order, as the stamp names them
+// (`data-lm-btn-fallback`; the review's D4.7 reads the stamp and never re-derives these). The
+// conditions are exactly S5's: no label; a full-width label estimated at more than one line; a
+// custom width too narrow for the label; a text colour that is not #RGB or #RRGGBB; a character
+// outside the label set (an empty label has none).
+export function fallbackCauses(options: Pick<TVmlButtonOptions, 'text' | 'textColor' | 'lines' | 'narrow'>) {
+  const causes: string[] = [];
+  if (options.text === '') causes.push('empty');
+  if ((options.lines ?? 1) > 1) causes.push('lines');
+  if (options.narrow) causes.push('width');
+  if (!TEXTPATH_COLOR.test(options.textColor)) causes.push('colour');
+  if (options.text !== '' && !textpathLabelAllowed(options.text)) causes.push('chars');
+  return causes;
+}
+
 function useTextpathLabel(options: TVmlButtonOptions) {
-  return VML_LABEL_VARIANT === 'textpath'
-    && options.text !== ''
-    && (options.lines ?? 1) <= 1
-    && TEXTPATH_COLOR.test(options.textColor)
-    && textpathLabelAllowed(options.text);
+  return VML_LABEL_VARIANT === 'textpath' && fallbackCauses(options).length === 0;
+}
+
+// The family VML text names (and the fallback's Word font wrapper): the stack's first family on
+// WORD_FONT_ALLOWLIST, else Arial.
+function wordLabelFont(fontFamily: string) {
+  return parseFontStack(fontFamily).find((family) => WORD_FONT_ALLOWSET.has(family.toLowerCase())) ?? 'Arial';
+}
+
+// BIBLE-OUTLOOK-FIXES-SPEC §12.3 (DA3): under 'textpath', the S5 fallback is a Word TABLE-CELL
+// button — byte for byte the markup candidate render GA0 proved (rows K4 and K7–K19 of
+// Downloads/inspect/outlook-fix-candidates-20261002/r4/candidates-r4.html). The fill is the cell's
+// background and the label a link inside it: square corners, only the label is a link, and Word's
+// dark transform inverts the cell and its text TOGETHER, so the label stays readable (the old VML
+// pill kept its fill while its HTML label went dark — hazard 54). Widths are content-box on a Word
+// cell ({w} = {W} less the horizontal padding and both borders, K10/K11) and the height attribute
+// is the content height ({h} = the CSS height less the vertical padding and both borders, K12);
+// neither goes below 1. Word's 2x-font floor for shapes does not apply to a cell. The table is
+// stamped with the causes (SA14).
+function buildFallbackButton(options: TVmlButtonOptions) {
+  const pad = options.padding ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const border = options.borderColor && options.borderWidth > 0 ? options.borderWidth : 0;
+  const W = options.boxWidth ?? null;
+  const w = W !== null ? Math.max(1, W - pad.left - pad.right - 2 * border) : null;
+  const h = options.boxHeight != null ? Math.max(1, options.boxHeight - pad.top - pad.bottom - 2 * border) : null;
+  const fill = escapeAttribute(options.buttonColor);
+  const text = escapeAttribute(options.textColor);
+  return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" data-lm-btn-fallback="${fallbackCauses(options).join(' ')}"${W !== null ? ` width="${W}"` : ''} style="border-collapse:separate">`
+    + `<tr><td align="center" bgcolor="${fill}"${w !== null ? ` width="${w}"` : ''}${h !== null ? ` height="${h}" valign="middle"` : ''}`
+    + ` style="background-color:${fill};padding:${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px;${border > 0 ? `border:${border}px solid ${escapeAttribute(options.borderColor as string)};` : ''}">`
+    + `<font face="${escapeAttribute(wordLabelFont(options.fontFamily))}"><a href="${VML_HREF_SENTINEL}" style="color:${text};font-family:${escapeAttribute(options.fontFamily)};font-size:${options.fontSize}px;font-weight:${escapeAttribute(options.fontWeight)};text-decoration:none">`
+    + `<span style="color:${text}">${escapeHtml(options.text)}</span></a></font></td></tr></table>`;
 }
 
 // The VML text weight: VML has bold or not. `bold`, `bolder` or a numeric weight >= 600.
@@ -949,7 +1003,8 @@ function buildVmlLabel(options: TVmlButtonOptions) {
   switch (VML_LABEL_VARIANT) {
     case 'bgcolor':
       return `<center style="${centerStyle(options.textColor, `background:${escapeAttribute(options.buttonColor)};`)}">${label}</center>`;
-    // 'textpath' reaches here only for an S5 fallback, which is exactly today's 'border' label.
+    // Unreached under 'textpath' since BIBLE-OUTLOOK-FIXES-SPEC §12 (its S5 fallback is the
+    // table-cell button); kept with the 'border' label it had until then (SA18).
     case 'textpath':
     case 'border': {
       const color = options.borderColor ?? options.textColor;
@@ -984,7 +1039,7 @@ function buildVmlButton(options: TVmlButtonOptions) {
     const w10 = Math.round(options.width * 10);
     const h10 = Math.round(options.height * 10);
     const box = `position:absolute;left:0;top:0;width:${w10};height:${h10}`;
-    const font = parseFontStack(options.fontFamily).find((family) => WORD_FONT_ALLOWSET.has(family.toLowerCase())) ?? 'Arial';
+    const font = wordLabelFont(options.fontFamily);
     const fontSize = String(Math.round(options.fontSize * 0.75 * 100) / 100);
     return `<v:group xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" style="width:${pt(options.width)}pt;height:${pt(options.height)}pt" coordorigin="0,0" coordsize="${w10},${h10}">`
       + `<v:roundrect href="${VML_HREF_SENTINEL}" style="${box}" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"/>`
@@ -994,9 +1049,15 @@ function buildVmlButton(options: TVmlButtonOptions) {
       + '</v:shape></v:group>';
   }
 
-  // Every other variant, and the S5 fallback, keeps the canonical shape: <w:anchorlock/>
-  // then <center> (v-text-anchor:middle alone centers; a v:textbox is deliberately absent —
-  // see the comment above). Only the label markup inside the <center> varies (buildVmlLabel).
+  // BIBLE-OUTLOOK-FIXES-SPEC §12.3: under 'textpath' the S5 fallback is the table-cell button.
+  if (VML_LABEL_VARIANT === 'textpath') {
+    return buildFallbackButton(options);
+  }
+
+  // Every other variant keeps the canonical shape: <w:anchorlock/> then <center>
+  // (v-text-anchor:middle alone centers; a v:textbox is deliberately absent — see the comment
+  // above). Only the label markup inside the <center> varies (buildVmlLabel); its 'textpath'
+  // case (the old 'border' label) is no longer reached (SA18 keeps it, unused).
   return `<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${VML_HREF_SENTINEL}" style="height:${pt(options.height)}pt;v-text-anchor:middle;width:${pt(options.width)}pt;" arcsize="${arcsize}%" ${strokeAttrs} fillcolor="${escapeAttribute(options.buttonColor)}"><w:anchorlock/>${buildVmlLabel(options)}</v:roundrect>`;
 }
 
@@ -1124,9 +1185,14 @@ function buildBulletproofButton(anchor: HTMLAnchorElement, wrapperStyle: string)
     // "fits": characters x font size x 0.65 (0.6 when not bold), plus side padding and both
     // borders, inside a border-box width. A hand-typed content-box width over-triggers, which
     // only selects the old shape.
-    lines: explicitWidth !== null
+    // BIBLE-OUTLOOK-FIXES-SPEC SA14: this is the `width` cause (it was carried as lines: 2).
+    narrow: explicitWidth !== null
       && [...text].length * fontSize * (textpathWeight(fontWeight) === 'bold' ? 0.65 : 0.6)
-        + paddingValues.left + paddingValues.right + 2 * borderWidth > explicitWidth ? 2 : 1,
+        + paddingValues.left + paddingValues.right + 2 * borderWidth > explicitWidth,
+    // The fallback cell (§12.3): the anchor's padding, its custom width (auto: none) and height.
+    padding: paddingValues,
+    boxWidth: explicitWidth,
+    boxHeight: explicitHeight,
   });
   // The VML must ride inside the Safe template WITH its conditional markers:
   // emitted raw, the fragment parser rewrites <w:anchorlock/> into an OPEN tag
@@ -1403,6 +1469,10 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
     height,
     // More than one line selects the S5 fallback: VML text draws a single line.
     lines,
+    // The fallback cell (§12.3): the anchor's padding, the column budget, any CSS height.
+    padding,
+    boxWidth: width,
+    boxHeight: getPixelValue(anchorStyleMap.height),
   });
 
   // The non-mso copy stays width="100%" — the fluid form is the only one

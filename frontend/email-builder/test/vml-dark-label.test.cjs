@@ -1,11 +1,10 @@
 // CAMPAIGN-52-HARDENING T3 (I4), superseded for the shipped variant by BIBLE-OUTLOOK-FIXES-SPEC
-// I5. postProcess.ts ships VML_LABEL_VARIANT = 'textpath': the Word label is VML text
+// I5 and, for the S5 fallbacks, §12 (Amendment A) IA8. postProcess.ts ships VML_LABEL_VARIANT = 'textpath': the Word label is VML text
 // (v:textpath) whose colour is a VML attribute Word's dark transform never inverts (hazard 54).
 // A Button outside spec S5 compiles to the §4.3 group — the fill on a self-closed roundrect, the
 // Button's TEXT colour (never its border colour) as the text shape's fillcolor, the escaped label
-// in `string`, no <center>, no anchorlock, no v:textbox. Each S5 case compiles to exactly the
-// 'border' output erinos.188 (b5ceb3ce) shipped — the literals below were captured from that
-// commit's postProcess.ts. Behaviour (Word's dark transform) is external-client rendering —
+// in `string`, no <center>, no anchorlock, no v:textbox. Each S5 case compiles to the §12.3
+// table-cell button, stamped with its cause (until §12: erinos.188's 'border' output). Behaviour (Word's dark transform) is external-client rendering —
 // gates G1/G6, not this suite.
 const { pp, canvas, decodeSafe, makeChecker, inlineButton, fullWidthButton } = require('./_fixtures-hardening.cjs');
 const { check, done } = makeChecker();
@@ -47,16 +46,15 @@ check('a #RGB text colour is passed through as written', /<v:shape [^>]*fillcolo
 const escaped = textpath(styled('', 'Tom &amp; Jerry\'s &lt;50%&gt; "deal" é ü — €5'));
 check('label is attribute-escaped in string', /string="Tom &amp; Jerry's &lt;50%&gt; &quot;deal&quot; é ü — €5"/.test(escaped), escaped);
 
-// ---- S5: each fallback is exactly erinos.188's 'border' output --------------------------------
+// ---- S5: each fallback is the §12.3 table-cell button (BIBLE-OUTLOOK-FIXES-SPEC Amendment A) ----
+// Until §12 each case compiled to exactly erinos.188's 'border' output (the VML pill with an HTML
+// label, which Word inverts in dark mode — hazard 54). Since DA3 the Word copy is a stamped
+// table-cell button; test/button-fallback.test.cjs pins it byte for byte, one case per cause.
+const fallback = (html) => (decodeSafe(pp.postProcess(canvas(html), { outlook: true })).match(/<!--\[if mso\]><table role="presentation" border="0"[\s\S]*?<!\[endif\]-->/) || [''])[0];
+const isFallback = (v) => /^<!--\[if mso\]><table [^>]*data-lm-btn-fallback="[^"]*"/.test(v) && !/<v:|anchorlock|<center/.test(v);
 const inline = (label, color = '#FFFFFF') => `<div style="text-align:center;padding:0px 24px 20px 24px"><a href="https://x.test/go" target="_blank" style="color:${color};font-size:16px;font-weight:bold;background-color:#000000;border-radius:64px;display:inline-block;padding:12px 20px 12px 20px;text-decoration:none;border:2px solid #fbf00b">${label}</a></div>`;
 const full = (label) => `<div style="text-align:center;padding:0px 24px 8px 24px"><a href="https://x.test/wide" style="color:#FFFFFF;font-size:16px;font-weight:bold;background-color:#2563EB;border-radius:4px;display:block;padding:12px 20px 12px 20px;text-decoration:none;width:100%">${label}</a></div>`;
-const BORDER_188 = {
-  empty: "<!--[if mso]><v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"https://x.test/go\" style=\"height:33.75pt;v-text-anchor:middle;width:32.25pt;\" arcsize=\"50%\" strokecolor=\"#fbf00b\" strokeweight=\"1.5pt\" fillcolor=\"#000000\"><w:anchorlock/><center style=\"color:#fbf00b;font-family:Arial, sans-serif;font-size:12pt;font-weight:bold;\"></center></v:roundrect><![endif]-->",
-  multiline: "<!--[if mso]><v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"https://x.test/wide\" style=\"height:47.25pt;v-text-anchor:middle;width:414pt;\" arcsize=\"6%\" strokecolor=\"#2563EB\" strokeweight=\"0.75pt\" fillcolor=\"#2563EB\"><w:anchorlock/><center style=\"color:#2563EB;font-family:Arial, sans-serif;font-size:12pt;font-weight:bold;\">Discover everything new in the autumn collection, every single piece, today and tomorrow</center></v:roundrect><![endif]-->",
-  nonhex: "<!--[if mso]><v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"https://x.test/go\" style=\"height:33.75pt;v-text-anchor:middle;width:113.25pt;\" arcsize=\"50%\" strokecolor=\"#fbf00b\" strokeweight=\"1.5pt\" fillcolor=\"#000000\"><w:anchorlock/><center style=\"color:#fbf00b;font-family:Arial, sans-serif;font-size:12pt;font-weight:bold;\">Inline CTA</center></v:roundrect><![endif]-->",
-  outside: "<!--[if mso]><v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"https://x.test/go\" style=\"height:33.75pt;v-text-anchor:middle;width:88.5pt;\" arcsize=\"50%\" strokecolor=\"#fbf00b\" strokeweight=\"1.5pt\" fillcolor=\"#000000\"><w:anchorlock/><center style=\"color:#fbf00b;font-family:Arial, sans-serif;font-size:12pt;font-weight:bold;\">Shop 今日</center></v:roundrect><![endif]-->",
-  emoji: "<!--[if mso]><v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"https://x.test/go\" style=\"height:33.75pt;v-text-anchor:middle;width:88.5pt;\" arcsize=\"50%\" strokecolor=\"#fbf00b\" strokeweight=\"1.5pt\" fillcolor=\"#000000\"><w:anchorlock/><center style=\"color:#fbf00b;font-family:Arial, sans-serif;font-size:12pt;font-weight:bold;\">Shop 🛍</center></v:roundrect><![endif]-->",
-};
+const STAMP = { empty: 'empty', multiline: 'lines', nonhex: 'colour', outside: 'chars', emoji: 'chars' };
 const cases = {
   empty: inline(''),
   multiline: full('Discover everything new in the autumn collection, every single piece, today and tomorrow'),
@@ -65,26 +63,27 @@ const cases = {
   emoji: inline('Shop 🛍'),
 };
 for (const [name, html] of Object.entries(cases)) {
-  const got = word(html);
-  check(`S5 ${name}: exactly the erinos.188 'border' output`, got === BORDER_188[name], got);
+  const got = fallback(html);
+  check(`S5 ${name}: the table-cell fallback, no VML`, isFallback(got) && word(html) === '', got.slice(0, 200));
+  check(`S5 ${name}: stamped "${STAMP[name]}"`, got.includes(`data-lm-btn-fallback="${STAMP[name]}"`), got.slice(0, 200));
   const raw = pp.postProcess(canvas(html), { outlook: true });
-  check(`S5 ${name}: one href marker (one shape)`, (raw.match(/<span data-lm-vml-href=/g) || []).length === 1);
+  check(`S5 ${name}: one href marker`, (raw.match(/<span data-lm-vml-href=/g) || []).length === 1);
 }
 check('S5: a one-line full-width Button is NOT a fallback', /<v:group /.test(word(fullWidthButton)) && /string="Wide CTA"/.test(word(fullWidthButton)));
 check('S5: a label of U+0020, U+024F, U+2014 and U+20AC is NOT a fallback',
   /<v:group /.test(word(inline('A ɏ — €'))));
-check('S5: a non-hex keyword colour IS a fallback', /<center /.test(word(inline('Go', 'white'))));
+check('S5: a non-hex keyword colour IS a fallback', isFallback(fallback(inline('Go', 'white'))));
 
 
 // ---- review fix F3: a custom-width inline Button whose label does not fit wraps in CSS, so it
-// keeps the wrapping <center> shape; a label that fits still gets the group. Literal captured
-// from b5ceb3ce's postProcess.ts.
+// falls back (since §12: the table-cell button, whose label wraps inside the cell, stamped
+// "width"); a label that fits still gets the group.
 const custom = (label) => `<div style="text-align:center;padding:0px 24px 20px 24px"><a href="https://x.test/go" target="_blank" style="color:#FFFFFF;font-size:16px;font-weight:bold;background-color:#000000;border-radius:64px;display:inline-block;padding:12px 20px 12px 20px;text-decoration:none;border:2px solid #fbf00b;width:120px;box-sizing:border-box">${label}</a></div>`;
-const NARROW_188 = "<!--[if mso]><v:roundrect xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" href=\"https://x.test/go\" style=\"height:33.75pt;v-text-anchor:middle;width:90pt;\" arcsize=\"50%\" strokecolor=\"#fbf00b\" strokeweight=\"1.5pt\" fillcolor=\"#000000\"><w:anchorlock/><center style=\"color:#fbf00b;font-family:Arial, sans-serif;font-size:12pt;font-weight:bold;\">Shop the whole autumn collection</center></v:roundrect><![endif]-->";
-check('F3: a width:120px Button with a long label is exactly the erinos.188 output', word(custom('Shop the whole autumn collection')) === NARROW_188, word(custom('Shop the whole autumn collection')));
+check('F3: a width:120px Button with a long label is the stamped table-cell fallback ("width")',
+  isFallback(fallback(custom('Shop the whole autumn collection'))) && fallback(custom('Shop the whole autumn collection')).includes('data-lm-btn-fallback="width"'), fallback(custom('Shop the whole autumn collection')).slice(0, 200));
 // Re-review R1/R3: the fit model is characters x 16 x 0.65 + side padding (40) + both borders (4)
 // inside the 120 px box. "Shop now" (8 characters, 83.2) fits alone but not with padding.
-check('F3: a label that fits alone but not with its padding and borders is a fallback', /^<!--\[if mso\]><v:roundrect [\s\S]*<center /.test(word(custom('Shop now'))), word(custom('Shop now')).slice(0, 60));
+check('F3: a label that fits alone but not with its padding and borders is a fallback', isFallback(fallback(custom('Shop now'))), fallback(custom('Shop now')).slice(0, 60));
 check('F3: a seven-character label (72.8 + 44 = 116.8) fits and gets the group', /^<!--\[if mso\]><v:group /.test(word(custom('Shop it'))), word(custom('Shop it')).slice(0, 60));
 check('F3: a width:120px Button whose label fits still gets the group', /^<!--\[if mso\]><v:group [^>]*style="width:90pt;/.test(word(custom('Go'))) && /string="Go"/.test(word(custom('Go'))));
 
@@ -100,7 +99,7 @@ for (const n of ALLOWED) check(`F4: ${hex(n)} is inside the label set`, pp.textp
 // every other character arrives as typed.
 const JS_SPACE = new Set([0x00A0, 0x2000, 0x205F]);
 for (const n of FALLS_BACK.filter((x) => !JS_SPACE.has(x))) {
-  check(`F4: a label holding ${hex(n)} compiles to the fallback`, /^<!--\[if mso\]><v:roundrect [\s\S]*<center /.test(word(inline(`Go${cp(n)}far`))));
+  check(`F4: a label holding ${hex(n)} compiles to the fallback`, isFallback(fallback(inline(`Go${cp(n)}far`))));
 }
 for (const n of ALLOWED.filter((x) => !JS_SPACE.has(x))) {
   check(`F4: a label holding ${hex(n)} compiles to the group`, /^<!--\[if mso\]><v:group /.test(word(inline(`Go${cp(n)}far`))));
@@ -108,7 +107,7 @@ for (const n of ALLOWED.filter((x) => !JS_SPACE.has(x))) {
 for (const n of [0x2000, 0x205F]) {
   check(`F4: ${hex(n)} in a label is collapsed to a plain space before the check (never drawn)`, word(inline(`Go${cp(n)}far`)).includes('string="Go far"'));
 }
-check('F4: #ffff (4 digits) falls back', /<center /.test(word(inline('Go', '#ffff'))));
-check('F4: #ffffffff (8 digits) falls back', /<center /.test(word(inline('Go', '#ffffffff'))));
+check('F4: #ffff (4 digits) falls back', isFallback(fallback(inline('Go', '#ffff'))));
+check('F4: #ffffffff (8 digits) falls back', isFallback(fallback(inline('Go', '#ffffffff'))));
 
 done();

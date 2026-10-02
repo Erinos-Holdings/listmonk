@@ -374,5 +374,34 @@ const colsPropsSansColumns = (doc) => { const { columns, ...rest } = doc.cols.da
   check('move parity: the moved block\'s own slot untouched', J(next.box) === J(d.box) && J(next.root.data.childrenIds) === J(['box', 'a']));
 }
 
+// integrations BIBLE-OUTLOOK-FIXES-SPEC §12 IA1: isUnstyledContainer against the SAME case table
+// the integrations review pins its port against (tests/lib/campaign-review/fingerprint-v2.test.ts,
+// BARE_CASES — `isBareContainer` there). The two tables agree by copy; each file names the other.
+{
+  const BARE_CASES = [
+    ['null style', { type: 'Container', data: { style: null, props: { childrenIds: [] } } }, true],
+    ['absent style', { type: 'Container', data: { props: { childrenIds: [] } } }, true],
+    ['empty style', { type: 'Container', data: { style: {}, props: { childrenIds: [] } } }, true],
+    ['a non-object style', { type: 'Container', data: { style: 'padding:0', props: { childrenIds: [] } } }, false],
+    ['zero padding', { type: 'Container', data: { style: { padding: { top: 0, right: 0, bottom: 0, left: 0 } }, props: {} } }, true],
+    ['null padding', { type: 'Container', data: { style: { padding: null }, props: {} } }, true],
+    ['one non-zero padding side', { type: 'Container', data: { style: { padding: { top: 0, right: 0, bottom: 1, left: 0 } }, props: {} } }, false],
+    ['a padding object missing a side', { type: 'Container', data: { style: { padding: { top: 0, right: 0, bottom: 0 } }, props: {} } }, false],
+    ['a non-object padding', { type: 'Container', data: { style: { padding: 0 }, props: {} } }, false],
+    ['background', { type: 'Container', data: { style: { backgroundColor: '#ffffff' }, props: {} } }, false],
+    ['empty-string background', { type: 'Container', data: { style: { backgroundColor: '' }, props: {} } }, true],
+    ['border colour', { type: 'Container', data: { style: { borderColor: '#000000' }, props: {} } }, false],
+    ['empty-string border colour', { type: 'Container', data: { style: { borderColor: '' }, props: {} } }, true],
+    ['radius 0', { type: 'Container', data: { style: { borderRadius: 0 }, props: {} } }, true],
+    ['radius null', { type: 'Container', data: { style: { borderRadius: null }, props: {} } }, true],
+    ['radius 4', { type: 'Container', data: { style: { borderRadius: 4 }, props: {} } }, false],
+    ['radius "0"', { type: 'Container', data: { style: { borderRadius: '0' }, props: {} } }, false],
+    ['an unknown truthy key', { type: 'Container', data: { style: { textAlign: 'center' }, props: {} } }, false],
+    ['an unknown falsy key', { type: 'Container', data: { style: { textAlign: null }, props: {} } }, true],
+    ['a non-Container block', { type: 'Text', data: { style: null, props: { text: 'x' } } }, false],
+  ];
+  for (const [name, block, bare] of BARE_CASES) check(`IA1: ${name} -> ${bare ? 'unstyled' : 'styled'}`, S.isUnstyledContainer(block) === bare, String(S.isUnstyledContainer(block)));
+}
+
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

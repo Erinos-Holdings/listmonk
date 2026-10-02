@@ -30,10 +30,12 @@ check('pipeline: original CSS anchor preserved', /display:block/.test(out) && (o
 const longLabel = 'Discover Everything New In The August Collection Now';
 const wrapInput = input.replace('SHOP NOW', longLabel);
 const wrapOut = foldVmlMarkers(postProcess(wrapInput, { outlook: true }));
-// Two lines select the S5 fallback (VML text draws one line): today's canonical roundrect.
-const wh = wrapOut.match(/height:([\d.]+)pt;v-text-anchor/);
-check('wrapped 2-line label is the S5 fallback (anchorlock + center, no textpath)', /anchorlock/.test(wrapOut) && !/v:textpath/.test(wrapOut));
-check('wrapped 2-line label: 19*2+24+1 hairline=63px -> 47.25pt', wh && wh[1] === '47.25', wh && `h=${wh[1]}`);
+// Two lines select the S5 fallback (VML text draws one line). Since BIBLE-OUTLOOK-FIXES-SPEC §12
+// (DA3) that is the table-cell button stamped "lines": no VML, the cell as wide as the column
+// budget (552) less the padding and the 1px hairline border on both sides (552 - 40 - 2 = 510),
+// and no height — the cell grows with the wrapped label (the old roundrect was 63px = 47.25pt).
+check('wrapped 2-line label is the S5 fallback (stamped table cell, no VML)', /data-lm-btn-fallback=\\"lines\\"/.test(wrapOut) && !/v:textpath|v:roundrect|anchorlock/.test(wrapOut));
+check('wrapped 2-line label: table 552, cell 510, no height', /width=\\"552\\"\\x20style=\\"border-collapse:separate\\"/.test(wrapOut) && /width=\\"510\\"\\x20style=\\"background-color:#0055d4;padding:12px\\x2020px\\x2012px\\x2020px;border:1px\\x20solid\\x20#0055d4;\\"/.test(wrapOut) && !/height=\\"/.test(wrapOut));
 
 // Non-canonical border shorthand still yields the stroke
 const borderInput = input.replace('text-decoration:none">SHOP NOW', 'text-decoration:none;border:solid 5px #e01d1d !important">SHOP NOW');

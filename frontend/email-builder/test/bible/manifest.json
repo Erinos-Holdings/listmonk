@@ -1,5 +1,5 @@
 {
-  "census": "structure-census-20261002T043224Z.json (integrations scripts/census-campaign-structures.ts, 2026-10-02T04:32:24Z; Image tokens in the amendment-A1 grammar)",
+  "census": "structure-census-20261002T180017Z.json (integrations scripts/census-campaign-structures.ts, 2026-10-02T18:00:17Z; version 2 grammar with bare Containers transparent, BIBLE-OUTLOOK-FIXES-SPEC SA2/SA6)",
   "layouts": {
     "common": "EmailLayout|outlook=true|radius=square|backdrop=light|canvas=light",
     "b6": "EmailLayout|outlook=false|radius=square|backdrop=light|canvas=light"
@@ -69,7 +69,7 @@
     },
     {
       "stem": "bible-03-three-columns",
-      "rows": 19,
+      "rows": 17,
       "cells": [
         "Text@-@col3",
         "Text@left@col3",
@@ -86,33 +86,14 @@
         "Image@-@col3",
         "Image@left@col3",
         "Image@center@col3",
-        "Image@right@col3"
+        "Image@right@col3",
+        "Heading@right@columnRowInContainer"
       ],
-      "dropped": [
-        "census composition, 10 items: Container ( Image:height-only@center )",
-        "census composition, 5 items: Columns ( Text@center ; Image:width@- ; - )",
-        "census composition, 5 items: Container ( Container ( Image:width@- ) )",
-        "census composition, 4 items: Container ( - )",
-        "census composition, 3 items: Container ( Container ( - ) )",
-        "census composition, 3 items: Container ( Container ( Image:width@- ) + Image:height-only@center )",
-        "census composition, 3 items: Container ( Image:width@- + Text@- + Button@center )",
-        "census composition, 2 items: Columns ( Image:unsized@- ; Image:unsized@- ; Image:unsized@- )",
-        "census composition, 2 items: Container ( Columns ( Image:unsized@- ; Image:unsized@- ; Image:unsized@- ) )",
-        "census composition, 2 items: Container ( Image:width@- + Text@center + Columns ( Image:width@- ; Text@center ; - ) + Columns ( Text@center ; Image:width@- ; - ) + Text@center + Button@center )",
-        "census composition, 1 items: Columns ( Button@center + Button@center + Button@center + Button@center ; Button@center + Button@center + Button@center + Button@center ; - )",
-        "census composition, 1 items: Columns ( Columns ( Image:width@- ; Image:width@- ; - ) ; Columns ( Image:width@- ; Image:width@- ; - ) ; - )",
-        "census composition, 1 items: Columns ( Image:width@- ; Html@- ; - )",
-        "census composition, 1 items: Columns ( Text@- ; Image:width@- ; - )",
-        "census composition, 1 items: Container ( Container ( Image:unsized@- ) + Text@- + Image:height-only@center )",
-        "census composition, 1 items: Container ( Container ( Image:width@- ) + Text@- + Image:height-only@center )",
-        "census composition, 1 items: Container ( Image:width@- + Text@- + Button@center + Image:height-only@center )",
-        "census composition, 1 items: Container ( Image:width@- + Text@center + Button@center + Text@center + Image:width@- )",
-        "census composition, 1 items: Container ( Image:width@center + Text@center + Container ( Columns ( Image:width@- ; Image:width@- ; - ) ) + Text@center + Button@center + Text@center + Image:width@center )"
-      ]
+      "dropped": []
     },
     {
       "stem": "bible-04-nesting",
-      "rows": 24,
+      "rows": 23,
       "cells": [
         "Text@-@containerInColumn",
         "Text@center@containerInColumn",
@@ -131,7 +112,6 @@
         "Text@right@columnRowInContainer",
         "Heading@-@columnRowInContainer",
         "Heading@center@columnRowInContainer",
-        "Heading@right@columnRowInContainer",
         "Button@-@columnRowInContainer",
         "Button@center@columnRowInContainer",
         "Button@right@columnRowInContainer",
@@ -161,9 +141,22 @@
       "rows": 10,
       "cells": [],
       "dropped": []
+    },
+    {
+      "stem": "bible-07-real-arrangements",
+      "rows": 22,
+      "cells": [],
+      "dropped": []
     }
   ],
   "gaps": [
     "explicit left does not fit B4 (8 rows: containerInColumn, columnRowInContainer): those cells are not in the bible"
+  ],
+  "moved": [
+    {
+      "what": "Heading, aligned right, as a two-column row in a Container",
+      "from": "bible-04-nesting",
+      "to": "bible-03-three-columns"
+    }
   ]
 }

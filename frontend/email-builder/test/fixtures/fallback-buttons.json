@@ -1,0 +1,210 @@
+{
+  "id": null,
+  "name": "fallback-buttons (synthetic: Buttons whose Word copy is the S5 table-cell fallback, beside one that is not; integrations BIBLE-OUTLOOK-FIXES-SPEC §12 IA13)",
+  "body_source": {
+    "root": {
+      "type": "EmailLayout",
+      "data": {
+        "backdropColor": "#F5F5F5",
+        "canvasColor": "#FFFFFF",
+        "textColor": "#262626",
+        "fontFamily": "MODERN_SANS",
+        "outlook": true,
+        "childrenIds": [
+          "t",
+          "f-lines",
+          "f-chars",
+          "f-sized",
+          "ok",
+          "c"
+        ]
+      }
+    },
+    "t": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 16,
+            "right": 24,
+            "bottom": 8,
+            "left": 24
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "Buttons that fall back in Outlook for Windows (integrations BIBLE-OUTLOOK-FIXES-SPEC §12, IA13)."
+        }
+      }
+    },
+    "f-lines": {
+      "type": "Button",
+      "data": {
+        "style": {
+          "textAlign": "center",
+          "padding": {
+            "top": 8,
+            "right": 24,
+            "bottom": 8,
+            "left": 24
+          }
+        },
+        "props": {
+          "text": "Two lines in Outlook: this full-width label wraps onto a second line",
+          "url": "https://canary.invalid/fallback",
+          "size": "medium",
+          "fullWidth": true,
+          "buttonStyle": "rounded",
+          "buttonBackgroundColor": "#003B4D",
+          "buttonTextColor": "#FFFFFF"
+        }
+      }
+    },
+    "f-chars": {
+      "type": "Button",
+      "data": {
+        "style": {
+          "textAlign": "center",
+          "padding": {
+            "top": 8,
+            "right": 24,
+            "bottom": 8,
+            "left": 24
+          }
+        },
+        "props": {
+          "text": "Shop now →",
+          "url": "https://canary.invalid/fallback",
+          "size": "medium",
+          "fullWidth": false,
+          "buttonStyle": "pill",
+          "buttonBackgroundColor": "#003B4D",
+          "buttonTextColor": "#FFFFFF",
+          "borderSize": 2,
+          "borderColor": "#FFFFFF"
+        }
+      }
+    },
+    "f-sized": {
+      "type": "Button",
+      "data": {
+        "style": {
+          "textAlign": "right",
+          "padding": {
+            "top": 8,
+            "right": 24,
+            "bottom": 8,
+            "left": 24
+          }
+        },
+        "props": {
+          "text": "Shop the whole autumn collection",
+          "url": "https://canary.invalid/fallback",
+          "size": "medium",
+          "fullWidth": false,
+          "buttonStyle": "rectangle",
+          "customWidth": 120,
+          "customHeight": 56,
+          "buttonBackgroundColor": "#1F2937",
+          "buttonTextColor": "#FFFFFF"
+        }
+      }
+    },
+    "ok": {
+      "type": "Button",
+      "data": {
+        "style": {
+          "textAlign": "center",
+          "padding": {
+            "top": 8,
+            "right": 24,
+            "bottom": 8,
+            "left": 24
+          }
+        },
+        "props": {
+          "text": "Not a fallback",
+          "url": "https://canary.invalid/fallback",
+          "size": "medium",
+          "fullWidth": false,
+          "buttonStyle": "rounded",
+          "buttonBackgroundColor": "#003B4D",
+          "buttonTextColor": "#FFFFFF"
+        }
+      }
+    },
+    "c": {
+      "type": "ColumnsContainer",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 8,
+            "right": 24,
+            "bottom": 8,
+            "left": 24
+          }
+        },
+        "props": {
+          "columnsCount": 2,
+          "columnsGap": 16,
+          "contentAlignment": "middle",
+          "columns": [
+            {
+              "childrenIds": [
+                "c-f"
+              ]
+            },
+            {
+              "childrenIds": [
+                "c-t"
+              ]
+            },
+            {
+              "childrenIds": []
+            }
+          ]
+        }
+      }
+    },
+    "c-f": {
+      "type": "Button",
+      "data": {
+        "style": {
+          "textAlign": "center",
+          "padding": {
+            "top": 8,
+            "right": 8,
+            "bottom": 8,
+            "left": 8
+          }
+        },
+        "props": {
+          "text": "Go →",
+          "url": "https://canary.invalid/fallback",
+          "size": "small",
+          "fullWidth": true,
+          "buttonStyle": "rounded",
+          "buttonBackgroundColor": "#003B4D",
+          "buttonTextColor": "#FFFFFF"
+        }
+      }
+    },
+    "c-t": {
+      "type": "Text",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 8,
+            "right": 8,
+            "bottom": 8,
+            "left": 8
+          }
+        },
+        "props": {
+          "markdown": true,
+          "text": "Beside a full-width fallback in a column."
+        }
+      }
+    }
+  }
+}

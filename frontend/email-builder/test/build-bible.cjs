@@ -11,8 +11,8 @@
 //                                a plain Button (auto width, no border) at -, left and right at top level (review L6)
 //   B2 two columns               the four types x every alignment, the same block in both columns;
 //                                gap none, valign top/bottom, one fixed-width row
-//   B3 three columns + real mixes the four types x every alignment in all three columns; then the
-//                                census's most common compositions not already present, most common first
+//   B3 three columns             the four types x every alignment in all three columns (the whole grid,
+//                                explicit left included); then any Heading rows moved from B4 (SA12)
 //   B4 nesting                   the four types x every alignment as a Container in each of two
 //                                columns, and as a two-column row inside a Container
 //   B5 colour bands, other blocks ink x ground pairings, Button label x fill, rows either side of both band
@@ -20,6 +20,11 @@
 //                                Button shape x full/inline (+ custom width, bordered), Divider, Spacer,
 //                                Avatar, Image unsized, an Html block, OfficialFooter brand and corporate
 //   B6 layout variants           under Outlook off: the key rows again (§3.10 "one factor at a time")
+//   B7 real arrangements         (BIBLE-OUTLOOK-FIXES-SPEC SA11) three bordered-Container rows, the two
+//                                fallback Buttons (SA13), the redundant-wrapper evidence rows (SA5:
+//                                three twin pairs, each a row followed by the same content in bare
+//                                Containers), any B4 Heading rows B3 had no room for, then the census's
+//                                compositions not already on B1-B4 or earlier on B7, most common first
 //
 // "Every alignment" is absent (`-`), center, right -- and explicit `left`, which the census found in
 // stored bodies (test/bible/census.json), so `left` is a cell in every context too. The values the
@@ -30,9 +35,19 @@
 // its column at a 360 px viewport by the D4.4 estimate (integrations lib/campaign-review/
 // value-rules.ts): a bible render must read clean.
 //
-// Limits (asserted by bible.test.cjs): at most 6 sheets, 40 rows a sheet, and 80,000 compiled bytes
-// a sheet. Over a limit: B3's census compositions are dropped least common first, then B4's Heading
-// rows, and the drop is recorded in manifest.json. Bands, the other blocks and B6 are never dropped.
+// Containers (BIBLE-OUTLOOK-FIXES-SPEC SA4): every Container the generator builds is STYLED --
+// padding on all four sides cycling 8, 16 and 24 px by the row's index on its sheet, no background,
+// no radius -- because a bare Container (style-less, zero padding) is transparent to the review's
+// version 2 matching and would vouch for nothing of its own. The fit estimate subtracts that padding
+// and a bordered Container's two borders. The only bare Containers are B7's four evidence wrappers.
+//
+// Limits (asserted by bible.test.cjs): at most 7 sheets, 40 rows a sheet, and 80,000 compiled bytes
+// a sheet. The overflow rule (SA12), in order: (1) explicit `left` that does not fit B4 is dropped
+// and the gap recorded (B4 only: B3's grid is never dropped); (2) while B4 is still over a limit, its
+// Heading rows move, last first, onto B3 after its grid while B3 stays within the limits, the rest
+// onto B7; (3) while B7 is over
+// a limit, its census rows are dropped least common first. manifest.json records every move and
+// drop; nothing else moves or is dropped, and a sheet still over a limit makes the generator throw.
 //
 // Images are existing listmonk media with a current, clean dark-mode verdict (test/bible/assets.json).
 // Every Image states its sizing mode explicitly (amendment A1 -- version 2 tells `width`,
@@ -51,11 +66,14 @@ const MANIFEST = path.join(BIBLE_DIR, 'manifest.json');
 const CENSUS = JSON.parse(fs.readFileSync(path.join(BIBLE_DIR, 'census.json'), 'utf8'));
 const ASSETS = JSON.parse(fs.readFileSync(path.join(BIBLE_DIR, 'assets.json'), 'utf8'));
 
-const LIMITS = { sheets: 6, rows: 40, bytes: 80000 };
+const LIMITS = { sheets: 7, rows: 40, bytes: 80000 };
 const TYPES = ['Text', 'Heading', 'Button', 'Image'];
 const ALIGNS = ['-', 'left', 'center', 'right'];
 const SIZES = [11, 14, 16, 20, 28, 40];
 const PADS = [0, 8, 24, 48];
+// SA4: a Container's padding on all four sides, by the row's index on its sheet (never 0).
+const CONTAINER_PADS = [8, 16, 24];
+const containerPadOf = (i) => CONTAINER_PADS[i % CONTAINER_PADS.length];
 const LEVELS = ['h3', 'h2', 'h1'];
 const HEADING_SIZE = { h1: 32, h2: 24, h3: 20 };
 const GAP = 16;
@@ -194,7 +212,16 @@ function imageProps(mode, asset, size, alt) {
 // The height-only rows' height: the logo (1200 x 322) renders about 89 px wide, so it fits any column.
 const LOGO_HEIGHT = 24;
 
-const container = (childrenIds, style = {}) => ({ type: 'Container', data: { style: { padding: { top: 0, bottom: 0, left: 0, right: 0 }, ...style }, props: { childrenIds } } });
+// SA4: a styled Container -- `pad` px on all four sides (the row's cycle value), no background, no
+// radius; `style` adds a border colour for B7's bordered rows. `inner(avail, pad, style)` is the
+// width the fit estimate gives a block inside it: less both paddings and, when bordered, both borders.
+const container = (childrenIds, pad, style = {}) => {
+  if (!(pad > 0)) throw new Error('every generated Container is padded (SA4)');
+  return { type: 'Container', data: { style: { padding: { top: pad, bottom: pad, left: pad, right: pad }, ...style }, props: { childrenIds } } };
+};
+const inner = (avail, pad, style = {}) => avail - 2 * pad - (style.borderColor ? 2 : 0);
+// SA5: a BARE Container (the editor's unstyled one): a null style, or zero padding and nothing else.
+const bareContainer = (childrenIds, nullStyle) => ({ type: 'Container', data: { style: nullStyle ? null : { padding: { top: 0, bottom: 0, left: 0, right: 0 } }, props: { childrenIds } } });
 const columns = (cols, props = {}) => ({
   type: 'ColumnsContainer',
   data: {
@@ -203,8 +230,9 @@ const columns = (cols, props = {}) => ({
   },
 });
 
-// A cell row: `type` x `align` placed in `ctx`, with `values` (a row index, or {size, pad, level}). Returns { id, blocks }.
-function cellRow(prefix, type, align, ctx, values) {
+// A cell row: `type` x `align` placed in `ctx`, with `values` (a row index, or {size, pad, level});
+// `rowIndex` (the row's index on its sheet) sets its Containers' padding (SA4). Returns { id, blocks }.
+function cellRow(prefix, type, align, ctx, values, rowIndex) {
   const blocks = {};
   const leaf = (suffix, avail) => {
     const id = `${prefix}-${suffix}`;
@@ -212,11 +240,12 @@ function cellRow(prefix, type, align, ctx, values) {
     return id;
   };
   const half = columnWidth(NARROW, 2);
+  const cp = containerPadOf(rowIndex);
   switch (ctx) {
     case 'top':
       return { id: leaf('x', NARROW), blocks };
     case 'container':
-      blocks[prefix] = container([leaf('x', NARROW)]);
+      blocks[prefix] = container([leaf('x', inner(NARROW, cp))], cp);
       return { id: prefix, blocks };
     case 'col2':
       blocks[prefix] = columns([[leaf('c0', half)], [leaf('c1', half)]]);
@@ -227,21 +256,23 @@ function cellRow(prefix, type, align, ctx, values) {
       return { id: prefix, blocks };
     }
     case 'containerInColumn':
-      blocks[`${prefix}-k0`] = container([leaf('c0', half)]);
-      blocks[`${prefix}-k1`] = container([leaf('c1', half)]);
+      blocks[`${prefix}-k0`] = container([leaf('c0', inner(half, cp))], cp);
+      blocks[`${prefix}-k1`] = container([leaf('c1', inner(half, cp))], cp);
       blocks[prefix] = columns([[`${prefix}-k0`], [`${prefix}-k1`]]);
       return { id: prefix, blocks };
-    case 'columnRowInContainer':
-      blocks[`${prefix}-cols`] = columns([[leaf('c0', half)], [leaf('c1', half)]]);
-      blocks[prefix] = container([`${prefix}-cols`]);
+    case 'columnRowInContainer': {
+      const w = columnWidth(inner(NARROW, cp), 2);
+      blocks[`${prefix}-cols`] = columns([[leaf('c0', w)], [leaf('c1', w)]]);
+      blocks[prefix] = container([`${prefix}-cols`], cp);
       return { id: prefix, blocks };
+    }
     default:
       throw new Error(`unknown context ${ctx}`);
   }
 }
 
 const cellSpecs = (ctx, types = TYPES) =>
-  types.flatMap((type) => ALIGNS.map((align) => ({ what: `${type === 'Image' ? 'Image sized by width' : type}, ${alignLabel(align)}, ${CONTEXT_LABEL[ctx]}`, type, cell: { type, align, ctx }, build: (p, i, values) => cellRow(p, type, align, ctx, values) })));
+  types.flatMap((type) => ALIGNS.map((align) => ({ what: `${type === 'Image' ? 'Image sized by width' : type}, ${alignLabel(align)}, ${CONTEXT_LABEL[ctx]}`, type, cell: { type, align, ctx }, build: (p, i, values) => cellRow(p, type, align, ctx, values, i) })));
 
 // U7 per context class: within one class the padding cycles by its row index, the font size by
 // its index among the class's Text and Button rows, and the Heading level by its index among the
@@ -308,14 +339,16 @@ function parseComposition(s) {
 }
 
 // Build a census composition as one row. `fixed` values: realistic, not cycled (they are not cells).
-function compositionRow(prefix, comp) {
+// Every Container in it takes the row's padding (SA4, `rowIndex` on its sheet).
+function compositionRow(prefix, comp, rowIndex) {
   const blocks = {};
   let k = 0;
   const fixed = { size: 16, pad: 24, level: 'h2' };
+  const cp = containerPadOf(rowIndex);
   const build = (n, avail) => {
     const id = `${prefix}-${k++}`;
     if (n.kind === 'Container') {
-      blocks[id] = container(n.children.map((c) => build(c, avail)));
+      blocks[id] = container(n.children.map((c) => build(c, inner(avail, cp))), cp);
     } else if (n.kind === 'Columns') {
       const used = n.cols.length === 3 && n.cols[2].length ? 3 : 2;
       const w = columnWidth(avail, used);
@@ -332,24 +365,56 @@ function compositionRow(prefix, comp) {
 // The v2 composition tokens (mirrors integrations lib/campaign-review/fingerprint.ts compositionsOfV2)
 // ---------------------------------------------------------------------------------------------
 
+// BIBLE-OUTLOOK-FIXES-SPEC SA1: the editor's unstyled Container (src/documents/structure.ts
+// isUnstyledContainer), ported here because this generator runs without the bundle's modules.
+function isBareContainer(b) {
+  if (!b || b.type !== 'Container') return false;
+  const style = b.data ? b.data.style : null;
+  if (style === null || style === undefined) return true;
+  if (typeof style !== 'object') return false;
+  const emptyPad = (p) => p === null || p === undefined || (typeof p === 'object' && p.top === 0 && p.right === 0 && p.bottom === 0 && p.left === 0);
+  return Object.entries(style).every(([k, v]) => {
+    if (k === 'backgroundColor' || k === 'borderColor') return !v;
+    if (k === 'borderRadius') return v === null || v === undefined || v === 0;
+    if (k === 'padding') return emptyPad(v);
+    return !v;
+  });
+}
+
+// SA9: the Container descriptor's box and border parts -- `cell` when style.padding is an object
+// and a side is above 0 or a background is set (the compile's transformSimpleDivBlocks), else `div`;
+// `border=some` when style.borderColor is truthy. A bare Container has none (`bare`).
+function containerParts(b) {
+  if (isBareContainer(b)) return 'bare';
+  const s = (b && b.data && b.data.style && typeof b.data.style === 'object') ? b.data.style : {};
+  const p = s.padding;
+  const box = p && typeof p === 'object' && (['top', 'right', 'bottom', 'left'].some((k) => typeof p[k] === 'number' && p[k] > 0) || !!s.backgroundColor) ? 'cell' : 'div';
+  return `box=${box}|border=${s.borderColor ? 'some' : 'none'}`;
+}
+
+// SA2/SA8: a bare Container is TRANSPARENT -- no composition of its own; inside a parent its
+// children's tokens stand in its place, recursively; one met again on the same path yields nothing.
+// Consecutive identical tokens in a Container collapse after the splice. Shares IA2's case table
+// with integrations fingerprint-v2.test.ts (bible.test.cjs, IA21).
 const ALIGNED = new Set(['Text', 'Heading', 'Button', 'Image', 'Avatar', 'Html']);
 function compositionsOf(doc) {
-  const tok = (id, seen) => {
+  const toks = (id, seen) => {
     const b = doc[id] || {};
     const p = (b.data && b.data.props) || {};
     const s = (b.data && b.data.style) || {};
-    if ((b.type === 'Container' || b.type === 'ColumnsContainer') && !seen.has(id)) return comp(id, new Set(seen).add(id));
+    if (isBareContainer(b)) return seen.has(id) ? [] : (p.childrenIds || []).flatMap((x) => toks(x, new Set(seen).add(id)));
+    if ((b.type === 'Container' || b.type === 'ColumnsContainer') && !seen.has(id)) return [comp(id, new Set(seen).add(id))];
     const base = b.type === 'Image' ? `Image:${typeof p.width === 'number' ? 'width' : typeof p.height === 'number' ? 'height-only' : 'unsized'}` : b.type;
-    return ALIGNED.has(b.type) ? `${base}@${typeof s.textAlign === 'string' && s.textAlign ? s.textAlign : '-'}` : base;
+    return [ALIGNED.has(b.type) ? `${base}@${typeof s.textAlign === 'string' && s.textAlign ? s.textAlign : '-'}` : base];
   };
   const comp = (id, seen) => {
     const p = (doc[id].data && doc[id].data.props) || {};
-    if (doc[id].type === 'ColumnsContainer') return `Columns[${(p.columns || []).map((c) => (c.childrenIds || []).map((x) => tok(x, seen)).join('+') || '-').join(';')}]`;
-    const t = (p.childrenIds || []).map((x) => tok(x, seen)).filter((x, i, all) => i === 0 || x !== all[i - 1]);
+    if (doc[id].type === 'ColumnsContainer') return `Columns[${(p.columns || []).map((c) => (c.childrenIds || []).flatMap((x) => toks(x, seen)).join('+') || '-').join(';')}]`;
+    const t = (p.childrenIds || []).flatMap((x) => toks(x, seen)).filter((x, i, all) => i === 0 || x !== all[i - 1]);
     return `Container[${t.join('+') || '-'}]`;
   };
   return Object.keys(doc)
-    .filter((id) => doc[id] && (doc[id].type === 'Container' || doc[id].type === 'ColumnsContainer'))
+    .filter((id) => doc[id] && (doc[id].type === 'ColumnsContainer' || (doc[id].type === 'Container' && !isBareContainer(doc[id]))))
     .map((id) => comp(id, new Set([id])));
 }
 
@@ -467,13 +532,130 @@ function b2Extras() {
 
 function b6Specs() {
   return [
-    ...[['Text', 'center'], ['Heading', '-'], ['Button', 'center'], ['Image', '-']].map(([type, align]) => ({ what: `${type}, ${alignLabel(align)}, top level, Outlook off`, build: (p, i) => cellRow(p, type, align, 'top', i) })),
-    { what: 'a Container, Outlook off', build: (p, i) => cellRow(p, 'Text', '-', 'container', i) },
+    ...[['Text', 'center'], ['Heading', '-'], ['Button', 'center'], ['Image', '-']].map(([type, align]) => ({ what: `${type}, ${alignLabel(align)}, top level, Outlook off`, build: (p, i) => cellRow(p, type, align, 'top', i, i) })),
+    { what: 'a Container, Outlook off', build: (p, i) => cellRow(p, 'Text', '-', 'container', i, i) },
     { what: 'two columns, Outlook off', build: (p, i) => columnsRow(p, i, [['Image', '-'], ['Text', 'center']], {}) },
-    { what: 'three columns, Outlook off', build: (p, i) => cellRow(p, 'Text', 'center', 'col3', i) },
+    { what: 'three columns, Outlook off', build: (p, i) => cellRow(p, 'Text', 'center', 'col3', i, i) },
     ...['rectangle', 'rounded', 'pill'].map((shape) => ({ what: `Button, ${shape}, Outlook off`, build: single(button(shape, { buttonStyle: shape })) })),
   ];
 }
+
+// ---------------------------------------------------------------------------------------------
+// BIBLE-OUTLOOK-FIXES-SPEC §12: B7's bordered, fallback and evidence rows (SA11, SA13, SA5)
+// ---------------------------------------------------------------------------------------------
+
+// The row values held fixed on these rows (they are not cells, so nothing is cycled).
+const FIXED = { size: 16, pad: 24, level: 'h2' };
+
+// SA5: three twin pairs, each a row directly followed by the same content with bare Containers at
+// top level, on B7 at (c). `base` is the number of B7 rows before them, so the wrapped row names its twin.
+function evidenceRows(base) {
+  const twinNo = (k) => `B7.${base + 2 * k + 1}`;
+  const image = () => contentBlock('Image', 'right', FIXED, NARROW, 'width');
+  const plain = () => button('Go', { buttonStyle: 'rounded' });
+  const half = columnWidth(NARROW, 2);
+  const textIn = () => contentBlock('Text', 'center', FIXED, half);
+  const buttonIn = () => button('Go', { buttonStyle: 'rounded' }, { padding: padding(24) });
+  const pairRow = (p, wrapped) => {
+    const blocks = { [`${p}-t0`]: textIn(), [`${p}-b0`]: buttonIn(), [`${p}-t1`]: textIn(), [`${p}-b1`]: buttonIn() };
+    if (!wrapped) {
+      blocks[p] = columns([[`${p}-t0`, `${p}-b0`], [`${p}-t1`, `${p}-b1`]]);
+    } else {
+      blocks[`${p}-w0`] = bareContainer([`${p}-t0`, `${p}-b0`], false);
+      blocks[`${p}-w1`] = bareContainer([`${p}-t1`, `${p}-b1`], false);
+      blocks[p] = columns([[`${p}-w0`], [`${p}-w1`]]);
+    }
+    return { id: p, blocks };
+  };
+  return [
+    { what: 'evidence twin: Image sized by width, aligned right, top level', evidence: 'twin', build: single(image()) },
+    {
+      what: `evidence: the same Image alone in a Container with no style (redundant wrapper, must render as ${twinNo(0)})`,
+      evidence: 'wrapped',
+      build: (p) => ({ id: `${p}-w`, blocks: { [`${p}-w`]: bareContainer([`${p}-x`], true), [`${p}-x`]: image() } }),
+    },
+    { what: 'evidence twin: Button, plain (auto width, no border), centred, top level', evidence: 'twin', build: single(plain()) },
+    {
+      what: `evidence: the same Button alone in a Container with zero padding (redundant wrapper, must render as ${twinNo(1)})`,
+      evidence: 'wrapped',
+      build: (p) => ({ id: `${p}-w`, blocks: { [`${p}-w`]: bareContainer([`${p}-x`], false), [`${p}-x`]: plain() } }),
+    },
+    { what: 'evidence twin: two columns, each a Text and a Button', evidence: 'twin', build: (p) => pairRow(p, false) },
+    {
+      what: `evidence: the same row with each column's two blocks grouped in a Container with zero padding (redundant wrapper, must render as ${twinNo(2)})`,
+      evidence: 'wrapped',
+      build: (p) => pairRow(p, true),
+    },
+  ];
+}
+
+// SA11 (a): three bordered-Container rows -- a border colour, padding from SA4's cycle, no radius.
+const BORDER = { borderColor: '#CCCCCC' };
+function borderedRows() {
+  return [
+    {
+      what: 'a bordered Container holding a two-column row (Text centred, Image sized by width)',
+      bordered: true,
+      build: (p, i) => {
+        const cp = containerPadOf(i);
+        const w = columnWidth(inner(NARROW, cp, BORDER), 2);
+        return {
+          id: p,
+          blocks: {
+            [p]: container([`${p}-cols`], cp, BORDER),
+            [`${p}-cols`]: columns([[`${p}-c0`], [`${p}-c1`]]),
+            [`${p}-c0`]: contentBlock('Text', 'center', FIXED, w),
+            [`${p}-c1`]: contentBlock('Image', '-', FIXED, w, 'width'),
+          },
+        };
+      },
+    },
+    {
+      what: 'a bordered Container holding an Image sized by width at 600 (the compile clamps it inside the padding and borders)',
+      bordered: true,
+      build: (p, i) => ({
+        id: p,
+        blocks: {
+          [p]: container([`${p}-x`], containerPadOf(i), BORDER),
+          [`${p}-x`]: { type: 'Image', data: { style: { padding: padding(0, 0) }, props: imageProps('width', ASSETS.photo, 600, 'Bible photo, over-wide') } },
+        },
+      }),
+    },
+    {
+      what: 'a bordered Container holding a Text and then a Button',
+      bordered: true,
+      build: (p, i) => {
+        const cp = containerPadOf(i);
+        return {
+          id: p,
+          blocks: {
+            [p]: container([`${p}-t`, `${p}-b`], cp, BORDER),
+            [`${p}-t`]: contentBlock('Text', 'center', FIXED, inner(NARROW, cp, BORDER)),
+            [`${p}-b`]: button('Go', { buttonStyle: 'rounded' }, { padding: padding(24) }),
+          },
+        };
+      },
+    },
+  ];
+}
+
+// SA13 (b): the two Buttons that fall back in Outlook for Windows -- a full-width label the compile
+// estimates at two lines (cause `lines`) and an inline label ending in U+2192, outside the VML label
+// set (cause `chars`). No other bible Button falls back (bible.test.cjs, IA14).
+const FALLBACK_LINES_LABEL = 'Two lines in Outlook: this full-width label wraps onto a second line';
+const FALLBACK_CHARS_LABEL = 'Shop now \u2192';
+function fallbackRows() {
+  return [
+    { what: 'fallback Button: full width, a label on two lines (Outlook for Windows: the table-cell button)', fallback: 'lines', build: single(button(FALLBACK_LINES_LABEL, { fullWidth: true })) },
+    { what: 'fallback Button: inline, a label ending in an arrow (Outlook for Windows: the table-cell button)', fallback: 'chars', build: single(button(FALLBACK_CHARS_LABEL, {})) },
+  ];
+}
+
+// Pin each cell row's cycled values (U7) to the row, so a row that later moves sheets keeps them.
+const pinCycles = (specs) => {
+  const cycles = cellCycles(specs);
+  return specs.map((s, i) => (cycles[i] ? { ...s, values: cycles[i] } : s));
+};
 
 // ---------------------------------------------------------------------------------------------
 // Sheets
@@ -486,7 +668,7 @@ function buildDoc(layout, specs, sheetNo) {
     const prefix = `b${sheetNo}-r${pad2(i + 1)}`;
     const labelId = `${prefix}-label`;
     doc[labelId] = labelBlock(`B${sheetNo}.${i + 1} · ${spec.what}`);
-    const { id, blocks } = spec.build(prefix, i, cycles[i] || i);
+    const { id, blocks } = spec.build(prefix, i, spec.values || cycles[i] || i);
     Object.assign(doc, blocks);
     doc.root.data.childrenIds.push(labelId, id);
   });
@@ -500,6 +682,7 @@ const SHEETS = [
   { n: 4, slug: 'nesting' },
   { n: 5, slug: 'colour-and-blocks' },
   { n: 6, slug: 'layout-variants' },
+  { n: 7, slug: 'real-arrangements' },
 ];
 const stemOf = (s) => `bible-${pad2(s.n)}-${s.slug}`;
 
@@ -551,48 +734,70 @@ function buildBible(EB) {
   );
   const b2 = [...cells('col2'), ...b2Extras(), ...plainShapes];
   record(SHEETS[1], buildDoc(common, b2, 2), b2);
-  // B4 before B3, so B3's census rows skip what B4 already holds. Over a limit, first the §3.6
-  // `left` fallback (explicit left beyond top level does not fit: those rows go, the gap is
-  // recorded), then B4's Heading rows.
-  let b4 = [...cells('containerInColumn'), ...cells('columnRowInContainer')];
-  let b4Dropped = [];
-  if (!fits(buildDoc(common, b4, 4)) && leftEverywhere) {
-    const left = b4.filter((s) => s.cell.align === 'left');
-    b4 = b4.filter((s) => s.cell.align !== 'left');
-    b4Dropped = left.map((s) => s.what);
-    manifest.gaps.push(`explicit left does not fit B4 (${left.length} rows: ${[...new Set(left.map((s) => s.cell.ctx))].join(', ')}): those cells are not in the bible`);
-  }
-  if (!fits(buildDoc(common, b4, 4))) {
-    b4Dropped = [...b4Dropped, ...b4.filter((s) => s.type === 'Heading').map((s) => s.what)];
-    b4 = b4.filter((s) => s.type !== 'Heading');
-  }
-  const b5 = b5Specs();
-  const b6 = b6Specs();
-  const b4Doc = buildDoc(common, b4, 4);
-  const b5Doc = buildDoc(common, b5, 5);
-  const b6Doc = buildDoc(outlookOff, b6, 6);
+  // SA12 step 1 (the parent's §3.6 `left` rule, B4 only): explicit `left` beyond top level that
+  // does not fit B4 is dropped and the gap recorded. B3's grid is never dropped (it throws).
+  const dropLeft = (specs, sheetNo) => {
+    if (fits(buildDoc(common, specs, sheetNo)) || !leftEverywhere) return { specs, dropped: [] };
+    const left = specs.filter((s) => s.cell && s.cell.align === 'left');
+    manifest.gaps.push(`explicit left does not fit B${sheetNo} (${left.length} rows: ${[...new Set(left.map((s) => s.cell.ctx))].join(', ')}): those cells are not in the bible`);
+    return { specs: specs.filter((s) => !left.includes(s)), dropped: left.map((s) => s.what) };
+  };
 
-  // B3: the three-column cells, then the census compositions not already present, most common first.
-  const b3Cells = cells('col3');
-  const present = new Set([...Object.values(out), b4Doc, b5Doc, b6Doc, buildDoc(common, b3Cells, 3)].flatMap(compositionsOf));
+  // B4 (SA12 steps 1 and 2). Its rows' cycled values are pinned before anything moves, so a moved
+  // row is the same row on its new sheet (only its Containers' padding follows its new index, SA4).
+  const b4Left = dropLeft([...cells('containerInColumn'), ...cells('columnRowInContainer')], 4);
+  let b4 = pinCycles(b4Left.specs);
+  const b4Dropped = b4Left.dropped;
+  const movedOut = [];
+  while (!fits(buildDoc(common, b4, 4))) {
+    const headings = b4.filter((s) => s.type === 'Heading');
+    if (!headings.length) break; // record() throws: B4 holds nothing more that may move
+    const last = headings[headings.length - 1];
+    movedOut.unshift(last);
+    b4 = b4.filter((s) => s !== last);
+  }
+  const movedRow = (spec, to) => ({ ...spec, what: `${spec.what} (moved from B4)`, movedTo: to });
+
+  // B3: the whole three-column grid, then the moved Heading rows (document order) while B3 fits.
+  const b3 = pinCycles(cells('col3'));
+  const toB7 = [];
+  for (const spec of movedOut) {
+    const row = movedRow(spec, 3);
+    if (!toB7.length && fits(buildDoc(common, [...b3, row], 3))) b3.push(row);
+    else toB7.push(movedRow(spec, 7));
+  }
+  record(SHEETS[2], buildDoc(common, b3, 3), b3);
+  record(SHEETS[3], buildDoc(common, b4, 4), b4, b4Dropped);
+  manifest.moved = movedOut.map((spec, k) => ({ what: spec.what, from: stemOf(SHEETS[3]), to: stemOf(k < movedOut.length - toB7.length ? SHEETS[2] : SHEETS[6]) }));
+
+  // B5, B6.
+  const b5 = b5Specs();
+  record(SHEETS[4], buildDoc(common, b5, 5), b5);
+  const b6 = b6Specs();
+  record(SHEETS[5], buildDoc(outlookOff, b6, 6), b6);
+
+  // B7 (SA11): (a) bordered rows, (b) the fallback Buttons, (c) the SA5 evidence rows, (d) the moved
+  // rows B3 had no room for, then (e) the census compositions not present on B1-B4 (B5 and B6 do not
+  // count) or earlier on B7,
+  // most common first. Over a limit, census rows go least common first (SA12 step 3).
+  const b7Lead = [...borderedRows(), ...fallbackRows()];
+  const b7Head = [...b7Lead, ...evidenceRows(b7Lead.length), ...toB7];
+  const present = new Set([...['bible-01-flat-alignment', 'bible-02-two-columns', 'bible-03-three-columns', 'bible-04-nesting'].map((st) => out[st]), buildDoc(common, b7Head, 7)].flatMap(compositionsOf));
   const candidates = [];
   for (const c of CENSUS.compositions) {
     if (present.has(c.value)) continue;
     // A kept row also brings its nested containers' compositions: a later census entry equal to
     // one of them is already present.
-    compositionsOf(compositionRow('probe', c.value).blocks).forEach((x) => present.add(x));
+    compositionsOf(compositionRow('probe', c.value, 0).blocks).forEach((x) => present.add(x));
     // The label spells the composition with spaces, so it wraps like any text (and reads clean).
     const spelled = c.value.replace(/\[/g, ' ( ').replace(/\]/g, ' ) ').replace(/;/g, ' ; ').replace(/\+/g, ' + ').replace(/\s+/g, ' ').trim();
-    candidates.push({ what: `census composition, ${c.items} items: ${spelled}`, composition: c.value, items: c.items, build: (p) => compositionRow(p, c.value) });
+    candidates.push({ what: `census composition, ${c.items} items: ${spelled}`, composition: c.value, items: c.items, build: (p, i) => compositionRow(p, c.value, i) });
   }
   // Drop least common first = keep the longest most-common-first prefix that fits.
   let keep = candidates.length;
-  while (keep > 0 && !fits(buildDoc(common, [...b3Cells, ...candidates.slice(0, keep)], 3))) keep -= 1;
-  const b3 = [...b3Cells, ...candidates.slice(0, keep)];
-  record(SHEETS[2], buildDoc(common, b3, 3), b3, candidates.slice(keep).map((c) => c.what));
-  record(SHEETS[3], b4Doc, b4, b4Dropped);
-  record(SHEETS[4], b5Doc, b5);
-  record(SHEETS[5], b6Doc, b6);
+  while (keep > 0 && !fits(buildDoc(common, [...b7Head, ...candidates.slice(0, keep)], 7))) keep -= 1;
+  const b7 = [...b7Head, ...candidates.slice(0, keep)];
+  record(SHEETS[6], buildDoc(common, b7, 7), b7, candidates.slice(keep).map((c) => c.what));
   manifest.sheets.sort((a, b) => (a.stem < b.stem ? -1 : 1));
   if (!leftEverywhere) manifest.gaps.push('the census found no explicit `left`: it is a cell at top level only');
   return { documents: out, manifest };
@@ -654,4 +859,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { BIBLE_DIR, MANIFEST, LIMITS, TYPES, ALIGNS, SIZES, PADS, CONTEXTS, GAP, NARROW, CANVAS, buildBible, bibleFiles, compiledBytes, compositionsOf, parseComposition, runWidth, columnWidth, fileOf, serialize };
+module.exports = { BIBLE_DIR, MANIFEST, LIMITS, TYPES, ALIGNS, SIZES, PADS, CONTAINER_PADS, CONTEXTS, GAP, NARROW, CANVAS, FALLBACK_LINES_LABEL, FALLBACK_CHARS_LABEL, buildBible, bibleFiles, compiledBytes, compositionsOf, containerParts, isBareContainer, parseComposition, runWidth, columnWidth, fileOf, serialize };

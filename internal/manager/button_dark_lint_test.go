@@ -216,3 +216,45 @@ func TestButtonDarkLintTextpath(t *testing.T) {
 		}
 	})
 }
+
+// fallbackButton is integrations BIBLE-OUTLOOK-FIXES-SPEC §12's S5 fallback as the rendered mail
+// carries it: the stamped Word-only table cell (the label a link inside a cell whose background
+// is the fill) and the mso-hide:all twin.
+func fallbackButton(fill, label, text string) string {
+	return `<!--[if mso]><table role="presentation" border="0" cellpadding="0" cellspacing="0" data-lm-btn-fallback="chars" style="border-collapse:separate">` +
+		`<tr><td align="center" bgcolor="` + fill + `" style="background-color:` + fill + `;padding:12px 20px 12px 20px;border:2px solid ` + label + `;">` +
+		`<font face="Arial"><a href="https://x.test/l" style="color:` + label + `;font-family:Arial, sans-serif;font-size:16px;font-weight:bold;text-decoration:none">` +
+		`<span style="color:` + label + `">` + text + `</span></a></font></td></tr></table><![endif]-->` +
+		`<div class="lm-nomso" style="mso-hide:all"><a href="https://x.test/l" style="background-color:` + fill + `;color:` + label + `">` + text + `</a></div>`
+}
+
+// integrations BIBLE-OUTLOOK-FIXES-SPEC §12 IA10 -- the lint reads only <v:roundrect> with a
+// <center> label, so it is silent on the table-cell fallback, campaign 49's colours included (Word
+// inverts the cell and its text together); it still warns on an old <center> button beside one.
+// The same cases are copied into integrations tests/fixtures/campaign-review/render-warnings.json.
+func TestButtonDarkLintFallbackTable(t *testing.T) {
+	for _, c := range []struct{ name, body string }{
+		{"campaign 49's colours as a fallback button", fallbackButton("#F5F5F5", "#000000", "FOLLOW US →")},
+		{"light label on a dark fill", fallbackButton("#000000", "#FFFFFF", "Shop →")},
+	} {
+		t.Run("silent: "+c.name, func(t *testing.T) {
+			if w := ButtonDarkModeWarnings(c.body); len(w) != 0 {
+				t.Fatalf("expected no warnings on the fallback shape, got %v", w)
+			}
+		})
+	}
+
+	t.Run("the old <center> shape still warns, beside a fallback button", func(t *testing.T) {
+		body := fallbackButton("#F5F5F5", "#000000", "New →") + vmlButton("#F5F5F5", "#000000", "Old")
+		w := ButtonDarkModeWarnings(body)
+		if len(w) != 1 || w[0] != `Button "Old"`+buttonWarnSuffix {
+			t.Fatalf("expected exactly the old-shape warning, got %v", w)
+		}
+	})
+
+	t.Run("RenderWarnings is silent on a fallback-only body", func(t *testing.T) {
+		if w := RenderWarnings([]byte("<html><body>" + fallbackButton("#F5F5F5", "#000000", "Follow →") + "</body></html>")); len(w) != 0 {
+			t.Fatalf("expected no render warnings, got %v", w)
+		}
+	})
+}
