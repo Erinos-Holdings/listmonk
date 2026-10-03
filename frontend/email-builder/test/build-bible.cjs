@@ -831,6 +831,16 @@ function buildBible(EB) {
       // The label spells the composition with spaces, so it wraps like any text (and reads clean).
       const spelled = c.value.replace(/\[/g, ' ( ').replace(/\]/g, ' ) ').replace(/;/g, ' ; ').replace(/\+/g, ' + ').replace(/\s+/g, ' ').trim();
       const row = { what: `census composition, ${c.items} items: ${spelled}`, composition: c.value, items: c.items, build: (p, i) => compositionRow(p, c.value, i) };
+      // BIBLE-OUTLOOK-FIXES-SPEC §15 (SD1): a composition holding an unsized Image inside a column
+      // row is never built. Word draws an unsized image at its file size and a photo wider than its
+      // column blows the whole email out (sheet 7, Outlook 2024, 2026-10-03); the compile cannot clamp
+      // it (Word ignores a stylesheet width on an image; only the attribute counts, and that reaches
+      // every client), so the bible cannot vouch for the shape. The review's D4.8 warns on it instead.
+      // The editor's width auto-fill (IMAGE-WIDTH-SPEC) means a stored unsized image is a relic.
+      if (/Columns\[[^\]]*Image:unsized/.test(c.value)) {
+        dropped.push(row);
+        continue;
+      }
       if (kept.length >= n) {
         dropped.push(row);
         continue;

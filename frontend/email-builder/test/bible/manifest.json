@@ -144,9 +144,12 @@
     },
     {
       "stem": "bible-07-real-arrangements",
-      "rows": 24,
+      "rows": 22,
       "cells": [],
-      "dropped": []
+      "dropped": [
+        "census composition, 2 items: Columns ( Image:unsized@- ; Image:unsized@- ; Image:unsized@- )",
+        "census composition, 2 items: Container ( Columns ( Image:unsized@- ; Image:unsized@- ; Image:unsized@- ) )"
+      ]
     }
   ],
   "gaps": [

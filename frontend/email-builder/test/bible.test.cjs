@@ -460,6 +460,11 @@ try {
     const spell = (v) => v.replace(/\[/g, ' ( ').replace(/\]/g, ' ) ').replace(/;/g, ' ; ').replace(/\+/g, ' + ').replace(/\s+/g, ' ').trim();
     const missingComps = CENSUS.compositions.filter((c) => !all.has(c.value) && !b7Dropped.some((w) => w === `census composition, ${c.items} items: ${spell(c.value)}`));
     check('IA14: every census composition is in the bible or recorded as dropped', missingComps.length === 0, missingComps.map((c) => c.value).join(' | '));
+    // BIBLE-OUTLOOK-FIXES-SPEC §15 SD1: no built row holds an unsized Image inside a column row, and
+    // every census composition that does is recorded as dropped (D4.8 warns on the shape instead).
+    const unsizedInColumns = CENSUS.compositions.filter((c) => /Columns\[[^\]]*Image:unsized/.test(c.value));
+    check('SD1: a census composition with an unsized Image in a column is never built', !compositionsOf(d7).some((v) => /Columns\[[^\]]*Image:unsized/.test(v)));
+    check('SD1: each such composition is recorded as dropped on B7', unsizedInColumns.length > 0 && unsizedInColumns.every((c) => b7Dropped.includes(`census composition, ${c.items} items: ${spell(c.value)}`)), unsizedInColumns.map((c) => c.value).join(' | '));
   }
 
   // IA14 / SA12: every move and drop is recorded. The full grid of cell rows a sheet was built from,
