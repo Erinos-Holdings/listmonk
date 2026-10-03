@@ -39,7 +39,13 @@
         "b8-r15-label",
         "b8-r15",
         "b8-r16-label",
-        "b8-r16"
+        "b8-r16",
+        "b8-r17-label",
+        "b8-r17-x",
+        "b8-r18-label",
+        "b8-r18-x",
+        "b8-r19-label",
+        "b8-r19-x"
       ]
     }
   },
@@ -1339,6 +1345,122 @@
             ]
           }
         ]
+      }
+    }
+  },
+  "b8-r17-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.17 · Image sized by width at 600, not linked, top level (fluid: it must fit a phone with no zoom)"
+      }
+    }
+  },
+  "b8-r17-x": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo, not linked, at the canvas width",
+        "contentAlignment": "middle",
+        "width": 600
+      }
+    }
+  },
+  "b8-r18-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.18 · Image sized by width at 240, not linked, aligned center, top level"
+      }
+    }
+  },
+  "b8-r18-x": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Bible photo, not linked",
+        "contentAlignment": "middle",
+        "width": 240
+      }
+    }
+  },
+  "b8-r19-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.19 · Image declared at 140 px whose file is 104 px wide, not linked, aligned center (does it draw 140 everywhere?)"
+      }
+    }
+  },
+  "b8-r19-x": {
+    "type": "Image",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Bible icon, declared wider than its file",
+        "contentAlignment": "middle",
+        "width": 140
       }
     }
   }

@@ -208,6 +208,16 @@ try {
     check('SE2: B8\'s inline rows cycle -, left, center and right', ['-', 'left', 'center', 'right'].every((a) => inlineAligns.has(a)), [...inlineAligns].join(','));
     const wide = Object.values(d8).filter((b) => b && b.type === 'Button' && !b.data.props.fullWidth && b.data.props.customWidth > 109);
     check('SE2: every custom width on B8 fits a third of the 360 px viewport', wide.length === 0, String(wide.length));
+    // §16 SE1, review M2/M3: the fluid-image evidence rows -- the only unlinked Images in the bible,
+    // one at the canvas width and one declared wider than its file.
+    const ASSETS = JSON.parse(fs.readFileSync(path.join(__dirname, 'bible', 'assets.json'), 'utf8'));
+    const naturalOf = (url) => (Object.values(ASSETS).find((a) => a && a.url === url) || {}).width;
+    const images = stems.flatMap((s) => Object.values(docs[s]).filter((b) => b && b.type === 'Image').map((b) => ({ s, p: b.data.props })));
+    const unlinkedImages = images.filter((x) => !x.p.linkHref);
+    check('SE1: B8 holds the three unlinked Images, and no other sheet holds one', unlinkedImages.length === 3 && unlinkedImages.every((x) => x.s === 'bible-08-button-sizes'), unlinkedImages.map((x) => x.s).join(','));
+    check('SE1: one unlinked Image is declared at the canvas width', unlinkedImages.some((x) => x.p.width === 600));
+    const upscaled = images.filter((x) => typeof x.p.width === 'number' && naturalOf(x.p.url) < x.p.width);
+    check('SE1: exactly one Image is declared wider than its file (104 px at 140), on B8', upscaled.length === 1 && upscaled[0].s === 'bible-08-button-sizes' && upscaled[0].p.width === 140 && naturalOf(upscaled[0].p.url) === 104, JSON.stringify(upscaled.map((x) => [x.s, x.p.width])));
   }
 
   // Cells.

@@ -1549,8 +1549,9 @@ function clampImageWidths(node: Element, available: number) {
       // max-width:100% to shrink it. The Gmail apps (Android and iOS) size the layout from
       // the width ATTRIBUTE: a width="600" image beside a Text column pushed the row past
       // the canvas, and Gmail's overflow mode scaled the page and left-aligned every centered
-      // block below. The clamped width is right for every client (max-width:100% stays as
-      // the fluid belt), so the twin is gone and no conditional is needed here at all.
+      // block below. The clamped width is right for every client (fluidImages later turns it
+      // into width:100%;max-width:<clamped>px), so the twin is gone and no conditional is
+      // needed here at all.
       replaceNodeWithHtml(img, clampedImage.outerHTML);
     }
     return;
@@ -1732,9 +1733,11 @@ function markFencedImages(doc: Document) {
 // and draws the same <n> px wherever there is room. The `width` ATTRIBUTE stays: it is the only
 // thing Word reads (§15 GD0). Candidate render GE0: Gmail Android full size, Outlook 2024 and
 // Gmail iOS unchanged. Only an image hardenImages left as `width:<n>px` + `height:auto` with a
-// matching attribute qualifies: a height-only image, an unsized one, an Avatar (px height), the
-// tracking pixel (no style) and an author's Html image are untouched. Runs after the final
-// hardenImages, so the clamp's px width is what becomes the max-width.
+// matching attribute qualifies: a height-only image, an unsized one and an author's Html image
+// (an OfficialFooter's icons included: they are fenced) are untouched; an Avatar is width-sized
+// once hardened, so it is fluid at its own size. Runs after the final hardenImages, so the
+// clamp's px width is what becomes the max-width. Where the file is narrower than the declared
+// width a fluid image may draw at the file's width outside Word (bible sheet 8's last row shows it).
 function fluidImages(doc: Document) {
   doc.querySelectorAll('img').forEach((img) => {
     if (img.hasAttribute(FLUID_FENCE_ATTR)) {

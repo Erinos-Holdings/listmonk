@@ -10,8 +10,9 @@ const { postProcess } = require(path.join(__dirname, '.build', 'postProcess.cjs'
 // 108, 2026-10-03). A width-sized image now compiles to `width:100%;max-width:<n>px` with its
 // `width` attribute kept (the only thing Word reads). Pins:
 //   a width-sized image, at its own width or clamped  -> fluid, attribute = the px width
-//   a height-only image, an unsized image, an Avatar-like image with a px height,
-//   an image with no style (the tracking pixel) and an author's Html-block image -> untouched
+//   an Avatar (width-sized once hardened)                -> fluid at its own size
+//   a height-only image, an unsized image, an image with no style and an author's
+//   Html-block image                                     -> untouched
 //   no mark attribute reaches the output; flag off -> nothing changes.
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }

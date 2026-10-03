@@ -602,7 +602,24 @@ function b8Specs() {
       },
     };
   });
-  return [...full, ...inline];
+  return [...full, ...inline, ...fluidImageRows()];
+}
+
+// §16 SE1, review M2/M3: every other bible Image is LINKED (it sits in an inline-block anchor) and
+// declared at or below its file's width, so those sheets cannot show how a fluid image behaves
+// without the anchor or when it is declared wider than its file. Three rows at the end of B8 do:
+// an unlinked image at the canvas width, an unlinked centred one, and the 104 px icon declared at 140.
+const unlinked = (props) => {
+  const { linkHref: _link, ...rest } = props;
+  return rest;
+};
+function fluidImageRows() {
+  const img = (style, props) => single({ type: 'Image', data: { style, props } });
+  return [
+    { what: 'Image sized by width at 600, not linked, top level (fluid: it must fit a phone with no zoom)', fluid: 'wide', build: img({ padding: padding(0, 0) }, unlinked(imageProps('width', ASSETS.photo, 600, 'Bible photo, not linked, at the canvas width'))) },
+    { what: 'Image sized by width at 240, not linked, aligned center, top level', fluid: 'centred', build: img({ textAlign: 'center', padding: padding(48, 16) }, unlinked(imageProps('width', ASSETS.photo, 240, 'Bible photo, not linked'))) },
+    { what: 'Image declared at 140 px whose file is 104 px wide, not linked, aligned center (does it draw 140 everywhere?)', fluid: 'upscaled', build: img({ textAlign: 'center', padding: padding(48, 16) }, unlinked(imageProps('width', ASSETS.icon, 140, 'Bible icon, declared wider than its file'))) },
+  ];
 }
 
 // ---------------------------------------------------------------------------------------------
