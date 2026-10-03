@@ -1,7 +1,7 @@
 // integrations RENDERING-BIBLE-SPEC I13 -- the rendering bible (test/build-bible.cjs):
 //
 //   - regenerating reproduces the committed files byte for byte (and leaves no stale bible file);
-//   - at most 7 sheets, at most 40 rows a sheet, each sheet compiles to at most 80,000 bytes;
+//   - at most 8 sheets, at most 40 rows a sheet, each sheet compiles to at most 80,000 bytes;
 //   - every cell of {Text, Heading, Button, Image} x {-, center, right} x {top level, Container,
 //     each column of 2, each column of 3, Container in a column, column row in a Container} is
 //     present -- read from the documents' structure, not from the manifest;
@@ -182,7 +182,33 @@ try {
     if (s === 'bible-07-real-arrangements') check(`${s}: exactly the two fallback Buttons, causes lines and chars (SA13)`, JSON.stringify(stamps) === JSON.stringify(['lines', 'chars']), JSON.stringify(stamps));
     else check(`${s}: no Button falls back (SA13)`, stamps.length === 0, JSON.stringify(stamps));
   }
-  check(`exactly ${LIMITS.sheets} sheets (SA11)`, stems.length === LIMITS.sheets && LIMITS.sheets === 7 && stems.includes('bible-07-real-arrangements'), stems.join(', '));
+  check(`exactly ${LIMITS.sheets} sheets (SA11; §16 SE2 adds B8)`, stems.length === LIMITS.sheets && LIMITS.sheets === 8 && stems.includes('bible-07-real-arrangements') && stems.includes('bible-08-button-sizes'), stems.join(', '));
+
+  // integrations BIBLE-OUTLOOK-FIXES-SPEC §16 SE2 / IE2: every Button BOX of every shape is in the
+  // bible -- a box is (shape, full, custom width, custom height, border), custom width ignored while
+  // full width is on (Button.tsx) -- and B8 itself holds the ten non-plain boxes of each shape, its
+  // inline rows cycling the alignment. (That no B8 Button falls back is the per-sheet check above.)
+  {
+    const boxOf = (p) => [p.buttonStyle ?? 'rounded', p.fullWidth ? 'full' : 'inline', !p.fullWidth && p.customWidth > 0 ? 'W' : '-', p.customHeight > 0 ? 'H' : '-', p.borderSize > 0 ? 'B' : '-'].join('|');
+    const boxesIn = (doc) => new Set(Object.values(doc).filter((b) => b && b.type === 'Button').map((b) => boxOf(b.data.props || {})));
+    const all = new Set(stems.flatMap((s) => [...boxesIn(docs[s])]));
+    const want = [];
+    for (const shape of ['rectangle', 'rounded', 'pill']) {
+      for (const h of ['-', 'H']) for (const b of ['-', 'B']) want.push([shape, 'full', '-', h, b].join('|'));
+      for (const w of ['-', 'W']) for (const h of ['-', 'H']) for (const b of ['-', 'B']) want.push([shape, 'inline', w, h, b].join('|'));
+    }
+    const missingBoxes = want.filter((x) => !all.has(x));
+    check('SE2: all 36 Button boxes (12 a shape) are in the bible', want.length === 36 && missingBoxes.length === 0, missingBoxes.join(', '));
+    const d8 = docs['bible-08-button-sizes'];
+    const b8 = boxesIn(d8);
+    const plain = (x) => /\|-\|-\|-$/.test(x) || /\|full\|-\|-\|-$/.test(x);
+    const b8Missing = want.filter((x) => !plain(x) && !b8.has(x));
+    check('SE2: B8 holds the ten non-plain boxes of each shape', b8Missing.length === 0 && d8.root.data.outlook === true, b8Missing.join(', '));
+    const inlineAligns = new Set(Object.values(d8).filter((b) => b && b.type === 'Button' && !b.data.props.fullWidth).map((b) => b.data.style.textAlign ?? '-'));
+    check('SE2: B8\'s inline rows cycle -, left, center and right', ['-', 'left', 'center', 'right'].every((a) => inlineAligns.has(a)), [...inlineAligns].join(','));
+    const wide = Object.values(d8).filter((b) => b && b.type === 'Button' && !b.data.props.fullWidth && b.data.props.customWidth > 109);
+    check('SE2: every custom width on B8 fits a third of the 360 px viewport', wide.length === 0, String(wide.length));
+  }
 
   // Cells.
   const present = new Set();

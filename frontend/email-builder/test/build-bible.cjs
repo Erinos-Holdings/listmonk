@@ -30,6 +30,10 @@
 //                                three twin pairs, each a row followed by the same content in bare
 //                                Containers), any B4 Heading rows B3 had no room for, then the census's
 //                                compositions not already on B1-B4 or earlier on B7, most common first
+//   B8 button sizes              (BIBLE-OUTLOOK-FIXES-SPEC §16 SE2) every Button BOX (shape, full/inline,
+//                                custom width, custom height, border) of every shape: the four full-width
+//                                boxes one row a shape at top level, the eight inline boxes as three-column
+//                                rows (one shape a column), alignment cycling by row
 //
 // "Every alignment" is absent (`-`), center, right -- and explicit `left`, which the census found in
 // stored bodies (test/bible/census.json), so `left` is a cell in every context too. The values the
@@ -47,7 +51,7 @@
 // and a bordered Container's two borders. The only bare Containers are B7's four evidence wrappers;
 // the only other unpadded one is B7's zero-padding background row (SA11 a).
 //
-// Limits (asserted by bible.test.cjs): at most 7 sheets, 40 rows a sheet, and 80,000 compiled bytes
+// Limits (asserted by bible.test.cjs): at most 8 sheets, 40 rows a sheet, and 80,000 compiled bytes
 // a sheet. The overflow rule (SA12), in order: (1) explicit `left` that does not fit B4 is dropped
 // and the gap recorded (B4 only: B3's grid is never dropped); (2) while B4 is still over a limit, its
 // Heading rows move, last first, onto B3 after its grid while B3 stays within the limits, the rest
@@ -72,7 +76,7 @@ const MANIFEST = path.join(BIBLE_DIR, 'manifest.json');
 const CENSUS = JSON.parse(fs.readFileSync(path.join(BIBLE_DIR, 'census.json'), 'utf8'));
 const ASSETS = JSON.parse(fs.readFileSync(path.join(BIBLE_DIR, 'assets.json'), 'utf8'));
 
-const LIMITS = { sheets: 7, rows: 40, bytes: 80000 };
+const LIMITS = { sheets: 8, rows: 40, bytes: 80000 };
 const TYPES = ['Text', 'Heading', 'Button', 'Image'];
 const ALIGNS = ['-', 'left', 'center', 'right'];
 const SIZES = [11, 14, 16, 20, 28, 40];
@@ -547,6 +551,61 @@ function b6Specs() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// BIBLE-OUTLOOK-FIXES-SPEC §16 SE2: B8 -- Button sizes
+// ---------------------------------------------------------------------------------------------
+
+// A Button's BOX is its shape and four size settings. `customWidth` is ignored by the block while
+// `fullWidth` is on (src/documents/blocks/Button/Button.tsx), so a shape has 12 boxes: 4 full-width
+// (height auto|custom x border none|some) and 8 inline (width x height x border). The review vouches
+// a Button by its box, its alignment and its colour bands separately (integrations coverage.ts), so
+// this sheet renders every box of every shape once instead of every combination.
+const SHAPES = ['rectangle', 'rounded', 'pill'];
+const B8_HEIGHTS = [48, 56, 64];
+const B8_COLUMN_WIDTH = 96; // fits a third of the 360 px viewport: (360 - 2 x 16) / 3 = 109
+const B8_BORDER = { borderSize: 2, borderColor: '#FFFFFF' };
+// The two PLAIN boxes (auto size, no border: full width and inline) are B5's `Button, <shape>, full
+// width|inline` rows for every shape, so B8 builds the other ten -- all twelve would put the sheet
+// over the 80,000-byte limit (36 VML Buttons compiled to 82,496 bytes).
+const isPlain = (b) => !b.width && !b.height && !b.border;
+const B8_FULL = [false, true].flatMap((height) => [false, true].map((border) => ({ full: true, width: false, height, border }))).filter((b) => !isPlain(b));
+const B8_INLINE = [false, true].flatMap((width) => [false, true].flatMap((height) => [false, true].map((border) => ({ full: false, width, height, border })))).filter((b) => !isPlain(b));
+const boxLabel = (b) => [b.full ? 'full width' : `inline, ${b.width ? 'custom' : 'auto'} width`, `${b.height ? 'custom' : 'auto'} height`, b.border ? 'bordered' : 'no border'].join(', ');
+const boxProps = (b, shape, k) => ({
+  buttonStyle: shape,
+  fullWidth: b.full,
+  ...(b.width ? { customWidth: B8_COLUMN_WIDTH } : {}),
+  ...(b.height ? { customHeight: B8_HEIGHTS[k % B8_HEIGHTS.length] } : {}),
+  ...(b.border ? B8_BORDER : {}),
+});
+function b8Specs() {
+  const full = B8_FULL.flatMap((b, n) =>
+    SHAPES.map((shape, s) => ({
+      what: `Button box: ${shape}, ${boxLabel(b)}, top level`,
+      box: { shape, ...b },
+      build: single(button('Go far', boxProps(b, shape, n * SHAPES.length + s))),
+    })),
+  );
+  const inline = B8_INLINE.map((b, n) => {
+    const align = ALIGNS[n % ALIGNS.length];
+    return {
+      what: `Button box: ${boxLabel(b)}, ${alignLabel(align)}; rectangle, rounded and pill in three columns`,
+      boxes: SHAPES.map((shape) => ({ shape, ...b })),
+      build: (p) => {
+        const blocks = {};
+        const cols = SHAPES.map((shape, s) => {
+          const id = `${p}-c${s}`;
+          blocks[id] = button('Go', boxProps(b, shape, n + s), { padding: padding(0), ...(align === '-' ? { textAlign: undefined } : { textAlign: align }) });
+          return [id];
+        });
+        blocks[p] = columns(cols);
+        return { id: p, blocks };
+      },
+    };
+  });
+  return [...full, ...inline];
+}
+
+// ---------------------------------------------------------------------------------------------
 // BIBLE-OUTLOOK-FIXES-SPEC §12: B7's bordered, fallback and evidence rows (SA11, SA13, SA5)
 // ---------------------------------------------------------------------------------------------
 
@@ -713,6 +772,7 @@ const SHEETS = [
   { n: 5, slug: 'colour-and-blocks' },
   { n: 6, slug: 'layout-variants' },
   { n: 7, slug: 'real-arrangements' },
+  { n: 8, slug: 'button-sizes' },
 ];
 const stemOf = (s) => `bible-${pad2(s.n)}-${s.slug}`;
 
@@ -858,6 +918,9 @@ function buildBible(EB) {
   const { kept, dropped } = censusRows(keep);
   const b7 = [...b7Head, ...kept];
   record(SHEETS[6], buildDoc(common, b7, 7), b7, dropped.map((c) => c.what));
+  // B8 (§16 SE2): every Button box of every shape.
+  const b8 = b8Specs();
+  record(SHEETS[7], buildDoc(common, b8, 8), b8);
   manifest.sheets.sort((a, b) => (a.stem < b.stem ? -1 : 1));
   if (!leftEverywhere) manifest.gaps.push('the census found no explicit `left`: it is a cell at top level only');
   return { documents: out, manifest };

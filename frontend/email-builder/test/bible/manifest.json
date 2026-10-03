@@ -150,6 +150,12 @@
         "census composition, 2 items: Columns ( Image:unsized@- ; Image:unsized@- ; Image:unsized@- )",
         "census composition, 2 items: Container ( Columns ( Image:unsized@- ; Image:unsized@- ; Image:unsized@- ) )"
       ]
+    },
+    {
+      "stem": "bible-08-button-sizes",
+      "rows": 16,
+      "cells": [],
+      "dropped": []
     }
   ],
   "gaps": [

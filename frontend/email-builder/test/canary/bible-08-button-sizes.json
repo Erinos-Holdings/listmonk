@@ -1,0 +1,1345 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "textColor": "#262626",
+      "fontFamily": "MODERN_SANS",
+      "outlook": true,
+      "childrenIds": [
+        "b8-r01-label",
+        "b8-r01-x",
+        "b8-r02-label",
+        "b8-r02-x",
+        "b8-r03-label",
+        "b8-r03-x",
+        "b8-r04-label",
+        "b8-r04-x",
+        "b8-r05-label",
+        "b8-r05-x",
+        "b8-r06-label",
+        "b8-r06-x",
+        "b8-r07-label",
+        "b8-r07-x",
+        "b8-r08-label",
+        "b8-r08-x",
+        "b8-r09-label",
+        "b8-r09-x",
+        "b8-r10-label",
+        "b8-r10",
+        "b8-r11-label",
+        "b8-r11",
+        "b8-r12-label",
+        "b8-r12",
+        "b8-r13-label",
+        "b8-r13",
+        "b8-r14-label",
+        "b8-r14",
+        "b8-r15-label",
+        "b8-r15",
+        "b8-r16-label",
+        "b8-r16"
+      ]
+    }
+  },
+  "b8-r01-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.1 · Button box: rectangle, full width, auto height, bordered, top level"
+      }
+    }
+  },
+  "b8-r01-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r02-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.2 · Button box: rounded, full width, auto height, bordered, top level"
+      }
+    }
+  },
+  "b8-r02-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r03-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.3 · Button box: pill, full width, auto height, bordered, top level"
+      }
+    }
+  },
+  "b8-r03-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r04-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.4 · Button box: rectangle, full width, custom height, no border, top level"
+      }
+    }
+  },
+  "b8-r04-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 48
+      }
+    }
+  },
+  "b8-r05-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.5 · Button box: rounded, full width, custom height, no border, top level"
+      }
+    }
+  },
+  "b8-r05-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 56
+      }
+    }
+  },
+  "b8-r06-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.6 · Button box: pill, full width, custom height, no border, top level"
+      }
+    }
+  },
+  "b8-r06-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 64
+      }
+    }
+  },
+  "b8-r07-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.7 · Button box: rectangle, full width, custom height, bordered, top level"
+      }
+    }
+  },
+  "b8-r07-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 48,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r08-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.8 · Button box: rounded, full width, custom height, bordered, top level"
+      }
+    }
+  },
+  "b8-r08-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 56,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r09-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.9 · Button box: pill, full width, custom height, bordered, top level"
+      }
+    }
+  },
+  "b8-r09-x": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": true,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 64,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r10-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.10 · Button box: inline, auto width, auto height, bordered, no alignment; rectangle, rounded and pill in three columns"
+      }
+    }
+  },
+  "b8-r10-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r10-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r10-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r10": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b8-r10-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r10-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r10-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b8-r11-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.11 · Button box: inline, auto width, custom height, no border, aligned left; rectangle, rounded and pill in three columns"
+      }
+    }
+  },
+  "b8-r11-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 56
+      }
+    }
+  },
+  "b8-r11-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 64
+      }
+    }
+  },
+  "b8-r11-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 48
+      }
+    }
+  },
+  "b8-r11": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b8-r11-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r11-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r11-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b8-r12-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.12 · Button box: inline, auto width, custom height, bordered, aligned center; rectangle, rounded and pill in three columns"
+      }
+    }
+  },
+  "b8-r12-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 64,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r12-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 48,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r12-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customHeight": 56,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r12": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b8-r12-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r12-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r12-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b8-r13-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.13 · Button box: inline, custom width, auto height, no border, aligned right; rectangle, rounded and pill in three columns"
+      }
+    }
+  },
+  "b8-r13-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96
+      }
+    }
+  },
+  "b8-r13-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96
+      }
+    }
+  },
+  "b8-r13-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96
+      }
+    }
+  },
+  "b8-r13": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b8-r13-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r13-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r13-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b8-r14-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.14 · Button box: inline, custom width, auto height, bordered, no alignment; rectangle, rounded and pill in three columns"
+      }
+    }
+  },
+  "b8-r14-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r14-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r14-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r14": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b8-r14-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r14-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r14-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b8-r15-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.15 · Button box: inline, custom width, custom height, no border, aligned left; rectangle, rounded and pill in three columns"
+      }
+    }
+  },
+  "b8-r15-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "customHeight": 64
+      }
+    }
+  },
+  "b8-r15-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "customHeight": 48
+      }
+    }
+  },
+  "b8-r15-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "customHeight": 56
+      }
+    }
+  },
+  "b8-r15": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b8-r15-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r15-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r15-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "b8-r16-label": {
+    "type": "Text",
+    "data": {
+      "style": {
+        "fontSize": 12,
+        "fontWeight": "normal",
+        "padding": {
+          "top": 12,
+          "bottom": 4,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "markdown": true,
+        "text": "B8.16 · Button box: inline, custom width, custom height, bordered, aligned center; rectangle, rounded and pill in three columns"
+      }
+    }
+  },
+  "b8-r16-c0": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "customHeight": 48,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r16-c1": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "rounded",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "customHeight": 56,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r16-c2": {
+    "type": "Button",
+    "data": {
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/bible",
+        "size": "medium",
+        "fullWidth": false,
+        "buttonStyle": "pill",
+        "buttonBackgroundColor": "#003B4D",
+        "buttonTextColor": "#FFFFFF",
+        "customWidth": 96,
+        "customHeight": 64,
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      }
+    }
+  },
+  "b8-r16": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "b8-r16-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r16-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "b8-r16-c2"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

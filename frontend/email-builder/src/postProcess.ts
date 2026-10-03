@@ -1716,6 +1716,46 @@ function markFencedTables(doc: Document) {
   doc.querySelectorAll('[data-lm-user-html] table').forEach((table) => table.setAttribute(WORD_COLUMN_FENCE_ATTR, ''));
 }
 
+// BIBLE-OUTLOOK-FIXES-SPEC §16 SE1: the same fence problem for images. An author's own <img> in
+// an Html block is marked while the fence still exists, so fluidImages leaves it byte-identical;
+// the mark never reaches compiled output.
+const FLUID_FENCE_ATTR = 'data-lm-fluid-fenced';
+
+function markFencedImages(doc: Document) {
+  doc.querySelectorAll('[data-lm-user-html] img').forEach((img) => img.setAttribute(FLUID_FENCE_ATTR, ''));
+}
+
+// BIBLE-OUTLOOK-FIXES-SPEC §16 SE1: a width-sized image is FLUID. `width:<n>px;max-width:100%`
+// inside the builder's auto-width tables gives the cell a minimum width of <n>: Android's WebView
+// then lays the mail out at the canvas width and the Gmail app zooms the whole mail out to about
+// 65 % (sheet 7 and campaign 108, 2026-10-03). `width:100%;max-width:<n>px` has no such minimum
+// and draws the same <n> px wherever there is room. The `width` ATTRIBUTE stays: it is the only
+// thing Word reads (§15 GD0). Candidate render GE0: Gmail Android full size, Outlook 2024 and
+// Gmail iOS unchanged. Only an image hardenImages left as `width:<n>px` + `height:auto` with a
+// matching attribute qualifies: a height-only image, an unsized one, an Avatar (px height), the
+// tracking pixel (no style) and an author's Html image are untouched. Runs after the final
+// hardenImages, so the clamp's px width is what becomes the max-width.
+function fluidImages(doc: Document) {
+  doc.querySelectorAll('img').forEach((img) => {
+    if (img.hasAttribute(FLUID_FENCE_ATTR)) {
+      img.removeAttribute(FLUID_FENCE_ATTR);
+      return;
+    }
+    const attr = img.getAttribute('width');
+    if (!attr || !/^\d+$/.test(attr)) {
+      return;
+    }
+    const styleMap = parseStyleMap(img.getAttribute('style'));
+    if ((styleMap.width || '').toLowerCase() !== `${attr}px` || (styleMap.height || '').toLowerCase() !== 'auto') {
+      return;
+    }
+    img.setAttribute('style', setStyleValues(img.getAttribute('style'), [
+      ['width', '100%'],
+      ['max-width', `${attr}px`],
+    ]));
+  });
+}
+
 // BIBLE-OUTLOOK-FIXES-SPEC §4.4 / S6 / S11: the Word half of the column-width fix. One
 // conditional <style> in <head>, carried in a Safe payload (the mechanism the document-settings
 // block in utils.tsx uses), with one flat rule per distinct `lm-cw-<n>` width, ascending:
@@ -1772,6 +1812,7 @@ export function postProcess(html: string, options: { outlook: boolean }) {
 
   if (options.outlook) {
     markFencedTables(doc);
+    markFencedImages(doc);
     addTableDefaults(doc);
     hardenImages(doc);
     transformButtonBlocks(doc);
@@ -1785,6 +1826,7 @@ export function postProcess(html: string, options: { outlook: boolean }) {
     addGmailButtonPinStyles(doc);
     addTableDefaults(doc);
     hardenImages(doc);
+    fluidImages(doc);
     addWordColumnWidthStyles(doc);
   }
 

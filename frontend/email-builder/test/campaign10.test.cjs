@@ -48,16 +48,17 @@ check('no downlevel-revealed conditional in the output', !output.includes('!mso'
 check('no image inside an [if mso] block', output.indexOf(MSO_OPEN + '<img') === -1);
 check('no image inside an mso-hide:all wrapper', output.indexOf(NONMSO_OPEN + '<img') === -1);
 
-// 5. Clamped image: style width follows, max-width:100% kept as the fluid belt
-check('clamped image style width:270px', /<img[^>]*width="270"[^>]*style="[^"]*width:270px/.test(output));
-check('clamped image keeps max-width:100%', /<img[^>]*width="270"[^>]*style="[^"]*max-width:100%/.test(output));
+// 5. Clamped image: fluid at the clamped width (integrations BIBLE-OUTLOOK-FIXES-SPEC §16 SE1 --
+// `width:100%;max-width:<clamped>px`, the width attribute kept for Word)
+check('clamped image style max-width:270px', /<img[^>]*width="270"[^>]*style="[^"]*max-width:270px/.test(output));
+check('clamped image style width:100%', /<img[^>]*width="270"[^>]*style="(?:[^"]*;)?width:100%/.test(output));
 
 // 5b. Padded table-wrapping divs convert to td-carried boxes (Word drops div padding)
 check('grid-row wrapper div converted to padded td', /<td style="padding:16px 24px 8px 24px">/.test(output));
 check('zero-padding structural wrappers stay divs', /<div style="padding:0px 0px 0px 0px"><table align="center"/.test(output));
 
 // 6. Structure sanity
-check('canvas max-width:600px still present once', (output.match(/max-width:600px/g) || []).length === 1);
+check('canvas max-width:600px still present once', (output.match(/<table[^>]*max-width:600px/g) || []).length === 1);
 check('button markup preserved', /border:1px solid #999999">COLLABS<\/a>/.test(output));
 check('only the head [if mso] block is a literal comment', (output.match(/<!--\[if mso\]>/g) || []).length === 1);
 
