@@ -35,6 +35,9 @@ check('full-width twin keeps width=100% (fluid for Outlook mobile)', wideTable &
 check('full-width twin table is wrapped in a block div carrying mso-hide:all and lm-nomso',
   wideTable && wideTable.parentElement.tagName === 'DIV' && /mso-hide:\s*all/.test(wideTable.parentElement.getAttribute('style') || '') && /\blm-nomso\b/.test(wideTable.parentElement.getAttribute('class') || ''));
 check('the wrapper holds the twin table alone', wideTable && wideTable.parentElement.children.length === 1);
+// §14 GC2 (candidate render, 2026-10-03): Word paints the block ANCHOR's own box, so the anchor
+// itself must carry mso-hide:all — the one declaration that hides the twin. Fails when reverted.
+check('the full-width twin anchor carries mso-hide:all', /mso-hide:\s*all/.test(wideAnchor.getAttribute('style') || ''));
 
 // BIBLE-OUTLOOK-FIXES-SPEC §12 (IA15): the fallback Button's Word copy (the stamped table cell)
 // rides in a downlevel-HIDDEN conditional, and its non-Word twin in an mso-hide:all block.

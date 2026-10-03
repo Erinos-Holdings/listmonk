@@ -1493,10 +1493,13 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
       .forEach((cell) => cell.setAttribute('style', appendMissingStyles(cell.getAttribute('style'), [['mso-hide', 'all']])));
   });
 
-  // Word ignored the per-cell declaration (Outlook 2024, light and dark, bible sheet 5
-  // 2026-10-02: the twin painted beneath the VML copy — the first Word render of this path),
-  // while the inline Button's block `div` wrapper is honoured. So the twin table also gets
-  // that same wrapper (BIBLE-OUTLOOK-FIXES-SPEC §14); the table and cell declarations stay.
+  // Word painted the twin beneath the VML copy regardless (Outlook 2024, light and dark, bible
+  // sheet 5 2026-10-02 — the first Word render of this path): what it paints is the ANCHOR's
+  // own block box (display:block, its background-color), which neither the cell's nor a
+  // wrapping div's declaration reaches. The candidate render of 2026-10-03 (BIBLE-OUTLOOK-
+  // FIXES-SPEC §14, GC2) showed mso-hide:all on the anchor is what hides it; the table, cell
+  // and wrapper declarations stay as belt and braces.
+  anchor.setAttribute('style', appendMissingStyles(anchor.getAttribute('style'), [['mso-hide', 'all']]));
   replaceNodeWithHtml(table, [
     wrapMsoVml(vml, href),
     `<div class="${NON_MSO_CLASS}" style="${NON_MSO_HIDE_STYLE}">${table.outerHTML}</div>`,
