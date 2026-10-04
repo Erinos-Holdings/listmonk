@@ -52,6 +52,17 @@ const listed = manifest.sheets.map((s) => s.stem).sort();
 check('every catalog-*.json is a manifest sheet and every sheet has its file', JSON.stringify(files) === JSON.stringify(listed), `${files} vs ${listed}`);
 check('the catalog holds at least one sheet', files.length > 0);
 
+// U15 (RENDER-CATALOG-SPEC §6.5): the representative sheets — bought on every client — together
+// hold every family the catalog's units carry; the others are bought on the exact clients only.
+const reps = manifest.sheets.filter((s) => s.representative === true);
+check('the manifest marks at least one representative sheet', reps.length > 0);
+check(`at most ${manifest.limits.stopRepresentative} representative sheets (${reps.length})`, reps.length <= manifest.limits.stopRepresentative);
+const familiesOf = (sheets) => new Set(sheets.flatMap((s) => s.units.map((u) => u.family)).filter((f) => typeof f === 'string'));
+const allFamilies = familiesOf(manifest.sheets);
+const repFamilies = familiesOf(reps);
+const uncovered = [...allFamilies].filter((f) => !repFamilies.has(f));
+check(`the representative sheets cover every family in the manifest (${allFamilies.size})`, allFamilies.size > 0 && uncovered.length === 0, uncovered.join(', '));
+
 const umdSha = sha256(fs.readFileSync(DEFAULT_UMD));
 const sameBundle = umdSha === manifest.bundleSha256;
 const { dom, EB } = loadUmd();
@@ -90,6 +101,41 @@ for (const f of fs.readdirSync(PANELS).filter((x) => x.endsWith('SidebarPanel.ts
   const stale = [...named].filter((c) => !controls.has(c));
   check(`I23: ${panel}: the axis table names no control the panel lacks`, stale.length === 0, stale.join(', '));
 }
+
+// I23 (review M4): every OPTION VALUE the panels offer is named too — a new toggle value (an H4
+// level, a Button size) or a new font is as invisible to the control-name check as a new compile
+// branch. Each panel's RadioGroupInput toggle values, the shared alignment and weight toggles for
+// every `style.textAlign` / `style.fontWeight` entry, and every fontFamily.ts key for every font
+// control, must be among the entry's values, second, proved or options.
+const named = (c) => new Set([...(c.values || []), c.second, ...(c.proved || []), ...(c.options || [])].filter((v) => v !== undefined && v !== null).map(String));
+const entry = (panel, control) => manifest.axisTable.find((c) => c.panel === panel && c.control === control);
+const HELPERS = path.join(PANELS, 'helpers', 'inputs');
+const toggles = (src) => [...src.matchAll(/<ToggleButton value="([^"]+)"/g)].map((m) => m[1]);
+const SHARED = {
+  'style.textAlign': toggles(fs.readFileSync(path.join(HELPERS, 'TextAlignInput.tsx'), 'utf8')),
+  'style.fontWeight': toggles(fs.readFileSync(path.join(HELPERS, 'FontWeightInput.tsx'), 'utf8')),
+};
+const FONT_KEYS = [...fs.readFileSync(path.join(__dirname, '..', 'src', 'documents', 'blocks', 'helpers', 'fontFamily.ts'), 'utf8').matchAll(/key: '([A-Z_]+)'/g)].map((m) => m[1]);
+check('fontFamily.ts lists the editor\'s fonts', FONT_KEYS.length >= 20, FONT_KEYS.length);
+function optionGaps(panel, src) {
+  const gaps = [];
+  for (const m of src.matchAll(/<RadioGroupInput\s+label="([^"]+)"([\s\S]*?)<\/RadioGroupInput>/g)) {
+    const c = entry(panel, m[1]);
+    if (!c || c.class === 'excluded' || c.class === 'fixed') continue;
+    for (const v of toggles(m[2])) if (!named(c).has(v)) gaps.push(`${m[1]}=${v}`);
+  }
+  for (const c of manifest.axisTable.filter((x) => x.panel === panel && x.class !== 'excluded' && x.class !== 'fixed')) {
+    for (const v of SHARED[c.control] || []) if (!named(c).has(v)) gaps.push(`${c.control}=${v}`);
+    if (c.control === 'style.fontFamily' || c.control === 'Font family') for (const v of FONT_KEYS) if (!named(c).has(v)) gaps.push(`${c.control}=${v}`);
+  }
+  return gaps;
+}
+for (const f of fs.readdirSync(PANELS).filter((x) => x.endsWith('SidebarPanel.tsx')).sort()) {
+  const panel = f.replace(/\.tsx$/, '');
+  const gaps = optionGaps(panel, fs.readFileSync(path.join(PANELS, f), 'utf8'));
+  check(`I23: ${panel}: every option value is named in the manifest's axis table`, gaps.length === 0, gaps.join(', '));
+}
+check('I23 self-test: a new toggle value is caught', optionGaps('HeadingSidebarPanel', '<RadioGroupInput label="Level"><ToggleButton value="h1">H1</ToggleButton><ToggleButton value="h4">H4</ToggleButton></RadioGroupInput>').join() === 'Level=h4');
 
 // I23 must fail on a new control: a panel with one control more is caught.
 {
