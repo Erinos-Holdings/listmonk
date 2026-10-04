@@ -27,8 +27,6 @@
         "s03-r007",
         "s03-r008-label",
         "s03-r008",
-        "s03-r009-label",
-        "s03-r009",
         "s03-end"
       ]
     }
@@ -48,157 +46,100 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s03-r001-k0": {
-    "type": "Button",
+  "s03-r001-c0": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r001-k1": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "",
+        "markdown": true
       },
       "style": {
         "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
   },
-  "s03-r001-k2": {
-    "type": "Button",
+  "s03-r001-c1": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "",
+        "markdown": true
       },
       "style": {
         "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
   },
-  "s03-r001-k3": {
-    "type": "Button",
+  "s03-r001-c2": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "",
+        "markdown": true
       },
       "style": {
         "textAlign": "right",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r001-k4": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r001-k5": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
   },
   "s03-r001": {
-    "type": "Container",
+    "type": "ColumnsContainer",
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
-        "childrenIds": [
-          "s03-r001-k0",
-          "s03-r001-k1",
-          "s03-r001-k2",
-          "s03-r001-k3",
-          "s03-r001-k4",
-          "s03-r001-k5"
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          60,
+          60,
+          60
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s03-r001-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s03-r001-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s03-r001-c2"
+            ]
+          }
         ]
       }
     }
@@ -218,7 +159,7 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
@@ -235,7 +176,6 @@
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -258,7 +198,7 @@
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -275,11 +215,13 @@
         "text": "Go",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -296,12 +238,13 @@
         "text": "Go",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -323,7 +266,6 @@
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -345,7 +287,7 @@
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -359,11 +301,12 @@
     "type": "Container",
     "data": {
       "style": {
+        "borderRadius": 8,
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
@@ -393,7 +336,7 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
@@ -405,12 +348,11 @@
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
         "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -428,13 +370,11 @@
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
         "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -458,7 +398,6 @@
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -482,7 +421,7 @@
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -499,11 +438,14 @@
         "text": "Go",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -520,12 +462,14 @@
         "text": "Go",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -541,10 +485,10 @@
       "style": {
         "borderRadius": 8,
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
@@ -574,47 +518,54 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s03-r004": {
-    "type": "Container",
+  "s03-r004-k0": {
+    "type": "Button",
     "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
       "style": {
-        "borderRadius": 8,
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
         }
-      },
-      "props": {
-        "childrenIds": []
       }
     }
   },
-  "s03-r005-label": {
-    "type": "Text",
+  "s03-r004-k1": {
+    "type": "Button",
     "data": {
       "props": {
-        "text": "R3.5",
-        "markdown": true
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
+        "textAlign": "left",
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#777777"
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
-  "s03-r005-k0": {
+  "s03-r004-k2": {
     "type": "Button",
     "data": {
       "props": {
@@ -636,7 +587,7 @@
       }
     }
   },
-  "s03-r005-k1": {
+  "s03-r004-k3": {
     "type": "Button",
     "data": {
       "props": {
@@ -658,7 +609,7 @@
       }
     }
   },
-  "s03-r005-k2": {
+  "s03-r004-k4": {
     "type": "Button",
     "data": {
       "props": {
@@ -681,7 +632,7 @@
       }
     }
   },
-  "s03-r005-k3": {
+  "s03-r004-k5": {
     "type": "Button",
     "data": {
       "props": {
@@ -705,7 +656,50 @@
       }
     }
   },
-  "s03-r005-k4": {
+  "s03-r004": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "borderColor": "#333333",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "s03-r004-k0",
+          "s03-r004-k1",
+          "s03-r004-k2",
+          "s03-r004-k3",
+          "s03-r004-k4",
+          "s03-r004-k5"
+        ]
+      }
+    }
+  },
+  "s03-r005-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R3.5",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 11,
+        "color": "#666666"
+      }
+    }
+  },
+  "s03-r005-k0": {
     "type": "Button",
     "data": {
       "props": {
@@ -729,7 +723,7 @@
       }
     }
   },
-  "s03-r005-k5": {
+  "s03-r005-k1": {
     "type": "Button",
     "data": {
       "props": {
@@ -753,11 +747,102 @@
       }
     }
   },
+  "s03-r005-k2": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s03-r005-k3": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s03-r005-k4": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s03-r005-k5": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
   "s03-r005": {
     "type": "Container",
     "data": {
       "style": {
-        "borderRadius": 8,
+        "borderColor": "#333333",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -792,7 +877,7 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
@@ -800,11 +885,12 @@
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
         "customWidth": 60,
-        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -822,11 +908,12 @@
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
         "customWidth": 60,
-        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -845,11 +932,12 @@
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
         "customWidth": 60,
-        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -868,11 +956,12 @@
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
         "customWidth": 60,
-        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -891,13 +980,11 @@
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
         "customWidth": 60,
         "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -915,13 +1002,11 @@
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
         "customWidth": 60,
         "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -940,7 +1025,6 @@
     "type": "Container",
     "data": {
       "style": {
-        "borderColor": "#333333",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -975,7 +1059,152 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
+      }
+    }
+  },
+  "s03-r007-k0": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s03-r007-k1": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s03-r007-k2": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s03-r007-k3": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s03-r007-k4": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s03-r007-k5": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "customWidth": 60,
+        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
@@ -983,8 +1212,6 @@
     "type": "Container",
     "data": {
       "style": {
-        "borderColor": "#333333",
-        "borderRadius": 8,
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -993,7 +1220,14 @@
         }
       },
       "props": {
-        "childrenIds": []
+        "childrenIds": [
+          "s03-r007-k0",
+          "s03-r007-k1",
+          "s03-r007-k2",
+          "s03-r007-k3",
+          "s03-r007-k4",
+          "s03-r007-k5"
+        ]
       }
     }
   },
@@ -1012,173 +1246,24 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s03-r008-k0": {
+  "s03-r008-c0": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
         "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r008-k1": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
+        "buttonTextColor": "#FFFFFF",
+        "buttonStyle": "rectangle",
         "fullWidth": false,
-        "customWidth": 60,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r008-k2": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r008-k3": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r008-k4": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
+        "customWidth": 96,
+        "customHeight": 48,
         "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r008-k5": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r008": {
-    "type": "Container",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "childrenIds": [
-          "s03-r008-k0",
-          "s03-r008-k1",
-          "s03-r008-k2",
-          "s03-r008-k3",
-          "s03-r008-k4",
-          "s03-r008-k5"
-        ]
-      }
-    }
-  },
-  "s03-r009-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R3.9",
-        "markdown": true
+        "borderColor": "#FFFFFF"
       },
       "style": {
         "padding": {
@@ -1187,152 +1272,64 @@
           "left": 0,
           "right": 0
         },
-        "fontSize": 11,
-        "color": "#777777"
+        "textAlign": "center"
       }
     }
   },
-  "s03-r009-k0": {
+  "s03-r008-c1": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go",
         "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF",
+        "buttonStyle": "rounded",
         "fullWidth": false,
-        "customWidth": 60,
+        "customWidth": 96,
+        "customHeight": 56,
         "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "borderColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "textAlign": "center"
       }
     }
   },
-  "s03-r009-k1": {
+  "s03-r008-c2": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go",
         "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF",
+        "buttonStyle": "pill",
         "fullWidth": false,
-        "customWidth": 60,
+        "customWidth": 96,
+        "customHeight": 64,
         "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r009-k2": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "borderColor": "#FFFFFF"
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "textAlign": "center"
       }
     }
   },
-  "s03-r009-k3": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r009-k4": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r009-k5": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s03-r009": {
-    "type": "Container",
+  "s03-r008": {
+    "type": "ColumnsContainer",
     "data": {
       "style": {
         "padding": {
@@ -1343,13 +1340,25 @@
         }
       },
       "props": {
-        "childrenIds": [
-          "s03-r009-k0",
-          "s03-r009-k1",
-          "s03-r009-k2",
-          "s03-r009-k3",
-          "s03-r009-k4",
-          "s03-r009-k5"
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s03-r008-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s03-r008-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s03-r008-c2"
+            ]
+          }
         ]
       }
     }
@@ -1369,7 +1378,7 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   }

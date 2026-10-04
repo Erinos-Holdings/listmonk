@@ -40,8 +40,6 @@
         "s09-r017",
         "s09-r018-label",
         "s09-r018",
-        "s09-r019-label",
-        "s09-r019",
         "s09-end"
       ]
     }
@@ -61,78 +59,45 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s09-r001-c1": {
-    "type": "Button",
+  "s09-r001-c0": {
+    "type": "Heading",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "A heading",
+        "level": "h1"
       },
       "style": {
         "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontFamily": "GEORGIA"
       }
     }
   },
-  "s09-r001-in": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "columns": [
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": [
-              "s09-r001-c1"
-            ]
-          },
-          {
-            "childrenIds": []
-          }
-        ]
-      }
-    }
-  },
-  "s09-r001-of": {
-    "type": "Text",
+  "s09-r001-c2": {
+    "type": "Heading",
     "data": {
       "props": {
-        "text": "Cell",
-        "markdown": true
+        "text": "A heading",
+        "level": "h1"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontFamily": "GEORGIA"
       }
     }
   },
@@ -148,22 +113,27 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "middle",
+        "fixedWidths": [
+          null,
+          60,
+          null
+        ],
         "columns": [
           {
             "childrenIds": [
-              "s09-r001-in"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s09-r001-of"
+              "s09-r001-c0"
             ]
           },
           {
             "childrenIds": []
+          },
+          {
+            "childrenIds": [
+              "s09-r001-c2"
+            ]
           }
         ]
       }
@@ -184,7 +154,29 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
+      }
+    }
+  },
+  "s09-r002-c0": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
@@ -195,13 +187,12 @@
         "text": "Go",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
+        "buttonStyle": "rectangle",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -211,55 +202,18 @@
       }
     }
   },
-  "s09-r002-in": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          100,
-          null,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": [
-              "s09-r002-c1"
-            ]
-          },
-          {
-            "childrenIds": []
-          }
-        ]
-      }
-    }
-  },
-  "s09-r002-of": {
-    "type": "Text",
+  "s09-r002-c2": {
+    "type": "Divider",
     "data": {
       "props": {
-        "text": "Cell",
-        "markdown": true
+        "lineColor": "#CCCCCC"
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -269,29 +223,36 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          null,
+          null,
+          60
+        ],
         "columns": [
           {
             "childrenIds": [
-              "s09-r002-in"
+              "s09-r002-c0"
             ]
           },
           {
             "childrenIds": [
-              "s09-r002-of"
+              "s09-r002-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r002-c2"
+            ]
           }
         ]
       }
@@ -312,70 +273,15 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s09-r003-c0": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s09-r003-in": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r003-c0"
-            ]
-          },
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": []
-          }
-        ]
-      }
-    }
-  },
-  "s09-r003-of": {
+  "s09-r003-k0": {
     "type": "Text",
     "data": {
       "props": {
-        "text": "Cell",
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
         "markdown": true
       },
       "style": {
@@ -384,12 +290,70 @@
           "bottom": 16,
           "left": 24,
           "right": 24
-        }
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r003-k1": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r003-k2": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r003-k3": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
       }
     }
   },
   "s09-r003": {
-    "type": "ColumnsContainer",
+    "type": "Container",
     "data": {
       "style": {
         "padding": {
@@ -400,23 +364,11 @@
         }
       },
       "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r003-in"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s09-r003-of"
-            ]
-          },
-          {
-            "childrenIds": []
-          }
+        "childrenIds": [
+          "s09-r003-k0",
+          "s09-r003-k1",
+          "s09-r003-k2",
+          "s09-r003-k3"
         ]
       }
     }
@@ -436,23 +388,24 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r004-c0": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -462,43 +415,38 @@
       }
     }
   },
-  "s09-r004-in": {
-    "type": "ColumnsContainer",
+  "s09-r004-c1": {
+    "type": "Image",
     "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
       "style": {
+        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
           "left": 24,
           "right": 24
         }
-      },
-      "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r004-c0"
-            ]
-          },
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": []
-          }
-        ]
       }
     }
   },
-  "s09-r004-of": {
-    "type": "Text",
+  "s09-r004-c2": {
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Cell",
-        "markdown": true
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
+        "contentAlignment": "middle"
       },
       "style": {
         "padding": {
@@ -522,22 +470,24 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s09-r004-in"
+              "s09-r004-c0"
             ]
           },
           {
             "childrenIds": [
-              "s09-r004-of"
+              "s09-r004-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r004-c2"
+            ]
           }
         ]
       }
@@ -558,76 +508,64 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r005-c0": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r005-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r005-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
+        "contentAlignment": "middle"
       },
       "style": {
         "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s09-r005-in": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          null,
-          100,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r005-c0"
-            ]
-          },
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": []
-          }
-        ]
-      }
-    }
-  },
-  "s09-r005-of": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Cell",
-        "markdown": true
-      },
-      "style": {
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -649,22 +587,24 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s09-r005-in"
+              "s09-r005-c0"
             ]
           },
           {
             "childrenIds": [
-              "s09-r005-of"
+              "s09-r005-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r005-c2"
+            ]
           }
         ]
       }
@@ -685,22 +625,41 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r006-c0": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r006-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
         "textAlign": "left",
@@ -713,50 +672,19 @@
       }
     }
   },
-  "s09-r006-in": {
-    "type": "ColumnsContainer",
+  "s09-r006-c2": {
+    "type": "Image",
     "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
       "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
         "contentAlignment": "middle",
-        "fixedWidths": [
-          null,
-          100,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r006-c0"
-            ]
-          },
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": []
-          }
-        ]
-      }
-    }
-  },
-  "s09-r006-of": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Cell",
-        "markdown": true
+        "embed": true
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -778,22 +706,24 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s09-r006-in"
+              "s09-r006-c0"
             ]
           },
           {
             "childrenIds": [
-              "s09-r006-of"
+              "s09-r006-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r006-c2"
+            ]
           }
         ]
       }
@@ -814,22 +744,20 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r007-c0": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
         "textAlign": "right",
@@ -842,9 +770,16 @@
       }
     }
   },
-  "s09-r007-in": {
-    "type": "ColumnsContainer",
+  "s09-r007-c1": {
+    "type": "Image",
     "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "contentAlignment": "middle"
+      },
       "style": {
         "padding": {
           "top": 16,
@@ -852,40 +787,21 @@
           "left": 24,
           "right": 24
         }
-      },
-      "props": {
-        "columnsCount": 2,
-        "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "fixedWidths": [
-          null,
-          100,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r007-c0"
-            ]
-          },
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": []
-          }
-        ]
       }
     }
   },
-  "s09-r007-of": {
-    "type": "Text",
+  "s09-r007-c2": {
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Cell",
-        "markdown": true
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "contentAlignment": "middle"
       },
       "style": {
+        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -907,22 +823,24 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s09-r007-in"
+              "s09-r007-c0"
             ]
           },
           {
             "childrenIds": [
-              "s09-r007-of"
+              "s09-r007-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r007-c2"
+            ]
           }
         ]
       }
@@ -943,20 +861,19 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s09-r008-c1": {
-    "type": "Button",
+  "s09-r008-c0": {
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "contentAlignment": "middle"
       },
       "style": {
         "textAlign": "center",
@@ -969,16 +886,15 @@
       }
     }
   },
-  "s09-r008-c2": {
-    "type": "Button",
+  "s09-r008-c1": {
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "contentAlignment": "middle"
       },
       "style": {
         "textAlign": "right",
@@ -991,50 +907,16 @@
       }
     }
   },
-  "s09-r008-in": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          100,
-          null,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": [
-              "s09-r008-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s09-r008-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s09-r008-of": {
-    "type": "Text",
+  "s09-r008-c2": {
+    "type": "Image",
     "data": {
       "props": {
-        "text": "Cell",
-        "markdown": true
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle"
       },
       "style": {
         "padding": {
@@ -1058,22 +940,24 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s09-r008-in"
+              "s09-r008-c0"
             ]
           },
           {
             "childrenIds": [
-              "s09-r008-of"
+              "s09-r008-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r008-c2"
+            ]
           }
         ]
       }
@@ -1094,23 +978,45 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
+      }
+    }
+  },
+  "s09-r009-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
   "s09-r009-c1": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1121,19 +1027,18 @@
     }
   },
   "s09-r009-c2": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle"
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1157,15 +1062,12 @@
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "fixedWidths": [
-          100,
-          null,
-          null
-        ],
+        "contentAlignment": "middle",
         "columns": [
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r009-c0"
+            ]
           },
           {
             "childrenIds": [
@@ -1196,25 +1098,46 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r010-c0": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
-        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r010-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1225,20 +1148,19 @@
     }
   },
   "s09-r010-c2": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1262,7 +1184,7 @@
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "top",
+        "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
@@ -1270,7 +1192,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r010-c1"
+            ]
           },
           {
             "childrenIds": [
@@ -1296,23 +1220,40 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r011-c0": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "contentAlignment": "middle"
       },
       "style": {
-        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r011-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1323,18 +1264,16 @@
     }
   },
   "s09-r011-c2": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "contentAlignment": "middle"
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1366,7 +1305,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r011-c1"
+            ]
           },
           {
             "childrenIds": [
@@ -1392,24 +1333,41 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r012-c0": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "contentAlignment": "middle"
       },
       "style": {
-        "textAlign": "center",
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r012-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1420,19 +1378,17 @@
     }
   },
   "s09-r012-c2": {
-    "type": "Button",
+    "type": "Image",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1456,12 +1412,7 @@
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          null,
-          100,
-          null
-        ],
+        "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
@@ -1469,7 +1420,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r012-c1"
+            ]
           },
           {
             "childrenIds": [
@@ -1495,39 +1448,18 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r013-c0": {
-    "type": "Button",
+    "type": "Avatar",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s09-r013-c2": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "circle",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "textAlign": "left",
@@ -1540,52 +1472,37 @@
       }
     }
   },
-  "s09-r013-in": {
-    "type": "ColumnsContainer",
+  "s09-r013-c1": {
+    "type": "Avatar",
     "data": {
+      "props": {
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "circle",
+        "size": 64,
+        "alt": "Catalog avatar"
+      },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
           "left": 24,
           "right": 24
         }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          null,
-          100,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r013-c0"
-            ]
-          },
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": [
-              "s09-r013-c2"
-            ]
-          }
-        ]
       }
     }
   },
-  "s09-r013-of": {
-    "type": "Text",
+  "s09-r013-c2": {
+    "type": "Avatar",
     "data": {
       "props": {
-        "text": "Cell",
-        "markdown": true
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "circle",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
+        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1607,22 +1524,24 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s09-r013-in"
+              "s09-r013-c0"
             ]
           },
           {
             "childrenIds": [
-              "s09-r013-of"
+              "s09-r013-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r013-c2"
+            ]
           }
         ]
       }
@@ -1643,20 +1562,18 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
   "s09-r014-c0": {
-    "type": "Button",
+    "type": "Avatar",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "square",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "padding": {
@@ -1668,16 +1585,14 @@
       }
     }
   },
-  "s09-r014-c2": {
-    "type": "Button",
+  "s09-r014-c1": {
+    "type": "Avatar",
     "data": {
       "props": {
-        "text": "",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "square",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "textAlign": "left",
@@ -1690,52 +1605,17 @@
       }
     }
   },
-  "s09-r014-in": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "fixedWidths": [
-          null,
-          100,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r014-c0"
-            ]
-          },
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": [
-              "s09-r014-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s09-r014-of": {
-    "type": "Text",
+  "s09-r014-c2": {
+    "type": "Avatar",
     "data": {
       "props": {
-        "text": "Cell",
-        "markdown": true
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "square",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1757,22 +1637,24 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s09-r014-in"
+              "s09-r014-c0"
             ]
           },
           {
             "childrenIds": [
-              "s09-r014-of"
+              "s09-r014-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s09-r014-c2"
+            ]
           }
         ]
       }
@@ -1793,21 +1675,16 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s09-r015-c0": {
-    "type": "Button",
+  "s09-r015-t": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "Text on a light ground.",
+        "markdown": true
       },
       "style": {
         "padding": {
@@ -1815,37 +1692,58 @@
           "bottom": 16,
           "left": 24,
           "right": 24
-        }
+        },
+        "color": "#262626"
       }
     }
   },
-  "s09-r015-c1": {
+  "s09-r015-b": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go far",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
+      }
+    }
+  },
+  "s09-r015-bb": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
       }
     }
   },
   "s09-r015": {
-    "type": "ColumnsContainer",
+    "type": "Container",
     "data": {
       "style": {
+        "backgroundColor": "#F7F4EE",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1854,23 +1752,10 @@
         }
       },
       "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r015-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s09-r015-c1"
-            ]
-          },
-          {
-            "childrenIds": []
-          }
+        "childrenIds": [
+          "s09-r015-t",
+          "s09-r015-b",
+          "s09-r015-bb"
         ]
       }
     }
@@ -1890,22 +1775,16 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s09-r016-c0": {
-    "type": "Button",
+  "s09-r016-t": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "Text on a mid ground.",
+        "markdown": true
       },
       "style": {
         "padding": {
@@ -1913,38 +1792,58 @@
           "bottom": 16,
           "left": 24,
           "right": 24
-        }
+        },
+        "color": "#FFFFFF"
       }
     }
   },
-  "s09-r016-c1": {
+  "s09-r016-b": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go far",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
+      }
+    }
+  },
+  "s09-r016-bb": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
       }
     }
   },
   "s09-r016": {
-    "type": "ColumnsContainer",
+    "type": "Container",
     "data": {
       "style": {
+        "backgroundColor": "#8A8A8A",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1953,23 +1852,10 @@
         }
       },
       "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r016-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s09-r016-c1"
-            ]
-          },
-          {
-            "childrenIds": []
-          }
+        "childrenIds": [
+          "s09-r016-t",
+          "s09-r016-b",
+          "s09-r016-bb"
         ]
       }
     }
@@ -1989,60 +1875,75 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s09-r017-c0": {
-    "type": "Button",
+  "s09-r017-t": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "Text on a dark ground.",
+        "markdown": true
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
           "left": 24,
           "right": 24
-        }
+        },
+        "color": "#F2F2F2"
       }
     }
   },
-  "s09-r017-c1": {
+  "s09-r017-b": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go far",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
-        "buttonStyle": "rectangle",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
+      }
+    }
+  },
+  "s09-r017-bb": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
       }
     }
   },
   "s09-r017": {
-    "type": "ColumnsContainer",
+    "type": "Container",
     "data": {
       "style": {
+        "backgroundColor": "#1C2B33",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -2051,28 +1952,10 @@
         }
       },
       "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          null,
-          null,
-          100
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r017-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s09-r017-c1"
-            ]
-          },
-          {
-            "childrenIds": []
-          }
+        "childrenIds": [
+          "s09-r017-t",
+          "s09-r017-b",
+          "s09-r017-bb"
         ]
       }
     }
@@ -2092,82 +1975,56 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   },
-  "s09-r018-c0": {
-    "type": "Image",
+  "s09-r018-own": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Go far",
+        "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s09-r018-c1": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s09-r018-c2": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
         "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+        "backgroundColor": "#EAF2F5"
       }
     }
   },
-  "s09-r018": {
-    "type": "ColumnsContainer",
+  "s09-r018-mb": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#8A8A8A",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
+      }
+    }
+  },
+  "s09-r018-m": {
+    "type": "Container",
     "data": {
       "style": {
+        "backgroundColor": "#8A8A8A",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -2176,165 +2033,13 @@
         }
       },
       "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          100,
-          100,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s09-r018-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s09-r018-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s09-r018-c2"
-            ]
-          }
+        "childrenIds": [
+          "s09-r018-mb"
         ]
       }
     }
   },
-  "s09-r019-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R9.19",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#777777"
-      }
-    }
-  },
-  "s09-r019-k0": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s09-r019-k1": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s09-r019-k2": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s09-r019-k3": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s09-r019-k4": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s09-r019-k5": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s09-r019": {
+  "s09-r018": {
     "type": "Container",
     "data": {
       "style": {
@@ -2347,12 +2052,8 @@
       },
       "props": {
         "childrenIds": [
-          "s09-r019-k0",
-          "s09-r019-k1",
-          "s09-r019-k2",
-          "s09-r019-k3",
-          "s09-r019-k4",
-          "s09-r019-k5"
+          "s09-r018-own",
+          "s09-r018-m"
         ]
       }
     }
@@ -2372,7 +2073,7 @@
           "right": 0
         },
         "fontSize": 11,
-        "color": "#777777"
+        "color": "#666666"
       }
     }
   }
