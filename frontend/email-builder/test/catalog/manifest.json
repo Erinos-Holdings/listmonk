@@ -9066,5 +9066,104 @@
     }
   ],
   "corpusAdded": [],
-  "storedOnly": 38
+  "storedOnly": 38,
+  "codeChecked": [
+    {
+      "id": "columns-auto-without-width",
+      "rule": "D4.4",
+      "reason": "Fixed columns that leave an auto column no width: the compile gives that cell no Word width class (postProcess.ts, innerWidth > 0), and D4.4's fixed-width check flags the row as wider than its slot. A row in this state cannot fit, so a render shows only the overflow D4.4 already reports (§17.6).",
+      "units": [
+        {
+          "key": "ColumnsContainer:03dbcb863a84b921",
+          "label": "Columns, 3 columns, widths fixed/auto/fixed, valign middle",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:135d7339a321fc9d",
+          "label": "Columns, 3 columns, widths fixed/auto/fixed, valign top",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:2dabe6872090a1e5",
+          "label": "Columns, 3 columns, widths fixed/fixed/auto, valign middle",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:3b3ee96c374f6e20",
+          "label": "Columns, 3 columns, widths auto/fixed/fixed, valign middle",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:48a7e02525ff375c",
+          "label": "Columns, 3 columns, widths fixed/auto/fixed, valign bottom",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:9a9756dfe934f716",
+          "label": "Columns, 3 columns, widths auto/fixed/fixed, valign top",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:bcb340c6e89d78d0",
+          "label": "Columns, 3 columns, widths fixed/fixed/auto, valign top",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:d6618ffea4aa2bd1",
+          "label": "Columns, 3 columns, widths fixed/fixed/auto, valign bottom",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:eb61a1a2fb50790f",
+          "label": "Columns, 3 columns, widths auto/fixed/fixed, valign bottom",
+          "instances": 4
+        },
+        {
+          "key": "ColumnsContainer:empty:16b9449997139b85",
+          "label": "Columns, 3 columns, empty first cell, auto width, inside a column cell",
+          "instances": 1
+        },
+        {
+          "key": "ColumnsContainer:empty:170c009352b6d9d6",
+          "label": "Columns, 3 columns, empty third cell, auto width, inside a column cell",
+          "instances": 1
+        },
+        {
+          "key": "ColumnsContainer:empty:33491875b59bb1fd",
+          "label": "Columns, 3 columns, empty second cell, auto width, inside a column cell",
+          "instances": 1
+        },
+        {
+          "key": "ColumnsContainer:empty:48153ba92392e5a6",
+          "label": "Columns, 3 columns, empty third cell, auto width, inside a column cell",
+          "instances": 1
+        },
+        {
+          "key": "ColumnsContainer:empty:546845046930b570",
+          "label": "Columns, 3 columns, empty first cell, auto width, inside a column cell",
+          "instances": 1
+        },
+        {
+          "key": "ColumnsContainer:empty:625dd2d62112f5a5",
+          "label": "Columns, 3 columns, empty first cell, auto width, inside a column cell",
+          "instances": 1
+        },
+        {
+          "key": "ColumnsContainer:empty:81388940f87f1cad",
+          "label": "Columns, 3 columns, empty third cell, auto width, inside a column cell",
+          "instances": 1
+        },
+        {
+          "key": "ColumnsContainer:empty:c1251ad92f6925f7",
+          "label": "Columns, 3 columns, empty second cell, auto width, inside a column cell",
+          "instances": 1
+        },
+        {
+          "key": "ColumnsContainer:empty:f6c4a88478aa3b0b",
+          "label": "Columns, 3 columns, empty second cell, auto width, inside a column cell",
+          "instances": 1
+        }
+      ]
+    }
+  ]
 }
