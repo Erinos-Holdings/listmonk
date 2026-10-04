@@ -42,19 +42,23 @@ for (const { file, document } of fixtures) {
 }
 
 // BIBLE-OUTLOOK-FIXES-SPEC I9: a document with the Outlook flag OFF compiles exactly as before
-// the Word fixes. The fixture is the render canary's bible-06-layout-variants document (a
-// Heading, column rows and Buttons); its output is pinned in a separate file captured from
-// b5ceb3ce, the commit before the fixes, so a later recapture of the main snapshot cannot
-// re-pin it. Any §4 pass that ran with the flag off would change this output.
+// the Word fixes. The fixture is a copy of the retired render canary document
+// bible-06-layout-variants (a Heading, column rows and Buttons); its output is pinned in a separate
+// file captured from b5ceb3ce, the commit before the fixes, so a later recapture of the main
+// snapshot cannot re-pin it. Any §4 pass that ran with the flag off would change this output.
+// integrations RENDER-CATALOG-SPEC §10 / I9: the bible's documents retire with the render catalog,
+// so the copy is pinned by the sha256 of the canary document it was copied from (its
+// JSON.stringify), not by the canary file.
 const FLAG_OFF = 'bible-06-layout-variants.json';
+const FLAG_OFF_SOURCE_SHA256 = 'b1d7e661c4bb2e1de1195d6492e5933fa4af2fe1a9ce042da33e5de1f2bd7541';
 const pin = JSON.parse(fs.readFileSync(FLAG_OFF_SNAPSHOT, 'utf8'));
 check('I9: the flag-off pin was captured from b5ceb3ce (before the Word fixes)', /^b5ceb3ce/.test(pin.baseCommit), pin.baseCommit);
 check('I9: the pin was taken with the same context and references', JSON.stringify(pin.context) === JSON.stringify(context)
   && JSON.stringify(pin.refs) === JSON.stringify(refs.map((r) => ({ id: r.id, name: r.name }))));
 const flagOff = fixtures.find((f) => f.file === FLAG_OFF);
 check('I9: the flag-off fixture exists and has the Outlook flag off', !!flagOff && flagOff.document.root.data.outlook === false);
-check('I9: the fixture is still the render canary document (copied, never edited)',
-  !!flagOff && JSON.stringify(flagOff.document) === JSON.stringify(JSON.parse(fs.readFileSync(require('path').join(__dirname, 'canary', 'bible-06-layout-variants.json'), 'utf8'))));
+check('I9: the fixture is still the retired render canary document (copied, never edited)',
+  !!flagOff && require('crypto').createHash('sha256').update(JSON.stringify(flagOff.document)).digest('hex') === FLAG_OFF_SOURCE_SHA256);
 check('I9: it holds a Heading, a ColumnsContainer and a Button', !!flagOff
   && ['Heading', 'ColumnsContainer', 'Button'].every((t) => Object.values(flagOff.document).some((b) => b && b.type === t)));
 if (flagOff && typeof pin.outputs[FLAG_OFF] === 'string') {

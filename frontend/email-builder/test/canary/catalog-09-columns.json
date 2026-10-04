@@ -1,0 +1,2454 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "outlook": true,
+      "childrenIds": [
+        "s09-r001-label",
+        "s09-r001",
+        "s09-r002-label",
+        "s09-r002",
+        "s09-r003-label",
+        "s09-r003",
+        "s09-r004-label",
+        "s09-r004",
+        "s09-r005-label",
+        "s09-r005",
+        "s09-r006-label",
+        "s09-r006",
+        "s09-r007-label",
+        "s09-r007",
+        "s09-r008-label",
+        "s09-r008",
+        "s09-r009-label",
+        "s09-r009",
+        "s09-r010-label",
+        "s09-r010",
+        "s09-r011-label",
+        "s09-r011",
+        "s09-r012-label",
+        "s09-r012",
+        "s09-r013-label",
+        "s09-r013",
+        "s09-r014-label",
+        "s09-r014",
+        "s09-r015-label",
+        "s09-r015",
+        "s09-r016-label",
+        "s09-r016",
+        "s09-r017-label",
+        "s09-r017",
+        "s09-r018-label",
+        "s09-r018",
+        "s09-r019-label",
+        "s09-r019",
+        "s09-r020-label",
+        "s09-r020",
+        "s09-end"
+      ]
+    }
+  },
+  "s09-r001-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.1",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r001-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r001-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r001-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r001": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "top",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r001-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r001-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r001-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r002-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.2",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r002-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r002-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r002-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r002": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "top",
+        "fixedWidths": [
+          100,
+          null,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r002-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r002-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r002-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r003-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.3",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r003-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r003-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r003-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r003": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "top",
+        "fixedWidths": [
+          null,
+          100,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r003-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r003-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r003-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r004-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.4",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r004-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r004-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r004-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r004": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "top",
+        "fixedWidths": [
+          100,
+          100,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r004-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r004-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r004-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r005-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.5",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r005-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r005-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r005-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r005": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "top",
+        "fixedWidths": [
+          null,
+          null,
+          100
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r005-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r005-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r005-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r006-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.6",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r006-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r006-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r006-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r006": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "top",
+        "fixedWidths": [
+          100,
+          null,
+          100
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r006-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r006-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r006-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r007-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.7",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r007-c0": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h1"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r007-c1": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h1"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r007-c2": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h2"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r007-in": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          100,
+          100,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r007-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r007-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r007-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r007-of": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Cell",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r007": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r007-in"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r007-of"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s09-r008-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.8",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r008-c0": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h2"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r008-c1": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h3"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r008-c2": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h3"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r008-in": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          100,
+          null,
+          100
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r008-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r008-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r008-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r008-of": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Cell",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r008": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r008-in"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r008-of"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s09-r009-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.9",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r009-c0": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h3"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r009-c1": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h3"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r009-c2": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h3"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r009-in": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          null,
+          100,
+          100
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r009-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r009-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r009-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r009-of": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Cell",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r009": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r009-in"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r009-of"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s09-r010-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.10",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r010-c0": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r010-c1": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r010-c2": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r010": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          100,
+          100,
+          100
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r010-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r010-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r010-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r011-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.11",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r011-c1": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r011-c2": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r011": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": [
+              "s09-r011-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r011-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r012-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.12",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r012-c1": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r012-c2": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r012": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          100,
+          null,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": [
+              "s09-r012-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r012-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r013-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.13",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r013-c1": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s09-r013-c2": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r013": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          null,
+          100,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": [
+              "s09-r013-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r013-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r014-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.14",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r014-c1": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r014-c2": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r014-in": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          100,
+          100,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": [
+              "s09-r014-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r014-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r014-of": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Cell",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r014": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r014-in"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r014-of"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s09-r015-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.15",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r015-c1": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": true,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r015-c2": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": true,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r015-in": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          100,
+          null,
+          100
+        ],
+        "columns": [
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": [
+              "s09-r015-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r015-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r015-of": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Cell",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r015": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r015-in"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r015-of"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s09-r016-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.16",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r016-c1": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r016-c2": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r016-in": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          null,
+          100,
+          100
+        ],
+        "columns": [
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": [
+              "s09-r016-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r016-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s09-r016-of": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Cell",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r016": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r016-in"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r016-of"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s09-r017-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.17",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r017": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "childrenIds": []
+      }
+    }
+  },
+  "s09-r018-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.18",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r018-own": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center",
+        "backgroundColor": "#EAF2F5"
+      }
+    }
+  },
+  "s09-r018-mb": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#8A8A8A",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
+      }
+    }
+  },
+  "s09-r018-m": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "backgroundColor": "#8A8A8A",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "s09-r018-mb"
+        ]
+      }
+    }
+  },
+  "s09-r018": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "s09-r018-own",
+          "s09-r018-m"
+        ]
+      }
+    }
+  },
+  "s09-r019-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.19",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r019-f-x": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": true,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r019-of": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Cell",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r019": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r019-f-x"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r019-of"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s09-r020-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R9.20",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s09-r020-f-x": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": true,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r020-of": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Cell",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s09-r020": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s09-r020-f-x"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s09-r020-of"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s09-end": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "END catalog-09-columns",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  }
+}

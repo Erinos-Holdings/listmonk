@@ -1,0 +1,453 @@
+{
+  "root": {
+    "type": "EmailLayout",
+    "data": {
+      "backdropColor": "#F5F5F5",
+      "canvasColor": "#FFFFFF",
+      "fontFamily": "MODERN_SANS",
+      "textColor": "#262626",
+      "outlook": true,
+      "childrenIds": [
+        "s02-r001-label",
+        "s02-r001",
+        "s02-r002-label",
+        "s02-r002",
+        "s02-r003-label",
+        "s02-r003",
+        "s02-end"
+      ]
+    }
+  },
+  "s02-r001-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R2.1",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s02-r001-c0": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s02-r001-c1": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s02-r001": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "top",
+        "columns": [
+          {
+            "childrenIds": [
+              "s02-r001-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s02-r001-c1"
+            ]
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s02-r002-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R2.2",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s02-r002-k0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s02-r002-k1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "alt": "Catalog image",
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s02-r002-k2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s02-r002-k3": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s02-r002-k4": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s02-r002-k5": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s02-r002": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "s02-r002-k0",
+          "s02-r002-k1",
+          "s02-r002-k2",
+          "s02-r002-k3",
+          "s02-r002-k4",
+          "s02-r002-k5"
+        ]
+      }
+    }
+  },
+  "s02-r003-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R2.3",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  },
+  "s02-r003-k0": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s02-r003-k1": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s02-r003-k2": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s02-r003-k3": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s02-r003-k4": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s02-r003-k5": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Intro paragraph.\n\n- one\n- two\n\n1. first\n2. second\n\n> A quote.\n\n- outer\n  - inner\n\n1. outer\n   1. inner\n\nOutro.",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s02-r003": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "childrenIds": [
+          "s02-r003-k0",
+          "s02-r003-k1",
+          "s02-r003-k2",
+          "s02-r003-k3",
+          "s02-r003-k4",
+          "s02-r003-k5"
+        ]
+      }
+    }
+  },
+  "s02-end": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "END catalog-02-containers",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 6,
+          "bottom": 2,
+          "left": 24,
+          "right": 24
+        },
+        "fontSize": 11,
+        "color": "#777777"
+      }
+    }
+  }
+}
