@@ -48,6 +48,16 @@ function fixedDocs(outlook = true) {
       b2: button({ fullWidth: true, text: '' }),
       b3: button({ fullWidth: true, borderSize: 2, borderColor: '#FFFFFF' }),
     }, ['b0', 'bf', 'r'], {}, outlook),
+    // §17.5 F2 (amended): the box is the slot less max(2, stroke px) — border 0 (the 1 px hairline), 2 and 4.
+    strokeButtons: doc({
+      s0: button({ fullWidth: true }),
+      s2: button({ fullWidth: true, borderSize: 2, borderColor: '#FFFFFF' }),
+      s4: button({ fullWidth: true, borderSize: 4, borderColor: '#FFFFFF' }),
+      r: cols(3, [['c0'], ['c2'], ['c4']]),
+      c0: button({ fullWidth: true }),
+      c2: button({ fullWidth: true, borderSize: 2, borderColor: '#FFFFFF' }),
+      c4: button({ fullWidth: true, borderSize: 4, borderColor: '#FFFFFF' }),
+    }, ['s0', 's2', 's4', 'r'], {}, outlook),
     borderedCanvas: doc({ t: text('Inside a bordered canvas.') }, ['t'], { borderColor: '#333333' }, outlook),
     borderedZeroBox: doc({
       c: box(['t'], { borderColor: '#333333', padding: ZERO }),

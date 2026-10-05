@@ -3,11 +3,11 @@
 //
 //   F1 Divider: a Word-only one-cell table whose top border is the line, before the <hr>; the
 //      <hr> wrapped in <div class="lm-nomso" style="mso-hide:all"> for every other client.
-//   F2 full-width Button: the Word box (VML group, or a full-width fallback's table) is 2 px
-//      narrower than its slot, floor 1; the Gmail pin class and the non-Word twin keep the slot.
+//   F2 full-width Button: the Word box (VML group, or a full-width fallback's table) is its slot
+//      less max(2, stroke px), floor 1; the Gmail pin class and the non-Word twin keep the slot.
 //   F3 bordered canvas: the Word-only wrapper cell draws the layout's border; the canvas table
 //      (style unchanged, border-collapse:collapse) gains the class lm-cvb, switched off in Word by
-//      `table.lm-cvb{border:none}` in the Word-only head block. (A first attempt, separate on the
+//      `table.lm-cvb{border:none !important}` in the Word-only head block. (A first attempt, separate on the
 //      canvas table, still lost the right edge in Word.)
 //   F4 zero-padding bordered Container: the table-cell form (borders on the td) with
 //      border-collapse:separate on its table.
@@ -57,6 +57,14 @@ try {
     check('F2: each VML group is 2 px narrower than its slot', pairs.filter((p) => p.vml !== null).every((p) => p.vml === pt(p.slot - 2)), JSON.stringify(pairs));
     check('F2: each full-width fallback table is 2 px narrower than its slot', pairs.filter((p) => p.table !== null).every((p) => p.table === p.slot - 2), JSON.stringify(pairs));
     check('F2: the slots include the canvas (552) and a column', pairs.some((p) => p.slot === 552) && pairs.some((p) => p.slot < 200), JSON.stringify(pairs));
+    // Amended F2: the slot less max(2, stroke px). Border 0 (hairline 1), 2 and 4, at full width
+    // and in a column, in that order.
+    const stroke = decode(compile(fixed.strokeButtons));
+    const boxes = [...stroke.matchAll(/(?:<v:group [^>]*style="width:([\d.]+)pt|data-lm-btn-fallback="[^"]*" width="(\d+)")[\s\S]*?class="[^"]*\blm-gm-pin-(\d+)\b/g)]
+      .map((m) => ({ vml: m[1] !== undefined ? Number(m[1]) : null, slot: Number(m[3]) }));
+    const less = [2, 2, 4, 2, 2, 4];
+    check('F2: six stroked full-width Buttons, all VML', boxes.length === 6 && boxes.every((b) => b.vml !== null), JSON.stringify(boxes));
+    check('F2: each box is its slot less max(2, stroke): 2, 2, 4 at full width and in a column', boxes.every((b, i) => b.vml === pt(b.slot - less[i])), JSON.stringify(boxes));
   }
 
   // ---- F3 ----
@@ -67,8 +75,9 @@ try {
     check('F3: the Word-only wrapper cell draws the layout\'s border', out.includes('<!--[if mso]><table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;"><tr><td style="border:1px solid #333333"><![endif]-->'));
     check('F3: the canvas table keeps its own border and collapse, and carries the class lm-cvb', /border:1px solid #333333;border-collapse:collapse/.test(canvasTag) && / class="lm-cvb"/.test(canvasTag) && !/separate/.test(canvasTag), canvasTag);
     const head = out.slice(0, out.indexOf('</head>'));
-    check('F3: the Word-only head block switches the canvas border off in Word', /<!--\[if mso\]><style>[^<]*table\.lm-cvb\{border:none\}<\/style><!\[endif\]-->/.test(head), head.slice(-300));
-    check('F3: the head rule is emitted even with no Word column width', !/td\.lm-cw-/.test(head) && /table\.lm-cvb\{border:none\}/.test(head));
+    check('F3: the Word-only head block holds exactly `table.lm-cvb{border:none !important}` (without !important Word still draws the inline border)', head.includes('<!--[if mso]><style>table.lm-cvb{border:none !important}</style><![endif]-->'), head.slice(-300));
+    check('F3: the head rule is emitted even with no Word column width', !/td\.lm-cw-/.test(head));
+    check('F3: in the stored form the rule rides the Safe payload with its space escaped', raw.includes('table.lm-cvb{border:none\\x20!important}'));
     const plain = decode(compile(cleanDocs().plainCanvas));
     check('F3: a canvas with no border: no class, no rule, a bare wrapper cell', !/lm-cvb/.test(plain) && /border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;"><tr><td><!\[endif\]-->/.test(plain));
   }

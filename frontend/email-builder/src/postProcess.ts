@@ -820,8 +820,9 @@ function transformSimpleDivBlocks(doc: Document) {
 // tZzFO7s3…, rows D1). The Divider's line is therefore given to Word as a one-cell table whose
 // top border is the line (the block's own height and colour), inside a downlevel-HIDDEN
 // conditional, and the `<hr>` stays for every other client inside the `lm-nomso` wrapper the
-// Button twin uses (hazard 53: never a downlevel-revealed conditional). Only a builder Divider's
-// rule is rewritten: an `<hr>` with a px `border-top`, never one inside user Html.
+// Button twin uses (hazard 53: never a downlevel-revealed conditional). It rewrites ANY un-fenced
+// `<hr>` whose style has a px-solid `border-top` — a builder Divider's, and also one typed as raw
+// HTML into a Text (which reads `typed:html` and is never vouched); never one inside an Html block.
 const DIVIDER_BORDER_TOP = /^\s*(\d+(?:\.\d+)?)px\s+solid\s+(#[0-9a-f]{3,8}|rgba?\([^)]*\)|[a-z]+)\s*$/i;
 
 function transformDividerBlocks(doc: Document) {
@@ -1490,9 +1491,11 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   // RENDER-CATALOG-SPEC §17.5 F2 (integrations): Word draws the VML stroke OUTSIDE the box, and
   // rounds a fractional column up, so a box the full width of its slot widened the canvas (three
   // columns, box 125 px: canvas 605; 123: 600 — candidate render tZzFO7s3…). The Word box (the VML
-  // group, and a fallback's table) is 2 px narrower than its slot, never below 1. The Gmail pin
-  // class and the non-Word twin keep the slot width.
-  const wordWidth = Math.max(1, width - 2);
+  // group, and a fallback's table) is its slot less max(2, s), never below 1, `s` the stroke width
+  // in px — the Button's border size, 1 for the hairline (a 4 px stroke at − 2 drew 605 px, at − 4
+  // 600 px: candidate render UhNHyA2M…). The Gmail pin class and the non-Word twin keep the slot.
+  const strokePx = parseButtonBorder(anchorStyleMap).width || 1;
+  const wordWidth = Math.max(1, width - Math.max(2, strokePx));
   const buttonColor = td.getAttribute('bgcolor') || anchorStyleMap['background-color'] || '#0055d4';
   const href = anchor.getAttribute('href') || '#';
   const text = anchor.textContent?.replace(/\s+/g, ' ').trim() || '';
@@ -1854,7 +1857,9 @@ function addWordColumnWidthStyles(doc: Document) {
   doc.querySelectorAll(`[${WORD_COLUMN_FENCE_ATTR}]`).forEach((table) => table.removeAttribute(WORD_COLUMN_FENCE_ATTR));
 
   // §17.5 F3: a bordered canvas's own border is off in Word (its wrapper cell draws it).
-  const canvasBorderRule = doc.querySelector(`table.${CANVAS_BORDER_CLASS}`) ? `table.${CANVAS_BORDER_CLASS}{border:none}` : '';
+  // `!important` is required: without it Word still drew the inline border inside the wrapper's
+  // (2 px on three sides; candidate render UhNHyA2M…, all four edges 1 px with it).
+  const canvasBorderRule = doc.querySelector(`table.${CANVAS_BORDER_CLASS}`) ? `table.${CANVAS_BORDER_CLASS}{border:none !important}` : '';
 
   if ((widths.size === 0 && !canvasBorderRule) || !doc.head) {
     return;
