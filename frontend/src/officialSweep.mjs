@@ -34,6 +34,8 @@ export const TEMPLATE_UPDATE_KEYS = Object.freeze(['id', 'name', 'type', 'subjec
 export const SWEEP_STATUSES = Object.freeze(['draft', 'scheduled', 'paused']);
 
 const BRAND_TAG_PREFIX = 'brand:';
+// The derivation default only (an untagged list / empty template brand). Since CURATED-FOOTER-SPEC
+// D1 `curated` is an ordinary brand in footer resolution.
 const CURATED = 'curated';
 
 export const isOfficialName = (name) => typeof name === 'string' && name.startsWith(OFFICIAL_PREFIX);
@@ -110,7 +112,7 @@ export function resolvesTo(kind, ctx, savedName) {
     return true;
   }
   const b = slug(ctx.brand);
-  return b !== '' && b !== CURATED && b === p.brand;
+  return b !== '' && b === p.brand;
 }
 
 function carries(bodySource, ctx, savedName) {

@@ -1,9 +1,9 @@
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D7. The Add-block menu's "Official footer"
 // entry as a pure document transform: the menu's onSelect contract inserts ONE block, the
-// footer is two. Inserts, at `index` in `parentId`'s children, the brand block (unless the
-// context brand is `curated`, which has no brand footer by design) followed by the corporate
-// block. A kind already present in the document -- in a block REACHABLE FROM ROOT -- is not
-// inserted again (idempotent). CONTAINER-NESTING-SPEC D12: an orphaned footer (a key no slot
+// footer is two. Inserts, at `index` in `parentId`'s children, the brand block followed by the
+// corporate block, for every brand (`curated` included -- CURATED-FOOTER-SPEC D2). A kind
+// already present in the document -- in a block REACHABLE FROM ROOT -- is not inserted again
+// (idempotent). CONTAINER-NESTING-SPEC D12: an orphaned footer (a key no slot
 // path from root reaches, e.g. left behind by the pre-erinos.N Delete) never compiles -- the
 // Reader walks from root -- so it no longer blocks the Insert.
 //
@@ -64,6 +64,9 @@ export function insertOfficialFooter(
   document: TDocument,
   parentId: string,
   index: number,
+  // Kept for the callers' contract; since CURATED-FOOTER-SPEC D2 no brand changes what is
+  // inserted (the blocks resolve their reference from the context at render time).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   context: TInsertContext
 ): TDocument {
   const parent = document[parentId];
@@ -72,10 +75,8 @@ export function insertOfficialFooter(
   }
 
   const present = presentKinds(document);
-  const brand = context && context.brand !== undefined && context.brand !== null ? String(context.brand) : null;
-  const isCurated = brand !== null && brand.toLowerCase().replace(/[^a-z0-9]/g, '') === 'curated';
   const wanted: string[] = [];
-  if (!isCurated && !present.has('brand')) {
+  if (!present.has('brand')) {
     wanted.push('brand');
   }
   if (!present.has('corporate')) {

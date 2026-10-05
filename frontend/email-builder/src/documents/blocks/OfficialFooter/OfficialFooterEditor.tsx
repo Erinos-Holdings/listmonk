@@ -33,8 +33,6 @@ export default function OfficialFooterEditor({ props }: OfficialFooterProps) {
   let body: JSX.Element;
   if (!res) {
     body = <Placeholder text="Official footer: unknown kind" />;
-  } else if (res.status === 'none') {
-    body = <Placeholder text="Corporate campaign — no brand footer" />;
   } else if (res.status === 'no-context') {
     body = <Placeholder text={kind === 'brand' ? 'Choose a list to resolve the brand footer' : 'Official footer: no context'} />;
   } else if (res.status === 'missing') {

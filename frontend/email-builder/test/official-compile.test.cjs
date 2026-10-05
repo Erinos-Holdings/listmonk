@@ -7,7 +7,8 @@
 //       the two marker comments per block; no wrapper element.
 //   I3  The markers survive postProcess and the editor quote hack into the stored body; the
 //       corporate marker's brand segment is `-`; a `missing` brand footer compiles to an empty
-//       marker pair; a `curated` brand block compiles to nothing; an OfficialFooter inside a
+//       marker pair; a `curated` brand block compiles like any brand's (CURATED-FOOTER-SPEC
+//       I2); an OfficialFooter inside a
 //       reference renders nothing (no recursion).
 //   I5  setOfficialContext/setOfficialFooters re-emit onChange with a regenerated body, and not
 //       before the first resetDocument.
@@ -100,12 +101,19 @@ async function main() {
   check('I3: brand pair precedes corporate pair', official.indexOf('official:brand') < official.indexOf('official:corporate'));
   check('I3: the quote hack ran (Go actions carry raw quotes)', !/\{\{[^}]*&quot;[^}]*\}\}/.test(official));
 
-  // missing brand -> empty pair; curated -> nothing.
+  // missing brand -> empty pair; curated -> like any brand.
   const liyora = EB.compileDocument(withBlocks, { lang: 'en', brand: 'liyora' }, REFS);
   check('I3: missing brand footer compiles to an EMPTY marker pair', liyora.includes('<!-- official:brand:en:liyora:missing --><!-- /official -->'), (liyora.match(MARKER_RE) || []).join(' '));
-  const curated = EB.compileDocument(withBlocks, { lang: 'en', brand: 'curated' }, REFS);
-  const curatedMarkers = curated.match(MARKER_RE) || [];
-  check('I3: curated brand block compiles to nothing, marker included', curatedMarkers.length === 2 && !curated.includes('official:brand') && !curated.includes('Asset-2RUZE.png'), curatedMarkers.join(' '));
+  // CURATED-FOOTER-SPEC I2: `curated` is an ordinary brand. A Curated reference (t14's body under
+  // the Curated name stands in for t37) compiles exactly like the RUZE one, its marker carrying
+  // the `curated` slug; with no Curated reference, the empty `missing` pair.
+  const curatedRefs = [...REFS, refOf({ ...t14, id: 37, name: 'Official_Curated_Footer_EN' })];
+  const curated = EB.compileDocument(withBlocks, { lang: 'en', brand: 'curated' }, curatedRefs);
+  check('CURATED I2: curated brand block compiles to its marker pair around the reference', curated.includes(`<!-- official:brand:en:curated:${H14} -->`) && curated.includes('Asset-2RUZE.png') && (curated.match(MARKER_RE) || []).length === 4, (curated.match(MARKER_RE) || []).join(' '));
+  check('CURATED I2: identical to the ruze compile but for the marker brand segment', curated.replace(`official:brand:en:curated:${H14}`, `official:brand:en:ruze:${H14}`) === official);
+  check('CURATED I2: curated brand pair precedes the corporate pair', curated.indexOf('official:brand:en:curated') < curated.indexOf('official:corporate'));
+  const curatedMissing = EB.compileDocument(withBlocks, { lang: 'en', brand: 'curated' }, REFS);
+  check('CURATED I2: no Curated reference -> the EMPTY missing pair', curatedMissing.includes('<!-- official:brand:en:curated:missing --><!-- /official -->') && !curatedMissing.includes('Asset-2RUZE.png'), (curatedMissing.match(MARKER_RE) || []).join(' '));
   const nolist = EB.compileDocument(withBlocks, { lang: 'en', brand: null }, REFS);
   check('no-context brand compiles to an empty pair; corporate still resolves', nolist.includes('<!-- official:brand:en:-:no-context --><!-- /official -->') && nolist.includes(`official:corporate:en:-:${H30}`));
   const es = EB.compileDocument(withBlocks, { lang: '', brand: 'ruze' }, REFS);

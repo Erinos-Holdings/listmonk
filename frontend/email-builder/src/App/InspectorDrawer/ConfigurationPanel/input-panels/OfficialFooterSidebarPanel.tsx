@@ -16,7 +16,6 @@ const STATUS_TEXT: Record<string, string> = {
   ok: 'Resolved',
   duplicate: 'Two templates share this name — using the lowest id. Rename or delete the other.',
   missing: 'Missing — no template of this name exists; the footer compiles empty.',
-  none: 'Corporate campaign — no brand footer.',
   'no-context': 'Choose a list to resolve the brand footer.',
 };
 
@@ -42,7 +41,7 @@ export default function OfficialFooterSidebarPanel({ data }: { data: OfficialFoo
           </Typography>
         )}
         {res && (
-          <Alert severity={res.status === 'ok' || res.status === 'none' ? 'info' : 'warning'}>{STATUS_TEXT[res.status]}</Alert>
+          <Alert severity={res.status === 'ok' ? 'info' : 'warning'}>{STATUS_TEXT[res.status]}</Alert>
         )}
         <Typography variant="caption" color="text.secondary">
           {OFFICIAL_LOCK_HINT}

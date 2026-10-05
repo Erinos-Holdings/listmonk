@@ -1,5 +1,5 @@
-// OFFICIAL-FOOTER-SPEC I6. insertOfficialFooter adds brand (unless curated) then corporate at the
-// given position and never duplicates a kind; the input document is never mutated.
+// OFFICIAL-FOOTER-SPEC I6. insertOfficialFooter adds brand (for every brand, curated included --
+// CURATED-FOOTER-SPEC I3) then corporate at the given position and never duplicates a kind; the input document is never mutated.
 // CONTAINER-NESTING-SPEC D12 / I5: only footers REACHABLE FROM ROOT count as present -- an
 // orphaned pair (e.g. left by the old Delete) never compiles and no longer blocks the Insert.
 const path = require('path');
@@ -28,10 +28,18 @@ check('root props kept', next.root.data.backdropColor === '#F5F5F5');
 next = insertOfficialFooter(base(), 'root', 1, { lang: 'en', brand: 'ruze' });
 check('inserts at the menu position', JSON.stringify(kinds(next, next.root.data.childrenIds)) === JSON.stringify(['a', 'OF:brand', 'OF:corporate', 'box', 'b']));
 
+// CURATED-FOOTER-SPEC I3: `curated` is an ordinary brand -- brand then corporate.
 next = insertOfficialFooter(base(), 'root', 3, { lang: 'en', brand: 'curated' });
-check('curated: corporate only', JSON.stringify(kinds(next, next.root.data.childrenIds)) === JSON.stringify(['a', 'box', 'b', 'OF:corporate']));
+check('I3: curated: brand then corporate', JSON.stringify(kinds(next, next.root.data.childrenIds)) === JSON.stringify(['a', 'box', 'b', 'OF:brand', 'OF:corporate']), JSON.stringify(kinds(next, next.root.data.childrenIds)));
 next = insertOfficialFooter(base(), 'root', 3, { lang: 'en', brand: 'Curated' });
-check('curated is case-insensitive', JSON.stringify(kinds(next, next.root.data.childrenIds)) === JSON.stringify(['a', 'box', 'b', 'OF:corporate']));
+check('I3: Curated (any casing): brand then corporate', JSON.stringify(kinds(next, next.root.data.childrenIds)) === JSON.stringify(['a', 'box', 'b', 'OF:brand', 'OF:corporate']));
+const curatedCorp = base();
+curatedCorp.corp = { type: 'OfficialFooter', data: { props: { kind: 'corporate' } } };
+curatedCorp.root.data.childrenIds = ['a', 'box', 'b', 'corp'];
+next = insertOfficialFooter(curatedCorp, 'root', 3, { lang: 'en', brand: 'curated' });
+check('I3: curated with corporate present: brand only, at the given position', JSON.stringify(kinds(next, next.root.data.childrenIds)) === JSON.stringify(['a', 'box', 'b', 'OF:brand', 'OF:corporate']), JSON.stringify(kinds(next, next.root.data.childrenIds)));
+check('I3: curated never duplicates a kind', insertOfficialFooter(next, 'root', 0, { lang: 'en', brand: 'curated' }) === next
+  && Object.values(next).filter((b) => b.type === 'OfficialFooter').length === 2);
 next = insertOfficialFooter(base(), 'root', 3, { lang: 'en', brand: null });
 check('unknown brand (no list yet): the pair (the brand block resolves later)', JSON.stringify(kinds(next, next.root.data.childrenIds)) === JSON.stringify(['a', 'box', 'b', 'OF:brand', 'OF:corporate']));
 
@@ -43,7 +51,10 @@ check('second insert is a no-op (same object)', twice === once);
 check('exactly one block of each kind', Object.values(twice).filter((b) => b.type === 'OfficialFooter').length === 2);
 
 // Only corporate present -> only brand added.
-const corpOnly = insertOfficialFooter(base(), 'root', 3, { lang: 'en', brand: 'curated' });
+// (Built by hand: before CURATED-FOOTER-SPEC a `curated` Insert produced it.)
+const corpOnly = base();
+corpOnly.corp = { type: 'OfficialFooter', data: { props: { kind: 'corporate' } } };
+corpOnly.root.data.childrenIds = ['a', 'box', 'b', 'corp'];
 const thenBrand = insertOfficialFooter(corpOnly, 'root', 3, { lang: 'en', brand: 'ruze' });
 check('missing kind only is added', JSON.stringify(kinds(thenBrand, thenBrand.root.data.childrenIds)) === JSON.stringify(['a', 'box', 'b', 'OF:brand', 'OF:corporate']), JSON.stringify(kinds(thenBrand, thenBrand.root.data.childrenIds)));
 

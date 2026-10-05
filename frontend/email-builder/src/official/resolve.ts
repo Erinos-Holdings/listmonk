@@ -9,8 +9,8 @@
 //
 // LANG is the upper-cased context lang; an empty lang resolves as `en` (a campaign stored
 // before the create-time default -- "no attribs.lang => the English send"). There is NO
-// cross-language fallback: an absent name is `missing`. Brand `curated` has no brand footer by
-// design (the corporate footer IS the Curated footer): a brand block resolves to `none`.
+// cross-language fallback: an absent name is `missing`. Brand `curated` is an ordinary brand
+// here (CURATED-FOOTER-SPEC D1, reversing OFFICIAL-FOOTER-SPEC D3).
 
 export const OFFICIAL_TEMPLATE_PREFIX = 'Official_';
 
@@ -32,7 +32,7 @@ export type TOfficialContext = {
   official?: boolean;
 };
 
-export type TOfficialStatus = 'ok' | 'missing' | 'none' | 'no-context' | 'duplicate';
+export type TOfficialStatus = 'ok' | 'missing' | 'no-context' | 'duplicate';
 
 export type TOfficialResolution = {
   status: TOfficialStatus;
@@ -40,8 +40,6 @@ export type TOfficialResolution = {
   name: string;
   ref?: TOfficialRef;
 };
-
-export const CURATED_BRAND = 'curated';
 
 // Lower-case, non-alphanumerics stripped: `AcmeCo` -> `acmeco`, `ACME` -> `acme`.
 // Applied to BOTH the name's brand segment and the context brand, so `acme-co` and
@@ -93,9 +91,6 @@ export function resolveOfficial(
       return { status: 'no-context', name: '' };
     }
     brandSlug = officialSlug(context.brand);
-    if (brandSlug === CURATED_BRAND) {
-      return { status: 'none', name: '' };
-    }
   }
 
   const matches = (refs ?? []).filter((r) => {

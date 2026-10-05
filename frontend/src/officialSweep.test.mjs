@@ -60,7 +60,7 @@ test('I10: selects only items whose OfficialFooter blocks resolve to the saved t
     camp(7, { status: 'running', evergreen: false }), // a broadcast in flight: never touched
     camp(8, { content_type: 'richtext' }),
     camp(9, { status: 'paused' }),
-    camp(10, { status: 'scheduled', lists: [{ id: 25 }] }), // curated: corporate only
+    camp(10, { status: 'scheduled', lists: [{ id: 25 }] }), // untagged -> curated (its brand block resolves Curated's)
     camp(11, { lists: [{ id: 15 }, { id: 16 }] }), // two brands
   ];
   const templates = [
@@ -89,6 +89,34 @@ test('I10: selects only items whose OfficialFooter blocks resolve to the saved t
 
   const none = selectSweepItems(campaigns, templates, { id: 99, name: 'Not official' }, LISTS);
   assert.equal(none.campaigns.length + none.evergreens.length + none.templates.length, 0);
+});
+
+test('CURATED-FOOTER-SPEC I4: a saved Official_Curated_Footer_EN selects the curated-context brand carriers only', () => {
+  const campaigns = [
+    camp(1, { lists: [{ id: 5 }] }), // brand:curated, brand + corporate
+    camp(2, { lists: [{ id: 25 }] }), // untagged -> curated, brand + corporate
+    camp(3, { lists: [{ id: 5 }], body_source: doc('corporate') }), // curated, corporate only
+    camp(4), // ruze, brand + corporate
+    camp(5, { lists: [{ id: 6 }] }), // thirstygirl
+    camp(6, { lists: [{ id: 5 }], attribs: { lang: 'es' } }), // curated es
+    camp(7, { lists: [{ id: 5 }], status: 'running', evergreen: true }), // curated evergreen
+  ];
+  const templates = [
+    tpl(37, 'Official_Curated_Footer_EN', { brand: 'curated' }),
+    tpl(50, 'Curated draft', { body_source: doc('brand', 'corporate') }), // empty brand -> curated
+    tpl(51, 'Curated tagged', { brand: 'curated', body_source: doc('brand') }),
+    tpl(52, 'Ruze draft', { brand: 'ruze', body_source: doc('brand', 'corporate') }),
+    tpl(53, 'Curated corporate', { body_source: doc('corporate') }),
+  ];
+  const cur = selectSweepItems(campaigns, templates, { id: 37, name: 'Official_Curated_Footer_EN' }, LISTS);
+  assert.deepEqual(cur.campaigns.map((c) => c.id), [1, 2]);
+  assert.deepEqual(cur.evergreens.map((c) => c.id), [7]);
+  assert.deepEqual(cur.templates.map((t) => t.id), [50, 51]);
+  assert.deepEqual(cur.unresolved, []);
+
+  const ruze = selectSweepItems(campaigns, templates, { id: 14, name: 'Official_RUZE_Footer_EN' }, LISTS);
+  assert.deepEqual(ruze.campaigns.map((c) => c.id), [4], 'a RUZE edit never selects a curated carrier');
+  assert.deepEqual(ruze.templates.map((t) => t.id), [52]);
 });
 
 test('I10: payload key sets equal CAMPAIGN_UPDATE_KEYS / TEMPLATE_UPDATE_KEYS (brand, lang included)', () => {

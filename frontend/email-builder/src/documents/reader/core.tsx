@@ -165,7 +165,6 @@ function EmailLayoutReader(props: EmailLayoutProps) {
 //   ok / duplicate  <!-- official:<kind>:<lang>:<brand>:<hash> --> ...children... <!-- /official -->
 //   missing         <!-- official:<kind>:<lang>:<brand>:missing --><!-- /official -->
 //   no-context      <!-- official:<kind>:<lang>:<brand>:no-context --><!-- /official -->
-//   none (curated)  nothing at all, marker included
 // `brand` is `-` for the corporate kind. An OfficialFooter met INSIDE a reference renders
 // nothing (depth 1 only).
 export const OFFICIAL_OPEN_TAG = 'lm-official-open';
@@ -212,9 +211,6 @@ function OfficialFooterReader({ props }: z.infer<typeof OfficialFooterPropsSchem
   }
 
   const res = resolveOfficial(kind, official.context, official.refs);
-  if (res.status === 'none') {
-    return <></>;
-  }
   const lang = officialLang(official.context?.lang).toLowerCase();
   const brand = kind === 'corporate' ? '-' : officialSlug(official.context?.brand) || '-';
   const prefix = `official:${kind}:${lang}:${brand}`;

@@ -1,6 +1,6 @@
 // OFFICIAL-FOOTER-SPEC I1. An OfficialFooter block stores only `kind`; the reference is resolved
-// from the context on every render, BY NAME: `en` for an empty lang, `curated` -> no brand
-// block, absent name -> `missing` (no cross-language fallback), no context -> `no-context`,
+// from the context on every render, BY NAME: `en` for an empty lang, `curated` an ordinary brand
+// (CURATED-FOOTER-SPEC I1), absent name -> `missing` (no cross-language fallback), no context -> `no-context`,
 // two rows of one name -> lowest id + `duplicate`. The template lang/brand columns drive nothing.
 const path = require('path');
 const { resolveOfficial, officialSlug, parseOfficialName } = require(path.join(__dirname, '.build', 'official', 'resolve.cjs'));
@@ -39,8 +39,21 @@ r = resolveOfficial('brand', { lang: 'fr', brand: 'ruze' }, REFS);
 check('brand fr absent -> missing (no cross-language fallback)', r.status === 'missing' && r.name === 'Official_ruze_Footer_FR');
 r = resolveOfficial('brand', { lang: 'en', brand: 'liyora' }, REFS);
 check('brand with no template -> missing', r.status === 'missing');
+// CURATED-FOOTER-SPEC I1: `curated` is an ordinary brand -- no context yields `none`.
+const CURATED_REFS = [...REFS, ref(37, 'Official_Curated_Footer_EN'), ref(38, 'Official_Curated_Footer_ES')];
+r = resolveOfficial('brand', { lang: 'en', brand: 'curated' }, CURATED_REFS);
+check('I1: brand curated en -> Official_Curated_Footer_EN (ok)', r.status === 'ok' && r.ref.id === 37 && r.name === 'Official_Curated_Footer_EN', JSON.stringify(r));
+r = resolveOfficial('brand', { lang: 'es', brand: 'Curated' }, CURATED_REFS);
+check('I1: curated is slug-compared (Curated es -> 38)', r.status === 'ok' && r.ref.id === 38);
 r = resolveOfficial('brand', { lang: 'en', brand: 'curated' }, REFS);
-check('brand curated -> none', r.status === 'none');
+check('I1: brand curated with no template -> missing (not none)', r.status === 'missing' && r.name === 'Official_curated_Footer_EN' && !r.ref, JSON.stringify(r));
+r = resolveOfficial('brand', { lang: 'fr', brand: 'curated' }, CURATED_REFS);
+check('I1: brand curated fr absent -> missing (no cross-language fallback)', r.status === 'missing' && r.name === 'Official_curated_Footer_FR');
+r = resolveOfficial('brand', { lang: 'en', brand: 'curated' }, [...CURATED_REFS, ref(45, 'Official_Curated_Footer_EN')]);
+check('I1: two Curated EN rows -> lowest id + duplicate', r.status === 'duplicate' && r.ref.id === 37);
+const anyNone = ['curated', 'Curated', 'ruze', 'liyora', '', null].some((b) =>
+  ['en', 'es', 'fr'].some((l) => ['brand', 'corporate'].some((k) => resolveOfficial(k, { lang: l, brand: b }, CURATED_REFS).status === 'none')));
+check('I1: no context brand yields status none', !anyNone);
 r = resolveOfficial('brand', { lang: 'en', brand: null }, REFS);
 check('brand null -> no-context', r.status === 'no-context');
 r = resolveOfficial('brand', null, REFS);
