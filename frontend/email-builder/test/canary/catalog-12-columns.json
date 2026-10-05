@@ -40,6 +40,12 @@
         "s12-r016",
         "s12-r017-label",
         "s12-r017",
+        "s12-r018-label",
+        "s12-r018",
+        "s12-r019-label",
+        "s12-r019",
+        "s12-r020-label",
+        "s12-r020",
         "s12-end"
       ]
     }
@@ -70,8 +76,6 @@
         "text": "",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -99,7 +103,7 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
+        "contentAlignment": "top",
         "columns": [
           {
             "childrenIds": []
@@ -192,8 +196,6 @@
         "text": "",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -222,12 +224,7 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          60,
-          null,
-          null
-        ],
+        "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": []
@@ -313,21 +310,19 @@
       }
     }
   },
-  "s12-r003-c0": {
+  "s12-r003-c1": {
     "type": "Button",
     "data": {
       "props": {
         "text": "",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "buttonStyle": "rectangle",
         "borderSize": 2,
         "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -351,15 +346,15 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
         "columns": [
           {
-            "childrenIds": [
-              "s12-r003-c0"
-            ]
+            "childrenIds": []
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s12-r003-c1"
+            ]
           },
           {
             "childrenIds": []
@@ -437,13 +432,14 @@
       }
     }
   },
-  "s12-r004-c0": {
+  "s12-r004-c1": {
     "type": "Button",
     "data": {
       "props": {
         "text": "",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -471,15 +467,20 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          60,
+          null,
+          null
+        ],
         "columns": [
           {
-            "childrenIds": [
-              "s12-r004-c0"
-            ]
+            "childrenIds": []
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s12-r004-c1"
+            ]
           },
           {
             "childrenIds": []
@@ -557,18 +558,19 @@
       }
     }
   },
-  "s12-r005-c0": {
+  "s12-r005-c1": {
     "type": "Button",
     "data": {
       "props": {
         "text": "",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
+        "fullWidth": false,
         "buttonStyle": "rectangle",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -592,20 +594,20 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
         "fixedWidths": [
-          null,
           60,
+          null,
           null
         ],
         "columns": [
           {
-            "childrenIds": [
-              "s12-r005-c0"
-            ]
+            "childrenIds": []
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s12-r005-c1"
+            ]
           },
           {
             "childrenIds": []
@@ -689,13 +691,14 @@
       "props": {
         "text": "",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
+        "fullWidth": false,
         "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -719,12 +722,7 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "fixedWidths": [
-          null,
-          60,
-          null
-        ],
+        "contentAlignment": "top",
         "columns": [
           {
             "childrenIds": [
@@ -811,49 +809,62 @@
     }
   },
   "s12-r007-c0": {
-    "type": "Text",
+    "type": "Button",
     "data": {
       "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
+        "text": "",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": true,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "left",
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontFamily": "GEORGIA"
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
-  "s12-r007-c1": {
-    "type": "Text",
+  "s12-r007-in": {
+    "type": "ColumnsContainer",
     "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
       "style": {
-        "textAlign": "center",
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontFamily": "GEORGIA"
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "bottom",
+        "columns": [
+          {
+            "childrenIds": [
+              "s12-r007-c0"
+            ]
+          },
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": []
+          }
+        ]
       }
     }
   },
-  "s12-r007-c2": {
+  "s12-r007-of": {
     "type": "Text",
     "data": {
       "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
+        "text": "Cell",
+        "markdown": true
       },
       "style": {
         "padding": {
@@ -877,29 +888,22 @@
         }
       },
       "props": {
-        "columnsCount": 3,
+        "columnsCount": 2,
         "columnsGap": 16,
         "contentAlignment": "middle",
-        "fixedWidths": [
-          60,
-          60,
-          null
-        ],
         "columns": [
           {
             "childrenIds": [
-              "s12-r007-c0"
+              "s12-r007-in"
             ]
           },
           {
             "childrenIds": [
-              "s12-r007-c1"
+              "s12-r007-of"
             ]
           },
           {
-            "childrenIds": [
-              "s12-r007-c2"
-            ]
+            "childrenIds": []
           }
         ]
       }
@@ -928,34 +932,10 @@
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "customWidth": 60,
+        "fullWidth": true,
         "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s12-r008-c1": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -969,18 +949,50 @@
       }
     }
   },
-  "s12-r008-c2": {
-    "type": "Button",
+  "s12-r008-in": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          null,
+          60,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s12-r008-c0"
+            ]
+          },
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": []
+          }
+        ]
+      }
+    }
+  },
+  "s12-r008-of": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": true,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "Cell",
+        "markdown": true
       },
       "style": {
-        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1002,24 +1014,22 @@
         }
       },
       "props": {
-        "columnsCount": 3,
+        "columnsCount": 2,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s12-r008-c0"
+              "s12-r008-in"
             ]
           },
           {
             "childrenIds": [
-              "s12-r008-c1"
+              "s12-r008-of"
             ]
           },
           {
-            "childrenIds": [
-              "s12-r008-c2"
-            ]
+            "childrenIds": []
           }
         ]
       }
@@ -1045,17 +1055,18 @@
     }
   },
   "s12-r009-c0": {
-    "type": "Image",
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "height": 80,
-        "contentAlignment": "middle"
+        "text": "",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": true,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1065,17 +1076,9 @@
       }
     }
   },
-  "s12-r009-c1": {
-    "type": "Image",
+  "s12-r009-in": {
+    "type": "ColumnsContainer",
     "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
-      },
       "style": {
         "padding": {
           "top": 16,
@@ -1083,22 +1086,40 @@
           "left": 24,
           "right": 24
         }
+      },
+      "props": {
+        "columnsCount": 2,
+        "columnsGap": 16,
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          null,
+          60,
+          null
+        ],
+        "columns": [
+          {
+            "childrenIds": [
+              "s12-r009-c0"
+            ]
+          },
+          {
+            "childrenIds": []
+          },
+          {
+            "childrenIds": []
+          }
+        ]
       }
     }
   },
-  "s12-r009-c2": {
-    "type": "Image",
+  "s12-r009-of": {
+    "type": "Text",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Cell",
+        "markdown": true
       },
       "style": {
-        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1120,24 +1141,22 @@
         }
       },
       "props": {
-        "columnsCount": 3,
+        "columnsCount": 2,
         "columnsGap": 16,
         "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
-              "s12-r009-c0"
+              "s12-r009-in"
             ]
           },
           {
             "childrenIds": [
-              "s12-r009-c1"
+              "s12-r009-of"
             ]
           },
           {
-            "childrenIds": [
-              "s12-r009-c2"
-            ]
+            "childrenIds": []
           }
         ]
       }
@@ -1163,23 +1182,17 @@
     }
   },
   "s12-r010-c0": {
-    "type": "Image",
+    "type": "Divider",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "lineColor": "#CCCCCC"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -1188,10 +1201,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
         "alt": "Catalog image",
-        "linkHref": null,
-        "height": 80,
+        "linkHref": "https://canary.invalid/catalog",
+        "width": 120,
         "contentAlignment": "middle",
         "embed": true
       },
@@ -1207,21 +1220,17 @@
     }
   },
   "s12-r010-c2": {
-    "type": "Image",
+    "type": "Divider",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle"
+        "lineColor": "#CCCCCC"
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -1240,7 +1249,12 @@
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          60,
+          null,
+          60
+        ],
         "columns": [
           {
             "childrenIds": [
@@ -1281,17 +1295,16 @@
     }
   },
   "s12-r011-c0": {
-    "type": "Image",
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle"
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1302,43 +1315,34 @@
     }
   },
   "s12-r011-c1": {
-    "type": "Image",
+    "type": "Divider",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle"
+        "lineColor": "#CCCCCC"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
   },
   "s12-r011-c2": {
-    "type": "Image",
+    "type": "Text",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle"
+        "text": "",
+        "markdown": true
       },
       "style": {
-        "textAlign": "right",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -1357,7 +1361,12 @@
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          null,
+          60,
+          60
+        ],
         "columns": [
           {
             "childrenIds": [
@@ -1398,61 +1407,50 @@
     }
   },
   "s12-r012-c0": {
-    "type": "Image",
+    "type": "Divider",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle"
+        "lineColor": "#CCCCCC"
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
   },
   "s12-r012-c1": {
-    "type": "Image",
+    "type": "Text",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle"
+        "text": "",
+        "markdown": true
       },
       "style": {
-        "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
   },
   "s12-r012-c2": {
-    "type": "Image",
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle"
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1467,16 +1465,21 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          60,
+          60,
+          null
+        ],
         "columns": [
           {
             "childrenIds": [
@@ -1517,15 +1520,32 @@
     }
   },
   "s12-r013-c0": {
-    "type": "Image",
+    "type": "Text",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle"
+        "text": "",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s12-r013-c1": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "textAlign": "right",
@@ -1538,47 +1558,18 @@
       }
     }
   },
-  "s12-r013-c1": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
   "s12-r013-c2": {
-    "type": "Image",
+    "type": "Divider",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "lineColor": "#CCCCCC"
       },
       "style": {
-        "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -1588,16 +1579,21 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          60,
+          null,
+          60
+        ],
         "columns": [
           {
             "childrenIds": [
@@ -1638,19 +1634,19 @@
     }
   },
   "s12-r014-c0": {
-    "type": "Image",
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1661,40 +1657,34 @@
     }
   },
   "s12-r014-c1": {
-    "type": "Image",
+    "type": "Divider",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle"
+        "lineColor": "#CCCCCC"
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
   },
   "s12-r014-c2": {
-    "type": "Image",
+    "type": "Text",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle"
+        "text": "",
+        "markdown": true
       },
       "style": {
-        "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -1704,16 +1694,21 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          null,
+          60,
+          60
+        ],
         "columns": [
           {
             "childrenIds": [
@@ -1753,71 +1748,8 @@
       }
     }
   },
-  "s12-r015-c0": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s12-r015-c1": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s12-r015-c2": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
   "s12-r015": {
-    "type": "ColumnsContainer",
+    "type": "Container",
     "data": {
       "style": {
         "padding": {
@@ -1828,26 +1760,7 @@
         }
       },
       "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "columns": [
-          {
-            "childrenIds": [
-              "s12-r015-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s12-r015-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s12-r015-c2"
-            ]
-          }
-        ]
+        "childrenIds": []
       }
     }
   },
@@ -1870,77 +1783,74 @@
       }
     }
   },
-  "s12-r016-k0": {
+  "s12-r016-c0": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go far",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF",
-        "size": "small",
+        "fullWidth": false,
+        "customWidth": 60,
         "buttonStyle": "rectangle",
-        "fullWidth": true
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
+        "textAlign": "right",
         "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 8,
-          "right": 8
-        },
-        "textAlign": "center"
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
-  "s12-r016-k1": {
+  "s12-r016-c1": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go far",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
+        "fullWidth": true,
         "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF",
-        "size": "small",
-        "buttonStyle": "rounded",
-        "fullWidth": true
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 8,
-          "right": 8
-        },
-        "textAlign": "center"
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
-  "s12-r016-k2": {
+  "s12-r016-c2": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go far",
+        "text": "Go → now",
         "url": "https://canary.invalid/catalog",
+        "fullWidth": true,
         "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF",
-        "size": "small",
-        "buttonStyle": "pill",
-        "fullWidth": true
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
+        "textAlign": "left",
         "padding": {
-          "top": 8,
-          "bottom": 8,
-          "left": 8,
-          "right": 8
-        },
-        "textAlign": "center"
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
   "s12-r016": {
-    "type": "Container",
+    "type": "ColumnsContainer",
     "data": {
       "style": {
         "padding": {
@@ -1951,10 +1861,25 @@
         }
       },
       "props": {
-        "childrenIds": [
-          "s12-r016-k0",
-          "s12-r016-k1",
-          "s12-r016-k2"
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s12-r016-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s12-r016-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s12-r016-c2"
+            ]
+          }
         ]
       }
     }
@@ -1978,7 +1903,356 @@
       }
     }
   },
-  "s12-r017-k0": {
+  "s12-r017-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r017-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r017-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r017": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s12-r017-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s12-r017-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s12-r017-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s12-r018-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R12.18",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 11,
+        "color": "#666666"
+      }
+    }
+  },
+  "s12-r018-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r018-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r018-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r018": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s12-r018-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s12-r018-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s12-r018-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s12-r019-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R12.19",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 11,
+        "color": "#666666"
+      }
+    }
+  },
+  "s12-r019-c0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r019-c1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r019-c2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s12-r019": {
+    "type": "ColumnsContainer",
+    "data": {
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s12-r019-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s12-r019-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s12-r019-c2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "s12-r020-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R12.20",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 11,
+        "color": "#666666"
+      }
+    }
+  },
+  "s12-r020-k0": {
     "type": "Button",
     "data": {
       "props": {
@@ -1986,7 +2260,7 @@
         "url": "https://canary.invalid/catalog",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF",
-        "size": "large",
+        "size": "small",
         "buttonStyle": "rectangle",
         "fullWidth": true
       },
@@ -2001,7 +2275,7 @@
       }
     }
   },
-  "s12-r017-k1": {
+  "s12-r020-k1": {
     "type": "Button",
     "data": {
       "props": {
@@ -2009,7 +2283,7 @@
         "url": "https://canary.invalid/catalog",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF",
-        "size": "large",
+        "size": "small",
         "buttonStyle": "rounded",
         "fullWidth": true
       },
@@ -2024,7 +2298,7 @@
       }
     }
   },
-  "s12-r017-k2": {
+  "s12-r020-k2": {
     "type": "Button",
     "data": {
       "props": {
@@ -2032,7 +2306,7 @@
         "url": "https://canary.invalid/catalog",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF",
-        "size": "large",
+        "size": "small",
         "buttonStyle": "pill",
         "fullWidth": true
       },
@@ -2047,7 +2321,7 @@
       }
     }
   },
-  "s12-r017": {
+  "s12-r020": {
     "type": "Container",
     "data": {
       "style": {
@@ -2060,9 +2334,9 @@
       },
       "props": {
         "childrenIds": [
-          "s12-r017-k0",
-          "s12-r017-k1",
-          "s12-r017-k2"
+          "s12-r020-k0",
+          "s12-r020-k1",
+          "s12-r020-k2"
         ]
       }
     }

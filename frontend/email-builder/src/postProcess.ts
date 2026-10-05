@@ -729,9 +729,12 @@ function transformSimpleDivBlocks(doc: Document) {
         // 2026-08-07). Convert block-wrapping divs (tables and nested block
         // wrappers alike) when they carry a real box, so zero-padding
         // structural wrappers stay divs.
+        // RENDER-CATALOG-SPEC §17.5 F4 (integrations): a border is a box too — Word does not draw
+        // a div's right border (a zero-padding bordered Container, R3.5 and R10.3).
         const padding = getPaddingValues(styleMap);
         return padding.top > 0 || padding.right > 0 || padding.bottom > 0 || padding.left > 0
-          || Boolean(styleMap['background-color']);
+          || Boolean(styleMap['background-color'])
+          || hasBorder(styleMap);
       }
     }
 
@@ -745,7 +748,8 @@ function transformSimpleDivBlocks(doc: Document) {
     const padding = getPaddingValues(styleMap);
     return padding.top > 0 || padding.right > 0 || padding.bottom > 0 || padding.left > 0
       || Boolean(styleMap['background-color'])
-      || Boolean(styleMap.height);
+      || Boolean(styleMap.height)
+      || hasBorder(styleMap);
   }) as HTMLDivElement[];
 
   // Innermost-first: converting an ancestor re-parses its subtree, which
@@ -796,11 +800,43 @@ function transformSimpleDivBlocks(doc: Document) {
     }
     const alignAttr = tdAlign ? ` align="${escapeAttribute(tdAlign)}"` : '';
 
-    const blockHtml = buildPresentationTable(
-      `<tbody><tr><td${alignAttr}${bgcolorAttr} style="${escapeAttribute(styleValue)}">${div.innerHTML}</td></tr></tbody>`
-    );
+    const cell = `<tbody><tr><td${alignAttr}${bgcolorAttr} style="${escapeAttribute(styleValue)}">${div.innerHTML}</td></tr></tbody>`;
+    // F4: a bordered block with zero padding fills its table, and a collapsed border on a box
+    // that fills its wrapper loses its right edge in Word (candidate C2: four edges, 600 px with
+    // `separate`). Padded bordered blocks keep the collapsed form they render correctly in.
+    const padding = getPaddingValues(styleMap);
+    const zeroPadding = padding.top === 0 && padding.right === 0 && padding.bottom === 0 && padding.left === 0;
+    const blockHtml = zeroPadding && hasBorder(styleMap)
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;mso-table-lspace:0pt;mso-table-rspace:0pt;">${cell}</table>`
+      : buildPresentationTable(cell);
 
     replaceNodeWithHtml(div, blockHtml);
+  });
+}
+
+// RENDER-CATALOG-SPEC §17.5 F1 (integrations): Word never draws an `<hr>` narrower than about
+// 107 px — a narrower cell is stretched to it, shifting its neighbours — and ignores the
+// Divider's side padding (discovery 2026-10-04, sheets 02 and 05–15; candidate render
+// tZzFO7s3…, rows D1). The Divider's line is therefore given to Word as a one-cell table whose
+// top border is the line (the block's own height and colour), inside a downlevel-HIDDEN
+// conditional, and the `<hr>` stays for every other client inside the `lm-nomso` wrapper the
+// Button twin uses (hazard 53: never a downlevel-revealed conditional). Only a builder Divider's
+// rule is rewritten: an `<hr>` with a px `border-top`, never one inside user Html.
+const DIVIDER_BORDER_TOP = /^\s*(\d+(?:\.\d+)?)px\s+solid\s+(#[0-9a-f]{3,8}|rgba?\([^)]*\)|[a-z]+)\s*$/i;
+
+function transformDividerBlocks(doc: Document) {
+  Array.from(doc.querySelectorAll('hr')).forEach((hr) => {
+    if (hr.closest('[data-lm-user-html]') || hr.parentElement?.classList.contains(NON_MSO_CLASS)) {
+      return;
+    }
+    const match = DIVIDER_BORDER_TOP.exec(parseStyleMap(hr.getAttribute('style'))['border-top'] || '');
+    if (!match) {
+      return;
+    }
+    const line = makeSafeTemplate(
+      `<!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tr><td style="border-top:${match[1]}px solid ${escapeAttribute(match[2])};font-size:1px;line-height:1px;mso-line-height-rule:exactly">&nbsp;</td></tr></table><![endif]-->`
+    );
+    replaceNodeWithHtml(hr, `${line}<div class="${NON_MSO_CLASS}" style="${NON_MSO_HIDE_STYLE}">${hr.outerHTML}</div>`);
   });
 }
 
@@ -1251,6 +1287,12 @@ export function getBorderWidths(styleMap: TStyleMap): Pick<TPaddingValues, 'top'
   };
 }
 
+// RENDER-CATALOG-SPEC §17.5 F3/F4: whether a style draws a border on any side.
+function hasBorder(styleMap: TStyleMap) {
+  const b = getBorderWidths(styleMap);
+  return b.top > 0 || b.right > 0 || b.bottom > 0 || b.left > 0;
+}
+
 function getHorizontalInset(styleMap: TStyleMap) {
   const padding = getPaddingValues(styleMap);
   const border = getBorderWidths(styleMap);
@@ -1328,6 +1370,9 @@ function findCanvasTable(doc: Document): { table: HTMLTableElement; width: numbe
   return null;
 }
 
+// §17.5 F3: the class a bordered canvas table carries, whose border Word alone does not draw.
+const CANVAS_BORDER_CLASS = 'lm-cvb';
+
 function constrainCanvasForOutlook(doc: Document) {
   const found = findCanvasTable(doc);
   if (!found) {
@@ -1336,10 +1381,24 @@ function constrainCanvasForOutlook(doc: Document) {
 
   const { table: canvas, width: canvasWidth } = found;
 
+  // RENDER-CATALOG-SPEC §17.5 F3 (integrations): a border on a canvas table that holds a
+  // fixed-layout row loses its right edge in Word whatever the table's own settings (collapse,
+  // separate, a Word width class, a narrower wrapper: candidate render NAYVYSCV…, sheet 06 rows).
+  // So in Word the border is drawn by the Word-only wrapper's cell, with the layout's own width
+  // and colour, and the canvas table's own border is switched off for Word alone (class `lm-cvb`
+  // and `table.lm-cvb{border:none}` in the Word-only head block, addWordColumnWidthStyles). The
+  // canvas table is otherwise untouched; a canvas with no border gets nothing.
+  const canvasBorder = parseButtonBorder(parseStyleMap(canvas.getAttribute('style')));
+  const bordered = Boolean(canvasBorder.color) && canvasBorder.width > 0;
+  const wrapperCellStyle = bordered ? ` style="border:${canvasBorder.width}px solid ${escapeAttribute(canvasBorder.color as string)}"` : '';
+  if (bordered) {
+    canvas.setAttribute('class', `${canvas.getAttribute('class') || ''} ${CANVAS_BORDER_CLASS}`.trim());
+  }
+
   // Word ignores max-width, so without this the white canvas table spans the
   // full reading pane. Pin it to its real width with a conditional ghost table.
   const ghostStart = makeSafeTemplate(
-    `<!--[if mso]><table role="presentation" align="center" width="${canvasWidth}" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tr><td><![endif]-->`
+    `<!--[if mso]><table role="presentation" align="center" width="${canvasWidth}" cellpadding="0" cellspacing="0" border="0" style="${PRESENTATION_TABLE_STYLE}"><tr><td${wrapperCellStyle}><![endif]-->`
   );
   const ghostEnd = makeSafeTemplate('<!--[if mso]></td></tr></table><![endif]-->');
 
@@ -1428,6 +1487,12 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   const { td, anchor } = found;
   const anchorStyleMap = parseStyleMap(anchor.getAttribute('style'));
   const width = Math.floor(available);
+  // RENDER-CATALOG-SPEC §17.5 F2 (integrations): Word draws the VML stroke OUTSIDE the box, and
+  // rounds a fractional column up, so a box the full width of its slot widened the canvas (three
+  // columns, box 125 px: canvas 605; 123: 600 — candidate render tZzFO7s3…). The Word box (the VML
+  // group, and a fallback's table) is 2 px narrower than its slot, never below 1. The Gmail pin
+  // class and the non-Word twin keep the slot width.
+  const wordWidth = Math.max(1, width - 2);
   const buttonColor = td.getAttribute('bgcolor') || anchorStyleMap['background-color'] || '#0055d4';
   const href = anchor.getAttribute('href') || '#';
   const text = anchor.textContent?.replace(/\s+/g, ' ').trim() || '';
@@ -1448,7 +1513,7 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
   // the column width with the same calibrated heuristic the custom-size
   // branch uses. Overestimating degrades safely (a slightly taller button,
   // text still centered); underestimating hides text in Word.
-  const contentWidth = Math.max(1, width - padding.left - padding.right - borderWidth * 2);
+  const contentWidth = Math.max(1, wordWidth - padding.left - padding.right - borderWidth * 2);
   const lines = Math.max(1, Math.ceil(estimateTextWidth(text, fontSize, fontWeight) / contentWidth));
   const measuredHeight = lineHeight * lines + padding.top + padding.bottom;
   const cssHeight = lineHeightPx !== null ? measuredHeight : Math.max(measuredHeight, 32);
@@ -1465,13 +1530,13 @@ function transformFullWidthButtonForMso(table: Element, available: number) {
     borderColor,
     borderWidth,
     borderRadius: getPixelValue(anchorStyleMap['border-radius']) || 0,
-    width,
+    width: wordWidth,
     height,
     // More than one line selects the S5 fallback: VML text draws a single line.
     lines,
-    // The fallback cell (§12.3): the anchor's padding, the column budget, any CSS height.
+    // The fallback cell (§12.3): the anchor's padding, the column budget (less F2's 2 px), any CSS height.
     padding,
-    boxWidth: width,
+    boxWidth: wordWidth,
     boxHeight: getPixelValue(anchorStyleMap.height),
   });
 
@@ -1788,14 +1853,17 @@ function addWordColumnWidthStyles(doc: Document) {
   });
   doc.querySelectorAll(`[${WORD_COLUMN_FENCE_ATTR}]`).forEach((table) => table.removeAttribute(WORD_COLUMN_FENCE_ATTR));
 
-  if (widths.size === 0 || !doc.head) {
+  // §17.5 F3: a bordered canvas's own border is off in Word (its wrapper cell draws it).
+  const canvasBorderRule = doc.querySelector(`table.${CANVAS_BORDER_CLASS}`) ? `table.${CANVAS_BORDER_CLASS}{border:none}` : '';
+
+  if ((widths.size === 0 && !canvasBorderRule) || !doc.head) {
     return;
   }
 
   const rules = Array.from(widths)
     .sort((a, b) => a - b)
     .map((w) => `td.lm-cw-${w}{width:${w}px}`)
-    .join('');
+    .join('') + canvasBorderRule;
   doc.head.appendChild(doc.createTextNode(makeSafeTemplate(`<!--[if mso]><style>${rules}</style><![endif]-->`)));
 }
 
@@ -1823,6 +1891,9 @@ export function postProcess(html: string, options: { outlook: boolean }) {
     transformHeadingBlocks(doc);
     addWordFontFallbacks(doc);
     expandBorderShorthands(doc);
+    // F1 before the div pass: that pass rebuilds an Html block's wrapper as a cell without its
+    // `data-lm-user-html` marker, and the marker is what keeps a hand-written <hr> untouched.
+    transformDividerBlocks(doc);
     transformSimpleDivBlocks(doc);
     clampImagesToCanvas(doc);
     constrainCanvasForOutlook(doc);

@@ -26,7 +26,8 @@ const markers = [...raw.matchAll(/<span data-lm-vml-href="https:\/\/listmonk\.ap
 // text shape, so each button emits two markers.
 check('16 VML href markers (8 buttons x 2 shapes) emitted outside the Safe payloads', markers.length === 16, `count=${markers.length}`);
 check('every button is the textpath shape (no S5 fallback in campaign 10)', (out.match(/v:textpath\\x20/g) || []).length === 8 && !/anchorlock/.test(out));
-check('all sized to the column budget 244px -> 183pt', msoVml.every((m) => /width:183pt/.test(m[0])));
+// integrations RENDER-CATALOG-SPEC §17.5 F2: the Word box is the budget less 2 px (242px).
+check('all sized to the column budget 244px less 2 (F2) = 242px -> 181.5pt', msoVml.every((m) => /width:181\.5pt/.test(m[0])));
 const h3675 = msoVml.filter((m) => /height:36.75pt/.test(m[0])).length;
 const h3375 = msoVml.filter((m) => /height:33.75pt/.test(m[0])).length;
 check('7 standard shapes at 49px -> 36.75pt', h3675 === 7, `count=${h3675}`);

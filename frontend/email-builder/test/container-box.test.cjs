@@ -1,7 +1,7 @@
 // integrations BIBLE-OUTLOOK-FIXES-SPEC §12 (Amendment A) IA20 — the compile side of SA9: with the
 // Outlook flag on, a Container becomes a table CELL exactly when its style holds a padding object
-// and one side is above 0 or a background is set (transformSimpleDivBlocks); otherwise it stays a
-// `div`. The review's version 2 Container descriptor carries `box=cell|div` from that same rule
+// and one side is above 0, a background is set or (RENDER-CATALOG-SPEC §17.5 F4) a border is set
+// (transformSimpleDivBlocks); otherwise it stays a `div`. The review's version 2 Container descriptor carries `box=cell|div` from that same rule
 // (integrations lib/campaign-review/fingerprint.ts::containerBox), pinned against the same style
 // combinations in tests/lib/campaign-review/fingerprint-v2.test.ts (BOX_CASES, IA7) — the two
 // tables agree by copy; each file names the other.
@@ -27,7 +27,10 @@ const BOX_CASES = [
   ['padding above 0 with a border', { padding: { top: 0, right: 0, bottom: 16, left: 0 }, borderColor: '#000000' }, 'cell'],
   ['border alone', { borderColor: '#000000' }, 'div'],
   ['radius alone', { borderRadius: 8 }, 'div'],
-  ['border with zero padding', { borderColor: '#000000', ...ZERO }, 'div'],
+  // integrations RENDER-CATALOG-SPEC §17.5 F4: a border with a padding object is a box too (Word
+  // drops a div's right border). A style with no padding key (not producible in the editor) keeps
+  // the div, as above.
+  ['border with zero padding', { borderColor: '#000000', ...ZERO }, 'cell'],
   ['radius with zero padding', { borderRadius: 8, ...ZERO }, 'div'],
 ];
 

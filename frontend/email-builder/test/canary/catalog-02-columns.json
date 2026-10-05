@@ -4,8 +4,11 @@
     "data": {
       "backdropColor": "#F5F5F5",
       "canvasColor": "#FFFFFF",
+      "borderColor": "#000000",
+      "borderRadius": 8,
       "fontFamily": "MODERN_SANS",
       "textColor": "#262626",
+      "linkColor": "#777e5c",
       "outlook": true,
       "childrenIds": [
         "s02-r001-label",

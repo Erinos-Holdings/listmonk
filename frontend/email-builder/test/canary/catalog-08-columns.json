@@ -59,15 +59,35 @@
       }
     }
   },
-  "s08-r001-c1": {
-    "type": "Text",
+  "s08-r001-c0": {
+    "type": "Divider",
     "data": {
       "props": {
-        "text": "",
-        "markdown": true
+        "lineColor": "#CCCCCC"
       },
       "style": {
-        "textAlign": "left",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s08-r001-c1": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -78,64 +98,19 @@
     }
   },
   "s08-r001-c2": {
-    "type": "Text",
+    "type": "Button",
     "data": {
       "props": {
-        "text": "",
-        "markdown": true
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r001-in": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "columns": [
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": [
-              "s08-r001-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s08-r001-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s08-r001-of": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Cell",
-        "markdown": true
-      },
-      "style": {
+        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -150,29 +125,36 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          60,
+          null,
+          null
+        ],
         "columns": [
           {
             "childrenIds": [
-              "s08-r001-in"
+              "s08-r001-c0"
             ]
           },
           {
             "childrenIds": [
-              "s08-r001-of"
+              "s08-r001-c1"
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s08-r001-c2"
+            ]
           }
         ]
       }
@@ -198,22 +180,6 @@
     }
   },
   "s08-r002-c0": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s08-r002-c1": {
     "type": "Button",
     "data": {
       "props": {
@@ -226,11 +192,28 @@
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
           "left": 24,
           "right": 24
+        }
+      }
+    }
+  },
+  "s08-r002-c1": {
+    "type": "Divider",
+    "data": {
+      "props": {
+        "lineColor": "#CCCCCC"
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -248,7 +231,7 @@
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -274,8 +257,8 @@
         "columnsGap": 16,
         "contentAlignment": "bottom",
         "fixedWidths": [
-          60,
           null,
+          60,
           null
         ],
         "columns": [
@@ -324,8 +307,29 @@
         "text": "Go",
         "url": "https://canary.invalid/catalog",
         "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s08-r003-c1": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
@@ -340,7 +344,7 @@
       }
     }
   },
-  "s08-r003-c1": {
+  "s08-r003-c2": {
     "type": "Divider",
     "data": {
       "props": {
@@ -352,29 +356,6 @@
           "bottom": 0,
           "left": 0,
           "right": 0
-        }
-      }
-    }
-  },
-  "s08-r003-c2": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
         }
       }
     }
@@ -396,8 +377,8 @@
         "contentAlignment": "bottom",
         "fixedWidths": [
           null,
-          60,
-          null
+          null,
+          60
         ],
         "columns": [
           {
@@ -439,15 +420,13 @@
     }
   },
   "s08-r004-k0": {
-    "type": "Image",
+    "type": "Avatar",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle",
-        "embed": true
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "square",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "padding": {
@@ -460,15 +439,13 @@
     }
   },
   "s08-r004-k1": {
-    "type": "Image",
+    "type": "Avatar",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle",
-        "embed": true
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "square",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "textAlign": "left",
@@ -482,15 +459,13 @@
     }
   },
   "s08-r004-k2": {
-    "type": "Image",
+    "type": "Avatar",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle",
-        "embed": true
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "square",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "textAlign": "center",
@@ -504,15 +479,13 @@
     }
   },
   "s08-r004-k3": {
-    "type": "Image",
+    "type": "Avatar",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle",
-        "embed": true
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "square",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "textAlign": "right",
@@ -529,12 +502,11 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
         "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "contentAlignment": "middle",
-        "embed": true
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle"
       },
       "style": {
         "padding": {
@@ -550,12 +522,11 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
         "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "contentAlignment": "middle",
-        "embed": true
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle"
       },
       "style": {
         "textAlign": "left",
@@ -610,11 +581,139 @@
       }
     }
   },
+  "s08-r005-k0": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s08-r005-k1": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s08-r005-k2": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s08-r005-k3": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s08-r005-k4": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
+  "s08-r005-k5": {
+    "type": "Image",
+    "data": {
+      "props": {
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "height": 80,
+        "contentAlignment": "middle",
+        "embed": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      }
+    }
+  },
   "s08-r005": {
     "type": "Container",
     "data": {
       "style": {
-        "borderRadius": 8,
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -623,7 +722,14 @@
         }
       },
       "props": {
-        "childrenIds": []
+        "childrenIds": [
+          "s08-r005-k0",
+          "s08-r005-k1",
+          "s08-r005-k2",
+          "s08-r005-k3",
+          "s08-r005-k4",
+          "s08-r005-k5"
+        ]
       }
     }
   },
@@ -647,13 +753,14 @@
     }
   },
   "s08-r006-k0": {
-    "type": "Avatar",
+    "type": "Image",
     "data": {
       "props": {
-        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "shape": "square",
-        "size": 64,
-        "alt": "Catalog avatar"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle"
       },
       "style": {
         "padding": {
@@ -666,13 +773,14 @@
     }
   },
   "s08-r006-k1": {
-    "type": "Avatar",
+    "type": "Image",
     "data": {
       "props": {
-        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "shape": "square",
-        "size": 64,
-        "alt": "Catalog avatar"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle"
       },
       "style": {
         "textAlign": "left",
@@ -686,13 +794,14 @@
     }
   },
   "s08-r006-k2": {
-    "type": "Avatar",
+    "type": "Image",
     "data": {
       "props": {
-        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "shape": "square",
-        "size": 64,
-        "alt": "Catalog avatar"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle"
       },
       "style": {
         "textAlign": "center",
@@ -706,13 +815,14 @@
     }
   },
   "s08-r006-k3": {
-    "type": "Avatar",
+    "type": "Image",
     "data": {
       "props": {
-        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "shape": "square",
-        "size": 64,
-        "alt": "Catalog avatar"
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "alt": "Catalog image",
+        "linkHref": null,
+        "width": 120,
+        "contentAlignment": "middle"
       },
       "style": {
         "textAlign": "right",
@@ -729,9 +839,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
         "alt": "Catalog image",
         "linkHref": null,
+        "width": 120,
         "height": 80,
         "contentAlignment": "middle"
       },
@@ -749,9 +860,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
         "alt": "Catalog image",
         "linkHref": null,
+        "width": 120,
         "height": 80,
         "contentAlignment": "middle"
       },
@@ -812,9 +924,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
         "alt": "Catalog image",
         "linkHref": null,
+        "width": 120,
         "height": 80,
         "contentAlignment": "middle"
       },
@@ -833,9 +946,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
         "alt": "Catalog image",
         "linkHref": null,
+        "width": 120,
         "height": 80,
         "contentAlignment": "middle"
       },
@@ -854,9 +968,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
         "alt": "Catalog image",
         "linkHref": null,
+        "width": 120,
         "height": 80,
         "contentAlignment": "middle",
         "embed": true
@@ -875,9 +990,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
         "alt": "Catalog image",
         "linkHref": null,
+        "width": 120,
         "height": 80,
         "contentAlignment": "middle",
         "embed": true
@@ -897,9 +1013,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
         "alt": "Catalog image",
         "linkHref": null,
+        "width": 120,
         "height": 80,
         "contentAlignment": "middle",
         "embed": true
@@ -919,9 +1036,10 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
+        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
         "alt": "Catalog image",
         "linkHref": null,
+        "width": 120,
         "height": 80,
         "contentAlignment": "middle",
         "embed": true
@@ -983,11 +1101,11 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
         "alt": "Catalog image",
         "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle"
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
         "padding": {
@@ -1003,11 +1121,11 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
         "alt": "Catalog image",
         "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle"
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
         "textAlign": "left",
@@ -1024,11 +1142,11 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
         "alt": "Catalog image",
         "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle"
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
         "textAlign": "center",
@@ -1045,11 +1163,11 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
         "alt": "Catalog image",
         "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle"
+        "contentAlignment": "middle",
+        "embed": true
       },
       "style": {
         "textAlign": "right",
@@ -1066,11 +1184,9 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
         "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
+        "linkHref": "https://canary.invalid/catalog",
         "contentAlignment": "middle"
       },
       "style": {
@@ -1087,11 +1203,9 @@
     "type": "Image",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
+        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
         "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
+        "linkHref": "https://canary.invalid/catalog",
         "contentAlignment": "middle"
       },
       "style": {
@@ -1147,83 +1261,15 @@
       }
     }
   },
-  "s08-r009-k0": {
-    "type": "Image",
+  "s08-r009-c0": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle"
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r009-k1": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/Elizabeth-RUZE.jpg",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r009-k2": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r009-k3": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "textAlign": "left",
@@ -1236,17 +1282,15 @@
       }
     }
   },
-  "s08-r009-k4": {
-    "type": "Image",
+  "s08-r009-c1": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "textAlign": "center",
@@ -1259,17 +1303,15 @@
       }
     }
   },
-  "s08-r009-k5": {
-    "type": "Image",
+  "s08-r009-c2": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "textAlign": "right",
@@ -1283,7 +1325,7 @@
     }
   },
   "s08-r009": {
-    "type": "Container",
+    "type": "ColumnsContainer",
     "data": {
       "style": {
         "padding": {
@@ -1294,13 +1336,25 @@
         }
       },
       "props": {
-        "childrenIds": [
-          "s08-r009-k0",
-          "s08-r009-k1",
-          "s08-r009-k2",
-          "s08-r009-k3",
-          "s08-r009-k4",
-          "s08-r009-k5"
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s08-r009-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s08-r009-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s08-r009-c2"
+            ]
+          }
         ]
       }
     }
@@ -1324,40 +1378,17 @@
       }
     }
   },
-  "s08-r010-k0": {
-    "type": "Image",
+  "s08-r010-c0": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r010-k1": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "height": 80,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "textAlign": "right",
@@ -1370,14 +1401,16 @@
       }
     }
   },
-  "s08-r010-k2": {
-    "type": "Image",
+  "s08-r010-c1": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle"
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "padding": {
@@ -1389,14 +1422,16 @@
       }
     }
   },
-  "s08-r010-k3": {
-    "type": "Image",
+  "s08-r010-c2": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle"
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "textAlign": "left",
@@ -1409,48 +1444,8 @@
       }
     }
   },
-  "s08-r010-k4": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle"
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r010-k5": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
   "s08-r010": {
-    "type": "Container",
+    "type": "ColumnsContainer",
     "data": {
       "style": {
         "padding": {
@@ -1461,13 +1456,25 @@
         }
       },
       "props": {
-        "childrenIds": [
-          "s08-r010-k0",
-          "s08-r010-k1",
-          "s08-r010-k2",
-          "s08-r010-k3",
-          "s08-r010-k4",
-          "s08-r010-k5"
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s08-r010-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s08-r010-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s08-r010-c2"
+            ]
+          }
         ]
       }
     }
@@ -1491,56 +1498,16 @@
       }
     }
   },
-  "s08-r011-k0": {
-    "type": "Image",
+  "s08-r011-c0": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r011-k1": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r011-k2": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "textAlign": "center",
@@ -1553,15 +1520,16 @@
       }
     }
   },
-  "s08-r011-k3": {
-    "type": "Image",
+  "s08-r011-c1": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png#cid",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "contentAlignment": "middle",
-        "embed": true
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
         "textAlign": "right",
@@ -1574,36 +1542,20 @@
       }
     }
   },
-  "s08-r011-k4": {
-    "type": "Image",
+  "s08-r011-c2": {
+    "type": "Button",
     "data": {
       "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "contentAlignment": "middle"
+        "text": "Go → now",
+        "url": "https://canary.invalid/catalog",
+        "fullWidth": false,
+        "buttonStyle": "rectangle",
+        "borderSize": 2,
+        "borderColor": "#111111",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r011-k5": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "contentAlignment": "middle"
-      },
-      "style": {
-        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1614,7 +1566,7 @@
     }
   },
   "s08-r011": {
-    "type": "Container",
+    "type": "ColumnsContainer",
     "data": {
       "style": {
         "padding": {
@@ -1625,13 +1577,25 @@
         }
       },
       "props": {
-        "childrenIds": [
-          "s08-r011-k0",
-          "s08-r011-k1",
-          "s08-r011-k2",
-          "s08-r011-k3",
-          "s08-r011-k4",
-          "s08-r011-k5"
+        "columnsCount": 3,
+        "columnsGap": 16,
+        "contentAlignment": "middle",
+        "columns": [
+          {
+            "childrenIds": [
+              "s08-r011-c0"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s08-r011-c1"
+            ]
+          },
+          {
+            "childrenIds": [
+              "s08-r011-c2"
+            ]
+          }
         ]
       }
     }
@@ -1656,14 +1620,13 @@
     }
   },
   "s08-r012-c0": {
-    "type": "Button",
+    "type": "Avatar",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "circle",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "textAlign": "left",
@@ -1677,14 +1640,13 @@
     }
   },
   "s08-r012-c1": {
-    "type": "Button",
+    "type": "Avatar",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "circle",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "textAlign": "center",
@@ -1698,14 +1660,13 @@
     }
   },
   "s08-r012-c2": {
-    "type": "Button",
+    "type": "Avatar",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "imageUrl": "https://email.curatedfor.you/uploads/social-curated-instagram.png",
+        "shape": "circle",
+        "size": 64,
+        "alt": "Catalog avatar"
       },
       "style": {
         "textAlign": "right",
@@ -1772,76 +1733,71 @@
       }
     }
   },
-  "s08-r013-c0": {
+  "s08-r013-t": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Text on a light ground.",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        },
+        "color": "#262626"
+      }
+    }
+  },
+  "s08-r013-b": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go far",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF"
+      },
+      "style": {
+        "padding": {
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
+      }
+    }
+  },
+  "s08-r013-bb": {
+    "type": "Button",
+    "data": {
+      "props": {
+        "text": "Go far",
+        "url": "https://canary.invalid/catalog",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF",
         "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r013-c1": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "borderColor": "#FFFFFF"
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s08-r013-c2": {
-    "type": "Button",
-    "data": {
-      "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
       }
     }
   },
   "s08-r013": {
-    "type": "ColumnsContainer",
+    "type": "Container",
     "data": {
       "style": {
+        "backgroundColor": "#F7F4EE",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1850,25 +1806,10 @@
         }
       },
       "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "columns": [
-          {
-            "childrenIds": [
-              "s08-r013-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s08-r013-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s08-r013-c2"
-            ]
-          }
+        "childrenIds": [
+          "s08-r013-t",
+          "s08-r013-b",
+          "s08-r013-bb"
         ]
       }
     }
@@ -1892,77 +1833,71 @@
       }
     }
   },
-  "s08-r014-c0": {
-    "type": "Button",
+  "s08-r014-t": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "Text on a mid ground.",
+        "markdown": true
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
           "left": 24,
           "right": 24
-        }
+        },
+        "color": "#FFFFFF"
       }
     }
   },
-  "s08-r014-c1": {
+  "s08-r014-b": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go far",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
       }
     }
   },
-  "s08-r014-c2": {
+  "s08-r014-bb": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go far",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
+        "buttonBackgroundColor": "#0B6E6E",
+        "buttonTextColor": "#FFFFFF",
         "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "borderColor": "#FFFFFF"
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
       }
     }
   },
   "s08-r014": {
-    "type": "ColumnsContainer",
+    "type": "Container",
     "data": {
       "style": {
+        "backgroundColor": "#8A8A8A",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -1971,25 +1906,10 @@
         }
       },
       "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "columns": [
-          {
-            "childrenIds": [
-              "s08-r014-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s08-r014-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s08-r014-c2"
-            ]
-          }
+        "childrenIds": [
+          "s08-r014-t",
+          "s08-r014-b",
+          "s08-r014-bb"
         ]
       }
     }
@@ -2013,82 +1933,71 @@
       }
     }
   },
-  "s08-r015-c0": {
-    "type": "Button",
+  "s08-r015-t": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "Go → now",
-        "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
-        "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "text": "Text on a dark ground.",
+        "markdown": true
       },
       "style": {
-        "textAlign": "left",
         "padding": {
           "top": 16,
           "bottom": 16,
           "left": 24,
           "right": 24
-        }
+        },
+        "color": "#F2F2F2"
       }
     }
   },
-  "s08-r015-c1": {
+  "s08-r015-b": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go far",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
         "buttonTextColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
       }
     }
   },
-  "s08-r015-c2": {
+  "s08-r015-bb": {
     "type": "Button",
     "data": {
       "props": {
-        "text": "Go → now",
+        "text": "Go far",
         "url": "https://canary.invalid/catalog",
-        "fullWidth": false,
-        "buttonStyle": "rectangle",
-        "borderSize": 2,
-        "borderColor": "#111111",
         "buttonBackgroundColor": "#0B6E6E",
-        "buttonTextColor": "#FFFFFF"
+        "buttonTextColor": "#FFFFFF",
+        "borderSize": 2,
+        "borderColor": "#FFFFFF"
       },
       "style": {
-        "textAlign": "right",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
+          "top": 8,
+          "bottom": 8,
+          "left": 8,
+          "right": 8
+        },
+        "textAlign": "center"
       }
     }
   },
   "s08-r015": {
-    "type": "ColumnsContainer",
+    "type": "Container",
     "data": {
       "style": {
+        "backgroundColor": "#1C2B33",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -2097,25 +2006,10 @@
         }
       },
       "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "columns": [
-          {
-            "childrenIds": [
-              "s08-r015-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s08-r015-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s08-r015-c2"
-            ]
-          }
+        "childrenIds": [
+          "s08-r015-t",
+          "s08-r015-b",
+          "s08-r015-bb"
         ]
       }
     }
@@ -2124,7 +2018,7 @@
     "type": "Text",
     "data": {
       "props": {
-        "text": "END catalog-08-containers",
+        "text": "END catalog-08-columns",
         "markdown": true
       },
       "style": {

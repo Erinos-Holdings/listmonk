@@ -56,32 +56,6 @@
         "s15-r025",
         "s15-r026-label",
         "s15-r026",
-        "s15-r027-label",
-        "s15-r027",
-        "s15-r028-label",
-        "s15-r028",
-        "s15-r029-label",
-        "s15-r029",
-        "s15-r030-label",
-        "s15-r030",
-        "s15-r031-label",
-        "s15-r031",
-        "s15-r032-label",
-        "s15-r032",
-        "s15-r033-label",
-        "s15-r033",
-        "s15-r034-label",
-        "s15-r034",
-        "s15-r035-label",
-        "s15-r035",
-        "s15-r036-label",
-        "s15-r036",
-        "s15-r037-label",
-        "s15-r037",
-        "s15-r038-label",
-        "s15-r038",
-        "s15-r039-label",
-        "s15-r039",
         "s15-end"
       ]
     }
@@ -194,17 +168,19 @@
     }
   },
   "s15-r002-c1": {
-    "type": "Divider",
+    "type": "Text",
     "data": {
       "props": {
-        "lineColor": "#CCCCCC"
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
+        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -213,15 +189,16 @@
     "type": "Text",
     "data": {
       "props": {
-        "text": "",
-        "markdown": true
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
+        "textAlign": "right",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -240,7 +217,12 @@
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
+        "contentAlignment": "middle",
+        "fixedWidths": [
+          60,
+          null,
+          null
+        ],
         "columns": [
           {
             "childrenIds": []
@@ -278,6 +260,24 @@
       }
     }
   },
+  "s15-r003-c0": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "left",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
   "s15-r003-c1": {
     "type": "Text",
     "data": {
@@ -286,24 +286,7 @@
         "markdown": true
       },
       "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s15-r003-c2": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h1"
-      },
-      "style": {
+        "textAlign": "center",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -325,17 +308,19 @@
         }
       },
       "props": {
-        "columnsCount": 3,
+        "columnsCount": 2,
         "columnsGap": 16,
         "contentAlignment": "top",
         "fixedWidths": [
           60,
-          null,
+          60,
           null
         ],
         "columns": [
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r003-c0"
+            ]
           },
           {
             "childrenIds": [
@@ -343,9 +328,7 @@
             ]
           },
           {
-            "childrenIds": [
-              "s15-r003-c2"
-            ]
+            "childrenIds": []
           }
         ]
       }
@@ -370,30 +353,12 @@
       }
     }
   },
-  "s15-r004-c1": {
-    "type": "Text",
+  "s15-r004-c0": {
+    "type": "Heading",
     "data": {
       "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r004-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
+        "text": "A heading",
+        "level": "h2"
       },
       "style": {
         "textAlign": "right",
@@ -406,29 +371,44 @@
       }
     }
   },
+  "s15-r004-c1": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h2"
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
   "s15-r004": {
     "type": "ColumnsContainer",
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
-        "columnsCount": 3,
+        "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          60,
-          null,
-          null
-        ],
+        "contentAlignment": "top",
         "columns": [
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r004-c0"
+            ]
           },
           {
             "childrenIds": [
@@ -436,9 +416,7 @@
             ]
           },
           {
-            "childrenIds": [
-              "s15-r004-c2"
-            ]
+            "childrenIds": []
           }
         ]
       }
@@ -463,41 +441,38 @@
       }
     }
   },
-  "s15-r005-c1": {
-    "type": "Text",
+  "s15-r005-c0": {
+    "type": "Heading",
     "data": {
       "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
+        "text": "A heading",
+        "level": "h2"
       },
       "style": {
-        "textAlign": "center",
+        "textAlign": "left",
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
         },
         "fontFamily": "GEORGIA"
       }
     }
   },
-  "s15-r005-c2": {
-    "type": "Text",
+  "s15-r005-c1": {
+    "type": "Divider",
     "data": {
       "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
+        "lineColor": "#CCCCCC"
       },
       "style": {
-        "textAlign": "right",
         "padding": {
           "top": 0,
           "bottom": 0,
           "left": 0,
           "right": 0
-        },
-        "fontFamily": "GEORGIA"
+        }
       }
     }
   },
@@ -506,24 +481,26 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
-        "columnsCount": 3,
+        "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
+        "contentAlignment": "top",
         "fixedWidths": [
-          60,
           null,
+          60,
           null
         ],
         "columns": [
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r005-c0"
+            ]
           },
           {
             "childrenIds": [
@@ -531,9 +508,7 @@
             ]
           },
           {
-            "childrenIds": [
-              "s15-r005-c2"
-            ]
+            "childrenIds": []
           }
         ]
       }
@@ -559,39 +534,37 @@
     }
   },
   "s15-r006-c0": {
-    "type": "Heading",
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h1"
+        "text": "",
+        "markdown": true
       },
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
       }
     }
   },
   "s15-r006-c1": {
-    "type": "Heading",
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h1"
+        "text": "",
+        "markdown": true
       },
       "style": {
         "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
       }
     }
   },
@@ -600,20 +573,20 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
-        "columnsCount": 3,
+        "columnsCount": 2,
         "columnsGap": 16,
         "contentAlignment": "top",
         "fixedWidths": [
-          null,
-          null,
-          60
+          60,
+          60,
+          null
         ],
         "columns": [
           {
@@ -660,7 +633,7 @@
         "markdown": true
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "center",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -678,7 +651,7 @@
         "markdown": true
       },
       "style": {
-        "textAlign": "center",
+        "textAlign": "right",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -702,7 +675,7 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "top",
+        "contentAlignment": "middle",
         "fixedWidths": [
           60,
           60,
@@ -753,13 +726,14 @@
         "level": "h2"
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "left",
         "padding": {
           "top": 0,
           "bottom": 0,
           "left": 0,
           "right": 0
-        }
+        },
+        "fontFamily": "GEORGIA"
       }
     }
   },
@@ -771,6 +745,7 @@
         "level": "h2"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -795,7 +770,7 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "top",
+        "contentAlignment": "middle",
         "columns": [
           {
             "childrenIds": [
@@ -858,6 +833,7 @@
         "level": "h2"
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -882,7 +858,7 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "top",
+        "contentAlignment": "middle",
         "fixedWidths": [
           60,
           null,
@@ -933,7 +909,7 @@
         "level": "h2"
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "right",
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -974,7 +950,7 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "top",
+        "contentAlignment": "middle",
         "fixedWidths": [
           null,
           60,
@@ -1025,6 +1001,7 @@
         "markdown": true
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1042,7 +1019,7 @@
         "markdown": true
       },
       "style": {
-        "textAlign": "left",
+        "textAlign": "right",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1057,16 +1034,16 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "top",
+        "contentAlignment": "bottom",
         "fixedWidths": [
           60,
           60,
@@ -1110,29 +1087,11 @@
     }
   },
   "s15-r012-c0": {
-    "type": "Text",
+    "type": "Heading",
     "data": {
       "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r012-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
+        "text": "A heading",
+        "level": "h2"
       },
       "style": {
         "textAlign": "right",
@@ -1141,7 +1100,26 @@
           "bottom": 0,
           "left": 0,
           "right": 0
-        }
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s15-r012-c1": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h2"
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "backgroundColor": "#EEEEEE"
       }
     }
   },
@@ -1150,21 +1128,16 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          60,
-          60,
-          null
-        ],
+        "contentAlignment": "bottom",
         "columns": [
           {
             "childrenIds": [
@@ -1203,21 +1176,19 @@
     }
   },
   "s15-r013-c0": {
-    "type": "Heading",
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h2"
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
-        "textAlign": "left",
         "padding": {
           "top": 0,
           "bottom": 0,
           "left": 0,
           "right": 0
-        },
-        "fontFamily": "GEORGIA"
+        }
       }
     }
   },
@@ -1226,17 +1197,15 @@
     "data": {
       "props": {
         "text": "A heading",
-        "level": "h2"
+        "level": "h3"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontFamily": "GEORGIA"
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
       }
     }
   },
@@ -1254,7 +1223,12 @@
       "props": {
         "columnsCount": 2,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "bottom",
+        "fixedWidths": [
+          60,
+          null,
+          null
+        ],
         "columns": [
           {
             "childrenIds": [
@@ -1296,10 +1270,11 @@
     "type": "Text",
     "data": {
       "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
+        "text": "",
+        "markdown": true
       },
       "style": {
+        "textAlign": "center",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1310,6 +1285,24 @@
     }
   },
   "s15-r014-c1": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s15-r014-c2": {
     "type": "Heading",
     "data": {
       "props": {
@@ -1317,14 +1310,14 @@
         "level": "h2"
       },
       "style": {
-        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         },
-        "fontFamily": "GEORGIA"
+        "fontFamily": "GEORGIA",
+        "backgroundColor": "#EEEEEE"
       }
     }
   },
@@ -1333,19 +1326,19 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "top",
         "fixedWidths": [
           60,
-          null,
+          60,
           null
         ],
         "columns": [
@@ -1360,7 +1353,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r014-c2"
+            ]
           }
         ]
       }
@@ -1386,29 +1381,47 @@
     }
   },
   "s15-r015-c0": {
-    "type": "Heading",
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h2"
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
       }
     }
   },
   "s15-r015-c1": {
-    "type": "Divider",
+    "type": "Text",
     "data": {
       "props": {
-        "lineColor": "#CCCCCC"
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s15-r015-c2": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
         "padding": {
@@ -1416,7 +1429,8 @@
           "bottom": 0,
           "left": 0,
           "right": 0
-        }
+        },
+        "fontFamily": "GEORGIA"
       }
     }
   },
@@ -1425,20 +1439,20 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "middle",
+        "contentAlignment": "top",
         "fixedWidths": [
-          null,
           60,
-          null
+          60,
+          60
         ],
         "columns": [
           {
@@ -1452,7 +1466,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r015-c2"
+            ]
           }
         ]
       }
@@ -1478,14 +1494,32 @@
     }
   },
   "s15-r016-c0": {
+    "type": "Heading",
+    "data": {
+      "props": {
+        "text": "A heading",
+        "level": "h3"
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontFamily": "GEORGIA"
+      }
+    }
+  },
+  "s15-r016-c1": {
     "type": "Text",
     "data": {
       "props": {
-        "text": "",
-        "markdown": true
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
-        "textAlign": "center",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1495,15 +1529,15 @@
       }
     }
   },
-  "s15-r016-c1": {
+  "s15-r016-c2": {
     "type": "Text",
     "data": {
       "props": {
-        "text": "",
-        "markdown": true
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "left",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1518,20 +1552,20 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
+        "contentAlignment": "top",
         "fixedWidths": [
+          null,
           60,
-          60,
-          null
+          60
         ],
         "columns": [
           {
@@ -1545,7 +1579,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r016-c2"
+            ]
           }
         ]
       }
@@ -1571,11 +1607,29 @@
     }
   },
   "s15-r017-c0": {
-    "type": "Heading",
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h2"
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
+      },
+      "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s15-r017-c1": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
         "textAlign": "right",
@@ -1584,17 +1638,16 @@
           "bottom": 0,
           "left": 0,
           "right": 0
-        },
-        "fontFamily": "GEORGIA"
+        }
       }
     }
   },
-  "s15-r017-c1": {
-    "type": "Heading",
+  "s15-r017-c2": {
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h2"
+        "text": "Plain text\nwith a line break.",
+        "markdown": false
       },
       "style": {
         "padding": {
@@ -1603,7 +1656,7 @@
           "left": 0,
           "right": 0
         },
-        "backgroundColor": "#EEEEEE"
+        "fontFamily": "GEORGIA"
       }
     }
   },
@@ -1619,9 +1672,14 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
+        "contentAlignment": "top",
+        "fixedWidths": [
+          60,
+          60,
+          60
+        ],
         "columns": [
           {
             "childrenIds": [
@@ -1634,7 +1692,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r017-c2"
+            ]
           }
         ]
       }
@@ -1663,10 +1723,11 @@
     "type": "Text",
     "data": {
       "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
+        "text": "",
+        "markdown": true
       },
       "style": {
+        "textAlign": "left",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1677,18 +1738,37 @@
     }
   },
   "s15-r018-c1": {
-    "type": "Heading",
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h3"
+        "text": "",
+        "markdown": true
       },
       "style": {
+        "textAlign": "center",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s15-r018-c2": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "right",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
@@ -1705,13 +1785,13 @@
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "bottom",
+        "contentAlignment": "middle",
         "fixedWidths": [
           60,
-          null,
-          null
+          60,
+          60
         ],
         "columns": [
           {
@@ -1725,7 +1805,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r018-c2"
+            ]
           }
         ]
       }
@@ -1751,30 +1833,50 @@
     }
   },
   "s15-r019-c0": {
-    "type": "Heading",
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h3"
+        "text": "",
+        "markdown": true
       },
       "style": {
         "textAlign": "left",
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       }
     }
   },
   "s15-r019-c1": {
-    "type": "Divider",
+    "type": "Text",
     "data": {
       "props": {
-        "lineColor": "#CCCCCC"
+        "text": "",
+        "markdown": true
       },
       "style": {
+        "textAlign": "center",
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "s15-r019-c2": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "",
+        "markdown": true
+      },
+      "style": {
+        "textAlign": "right",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1789,20 +1891,20 @@
     "data": {
       "style": {
         "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
         }
       },
       "props": {
-        "columnsCount": 2,
+        "columnsCount": 3,
         "columnsGap": 16,
         "contentAlignment": "bottom",
         "fixedWidths": [
-          null,
           60,
-          null
+          60,
+          60
         ],
         "columns": [
           {
@@ -1816,7 +1918,9 @@
             ]
           },
           {
-            "childrenIds": []
+            "childrenIds": [
+              "s15-r019-c2"
+            ]
           }
         ]
       }
@@ -1849,7 +1953,7 @@
         "markdown": true
       },
       "style": {
-        "textAlign": "center",
+        "textAlign": "left",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1867,7 +1971,7 @@
         "markdown": true
       },
       "style": {
-        "textAlign": "right",
+        "textAlign": "center",
         "padding": {
           "top": 0,
           "bottom": 0,
@@ -1878,21 +1982,20 @@
     }
   },
   "s15-r020-c2": {
-    "type": "Heading",
+    "type": "Text",
     "data": {
       "props": {
-        "text": "A heading",
-        "level": "h2"
+        "text": "",
+        "markdown": true
       },
       "style": {
+        "textAlign": "right",
         "padding": {
           "top": 0,
           "bottom": 0,
           "left": 0,
           "right": 0
-        },
-        "fontFamily": "GEORGIA",
-        "backgroundColor": "#EEEEEE"
+        }
       }
     }
   },
@@ -1901,20 +2004,20 @@
     "data": {
       "style": {
         "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
         }
       },
       "props": {
         "columnsCount": 3,
         "columnsGap": 16,
-        "contentAlignment": "top",
+        "contentAlignment": "bottom",
         "fixedWidths": [
           60,
           60,
-          null
+          60
         ],
         "columns": [
           {
@@ -1955,1466 +2058,7 @@
       }
     }
   },
-  "s15-r021-c0": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r021-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r021-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
   "s15-r021": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          60,
-          60,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r021-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r021-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r021-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r022-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.22",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r022-c0": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r022-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r022-c2": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s15-r022": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          60,
-          60,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r022-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r022-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r022-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r023-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.23",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r023-c0": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r023-c1": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s15-r023-c2": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r023": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          60,
-          null,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r023-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r023-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r023-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r024-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.24",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r024-c0": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s15-r024-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r024-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r024": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          null,
-          60,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r024-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r024-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r024-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r025-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.25",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r025-c0": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r025-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r025-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s15-r025": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "top",
-        "fixedWidths": [
-          60,
-          60,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r025-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r025-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r025-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r026-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.26",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r026-c0": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r026-c1": {
-    "type": "Heading",
-    "data": {
-      "props": {
-        "text": "A heading",
-        "level": "h3"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "backgroundColor": "#EEEEEE"
-      }
-    }
-  },
-  "s15-r026-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r026": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          60,
-          null,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r026-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r026-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r026-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r027-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.27",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r027-c0": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s15-r027-c1": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r027-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r027": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          null,
-          60,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r027-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r027-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r027-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r028-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.28",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r028-c0": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r028-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s15-r028-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s15-r028": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          60,
-          null,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r028-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r028-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r028-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r029-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.29",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r029-c0": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s15-r029-c1": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r029-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "Plain text\nwith a line break.",
-        "markdown": false
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        },
-        "fontFamily": "GEORGIA"
-      }
-    }
-  },
-  "s15-r029": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          null,
-          60,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r029-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r029-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r029-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r030-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.30",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r030-c0": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r030-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r030-c2": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": null,
-        "width": 120,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s15-r030": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          60,
-          60,
-          null
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r030-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r030-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r030-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r031-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.31",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r031-c0": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r031-c1": {
-    "type": "Image",
-    "data": {
-      "props": {
-        "url": "https://email.curatedfor.you/uploads/curated_logo3.png",
-        "alt": "Catalog image",
-        "linkHref": "https://canary.invalid/catalog",
-        "width": 120,
-        "contentAlignment": "middle",
-        "embed": true
-      },
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      }
-    }
-  },
-  "s15-r031-c2": {
-    "type": "Divider",
-    "data": {
-      "props": {
-        "lineColor": "#CCCCCC"
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r031": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "fixedWidths": [
-          60,
-          null,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r031-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r031-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r031-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r032-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.32",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r032-c0": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r032-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r032-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r032": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "fixedWidths": [
-          60,
-          60,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r032-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r032-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r032-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r033-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.33",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r033-c0": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "textAlign": "left",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r033-c1": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "textAlign": "center",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r033-c2": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "",
-        "markdown": true
-      },
-      "style": {
-        "textAlign": "right",
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      }
-    }
-  },
-  "s15-r033": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "bottom",
-        "fixedWidths": [
-          60,
-          60,
-          60
-        ],
-        "columns": [
-          {
-            "childrenIds": [
-              "s15-r033-c0"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r033-c1"
-            ]
-          },
-          {
-            "childrenIds": [
-              "s15-r033-c2"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "s15-r034-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.34",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r034": {
     "type": "ColumnsContainer",
     "data": {
       "style": {
@@ -3443,11 +2087,11 @@
       }
     }
   },
-  "s15-r035-label": {
+  "s15-r022-label": {
     "type": "Text",
     "data": {
       "props": {
-        "text": "R15.35",
+        "text": "R15.22",
         "markdown": true
       },
       "style": {
@@ -3462,58 +2106,11 @@
       }
     }
   },
-  "s15-r035": {
-    "type": "ColumnsContainer",
-    "data": {
-      "style": {
-        "padding": {
-          "top": 16,
-          "bottom": 16,
-          "left": 24,
-          "right": 24
-        }
-      },
-      "props": {
-        "columnsCount": 3,
-        "columnsGap": 16,
-        "contentAlignment": "middle",
-        "columns": [
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": []
-          },
-          {
-            "childrenIds": []
-          }
-        ]
-      }
-    }
-  },
-  "s15-r036-label": {
-    "type": "Text",
-    "data": {
-      "props": {
-        "text": "R15.36",
-        "markdown": true
-      },
-      "style": {
-        "padding": {
-          "top": 0,
-          "bottom": 0,
-          "left": 0,
-          "right": 0
-        },
-        "fontSize": 11,
-        "color": "#666666"
-      }
-    }
-  },
-  "s15-r036": {
+  "s15-r022": {
     "type": "Container",
     "data": {
       "style": {
+        "borderRadius": 8,
         "padding": {
           "top": 16,
           "bottom": 16,
@@ -3526,11 +2123,11 @@
       }
     }
   },
-  "s15-r037-label": {
+  "s15-r023-label": {
     "type": "Text",
     "data": {
       "props": {
-        "text": "R15.37",
+        "text": "R15.23",
         "markdown": true
       },
       "style": {
@@ -3545,7 +2142,7 @@
       }
     }
   },
-  "s15-r037": {
+  "s15-r023": {
     "type": "Container",
     "data": {
       "style": {
@@ -3562,11 +2159,11 @@
       }
     }
   },
-  "s15-r038-label": {
+  "s15-r024-label": {
     "type": "Text",
     "data": {
       "props": {
-        "text": "R15.38",
+        "text": "R15.24",
         "markdown": true
       },
       "style": {
@@ -3581,7 +2178,7 @@
       }
     }
   },
-  "s15-r038": {
+  "s15-r024": {
     "type": "Container",
     "data": {
       "style": {
@@ -3598,11 +2195,11 @@
       }
     }
   },
-  "s15-r039-label": {
+  "s15-r025-label": {
     "type": "Text",
     "data": {
       "props": {
-        "text": "R15.39",
+        "text": "R15.25",
         "markdown": true
       },
       "style": {
@@ -3617,7 +2214,44 @@
       }
     }
   },
-  "s15-r039": {
+  "s15-r025": {
+    "type": "Container",
+    "data": {
+      "style": {
+        "borderColor": "#333333",
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "bottom": 16,
+          "left": 24,
+          "right": 24
+        }
+      },
+      "props": {
+        "childrenIds": []
+      }
+    }
+  },
+  "s15-r026-label": {
+    "type": "Text",
+    "data": {
+      "props": {
+        "text": "R15.26",
+        "markdown": true
+      },
+      "style": {
+        "padding": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "fontSize": 11,
+        "color": "#666666"
+      }
+    }
+  },
+  "s15-r026": {
     "type": "Container",
     "data": {
       "style": {
