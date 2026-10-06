@@ -179,6 +179,17 @@ export default {
       return (iframe && iframe.contentWindow && iframe.contentWindow.EmailBuilder) || null;
     },
 
+    // integrations REVIEW-NAVIGATION-SPEC §4.5/§5.3: select (and scroll to) a block from the
+    // Inspect window's reference. false when the builder is not loaded yet, a stale cached bundle
+    // predates selectBlock, or the builder does not know the block. Writes nothing.
+    selectBlock(id) {
+      const em = this.builder();
+      if (!em || typeof em.selectBlock !== 'function' || !em.isRendered('visual-editor-container')) {
+        return false;
+      }
+      return em.selectBlock(id) === true;
+    },
+
     // OFFICIAL-FOOTER-SPEC D11: the headless compile the re-save sweep uses -- another item's
     // document under its own context, never touching this editor's document or context. null
     // when the loaded bundle predates compileDocument.

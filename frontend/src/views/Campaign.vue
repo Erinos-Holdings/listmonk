@@ -475,6 +475,9 @@ import {
   CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
 } from '../langs';
 import { audienceBox, hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
+import {
+  SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, openerMessage, selectFromQuery,
+} from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
@@ -582,6 +585,12 @@ export default Vue.extend({
       reviewState: null,
       reviewWindow: null,
       reviewPollID: null,
+
+      // Fork (review navigation, integrations REVIEW-NAVIGATION-SPEC §4.5) -- a valid `?select=`
+      // read ONCE at mount (never re-read from $route.query: history.replaceState does not clear
+      // it), consumed when the editor has loaded; and the deep-link select poll.
+      selectOnLoad: selectFromQuery(this.$route.query),
+      selectPollID: null,
 
       // IDs from ?list_id query param.
       selListIDs: [],
@@ -1542,6 +1551,81 @@ export default Vue.extend({
       this.loadReview();
     },
 
+    // Fork (review navigation) -- integrations REVIEW-NAVIGATION-SPEC §4.5: tell the Inspect
+    // window that THIS admin window is its opener (a named window reused from another tab keeps
+    // that tab as window.opener). window.open navigates the window, so a message posted at once
+    // can land on the outgoing document: it is re-posted over the next few seconds, while the
+    // window loads. Same origin only.
+    postReviewOpener(win) {
+      const msg = openerMessage(this.data.id);
+      const post = () => {
+        try {
+          if (win && !win.closed) {
+            win.postMessage(msg, window.location.origin);
+          }
+        } catch (e) {
+          // The window navigated elsewhere; nothing to tell.
+        }
+      };
+      [0, 300, 1000, 2500, 5000].forEach((ms) => setTimeout(post, ms));
+    },
+
+    // Fork (review navigation) -- §4.5: select a block the Inspect window referenced. The content
+    // tab is opened through the page's own onTab path (history.replaceState) -- NEVER a router
+    // push of a hash or query onto this page: the root <router-view> is keyed on $route.fullPath,
+    // so that would remount the page and drop the editor. Resolves `selected` or `unknown`.
+    selectReviewBlock(blockId, poll) {
+      return new Promise((resolve) => {
+        if (!isValidBlockId(blockId) || this.form.content.contentType !== 'visual') {
+          resolve('unknown');
+          return;
+        }
+        this.activeTab = 'content';
+        this.onTab('content');
+        const started = Date.now();
+        const attempt = () => {
+          const ed = this.$refs.editor;
+          if (ed && typeof ed.selectBlock === 'function' && ed.selectBlock(blockId) === true) {
+            resolve('selected');
+            return;
+          }
+          if (!poll || Date.now() - started >= SELECT_POLL_CAP_MS) {
+            resolve('unknown');
+            return;
+          }
+          this.selectPollID = setTimeout(attempt, SELECT_POLL_MS);
+        };
+        this.$nextTick(attempt);
+      });
+    },
+
+    // The receiver (App.vue) found this page showing the referenced campaign.
+    onReviewSelect(req) {
+      if (!req || (req.campaignId !== undefined && req.campaignId !== this.data.id)) {
+        return;
+      }
+      clearTimeout(this.selectPollID);
+      this.selectReviewBlock(req.blockId, false).then((result) => {
+        this.$events.$emit('review.select-result', { campaignId: this.data.id, blockId: req.blockId, result });
+      });
+    },
+
+    // A page mounted with `?select=` (the receiver's navigation, or the Inspect window's new-tab
+    // fallback): consume it once, clean the URL without the router, poll the builder (it mounts on
+    // a timer), then report the result.
+    consumeSelectOnLoad() {
+      const blockId = this.selectOnLoad;
+      if (!blockId) {
+        return;
+      }
+      this.selectOnLoad = null;
+      const { pathname } = window.location;
+      window.history.replaceState({}, '', `${pathname}#content`);
+      this.selectReviewBlock(blockId, true).then((result) => {
+        this.$events.$emit('review.select-result', { campaignId: this.data.id, blockId, result });
+      });
+    },
+
     // Fork (campaign review, D12). Open (or focus) the checklist window FIRST -- inside the click,
     // so no pop-up blocker intervenes -- then save exactly as Start does and start the inspection.
     // The window polls and shows the running job.
@@ -1553,6 +1637,7 @@ export default Vue.extend({
       } else {
         this.reviewWindow = win;
         win.focus();
+        this.postReviewOpener(win);
       }
       this.updateCampaign(null, true)
         .then(
@@ -1995,7 +2080,9 @@ export default Vue.extend({
 
   beforeRouteLeave(to, from, next) {
     if (this.isUnsaved()) {
-      this.$utils.confirm(this.$t('globals.messages.confirmDiscard'), () => next(true));
+      // Fork (review navigation, REVIEW-NAVIGATION-SPEC §4.5): Cancel settles the navigation
+      // (next(false)), so a push from the review receiver rejects and answers `declined`.
+      this.$utils.confirm(this.$t('globals.messages.confirmDiscard'), () => next(true), () => next(false));
       return;
     }
     next(true);
@@ -2118,6 +2205,8 @@ export default Vue.extend({
         this.loadReview();
         // Editor mounts on data.id; offer the stash once it exists.
         this.$nextTick(() => this.offerDraftRestore());
+        // Fork (review navigation): a `?select=` deep link, once the campaign and editor are in.
+        this.$nextTick(() => this.consumeSelectOnLoad());
       });
     } else {
       this.form.messenger = 'email';
@@ -2139,9 +2228,14 @@ export default Vue.extend({
 
     // Fork (campaign review, D11): re-read the inspection when the admin comes back to this tab.
     window.addEventListener('focus', this.onReviewFocus);
+
+    // Fork (review navigation): the receiver's in-page select (App.vue, §4.5).
+    this.$events.$on('review.select', this.onReviewSelect);
   },
 
   beforeDestroy() {
+    this.$events.$off('review.select', this.onReviewSelect);
+    clearTimeout(this.selectPollID);
     this.$events.$off('campaign.update');
     window.removeEventListener('listmonk:session-expired', this.stashDraft);
     window.removeEventListener('resize', this.syncAudienceBox);

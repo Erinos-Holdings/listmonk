@@ -5,7 +5,7 @@ import { Box, Tooltip } from '@mui/material';
 
 import { useCurrentBlockId } from '../../../editor/EditorBlock';
 import { setSelectedBlockId, useDocument, useSelectedBlockId, useShowStructure } from '../../../editor/EditorContext';
-import { containerDepth, wrapperMessage, wrapperState } from '../../../structure';
+import { blockNumbers, containerDepth, wrapperMessage, wrapperState } from '../../../structure';
 
 import TuneMenu from './TuneMenu';
 
@@ -13,6 +13,8 @@ import TuneMenu from './TuneMenu';
 // Reader path never renders this wrapper, so none of it reaches compiled output (D10).
 const TAB_SIZE = 18;
 const TAB_STEP = 20;
+// The block-number badge's step per container depth (wide enough for a two-digit number).
+const NUMBER_STEP = 26;
 // Show structure: a fixed 4-colour cycle by container depth.
 const STRUCTURE_COLORS = ['#8e24aa', '#00897b', '#f4511e', '#3949ab'];
 
@@ -33,6 +35,11 @@ export default function EditorBlockWrapper({ children, moveOnly }: TEditorBlockW
   const isStructural = block?.type === 'Container' || block?.type === 'ColumnsContainer';
   const depth = useMemo(() => (isStructural ? containerDepth(document, blockId) : 0), [isStructural, document, blockId]);
   const flag = isStructural ? wrapperState(block) : null;
+  // blockNumbers is memoized on the document object, so every wrapper shares one walk.
+  const blockNumber = showStructure ? blockNumbers(document).get(blockId) : undefined;
+  // A nested block's badge steps left by its container depth, so it never covers its parent's
+  // badge where their top-right corners coincide (the handle tabs step right the same way).
+  const numberDepth = useMemo(() => (blockNumber !== undefined ? containerDepth(document, blockId) : 0), [blockNumber, document, blockId]);
 
   // PARAGRAPH-SPACING-SPEC D3: the canvas half of the text-margin rule. A Text block's box
   // carries `data-lm-text` plus its effective font size (its own, else the canvas's 16px —
@@ -113,6 +120,49 @@ export default function EditorBlockWrapper({ children, moveOnly }: TEditorBlockW
     );
   };
 
+  // Fork (review navigation) -- integrations REVIEW-NAVIGATION-SPEC §5.2: with Show structure on,
+  // a block's render-walk number (the "(block 7)" the Inspect window prints) at its top-right.
+  // A block with no number (an orphan, a hidden column -- not in the email) shows none. Numbers
+  // only; the window shows names. Editor chrome: the Reader path never renders this wrapper.
+  const renderNumber = () => {
+    if (!showStructure || blockNumber === undefined) {
+      return null;
+    }
+    return (
+      <Box
+        component="span"
+        className="lm-structure-number"
+        data-lm-structure-number={String(blockNumber)}
+        title={`block ${blockNumber}`}
+        sx={{
+          position: 'absolute',
+          top: 0,
+          right: `min(${numberDepth * NUMBER_STEP}px, calc(100% - ${NUMBER_STEP}px))`,
+          zIndex: 2,
+          minWidth: TAB_SIZE,
+          height: TAB_SIZE,
+          px: '3px',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+          fontSize: 11,
+          fontFamily: 'sans-serif',
+          fontWeight: 600,
+          lineHeight: 1,
+          borderRadius: '0 0 0 4px',
+          border: '1px solid',
+          borderColor: 'rgba(0,121,204,1)',
+          bgcolor: '#ffffff',
+          color: 'rgba(0,121,204,1)',
+        }}
+      >
+        {blockNumber}
+      </Box>
+    );
+  };
+
   const renderMenu = () => {
     if (selectedBlockId !== blockId) {
       return null;
@@ -122,6 +172,7 @@ export default function EditorBlockWrapper({ children, moveOnly }: TEditorBlockW
 
   return (
     <Box
+      data-lm-block-id={blockId}
       data-lm-text={textMarker}
       style={textSizeStyle}
       sx={{
@@ -145,6 +196,7 @@ export default function EditorBlockWrapper({ children, moveOnly }: TEditorBlockW
     >
       {renderMenu()}
       {renderTab()}
+      {renderNumber()}
       {children}
     </Box>
   );

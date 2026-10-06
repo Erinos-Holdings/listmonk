@@ -13,8 +13,9 @@ const { SNAPSHOT, FLAG_OFF_SNAPSHOT, loadUmd, documentFixtures, compileInputs } 
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${!ok && detail ? '  [' + String(detail).slice(0, 400) + ']' : ''}`); }
 
-// The chrome markers the structure tools add to the canvas only.
-const CHROME = /data-lm-structure|lm-structure-tab|data-lm-breadcrumb|data-lm-wrapper-alert|data-lm-confirm|data-lm-unwrap/;
+// The chrome markers the structure tools add to the canvas only (integrations
+// REVIEW-NAVIGATION-SPEC I12: the block id and the number badge too).
+const CHROME = /data-lm-structure|lm-structure-tab|data-lm-breadcrumb|data-lm-wrapper-alert|data-lm-confirm|data-lm-unwrap|data-lm-block-id|lm-structure-number/;
 
 const snapshot = JSON.parse(fs.readFileSync(SNAPSHOT, 'utf8'));
 check('snapshot records its base commit and bundle sha256', /^[0-9a-f]{40}$/.test(snapshot.baseCommit) && /^[0-9a-f]{64}$/.test(snapshot.bundleSha256));

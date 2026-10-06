@@ -22,7 +22,7 @@ function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS'
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const J = (o) => JSON.stringify(o);
 const tick = (ms = 40) => new Promise((r) => setTimeout(r, ms));
-const CHROME = /data-lm-structure|lm-structure-tab|data-lm-breadcrumb|data-lm-wrapper-alert|data-lm-confirm|data-lm-unwrap/;
+const CHROME = /data-lm-structure|lm-structure-tab|data-lm-breadcrumb|data-lm-wrapper-alert|data-lm-confirm|data-lm-unwrap|data-lm-block-id|lm-structure-number/;
 
 const WRAPPER = c110.root.data.childrenIds[0];
 const NINE = c110[WRAPPER].data.props.childrenIds;
@@ -192,9 +192,44 @@ async function main() {
   await load(c110);
   const toggle = $('[aria-label="Show structure"]');
   check('Show structure is off by default', toggle && toggle.getAttribute('aria-pressed') === 'false');
+  check('REVIEW-NAVIGATION §5.2: no number badge with Show structure off', $$('[data-lm-structure-number]').length === 0);
+  check('REVIEW-NAVIGATION §5.2: every block wrapper carries data-lm-block-id', $$('[data-lm-block-id]').length > 0
+    && $$('[data-lm-block-id]').every((el) => el.getAttribute('data-lm-block-id') in c110));
   await click(toggle);
   check('Show structure on: every container shows its tab', $('[aria-label="Show structure"]').getAttribute('aria-pressed') === 'true' && $$('[data-lm-structure-tab="columns"]').length === 2 && $$('[data-lm-structure-tab]').length === 3);
   check('Show structure is remembered under lm-eb-show-structure', ui.dom.window.localStorage.getItem('lm-eb-show-structure') === '1');
+  {
+    // integrations REVIEW-NAVIGATION-SPEC I2 on the canvas: each badge shows blockNumbers' number
+    // for its own block, and every rendered block that has a number shows one.
+    const nums = S.blockNumbers(c110);
+    const badges = $$('[data-lm-structure-number]').map((b) => ({ id: b.parentElement.getAttribute('data-lm-block-id'), n: Number(b.getAttribute('data-lm-structure-number')), title: b.getAttribute('title'), text: b.textContent }));
+    const wrapped = new Set($$('[data-lm-block-id]').map((el) => el.getAttribute('data-lm-block-id')));
+    const expected = [...nums.entries()].filter(([id]) => wrapped.has(id));
+    check('§5.2: every badge number equals blockNumbers for its block (title "block <n>")', badges.length > 0
+      && badges.every((b) => nums.get(b.id) === b.n && b.title === `block ${b.n}` && b.text === String(b.n)), badges.filter((b) => nums.get(b.id) !== b.n));
+    check('§5.2: every numbered, rendered block shows exactly one badge', badges.length === expected.length && new Set(badges.map((b) => b.id)).size === badges.length, { badges: badges.length, expected: expected.length });
+    check('§5.2: every block of the c110 document is numbered and rendered', expected.length === nums.size, { wrapped: wrapped.size, numbers: nums.size });
+  }
+  {
+    // integrations REVIEW-NAVIGATION-SPEC §5.3 / I15: selectBlock selects (and switches to the Edit
+    // tab) without writing the document -- no onChange fires; an unknown id or an orphan answers false.
+    const target = NINE[NINE.length - 1];
+    const before = ui.events.length;
+    const tabsNow = $$('[role="tab"]').filter((t) => !['Styles', 'Inspect'].includes(t.textContent));
+    await click(tabsNow[1]); // Preview: selectBlock must bring the editor back
+    const ok = ui.EB.selectBlock(target);
+    await tick(120);
+    const box = $(`[data-lm-block-id="${target}"]`);
+    const outline = box ? (ui.dom.window.getComputedStyle(box).outline || '') : '';
+    check('I15: selectBlock returns true for a rendered block and selects it on the Edit tab', ok === true && !!box && /solid/.test(outline) && /rgba?\(0, ?121, ?204(, ?1)?\)/.test(outline), outline);
+    check('I15: the breadcrumb follows the selection', $$('[data-lm-breadcrumb-segment]').length >= 2);
+    check('I15: selectBlock fired no onChange (the document is unchanged)', ui.events.length === before, ui.events.length - before);
+    const orphanDoc = { ...clone(c110), 'block-orphan-x': { type: 'Spacer', data: { style: {}, props: { height: 8 } } } };
+    await load(orphanDoc);
+    check('selectBlock answers false for an unknown id, an orphan and a non-string', ui.EB.selectBlock('block-nope') === false && ui.EB.selectBlock('block-orphan-x') === false && ui.EB.selectBlock(undefined) === false);
+    check('… and fires no onChange', ui.events.length === 0);
+    await load(c110);
+  }
   // Review fix 3: with Show structure on, hovering a block inside the wrapper (every ancestor
   // is then "mouseInside") leaves the ancestor containers' dashed depth outline in place; a
   // hovered non-container keeps today's faint-blue hover outline.

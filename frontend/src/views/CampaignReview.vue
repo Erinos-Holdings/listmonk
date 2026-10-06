@@ -24,11 +24,15 @@
       </div>
     </header>
 
-    <!-- Running: the Lambda's progress stage. -->
-    <div v-if="isRunning" class="review-progress" data-cy="review-progress">
-      <b-progress :value="progressValue" type="is-info" show-value format="percent" />
-      <p class="is-size-7">{{ stageLabel }}</p>
-    </div>
+    <!-- integrations REVIEW-NAVIGATION-SPEC §4.6: the live checklist, pinned above the sections
+         while the review runs and after it completes (reviewChecklist.mjs). -->
+    <ul v-if="checklistRows.length" class="review-checklist" data-cy="review-checklist">
+      <li v-for="r in checklistRows" :key="r.key" :class="`is-${r.state}`" :data-cy="`checklist-${r.key}`">
+        <input type="checkbox" :checked="r.checked" disabled :aria-label="r.label" />
+        <span>{{ r.label }}</span>
+        <span v-if="r.spinner" class="checklist-spinner" aria-hidden="true" />
+      </li>
+    </ul>
 
     <b-message v-if="row && row.status === 'failed'" type="is-danger" data-cy="review-failed">
       {{ $t('campaigns.review.failed') }}
@@ -41,6 +45,42 @@
     <b-message v-else-if="isEdited" type="is-warning" data-cy="review-edited">
       {{ $t('campaigns.review.edited') }}
     </b-message>
+
+    <!-- EARLY FINDINGS -->
+    <!-- §4.6: the rule-check findings from progress.items while the review runs -- read-only (no
+         buttons, nothing can be staged against them, I5). The report replaces them. -->
+    <template v-if="isRunning && earlySections.length">
+      <section v-for="sec in earlySections" :key="`early-${sec.key}`" class="review-section" :data-cy="`early-${sec.key}`">
+        <h5 class="title is-5">{{ sec.label }} <span class="tag">{{ sec.entries.length }}</span></h5>
+        <div v-for="e in sec.entries" :key="`early-${e.key}`" class="review-item box is-early" :data-cy="`early-item-${e.item.id}`">
+          <div class="item-head">
+            <strong>{{ e.item.id }}</strong> {{ e.item.title }}
+            <b-tag :type="tagType(e)" class="ml-2">{{ e.finding.severity || e.item.verdict }}</b-tag>
+          </div>
+          <p class="todo">{{ e.finding.todo }}</p>
+          <p v-if="links(e.item).length" class="is-size-7 standards">
+            <span class="has-text-grey">{{ $t('campaigns.review.standard') }}:</span>
+            <span v-for="(r, n) in links(e.item)" :key="`l-${n}`"><a :href="r.url" target="_blank"
+              rel="noopener noreferrer">{{ r.label }}</a><span v-if="n < links(e.item).length - 1">, </span></span>
+          </p>
+          <p class="is-size-7">
+            <span class="has-text-grey">{{ $t('campaigns.review.evidence') }}:</span>
+            <img v-if="isImageUrl(e.finding.evidence)" :src="e.finding.evidence" alt="" class="evidence-thumb" />
+            <q v-else>{{ e.finding.evidence }}</q>
+            <img v-if="thumbnail(e.finding)" :src="thumbnail(e.finding)" alt="" class="evidence-thumb ml-2" data-cy="where-thumb" />
+          </p>
+          <p v-if="reference(e.finding).kind !== 'none'" class="is-size-7">
+            <span class="has-text-grey">{{ reference(e.finding).kind === 'plain' ? $t('campaigns.review.location') : $t('campaigns.review.where') }}:</span>
+            <a v-if="reference(e.finding).kind === 'link'" href="#" class="button is-small is-text goto-block" data-cy="btn-goto-block"
+              :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
+              @click.prevent="gotoBlock(reference(e.finding).blockId)">{{ reference(e.finding).text }}</a>
+            <template v-else>{{ reference(e.finding).text }}</template>
+          </p>
+          <p class="is-size-7 has-text-grey">{{ $t('campaigns.review.decideLater') }}</p>
+        </div>
+      </section>
+    </template>
+    <!-- /EARLY FINDINGS -->
 
     <template v-if="report && !isRunning">
       <!-- AI unavailable / partial: the user override (pseudo-key A). -->
@@ -62,13 +102,27 @@
             <b-tag v-if="stillOpen(e)" type="is-warning" class="ml-1">{{ $t('campaigns.review.stillOpen') }}</b-tag>
           </div>
           <p class="todo">{{ e.finding.todo }}</p>
+          <!-- REVIEW-NAVIGATION-SPEC §4.3: the standards links (https only). -->
+          <p v-if="links(e.item).length" class="is-size-7 standards" data-cy="review-standards">
+            <span class="has-text-grey">{{ $t('campaigns.review.standard') }}:</span>
+            <span v-for="(r, n) in links(e.item)" :key="`l-${n}`"><a :href="r.url" target="_blank"
+              rel="noopener noreferrer">{{ r.label }}</a><span v-if="n < links(e.item).length - 1">, </span></span>
+          </p>
           <p class="is-size-7">
             <span class="has-text-grey">{{ $t('campaigns.review.evidence') }}:</span>
             <img v-if="isImageUrl(e.finding.evidence)" :src="e.finding.evidence" alt="" class="evidence-thumb" />
             <q v-else>{{ e.finding.evidence }}</q>
+            <!-- §4.2: the thumbnail of the image the finding is at (this host's uploads only, never repeated). -->
+            <img v-if="thumbnail(e.finding)" :src="thumbnail(e.finding)" alt="" class="evidence-thumb ml-2" data-cy="where-thumb" />
           </p>
-          <p class="is-size-7">
-            <span class="has-text-grey">{{ $t('campaigns.review.location') }}:</span> {{ e.finding.location }}
+          <!-- §4.1: the reference line -- a link that selects the block in the editor window, plain
+               for an official footer; locationPlain (else location) when there is no `where`. -->
+          <p v-if="reference(e.finding).kind !== 'none'" class="is-size-7" data-cy="review-where">
+            <span class="has-text-grey">{{ reference(e.finding).kind === 'plain' ? $t('campaigns.review.location') : $t('campaigns.review.where') }}:</span>
+            <a v-if="reference(e.finding).kind === 'link'" href="#" class="button is-small is-text goto-block" data-cy="btn-goto-block"
+              :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
+              @click.prevent="gotoBlock(reference(e.finding).blockId)">{{ reference(e.finding).text }}</a>
+            <template v-else>{{ reference(e.finding).text }}</template>
           </p>
           <p v-if="decided(e.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(e.key)) }}</p>
           <div class="buttons mt-2">
@@ -275,8 +329,14 @@ import { deriveContext, isOfficialName } from '../officialSweep.mjs'; // eslint-
 import {
   buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
+import {
+  checklist, earlyEntries, sectionCounts, sectionOf,
+} from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
+import {
+  ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, acceptAck, acceptOpener, afterAckWait, clickDecision, fallbackUrl,
+  isFinalResult, isImageUrl, newToken, referenceLine, resultToast, selectMessage, standardLinks, thumbnailUrl,
+} from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
-const STAGES = ['reading', 'deterministic', 'screenshots', 'ai', 'writing'];
 const BUILDER_CACHE_BUST = Date.now();
 
 export default Vue.extend({
@@ -292,6 +352,14 @@ export default Vue.extend({
       briefOpen: false,
       brief: '',
     };
+  },
+
+  created() {
+    // REVIEW-NAVIGATION-SPEC §4.5: the last admin window that clicked Inspect (its
+    // `lm-review:opener` handshake), else window.opener; and the one click in flight. Kept off
+    // the reactive data on purpose: they hold other windows.
+    this.currentOpener = null;
+    this.nav = null;
   },
 
   computed: {
@@ -343,15 +411,47 @@ export default Vue.extend({
       return (this.campaign.attribs && this.campaign.attribs.lang) || '';
     },
 
-    progressValue() {
-      const st = this.row && this.row.progress && this.row.progress.stage;
-      const i = STAGES.indexOf(st);
-      return i < 0 ? 5 : Math.round(((i + 1) / (STAGES.length + 1)) * 100);
+    // REVIEW-NAVIGATION-SPEC §4.6: running (the newest row), complete (the report shown), or
+    // halted (failed/stale: the checklist stays as at the last PATCH).
+    checklistPhase() {
+      if (this.isRunning) {
+        return 'running';
+      }
+      if (this.row && (this.row.status === 'failed' || this.row.status === 'stale')) {
+        return 'halted';
+      }
+      return this.report ? 'complete' : null;
     },
 
-    stageLabel() {
-      const st = this.row && this.row.progress && this.row.progress.stage;
-      return STAGES.includes(st) ? this.$t(`campaigns.review.stage.${st}`) : this.$t('campaigns.review.running');
+    // The progress the checklist reads: the running/halted row's, or the shown report's own row's.
+    checklistProgress() {
+      if (this.checklistPhase === 'complete') {
+        const g = this.gate && this.gate.review;
+        if (g && g.progress) {
+          return g.progress;
+        }
+        return this.row && this.row.status === 'complete' ? (this.row.progress || null) : null;
+      }
+      return (this.row && this.row.progress) || null;
+    },
+
+    checklistRows() {
+      if (!this.checklistPhase) {
+        return [];
+      }
+      return checklist({
+        progress: this.checklistProgress,
+        report: this.report,
+        phase: this.checklistPhase,
+        sectionsOf: sectionCounts,
+        t: (k, p) => this.$t(k, p),
+      });
+    },
+
+    // §4.6: the D items of a running review, read-only, in the same sections.
+    earlySections() {
+      const early = earlyEntries({ progress: this.row && this.row.progress, phase: this.isRunning ? 'running' : 'done' });
+      return this.sectionList(early);
     },
 
     // Latest disposition per key (the log is newest first).
@@ -381,26 +481,9 @@ export default Vue.extend({
       return out;
     },
 
+    // The section rule is reviewChecklist.mjs `sectionOf` -- the checklist's counts use the same one.
     sections() {
-      const blockers = [];
-      const ack = [];
-      const advisory = [];
-      this.entries.forEach((e) => {
-        if (e.item.tier === 'D') {
-          (e.item.verdict === 'fail' ? blockers : advisory).push(e);
-        } else if (e.finding.severity === 'critical') {
-          blockers.push(e);
-        } else if (e.finding.severity === 'high') {
-          ack.push(e);
-        } else {
-          advisory.push(e);
-        }
-      });
-      return [
-        { key: 'blockers', label: this.$t('campaigns.review.sectionBlockers'), entries: blockers },
-        { key: 'acknowledge', label: this.$t('campaigns.review.sectionAcknowledge'), entries: ack },
-        { key: 'advisory', label: this.$t('campaigns.review.sectionAdvisory'), entries: advisory },
-      ].filter((s) => s.entries.length);
+      return this.sectionList(this.entries);
     },
 
     passed() {
@@ -501,15 +584,137 @@ export default Vue.extend({
       }[s] || 'is-light';
     },
 
-    // Only this listmonk host's own uploads render as a thumbnail (Stage 4 finding 17): evidence is
-    // model- or author-supplied text, and an arbitrary URL in an <img src> would be fetched by the
-    // browser. Same-origin, so no host is hard-coded.
+    // Only this listmonk host's own uploads render as a thumbnail (Stage 4 finding 17): the rule is
+    // reviewNavigate.mjs `isImageUrl` (I10).
     isImageUrl(s) {
-      if (typeof s !== 'string') {
-        return false;
+      return isImageUrl(window.location.origin, s);
+    },
+
+    // Entries -> the three sections (reviewChecklist.mjs `sectionOf`), empty sections dropped.
+    sectionList(entries) {
+      const by = { blockers: [], acknowledge: [], advisory: [] };
+      entries.forEach((e) => by[sectionOf(e.item, e.finding)].push(e));
+      return [
+        { key: 'blockers', label: this.$t('campaigns.review.sectionBlockers'), entries: by.blockers },
+        { key: 'acknowledge', label: this.$t('campaigns.review.sectionAcknowledge'), entries: by.acknowledge },
+        { key: 'advisory', label: this.$t('campaigns.review.sectionAdvisory'), entries: by.advisory },
+      ].filter((s) => s.entries.length);
+    },
+
+    // REVIEW-NAVIGATION-SPEC §4.1-§4.3 (reviewNavigate.mjs): the reference line, the thumbnail, the
+    // standards links. The window never re-derives a name.
+    reference(finding) {
+      return referenceLine(finding);
+    },
+
+    thumbnail(finding) {
+      return thumbnailUrl(window.location.origin, finding);
+    },
+
+    links(item) {
+      return standardLinks(item);
+    },
+
+    // §4.5: the window's opener is the last admin window that clicked Inspect, else window.opener.
+    openerWindow() {
+      return this.currentOpener || window.opener || null;
+    },
+
+    // §4.5 click-through: post to a reachable opener and wait 1,500 ms for `received`; otherwise
+    // open the campaign's content page in a new tab, selecting on load.
+    gotoBlock(blockId) {
+      const opener = this.openerWindow();
+      const { origin } = window.location;
+      const decision = clickDecision({
+        opener, ourOrigin: origin, campaignId: this.id, blockId,
+      });
+      if (decision === 'ignore') {
+        return;
       }
-      const v = s.trim();
-      return v.startsWith(`${window.location.origin}/uploads/`) && /^\S+\.(png|jpe?g|gif|webp)(\?\S*)?$/i.test(v);
+      this.clearNav();
+      if (decision === 'newTab') {
+        this.openFallback(blockId);
+        return;
+      }
+      const token = newToken();
+      const nav = {
+        token, target: opener, blockId, received: false, ackTimer: null, resultTimer: null,
+      };
+      this.nav = nav;
+      try {
+        opener.postMessage(selectMessage(this.id, blockId, token), origin);
+      } catch (e) {
+        this.clearNav();
+        this.openFallback(blockId);
+        return;
+      }
+      nav.ackTimer = setTimeout(() => {
+        if (this.nav === nav && afterAckWait(nav.received ? 'received' : null) === 'newTab') {
+          this.clearNav();
+          this.openFallback(blockId);
+        }
+      }, ACK_TIMEOUT_MS);
+    },
+
+    openFallback(blockId) {
+      const url = fallbackUrl(this.$router.options.base || '', this.id, blockId);
+      if (url) {
+        window.open(url, '_blank');
+      }
+    },
+
+    clearNav() {
+      if (this.nav) {
+        clearTimeout(this.nav.ackTimer);
+        clearTimeout(this.nav.resultTimer);
+      }
+      this.nav = null;
+    },
+
+    finishNav(result) {
+      const key = resultToast(result);
+      this.clearNav();
+      if (key) {
+        this.$utils.toast(this.$t(key), result === 'selected' ? 'is-success' : 'is-warning');
+      }
+    },
+
+    // The opener handshake and the acks of the click in flight; anything else is ignored.
+    onMessage(ev) {
+      const { origin } = window.location;
+      if (acceptOpener({
+        origin: ev.origin, ourOrigin: origin, source: ev.source, data: ev.data, campaignId: this.id,
+      })) {
+        this.currentOpener = ev.source;
+        return;
+      }
+      const { nav } = this;
+      if (!nav) {
+        return;
+      }
+      const result = acceptAck({
+        origin: ev.origin, ourOrigin: origin, source: ev.source, expectedSource: nav.target, data: ev.data, token: nav.token,
+      });
+      if (!result) {
+        return;
+      }
+      if (result === 'received') {
+        if (!nav.received) {
+          nav.received = true;
+          clearTimeout(nav.ackTimer);
+          // The opener answers within 15 s (its own cap answers `unknown`); this window's cap is a
+          // moment longer so that answer arrives first. A reply after it is ignored.
+          nav.resultTimer = setTimeout(() => {
+            if (this.nav === nav) {
+              this.finishNav('unknown');
+            }
+          }, RESULT_TIMEOUT_MS + 1000);
+        }
+        return;
+      }
+      if (nav.received && isFinalResult(result)) {
+        this.finishNav(result);
+      }
     },
 
     // The builder UMD in this window's own frame, for compileDocument (the sweep's compile).
@@ -650,10 +855,13 @@ export default Vue.extend({
   mounted() {
     this.loadCampaign();
     this.load();
+    window.addEventListener('message', this.onMessage);
   },
 
   beforeDestroy() {
     clearTimeout(this.pollID);
+    window.removeEventListener('message', this.onMessage);
+    this.clearNav();
   },
 });
 </script>
@@ -693,6 +901,50 @@ export default Vue.extend({
 .evidence-thumb {
   max-height: 80px;
   vertical-align: middle;
+}
+/* REVIEW-NAVIGATION-SPEC §4.6: the live checklist, pinned at the top. */
+.review-checklist {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.9em;
+}
+.review-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.review-checklist li.is-pending {
+  color: #888;
+}
+.review-checklist li.is-current {
+  font-weight: bold;
+}
+.checklist-spinner {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border: 2px solid #ccc;
+  border-top-color: #3273dc;
+  border-radius: 50%;
+  animation: checklist-spin 0.8s linear infinite;
+}
+@keyframes checklist-spin {
+  to { transform: rotate(360deg); }
+}
+.review-item.is-early {
+  opacity: 0.9;
+}
+.goto-block {
+  height: auto;
+  padding: 0 0.25em;
+  white-space: normal;
+  text-align: left;
 }
 .structure-cmd {
   white-space: pre-wrap;

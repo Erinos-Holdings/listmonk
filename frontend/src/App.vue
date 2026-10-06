@@ -115,6 +115,10 @@
 <script>
 import Vue from 'vue';
 import { mapState } from 'vuex';
+import { NavigationFailureType, isNavigationFailure } from 'vue-router';
+import {
+  RESULT_TIMEOUT_MS, acceptSelect, ackMessage, campaignLocation, isFinalResult, pushFailureResult, receiverRoute,
+} from './reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import { clearAllDrafts } from './drafts';
 import { uris } from './constants';
 import stepUp, { stepUpError } from './stepUp';
@@ -234,6 +238,74 @@ export default Vue.extend({
       this.$api.pingSession().catch(() => {});
     },
 
+    // Fork (review navigation) -- integrations REVIEW-NAVIGATION-SPEC §4.5: the receiver for the
+    // Inspect window's block references. App.vue survives route changes, so it holds the ONE
+    // pending request; the campaign page does the selecting and answers via `review.select-result`.
+    // Acts only on what reviewNavigate.mjs `acceptSelect` accepts (our origin, a top-level other
+    // window, the type, valid ids, not the Inspect window itself); anything else gets no reply.
+    onReviewMessage(ev) {
+      const { origin } = window.location;
+      const req = acceptSelect({
+        origin: ev.origin, ourOrigin: origin, source: ev.source, self: window, data: ev.data, routeName: this.$route.name,
+      });
+      if (!req) {
+        return;
+      }
+      try {
+        ev.source.postMessage(ackMessage(req.token, 'received'), origin);
+      } catch (e) {
+        return;
+      }
+      // A new request replaces the pending one; the replaced one gets no second reply.
+      if (this.reviewPending) {
+        clearTimeout(this.reviewPending.timer);
+      }
+      const pending = {
+        source: ev.source, token: req.token, campaignId: req.campaignId, blockId: req.blockId, startedAt: Date.now(), timer: null,
+      };
+      pending.timer = setTimeout(() => this.replyReview(pending, 'unknown'), RESULT_TIMEOUT_MS);
+      this.reviewPending = pending;
+
+      if (receiverRoute({ routeName: this.$route.name, routeId: this.$route.params.id, campaignId: req.campaignId }) === 'emit') {
+        this.$events.$emit('review.select', { campaignId: req.campaignId, blockId: req.blockId });
+        return;
+      }
+      // Another route: navigate. The campaign page's leave guard may decline (Cancel settles the
+      // navigation with next(false), so the push rejects); a resolved push mounts a campaign page
+      // that selects from the query and emits the result.
+      this.$router.push(campaignLocation(req.campaignId, req.blockId)).catch((err) => {
+        this.replyReview(pending, pushFailureResult(err, (e) => isNavigationFailure(e, NavigationFailureType.aborted)));
+      });
+    },
+
+    onReviewSelectResult(r) {
+      const p = this.reviewPending;
+      if (!p || !r || r.blockId !== p.blockId || (r.campaignId !== undefined && r.campaignId !== p.campaignId)) {
+        return;
+      }
+      if (isFinalResult(r.result)) {
+        this.replyReview(p, r.result);
+      }
+    },
+
+    // The second (and last) reply to a pending request, once.
+    replyReview(p, result) {
+      if (this.reviewPending !== p) {
+        return;
+      }
+      clearTimeout(p.timer);
+      this.reviewPending = null;
+      try {
+        p.source.postMessage(ackMessage(p.token, result), window.location.origin);
+      } catch (e) {
+        // The Inspect window is gone; nothing to tell.
+      }
+      if (result === 'selected') {
+        // The raise is the browser's decision.
+        window.focus();
+      }
+    },
+
     listenEvents() {
       const reMatchLog = /(.+?)\.go:\d+:(.+?)$/im;
       const evtSource = new EventSource(uris.errorEvents, { withCredentials: true });
@@ -292,6 +364,12 @@ export default Vue.extend({
     this.lastSessionCheck = Date.now();
     document.addEventListener('visibilitychange', this.checkSessionOnFocus);
     window.addEventListener('listmonk:session-expired', this.onSessionExpired);
+
+    // Fork (review navigation): the Inspect window's block references (§4.5). The pending request
+    // holds another window, so it is kept off the reactive data.
+    this.reviewPending = null;
+    window.addEventListener('message', this.onReviewMessage);
+    this.$events.$on('review.select-result', this.onReviewSelectResult);
   },
 });
 </script>

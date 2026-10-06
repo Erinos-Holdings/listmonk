@@ -1,0 +1,278 @@
+{
+  "document": {
+    "root": {
+      "type": "EmailLayout",
+      "data": {
+        "backdropColor": "#F5F5F5",
+        "canvasColor": "#FFFFFF",
+        "textColor": "#262626",
+        "fontFamily": "MODERN_SANS",
+        "childrenIds": [
+          "block-1790113969001",
+          "block-outer",
+          "block-1790113969002",
+          "block-cols",
+          "block-17",
+          "block-official-brand",
+          "block-official-corporate"
+        ]
+      }
+    },
+    "block-1790113969001": {
+      "type": "Image",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          }
+        },
+        "props": {
+          "url": "https://email.curatedfor.you/uploads/hero.jpg",
+          "alt": "RUZE Header",
+          "contentAlignment": "middle"
+        }
+      }
+    },
+    "block-outer": {
+      "type": "Container",
+      "data": {
+        "style": {
+          "padding": {
+            "top": 16,
+            "bottom": 16,
+            "left": 24,
+            "right": 24
+          }
+        },
+        "props": {
+          "childrenIds": [
+            "block-inner",
+            "block-1790113969003",
+            "block-5"
+          ]
+        }
+      }
+    },
+    "block-inner": {
+      "type": "Container",
+      "data": {
+        "style": null,
+        "props": {
+          "childrenIds": [
+            "block-1790113969004",
+            "block-gone",
+            "block-5"
+          ]
+        }
+      }
+    },
+    "block-1790113969004": {
+      "type": "Heading",
+      "data": {
+        "style": null,
+        "props": {
+          "text": "Three ways to enjoy",
+          "level": "h2"
+        }
+      }
+    },
+    "block-5": {
+      "type": "Text",
+      "data": {
+        "style": null,
+        "props": {
+          "text": "Pouches fit right in your pocket."
+        }
+      }
+    },
+    "block-1790113969003": {
+      "type": "Button",
+      "data": {
+        "style": null,
+        "props": {
+          "text": "MEET RUZE",
+          "url": "https://ruze.example/"
+        }
+      }
+    },
+    "block-1790113969002": {
+      "type": "Divider",
+      "data": {
+        "style": null,
+        "props": {}
+      }
+    },
+    "block-cols": {
+      "type": "ColumnsContainer",
+      "data": {
+        "style": null,
+        "props": {
+          "columnsCount": 2,
+          "columns": [
+            {
+              "childrenIds": [
+                "block-left-col-container"
+              ]
+            },
+            {
+              "childrenIds": [
+                "block-1790113969005"
+              ]
+            },
+            {
+              "childrenIds": [
+                "block-hidden-third-column"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "block-left-col-container": {
+      "type": "Container",
+      "data": {
+        "style": null,
+        "props": {
+          "childrenIds": [
+            "block-6"
+          ]
+        }
+      }
+    },
+    "block-6": {
+      "type": "Text",
+      "data": {
+        "style": null,
+        "props": {
+          "text": "Left column"
+        }
+      }
+    },
+    "block-1790113969005": {
+      "type": "Image",
+      "data": {
+        "style": null,
+        "props": {
+          "url": " https://email.curatedfor.you/uploads/pocket.jpg ",
+          "alt": ""
+        }
+      }
+    },
+    "block-hidden-third-column": {
+      "type": "Button",
+      "data": {
+        "style": null,
+        "props": {
+          "text": "Hidden",
+          "url": "https://ruze.example/hidden"
+        }
+      }
+    },
+    "block-17": {
+      "type": "Spacer",
+      "data": {
+        "style": null,
+        "props": {
+          "height": 16
+        }
+      }
+    },
+    "block-official-brand": {
+      "type": "OfficialFooter",
+      "data": {
+        "style": null,
+        "props": {
+          "kind": "brand"
+        }
+      }
+    },
+    "block-official-corporate": {
+      "type": "OfficialFooter",
+      "data": {
+        "style": null,
+        "props": {
+          "kind": "corporate"
+        }
+      }
+    },
+    "block-orphan-spacer-not-in-tree": {
+      "type": "Spacer",
+      "data": {
+        "style": null,
+        "props": {
+          "height": 8
+        }
+      }
+    },
+    "block-orphan-html": {
+      "type": "Html",
+      "data": {
+        "style": null,
+        "props": {
+          "contents": "<p>orphan</p>"
+        }
+      }
+    }
+  },
+  "expected": [
+    [
+      "block-1790113969001",
+      1
+    ],
+    [
+      "block-outer",
+      2
+    ],
+    [
+      "block-inner",
+      3
+    ],
+    [
+      "block-1790113969004",
+      4
+    ],
+    [
+      "block-5",
+      5
+    ],
+    [
+      "block-1790113969003",
+      6
+    ],
+    [
+      "block-1790113969002",
+      7
+    ],
+    [
+      "block-cols",
+      8
+    ],
+    [
+      "block-left-col-container",
+      9
+    ],
+    [
+      "block-6",
+      10
+    ],
+    [
+      "block-1790113969005",
+      11
+    ],
+    [
+      "block-17",
+      12
+    ],
+    [
+      "block-official-brand",
+      13
+    ],
+    [
+      "block-official-corporate",
+      14
+    ]
+  ]
+}

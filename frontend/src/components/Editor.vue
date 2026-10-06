@@ -282,6 +282,13 @@ export default {
       return ve ? ve.remapColors(sourceStr, oldPalette, newPalette) : null;
     },
 
+    // integrations REVIEW-NAVIGATION-SPEC §4.5: the Inspect window's block reference. false when
+    // there is no visual editor (a non-visual campaign) or it could not select the block.
+    selectBlock(id) {
+      const ve = this.$refs.visualEditor;
+      return ve ? ve.selectBlock(id) : false;
+    },
+
     beautifyHTML(str) {
       // Pad all tags with linebreaks.
       let s = this.trimLines(str.replace(/(<(?!(\/)?a|span)([^>]+)>)/ig, '\n$1\n'), true);

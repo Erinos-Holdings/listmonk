@@ -499,3 +499,47 @@ export function breadcrumb(doc: TDocument, id: string): { id: string; label: str
     return { id: cid, label };
   });
 }
+
+// Fork (review navigation) -- integrations REVIEW-NAVIGATION-SPEC §5.1. The RENDER walk: root's
+// children in order, each block before its children; a Container's childrenIds; a
+// ColumnsContainer's first `columnsCount` columns only (default 2 when absent -- a hidden column
+// is not in the email); a block already visited is not visited again; ids the document lacks are
+// skipped. Root included. This restates the review Lambda's `value-rules.ts::reachable`; the
+// shared fixture test/numbers/block-numbers.json keeps the two equal (neither repo imports the
+// other). Unlike `reachableIds` (a set, hidden columns included), this is an ORDER.
+export function renderWalk(doc: TDocument): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (id: string) => {
+    if (seen.has(id) || !doc[id]) return;
+    seen.add(id);
+    out.push(id);
+    const block = doc[id];
+    let slots = slotsOfBlock(block);
+    if (block.type === 'ColumnsContainer') {
+      const raw = block.data && block.data.props ? block.data.props.columnsCount : undefined;
+      slots = slots.slice(0, Number(raw ?? 2));
+    }
+    for (const s of slots) s.ids.forEach(walk);
+  };
+  walk(ROOT);
+  return out;
+}
+
+// Every rendered block's number (root excluded, 1-based, render order) -- the numbers the review
+// window's references print ("(block 7)") and the Show structure badge shows. Memoized on the
+// document's identity, as the position index is.
+const numbersCache = new WeakMap<object, Map<string, number>>();
+
+export function blockNumbers(doc: TDocument): Map<string, number> {
+  let numbers = numbersCache.get(doc);
+  if (numbers) return numbers;
+  numbers = new Map<string, number>();
+  let n = 0;
+  for (const id of renderWalk(doc)) {
+    if (id === ROOT) continue;
+    numbers.set(id, ++n);
+  }
+  numbersCache.set(doc, numbers);
+  return numbers;
+}

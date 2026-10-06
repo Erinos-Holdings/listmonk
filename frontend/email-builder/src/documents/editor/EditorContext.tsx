@@ -93,6 +93,12 @@ export function useDocument() {
   return editorStateStore((s) => s.document);
 }
 
+// Fork (review navigation) -- integrations REVIEW-NAVIGATION-SPEC §5.3: the current document,
+// read outside React (EmailBuilder.selectBlock). Read-only.
+export function getDocument(): TEditorConfiguration {
+  return editorStateStore.getState().document;
+}
+
 export function useDocumentGeneration() {
   return editorStateStore((s) => s.documentGeneration);
 }
