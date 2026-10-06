@@ -150,27 +150,57 @@ test('the new-tab URL: the content page selecting on load; nothing for an invali
   assert.equal(selectFromQuery({}), null);
 });
 
-test('§4.1: the reference line', () => {
+test('the reference: badge -- a linkable block with no image', () => {
   const where = {
     block: 'block-17', n: 7, label: 'button "MEET RUZE"', type: 'Button',
   };
-  assert.deepEqual(referenceLine({ where, locationPlain: 'x', location: 'block block-17' }), {
-    kind: 'link', text: 'the button "MEET RUZE" (block 7)', label: 'button "MEET RUZE"', n: 7, blockId: 'block-17',
+  assert.deepEqual(referenceLine({ where, locationPlain: 'x', location: 'block block-17' }, ORIGIN), {
+    kind: 'badge', text: 'the button "MEET RUZE"', n: 7, blockId: 'block-17',
   });
-  assert.deepEqual(referenceLine({ locationPlain: 'The subject', location: 'subject' }), { kind: 'plain', text: 'The subject' });
-  assert.deepEqual(referenceLine({ location: 'subject' }), { kind: 'plain', text: 'subject' }, 'an older report');
-  assert.deepEqual(referenceLine({}), { kind: 'none', text: '' });
-  assert.equal(referenceLine({ where: { ...where, block: 'block-"]' } }).kind, 'text', 'an invalid id is never a link');
+  assert.equal(referenceLine({ where, evidence: 'MEET RUZE' }, ORIGIN).kind, 'badge', 'text evidence is no image');
+});
+
+test('the reference: image -- where.image first, else an image evidence; this host only', () => {
+  const up = `${ORIGIN}/uploads/hero.jpg`;
+  const ev = `${ORIGIN}/uploads/pocket.png`;
+  const where = {
+    block: 'block-1', n: 3, label: 'image "RUZE Header"', type: 'Image', image: up,
+  };
+  assert.deepEqual(referenceLine({ where, evidence: ev }, ORIGIN), {
+    kind: 'image', text: 'the image "RUZE Header"', n: 3, blockId: 'block-1', image: up,
+  });
+  const noImage = { ...where, image: undefined };
+  assert.equal(referenceLine({ where: noImage, evidence: ev }, ORIGIN).image, ev, 'the evidence when where.image is absent');
+  const offHost = { ...where, image: 'https://cdn.example/hero.jpg' };
+  assert.equal(referenceLine({ where: offHost, evidence: ev }, ORIGIN).image, ev, 'an off-host where.image falls back to the evidence');
+  assert.equal(referenceLine({ where: offHost, evidence: 'https://cdn.example/x.png' }, ORIGIN).kind, 'badge', 'no same-origin image -> badge (I10)');
+  assert.equal(referenceLine({ where, evidence: ev }, '').kind, 'badge', 'no origin -> no image');
+});
+
+test('the reference: plain and none', () => {
+  assert.deepEqual(referenceLine({ locationPlain: 'The subject', location: 'subject' }, ORIGIN), { kind: 'plain', text: 'The subject' });
+  assert.deepEqual(referenceLine({ location: 'subject' }, ORIGIN), { kind: 'plain', text: 'subject' }, 'an older report');
+  assert.deepEqual(referenceLine({}, ORIGIN), { kind: 'none', text: '' });
+  assert.deepEqual(referenceLine(null, ORIGIN), { kind: 'none', text: '' });
+  const bad = referenceLine({
+    where: {
+      block: 'block-"]', n: 2, label: 'text "x"', type: 'Text', image: `${ORIGIN}/uploads/a.png`,
+    },
+  }, ORIGIN);
+  assert.equal(bad.kind, 'plain', 'an invalid id is never a link');
+  assert.equal(bad.blockId, null);
 });
 
 test('I9: a block inside an official footer is never a link', () => {
   const r = referenceLine({
     where: {
-      block: 'block-official-brand', n: 13, label: 'official footer', type: 'OfficialFooter',
+      block: 'block-official-brand', n: 13, label: 'official footer', type: 'OfficialFooter', image: `${ORIGIN}/uploads/logo.png`,
     },
-  });
-  assert.equal(r.kind, 'text');
+    evidence: `${ORIGIN}/uploads/logo.png`,
+  }, ORIGIN);
+  assert.equal(r.kind, 'plain');
   assert.equal(r.blockId, null);
+  assert.equal(r.image, undefined);
   assert.equal(r.text, 'the official footer (block 13)');
 });
 

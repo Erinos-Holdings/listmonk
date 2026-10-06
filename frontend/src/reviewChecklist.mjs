@@ -134,3 +134,63 @@ export function earlyEntries({ progress, phase = 'running' }) {
   if (STAGES.indexOf(progress.stage) < STAGES.indexOf('screenshots')) return [];
   return openEntries(dItems(progress.items)).map((e) => ({ ...e, decidable: false }));
 }
+
+// ------------------------------------------------------------------ the auxiliary sections
+// (polish pass, user 2026-10-06) Context, Structure and Provenance as collapsible sections with a
+// status pill: the window's eye-catcher only -- nothing here decides, gates or stages anything.
+
+const STATUS_RANK = { fail: 0, warn: 1, ok: 2 };
+const PILL_TYPE = { ok: 'is-success', warn: 'is-warning', fail: 'is-danger' };
+
+// A context line is a concern when its value is not `ok`, not `none` and not a number ("issues",
+// "warn", "unknown", a list of running broadcasts …).
+export function isContextConcern(value) {
+  const v = String(value ?? '').trim().toLowerCase();
+  if (v === 'ok' || v === 'none') return false;
+  return !/^-?\d+(\.\d+)?$/.test(v);
+}
+
+// `structure` is structureBrief.mjs `structureOf(report)` (D4.2's coverage) or null. Returns the
+// sections present in the report, ordered fail, then warn, then ok (Context, Structure, Provenance
+// within a status): `{key, status, pill, pillType, open, highlight: Set<index>}`. `open` is
+// `status !== 'ok'`. Context highlights its concern lines; Provenance the AI call lines whose
+// status is not ok/cached.
+export function auxSections({ report, structure, t }) {
+  const rep = report && typeof report === 'object' ? report : null;
+  if (!rep) return [];
+  const tr = (k, p) => t(`campaigns.review.pill.${k}`, p);
+  const out = [];
+  const add = (key, status, pill, highlight = new Set()) => out.push({
+    key, status, pill, pillType: PILL_TYPE[status], open: status !== 'ok', highlight,
+  });
+
+  const context = Array.isArray(rep.context) ? rep.context : [];
+  if (context.length) {
+    const hl = new Set();
+    context.forEach((c, i) => { if (c && isContextConcern(c.value)) hl.add(i); });
+    if (hl.size) add('context', 'warn', tr('attention', { n: hl.size }), hl);
+    else add('context', 'ok', tr('passed'));
+  }
+
+  const cov = structure && structure.coverage;
+  if (cov) {
+    if (cov.verified) add('structure', 'ok', tr('passed'));
+    else if (cov.plan && cov.plan.available === false) add('structure', 'warn', tr('unavailable'));
+    else add('structure', 'fail', tr('unverified'));
+  } else if (rep.structure) {
+    add('structure', rep.structure.verified ? 'ok' : 'fail', rep.structure.verified ? tr('passed') : tr('unverified'));
+  }
+
+  const ai = rep.ai && typeof rep.ai === 'object' ? rep.ai : null;
+  const calls = ai && Array.isArray(ai.calls) ? ai.calls : [];
+  const hl = new Set();
+  calls.forEach((c, i) => { if (!c || (c.status !== 'ok' && c.status !== 'cached')) hl.add(i); });
+  if (ai && ai.status === 'unavailable') add('provenance', 'fail', tr('aiUnavailable'), hl);
+  else if (ai && ai.status === 'partial') add('provenance', 'warn', tr('aiPartial'), hl);
+  else add('provenance', 'ok', tr('passed'), hl);
+
+  return out
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => STATUS_RANK[a.s.status] - STATUS_RANK[b.s.status] || a.i - b.i)
+    .map(({ s }) => s);
+}

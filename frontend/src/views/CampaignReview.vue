@@ -28,7 +28,9 @@
          while the review runs and after it completes (reviewChecklist.mjs). -->
     <ul v-if="checklistRows.length" class="review-checklist" data-cy="review-checklist">
       <li v-for="r in checklistRows" :key="r.key" :class="`is-${r.state}`" :data-cy="`checklist-${r.key}`">
-        <input type="checkbox" :checked="r.checked" disabled :aria-label="r.label" />
+        <!-- A done row: the green check (the icon subset has no checkbox glyph); otherwise an empty box. -->
+        <b-icon v-if="r.checked" icon="check-circle-outline" size="is-small" class="has-text-success" />
+        <span v-else class="checklist-box" aria-hidden="true" />
         <span>{{ r.label }}</span>
         <span v-if="r.spinner" class="checklist-spinner" aria-hidden="true" />
       </li>
@@ -54,7 +56,7 @@
         <h5 class="title is-5">{{ sec.label }} <span class="tag">{{ sec.entries.length }}</span></h5>
         <div v-for="e in sec.entries" :key="`early-${e.key}`" class="review-item box is-early" :data-cy="`early-item-${e.item.id}`">
           <div class="item-head">
-            <strong>{{ e.item.id }}</strong> {{ e.item.title }}
+            <strong>{{ e.item.id }}</strong> {{ e.item.failTitle || e.item.title }}
             <b-tag :type="tagType(e)" class="ml-2">{{ e.finding.severity || e.item.verdict }}</b-tag>
           </div>
           <p class="todo">{{ e.finding.todo }}</p>
@@ -63,18 +65,18 @@
             <span v-for="(r, n) in links(e.item)" :key="`l-${n}`"><a :href="r.url" target="_blank"
               rel="noopener noreferrer">{{ r.label }}</a><span v-if="n < links(e.item).length - 1">, </span></span>
           </p>
-          <p class="is-size-7">
-            <span class="has-text-grey">{{ $t('campaigns.review.evidence') }}:</span>
-            <img v-if="isImageUrl(e.finding.evidence)" :src="e.finding.evidence" alt="" class="evidence-thumb" />
-            <q v-else>{{ e.finding.evidence }}</q>
-            <img v-if="thumbnail(e.finding)" :src="thumbnail(e.finding)" alt="" class="evidence-thumb ml-2" data-cy="where-thumb" />
+          <p v-if="reference(e.finding).kind === 'image'" class="where-line">
+            <a href="#" class="where-thumb" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
+              @click.prevent="gotoBlock(reference(e.finding).blockId)"><img :src="reference(e.finding).image" alt="" class="evidence-thumb" /><span
+                class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
           </p>
-          <p v-if="reference(e.finding).kind !== 'none'" class="is-size-7">
-            <span class="has-text-grey">{{ reference(e.finding).kind === 'plain' ? $t('campaigns.review.location') : $t('campaigns.review.where') }}:</span>
-            <a v-if="reference(e.finding).kind === 'link'" href="#" class="button is-small is-text goto-block" data-cy="btn-goto-block"
-              :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
-              @click.prevent="gotoBlock(reference(e.finding).blockId)">{{ reference(e.finding).text }}</a>
-            <template v-else>{{ reference(e.finding).text }}</template>
+          <p v-else-if="reference(e.finding).kind === 'badge'" class="is-size-7 where-line">
+            <a href="#" class="where-badge" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
+              @click.prevent="gotoBlock(reference(e.finding).blockId)"><span class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
+            {{ reference(e.finding).text }}
+          </p>
+          <p v-else-if="reference(e.finding).kind === 'plain'" class="is-size-7">
+            <span class="has-text-grey">{{ $t('campaigns.review.location') }}:</span> {{ reference(e.finding).text }}
           </p>
           <p class="is-size-7 has-text-grey">{{ $t('campaigns.review.decideLater') }}</p>
         </div>
@@ -97,7 +99,8 @@
         <h5 class="title is-5">{{ sec.label }} <span class="tag">{{ sec.entries.length }}</span></h5>
         <div v-for="e in sec.entries" :key="e.key" class="review-item box" :data-cy="`item-${e.item.id}`">
           <div class="item-head">
-            <strong>{{ e.item.id }}</strong> {{ e.item.title }}
+            <!-- The rule's pre-written failure title (report `failTitle`, user 2026-10-06); an older report has none. -->
+            <strong>{{ e.item.id }}</strong> {{ e.item.failTitle || e.item.title }}
             <b-tag :type="tagType(e)" class="ml-2">{{ e.finding.severity || e.item.verdict }}</b-tag>
             <b-tag v-if="stillOpen(e)" type="is-warning" class="ml-1">{{ $t('campaigns.review.stillOpen') }}</b-tag>
           </div>
@@ -108,21 +111,21 @@
             <span v-for="(r, n) in links(e.item)" :key="`l-${n}`"><a :href="r.url" target="_blank"
               rel="noopener noreferrer">{{ r.label }}</a><span v-if="n < links(e.item).length - 1">, </span></span>
           </p>
-          <p class="is-size-7">
-            <span class="has-text-grey">{{ $t('campaigns.review.evidence') }}:</span>
-            <img v-if="isImageUrl(e.finding.evidence)" :src="e.finding.evidence" alt="" class="evidence-thumb" />
-            <q v-else>{{ e.finding.evidence }}</q>
-            <!-- §4.2: the thumbnail of the image the finding is at (this host's uploads only, never repeated). -->
-            <img v-if="thumbnail(e.finding)" :src="thumbnail(e.finding)" alt="" class="evidence-thumb ml-2" data-cy="where-thumb" />
+          <!-- The reference (reviewNavigate.mjs referenceLine): the thumbnail IS the click-through,
+               with the editor's block-number badge on its corner; a badge alone when there is no
+               image; plain Location text for an official footer or no `where`. -->
+          <p v-if="reference(e.finding).kind === 'image'" class="where-line" data-cy="review-where">
+            <a href="#" class="where-thumb" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
+              @click.prevent="gotoBlock(reference(e.finding).blockId)"><img :src="reference(e.finding).image" alt="" class="evidence-thumb" /><span
+                class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
           </p>
-          <!-- §4.1: the reference line -- a link that selects the block in the editor window, plain
-               for an official footer; locationPlain (else location) when there is no `where`. -->
-          <p v-if="reference(e.finding).kind !== 'none'" class="is-size-7" data-cy="review-where">
-            <span class="has-text-grey">{{ reference(e.finding).kind === 'plain' ? $t('campaigns.review.location') : $t('campaigns.review.where') }}:</span>
-            <a v-if="reference(e.finding).kind === 'link'" href="#" class="button is-small is-text goto-block" data-cy="btn-goto-block"
-              :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
-              @click.prevent="gotoBlock(reference(e.finding).blockId)">{{ reference(e.finding).text }}</a>
-            <template v-else>{{ reference(e.finding).text }}</template>
+          <p v-else-if="reference(e.finding).kind === 'badge'" class="is-size-7 where-line" data-cy="review-where">
+            <a href="#" class="where-badge" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
+              @click.prevent="gotoBlock(reference(e.finding).blockId)"><span class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
+            {{ reference(e.finding).text }}
+          </p>
+          <p v-else-if="reference(e.finding).kind === 'plain'" class="is-size-7" data-cy="review-where">
+            <span class="has-text-grey">{{ $t('campaigns.review.location') }}:</span> {{ reference(e.finding).text }}
           </p>
           <p v-if="decided(e.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(e.key)) }}</p>
           <div class="buttons mt-2">
@@ -145,36 +148,51 @@
         </div>
       </section>
 
-      <b-collapse :open="false" class="review-section">
-        <template #trigger="props">
-          <h5 class="title is-5 is-clickable">
-            <b-icon :icon="props.open ? 'chevron-down' : 'chevron-right'" size="is-small" />
-            {{ $t('campaigns.review.sectionPassed') }} <span class="tag">{{ passed.length }}</span>
-          </h5>
-        </template>
-        <ul class="passed-list is-size-7">
-          <li v-for="i in passed" :key="i.id">
-            <strong>{{ i.id }}</strong> {{ i.title }} —
-            <template v-if="i.verdict === 'n/a'">n/a: {{ i.reason }}</template>
-            <template v-else>{{ $t('campaigns.review.examined', { n: i.examined || 0 }) }}</template>
-          </li>
-        </ul>
-      </b-collapse>
+      <!-- Context, Structure and Provenance (reviewChecklist.mjs auxSections) after the finding
+           sections: fail, then warn, then the ok group -- Passed first, then the ok sections. A
+           section with a concern opens by default; the pill only draws the eye. -->
+      <template v-for="s in auxLayout">
+        <b-collapse v-if="s.key === 'passed'" :key="s.key" :open="false" class="review-section" data-cy="section-passed">
+          <template #trigger="props">
+            <h5 class="title is-5 is-clickable aux-head">
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              {{ $t('campaigns.review.sectionPassed') }} <span class="tag">{{ passed.length }}</span>
+            </h5>
+          </template>
+          <ul class="passed-list is-size-7">
+            <li v-for="i in passed" :key="i.id">
+              <strong>{{ i.id }}</strong> {{ i.title }} —
+              <template v-if="i.verdict === 'n/a'">n/a: {{ i.reason }}</template>
+              <template v-else>{{ $t('campaigns.review.examined', { n: i.examined || 0 }) }}</template>
+            </li>
+          </ul>
+        </b-collapse>
 
-      <section v-if="report.context && report.context.length" class="review-section">
-        <h5 class="title is-5">{{ $t('campaigns.review.sectionContext') }}</h5>
-        <ul class="is-size-7">
-          <li v-for="(c, n) in report.context" :key="n">
-<strong>{{ c.label }}</strong>: {{ c.value }}
-            <span v-if="c.asOf" class="has-text-grey">({{ c.asOf }})</span>
-</li>
-        </ul>
-      </section>
+        <b-collapse v-else-if="s.key === 'context'" :key="s.key" :open="s.open" class="review-section" data-cy="section-context">
+          <template #trigger="props">
+            <h5 class="title is-5 is-clickable aux-head">
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              {{ $t('campaigns.review.sectionContext') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
+            </h5>
+          </template>
+          <ul class="is-size-7">
+            <li v-for="(c, n) in report.context" :key="n" :class="{ 'has-text-weight-bold has-text-warning': s.highlight.has(n) }">
+              <strong>{{ c.label }}</strong>: {{ c.value }}
+              <span v-if="c.asOf" class="has-text-grey">({{ c.asOf }})</span>
+            </li>
+          </ul>
+        </b-collapse>
 
-      <!-- INSPECT-SCOPE-SPEC §2.5: rendered from D4.2's coverage object; a report without it
-           (STRUCTURE_GATE off, older reports) renders the legacy section below. -->
-      <section v-if="structure" class="review-section" data-cy="section-structure">
-        <h5 class="title is-5">{{ $t('campaigns.review.sectionStructure') }}</h5>
+        <!-- INSPECT-SCOPE-SPEC §2.5: rendered from D4.2's coverage object; a report without it
+             (STRUCTURE_GATE off, older reports) renders the legacy content. -->
+        <b-collapse v-else-if="s.key === 'structure'" :key="s.key" :open="s.open" class="review-section" data-cy="section-structure">
+          <template #trigger="props">
+            <h5 class="title is-5 is-clickable aux-head">
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              {{ $t('campaigns.review.sectionStructure') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
+            </h5>
+          </template>
+        <div v-if="structure">
         <p v-if="structure.coverage.verified" class="is-size-7" data-cy="structure-verified">
           {{ $t('campaigns.review.structureVerifiedRecords', { records: recordsLine(structure.coverage.recordsUsed) }) }}
         </p>
@@ -195,8 +213,8 @@
 
           <b-collapse :open="false" class="mt-2" data-cy="structure-detail">
             <template #trigger="props">
-              <a class="is-clickable">
-                <b-icon :icon="props.open ? 'chevron-down' : 'chevron-right'" size="is-small" />
+              <a class="is-clickable aux-head">
+                <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
                 {{ $t('campaigns.review.structureWhat') }}
               </a>
             </template>
@@ -247,10 +265,9 @@
             </span>
           </div>
         </div>
-      </section>
+        </div>
 
-      <section v-else-if="report.structure" class="review-section" data-cy="section-structure">
-        <h5 class="title is-5">{{ $t('campaigns.review.sectionStructure') }}</h5>
+        <div v-else-if="report.structure">
         <p v-if="report.structure.verified" class="is-size-7">
           {{ $t('campaigns.review.structureVerified', { date: report.structure.verified.verified_at.slice(0, 10), id: report.structure.verified.test_id }) }}
         </p>
@@ -258,7 +275,31 @@
           <p>{{ $t('campaigns.review.structureOffer', { differs: (report.structure.differs || []).join(', ') }) }}</p>
           <pre class="structure-cmd">{{ report.structure.command }}</pre>
         </div>
-      </section>
+        </div>
+        </b-collapse>
+
+        <b-collapse v-else-if="s.key === 'provenance'" :key="s.key" :open="s.open" class="review-section" data-cy="section-provenance">
+          <template #trigger="props">
+            <h5 class="title is-5 is-clickable aux-head">
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              {{ $t('campaigns.review.sectionProvenance') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
+            </h5>
+          </template>
+          <ul class="is-size-7 provenance">
+            <li>rubric {{ report.rubricVersion }} · job {{ report.jobId }} · bundle {{ report.bundleHash.slice(0, 12) }}</li>
+            <li v-if="report.provenance">
+              fork {{ report.provenance.forkVersion }} · builder {{ (report.provenance.bundleSha256 || '').slice(0, 12) }}
+              · SpamAssassin {{ report.provenance.saVersion }} rules {{ (report.provenance.saRulesSha256 || '').slice(0, 12) }}
+            </li>
+            <li v-for="(c, n) in ((report.ai && report.ai.calls) || [])" :key="c.call"
+              :class="{ 'has-text-weight-bold has-text-warning': s.highlight.has(n) }">
+              A-{{ c.call }}: {{ c.status }} · {{ c.modelId }} · prompt {{ (c.promptHash || '').slice(0, 12) }}
+              · {{ c.tokensIn }}/{{ c.tokensOut }} tokens · {{ c.ms }} ms<span v-if="c.cachedFrom"> · cached from {{ c.cachedFrom }}</span>
+            </li>
+            <li v-for="(at, what) in ((report.provenance && report.provenance.lookups) || {})" :key="what">{{ what }} {{ at }}</li>
+          </ul>
+        </b-collapse>
+      </template>
 
       <b-modal scroll="keep" :aria-modal="true" :active.sync="briefOpen" :width="820" data-cy="structure-brief-modal">
         <div class="modal-card" style="width: auto">
@@ -279,27 +320,6 @@
           </footer>
         </div>
       </b-modal>
-
-      <b-collapse :open="false" class="review-section">
-        <template #trigger="props">
-          <h5 class="title is-5 is-clickable">
-            <b-icon :icon="props.open ? 'chevron-down' : 'chevron-right'" size="is-small" />
-            {{ $t('campaigns.review.sectionProvenance') }}
-          </h5>
-        </template>
-        <ul class="is-size-7 provenance">
-          <li>rubric {{ report.rubricVersion }} · job {{ report.jobId }} · bundle {{ report.bundleHash.slice(0, 12) }}</li>
-          <li v-if="report.provenance">
-fork {{ report.provenance.forkVersion }} · builder {{ (report.provenance.bundleSha256 || '').slice(0, 12) }}
-            · SpamAssassin {{ report.provenance.saVersion }} rules {{ (report.provenance.saRulesSha256 || '').slice(0, 12) }}
-</li>
-          <li v-for="c in ((report.ai && report.ai.calls) || [])" :key="c.call">
-            A-{{ c.call }}: {{ c.status }} · {{ c.modelId }} · prompt {{ (c.promptHash || '').slice(0, 12) }}
-            · {{ c.tokensIn }}/{{ c.tokensOut }} tokens · {{ c.ms }} ms<span v-if="c.cachedFrom"> · cached from {{ c.cachedFrom }}</span>
-          </li>
-          <li v-for="(at, what) in ((report.provenance && report.provenance.lookups) || {})" :key="what">{{ what }} {{ at }}</li>
-        </ul>
-      </b-collapse>
     </template>
 
     <!-- Submit bar. -->
@@ -330,11 +350,11 @@ import {
   buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 import {
-  checklist, earlyEntries, sectionCounts, sectionOf,
+  auxSections, checklist, earlyEntries, sectionCounts, sectionOf,
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import {
   ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, acceptAck, acceptOpener, afterAckWait, clickDecision, fallbackUrl,
-  isFinalResult, isImageUrl, newToken, referenceLine, resultToast, selectMessage, standardLinks, thumbnailUrl,
+  isFinalResult, newToken, referenceLine, resultToast, selectMessage, standardLinks,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
 const BUILDER_CACHE_BUST = Date.now();
@@ -495,6 +515,15 @@ export default Vue.extend({
       return structureOf(this.report);
     },
 
+    // Context, Structure, Provenance with their pills (reviewChecklist.mjs auxSections), ordered
+    // fail, warn, ok -- with Passed placed first in the ok group.
+    auxLayout() {
+      const aux = auxSections({ report: this.report, structure: this.structure, t: (k, p) => this.$t(k, p) });
+      const notOk = aux.filter((s) => s.status !== 'ok');
+      const ok = aux.filter((s) => s.status === 'ok');
+      return [...notOk, { key: 'passed' }, ...ok];
+    },
+
     // Buttons by the SERVER profile's permission (never a role name).
     structureUi() {
       return structureButtons(this.$can(STRUCTURE_PERMISSION));
@@ -584,12 +613,6 @@ export default Vue.extend({
       }[s] || 'is-light';
     },
 
-    // Only this listmonk host's own uploads render as a thumbnail (Stage 4 finding 17): the rule is
-    // reviewNavigate.mjs `isImageUrl` (I10).
-    isImageUrl(s) {
-      return isImageUrl(window.location.origin, s);
-    },
-
     // Entries -> the three sections (reviewChecklist.mjs `sectionOf`), empty sections dropped.
     sectionList(entries) {
       const by = { blockers: [], acknowledge: [], advisory: [] };
@@ -601,14 +624,11 @@ export default Vue.extend({
       ].filter((s) => s.entries.length);
     },
 
-    // REVIEW-NAVIGATION-SPEC §4.1-§4.3 (reviewNavigate.mjs): the reference line, the thumbnail, the
-    // standards links. The window never re-derives a name.
+    // REVIEW-NAVIGATION-SPEC §4.1-§4.3 (reviewNavigate.mjs): the reference (the thumbnail or badge
+    // that clicks through -- only this host's uploads render as an image, I10) and the standards
+    // links. The window never re-derives a name.
     reference(finding) {
-      return referenceLine(finding);
-    },
-
-    thumbnail(finding) {
-      return thumbnailUrl(window.location.origin, finding);
+      return referenceLine(finding, window.location.origin);
     },
 
     links(item) {
@@ -940,11 +960,82 @@ export default Vue.extend({
 .review-item.is-early {
   opacity: 0.9;
 }
-.goto-block {
-  height: auto;
-  padding: 0 0.25em;
-  white-space: normal;
-  text-align: left;
+/* Polish pass (2026-10-06): a pending/current checklist row's empty box. */
+.checklist-box {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid #b5b5b5; /* $grey-light */
+  border-radius: 3px;
+  flex: none;
+}
+/* The lists page's +/- expand glyph (style.scss scopes it to section.lists, so copied here). */
+.aux-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1px solid #b5b5b5; /* $grey-light */
+  border-radius: 3px;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: #7a7a7a; /* $grey */
+  line-height: 1;
+  vertical-align: middle;
+  flex: none;
+}
+.expand-btn:hover {
+  border-color: #0055d4; /* $primary */
+  color: #0055d4;
+}
+.expand-btn .icon {
+  width: 1rem;
+  height: 1rem;
+  font-size: 0.7rem;
+}
+/* The reference: the thumbnail is the click-through, the editor's block-number badge on its
+   top-right corner at the badge's FIXED size (EditorBlockWrapper.tsx) -- never scaled. */
+.where-line {
+  margin: 0.4rem 0;
+}
+.where-thumb {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+.where-thumb .evidence-thumb {
+  display: block;
+}
+.where-thumb .lm-structure-number {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.where-badge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.3rem;
+}
+.lm-structure-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 18px;
+  min-width: 18px;
+  padding: 0 3px;
+  font: 600 11px/1 sans-serif;
+  border: 1px solid rgba(0, 121, 204, 1);
+  border-radius: 0 0 0 4px;
+  background: #ffffff;
+  color: rgba(0, 121, 204, 1);
 }
 .structure-cmd {
   white-space: pre-wrap;

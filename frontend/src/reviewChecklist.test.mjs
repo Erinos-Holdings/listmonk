@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  STAGES, checklist, earlyEntries, openEntries, sectionCounts, sectionOf,
+  STAGES, auxSections, checklist, earlyEntries, isContextConcern, openEntries, sectionCounts, sectionOf,
 } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 
 const t = (k, p) => (p ? `${k} ${JSON.stringify(p)}` : k);
@@ -162,4 +162,99 @@ test('I5: the window stages only report entries -- its `entries` reads the repor
   const early = /<!-- EARLY FINDINGS -->([\s\S]*?)<!-- \/EARLY FINDINGS -->/.exec(src);
   assert.ok(early, 'the early findings block is marked');
   assert.doesNotMatch(early[1], /btn-fix-for-me|btn-ill-fix-it|btn-accept|stage\(/);
+});
+
+// ------------------------------------------------------------------ polish pass (2026-10-06)
+
+const P = 'campaigns.review.pill.';
+const keys = (list) => list.map((s) => `${s.key}:${s.status}`);
+const okStructure = { coverage: { verified: true, plan: { available: true } } };
+const OK_REPORT = {
+  items: [],
+  context: [{ label: 'SES', value: 'ok' }, { label: 'Blocklists', value: 'none' }, { label: 'Recipients', value: '1204' }],
+  ai: { status: 'ok', calls: [{ status: 'ok' }, { status: 'cached' }] },
+};
+
+test('auxSections: all ok -> Context, Structure, Provenance in that order, closed, Passed pills', () => {
+  const s = auxSections({ report: OK_REPORT, structure: okStructure, t });
+  assert.deepEqual(keys(s), ['context:ok', 'structure:ok', 'provenance:ok']);
+  assert.ok(s.every((x) => x.open === false && x.pill === `${P}passed` && x.pillType === 'is-success'));
+  assert.equal(s[0].highlight.size, 0);
+});
+
+test('auxSections: Structure -- verified ok, unavailable warn, else fail; the legacy block too', () => {
+  const st = (coverage) => auxSections({ report: OK_REPORT, structure: { coverage }, t }).find((x) => x.key === 'structure');
+  assert.equal(st({ verified: true }).status, 'ok');
+  const un = st({ verified: false, plan: { available: false } });
+  assert.deepEqual([un.status, un.pill, un.pillType, un.open], ['warn', `${P}unavailable`, 'is-warning', true]);
+  const uv = st({ verified: false, plan: { available: true } });
+  assert.deepEqual([uv.status, uv.pill, uv.pillType, uv.open], ['fail', `${P}unverified`, 'is-danger', true]);
+  const legacy = (structure) => auxSections({ report: { ...OK_REPORT, structure }, structure: null, t }).find((x) => x.key === 'structure');
+  assert.equal(legacy({ verified: { verified_at: 'x', test_id: 'y' } }).status, 'ok');
+  assert.equal(legacy({ verified: null, differs: ['a'] }).status, 'fail');
+  assert.equal(auxSections({ report: OK_REPORT, structure: null, t }).find((x) => x.key === 'structure'), undefined, 'no structure at all -> no section');
+});
+
+test('auxSections: Context concerns -- not ok, not none, not numeric; highlighted by index', () => {
+  ['ok', 'OK', ' none ', '0', '12', '3.5', '-1'].forEach((v) => assert.equal(isContextConcern(v), false, v));
+  ['issues', 'warn', 'unknown', 'c67 running, c88 running', ''].forEach((v) => assert.equal(isContextConcern(v), true, v));
+  const report = {
+    ...OK_REPORT,
+    context: [{ label: 'SES', value: 'ok' }, { label: 'DNSBL', value: 'issues' }, { label: 'n', value: '4' }, { label: 'Running', value: 'c67, c88' }],
+  };
+  const c = auxSections({ report, structure: okStructure, t }).find((x) => x.key === 'context');
+  assert.deepEqual([c.status, c.pill, c.open], ['warn', `${P}attention {"n":2}`, true]);
+  assert.deepEqual([...c.highlight], [1, 3]);
+});
+
+test('auxSections: Provenance by ai.status; the not-ok/cached call lines highlighted', () => {
+  const prov = (ai) => auxSections({ report: { ...OK_REPORT, ai }, structure: okStructure, t }).find((x) => x.key === 'provenance');
+  const partial = prov({ status: 'partial', calls: [{ status: 'ok' }, { status: 'invalid' }, { status: 'cached' }, { status: 'skipped' }] });
+  assert.deepEqual([partial.status, partial.pill, partial.pillType], ['warn', `${P}aiPartial`, 'is-warning']);
+  assert.deepEqual([...partial.highlight], [1, 3]);
+  const down = prov({ status: 'unavailable', calls: [{ status: 'unavailable' }] });
+  assert.deepEqual([down.status, down.pill, down.pillType, down.open], ['fail', `${P}aiUnavailable`, 'is-danger', true]);
+});
+
+test('auxSections: ordered fail, then warn, then ok (stable within a status)', () => {
+  const report = {
+    ...OK_REPORT,
+    context: [{ label: 'DNSBL', value: 'issues' }],
+    ai: { status: 'unavailable', calls: [] },
+  };
+  const s = auxSections({ report, structure: { coverage: { verified: false, plan: { available: true } } }, t });
+  assert.deepEqual(keys(s), ['structure:fail', 'provenance:fail', 'context:warn']);
+  const s2 = auxSections({ report: { ...OK_REPORT, context: [{ label: 'x', value: 'warn' }] }, structure: okStructure, t });
+  assert.deepEqual(keys(s2), ['context:warn', 'structure:ok', 'provenance:ok']);
+});
+
+test('auxSections: an old report with no coverage, no ai and no context renders Provenance only; no report -> none', () => {
+  const s = auxSections({ report: { items: [] }, structure: null, t });
+  assert.deepEqual(keys(s), ['provenance:ok']);
+  assert.deepEqual(auxSections({ report: null, structure: null, t }), []);
+  assert.deepEqual(auxSections({ report: undefined, structure: undefined, t }), []);
+});
+
+test('the item templates: no Evidence line; every btn-goto-block is an <a> wrapping an <img> or a where-badge', () => {
+  const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
+  assert.doesNotMatch(tpl, /campaigns\.review\.evidence/);
+  const early = /<!-- EARLY FINDINGS -->([\s\S]*?)<!-- \/EARLY FINDINGS -->/.exec(tpl)[1];
+  const reportList = /<section v-for="sec in sections"([\s\S]*?)<\/section>/.exec(tpl)[1];
+  // A called-out finding's card shows the rule's failure title (an older report falls back to title);
+  // the Passed list keeps the title.
+  [early, reportList].forEach((part) => {
+    assert.match(part, /\{\{ e\.item\.failTitle \|\| e\.item\.title \}\}/);
+    assert.doesNotMatch(part.replace(/e\.item\.failTitle \|\| e\.item\.title/g, ''), /e\.item\.title/);
+  });
+  const passedList = /<ul class="passed-list[\s\S]*?<\/ul>/.exec(tpl)[0];
+  assert.match(passedList, /\{\{ i\.title \}\}/);
+  assert.doesNotMatch(passedList, /failTitle/);
+  [early, reportList].forEach((part) => {
+    const anchors = [...part.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].filter((m) => /btn-goto-block/.test(m[1]));
+    assert.equal(anchors.length, 2, 'one image link and one badge link per item template');
+    anchors.forEach((m) => assert.ok(/<img\b/.test(m[2]) || /class="where-badge"/.test(m[1]), m[0]));
+    // btn-goto-block appears nowhere but on those anchors.
+    assert.equal((part.match(/btn-goto-block/g) || []).length, anchors.length);
+  });
 });

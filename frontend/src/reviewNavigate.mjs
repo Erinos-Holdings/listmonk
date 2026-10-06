@@ -191,29 +191,6 @@ export function selectFromQuery(query) {
 
 // ------------------------------------------------------------------ the finding (§4.1-§4.3)
 
-// §4.1: the reference line. `link` -- "the <label> (block <n>)" with the name as the click-through;
-// `text` -- the same words, plain (an official footer, which is compiled from a template and has
-// nothing to select, or an id that fails validation); `plain` -- `locationPlain`, else the raw
-// `location` (an older report); `none`. The window never re-derives a name.
-export function referenceLine(finding) {
-  const f = finding || {};
-  const w = f.where;
-  if (w && typeof w === 'object' && typeof w.label === 'string' && Number.isInteger(w.n)) {
-    const text = `the ${w.label} (block ${w.n})`;
-    const linkable = w.type !== 'OfficialFooter' && isValidBlockId(w.block);
-    return {
-      kind: linkable ? 'link' : 'text', text, label: w.label, n: w.n, blockId: linkable ? w.block : null,
-    };
-  }
-  if (typeof f.locationPlain === 'string' && f.locationPlain) {
-    return { kind: 'plain', text: f.locationPlain };
-  }
-  if (typeof f.location === 'string' && f.location) {
-    return { kind: 'plain', text: f.location };
-  }
-  return { kind: 'none', text: '' };
-}
-
 // Only this listmonk host's own uploads render as a thumbnail (Stage 4 finding 17 of
 // CAMPAIGN-INSPECT): evidence and `where.image` are model- or author-supplied text, and an
 // arbitrary URL in an <img src> would be fetched by the browser. Same-origin, so no host is
@@ -224,6 +201,47 @@ export function isImageUrl(origin, s) {
   }
   const v = s.trim();
   return v.startsWith(`${origin}/uploads/`) && /^\S+\.(png|jpe?g|gif|webp)(\?\S*)?$/i.test(v);
+}
+
+// §4.1/§4.2 (polish pass, user 2026-10-06): the reference -- the thumbnail IS the click-through.
+//   `image` -- a linkable `where` (not an official footer, a valid block id) with an image to show:
+//              `where.image` first, else the finding's `evidence`, each only when isImageUrl passes
+//              (this host's uploads); the window renders the image with the block-number badge
+//              over its top-right corner, the whole thing the link;
+//   `badge` -- a linkable `where` with no image: the number badge alone is the link, then the label;
+//   `plain` -- an official-footer `where` ("the official footer (block <n>)", no link -- it is
+//              compiled from a template and has nothing to select), an id that fails validation,
+//              or no `where`: `locationPlain`, else the raw `location` (an older report);
+//   `none`  -- nothing to show.
+// `text` is the label words ("the <label>") for image/badge -- the number is the badge. The window
+// never re-derives a name.
+export function referenceLine(finding, origin) {
+  const f = finding || {};
+  const w = f.where;
+  if (w && typeof w === 'object' && typeof w.label === 'string' && Number.isInteger(w.n)) {
+    const linkable = w.type !== 'OfficialFooter' && isValidBlockId(w.block);
+    if (!linkable) {
+      return {
+        kind: 'plain', text: `the ${w.label} (block ${w.n})`, n: w.n, blockId: null,
+      };
+    }
+    const own = typeof w.image === 'string' ? w.image.trim() : '';
+    const ev = typeof f.evidence === 'string' ? f.evidence.trim() : '';
+    let image = null;
+    if (own && isImageUrl(origin, own)) image = own;
+    else if (ev && isImageUrl(origin, ev)) image = ev;
+    const base = {
+      text: `the ${w.label}`, n: w.n, blockId: w.block,
+    };
+    return image ? { kind: 'image', ...base, image } : { kind: 'badge', ...base };
+  }
+  if (typeof f.locationPlain === 'string' && f.locationPlain) {
+    return { kind: 'plain', text: f.locationPlain };
+  }
+  if (typeof f.location === 'string' && f.location) {
+    return { kind: 'plain', text: f.location };
+  }
+  return { kind: 'none', text: '' };
 }
 
 // §4.2: the thumbnail of the image a finding is located at, or null -- never one the evidence
