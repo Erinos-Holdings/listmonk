@@ -22,13 +22,18 @@ export function sectionOf(item, finding) {
   return 'advisory';
 }
 
+// The campaign-context rule (polish pass 2, 2026-10-06): its findings are decided inside the
+// Context section, never as a card -- like the structure key.
+export const CONTEXT_RULE = 'D7.1';
+export const isContextItem = (item) => !!item && item.id === CONTEXT_RULE;
+
 // Every open finding of a report's (or a progress's) items with its section: pass and n/a items
-// are skipped, and the structure key (R#…, R) is excluded exactly as the window's `entries`
-// excludes it -- it is decided in the Structure section only.
+// are skipped, and the structure key (R#…, R) and the campaign-context rule (D7.1) are excluded
+// exactly as the window's `entries` excludes them -- each is decided in its own section only.
 export function openEntries(items) {
   const out = [];
   (Array.isArray(items) ? items : []).forEach((item) => {
-    if (!item || item.verdict === 'pass' || item.verdict === 'n/a') return;
+    if (!item || item.verdict === 'pass' || item.verdict === 'n/a' || isContextItem(item)) return;
     (item.findings || []).filter((f) => f && !isStructureKey(f.key)).forEach((finding) => {
       out.push({
         key: finding.key, item, finding, section: sectionOf(item, finding),
@@ -79,6 +84,8 @@ export function checklist({
   } else if (rep && rep.provenance && Number.isInteger(rep.provenance.screenshots)) {
     shots = rep.provenance.screenshots;
   }
+  // Polish pass 2: the number of AI questions, from the first PATCH on (absent from an older Lambda).
+  const questions = Number.isInteger(p.questions) ? p.questions : null;
   let ai = null;
   if (p.ai && typeof p.ai === 'object' && Number.isInteger(p.ai.calls)) {
     ai = p.ai;
@@ -90,7 +97,7 @@ export function checklist({
     reading: tr('reading'),
     deterministic: checks !== null ? tr('deterministic', { checks }) : tr('checksUnknown'),
     screenshots: tr('screenshots'),
-    ai: tr('ai'),
+    ai: questions !== null ? tr('aiQuestions', { questions }) : tr('ai'),
     writing: tr('writing'),
   };
   const done = {
@@ -108,7 +115,9 @@ export function checklist({
     done.screenshots = shots === 0 ? tr('screenshotsNone') : tr('screenshotsDone', { n: shots });
   }
   if (ai) {
-    done.ai = ai.status === 'ok' ? tr('aiDone', { calls: ai.calls }) : tr('aiStatus', { status: ai.status });
+    if (ai.status !== 'ok') done.ai = tr('aiStatus', { status: ai.status });
+    else if (questions !== null) done.ai = tr('aiQuestionsDone', { questions, calls: ai.calls });
+    else done.ai = tr('aiDone', { calls: ai.calls });
   }
   if (rep) {
     const c = sectionsOf(rep.items);
@@ -143,11 +152,13 @@ const STATUS_RANK = { fail: 0, warn: 1, ok: 2 };
 const PILL_TYPE = { ok: 'is-success', warn: 'is-warning', fail: 'is-danger' };
 
 // A context line is a concern when its value is not `ok`, not `none` and not a number ("issues",
-// "warn", "unknown", a list of running broadcasts …).
+// "warn", "unknown", a list of running broadcasts …); a count may carry a parenthesised note
+// ("1204 (listmonk's cached count)"). The review Lambda's D7.1 uses the same rule
+// (integrations lib/campaign-review/d-tier.ts::isContextConcern) -- keep them equal.
 export function isContextConcern(value) {
   const v = String(value ?? '').trim().toLowerCase();
   if (v === 'ok' || v === 'none') return false;
-  return !/^-?\d+(\.\d+)?$/.test(v);
+  return !/^-?\d+(\.\d+)?(\s*\(.*\))?$/.test(v);
 }
 
 // `structure` is structureBrief.mjs `structureOf(report)` (D4.2's coverage) or null. Returns the

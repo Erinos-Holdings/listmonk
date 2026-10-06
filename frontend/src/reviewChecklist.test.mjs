@@ -258,3 +258,66 @@ test('the item templates: no Evidence line; every btn-goto-block is an <a> wrapp
     assert.equal((part.match(/btn-goto-block/g) || []).length, anchors.length);
   });
 });
+
+// ------------------------------------------------------------------ polish pass 2 (2026-10-06)
+
+test('checklist: "Running N checks" from the first PATCH; the AI row names the questions when known', () => {
+  const rows = (progress, phase = 'running', report = null) => checklist({
+    progress, report, phase, t,
+  });
+  assert.equal(rows({ stage: 'reading', checks: 69 })[1].label, `${K}deterministic {"checks":69}`);
+  // `questions` arrives with `checks` on the first PATCH: the AI row names them from the start.
+  assert.equal(rows({ stage: 'reading', checks: 69, questions: 29 })[3].label, `${K}aiQuestions {"questions":29}`);
+  const ai = rows({
+    stage: 'ai', checks: 69, items: DITEMS, screenshots: 4, questions: 29,
+  });
+  assert.equal(ai[3].label, `${K}aiQuestions {"questions":29}`);
+  const done = rows({
+    stage: 'writing', checks: 69, items: DITEMS, screenshots: 4, questions: 29, ai: { calls: 4, status: 'ok' },
+  });
+  assert.equal(done[3].label, `${K}aiQuestionsDone {"questions":29,"calls":4}`);
+  // An older Lambda (no `questions`): today's labels.
+  assert.equal(rows({ stage: 'ai', checks: 55 })[3].label, `${K}ai`);
+  assert.equal(rows({ stage: 'writing', ai: { calls: 4, status: 'ok' } })[3].label, `${K}aiDone {"calls":4}`);
+  assert.equal(rows({ stage: 'writing', questions: 29, ai: { calls: 4, status: 'partial' } })[3].label, `${K}aiStatus {"status":"partial"}`);
+});
+
+test('D7.1 (campaign context) is excluded from the sections, their counts and the early list', () => {
+  const d71 = D('D7.1', 'warn', [f('D7.1', 1)]);
+  assert.ok(openEntries([...DITEMS, d71]).every((e) => e.item.id !== 'D7.1'));
+  assert.deepEqual(sectionCounts([...DITEMS, d71]), sectionCounts(DITEMS));
+  assert.ok(earlyEntries({ progress: { stage: 'screenshots', items: [...DITEMS, d71] }, phase: 'running' }).every((e) => e.item.id !== 'D7.1'));
+  assert.equal(isContextConcern("1204 (listmonk's cached count)"), false);
+  assert.equal(isContextConcern('88 Fall drop'), true);
+});
+
+test('the window: a proposal box with Copy in both card templates; the context list at card size and D7.1 in it; AI glyphs in Passed', () => {
+  const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
+  const early = /<!-- EARLY FINDINGS -->([\s\S]*?)<!-- \/EARLY FINDINGS -->/.exec(tpl)[1];
+  const reportList = /<section v-for="sec in sections"([\s\S]*?)<\/section>/.exec(tpl)[1];
+  [early, reportList].forEach((part) => {
+    const box = /<div v-if="e\.finding\.proposal" class="proposal"[\s\S]*?<\/div>/.exec(part);
+    assert.ok(box, 'a proposal box');
+    assert.match(box[0], /\{\{ e\.finding\.proposal \}\}/);
+    assert.match(box[0], /btn-copy-proposal[\s\S]*copyText\(e\.finding\.proposal\)/);
+  });
+  // Fix for me: light green when a fix exists (fixType), disabled without one; "I fixed it" by its key.
+  assert.match(reportList, /:disabled="!e\.finding\.fix" data-cy="btn-fix-for-me"\s+:type="fixType\(e\)"/);
+  const context = /data-cy="section-context"([\s\S]*?)<\/b-collapse>/.exec(tpl)[1];
+  const list = /<ul class="context-list"[^>]*>/.exec(context)[0];
+  assert.doesNotMatch(list, /is-size-7/);
+  assert.doesNotMatch(context, /has-text-warning\b/, 'never yellow text');
+  assert.match(context, /stage\(c\.finding\.key, 'D7\.1', 'accept'\)/);
+  assert.match(context, /<b-button size="is-small" disabled data-cy="btn-fix-for-me">/);
+  assert.match(context, /<b-button size="is-small" disabled data-cy="btn-ill-fix-it">/);
+  assert.match(context, /target="_blank" rel="noopener"/);
+  // D7.1 out of the cards; its keys in Done.
+  const entries = /entries\(\) \{([\s\S]*?)\n {4}\},/.exec(src)[1];
+  assert.match(entries, /isContextItem\(item\)/);
+  assert.match(src, /contextKeys\(this\.report\)\.every\(decided\)/);
+  // Passed: the count in a green tag; an A item carries the AI glyph, a D item none.
+  const passed = /data-cy="section-passed"([\s\S]*?)<\/b-collapse>/.exec(tpl)[1];
+  assert.match(passed, /<b-tag type="is-success">\{\{ passed\.length \}\}<\/b-tag>/);
+  assert.match(passed, /<b-icon v-if="i\.tier === 'A'" icon="creation" size="is-small"/);
+});

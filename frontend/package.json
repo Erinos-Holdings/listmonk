@@ -18,6 +18,7 @@
     "test:webauthn": "node --test src/webauthnCodec.test.mjs",
     "test:review-navigate": "node --test src/reviewNavigate.test.mjs",
     "test:review-checklist": "node --test src/reviewChecklist.test.mjs",
+    "test:context-advice": "node --test src/contextAdvice.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },
   "dependencies": {

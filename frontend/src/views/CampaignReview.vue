@@ -28,9 +28,9 @@
          while the review runs and after it completes (reviewChecklist.mjs). -->
     <ul v-if="checklistRows.length" class="review-checklist" data-cy="review-checklist">
       <li v-for="r in checklistRows" :key="r.key" :class="`is-${r.state}`" :data-cy="`checklist-${r.key}`">
-        <!-- A done row: the green check (the icon subset has no checkbox glyph); otherwise an empty box. -->
+        <!-- A done row: the green check circle; otherwise an empty grey circle (circle before and after). -->
         <b-icon v-if="r.checked" icon="check-circle-outline" size="is-small" class="has-text-success" />
-        <span v-else class="checklist-box" aria-hidden="true" />
+        <span v-else class="checklist-circle" aria-hidden="true" />
         <span>{{ r.label }}</span>
         <span v-if="r.spinner" class="checklist-spinner" aria-hidden="true" />
       </li>
@@ -60,6 +60,12 @@
             <b-tag :type="tagType(e)" class="ml-2">{{ e.finding.severity || e.item.verdict }}</b-tag>
           </div>
           <p class="todo">{{ e.finding.todo }}</p>
+          <div v-if="e.finding.proposal" class="proposal" data-cy="review-proposal">
+            <p class="proposal-text">{{ e.finding.proposal }}</p>
+            <b-button size="is-small" class="proposal-copy" data-cy="btn-copy-proposal" @click="copyText(e.finding.proposal)">
+              {{ $t('campaigns.review.structureCopy') }}
+            </b-button>
+          </div>
           <p v-if="links(e.item).length" class="is-size-7 standards">
             <span class="has-text-grey">{{ $t('campaigns.review.standard') }}:</span>
             <span v-for="(r, n) in links(e.item)" :key="`l-${n}`"><a :href="r.url" target="_blank"
@@ -105,6 +111,13 @@
             <b-tag v-if="stillOpen(e)" type="is-warning" class="ml-1">{{ $t('campaigns.review.stillOpen') }}</b-tag>
           </div>
           <p class="todo">{{ e.finding.todo }}</p>
+          <!-- Polish pass 2: the exact replacement text alone (report `proposal`), with Copy. -->
+          <div v-if="e.finding.proposal" class="proposal" data-cy="review-proposal">
+            <p class="proposal-text">{{ e.finding.proposal }}</p>
+            <b-button size="is-small" class="proposal-copy" data-cy="btn-copy-proposal" @click="copyText(e.finding.proposal)">
+              {{ $t('campaigns.review.structureCopy') }}
+            </b-button>
+          </div>
           <!-- REVIEW-NAVIGATION-SPEC §4.3: the standards links (https only). -->
           <p v-if="links(e.item).length" class="is-size-7 standards" data-cy="review-standards">
             <span class="has-text-grey">{{ $t('campaigns.review.standard') }}:</span>
@@ -130,7 +143,7 @@
           <p v-if="decided(e.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(e.key)) }}</p>
           <div class="buttons mt-2">
             <b-button size="is-small" :disabled="!e.finding.fix" data-cy="btn-fix-for-me"
-              :type="stagedAction(e.key) === 'fixed' ? 'is-primary' : ''" @click="stage(e.key, e.item.id, 'fixed', e.finding.fix)">
+              :type="fixType(e)" @click="stage(e.key, e.item.id, 'fixed', e.finding.fix)">
               {{ $t('campaigns.review.fixForMe') }}
             </b-button>
             <b-button size="is-small" data-cy="btn-ill-fix-it" :type="stagedAction(e.key) === 'fixme' ? 'is-primary' : ''"
@@ -156,11 +169,13 @@
           <template #trigger="props">
             <h5 class="title is-5 is-clickable aux-head">
               <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
-              {{ $t('campaigns.review.sectionPassed') }} <span class="tag">{{ passed.length }}</span>
+              {{ $t('campaigns.review.sectionPassed') }} <b-tag type="is-success">{{ passed.length }}</b-tag>
             </h5>
           </template>
           <ul class="passed-list is-size-7">
+            <!-- An AI question (tier A) carries the Inspect button's AI glyph; a rule check (tier D) none. -->
             <li v-for="i in passed" :key="i.id">
+              <b-icon v-if="i.tier === 'A'" icon="creation" size="is-small" class="passed-ai" data-cy="passed-ai" />
               <strong>{{ i.id }}</strong> {{ i.title }} —
               <template v-if="i.verdict === 'n/a'">n/a: {{ i.reason }}</template>
               <template v-else>{{ $t('campaigns.review.examined', { n: i.examined || 0 }) }}</template>
@@ -175,10 +190,30 @@
               {{ $t('campaigns.review.sectionContext') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
             </h5>
           </template>
-          <ul class="is-size-7">
-            <li v-for="(c, n) in report.context" :key="n" :class="{ 'has-text-weight-bold has-text-warning': s.highlight.has(n) }">
+          <!-- Polish pass 2: the card font size; a concern line bold on a warning band (contrast: never
+               yellow text). Under it, the campaign-context rule's (D7.1) instruction, the page that
+               helps, and the three buttons for that finding -- Acknowledge is the only enabled one. -->
+          <ul class="context-list" data-cy="context-list">
+            <li v-for="c in contextLines" :key="c.index" class="context-line"
+              :class="{ 'is-concern has-background-warning-light': s.highlight.has(c.index) || !!c.finding }">
               <strong>{{ c.label }}</strong>: {{ c.value }}
               <span v-if="c.asOf" class="has-text-grey">({{ c.asOf }})</span>
+              <ul v-if="c.finding" class="context-advice" data-cy="context-advice">
+                <li>
+                  {{ c.finding.todo }}
+                  <a v-if="c.href" :href="c.href" target="_blank" rel="noopener" class="ml-1" data-cy="context-open">
+                    {{ $t('campaigns.review.contextOpen', { page: $t(`campaigns.review.contextPage.${c.page}`) }) }}</a>
+                  <p v-if="decided(c.finding.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(c.finding.key)) }}</p>
+                  <div class="buttons mt-1">
+                    <b-button size="is-small" disabled data-cy="btn-fix-for-me">{{ $t('campaigns.review.fixForMe') }}</b-button>
+                    <b-button size="is-small" disabled data-cy="btn-ill-fix-it">{{ $t('campaigns.review.illFixIt') }}</b-button>
+                    <b-button size="is-small" data-cy="btn-accept" :type="stagedAction(c.finding.key) === 'accept' ? 'is-primary' : ''"
+                      @click="stage(c.finding.key, 'D7.1', 'accept')">
+                      {{ $t('campaigns.review.acknowledge') }}
+                    </b-button>
+                  </div>
+                </li>
+              </ul>
             </li>
           </ul>
         </b-collapse>
@@ -192,6 +227,8 @@
               {{ $t('campaigns.review.sectionStructure') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
             </h5>
           </template>
+        <!-- Polish pass 2: one explanatory line at the card font size, then the smaller content. -->
+        <p class="aux-intro" data-cy="structure-intro">{{ structureIntro }}</p>
         <div v-if="structure">
         <p v-if="structure.coverage.verified" class="is-size-7" data-cy="structure-verified">
           {{ $t('campaigns.review.structureVerifiedRecords', { records: recordsLine(structure.coverage.recordsUsed) }) }}
@@ -285,6 +322,7 @@
               {{ $t('campaigns.review.sectionProvenance') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
             </h5>
           </template>
+          <p class="aux-intro" data-cy="provenance-intro">{{ $t('campaigns.review.provenanceIntro') }}</p>
           <ul class="is-size-7 provenance">
             <li>rubric {{ report.rubricVersion }} · job {{ report.jobId }} · bundle {{ report.bundleHash.slice(0, 12) }}</li>
             <li v-if="report.provenance">
@@ -292,7 +330,7 @@
               · SpamAssassin {{ report.provenance.saVersion }} rules {{ (report.provenance.saRulesSha256 || '').slice(0, 12) }}
             </li>
             <li v-for="(c, n) in ((report.ai && report.ai.calls) || [])" :key="c.call"
-              :class="{ 'has-text-weight-bold has-text-warning': s.highlight.has(n) }">
+              :class="{ 'has-text-weight-bold has-background-warning-light': s.highlight.has(n) }">
               A-{{ c.call }}: {{ c.status }} · {{ c.modelId }} · prompt {{ (c.promptHash || '').slice(0, 12) }}
               · {{ c.tokensIn }}/{{ c.tokensOut }} tokens · {{ c.ms }} ms<span v-if="c.cachedFrom"> · cached from {{ c.cachedFrom }}</span>
             </li>
@@ -350,8 +388,9 @@ import {
   buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 import {
-  auxSections, checklist, earlyEntries, sectionCounts, sectionOf,
+  auxSections, checklist, earlyEntries, isContextItem, sectionCounts, sectionOf,
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
+import { contextKeys, contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
   ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, acceptAck, acceptOpener, afterAckWait, clickDecision, fallbackUrl,
   isFinalResult, newToken, referenceLine, resultToast, selectMessage, standardLinks,
@@ -491,7 +530,8 @@ export default Vue.extend({
       }
       const out = [];
       this.report.items.forEach((item) => {
-        if (item.verdict === 'pass' || item.verdict === 'n/a') {
+        // Polish pass 2: the campaign-context rule (D7.1) is decided inside the Context section.
+        if (item.verdict === 'pass' || item.verdict === 'n/a' || isContextItem(item)) {
           return;
         }
         // INSPECT-SCOPE-SPEC §2.5: the structure key (R#…) is decided ONLY in the Structure
@@ -513,6 +553,21 @@ export default Vue.extend({
     // D4.2's coverage (INSPECT-SCOPE-SPEC §2.5), or null → the legacy Structure section.
     structure() {
       return structureOf(this.report);
+    },
+
+    // Polish pass 2: the Context lines with D7.1's finding per concern line and the page that helps
+    // (contextAdvice.mjs).
+    contextLines() {
+      return contextRows(this.report, this.$router.options.base || '');
+    },
+
+    // The Structure section's explanatory line: with the plan's total when the coverage has one.
+    structureIntro() {
+      const plan = this.structure && this.structure.coverage && this.structure.coverage.plan;
+      const total = plan && Number.isInteger(plan.total) && plan.total > 0 ? plan.total : null;
+      return total !== null
+        ? this.$t('campaigns.review.structureIntro', { total })
+        : this.$t('campaigns.review.structureIntroNoTotal');
     },
 
     // Context, Structure, Provenance with their pills (reviewChecklist.mjs auxSections), ordered
@@ -549,7 +604,8 @@ export default Vue.extend({
         && !decided(this.structure.finding.key)) {
         return false;
       }
-      return this.entries.every((e) => decided(e.key));
+      // Polish pass 2: D7.1's findings (decided in the Context section) count like any entry.
+      return this.entries.every((e) => decided(e.key)) && contextKeys(this.report).every(decided);
     },
   },
 
@@ -600,7 +656,7 @@ export default Vue.extend({
       return this.$t('campaigns.review.decidedBy', { action: label, user: d.username || '?', date: this.$utils.niceDate(d.created_at, true) });
     },
 
-    // An "I'll fix it" item that is still in the report after a re-inspection.
+    // An "I fixed it" item (action `fixme`) that is still in the report after a re-inspection.
     stillOpen(e) {
       const d = this.latest[e.key];
       return !!d && d.action === 'fixme' && !this.staged[e.key];
@@ -858,6 +914,35 @@ export default Vue.extend({
       this.selectBrief();
     },
 
+    // Polish pass 2: a proposal's Copy -- the clipboard, else the execCommand fallback through a
+    // throwaway textarea (the brief modal's fallback, without its modal).
+    copyText(text) {
+      const done = () => this.$utils.toast(this.$t('campaigns.review.structureCopied'));
+      const fallback = () => {
+        const el = document.createElement('textarea');
+        el.value = text;
+        el.setAttribute('readonly', '');
+        el.style.position = 'absolute';
+        el.style.left = '-9999px';
+        document.body.appendChild(el);
+        el.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(el);
+        if (ok) done();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(fallback);
+        return;
+      }
+      fallback();
+    },
+
+    // Polish pass 2: Fix for me is light green when a fix exists, green when staged, grey (disabled) without one.
+    fixType(e) {
+      if (this.stagedAction(e.key) === 'fixed') return 'is-success';
+      return e.finding.fix ? 'is-success is-light' : '';
+    },
+
     selectBrief() {
       const el = this.$refs.briefText;
       if (el) {
@@ -960,14 +1045,58 @@ export default Vue.extend({
 .review-item.is-early {
   opacity: 0.9;
 }
-/* Polish pass (2026-10-06): a pending/current checklist row's empty box. */
-.checklist-box {
+/* Polish pass 2 (2026-10-06): a pending/current checklist row's empty grey circle. */
+.checklist-circle {
   display: inline-block;
+  box-sizing: border-box;
   width: 1rem;
   height: 1rem;
   border: 1px solid #b5b5b5; /* $grey-light */
-  border-radius: 3px;
+  border-radius: 50%;
   flex: none;
+}
+/* The proposal box: the exact replacement text, with Copy at its top-right. */
+.proposal {
+  position: relative;
+  background: #effaf3;
+  border: 1px solid #b8e0c4;
+  border-radius: 4px;
+  padding: 0.5rem 4.5rem 0.5rem 0.75rem;
+  margin: 0.4rem 0;
+}
+.proposal-text {
+  white-space: pre-wrap;
+  font-size: 1.05em;
+  margin: 0;
+}
+.proposal-copy {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+}
+/* The Context section: concern lines bold with a warning band (never yellow text — contrast). */
+.context-list {
+  margin: 0.25rem 0;
+}
+.context-line {
+  padding: 0.15rem 0.5rem;
+  border-left: 3px solid transparent;
+}
+.context-line.is-concern {
+  font-weight: bold;
+  border-left-color: #ffe08a;
+}
+.context-advice {
+  font-weight: normal;
+  margin: 0.25rem 0 0.4rem 1.25rem;
+  list-style: disc;
+}
+.aux-intro {
+  margin-bottom: 1rem;
+}
+.passed-ai {
+  vertical-align: middle;
+  margin-right: 0.15rem;
 }
 /* The lists page's +/- expand glyph (style.scss scopes it to section.lists, so copied here). */
 .aux-head {
