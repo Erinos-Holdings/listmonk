@@ -1124,24 +1124,8 @@ export default Vue.extend({
   border-color: #0055d4; /* $primary */
   color: #0055d4;
 }
-/* The glyph is centred by forcing the icon box to fill the button and stripping the fontello
-   pseudo-element's side margins and the title's line-height (the +/- otherwise sat top-left). */
-.expand-btn .icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  font-size: 0.7rem;
-  line-height: 1;
-}
-.expand-btn .icon i,
-.expand-btn .icon i::before {
-  margin: 0;
-  line-height: 1;
-  width: auto;
-}
+/* The glyph inside the button is styled in the UNSCOPED block at the end of this file: the <i>
+   belongs to the b-icon child component, which scoped CSS cannot reach. */
 /* The reference: the thumbnail is the click-through, the editor's block-number badge on its
    top-right corner at the badge's FIXED size (EditorBlockWrapper.tsx) -- never scaled. */
 .where-line {
@@ -1205,5 +1189,32 @@ export default Vue.extend({
   height: 0;
   border: 0;
   visibility: hidden;
+}
+</style>
+
+<!-- Unscoped on purpose (keyed on the page's root class): the +/- glyph is the <i> inside the
+     b-icon CHILD component, which scoped CSS cannot reach. The icon box fills the button and the
+     fontello pseudo-element's side margins and line-height are stripped, so the glyph is centred
+     (it otherwise sat top-left). Same look as the lists page's global .expand-btn rules. -->
+<style>
+.campaign-review .expand-btn .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.campaign-review .expand-btn .icon i {
+  display: block;
+  margin: 0;
+  line-height: 1;
+}
+.campaign-review .expand-btn .icon i::before {
+  margin: 0;
+  width: auto;
+  line-height: 1;
 }
 </style>
