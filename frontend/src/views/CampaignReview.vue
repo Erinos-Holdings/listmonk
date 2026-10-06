@@ -1124,10 +1124,23 @@ export default Vue.extend({
   border-color: #0055d4; /* $primary */
   color: #0055d4;
 }
+/* The glyph is centred by forcing the icon box to fill the button and stripping the fontello
+   pseudo-element's side margins and the title's line-height (the +/- otherwise sat top-left). */
 .expand-btn .icon {
-  width: 1rem;
-  height: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   font-size: 0.7rem;
+  line-height: 1;
+}
+.expand-btn .icon i,
+.expand-btn .icon i::before {
+  margin: 0;
+  line-height: 1;
+  width: auto;
 }
 /* The reference: the thumbnail is the click-through, the editor's block-number badge on its
    top-right corner at the badge's FIXED size (EditorBlockWrapper.tsx) -- never scaled. */
