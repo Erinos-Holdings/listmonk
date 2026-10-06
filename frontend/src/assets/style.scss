@@ -84,6 +84,30 @@ ul.no {
   position: relative;
 }
 
+/* Fork: centre the glyph inside an .expand-btn's icon (the +/- expand/collapse boxes on the
+   lists grid and in the campaign-review window). Buefy's BIcon renders
+   <span class="icon"><i class="mdi-…"/></span>, with the glyph on i::before. The glyph is drawn
+   centred within its own em box (verified from the fontello metrics: plus/minus centre at
+   x=500 of a 1000 advance and y=350, the ascent/descent midpoint). It still seated high-left
+   because the <i> is inline: its inline-block ::before carries the font's descender strut, so
+   the <i>'s box gains phantom space below the baseline and align-items:center then lifts the
+   glyph. Making the <i> a flex container drops the inline strut and centres the ::before in both
+   axes. This MUST be global, not in a page's scoped block: Vue scoped CSS reaches the .icon
+   (BIcon's root) but not the <i> nested inside the child component. Per-page .icon sizing
+   (section.lists and CampaignReview.vue) is unaffected. */
+.expand-btn .icon i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.expand-btn .icon i::before {
+  margin: 0;
+  width: auto;
+  line-height: 1;
+}
+
 .content pre {
   white-space: pre-wrap;
 }
