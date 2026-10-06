@@ -301,6 +301,13 @@ test('the window: a proposal box with Copy in both card templates; the context l
     assert.ok(box, 'a proposal box');
     assert.match(box[0], /\{\{ e\.finding\.proposal \}\}/);
     assert.match(box[0], /btn-copy-proposal[\s\S]*copyText\(e\.finding\.proposal\)/);
+    // An icon-only Copy (no text label), named for screen readers and on hover.
+    const copy = /<button type="button" class="proposal-copy"[\s\S]*?<\/button>/.exec(box[0]);
+    assert.ok(copy, 'an icon-only button.proposal-copy');
+    assert.match(copy[0], /:aria-label="\$t\('campaigns\.review\.copyProposal'\)"/);
+    assert.match(copy[0], /:title="\$t\('campaigns\.review\.copyProposal'\)"/);
+    assert.match(copy[0], /<b-icon icon="file-multiple-outline" size="is-small" \/>/);
+    assert.doesNotMatch(copy[0], /structureCopy/);
   });
   // Fix for me: light green when a fix exists (fixType), disabled without one; "I fixed it" by its key.
   assert.match(reportList, /:disabled="!e\.finding\.fix" data-cy="btn-fix-for-me"\s+:type="fixType\(e\)"/);

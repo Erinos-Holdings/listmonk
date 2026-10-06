@@ -62,9 +62,10 @@
           <p class="todo">{{ e.finding.todo }}</p>
           <div v-if="e.finding.proposal" class="proposal" data-cy="review-proposal">
             <p class="proposal-text">{{ e.finding.proposal }}</p>
-            <b-button size="is-small" class="proposal-copy" data-cy="btn-copy-proposal" @click="copyText(e.finding.proposal)">
-              {{ $t('campaigns.review.structureCopy') }}
-            </b-button>
+            <button type="button" class="proposal-copy" data-cy="btn-copy-proposal" :aria-label="$t('campaigns.review.copyProposal')"
+              :title="$t('campaigns.review.copyProposal')" @click="copyText(e.finding.proposal)">
+              <b-icon icon="file-multiple-outline" size="is-small" />
+            </button>
           </div>
           <p v-if="links(e.item).length" class="is-size-7 standards">
             <span class="has-text-grey">{{ $t('campaigns.review.standard') }}:</span>
@@ -114,9 +115,10 @@
           <!-- Polish pass 2: the exact replacement text alone (report `proposal`), with Copy. -->
           <div v-if="e.finding.proposal" class="proposal" data-cy="review-proposal">
             <p class="proposal-text">{{ e.finding.proposal }}</p>
-            <b-button size="is-small" class="proposal-copy" data-cy="btn-copy-proposal" @click="copyText(e.finding.proposal)">
-              {{ $t('campaigns.review.structureCopy') }}
-            </b-button>
+            <button type="button" class="proposal-copy" data-cy="btn-copy-proposal" :aria-label="$t('campaigns.review.copyProposal')"
+              :title="$t('campaigns.review.copyProposal')" @click="copyText(e.finding.proposal)">
+              <b-icon icon="file-multiple-outline" size="is-small" />
+            </button>
           </div>
           <!-- REVIEW-NAVIGATION-SPEC §4.3: the standards links (https only). -->
           <p v-if="links(e.item).length" class="is-size-7 standards" data-cy="review-standards">
@@ -1061,7 +1063,7 @@ export default Vue.extend({
   background: #effaf3;
   border: 1px solid #b8e0c4;
   border-radius: 4px;
-  padding: 0.5rem 4.5rem 0.5rem 0.75rem;
+  padding: 0.5rem 2.25rem 0.5rem 0.75rem;
   margin: 0.4rem 0;
 }
 .proposal-text {
@@ -1069,10 +1071,26 @@ export default Vue.extend({
   font-size: 1.05em;
   margin: 0;
 }
+/* The icon-only Copy at the proposal box's top-right. */
 .proposal-copy {
   position: absolute;
   top: 0.35rem;
   right: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid #b8e0c4;
+  border-radius: 3px;
+  background: #fff;
+  color: #4a4a4a;
+  cursor: pointer;
+}
+.proposal-copy:hover {
+  border-color: #0055d4;
+  color: #0055d4;
 }
 /* The Context section: concern lines bold with a warning band (never yellow text — contrast). */
 .context-list {

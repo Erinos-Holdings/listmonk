@@ -277,6 +277,7 @@
     "campaigns.review.structureBriefTitle": "Structure brief",
     "campaigns.review.structureCopy": "Copy",
     "campaigns.review.structureCopied": "Copied",
+    "campaigns.review.copyProposal": "Copy to clipboard",
     "campaigns.review.structureAdminOnly": "Only a structure admin (campaigns:review_structure) can acknowledge an unverified rendering structure or record an inspection.",
     "campaigns.review.examined": "{n} examined",
     "campaigns.review.evidence": "Evidence",
