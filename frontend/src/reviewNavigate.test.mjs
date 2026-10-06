@@ -19,7 +19,7 @@ const topWin = () => { const w = { closed: false, location: { origin: ORIGIN } }
 
 test('the timeouts are the spec\'s', () => {
   assert.equal(ACK_TIMEOUT_MS, 1500);
-  assert.equal(RESULT_TIMEOUT_MS, 15000);
+  assert.equal(RESULT_TIMEOUT_MS, 20000);
 });
 
 test('block ids: the builder forms only', () => {
@@ -95,9 +95,19 @@ test('I6: no reachable opener or no `received` in time -> the new tab', () => {
 
 test('I6: the window adopts an opener and reads an ack only from our origin, its opener and its token', () => {
   const opener = topWin();
+  const self = topWin();
   assert.equal(acceptOpener({
-    origin: ORIGIN, ourOrigin: ORIGIN, source: opener, data: openerMessage(7), campaignId: 7,
+    origin: ORIGIN, ourOrigin: ORIGIN, source: opener, self, data: openerMessage(7), campaignId: 7,
   }), true);
+  assert.equal(acceptOpener({
+    origin: ORIGIN, ourOrigin: ORIGIN, source: { top: opener }, self, data: openerMessage(7), campaignId: 7,
+  }), false, 'a frame source');
+  assert.equal(acceptOpener({
+    origin: ORIGIN, ourOrigin: ORIGIN, source: self, self, data: openerMessage(7), campaignId: 7,
+  }), false, 'this window');
+  assert.equal(acceptOpener({
+    origin: ORIGIN, ourOrigin: ORIGIN, source: { get top() { throw new Error('cross-origin'); } }, self, data: openerMessage(7), campaignId: 7,
+  }), false, 'an unreadable source');
   assert.equal(acceptOpener({
     origin: 'https://evil.example', ourOrigin: ORIGIN, source: opener, data: openerMessage(7), campaignId: 7,
   }), false);

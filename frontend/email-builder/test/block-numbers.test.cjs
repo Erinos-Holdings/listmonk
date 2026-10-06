@@ -4,6 +4,12 @@
 // (the integrations test byte-compares the two); it lives OUTSIDE test/fixtures/, which
 // _umd.cjs::documentFixtures() sweeps into the compile-snapshot test. A numbering change is one
 // workstream touching both copies.
+//
+// Scope of the equality claim: the builder's renderWalk and the Lambda's value-rules.ts
+// `reachable` agree on BUILDER-SHAPED documents only. The Lambda walks data.childrenIds,
+// props.childrenIds and props.columns on every block type; the builder walks them by type
+// (EmailLayout, Container, ColumnsContainer). An editor-saved document (zod-validated) cannot
+// carry those props on any other type, so the two never differ on a real campaign.
 const path = require('path');
 const S = require(path.join(__dirname, '.build', 'documents', 'structure.cjs'));
 const fixture = require('./numbers/block-numbers.json');

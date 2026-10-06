@@ -17,7 +17,9 @@ export const MSG_SELECT = 'lm-review:select';
 export const MSG_ACK = 'lm-review:ack';
 
 export const ACK_TIMEOUT_MS = 1500;
-export const RESULT_TIMEOUT_MS = 15000;
+// App.vue's cap on the second reply (covers a discard dialog left open); the Inspect window's
+// own cap is RESULT_TIMEOUT_MS + 1000, so the receiver's `unknown` arrives first.
+export const RESULT_TIMEOUT_MS = 20000;
 // The campaign page polls the builder this long for a block to select after a deep-link mount.
 export const SELECT_POLL_MS = 250;
 export const SELECT_POLL_CAP_MS = 10000;
@@ -116,13 +118,22 @@ export function openerReachable(win, ourOrigin) {
   }
 }
 
-// An `lm-review:opener` handshake the window adopts as its current opener: our origin, the type,
-// this window's campaign, and a source to post to.
+// An `lm-review:opener` handshake the window adopts as its current opener: our origin, a
+// top-level source that is not this window (the same source rule as acceptSelect), the type, and
+// this window's campaign.
 export function acceptOpener({
-  origin, ourOrigin, source, data, campaignId,
+  origin, ourOrigin, source, self, data, campaignId,
 }) {
-  return !!ourOrigin && origin === ourOrigin && !!source
-    && !!data && typeof data === 'object' && data.type === MSG_OPENER && data.campaignId === campaignId;
+  if (!ourOrigin || origin !== ourOrigin) return false;
+  if (!source || source === self) return false;
+  let topLevel = false;
+  try {
+    topLevel = source.top === source;
+  } catch (e) {
+    topLevel = false;
+  }
+  if (!topLevel) return false;
+  return !!data && typeof data === 'object' && data.type === MSG_OPENER && data.campaignId === campaignId;
 }
 
 // The result an `lm-review:ack` carries for THIS click, or null (another origin, another source,

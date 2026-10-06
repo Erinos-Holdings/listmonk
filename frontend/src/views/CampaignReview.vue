@@ -683,7 +683,7 @@ export default Vue.extend({
     onMessage(ev) {
       const { origin } = window.location;
       if (acceptOpener({
-        origin: ev.origin, ourOrigin: origin, source: ev.source, data: ev.data, campaignId: this.id,
+        origin: ev.origin, ourOrigin: origin, source: ev.source, self: window, data: ev.data, campaignId: this.id,
       })) {
         this.currentOpener = ev.source;
         return;
@@ -702,8 +702,8 @@ export default Vue.extend({
         if (!nav.received) {
           nav.received = true;
           clearTimeout(nav.ackTimer);
-          // The opener answers within 15 s (its own cap answers `unknown`); this window's cap is a
-          // moment longer so that answer arrives first. A reply after it is ignored.
+          // The opener answers within RESULT_TIMEOUT_MS (20 s; its own cap answers `unknown`); this
+          // window's cap is 1 s longer (21 s) so that answer arrives first. A reply after it is ignored.
           nav.resultTimer = setTimeout(() => {
             if (this.nav === nav) {
               this.finishNav('unknown');

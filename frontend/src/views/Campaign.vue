@@ -1427,7 +1427,8 @@ export default Vue.extend({
       };
 
       this.$api.createCampaign(data).then((d) => {
-        this.$router.push({ name: 'campaign', hash: '#content', params: { id: d.id } });
+        // .catch: the leave guard's Cancel settles the navigation with next(false), which rejects.
+        this.$router.push({ name: 'campaign', hash: '#content', params: { id: d.id } }).catch(() => {});
       });
       return false;
     },
@@ -1599,13 +1600,14 @@ export default Vue.extend({
       });
     },
 
-    // The receiver (App.vue) found this page showing the referenced campaign.
+    // The receiver (App.vue) found this page showing the referenced campaign. Polls the builder
+    // like the deep-link path (250 ms, up to 10 s): the builder may still be mounting.
     onReviewSelect(req) {
       if (!req || (req.campaignId !== undefined && req.campaignId !== this.data.id)) {
         return;
       }
       clearTimeout(this.selectPollID);
-      this.selectReviewBlock(req.blockId, false).then((result) => {
+      this.selectReviewBlock(req.blockId, true).then((result) => {
         this.$events.$emit('review.select-result', { campaignId: this.data.id, blockId: req.blockId, result });
       });
     },
@@ -1680,7 +1682,8 @@ export default Vue.extend({
             this.$api.changeCampaignStatus(this.data.id, status).then((d) => {
               // Toasts are global, so they survive the route change below.
               this.$utils.showWarnings(d.warnings);
-              this.$router.push({ name: 'campaigns' });
+              // .catch: a Cancel in the leave guard (next(false)) rejects the push.
+              this.$router.push({ name: 'campaigns' }).catch(() => {});
             });
           }).catch(() => {
             // The failed save is already toasted; nothing is started (unchanged behaviour).
