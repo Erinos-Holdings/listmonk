@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/captcha"
 	"github.com/knadh/listmonk/internal/subimporter"
+	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 	null "gopkg.in/volatiletech/null.v6"
 )
@@ -162,6 +164,50 @@ func (a *App) GetDashboardCounts(c echo.Context) error {
 		return err
 	}
 
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// GetDashboardClients returns the Dashboard's per-email-client views and clicks (fork, client
+// stats, integrations CLIENT-STATS-SPEC D6/D7). The scoped variant is selected exactly as in
+// GetDashboardCharts: a list-scoped user gets the rollup over their permitted lists, and ?brand=
+// is IGNORED for them (D7, review F6) -- no picker, no brands. Everyone else may pass ?brand=<tag>,
+// resolved here to that brand's list ids (a tag no list carries resolves to no lists, so no rows);
+// no ?brand= is every campaign.
+func (a *App) GetDashboardClients(c echo.Context) error {
+	user := auth.GetUser(c)
+	if hasAll, listIDs := user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage); !hasAll {
+		rows, err := a.core.GetDashboardClientsScoped(listIDs, user.HasPerm(auth.PermCampaignsGetAll))
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, okResp{models.DashboardClients{Scoped: true, Brands: []string{}, Clients: rows}})
+	}
+
+	brands, err := a.core.GetDashboardBrands()
+	if err != nil {
+		return err
+	}
+	out := models.DashboardClients{Brands: make([]string, 0, len(brands))}
+	for _, b := range brands {
+		out.Brands = append(out.Brands, b.Brand)
+	}
+
+	var listIDs []int
+	if brand := strings.TrimSpace(c.QueryParam("brand")); brand != "" {
+		out.Brand = brand
+		listIDs = []int{}
+		for _, b := range brands {
+			if b.Brand == brand {
+				for _, id := range b.ListIDs {
+					listIDs = append(listIDs, int(id))
+				}
+			}
+		}
+	}
+
+	if out.Clients, err = a.core.GetDashboardClients(listIDs); err != nil {
+		return err
+	}
 	return c.JSON(http.StatusOK, okResp{out})
 }
 

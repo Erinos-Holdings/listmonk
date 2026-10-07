@@ -153,6 +153,49 @@
               </div>
             </article>
           </div>
+
+          <!-- Fork (client stats, integrations CLIENT-STATS-SPEC D6/D7/D9): views, clicks and combined
+               per email client over the charts' window. A list-scoped user's panel covers their
+               permitted lists and has no brand picker (the server ignores ?brand= for them);
+               everyone else picks All brands or one list brand tag. -->
+          <div class="tile is-parent relative">
+            <b-loading v-if="clients.loading" active :is-full-page="false" />
+            <article class="tile is-child notification" data-cy="clients">
+              <div class="columns is-mobile">
+                <div class="column">
+                  <h3 class="title is-size-6">{{ $t('analytics.clients') }}</h3>
+                </div>
+                <div v-if="!clients.scoped && clients.brands.length > 0" class="column is-narrow">
+                  <b-select v-model="clients.brand" size="is-small" data-cy="clients-brand" @input="fetchClients">
+                    <option value="">{{ $t('dashboard.clientsAllBrands') }}</option>
+                    <option v-for="b in clients.brands" :key="b" :value="b">{{ b }}</option>
+                  </b-select>
+                </div>
+              </div>
+              <b-table :data="clientTableRows" hoverable narrowed
+                backend-sorting :default-sort="[clients.sort.field, clients.sort.order]" @sort="onClientSort">
+                <b-table-column v-slot="props" field="name" :label="$t('analytics.clientsClient')" sortable>
+                  <span :class="{ 'has-text-grey': props.row.unknown }" :title="clientRosterTip(props.row.client)">{{ props.row.name }}</span>
+                </b-table-column>
+                <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
+                  {{ $utils.formatNumber(props.row.views) }}
+                  <span v-if="clientShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ clientShare(props.row.views, 'views') }})</span>
+                </b-table-column>
+                <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
+                  {{ $utils.formatNumber(props.row.clicks) }}
+                  <span v-if="clientShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ clientShare(props.row.clicks, 'clicks') }})</span>
+                </b-table-column>
+                <b-table-column v-slot="props" field="combined" :label="$t('analytics.clientsCombined')" numeric sortable>
+                  {{ $utils.formatNumber(props.row.combined) }}
+                  <span v-if="clientShare(props.row.combined, 'combined')" class="is-size-7 has-text-grey">({{ clientShare(props.row.combined, 'combined') }})</span>
+                </b-table-column>
+                <template #empty v-if="!clients.loading">
+                  <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
+                </template>
+              </b-table>
+              <p class="is-size-7 has-text-grey mt-2">{{ $t('dashboard.clientsWindow') }} {{ $t('analytics.clientsHint') }}</p>
+            </article>
+          </div>
         </div>
       </div><!-- tile block -->
       <p v-if="settings['app.cache_slow_queries']" class="has-text-grey">
@@ -173,6 +216,11 @@ import { mapState } from 'vuex';
 import { colors } from '../constants';
 import Chart from '../components/Chart.vue';
 import DashboardSes from './DashboardSes.vue';
+import {
+  DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
+} from '../clientRows.mjs'; // eslint-disable-line import/extensions
+import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
+import { rateCell } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -196,6 +244,15 @@ export default Vue.extend({
         campaigns: {},
         messages: 0,
       },
+      // Fork (client stats) -- the client panel; brand "" = all brands.
+      clients: {
+        rows: [],
+        loading: false,
+        scoped: false,
+        brand: '',
+        brands: [],
+        sort: { ...CLIENT_DEFAULT_SORT },
+      },
     };
   },
 
@@ -218,6 +275,41 @@ export default Vue.extend({
         this.campaignViews = this.makeChart(data.campaignViews);
         this.campaignClicks = this.makeChart(data.linkClicks);
       });
+
+      this.fetchClients();
+    },
+
+    // Fork (client stats) -- the client panel for the picked brand (never sent when scoped: the
+    // server ignores it there anyway).
+    fetchClients() {
+      this.clients.loading = true;
+      const params = !this.clients.scoped && this.clients.brand ? { brand: this.clients.brand } : {};
+      this.$api.getDashboardClients(params).then((data) => {
+        this.clients.scoped = data.scoped === true;
+        this.clients.brands = Array.isArray(data.brands) ? data.brands : [];
+        if (this.clients.brand && !this.clients.brands.includes(this.clients.brand)) {
+          this.clients.brand = '';
+        }
+        this.clients.rows = shapeClientRows(data.clients, {
+          locale: (this.$i18n && this.$i18n.locale) || 'en',
+          unknownLabel: this.$t('analytics.clientsUnknown'),
+        });
+      }).finally(() => {
+        this.clients.loading = false;
+      });
+    },
+
+    onClientSort(field, order) {
+      this.clients.sort = { field, order };
+    },
+
+    clientShare(n, field) {
+      return rateCell(n, this.clientTotalsSum[field], 1).pct;
+    },
+
+    clientRosterTip(token) {
+      const ids = rosterFor(token);
+      return ids.length ? this.$t('analytics.clientsRoster', { ids: ids.join(', ') }) : '';
     },
 
     makeChart(data) {
@@ -243,6 +335,15 @@ export default Vue.extend({
     ...mapState(['settings']),
     dayjs() {
       return dayjs;
+    },
+
+    clientTotalsSum() {
+      return clientTotals(this.clients.rows);
+    },
+
+    clientTableRows() {
+      const { field, order } = this.clients.sort;
+      return sortClientRows(this.clients.rows, field, order, (this.$i18n && this.$i18n.locale) || 'en');
     },
   },
 

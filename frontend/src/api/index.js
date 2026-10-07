@@ -166,6 +166,13 @@ export const getDashboardCharts = () => http.get(
   { loading: models.dashboard },
 );
 
+// Fork (client stats, CLIENT-STATS-SPEC D7) -- the Dashboard's client panel:
+// {scoped, brand, brands, clients: [{client, views, clicks}]}; params.brand is a list brand tag.
+export const getDashboardClients = (params) => http.get(
+  '/api/dashboard/clients',
+  { params, loading: models.dashboard },
+);
+
 // Lists.
 export const getLists = (params) => http.get(
   '/api/lists',
@@ -484,6 +491,12 @@ export const getCampaignLinkCounts = async (params) => http.get(
 // Fork (location stats) -- views and clicks per country: [{country, views, clicks}], country "" = unknown.
 export const getCampaignCountryCounts = async (params) => http.get(
   '/api/campaigns/analytics/countries',
+  { params, loading: models.campaigns },
+);
+
+// Fork (client stats) -- views and clicks per email client: [{client, views, clicks}], client "" = unknown.
+export const getCampaignClientCounts = async (params) => http.get(
+  '/api/campaigns/analytics/clients',
   { params, loading: models.campaigns },
 );
 

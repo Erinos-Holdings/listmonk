@@ -449,6 +449,9 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	}
 	qMap["get-campaign-link-counts"].Query = fmt.Sprintf(qMap["get-campaign-link-counts"].Query, linkSel)
 	qMap["get-campaign-country-counts"].Query = fmt.Sprintf(qMap["get-campaign-country-counts"].Query, countrySel, countryFilter)
+	// Fork (client stats, CLIENT-STATS-SPEC D5) -- the per-client counts follow the country query's
+	// unique/total mode exactly (same counted expression, same row filter).
+	qMap["get-campaign-client-counts"].Query = fmt.Sprintf(qMap["get-campaign-client-counts"].Query, countrySel, countryFilter)
 	qMap["get-campaign-stats"].Query = fmt.Sprintf(qMap["get-campaign-stats"].Query, statsSel)
 
 	// Scan and prepare all queries.

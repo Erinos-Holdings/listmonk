@@ -114,6 +114,8 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/lang/:lang", a.GetI18nLang)
 		g.GET("/api/dashboard/charts", a.GetDashboardCharts)
 		g.GET("/api/dashboard/counts", a.GetDashboardCounts)
+		// Fork (client stats, CLIENT-STATS-SPEC D7) -- behind the same (authenticated-only) gate as the charts.
+		g.GET("/api/dashboard/clients", a.GetDashboardClients)
 
 		g.GET("/api/settings", pm(a.GetSettings, "settings:get"))
 		g.PUT("/api/settings", pm(a.UpdateSettings, "settings:manage"))

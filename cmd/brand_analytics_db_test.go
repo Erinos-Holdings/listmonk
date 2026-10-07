@@ -16,10 +16,12 @@ import (
 	"net/url"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 )
 
@@ -487,5 +489,121 @@ func TestBrandAnalyticsDashboardCharts(t *testing.T) {
 	}
 	if _, ok := got["scoped"]; ok {
 		t.Fatal("unscoped charts carry a scoped key")
+	}
+}
+
+// Fork (client stats) -- integrations CLIENT-STATS-SPEC I5 (and D6/D7): GET /api/dashboard/clients.
+// A list-scoped user's rollup covers only the campaigns on their permitted lists (get_all widens the
+// campaigns, as for the counts), ?brand= is ignored for them; everyone else gets every campaign, or
+// one brand's (list brand tag) campaigns with ?brand=; per table, the window is the charts' 31-day
+// rule anchored on that set's latest event.
+func TestDashboardClients(t *testing.T) {
+	h := newLinkHarness(t)
+	f := newBAFixture(h)
+	h.db.MustExec(`UPDATE lists SET tags = '{brand:alpha}' WHERE id = $1`, f.listA)
+	h.db.MustExec(`UPDATE lists SET tags = '{brand:bravo,other}' WHERE id = $1`, f.listB)
+	var link int
+	h.db.Get(&link, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), 'https://cl.test') RETURNING id`)
+
+	// client "" = NULL; day d at noon in the session's time zone.
+	view := func(camp int, client, day string, n int) {
+		for i := 0; i < n; i++ {
+			h.db.MustExec(`INSERT INTO campaign_views (campaign_id, client, created_at) VALUES ($1, NULLIF($2, ''), ($3::DATE + TIME '12:00')::TIMESTAMP)`, camp, client, day)
+		}
+	}
+	click := func(camp int, client, day string, n int) {
+		for i := 0; i < n; i++ {
+			h.db.MustExec(`INSERT INTO link_clicks (campaign_id, link_id, client, created_at) VALUES ($1, $2, NULLIF($3, ''), ($4::DATE + TIME '12:00')::TIMESTAMP)`, camp, link, client, day)
+		}
+	}
+
+	// On A (A and A+B): views anchor on 2026-06-30 (05-30 is day 32, out), clicks on 2026-06-15
+	// (05-15 out). B only: later events that must neither count nor move A's anchor.
+	view(f.campA, "apple-mail", "2026-06-30", 2)
+	view(f.campAB, "gmail-proxy", "2026-06-30", 1)
+	view(f.campA, "", "2026-06-10", 1)
+	view(f.campA, "apple-mail", "2026-05-30", 4)
+	click(f.campA, "browser-ios", "2026-06-15", 1)
+	click(f.campAB, "browser-ios", "2026-05-16", 2)
+	click(f.campA, "browser-ios", "2026-05-15", 3)
+	view(f.campB, "outlook-windows", "2026-07-20", 5)
+	click(f.campB, "browser-windows", "2026-07-20", 5)
+
+	type panel struct {
+		Scoped  bool                             `json:"scoped"`
+		Brand   string                           `json:"brand"`
+		Brands  []string                         `json:"brands"`
+		Clients []models.CampaignAnalyticsClient `json:"clients"`
+	}
+	call := func(name string, u auth.User, q string) panel {
+		t.Helper()
+		code, body := baCall(t, u, "/api/dashboard/clients"+q, h.app.GetDashboardClients)
+		if code != http.StatusOK {
+			t.Fatalf("%s: %d %s", name, code, body)
+		}
+		var resp struct {
+			Data panel `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("%s: %s: %v", name, body, err)
+		}
+		if resp.Data.Clients == nil || resp.Data.Brands == nil {
+			t.Fatalf("%s: null array in %s", name, body)
+		}
+		return resp.Data
+	}
+	rows := func(p panel) string {
+		sort.Slice(p.Clients, func(i, j int) bool { return p.Clients[i].Client < p.Clients[j].Client })
+		out := ""
+		for _, r := range p.Clients {
+			out += fmt.Sprintf("[%s %d %d]", r.Client, r.Views, r.Clicks)
+		}
+		return out
+	}
+	get := []string{auth.PermCampaignsGetAnalytics}
+	onA := "[ 1 0][apple-mail 2 0][browser-ios 0 3][gmail-proxy 1 0]"
+
+	// Scoped on A: only A's campaigns, A's own anchors; scoped, no brands.
+	p := call("scoped on A", baUser(get, f.listA), "")
+	if got := rows(p); got != onA || !p.Scoped || len(p.Brands) != 0 || p.Brand != "" {
+		t.Fatalf("scoped on A: %s scoped=%v brands=%v brand=%q, want %s scoped, no brands", got, p.Scoped, p.Brands, p.Brand, onA)
+	}
+
+	// D7 / review F6: ?brand= is ignored for a list-scoped user -- B's rows never appear.
+	p = call("scoped on A, brand=bravo", baUser(get, f.listA), "?brand=bravo")
+	if got := rows(p); got != onA || p.Brand != "" {
+		t.Fatalf("scoped on A with ?brand=bravo: %s brand=%q, want %s (brand ignored)", got, p.Brand, onA)
+	}
+
+	// No permitted list -> no rows, never the global numbers.
+	if got := rows(call("no lists", baUser(get), "")); got != "" {
+		t.Fatalf("no lists: %s, want no rows", got)
+	}
+
+	// campaigns:get_all + list-scoped: every campaign (anchors move to 07-20).
+	wantAll := "[apple-mail 2 0][browser-windows 0 5][gmail-proxy 1 0][outlook-windows 5 0]"
+	if got := rows(call("get_all scoped", baUser([]string{auth.PermCampaignsGetAnalytics, auth.PermCampaignsGetAll}, f.listA), "")); got != wantAll {
+		t.Fatalf("get_all + scoped on A: %s, want %s", got, wantAll)
+	}
+
+	// Unscoped: every campaign, the picker's brands.
+	admin := baUser([]string{auth.PermListGetAll})
+	p = call("unscoped", admin, "")
+	if got := rows(p); got != wantAll || p.Scoped || p.Brand != "" || strings.Join(p.Brands, ",") != "alpha,bravo" {
+		t.Fatalf("unscoped: %s scoped=%v brand=%q brands=%v, want %s, alpha,bravo", got, p.Scoped, p.Brand, p.Brands, wantAll)
+	}
+
+	// ?brand= resolves to that brand's lists: alpha = A's campaigns (equal to the scoped result).
+	p = call("brand alpha", admin, "?brand=alpha")
+	if got := rows(p); got != onA || p.Brand != "alpha" {
+		t.Fatalf("brand=alpha: %s brand=%q, want %s", got, p.Brand, onA)
+	}
+	// bravo = A+B and B: anchors on 07-20, so A+B's 06-30 view counts and its 05-16 clicks do not.
+	if got, want := rows(call("brand bravo", admin, "?brand=bravo")), "[browser-windows 0 5][gmail-proxy 1 0][outlook-windows 5 0]"; got != want {
+		t.Fatalf("brand=bravo: %s, want %s", got, want)
+	}
+	// A tag no list carries -> no rows.
+	if got := rows(call("brand unknown", admin, "?brand=nope")); got != "" {
+		t.Fatalf("brand=nope: %s, want no rows", got)
 	}
 }

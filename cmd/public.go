@@ -636,7 +636,8 @@ func (a *App) LinkRedirect(c echo.Context) error {
 			url, err = a.core.GetLinkURL(linkUUID)
 		} else {
 			// Fork (location stats) -- the CDN-resolved country code, NULL when absent/invalid.
-			url, err = a.core.RegisterCampaignLinkClick(linkUUID, campUUID, subUUID, viewerCountry(c))
+			// Fork (client stats) -- the classified User-Agent token, NULL when absent/junk; never the raw UA.
+			url, err = a.core.RegisterCampaignLinkClick(linkUUID, campUUID, subUUID, viewerCountry(c), viewerClient(c))
 		}
 	}
 	if err != nil {
@@ -727,6 +728,134 @@ func normalizeCountry(s string) string {
 	return strings.ToUpper(s)
 }
 
+// Fork (client stats, integrations CLIENT-STATS-SPEC D1/D2) -- the email client (rendering
+// environment) of a tracking request, classified from its User-Agent into a CLOSED vocabulary at
+// insert time. The CDN's pixel and click-redirect behaviors already forward User-Agent (the same
+// origin-request allow-list as the country). Only the token is stored: the raw User-Agent is never
+// persisted or logged (unbounded cardinality, a fingerprinting surface). A click's User-Agent is
+// the browser the link opened in, not the mail client -- hence the browser-* tokens.
+//
+// The token set is the contract shared with the frontend's frontend/src/clientRows.mjs label map:
+// extending the vocabulary means touching classifyClient, its test table and clientRows in the
+// same change (D2: deliberately not pinned by a cross-language test).
+const (
+	clientGmailProxy     = "gmail-proxy"
+	clientYahoo          = "yahoo"
+	clientOutlookWindows = "outlook-windows"
+	clientOutlookMac     = "outlook-mac"
+	clientThunderbird    = "thunderbird"
+	clientOutlookMobile  = "outlook-mobile"
+	clientAppleMail      = "apple-mail"
+	clientBrowserIOS     = "browser-ios"
+	clientBrowserAndroid = "browser-android"
+	clientBrowserWindows = "browser-windows"
+	clientBrowserMac     = "browser-mac"
+	clientBrowserLinux   = "browser-linux"
+	clientOther          = "other"
+)
+
+// viewerClient returns the classified client token of the request, or "" (stored as NULL).
+func viewerClient(c echo.Context) string {
+	return classifyClient(c.Request().UserAgent())
+}
+
+// classifyClient maps a User-Agent to one vocabulary token, "" (unknown, stored NULL) for an
+// empty or junk value. It is total: plain substring tests over the bytes, no regex, no indexing
+// that can go out of range, so no input panics. Ordered first-match rules: image proxies, then
+// named mail clients (incl. the Outlook mobile apps, before the browser rows since the Android
+// app's UA contains "Android"), then Apple Mail's terminal WebKit signature, then browsers by
+// platform, then "other" for any UA seen but not classified (its growth is the signal to extend
+// this table). Matching is case-insensitive.
+func classifyClient(ua string) string {
+	ua = strings.TrimSpace(ua)
+	if ua == "" {
+		return ""
+	}
+	// Junk: a real User-Agent is visible ASCII (RFC 9110 field-value). Control bytes, non-ASCII
+	// and invalid UTF-8 carry no signal -- unknown, not "other".
+	letters := false
+	for i := 0; i < len(ua); i++ {
+		b := ua[i]
+		if b < 0x20 || b > 0x7e {
+			return ""
+		}
+		if l := b | 0x20; l >= 'a' && l <= 'z' {
+			letters = true
+		}
+	}
+	if !letters {
+		return ""
+	}
+
+	s := strings.ToLower(ua)
+	has := func(sub string) bool { return strings.Contains(s, sub) }
+
+	switch {
+	// Image proxies.
+	case has("googleimageproxy"):
+		return clientGmailProxy
+	case has("yahoomailproxy"), has("yahoo") && has("mailproxy"):
+		return clientYahoo
+
+	// Named mail clients.
+	case has("msoffice"), has("microsoft office") && has("outlook") && !has("macintosh"):
+		return clientOutlookWindows
+	case has("outlook-mac"), has("outlook") && has("macintosh"):
+		return clientOutlookMac
+	case has("thunderbird/"):
+		return clientThunderbird
+	case has("outlook-ios"), has("outlook-android"):
+		return clientOutlookMobile
+	case isAppleMailUA(s):
+		return clientAppleMail
+
+	// Browsers (clicks, webmail pixel fetches), by platform.
+	case (has("iphone") || has("ipad") || has("ipod")) && (has("safari") || has("crios")):
+		return clientBrowserIOS
+	case has("android"):
+		return clientBrowserAndroid
+	case has("windows nt") && has("mozilla/"):
+		return clientBrowserWindows
+	case has("macintosh") && (has("chrome") || has("firefox") || has("version/") && has("safari")):
+		return clientBrowserMac
+	case (has("x11") || has("linux")) && has("mozilla/"):
+		return clientBrowserLinux
+	}
+	return clientOther
+}
+
+// isAppleMailUA reports the Apple Mail / Mail Privacy Protection signature on a lower-cased UA:
+// an Apple platform and AppleWebKit, with the UA TERMINATING at "(KHTML, like Gecko)", optionally
+// followed only by a "Mobile/<build>" token (the Mac MPP form and the on-device iOS Mail form).
+// Any further product token (FxiOS, DuckDuckGo, FBAN/FBIOS, Safari, Version/, ...) is a browser or
+// an in-app WebView and falls through to the browser rows. MPP and real Apple Mail opens cannot be
+// told apart by UA (CLIENT-STATS-SPEC D3) -- one bucket, labelled as such in the UI.
+func isAppleMailUA(s string) bool {
+	if !strings.Contains(s, "applewebkit/") ||
+		!(strings.Contains(s, "macintosh") || strings.Contains(s, "iphone") || strings.Contains(s, "ipad") || strings.Contains(s, "ipod")) {
+		return false
+	}
+	const sig = "(khtml, like gecko)"
+	i := strings.LastIndex(s, sig)
+	if i < 0 {
+		return false
+	}
+	rest := strings.TrimSpace(s[i+len(sig):])
+	if rest == "" {
+		return true
+	}
+	build, ok := strings.CutPrefix(rest, "mobile/")
+	if !ok || build == "" {
+		return false
+	}
+	for i := 0; i < len(build); i++ {
+		if b := build[i]; !(b >= 'a' && b <= 'z' || b >= '0' && b <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
 // RegisterCampaignView registers a campaign view which comes in
 // the form of an pixel image request. Regardless of errors, this handler
 // should always render the pixel image bytes. The pixel URL is generated by
@@ -748,7 +877,8 @@ func (a *App) RegisterCampaignView(c echo.Context) error {
 	campUUID := c.Param("campUUID")
 	if campUUID != dummyUUID && subUUID != dummyUUID {
 		// Fork (location stats) -- the CDN-resolved country code, NULL when absent/invalid.
-		if err := a.core.RegisterCampaignView(campUUID, subUUID, viewerCountry(c)); err != nil {
+		// Fork (client stats) -- the classified User-Agent token, NULL when absent/junk; never the raw UA.
+		if err := a.core.RegisterCampaignView(campUUID, subUUID, viewerCountry(c), viewerClient(c)); err != nil {
 			a.log.Printf("error registering campaign view: %s", err)
 		}
 	}

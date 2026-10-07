@@ -6,6 +6,10 @@ package main
 // the per-country aggregation counts in both the unique and the total preparation; type=countries
 // sits behind the same permission checks as the other analytics types. Shares newLinkHarness
 // (LISTMONK_TEST_PG opt-in; see link_redirect_db_test.go).
+//
+// Fork (client stats) -- integrations CLIENT-STATS-SPEC I3, I4 and I9 extend the same harness: the
+// pixel and click store the classified User-Agent token (never the raw UA), type=clients aggregates
+// in both preparations and sits behind the same permission checks.
 
 import (
 	"database/sql"
@@ -18,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,6 +95,71 @@ func (h *linkHarness) click(campUUID, subUUID, linkUUID, country string) (int, s
 		h.t.Fatalf("LinkRedirect: %v", err)
 	}
 	return rec.Code, rec.Header().Get("Location")
+}
+
+// Fork (client stats, CLIENT-STATS-SPEC I9) -- pixelUA/clickUA drive the same handlers with a
+// User-Agent header and no country header.
+func (h *linkHarness) pixelUA(campUUID, subUUID, ua string) *httptest.ResponseRecorder {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/campaign/"+campUUID+"/"+subUUID+"/px.png", nil)
+	req.Header.Set("User-Agent", ua)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("campUUID", "subUUID")
+	c.SetParamValues(campUUID, subUUID)
+	if err := h.app.RegisterCampaignView(c); err != nil {
+		h.t.Fatalf("RegisterCampaignView: %v", err)
+	}
+	return rec
+}
+
+func (h *linkHarness) clickUA(campUUID, subUUID, linkUUID, ua string) (int, string) {
+	e := echo.New()
+	e.Renderer = stubRenderer{}
+	req := httptest.NewRequest(http.MethodGet, "/link/"+linkUUID+"/"+campUUID+"/"+subUUID, nil)
+	req.Header.Set("User-Agent", ua)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("linkUUID", "campUUID", "subUUID")
+	c.SetParamValues(linkUUID, campUUID, subUUID)
+	if err := h.app.LinkRedirect(c); err != nil {
+		h.t.Fatalf("LinkRedirect: %v", err)
+	}
+	return rec.Code, rec.Header().Get("Location")
+}
+
+// clientCol returns the stored client of every row of the campaign in table, "NULL" for NULL.
+func (h *linkHarness) clientCol(table string, campID int) string {
+	var out []string
+	if err := h.db.Select(&out, `SELECT COALESCE(client, 'NULL') FROM `+table+` WHERE campaign_id = $1 ORDER BY id`, campID); err != nil {
+		h.t.Fatal(err)
+	}
+	return strings.Join(out, " ")
+}
+
+// assertNoRawUA fails when any column of any row in table carries marker (the raw UA, or a
+// distinctive fragment of it): the whole row is cast to text, so a future column storing the UA
+// is caught too.
+func (h *linkHarness) assertNoRawUA(table, marker string) {
+	h.t.Helper()
+	var n int
+	if err := h.db.Get(&n, `SELECT COUNT(*) FROM `+table+` t WHERE STRPOS(t::TEXT, $1) > 0`, marker); err != nil {
+		h.t.Fatal(err)
+	}
+	if n != 0 {
+		h.t.Fatalf("%s: %d row(s) carry the raw User-Agent fragment %q", table, n, marker)
+	}
+}
+
+// uaCases are the handler-level I9 inputs: a real UA (stored as its token), a UA with a distinctive
+// product token the classifier does not know (stored as "other", never the string), junk bytes and
+// an empty header (stored NULL). Marker is what must never be stored.
+var uaCases = []struct{ ua, want, marker string }{
+	{"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)", "apple-mail", "AppleWebKit"},
+	{"ZZRawAgentMarker/9.9 (probe)", "other", "ZZRawAgentMarker"},
+	{"Mozilla/5.0 (Windows NT 10.0) ZZWinMarker/1.0", "browser-windows", "ZZWinMarker"},
+	{"\x01\x02ZZJunkMarker\xff", "NULL", "ZZJunkMarker"},
+	{"", "NULL", ""},
 }
 
 func (h *linkHarness) trackRows(table string, campID int) []trackRow {
@@ -174,6 +244,23 @@ func TestLocationPixel(t *testing.T) {
 	if total != n {
 		t.Fatalf("dummy/disabled hits recorded: %d rows, want %d", total, n)
 	}
+
+	// Fork (client stats, CLIENT-STATS-SPEC I9) -- the rows above carried no User-Agent (NULL client);
+	// the pixel stores the classified token or NULL, never the raw UA, and still returns the pixel.
+	want := strings.TrimSpace(strings.Repeat("NULL ", n))
+	if got := h.clientCol("campaign_views", f.campID); got != want {
+		t.Fatalf("pixel without a User-Agent stored a client: %s", got)
+	}
+	for _, uc := range uaCases {
+		assertPixel("ua "+uc.want, h.pixelUA(f.campUUID, f.subUUID, uc.ua))
+		want += " " + uc.want
+		if uc.marker != "" {
+			h.assertNoRawUA("campaign_views", uc.marker)
+		}
+	}
+	if got := h.clientCol("campaign_views", f.campID); got != want {
+		t.Fatalf("pixel clients\n got  %s\n want %s", got, want)
+	}
 }
 
 // TestLocationClick is I3.
@@ -235,6 +322,25 @@ func TestLocationClick(t *testing.T) {
 	h.db.Get(&total, `SELECT COUNT(*) FROM link_clicks`)
 	if total != n {
 		t.Fatalf("dummy/disabled clicks recorded: %d rows, want %d", total, n)
+	}
+
+	// Fork (client stats, CLIENT-STATS-SPEC I9) -- the rows above carried no User-Agent (NULL client);
+	// the click stores the classified token or NULL, never the raw UA, and the destination is the
+	// same whatever the User-Agent (the click redirect is the feature's blast radius, D11).
+	want := strings.TrimSpace(strings.Repeat("NULL ", n))
+	if got := h.clientCol("link_clicks", f.campID); got != want {
+		t.Fatalf("click without a User-Agent stored a client: %s", got)
+	}
+	for _, uc := range uaCases {
+		code, loc := h.clickUA(f.campUUID, f.subUUID, f.linkUUID, uc.ua)
+		assertRedirect("ua "+uc.want, code, loc)
+		want += " " + uc.want
+		if uc.marker != "" {
+			h.assertNoRawUA("link_clicks", uc.marker)
+		}
+	}
+	if got := h.clientCol("link_clicks", f.campID); got != want {
+		t.Fatalf("click clients\n got  %s\n want %s", got, want)
 	}
 }
 
@@ -360,6 +466,107 @@ func TestLocationAggregation(t *testing.T) {
 	}
 }
 
+func clientsString(rows []models.CampaignAnalyticsClient) string {
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Client < rows[j].Client })
+	out := ""
+	for _, r := range rows {
+		out += fmt.Sprintf("[%s %d %d]", r.Client, r.Views, r.Clicks)
+	}
+	return out
+}
+
+// TestClientAggregation is integrations CLIENT-STATS-SPEC I3: get-campaign-client-counts honors the
+// individual-tracking dedupe branch exactly as the country query, in both preparations -- the
+// TestLocationAggregation fixture shape with a client per row.
+func TestClientAggregation(t *testing.T) {
+	h := newLinkHarness(t)
+	db := h.db
+
+	newCamp := func(name string) int {
+		var id int
+		db.Get(&id, `INSERT INTO campaigns (uuid, name, subject, from_email, body, messenger, template_id) VALUES (gen_random_uuid(), $1, 's', 'f@x', 'b', 'email', (SELECT id FROM templates LIMIT 1)) RETURNING id`, name)
+		return id
+	}
+	newSub := func(email string) int {
+		var id int
+		db.Get(&id, `INSERT INTO subscribers (uuid, email, name) VALUES (gen_random_uuid(), $1, 'S') RETURNING id`, email)
+		return id
+	}
+	var link int
+	db.Get(&link, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), 'https://x.test') RETURNING id`)
+
+	a, b, other := newCamp("A"), newCamp("B"), newCamp("Other")
+	s1, s2, s3 := newSub("s1@x"), newSub("s2@x"), newSub("s3@x")
+
+	// sub 0 = NULL subscriber, client "" = NULL, ago = days before now (negative = in the future).
+	view := func(camp, sub int, client string, times, ago int) {
+		for i := 0; i < times; i++ {
+			db.MustExec(`INSERT INTO campaign_views (campaign_id, subscriber_id, client, created_at) VALUES ($1, NULLIF($2, 0), NULLIF($3, ''), NOW() - ($4 || ' days')::INTERVAL)`, camp, sub, client, fmt.Sprint(ago))
+		}
+	}
+	click := func(camp, sub int, client string, times int) {
+		for i := 0; i < times; i++ {
+			db.MustExec(`INSERT INTO link_clicks (campaign_id, subscriber_id, link_id, client) VALUES ($1, NULLIF($2, 0), $3, NULLIF($4, ''))`, camp, sub, link, client)
+		}
+	}
+
+	// Campaign A views: a repeat viewer, a second viewer, one viewer on two clients, NULL-subscriber
+	// rows (the composite-DISTINCT trap), unknown client with and without a subscriber, one row
+	// before and one after the window.
+	view(a, s1, "apple-mail", 2, 0)
+	view(a, s2, "apple-mail", 1, 0)
+	view(a, s1, "gmail-proxy", 1, 0)
+	view(a, 0, "apple-mail", 3, 0)
+	view(a, s3, "", 1, 0)
+	view(a, 0, "", 2, 0)
+	view(a, s1, "outlook-windows", 1, 30)
+	view(a, s1, "yahoo", 1, -5)
+	// Campaign B: the same subscriber again (a distinct (subscriber, campaign) pair).
+	view(b, s1, "apple-mail", 1, 0)
+	// Outside the campaign filter.
+	view(other, s1, "thunderbird", 1, 0)
+	click(other, s1, "thunderbird", 1)
+	// Clicks on A: browser-ios is clicks-only, gmail-proxy views-only.
+	click(a, s1, "browser-ios", 2)
+	click(a, s2, "apple-mail", 1)
+
+	from := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339)
+	to := time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339)
+	ids := []int{a, b}
+
+	// Unique (individual tracking ON -- the harness's preparation).
+	got, err := h.app.core.GetCampaignAnalyticsClients(ids, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, want := clientsString(got), "[ 1 0][apple-mail 3 1][browser-ios 0 1][gmail-proxy 1 0]"; s != want {
+		t.Fatalf("unique counts\n got  %s\n want %s", s, want)
+	}
+
+	// Total (individual tracking OFF): a fresh preparation.
+	ko.Set("privacy.individual_tracking", false)
+	qTotal := prepareQueries(loadQueryMap(t), db, ko)
+	ko.Set("privacy.individual_tracking", true)
+	coTotal := core.New(&core.Opt{Queries: qTotal, DB: db, I18n: h.app.i18n, Log: log.New(os.Stderr, "", 0)}, &core.Hooks{})
+	got, err = coTotal.GetCampaignAnalyticsClients(ids, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, want := clientsString(got), "[ 3 0][apple-mail 7 1][browser-ios 0 2][gmail-proxy 1 0]"; s != want {
+		t.Fatalf("total counts\n got  %s\n want %s", s, want)
+	}
+
+	// The date window: widened back, the outlook-windows row appears; the future yahoo row stays out.
+	wide := time.Now().UTC().Add(-60 * 24 * time.Hour).Format(time.RFC3339)
+	got, err = h.app.core.GetCampaignAnalyticsClients([]int{a}, wide, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, want := clientsString(got), "[ 1 0][apple-mail 2 1][browser-ios 0 1][gmail-proxy 1 0][outlook-windows 1 0]"; s != want {
+		t.Fatalf("widened window, campaign A only\n got  %s\n want %s", s, want)
+	}
+}
+
 // analyticsReq calls GetCampaignViewAnalytics as the given user.
 func analyticsReq(t *testing.T, h *linkHarness, u auth.User, typ string, id int) (int, string) {
 	t.Helper()
@@ -388,6 +595,8 @@ func TestLocationAnalyticsPermission(t *testing.T) {
 	h := newLinkHarness(t)
 	f := newLocationFixture(t, h)
 	h.pixel(f.campUUID, f.subUUID, "US")
+	// Fork (client stats, CLIENT-STATS-SPEC I4) -- the same view, classified, for typ=clients.
+	h.db.MustExec(`UPDATE campaign_views SET client = 'thunderbird' WHERE campaign_id = $1`, f.campID)
 
 	var otherList int
 	h.db.Get(&otherList, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Other', 'private', 'single') RETURNING id`)
@@ -397,7 +606,7 @@ func TestLocationAnalyticsPermission(t *testing.T) {
 	member := auth.User{PermissionsMap: perms, GetListIDs: []int{f.listID}, ListPermissionsMap: map[int]map[string]struct{}{f.listID: {auth.PermListGet: {}}}}
 
 	// No access to the campaign's lists -> 403, exactly as for views.
-	for _, typ := range []string{"views", "countries"} {
+	for _, typ := range []string{"views", "countries", "clients"} {
 		if code, msg := analyticsReq(t, h, outsider, typ, f.campID); code != http.StatusForbidden {
 			t.Fatalf("outsider %s: %d %s, want 403", typ, code, msg)
 		}
@@ -416,6 +625,21 @@ func TestLocationAnalyticsPermission(t *testing.T) {
 	}
 	if s := countriesString(resp.Data); s != "[US 1 0]" {
 		t.Fatalf("member countries = %s, want [US 1 0]", s)
+	}
+
+	// Fork (client stats, CLIENT-STATS-SPEC I4) -- typ=clients through the same list access.
+	code, body = analyticsReq(t, h, member, "clients", f.campID)
+	if code != http.StatusOK {
+		t.Fatalf("member clients: %d %s", code, body)
+	}
+	var cresp struct {
+		Data []models.CampaignAnalyticsClient `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &cresp); err != nil {
+		t.Fatalf("body %s: %v", body, err)
+	}
+	if s := clientsString(cresp.Data); s != "[thunderbird 1 0]" {
+		t.Fatalf("member clients = %s, want [thunderbird 1 0]", s)
 	}
 
 	// An unknown type is still 400.

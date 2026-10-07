@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx/types"
+	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 	"github.com/lib/pq"
 )
@@ -65,5 +66,48 @@ func (c *Core) GetDashboardChartsScoped(listIDs []int, allCampaigns bool) (types
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard charts", "error", pqErrMsg(err)))
 	}
 
+	return out, nil
+}
+
+// GetDashboardBrands (fork, client stats, CLIENT-STATS-SPEC D7) returns every list brand tag with
+// the ids of its lists: the main Dashboard's brand picker and its server-side brand resolution.
+func (c *Core) GetDashboardBrands() ([]models.DashboardBrand, error) {
+	out := []models.DashboardBrand{}
+	if err := c.q.GetDashboardBrands.Select(&out); err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard clients", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
+// GetDashboardClients (fork, client stats, CLIENT-STATS-SPEC D6/D7) returns views and clicks per
+// email-client token over the Dashboard window: listIDs nil = every campaign (all brands), else
+// the campaigns on those lists (one brand's). Live, no refreshCache.
+func (c *Core) GetDashboardClients(listIDs []int) ([]models.CampaignAnalyticsClient, error) {
+	var lists any
+	if listIDs != nil {
+		lists = pq.Array(listIDs)
+	}
+
+	out := []models.CampaignAnalyticsClient{}
+	if err := c.q.GetDashboardClients.Select(&out, lists); err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard clients", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
+// GetDashboardClientsScoped (fork, client stats, CLIENT-STATS-SPEC D7) is GetDashboardClients for a
+// list-scoped user, with the GetDashboardCountsScoped arguments. Live, no refreshCache.
+func (c *Core) GetDashboardClientsScoped(listIDs []int, allCampaigns bool) ([]models.CampaignAnalyticsClient, error) {
+	if listIDs == nil {
+		listIDs = []int{}
+	}
+
+	out := []models.CampaignAnalyticsClient{}
+	if err := c.q.GetDashboardClientsScoped.Select(&out, pq.Array(listIDs), allCampaigns); err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard clients", "error", pqErrMsg(err)))
+	}
 	return out, nil
 }

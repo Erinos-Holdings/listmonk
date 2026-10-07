@@ -387,6 +387,28 @@ c AS (
 SELECT TRIM(COALESCE(v.country, c.country)) AS country, COALESCE(v.n, 0) AS views, COALESCE(c.n, 0) AS clicks
     FROM v FULL OUTER JOIN c ON v.country = c.country;
 
+-- name: get-campaign-client-counts
+-- raw: true
+-- Fork (client stats, CLIENT-STATS-SPEC D5) -- views and clicks per email-client token for the
+-- analytics page, in the get-campaign-country-counts shape, prepared on boot (cmd/init.go) with the same
+-- counted expression and row filter per individual tracking (ON counts distinct (subscriber_id,
+-- campaign_id) pairs among rows with a subscriber, OFF counts raw rows). Unknown client (NULL) is
+-- reported as the empty string. The combined column (views + clicks) is the UI's, not a stored fact.
+WITH v AS (
+    SELECT COALESCE(client, '') AS client, COUNT(%[1]s) AS n
+    FROM campaign_views
+    WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3 %[2]s
+    GROUP BY 1
+),
+c AS (
+    SELECT COALESCE(client, '') AS client, COUNT(%[1]s) AS n
+    FROM link_clicks
+    WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3 %[2]s
+    GROUP BY 1
+)
+SELECT COALESCE(v.client, c.client) AS client, COALESCE(v.n, 0) AS views, COALESCE(c.n, 0) AS clicks
+    FROM v FULL OUTER JOIN c ON v.client = c.client;
+
 -- name: get-campaign-link-counts
 -- raw: true
 -- %s = * or DISTINCT subscriber_id (prepared based on based on individual tracking=on/off). Prepared on boot.
@@ -748,5 +770,6 @@ WITH view AS (
     WHERE campaigns.uuid = $1
 )
 -- Fork (location stats) -- $3 is the normalized CloudFront-Viewer-Country code, or '' for unknown (stored NULL).
-INSERT INTO campaign_views (campaign_id, subscriber_id, country)
-    VALUES((SELECT campaign_id FROM view), (SELECT subscriber_id FROM view), NULLIF($3::TEXT, ''));
+-- Fork (client stats, CLIENT-STATS-SPEC D2/D4) -- $4 is the classified User-Agent token, or '' for unknown (stored NULL).
+INSERT INTO campaign_views (campaign_id, subscriber_id, country, client)
+    VALUES((SELECT campaign_id FROM view), (SELECT subscriber_id FROM view), NULLIF($3::TEXT, ''), NULLIF($4::TEXT, ''));

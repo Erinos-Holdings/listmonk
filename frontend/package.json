@@ -13,6 +13,7 @@
     "test:official-sweep": "node --test src/officialSweep.test.mjs",
     "test:structure-brief": "node --test src/structureBrief.test.mjs",
     "test:countries": "node --test src/countryRows.test.mjs",
+    "test:clients": "node --test src/clientRows.test.mjs src/clientRoster.test.mjs",
     "test:access": "node --test src/accessPolicy.test.mjs",
     "test:rates": "node --test src/campaignRates.test.mjs",
     "test:webauthn": "node --test src/webauthnCodec.test.mjs",

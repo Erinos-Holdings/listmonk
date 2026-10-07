@@ -81,6 +81,8 @@ var migList = []migFunc{
 	{"v6.2.17", migrations.V6_2_17},
 	// Fork migration (erinos): two-factor -- user_passkeys table, security.require_twofa seeded false (PASSKEY-2FA-SPEC) — see internal/migrations/v6.2.18.go.
 	{"v6.2.18", migrations.V6_2_18},
+	// Fork migration (erinos): client stats -- client TEXT on campaign_views and link_clicks (CLIENT-STATS-SPEC) — see internal/migrations/v6.2.19.go.
+	{"v6.2.19", migrations.V6_2_19},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

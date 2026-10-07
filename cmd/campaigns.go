@@ -952,6 +952,17 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{out})
 	}
 
+	// Fork (client stats, integrations CLIENT-STATS-SPEC D5) -- views and clicks per email-client
+	// token, the countries pattern: after the permission loop and date validation, inheriting both.
+	if typ == "clients" {
+		out, err := a.core.GetCampaignAnalyticsClients(ids, from, to)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Campaign link stats.
 	if typ == "links" {
 		out, err := a.core.GetCampaignAnalyticsLinks(ids, typ, from, to)

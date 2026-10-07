@@ -274,7 +274,10 @@ CREATE TABLE campaign_views (
     created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
     -- Fork (location stats, v6.2.16) -- ISO 3166-1 alpha-2 from CloudFront-Viewer-Country; NULL = unknown. Never an IP.
-    country          CHAR(2) NULL
+    country          CHAR(2) NULL,
+
+    -- Fork (client stats, v6.2.19) -- closed-vocabulary email-client token classified from the User-Agent; NULL = unknown. Never the raw UA.
+    client           TEXT NULL
 );
 DROP INDEX IF EXISTS idx_views_camp_id; CREATE INDEX idx_views_camp_id ON campaign_views(campaign_id);
 DROP INDEX IF EXISTS idx_views_subscriber_id; CREATE INDEX idx_views_subscriber_id ON campaign_views(subscriber_id);
@@ -332,7 +335,10 @@ CREATE TABLE link_clicks (
     created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
     -- Fork (location stats, v6.2.16) -- ISO 3166-1 alpha-2 from CloudFront-Viewer-Country; NULL = unknown. Never an IP.
-    country          CHAR(2) NULL
+    country          CHAR(2) NULL,
+
+    -- Fork (client stats, v6.2.19) -- closed-vocabulary email-client token classified from the User-Agent; NULL = unknown. Never the raw UA.
+    client           TEXT NULL
 );
 DROP INDEX IF EXISTS idx_clicks_camp_id; CREATE INDEX idx_clicks_camp_id ON link_clicks(campaign_id);
 DROP INDEX IF EXISTS idx_clicks_link_id; CREATE INDEX idx_clicks_link_id ON link_clicks(link_id);

@@ -18,6 +18,11 @@ type Queries struct {
 	GetDashboardCountsScoped *sqlx.Stmt `query:"get-dashboard-counts-scoped"`
 	GetDashboardChartsScoped *sqlx.Stmt `query:"get-dashboard-charts-scoped"`
 
+	// Fork (client stats, CLIENT-STATS-SPEC D6/D7) -- the Dashboard's live client panel.
+	GetDashboardClients       *sqlx.Stmt `query:"get-dashboard-clients"`
+	GetDashboardClientsScoped *sqlx.Stmt `query:"get-dashboard-clients-scoped"`
+	GetDashboardBrands        *sqlx.Stmt `query:"get-dashboard-brands"`
+
 	InsertSubscriber                *sqlx.Stmt `query:"insert-subscriber"`
 	UpsertSubscriber                *sqlx.Stmt `query:"upsert-subscriber"`
 	UpsertSubscriberFill            *sqlx.Stmt `query:"upsert-subscriber-fill"`
@@ -92,6 +97,9 @@ type Queries struct {
 
 	// Fork (location stats) -- interpolated on boot like the link counts (cmd/init.go).
 	GetCampaignCountryCounts *sqlx.Stmt `query:"get-campaign-country-counts"`
+
+	// Fork (client stats, CLIENT-STATS-SPEC D5) -- interpolated on boot like the country counts.
+	GetCampaignClientCounts *sqlx.Stmt `query:"get-campaign-client-counts"`
 
 	NextCampaigns           *sqlx.Stmt `query:"next-campaigns"`
 	GetRunningCampaign      *sqlx.Stmt `query:"get-running-campaign"`

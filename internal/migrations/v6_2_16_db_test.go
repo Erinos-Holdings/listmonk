@@ -97,7 +97,7 @@ func TestLocationColumnsMigration(t *testing.T) {
 	}
 	for _, table := range []string{"campaign_views", "link_clicks"} {
 		m := regexp.MustCompile(`(?s)CREATE TABLE ` + table + ` \((.*?)\n\);`).FindStringSubmatch(string(schema))
-		if m == nil || !regexp.MustCompile(`\n\s*country\s+CHAR\(2\) NULL\n`).MatchString(m[1]+"\n") {
+		if m == nil || !regexp.MustCompile(`\n\s*country\s+CHAR\(2\) NULL,?\n`).MatchString(m[1]+"\n") {
 			t.Fatalf("schema.sql CREATE TABLE %s does not declare country CHAR(2) NULL", table)
 		}
 	}

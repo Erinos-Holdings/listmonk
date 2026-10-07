@@ -640,10 +640,25 @@ func (c *Core) GetCampaignAnalyticsCountries(campIDs []int, fromDate, toDate str
 	return out, nil
 }
 
+// GetCampaignAnalyticsClients returns views and clicks per email-client token for the given
+// campaign IDs (fork, client stats, integrations CLIENT-STATS-SPEC D5). The dates are validated by
+// the caller.
+func (c *Core) GetCampaignAnalyticsClients(campIDs []int, fromDate, toDate string) ([]models.CampaignAnalyticsClient, error) {
+	out := []models.CampaignAnalyticsClient{}
+	if err := c.q.GetCampaignClientCounts.Select(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
+		c.log.Printf("error fetching campaign clients: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
 // RegisterCampaignView registers a subscriber's view on a campaign.
 // Fork (location stats) -- country is the normalized CloudFront-Viewer-Country code, "" for unknown.
-func (c *Core) RegisterCampaignView(campUUID, subUUID, country string) error {
-	if _, err := c.q.RegisterCampaignView.Exec(campUUID, subUUID, country); err != nil {
+// Fork (client stats) -- client is the classified User-Agent token, "" for unknown; never the raw UA.
+func (c *Core) RegisterCampaignView(campUUID, subUUID, country, client string) error {
+	if _, err := c.q.RegisterCampaignView.Exec(campUUID, subUUID, country, client); err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Column == "campaign_id" {
 			return nil
 		}
@@ -667,9 +682,10 @@ func (c *Core) GetLinkURL(linkUUID string) (string, error) {
 
 // RegisterCampaignLinkClick registers a subscriber's link click on a campaign.
 // Fork (location stats) -- country is the normalized CloudFront-Viewer-Country code, "" for unknown.
-func (c *Core) RegisterCampaignLinkClick(linkUUID, campUUID, subUUID, country string) (string, error) {
+// Fork (client stats) -- client is the classified User-Agent token, "" for unknown; never the raw UA.
+func (c *Core) RegisterCampaignLinkClick(linkUUID, campUUID, subUUID, country, client string) (string, error) {
 	var url string
-	if err := c.q.RegisterLinkClick.Get(&url, linkUUID, campUUID, subUUID, country); err != nil {
+	if err := c.q.RegisterLinkClick.Get(&url, linkUUID, campUUID, subUUID, country, client); err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Column == "link_id" {
 			return "", echo.NewHTTPError(http.StatusBadRequest, c.i18n.Ts("public.invalidLink"))
 		}

@@ -8,6 +8,7 @@ import (
 	txttpl "text/template"
 	"time"
 
+	"github.com/lib/pq"
 	null "gopkg.in/volatiletech/null.v6"
 )
 
@@ -117,6 +118,32 @@ type CampaignAnalyticsCountry struct {
 	Country string `db:"country" json:"country"`
 	Views   int    `db:"views" json:"views"`
 	Clicks  int    `db:"clicks" json:"clicks"`
+}
+
+// CampaignAnalyticsClient is one row of the per-email-client analytics (fork, client stats,
+// integrations CLIENT-STATS-SPEC D5): Client is a closed-vocabulary token (cmd/public.go
+// classifyClient), or "" for unknown. Shared by the campaign analytics and the Dashboard panel.
+type CampaignAnalyticsClient struct {
+	Client string `db:"client" json:"client"`
+	Views  int    `db:"views" json:"views"`
+	Clicks int    `db:"clicks" json:"clicks"`
+}
+
+// DashboardClients is the Dashboard's client panel (fork, client stats, CLIENT-STATS-SPEC D6/D7):
+// the rows for the selected brand (Brand "" = all brands), the picker's brands (list brand tags),
+// and Scoped -- true for a list-scoped user, whose rows cover their permitted lists only and who
+// gets no picker.
+type DashboardClients struct {
+	Scoped  bool                      `json:"scoped"`
+	Brand   string                    `json:"brand"`
+	Brands  []string                  `json:"brands"`
+	Clients []CampaignAnalyticsClient `json:"clients"`
+}
+
+// DashboardBrand is one list brand tag with the ids of its lists (fork, client stats).
+type DashboardBrand struct {
+	Brand   string        `db:"brand"`
+	ListIDs pq.Int64Array `db:"list_ids"`
 }
 
 // AnalyticsCampaign is one row of the Campaign Analytics picker (fork, brand analytics,

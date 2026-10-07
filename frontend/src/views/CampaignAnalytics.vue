@@ -102,6 +102,36 @@
         </template>
       </b-table>
     </section>
+
+    <!-- Fork (client stats, integrations CLIENT-STATS-SPEC D5/D8/D9): views, clicks and combined per
+    email client for the same campaigns and date range, the Location table's shape (clientRows.mjs
+    owns the sort: Unknown last always, Other next-to-last by default). A row's tooltip lists the
+    Inspect clients that render-verify it (clientRoster.mjs, advisory). -->
+    <section v-if="clients.fetched" class="clients mt-5" data-cy="clients">
+      <h4>{{ $t('analytics.clients') }}</h4>
+      <b-table :data="clientTableRows" :loading="clients.loading" hoverable narrowed
+        backend-sorting :default-sort="[clients.sort.field, clients.sort.order]" @sort="onClientSort">
+        <b-table-column v-slot="props" field="name" :label="$t('analytics.clientsClient')" sortable>
+          <span :class="{ 'has-text-grey': props.row.unknown }" :title="clientRosterTip(props.row.client)">{{ props.row.name }}</span>
+        </b-table-column>
+        <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
+          {{ $utils.formatNumber(props.row.views) }}
+          <span v-if="clientShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ clientShare(props.row.views, 'views') }})</span>
+        </b-table-column>
+        <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
+          {{ $utils.formatNumber(props.row.clicks) }}
+          <span v-if="clientShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ clientShare(props.row.clicks, 'clicks') }})</span>
+        </b-table-column>
+        <b-table-column v-slot="props" field="combined" :label="$t('analytics.clientsCombined')" numeric sortable>
+          {{ $utils.formatNumber(props.row.combined) }}
+          <span v-if="clientShare(props.row.combined, 'combined')" class="is-size-7 has-text-grey">({{ clientShare(props.row.combined, 'combined') }})</span>
+        </b-table-column>
+        <template #empty v-if="!clients.loading">
+          <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
+        </template>
+      </b-table>
+      <p class="is-size-7 has-text-grey mt-2">{{ $t('analytics.clientsHint') }}</p>
+    </section>
   </section>
 </template>
 
@@ -114,6 +144,10 @@ import Chart from '../components/Chart.vue';
 import { DEFAULT_SORT, shapeCountryRows, sortCountryRows } from '../countryRows.mjs'; // eslint-disable-line import/extensions
 import { defaultFromDate } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { rateCell } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
+import {
+  DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
+} from '../clientRows.mjs'; // eslint-disable-line import/extensions
+import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
 const RATE_DIGITS = { views: 1, clicks: 1, bounces: 2 };
@@ -201,6 +235,14 @@ export default Vue.extend({
         loading: false,
         fetched: false,
         sort: { ...DEFAULT_SORT },
+      },
+
+      // Fork (client stats) -- the Email clients table.
+      clients: {
+        rows: [],
+        loading: false,
+        fetched: false,
+        sort: { ...CLIENT_DEFAULT_SORT },
       },
 
       form: {
@@ -395,6 +437,39 @@ export default Vue.extend({
       this.countries.sort = { field, order };
     },
 
+    // Fork (client stats) -- fetched alongside the Location table, same campaigns and range.
+    getClients(camps) {
+      this.clients.loading = true;
+      this.clients.fetched = true;
+      this.$api.getCampaignClientCounts({
+        id: camps.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((data) => {
+        this.clients.rows = shapeClientRows(data, {
+          locale: this.locale,
+          unknownLabel: this.$t('analytics.clientsUnknown'),
+        });
+      }).finally(() => {
+        this.clients.loading = false;
+      });
+    },
+
+    onClientSort(field, order) {
+      this.clients.sort = { field, order };
+    },
+
+    // A client's share of the column's own total (Unknown included), as countryShare.
+    clientShare(n, field) {
+      return rateCell(n, this.clientTotalsSum[field], 1).pct;
+    },
+
+    // The row tooltip: the Inspect clients that render-verify the token (advisory, D8).
+    clientRosterTip(token) {
+      const ids = rosterFor(token);
+      return ids.length ? this.$t('analytics.clientsRoster', { ids: ids.join(', ') }) : '';
+    },
+
     onLinkClick(e) {
       const bars = e.chart.getElementsAtEventForMode(e, 'nearest', { intersect: true }, true);
       if (bars.length > 0) {
@@ -423,6 +498,15 @@ export default Vue.extend({
     countryTableRows() {
       const { field, order } = this.countries.sort;
       return sortCountryRows(this.countries.rows, field, order, this.locale);
+    },
+
+    clientTotalsSum() {
+      return clientTotals(this.clients.rows);
+    },
+
+    clientTableRows() {
+      const { field, order } = this.clients.sort;
+      return sortClientRows(this.clients.rows, field, order, this.locale);
     },
   },
 
@@ -478,6 +562,8 @@ export default Vue.extend({
 
           // Fork (location stats) -- the Location table.
           this.getCountries(this.form.campaigns);
+          // Fork (client stats) -- the Email clients table.
+          this.getClients(this.form.campaigns);
         });
       });
     }
