@@ -800,7 +800,7 @@ func classifyClient(ua string) string {
 	// Named mail clients.
 	case has("msoffice"), has("microsoft office") && has("outlook") && !has("macintosh"):
 		return clientOutlookWindows
-	case has("outlook-mac"), has("outlook") && has("macintosh"):
+	case has("outlook-mac"), has("macoutlook"), has("outlook") && has("macintosh"):
 		return clientOutlookMac
 	case has("thunderbird/"):
 		return clientThunderbird

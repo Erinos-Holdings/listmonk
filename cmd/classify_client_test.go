@@ -31,6 +31,8 @@ func TestClassifyClient(t *testing.T) {
 		{"Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0.17928; Pro)", clientOutlookWindows},
 		{"Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 10.0; WOW64; Trident/7.0; .NET4.0C; .NET4.0E; ms-office; MSOffice 16)", clientOutlookWindows},
 		{"Outlook-Mac/16.89 (Macintosh; Mac OS X 14.6)", clientOutlookMac},
+		// Review Low 2 -- the real-world Outlook-for-Mac form has no "Macintosh" token.
+		{"MacOutlook/16.70.23021201 (Intelx64 Mac OS X 13.2.1)", clientOutlookMac},
 		{"Microsoft Office/16.0 (Macintosh; Mac OS X 14.6; Microsoft Outlook 16.89)", clientOutlookMac},
 		{"Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Thunderbird/128.3.1", clientThunderbird},
 		{"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:115.0) Gecko/20100101 Thunderbird/115.15.0", clientThunderbird},
