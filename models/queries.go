@@ -153,6 +153,9 @@ type Queries struct {
 	CreateBrand         *sqlx.Stmt `query:"create-brand"`
 	UpdateBrand         *sqlx.Stmt `query:"update-brand"`
 	ReprojectBrandLists *sqlx.Stmt `query:"reproject-brand-lists"`
+	// Fork (persona From) -- queries/brands.sql, PERSONA-FROM-SPEC D4.
+	UpdateBrandPersonas      *sqlx.Stmt `query:"update-brand-personas"`
+	GetCampaignsCarryingFrom *sqlx.Stmt `query:"get-campaigns-carrying-from"`
 
 	// Fork (system health) -- queries/system.sql, SES-HEALTH-SPEC D6.
 	UpsertSystemHealth     *sqlx.Stmt `query:"upsert-system-health"`

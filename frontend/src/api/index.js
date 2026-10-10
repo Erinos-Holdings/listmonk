@@ -262,6 +262,22 @@ export const getBrands = async () => http.get(
   { camelCase: false },
 );
 
+// Fork (persona From, integrations PERSONA-FROM-SPEC D4). A brand's approved sender display
+// names; both need lists:manage_all. The GET returns [{name, campaigns: [{id, name, status}]}]
+// -- the campaigns that block each persona's removal -- and only greys the delete control, so a
+// failed read never toasts (the PUT's 409 is the control). The PUT replaces the whole set and
+// returns the brand row; its 400/409 message is toasted verbatim by the interceptor.
+export const getBrandPersonas = (slug) => http.get(
+  `/api/brands/${encodeURIComponent(slug)}/personas`,
+  { camelCase: false, disableToast: true },
+);
+
+export const putBrandPersonas = (slug, personas) => http.put(
+  `/api/brands/${encodeURIComponent(slug)}/personas`,
+  { personas },
+  { camelCase: false },
+);
+
 // Brand theme (visual editor swatches). The swatch row is a convenience, so a failed fetch
 // must never surface as an editor error toast.
 export const getBrandTheme = (slug) => http.get(

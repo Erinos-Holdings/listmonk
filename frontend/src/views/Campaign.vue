@@ -182,7 +182,50 @@
                      campaign. `readonly` rather than `disabled` on purpose -- a disabled input is
                      skipped by browser validation, and `required` is the backstop for a derivation
                      that ever yields empty. -->
-                <b-field :label="$t('campaigns.fromAddress')" label-position="on-border"
+                <!-- Fork (persona From, integrations PERSONA-FROM-SPEC D5). When the lists map to a
+                     brand and its brands row is loaded, the From is a PICKLIST: the brand From
+                     first, then the brand's approved persona display names -- a display-name
+                     variant on the brand's own address, never free text. The server refuses any
+                     other From (cmd/campaigns.go validateCampaignFields); this is the convenience.
+                     Unmapped, errored, or the brands fetch failed: the read-only input below. -->
+                <b-field v-if="senderRow" :label="$t('campaigns.senderName')" label-position="on-border"
+                  :message="brandFromMessage">
+                  <b-select v-model="form.fromEmail" name="from_email" :disabled="!canEdit" expanded required>
+                    <option v-for="o in senderSelectOptions" :key="o.value" :value="o.value">
+                      {{ o.label }}
+                    </option>
+                  </b-select>
+                </b-field>
+                <!-- The brand's persona set, for lists:manage_all holders only: one chip per
+                     persona whose close is the delete control, and an inline add. The chip's close
+                     is disabled while an editable or running campaign carries the persona (the
+                     server's 409 is the control); the span keeps the tooltip firing over it. -->
+                <div v-if="senderRow && canManagePersonas" class="persona-admin mb-4" data-cy="persona-admin">
+                  <b-taglist v-if="senderRow.personas.length > 0" class="mb-1">
+                    <template v-for="p in senderRow.personas">
+                      <b-tooltip v-if="personaBlockers(p).length > 0" :key="p" :label="personaInUseLabel(p)"
+                        type="is-dark" multilined>
+                        <span><b-tag closable disabled>{{ p }}</b-tag></span>
+                      </b-tooltip>
+                      <b-tag v-else :key="p" closable :disabled="personaBusy" @close="removePersona(p)">
+                        {{ p }}
+                      </b-tag>
+                    </template>
+                  </b-taglist>
+                  <b-field grouped>
+                    <b-input v-model="newPersona" size="is-small" name="new_persona" expanded
+                      :placeholder="$t('campaigns.personaAddPlaceholder', { brand: senderRow.display_name })"
+                      :disabled="personaBusy" @keydown.native.enter.prevent="addPersona" />
+                    <p class="control">
+                      <b-button size="is-small" :loading="personaBusy" :disabled="newPersona.trim() === ''"
+                        @click="addPersona">
+                        {{ $t('campaigns.personaAdd') }}
+                      </b-button>
+                    </p>
+                  </b-field>
+                </div>
+
+                <b-field v-if="!senderRow" :label="$t('campaigns.fromAddress')" label-position="on-border"
                   :type="brandDerivation.error ? 'is-danger' : ''" :message="brandFromMessage">
                   <!-- custom-class, NOT class: in Vue 2 a `class` on a component lands on its ROOT
                        element, which for b-input is the wrapping div.control -- so the styling
@@ -487,6 +530,11 @@ import { normalizeMediaTagsLenient } from '../mediaTags';
 import {
   BRAND_TAG_PREFIX, FROM_TAG_PREFIX, brandThemePalette, reBrandSlug,
 } from '../brand';
+import {
+  BRANDS_PENDING, BRANDS_LOADED, BRANDS_FAILED, personaFrom, findBrandRow, selectedPersona, displayOptions,
+  pickerBrandRow, fromToApply, isSyncRepoint, campaignRefs, blockingCampaigns,
+} from '../personaFrom.mjs'; // eslint-disable-line import/extensions
+import { canManageBrandPersonas } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 
 // Fork: the account's local zone for the Send-later helper text. MDT/MST is resolved by Intl
 // per date, so DST never needs a code change.
@@ -599,6 +647,17 @@ export default Vue.extend({
       // repoint TOAST fires once per load rather than on every subsequent list edit. The
       // persistent inline notice is the `brandFromRepointed` computed, which is self-clearing.
       brandFromLoadPending: false,
+
+      // Fork (persona From, PERSONA-FROM-SPEC D5). The brands rows (GET /api/brands, fetched
+      // once at mount) and the state of that fetch -- a THIRD async arrival beside the lists
+      // store and serverConfig, which syncBrandDerivation waits for like the other two. Then
+      // the admin controls' state: the campaigns blocking each persona's removal
+      // (GET /api/brands/:slug/personas), the Add input, and an in-flight write.
+      brands: [],
+      brandsState: BRANDS_PENDING,
+      personaUses: [],
+      newPersona: '',
+      personaBusy: false,
 
       // The brand swatch row(s) currently pushed into the visual editor's color picker, and
       // the slug of the latest theme request. The slug doubles as the stale-response guard:
@@ -942,17 +1001,35 @@ export default Vue.extend({
         return;
       }
 
+      // Fork (persona From, PERSONA-FROM-SPEC D5) -- the From to hold is no longer always
+      // d.fromEmail: a persona From that is valid for the derived brand is KEPT (the stored one on
+      // the load pass, the form's own afterwards), and everything else repoints to the brand From
+      // exactly as before. That needs the brands row, a third async arrival: while the derivation
+      // is mapped and GET /api/brands is still pending, fromToApply returns null and the From is
+      // left alone -- no repoint, no toast, brandFromLoadPending untouched -- or a stored persona
+      // would be repointed to the brand From before the row that makes it valid arrives, and a
+      // routine save would ship the campaign as the brand. The brandsState watcher re-runs this
+      // when the fetch settles; only a FAILED fetch falls back to forcing d.fromEmail.
       const stored = this.data.fromEmail || '';
-      if (this.brandFromLoadPending) {
-        this.brandFromLoadPending = false;
+      const apply = fromToApply(
+        this.brandFromLoadPending ? stored : null,
+        this.form.fromEmail,
+        d,
+        this.brandRow,
+        this.brandsState,
+      );
+      if (apply !== null) {
+        if (this.brandFromLoadPending) {
+          this.brandFromLoadPending = false;
 
-        if (stored !== '' && stored !== d.fromEmail) {
-          this.$utils.toast(this.$t('campaigns.brandFromRepointed', { from: stored, to: d.fromEmail }), 'is-warning', 6000);
+          if (stored !== '' && stored !== apply) {
+            this.$utils.toast(this.$t('campaigns.brandFromRepointed', { from: stored, to: apply }), 'is-warning', 6000);
+          }
         }
-      }
 
-      if (this.form.fromEmail !== d.fromEmail) {
-        this.form.fromEmail = d.fromEmail;
+        if (this.form.fromEmail !== apply) {
+          this.form.fromEmail = apply;
+        }
       }
 
       // Headers is a free-text JSON array carrying other headers too, so replace ONLY the
@@ -961,6 +1038,85 @@ export default Vue.extend({
       if (merged !== null && merged !== this.form.headersStr) {
         this.form.headersStr = merged;
       }
+    },
+
+    // Fork (persona From, PERSONA-FROM-SPEC D5) -- the admin controls. Every rule on a persona
+    // name lives in the server (models/personas.go); nothing here mirrors it. A refused write is
+    // toasted verbatim by the api interceptor.
+
+    // The campaigns blocking each persona's removal, for the greyed delete control. A convenience
+    // (the PUT's 409 is the control), so a failed read just leaves every chip deletable.
+    loadPersonaUses() {
+      const row = this.senderRow;
+      if (!row || !this.canManagePersonas) {
+        this.personaUses = [];
+        return;
+      }
+      const { slug } = row;
+      this.$api.getBrandPersonas(slug).then((data) => {
+        // Discard an answer for a brand the page has since left.
+        if (this.senderRow && this.senderRow.slug === slug) {
+          this.personaUses = Array.isArray(data) ? data : [];
+        }
+      }).catch(() => {
+        this.personaUses = [];
+      });
+    },
+
+    personaBlockers(persona) {
+      return blockingCampaigns(this.personaUses, persona);
+    },
+
+    personaInUseLabel(persona) {
+      return this.$t('campaigns.personaInUse', { campaigns: campaignRefs(this.personaBlockers(persona)) });
+    },
+
+    // Replace the brand's row with the one a personas PUT returned.
+    applyBrandRow(row) {
+      if (!row || !row.slug) {
+        return;
+      }
+      this.brands = this.brands.map((b) => (b.slug === row.slug ? row : b));
+      this.loadPersonaUses();
+    },
+
+    // Add PUTs the full set plus the typed name. On success the new persona is SELECTED -- that
+    // is why it was added -- as form state only, until the campaign is saved.
+    addPersona() {
+      const row = this.senderRow;
+      const name = this.newPersona.trim();
+      if (!row || this.personaBusy || name === '') {
+        return;
+      }
+      this.personaBusy = true;
+      this.$api.putBrandPersonas(row.slug, [...row.personas, name]).then((updated) => {
+        this.applyBrandRow(updated);
+        this.newPersona = '';
+        if (this.canEdit && Array.isArray(updated.personas) && updated.personas.includes(name)) {
+          this.form.fromEmail = personaFrom(name, updated);
+        }
+      }).catch(() => {}).finally(() => {
+        this.personaBusy = false;
+      });
+    },
+
+    // Delete PUTs the set minus the persona. If this form had it selected (unsaved), the sync
+    // repoints the form to the brand From.
+    removePersona(persona) {
+      const row = this.senderRow;
+      if (!row || this.personaBusy) {
+        return;
+      }
+      this.personaBusy = true;
+      this.$api.putBrandPersonas(row.slug, row.personas.filter((p) => p !== persona)).then((updated) => {
+        this.applyBrandRow(updated);
+        this.syncBrandDerivation();
+      }).catch(() => {
+        // A 409: a campaign took the persona since the list was read. Refresh the greyed state.
+        this.loadPersonaUses();
+      }).finally(() => {
+        this.personaBusy = false;
+      });
     },
 
     // Keep the visual editor's brand swatch row in sync with the derived brand. Display-only:
@@ -2047,11 +2203,14 @@ export default Vue.extend({
     // someone to save a change they already saved. A notice that says "not yet applied" when it
     // has been applied is the same class of lie this feature exists to remove, and it trains
     // people to ignore the one message that matters.
+    //
+    // Fork (persona From, PERSONA-FROM-SPEC D5) -- true only when the SYNC changed the value: the
+    // form holds the derived brand From and the stored From differs (personaFrom.mjs
+    // isSyncRepoint). A deliberate persona pick also differs from the stored From, and is not a
+    // repoint -- it shows the senderPersona line instead.
     brandFromRepointed() {
       return this.isEditing
-        && !this.brandDerivation.error
-        && !!this.data.fromEmail
-        && this.data.fromEmail !== this.form.fromEmail;
+        && isSyncRepoint(this.data.fromEmail, this.form.fromEmail, this.brandDerivation);
     },
 
     brandFromMessage() {
@@ -2069,7 +2228,42 @@ export default Vue.extend({
         return this.$t('campaigns.brandFromDefault', { brand: this.brandDerivation.brand });
       }
 
-      return this.$t('campaigns.brandFromDerived', { brand: this.brandDerivation.brand });
+      const derived = this.$t('campaigns.brandFromDerived', { brand: this.brandDerivation.brand });
+      if (this.senderPersonaName) {
+        // b-field renders an array as one line per entry.
+        return [derived, this.$t('campaigns.senderPersona', {
+          name: this.senderPersonaName, address: this.senderRow.address,
+        })];
+      }
+      return derived;
+    },
+
+    // Fork (persona From, PERSONA-FROM-SPEC D5). The derived brand's brands row (null until
+    // GET /api/brands has loaded, and for a brand with no row).
+    brandRow() {
+      return findBrandRow(this.brands, this.brandDerivation.brand);
+    },
+
+    // The row the sender picker is built from, or null for today's read-only input: unmapped or
+    // errored derivation, brands not loaded or failed, no row, or a row that disagrees with the
+    // lists' from: tag.
+    senderRow() {
+      return pickerBrandRow(this.brandDerivation, this.brandRow, this.brandsState);
+    },
+
+    senderSelectOptions() {
+      return displayOptions(this.form.fromEmail, this.senderRow);
+    },
+
+    // The persona the form's From names, or null (the brand From).
+    senderPersonaName() {
+      return this.senderRow ? selectedPersona(this.form.fromEmail, this.senderRow) : null;
+    },
+
+    // The add/delete controls need lists:manage_all (accessPolicy.mjs); choosing needs only the
+    // ability to edit the campaign.
+    canManagePersonas() {
+      return canManageBrandPersonas(this.profile);
     },
 
     emailMessengers() {
@@ -2114,6 +2308,23 @@ export default Vue.extend({
       this.syncBrandTheme();
     },
 
+    // Fork (persona From, PERSONA-FROM-SPEC D5) -- the brands rows are the third async arrival
+    // syncBrandDerivation waits for; re-run it when the fetch settles (loaded or failed), the
+    // lists.results watcher's pattern.
+    brandsState() {
+      this.syncBrandDerivation();
+    },
+
+    // The in-use list belongs to one brand: (re)load it when the picker's brand changes, and
+    // again when a save lands (this campaign counts as a carrier of the persona it stores).
+    'senderRow.slug': function watchSenderRowSlug() {
+      this.loadPersonaUses();
+    },
+
+    'data.fromEmail': function watchStoredFrom() {
+      this.loadPersonaUses();
+    },
+
     // Fork (audience box). Status and buttons change together; re-measure after render.
     'data.status': function watchDataStatus() {
       this.syncAudiencePoll();
@@ -2154,6 +2365,16 @@ export default Vue.extend({
 
     // Fill default form fields.
     this.form.fromEmail = this.serverConfig.from_email;
+
+    // Fork (persona From, PERSONA-FROM-SPEC D5) -- the brands rows, once per page (as the list
+    // form does). Until this settles a mapped campaign's From is left alone; a failure falls
+    // back to the read-only brand From.
+    this.$api.getBrands().then((data) => {
+      this.brands = Array.isArray(data) ? data : [];
+      this.brandsState = BRANDS_LOADED;
+    }).catch(() => {
+      this.brandsState = BRANDS_FAILED;
+    });
 
     // New campaign.
     const { id } = this.$route.params;

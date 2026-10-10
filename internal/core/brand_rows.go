@@ -23,7 +23,47 @@ func (c *Core) GetBrands() ([]models.Brand, error) {
 			c.i18n.Ts("globals.messages.errorFetching", "name", "brands", "error", pqErrMsg(err)))
 	}
 	for i := range out {
-		out[i].DisplayName = models.BrandDisplayName(out[i].FromEmail)
+		fillBrand(&out[i])
+	}
+	return out, nil
+}
+
+// fillBrand sets a row's computed fields: the display name, the bare address (PERSONA-FROM-SPEC
+// D1) and a non-nil persona set (JSON `[]`, never null).
+func fillBrand(b *models.Brand) {
+	b.DisplayName = models.BrandDisplayName(b.FromEmail)
+	b.Address = models.BareAddress(b.FromEmail)
+	if b.Personas == nil {
+		b.Personas = pq.StringArray{}
+	}
+}
+
+// UpdateBrandPersonas replaces a brand row's persona set (validated by the caller) and returns
+// the row. found is false when no row has this slug.
+func (c *Core) UpdateBrandPersonas(slug string, personas []string) (models.Brand, bool, error) {
+	if personas == nil {
+		personas = []string{}
+	}
+	var out string
+	if err := c.q.UpdateBrandPersonas.Get(&out, slug, pq.StringArray(personas)); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Brand{}, false, nil
+		}
+		c.log.Printf("error updating brand personas: %v", err)
+		return models.Brand{}, false, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "brand", "error", pqErrMsg(err)))
+	}
+	return c.GetBrand(out)
+}
+
+// GetCampaignsCarryingFrom returns the campaigns whose From is exactly from and whose status
+// blocks a persona's removal (models.PersonaBlockingStatuses), by id.
+func (c *Core) GetCampaignsCarryingFrom(from string) ([]models.PersonaCampaign, error) {
+	out := []models.PersonaCampaign{}
+	if err := c.q.GetCampaignsCarryingFrom.Select(&out, from, pq.StringArray(models.PersonaBlockingStatuses)); err != nil {
+		c.log.Printf("error fetching campaigns carrying a From: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))
 	}
 	return out, nil
 }
@@ -39,7 +79,7 @@ func (c *Core) GetBrand(slug string) (models.Brand, bool, error) {
 		return models.Brand{}, false, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "brand", "error", pqErrMsg(err)))
 	}
-	b.DisplayName = models.BrandDisplayName(b.FromEmail)
+	fillBrand(&b)
 	return b, true, nil
 }
 

@@ -777,3 +777,7 @@ CREATE TABLE IF NOT EXISTS brands (
     updated_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_brands_slug_lower ON brands (LOWER(slug));
+-- Fork (persona From): a brand's approved persona sender display names (v6.2.21,
+-- PERSONA-FROM-SPEC D1). A separate statement so the v6.2.20 mirror above stays byte-equal to its
+-- migration; mirrored in internal/migrations/v6.2.21.go.
+ALTER TABLE brands ADD COLUMN IF NOT EXISTS personas TEXT[] NOT NULL DEFAULT '{}';

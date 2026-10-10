@@ -249,12 +249,132 @@ func (a *App) UpdateBrand(c echo.Context) error {
 		return err
 	}
 
+	// Fork (persona From, PERSONA-FROM-SPEC D4) -- the stored personas must still be valid under
+	// the new From (each must contain its display name). The operator empties or edits the set
+	// first, then changes the From. A site-only change keeps the From and so always passes.
+	cur, found, err := a.core.GetBrand(b.Slug)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("globals.messages.notFound", "name", b.Slug))
+	}
+	if key, _ := models.PersonasProblem(cur.Personas, b.FromEmail); key != "" {
+		failing := ""
+		for _, p := range cur.Personas {
+			if k, _ := models.PersonaProblem(p, b.FromEmail); k != "" {
+				failing = p
+				break
+			}
+		}
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("brands.personasInvalidForFrom", "persona", failing, "from", b.FromEmail))
+	}
+
 	out, found, err := a.core.UpdateBrand(b)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("globals.messages.notFound", "name", b.Slug))
+	}
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// Fork (persona From, integrations PERSONA-FROM-SPEC D4). A brand's approved persona display
+// names: the picklist a campaign's From may be chosen from, beside the brand From itself. Both
+// routes need lists:manage_all, the brand-write permission -- the GET too, because it names
+// campaigns a campaign-scoped user may not be allowed to see. Every rule on the values is
+// models.PersonasProblem; the Campaign page has no mirror of it.
+
+// personaCampaignRefs renders blocking campaigns for a message: `"<id> <name>" (status)`, joined.
+func personaCampaignRefs(camps []models.PersonaCampaign) string {
+	refs := make([]string, 0, len(camps))
+	for _, c := range camps {
+		refs = append(refs, fmt.Sprintf("%q (%s)", strconv.Itoa(c.ID)+" "+c.Name, c.Status))
+	}
+	return strings.Join(refs, ", ")
+}
+
+// GetBrandPersonas returns [{name, campaigns: [{id, name, status}]}] per persona of the brand,
+// in stored order: campaigns are the BLOCKING carriers -- those whose From is the persona's
+// canonical From and whose status is editable or running. Finished and cancelled never block.
+func (a *App) GetBrandPersonas(c echo.Context) error {
+	slug := c.Param("slug")
+	row, found, err := a.core.GetBrand(slug)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("globals.messages.notFound", "name", slug))
+	}
+
+	out := make([]models.PersonaUse, 0, len(row.Personas))
+	for _, p := range row.Personas {
+		camps, err := a.core.GetCampaignsCarryingFrom(models.PersonaFrom(p, row.FromEmail))
+		if err != nil {
+			return err
+		}
+		out = append(out, models.PersonaUse{Name: p, Campaigns: camps})
+	}
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// PutBrandPersonas replaces the brand's persona set. Body: {"personas": ["Natasha at Acme", ...]}.
+// Each element is trimmed, the set validated against the row's From (400), and a persona being
+// REMOVED that an editable or running campaign still carries is refused (409 naming the persona
+// and the campaigns) with nothing written. Returns the brand row.
+func (a *App) PutBrandPersonas(c echo.Context) error {
+	var req struct {
+		Personas *[]string `json:"personas"`
+	}
+	// A body without the personas array is refused rather than read as "remove them all".
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil || req.Personas == nil {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "personas"))
+	}
+
+	slug := c.Param("slug")
+	row, found, err := a.core.GetBrand(slug)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("globals.messages.notFound", "name", slug))
+	}
+
+	next := make([]string, 0, len(*req.Personas))
+	for _, p := range *req.Personas {
+		next = append(next, strings.TrimSpace(p))
+	}
+	if key, args := models.PersonasProblem(next, row.FromEmail); key != "" {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts(key, args...))
+	}
+
+	// removed = current - new, as exact strings.
+	keep := make(map[string]struct{}, len(next))
+	for _, p := range next {
+		keep[p] = struct{}{}
+	}
+	for _, p := range row.Personas {
+		if _, ok := keep[p]; ok {
+			continue
+		}
+		camps, err := a.core.GetCampaignsCarryingFrom(models.PersonaFrom(p, row.FromEmail))
+		if err != nil {
+			return err
+		}
+		if len(camps) > 0 {
+			return echo.NewHTTPError(http.StatusConflict,
+				a.i18n.Ts("brands.personaInUse", "persona", p, "campaigns", personaCampaignRefs(camps)))
+		}
+	}
+
+	out, found, err := a.core.UpdateBrandPersonas(row.Slug, next)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("globals.messages.notFound", "name", slug))
 	}
 	return c.JSON(http.StatusOK, okResp{out})
 }

@@ -6,6 +6,7 @@ import {
   isAnalyticsOnly,
   canManageList,
   canViewBrand,
+  canManageBrandPersonas,
   routeRedirect,
   defaultFromDate,
 } from './accessPolicy.mjs'; // eslint-disable-line import/extensions
@@ -88,6 +89,26 @@ test('I7 canViewBrand', () => {
   assert.equal(canViewBrand(census[18]), false);
   assert.equal(canViewBrand(census[14]), false, 'brands:manage alone is not brands:get');
   assert.equal(canViewBrand(null), false);
+});
+
+// PERSONA-FROM-SPEC I11.
+test('canManageBrandPersonas: Super Admin and lists:manage_all only', () => {
+  assert.equal(canManageBrandPersonas(census[1]), true, 'super admin');
+  assert.equal(canManageBrandPersonas(profile(20, ['lists:manage_all'])), true, 'lists:manage_all');
+  // A per-list list:manage -- on any list -- is not the all-lists permission.
+  assert.equal(canManageBrandPersonas(profile(20, [], [{ id: RUZE, permissions: ['list:get', 'list:manage'] }])), false, 'per-list list:manage');
+  assert.equal(canManageBrandPersonas(census[11]), false, 'role 11: per-list list:manage + campaigns:manage');
+  assert.equal(canManageBrandPersonas(profile(20, ['lists:get_all', 'campaigns:manage_all', 'campaigns:manage'])), false, 'campaign permissions alone');
+  // Every current role: exactly the lists:manage_all holders and Super Admin.
+  const managers = ['1', '2', '3', '4', '7', '13'];
+  Object.entries(census).forEach(([id, p]) => {
+    assert.equal(canManageBrandPersonas(p), managers.includes(id), `role ${id}`);
+  });
+  // A null or partial profile is false and never throws.
+  [null, undefined, {}, { userRole: null, listRole: null }, { userRole: {}, listRole: {} },
+    { userRole: { id: 5 }, listRole: { lists: null } }, { userRole: { permissions: 'lists:manage_all' } }].forEach((p) => {
+    assert.equal(canManageBrandPersonas(p), false, JSON.stringify(p));
+  });
 });
 
 test('I7 routeRedirect: analytics-only users only', () => {

@@ -47,6 +47,14 @@ export function canManageList(profile, id) {
   return lists.some((l) => l && l.id === id && Array.isArray(l.permissions) && l.permissions.includes('list:manage'));
 }
 
+// Fork (persona From, integrations PERSONA-FROM-SPEC D5): may add and delete a brand's sender
+// display names on the Campaign page. lists:manage_all, the permission the personas API needs
+// (canManageList's all-lists branch); a per-list list:manage is NOT enough. Choosing a sender
+// name needs only the ability to edit the campaign.
+export function canManageBrandPersonas(profile) {
+  return !!profile && has(profile, 'lists:manage_all');
+}
+
 // D9: the brand pages (and the health chip's link / default-sender chip) need brands:get.
 export function canViewBrand(profile) {
   return !!profile && has(profile, 'brands:get');

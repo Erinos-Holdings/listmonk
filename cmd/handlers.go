@@ -220,6 +220,12 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/brands", a.GetBrands)
 		g.POST("/api/brands", pm(a.CreateBrand, "lists:manage_all"))
 		g.PUT("/api/brands/:slug", pm(a.UpdateBrand, "lists:manage_all"))
+		// Fork (persona From) -- PERSONA-FROM-SPEC D4 (brands.go). A brand's approved persona
+		// display names. Both under lists:manage_all: the GET names campaigns. After the static
+		// /api/brands/health routes, so /api/brands/health/personas is a history read, never a
+		// brand route (the slug `health` is reserved).
+		g.GET("/api/brands/:slug/personas", pm(a.GetBrandPersonas, "lists:manage_all"))
+		g.PUT("/api/brands/:slug/personas", pm(a.PutBrandPersonas, "lists:manage_all"))
 		// Fork (system health) -- SES-HEALTH-SPEC D6 (system_health.go). No new permission:
 		// whoever may read Brands may read the system rows; the brand-health writer writes them.
 		g.GET("/api/system/health/:kind", pm(a.GetSystemHealthHistory, "brands:get"))

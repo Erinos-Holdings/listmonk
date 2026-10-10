@@ -42,10 +42,22 @@ SELECT doc FROM brand_health WHERE brand = $1 AND day > (CURRENT_DATE - $2::INT)
 -- import preset. Every rule on the values is models.BrandProblem.
 
 -- name: get-brands
-SELECT slug, from_email, site, created_at, updated_at FROM brands ORDER BY slug;
+SELECT slug, from_email, site, personas, created_at, updated_at FROM brands ORDER BY slug;
 
 -- name: get-brand
-SELECT slug, from_email, site, created_at, updated_at FROM brands WHERE slug = $1;
+SELECT slug, from_email, site, personas, created_at, updated_at FROM brands WHERE slug = $1;
+
+-- name: update-brand-personas
+-- Fork (persona From, integrations PERSONA-FROM-SPEC D4). Full-set replacement of a brand's
+-- approved persona display names. The handler validates the set (models.PersonasProblem) and
+-- refuses the removal of a persona a blocking campaign still carries before this runs.
+UPDATE brands SET personas = $2::TEXT[], updated_at = NOW() WHERE slug = $1 RETURNING slug;
+
+-- name: get-campaigns-carrying-from
+-- The campaigns whose From is exactly $1 and whose status is one of $2 (the blocking set,
+-- built from the models.CampaignStatus constants -- never a literal list here).
+SELECT id, name, status FROM campaigns
+    WHERE from_email = $1 AND status = ANY($2::campaign_status[]) ORDER BY id;
 
 -- name: create-brand
 -- No conflict target, so the LOWER(slug) unique index refuses a case-only duplicate as well as an

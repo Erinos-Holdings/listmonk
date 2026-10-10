@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/lib/pq"
 	null "gopkg.in/volatiletech/null.v6"
 )
 
@@ -18,6 +19,13 @@ type Brand struct {
 	// DisplayName is the From's display-name part, or the bare address when it has none
 	// (computed, never stored) -- the "brand name" the successor PERSONA-FROM spec means.
 	DisplayName string `db:"-" json:"display_name"`
+
+	// Fork (persona From, integrations PERSONA-FROM-SPEC D1). Personas is the brand's approved
+	// persona display names (models/personas.go), in stored order; `{}` until a human adds one.
+	// Address is the From's bare address (computed, never stored): a persona From is
+	// `<persona> <address>`.
+	Personas pq.StringArray `db:"personas" json:"personas"`
+	Address  string         `db:"-" json:"address"`
 }
 
 // BrandDisplayName returns the display-name part of a `Display Name <address>` From, or the

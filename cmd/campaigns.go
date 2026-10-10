@@ -1305,9 +1305,44 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 	// that differs from it was hand-typed, which is the thing this removes. So a client passing a
 	// bare address on a tagged list is rejected ON PURPOSE, and so is one passing a different
 	// display name. That 400 is this rule working.
+	//
+	// Fork (persona From, integrations PERSONA-FROM-SPEC D3) -- ONE more accepted shape: a persona
+	// From, `<persona> <bare address>` for a persona on the brand's row, byte-equal to the
+	// canonical composition (models.PersonaFrom). The accepted set stays enumerable -- the brand
+	// From plus the row's approved personas -- so "anything else was hand-typed" still holds. The
+	// row is read lazily: only a From that differs from the brand From costs the one indexed read.
+	// A brand resolved from SQL-written tags with no row has no personas, which is the exact match.
 	if brand.mapped && c.FromEmail != brand.fromEmail {
-		return c, errors.New(a.i18n.Ts("campaigns.brandFromMismatch",
-			"from", c.FromEmail, "expected", brand.fromEmail, "list", brand.listName))
+		row, found, err := a.core.GetBrand(brand.brand)
+		if err != nil {
+			return c, err // a DB failure is a 500, never a misleading 400
+		}
+		var personas []string
+		if found {
+			personas = row.Personas
+		}
+		if !models.IsPersonaFrom(c.FromEmail, brand.fromEmail, personas) {
+			if len(personas) == 0 {
+				return c, errors.New(a.i18n.Ts("campaigns.brandFromMismatch",
+					"from", c.FromEmail, "expected", brand.fromEmail, "list", brand.listName))
+			}
+			accepted := append([]string{brand.fromEmail}, models.PersonaFroms(personas, brand.fromEmail)...)
+			return c, errors.New(a.i18n.Ts("campaigns.brandFromNotPersona",
+				"from", c.FromEmail, "list", brand.listName, "accepted", strings.Join(accepted, ", ")))
+		}
+	}
+
+	// Fork (PERSONA-FROM-SPEC D3, Stage 2 F1) -- a campaign header keyed `From` (any case) is
+	// refused on every campaign, mapped or not. The SMTP layer lets a `From` entry in the
+	// campaign's headers win over from_email (smtppool msgHeaders), so without this refusal the
+	// From rule above is not a rule: a hand-typed name or another brand's address would ship.
+	// Only `From`: Sender, Return-Path and Reply-To are envelope or reply concerns.
+	for _, h := range c.Headers {
+		for k := range h {
+			if strings.EqualFold(strings.TrimSpace(k), "From") {
+				return c, errors.New(a.i18n.Ts("campaigns.headerReserved", "header", k))
+			}
+		}
 	}
 
 	// Derive the `brand` SES message tag from the same mapping, so ONE mapping populates both
