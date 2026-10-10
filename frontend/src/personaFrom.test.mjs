@@ -248,6 +248,8 @@ test('campaignRefs and blockingCampaigns', () => {
   assert.deepEqual(blockingCampaigns(uses, 'Jo at Thirsty Girl'), []);
   assert.deepEqual(blockingCampaigns(uses, 'Unknown'), []);
   assert.deepEqual(blockingCampaigns(null, 'Jo at Thirsty Girl'), []);
-  assert.equal(campaignRefs(uses[0].campaigns), '7 Launch (draft), 9 Welcome (running)');
+  assert.equal(campaignRefs(uses[0].campaigns), 'draft campaigns: c7; running campaigns: c9');
+  const twoDrafts = [{ id: 194, name: 'A', status: 'draft' }, { id: 195, name: 'B', status: 'draft' }];
+  assert.equal(campaignRefs(twoDrafts), 'draft campaigns: c194, c195');
   assert.equal(campaignRefs(undefined), '');
 });

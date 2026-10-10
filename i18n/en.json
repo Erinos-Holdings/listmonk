@@ -210,7 +210,7 @@
     "campaigns.pauseCampaign": "Pause campaign",
     "campaigns.personaAdd": "Add",
     "campaigns.personaAddPlaceholder": "New sender name, e.g. Natasha at {brand}",
-    "campaigns.personaInUse": "In use by: {campaigns}. Finished and cancelled campaigns never block.",
+    "campaigns.personaInUse": "In use by {campaigns}",
     "campaigns.plainText": "Plain text",
     "campaigns.preheader": "Preheader text",
     "campaigns.preheaderHelp": "Hidden preview text shown after the subject in inboxes. Optional.",

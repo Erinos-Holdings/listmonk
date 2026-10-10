@@ -122,10 +122,19 @@ export function isSyncRepoint(stored, form, derivation) {
     && form === derivation.fromEmail && stored !== form;
 }
 
-// campaignRefs renders the campaigns blocking a persona's removal for the hover text.
+// campaignRefs renders the campaigns blocking a persona's removal for the hover text, short:
+// ids only, grouped by status in first-seen order -- `draft campaigns: c194, c195` (and
+// `; running campaigns: c67` when statuses are mixed). Names are left out on purpose: several
+// long campaign names make the tooltip unreadable.
 export function campaignRefs(campaigns) {
-  return (Array.isArray(campaigns) ? campaigns : [])
-    .map((c) => `${c.id} ${c.name} (${c.status})`).join(', ');
+  const groups = new Map();
+  (Array.isArray(campaigns) ? campaigns : []).forEach((c) => {
+    if (!groups.has(c.status)) {
+      groups.set(c.status, []);
+    }
+    groups.get(c.status).push(`c${c.id}`);
+  });
+  return [...groups].map(([status, ids]) => `${status} campaigns: ${ids.join(', ')}`).join('; ');
 }
 
 // blockingCampaigns is the GET /api/brands/:slug/personas entry's campaigns for one persona
