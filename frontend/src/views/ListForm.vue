@@ -17,13 +17,18 @@
         </h4>
       </header>
       <section expanded class="modal-card-body">
+        <!-- BRAND-PICKER-SPEC D4: the locked list (models.LockedListNames) is read-only here --
+        every control disabled, no Save; the server refuses the write with 409 regardless. -->
+        <b-notification v-if="locked" type="is-warning" :closable="false" data-cy="list-locked">
+          {{ $t('lists.lockedList', { name: data.name }) }}
+        </b-notification>
         <b-field :label="$t('globals.fields.name')" label-position="on-border">
           <b-input :maxlength="200" :ref="'focus'" v-model="form.name" name="name"
-            :placeholder="$t('globals.fields.name')" required />
+            :placeholder="$t('globals.fields.name')" required :disabled="locked" />
         </b-field>
 
         <b-field :label="$t('lists.type')" label-position="on-border" :message="$t('lists.typeHelp')">
-          <b-select v-model="form.type" name="type" :placeholder="$t('lists.typeHelp')" required expanded>
+          <b-select v-model="form.type" name="type" :placeholder="$t('lists.typeHelp')" required expanded :disabled="locked">
             <option value="private">
               {{ $t('lists.types.private') }}
             </option>
@@ -34,7 +39,7 @@
         </b-field>
 
         <b-field :label="$t('lists.optin')" label-position="on-border" :message="$t('lists.optinHelp')">
-          <b-select v-model="form.optin" name="optin" placeholder="Opt-in type" required expanded>
+          <b-select v-model="form.optin" name="optin" placeholder="Opt-in type" required expanded :disabled="locked">
             <option value="single">
               {{ $t('lists.optins.single') }}
             </option>
@@ -47,8 +52,8 @@
         <!-- BRAND-PICKER-SPEC D3: the brand is chosen, never typed; the server writes the
         brand:/from:/site: tags from the brands row. Required, no empty option. -->
         <b-field :label="$t('lists.brand')" label-position="on-border" :message="$t('lists.brandHelp')">
-          <b-select v-model="brand" name="brand" :placeholder="$t('lists.brand')" required expanded
-            data-cy="list-brand">
+          <b-select v-model="brand" name="brand" :placeholder="$t('lists.brand')" :required="!locked" expanded
+            :disabled="locked" data-cy="list-brand">
             <option v-for="b in brands" :key="b.slug" :value="b.slug">
               {{ brandLabel(b) }}
             </option>
@@ -61,24 +66,24 @@
         <b-field :label="$t('globals.terms.tags')" label-position="on-border" :message="$t('lists.tagsHelp')"
           :type="tagError ? 'is-danger' : ''">
           <b-taginput v-model="form.tags" name="tags" ellipsis icon="tag-outline"
-            :placeholder="$t('globals.terms.tags')" :before-adding="beforeAddingTag" />
+            :placeholder="$t('globals.terms.tags')" :before-adding="beforeAddingTag" :disabled="locked" />
         </b-field>
         <p v-if="tagError" class="help is-danger">{{ tagError }}</p>
 
         <b-field :label="$t('globals.fields.description')" label-position="on-border">
           <b-input :maxlength="2000" v-model="form.description" name="description" type="textarea"
-            :placeholder="$t('globals.fields.description')" />
+            :placeholder="$t('globals.fields.description')" :disabled="locked" />
         </b-field>
 
         <b-field :message="$t('lists.archivedHelp')" :label="$t('lists.archived')">
-          <b-switch v-model="isArchived" name="status" />
+          <b-switch v-model="isArchived" name="status" :disabled="locked" />
         </b-field>
       </section>
       <footer class="modal-card-foot has-text-right">
         <b-button @click="$parent.close()">
           {{ $t('globals.buttons.close') }}
         </b-button>
-        <b-button v-if="$can('lists:manage_all') || $canList(data.id, 'list:manage')" native-type="submit"
+        <b-button v-if="!locked && ($can('lists:manage_all') || $canList(data.id, 'list:manage'))" native-type="submit"
           type="is-primary" :loading="loading.lists" data-cy="btn-save">
           {{ $t('globals.buttons.save') }}
         </b-button>
@@ -92,7 +97,7 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import CopyText from '../components/CopyText.vue';
 import {
-  buildListRequest, brandLabel, isReservedTag, splitReservedTags,
+  buildListRequest, brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
@@ -140,6 +145,9 @@ export default Vue.extend({
     },
 
     onSubmit() {
+      if (this.locked) {
+        return;
+      }
       if (this.isEditing) {
         this.updateList();
         return;
@@ -170,6 +178,11 @@ export default Vue.extend({
 
     chosenBrand() {
       return this.brands.find((b) => b.slug === this.brand) || null;
+    },
+
+    // The render catalog list: read-only in the form (BRAND-PICKER-SPEC D4).
+    locked() {
+      return this.isEditing && isLockedList(this.data);
     },
 
     isArchived: {
