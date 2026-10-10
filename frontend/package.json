@@ -20,6 +20,8 @@
     "test:review-navigate": "node --test src/reviewNavigate.test.mjs",
     "test:review-checklist": "node --test src/reviewChecklist.test.mjs",
     "test:context-advice": "node --test src/contextAdvice.test.mjs",
+    "test:list-brand": "node --test src/listBrand.test.mjs",
+    "test": "node --test src/*.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },
   "dependencies": {

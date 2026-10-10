@@ -83,6 +83,8 @@ var migList = []migFunc{
 	{"v6.2.18", migrations.V6_2_18},
 	// Fork migration (erinos): client stats -- client TEXT on campaign_views and link_clicks (CLIENT-STATS-SPEC) — see internal/migrations/v6.2.19.go.
 	{"v6.2.19", migrations.V6_2_19},
+	// Fork migration (erinos): brand picker -- the brands table, backfilled from the lists' brand:/from:/site: tags (BRAND-PICKER-SPEC) — see internal/migrations/v6.2.20.go.
+	{"v6.2.20", migrations.V6_2_20},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

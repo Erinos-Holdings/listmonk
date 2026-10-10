@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
+	null "gopkg.in/volatiletech/null.v6"
 )
 
 // Fork (brand health, integrations BRAND-HEALTH-SPEC D1/D2/D6/D10). The fork stores and renders
@@ -174,4 +176,85 @@ func parseBrandHealthDays(s string) (int, error) {
 		n = brandHealthMaxDays
 	}
 	return n, nil
+}
+
+// Fork (brand picker, integrations BRAND-PICKER-SPEC D1). The brands rows: a brand's sending
+// identity, which every list of the brand carries as its brand:/from:/site: projection. Readable
+// by every logged-in user (the posture of GetLists and /api/brands/:slug/theme -- the data is the
+// From every email already shows; a per-list list:manage holder must load it to save the list
+// form). Written under lists:manage_all, the permission that could write the tags before.
+
+// brandReq is the POST/PUT /api/brands body. On PUT the slug comes from the path.
+type brandReq struct {
+	Slug      string `json:"slug"`
+	FromEmail string `json:"from_email"`
+	Site      string `json:"site"`
+}
+
+// brandOf validates a request with the one rule body, models.BrandProblem, configured exactly as
+// the list form's tag check was: the SMTP from_addresses lookup and the importer's sanitizer.
+func (a *App) brandOf(r brandReq) (models.Brand, error) {
+	b := models.Brand{
+		Slug:      strings.TrimSpace(r.Slug),
+		FromEmail: strings.TrimSpace(r.FromEmail),
+		Site:      null.NewString(strings.TrimSpace(r.Site), strings.TrimSpace(r.Site) != ""),
+	}
+	if key, args := models.BrandProblem(b.Slug, b.FromEmail, b.Site.String, configuredFromLookup(), a.importer.SanitizeEmail); key != "" {
+		return models.Brand{}, echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts(key, args...))
+	}
+	return b, nil
+}
+
+// GetBrands returns every brand row, sorted by slug: [{slug, from_email, site, display_name}].
+func (a *App) GetBrands(c echo.Context) error {
+	out, err := a.core.GetBrands()
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// CreateBrand creates a brand row. A slug taken exactly or by case is refused (409).
+func (a *App) CreateBrand(c echo.Context) error {
+	var r brandReq
+	if err := json.NewDecoder(c.Request().Body).Decode(&r); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "brand"))
+	}
+	b, err := a.brandOf(r)
+	if err != nil {
+		return err
+	}
+
+	out, created, err := a.core.CreateBrand(b)
+	if err != nil {
+		return err
+	}
+	if !created {
+		return echo.NewHTTPError(http.StatusConflict, a.i18n.Ts("brands.exists", "brand", b.Slug))
+	}
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// UpdateBrand changes a brand row's From and site and re-projects them onto every list of the
+// brand in the same transaction. No UI calls it in this spec; it exists so the projection cannot
+// drift from the row by any API path.
+func (a *App) UpdateBrand(c echo.Context) error {
+	var r brandReq
+	if err := json.NewDecoder(c.Request().Body).Decode(&r); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "brand"))
+	}
+	r.Slug = c.Param("slug")
+	b, err := a.brandOf(r)
+	if err != nil {
+		return err
+	}
+
+	out, found, err := a.core.UpdateBrand(b)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("globals.messages.notFound", "name", b.Slug))
+	}
+	return c.JSON(http.StatusOK, okResp{out})
 }

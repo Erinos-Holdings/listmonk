@@ -2,38 +2,89 @@ package main
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 )
 
-// validateBrandTags refuses a list whose `brand:`/`from:`/`site:` tags are invalid, BEFORE
-// they are stored. This is the tag-edit-time half of the list-scoped From design; the
-// campaign-save half lives in campaigns_brand.go and re-checks the same properties at use time.
+// Fork (brand picker, integrations BRAND-PICKER-SPEC D2/D4). A list's brand mapping is a
+// reference to a brands row; its brand:/from:/site: tags are the row's projection
+// (models.BrandProjection), written by the server and stored verbatim by core's
+// normalizeListTags. The readers (cmd/campaigns_brand.go, list_brand_tag(), the editor, the
+// integrations scripts) keep reading the tags unchanged.
 //
-// WHY HERE AND NOT ONLY AT CAMPAIGN SAVE: internal/core stores these tags verbatim
-// (normalizeListTags), so this validation is what stands between a typo and a stored bad value.
-// Without it, a bad tag sits dormant until it breaks a campaign nobody touched, weeks after
-// someone edited a list -- the exact deferred-failure this feature exists to remove. Refusing at
-// list save puts the error in front of the person making the edit.
-//
-// The rules themselves are the pure core models.ListTagsProblem (CAMPAIGN-52-HARDENING D7),
-// shared with the import presets so a preset-created list is validated by the same code
-// that validates the form. This wrapper adds only what the App has: the configured
-// from_addresses lookup, the importer's e-mail sanitizer (domain allow/blocklists) and the
-// translated echo error.
-//
-// Direct SQL writes bypass this by construction, as they bypass everything else.
-func (a *App) validateBrandTags(l models.List) error {
-	key, args := models.ListTagsProblem(l.Tags, configuredFromLookup(), a.importer.SanitizeEmail)
-	if key == "" {
-		return nil
-	}
-	return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts(key, args...))
+// Direct SQL writes bypass this by construction, as they bypass everything else; the
+// campaign-save checks in campaigns_brand.go remain the backstop for them.
+
+// listReq is the list API's request body: models.List plus the tri-state brand. Brand absent
+// (nil) keeps the list's current projection on update and writes none on create; "" means an
+// untagged list; a slug must name a brands row. The embedded List.Brand (the response field) is
+// shadowed by this one in JSON decoding.
+type listReq struct {
+	models.List
+	Brand *string `json:"brand"`
 }
 
-// siteTagProblem (fork, CLICK-TRACKING-SPEC §3.4 / I7a) is models.SiteTagProblem; kept as
-// the package-local name its table test (lists_brand_test.go) pins.
-func siteTagProblem(tags []string) string {
-	return models.SiteTagProblem(tags)
+// listTagsFor applies the reserved-tag refusal and the brand projection to a request. It returns
+// the tags to store and keepReserved (brand absent).
+func (a *App) listTagsFor(r listReq) ([]string, bool, error) {
+	free := make([]string, 0, len(r.Tags))
+	for _, t := range r.Tags {
+		if models.IsReservedListTag(t) {
+			return nil, false, echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("lists.reservedTag", "tag", strings.TrimSpace(t)))
+		}
+		free = append(free, t)
+	}
+
+	if r.Brand == nil {
+		return free, true, nil
+	}
+	slug := strings.TrimSpace(*r.Brand)
+	if slug == "" {
+		return free, false, nil
+	}
+
+	b, ok, err := a.core.GetBrand(slug)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("lists.brandUnknown", "brand", slug))
+	}
+	return append(free, models.BrandProjection(b)...), false, nil
+}
+
+// lockedListErr is the 409 for a locked list (models.LockedListNames).
+func (a *App) lockedListErr(name string) error {
+	return echo.NewHTTPError(http.StatusConflict, a.i18n.Ts("lists.lockedList", "name", name))
+}
+
+// refuseLocked returns the 409 when any of the lists is locked. Called AFTER the permission
+// check, so it never reveals a list name to a caller without access to the list.
+func (a *App) refuseLocked(ids ...int) error {
+	names, err := a.core.LockedListsOf(ids)
+	if err != nil {
+		return err
+	}
+	if len(names) > 0 {
+		return a.lockedListErr(names[0])
+	}
+	return nil
+}
+
+// refuseSecondLocked refuses giving a list a locked name while a list of that name exists: two
+// copies would both be undeletable, and the integrations sync demands exactly one.
+func (a *App) refuseSecondLocked(name string) error {
+	if !models.IsLockedListName(name) {
+		return nil
+	}
+	n, err := a.core.CountListsByName(name)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return a.lockedListErr(name)
+	}
+	return nil
 }

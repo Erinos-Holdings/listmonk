@@ -254,6 +254,14 @@ export const deleteLists = (params) => http.delete(
   { params, loading: models.lists },
 );
 
+// Fork (brand picker, integrations BRAND-PICKER-SPEC D1/D3). The brands rows
+// [{slug, from_email, site, display_name}], sorted by slug; readable by every logged-in user.
+// Returned verbatim (camelCase: false) so the list form and the Brands page read the API's keys.
+export const getBrands = async () => http.get(
+  '/api/brands',
+  { camelCase: false },
+);
+
 // Brand theme (visual editor swatches). The swatch row is a convenience, so a failed fetch
 // must never surface as an editor error toast.
 export const getBrandTheme = (slug) => http.get(

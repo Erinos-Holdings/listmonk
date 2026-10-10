@@ -176,9 +176,12 @@ func (c *Core) CreateList(l models.List) (models.List, error) {
 	return c.GetList(newID, "")
 }
 
-// UpdateList updates a given list.
-func (c *Core) UpdateList(id int, l models.List) (models.List, error) {
-	res, err := c.q.UpdateList.Exec(id, l.Name, l.Type, l.Optin, l.Status, pq.StringArray(normalizeListTags(l.Tags)), l.Description)
+// UpdateList updates a given list. l.Tags is stored as given (the caller has already added the
+// brand projection when the request named a brand); keepReserved (the request carried no brand)
+// keeps the list's current brand:/from:/site: tags, merged in the one update-list statement
+// (BRAND-PICKER-SPEC D2).
+func (c *Core) UpdateList(id int, l models.List, keepReserved bool) (models.List, error) {
+	res, err := c.q.UpdateList.Exec(id, l.Name, l.Type, l.Optin, l.Status, pq.StringArray(normalizeListTags(l.Tags)), l.Description, keepReserved)
 	if err != nil {
 		c.log.Printf("error updating list: %v", err)
 		return models.List{}, echo.NewHTTPError(http.StatusInternalServerError,
@@ -214,4 +217,55 @@ func (c *Core) DeleteLists(ids []int, query string, getAll bool, permittedIDs []
 			c.i18n.Ts("globals.messages.errorDeleting", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
 	}
 	return nil
+}
+
+// Fork (BRAND-PICKER-SPEC D4) -- the locked lists (models.LockedListNames).
+
+type lockedList struct {
+	ID   int    `db:"id"`
+	Name string `db:"name"`
+}
+
+// LockedListsOf returns the names of the given lists that are locked, in id order.
+func (c *Core) LockedListsOf(ids []int) ([]string, error) {
+	var res []lockedList
+	if err := c.q.GetLockedLists.Select(&res, pq.Array(ids), pq.StringArray(models.LockedListNames)); err != nil {
+		c.log.Printf("error reading locked lists: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
+	}
+	out := make([]string, 0, len(res))
+	for _, r := range res {
+		out = append(out, r.Name)
+	}
+	return out, nil
+}
+
+// CountListsByName returns how many lists carry exactly this name.
+func (c *Core) CountListsByName(name string) (int, error) {
+	var n int
+	if err := c.q.CountListsByName.Get(&n, name); err != nil {
+		c.log.Printf("error counting lists: %v", err)
+		return 0, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
+	}
+	return n, nil
+}
+
+// ListsMatchingDeleteQuery returns the ids and names a by-query DeleteLists would remove (the
+// delete-lists predicate exactly), so the caller can refuse it whole when one is locked.
+func (c *Core) ListsMatchingDeleteQuery(query string, getAll bool, permittedIDs []int) ([]int, []string, error) {
+	var res []lockedList
+	if err := c.q.GetDeleteListsByQ.Select(&res, makeSearchString(query), getAll, pq.Array(permittedIDs)); err != nil {
+		c.log.Printf("error reading lists to delete: %v", err)
+		return nil, nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
+	}
+	ids := make([]int, 0, len(res))
+	names := make([]string, 0, len(res))
+	for _, r := range res {
+		ids = append(ids, r.ID)
+		names = append(names, r.Name)
+	}
+	return ids, names, nil
 }

@@ -246,7 +246,7 @@ func main() {
 		importer = initImporter(queries, db, core, i18n, ko)
 
 		// Fork (import presets).
-		importPresets = initImportPresets(ko)
+		importPresets = initImportPresets(ko, core)
 
 		// Initialize the auth manager.
 		hasUsers, auth = initAuth(core, db.DB, ko)

@@ -307,11 +307,11 @@ func bareAddress(from string) string {
 	return models.BareAddress(from)
 }
 
-// configuredFromLookup is the from_addresses allowlist as the predicate models.ListTagsProblem
+// configuredFromLookup is the from_addresses allowlist as the predicate models.BrandProblem
 // takes: nil when no enabled SMTP block declares from_addresses (upstream's default -- the
 // check is opt-in), else a lookup normalised the way the messenger builds its routing pools.
-// Shared by the list form (validateBrandTags) and the import-preset loader (initImportPresets)
-// so a preset's list_tags are held to exactly the form's rule.
+// Used by the brands API (brands.go brandOf), which validates a brand's From before any list
+// carries it (BRAND-PICKER-SPEC D1).
 func configuredFromLookup() func(bare string) bool {
 	allowed := configuredFromAddresses()
 	if len(allowed) == 0 {

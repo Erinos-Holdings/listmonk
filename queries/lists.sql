@@ -1,6 +1,7 @@
 -- lists
 -- name: get-lists
-SELECT * FROM lists WHERE (CASE WHEN $1 = '' THEN 1=1 ELSE type=$1::list_type END)
+-- Fork (BRAND-PICKER-SPEC D2) -- brand is the list's brand slug, or empty when untagged.
+SELECT *, COALESCE(list_brand_tag(tags), '') AS brand FROM lists WHERE (CASE WHEN $1 = '' THEN 1=1 ELSE type=$1::list_type END)
     AND (CASE WHEN $2 = '' THEN 1=1 ELSE status=$2::list_status END)
     AND CASE
         -- Optional list IDs based on user permission.
@@ -10,7 +11,7 @@ SELECT * FROM lists WHERE (CASE WHEN $1 = '' THEN 1=1 ELSE type=$1::list_type EN
 
 -- name: query-lists
 WITH ls AS (
-    SELECT COUNT(*) OVER () AS total, lists.* FROM lists WHERE
+    SELECT COUNT(*) OVER () AS total, lists.*, COALESCE(list_brand_tag(lists.tags), '') AS brand FROM lists WHERE
     CASE
         WHEN $1 > 0 THEN id = $1
         WHEN $2 != '' THEN uuid = $2::UUID
@@ -134,7 +135,12 @@ WITH l AS (
         type=(CASE WHEN $3 != '' THEN $3::list_type ELSE type END),
         optin=(CASE WHEN $4 != '' THEN $4::list_optin ELSE optin END),
         status=(CASE WHEN $5 != '' THEN $5::list_status ELSE status END),
-        tags=$6::VARCHAR(100)[],
+        -- Fork (BRAND-PICKER-SPEC D2) -- $6 is the free tags plus, when the request named a
+        -- brand, its projection. $8 true (brand absent) keeps the list's CURRENT reserved tags,
+        -- merged here in the one statement so a concurrent brand re-projection is never lost.
+        tags=$6::VARCHAR(100)[] || (CASE WHEN $8::BOOLEAN THEN ARRAY(
+            SELECT t FROM UNNEST(lists.tags) AS t WHERE t LIKE 'brand:%' OR t LIKE 'from:%' OR t LIKE 'site:%'
+        ) ELSE '{}' END)::VARCHAR(100)[],
         description=(CASE WHEN $7 != '' THEN $7 ELSE description END),
         updated_at=NOW()
     WHERE id = $1
@@ -159,3 +165,20 @@ AND CASE
     WHEN $3 = TRUE THEN TRUE ELSE id = ANY($4::INT[])
 END;
 
+-- name: get-locked-lists
+-- Fork (BRAND-PICKER-SPEC D4) -- which of the ids $1 carry a locked name $2.
+SELECT id, name FROM lists WHERE id = ANY($1::INT[]) AND name = ANY($2::TEXT[]) ORDER BY id;
+
+-- name: count-lists-by-name
+SELECT COUNT(*) FROM lists WHERE name = $1;
+
+-- name: get-delete-lists-by-query
+-- Fork (BRAND-PICKER-SPEC D4) -- the ids and names delete-lists would remove for a by-query
+-- delete (its exact predicate with an empty id array), so the handler can refuse a delete that
+-- matches a locked list before anything is removed.
+SELECT id, name FROM lists
+WHERE ($1 = '' OR to_tsvector(name) @@ to_tsquery($1))
+AND CASE
+    WHEN $2 = TRUE THEN TRUE ELSE id = ANY($3::INT[])
+END
+ORDER BY id;

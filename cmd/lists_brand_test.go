@@ -1,9 +1,15 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/knadh/listmonk/models"
+)
 
 // Fork (click tracking) -- CLICK-TRACKING-SPEC T7 (I7a): the `site:` list tag is refused
 // without the brand:/from: pair, when duplicated, and when not an absolute http(s) URL.
+// (BRAND-PICKER-SPEC: the list API no longer accepts site: tags; the rule is models.SiteTagProblem,
+// still applied to SQL-written tags by ListTagsProblem.)
 func TestSiteTagProblem(t *testing.T) {
 	cases := []struct {
 		name string
@@ -26,7 +32,7 @@ func TestSiteTagProblem(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := siteTagProblem(c.tags); got != c.want {
+			if got := models.SiteTagProblem(c.tags); got != c.want {
 				t.Fatalf("got %q want %q", got, c.want)
 			}
 		})

@@ -1,11 +1,11 @@
 package models
 
-// Fork (list-scoped From / brand tags). The PURE core of list-tag validation, shared by the
-// list form (cmd/lists_brand.go, which adds the configured from_addresses lookup, the
-// importer's e-mail sanitizer and the echo error) and the import presets
-// (internal/subimporter/preset.go, which validates a preset's list_tags at boot) — one
-// implementation, so the two paths cannot diverge (CAMPAIGN-52-HARDENING D7). models
-// imports nothing that imports it, which is what lets both callers share this.
+// Fork (list-scoped From / brand tags). The PURE core of brand validation. Since
+// BRAND-PICKER-SPEC a brand's sending identity lives in the brands table and a list's reserved
+// tags are its server-written projection (BrandProjection); BrandProblem is the one rule body,
+// called by the brands API (cmd/brands.go, with the configured from_addresses lookup and
+// the importer's sanitizer), the v6.2.20 backfill and ListTagsProblem (CAMPAIGN-52-HARDENING
+// D7). models imports nothing that imports it, which is what lets every caller share this.
 //
 // A list carries its brand mapping as two reserved tags, both present or both absent:
 //
@@ -119,17 +119,11 @@ func SiteTagProblem(tags []string) string {
 // i18n key of the first problem with its {param} args (key/value pairs, the shape
 // i18n.Ts takes), or "" when the tags are acceptable. Free-form tags are ignored.
 //
-//   - allowedFrom, when non-nil, must report whether a BARE address is one of the
-//     configured SMTP from_addresses (the caller normalises the way its allowlist was
-//     built). nil skips the check — upstream's default has no from_addresses, and the
-//     preset loader may run before the messenger exists.
-//   - sanitize validates a bare (display-name-less) `from:` value the way the importer
-//     validates an e-mail; nil skips the shape check for bare addresses.
-//
-// Rules, in order: `site:` problems; no mapping tags at all is valid (an unmapped list);
-// at most one brand: and one from:; both or neither; the brand is a SES-safe slug; the
-// From is ASCII (nothing RFC 2047-encodes the header); the From is either a whole
-// `Display Name <address>` match or a sanitizable bare address; the address is configured.
+// Since BRAND-PICKER-SPEC the list API no longer accepts reserved tags (they are the
+// server-written projection of the list's brands row), so this holds only the STRUCTURAL
+// rules a tag set can break -- `site:` placement, at most one brand:/from:, both or neither
+// -- and delegates every rule about the values to BrandProblem: one implementation
+// (CAMPAIGN-52-HARDENING D7).
 func ListTagsProblem(tags []string, allowedFrom func(bare string) bool, sanitize func(string) (string, error)) (string, []string) {
 	var brands, froms []string
 	for _, t := range tags {
@@ -146,8 +140,7 @@ func ListTagsProblem(tags []string, allowedFrom func(bare string) bool, sanitize
 		return key, nil
 	}
 
-	// No mapping tags at all: an unmapped list, valid by design (the internal seed list and
-	// the bounce simulator are deliberately unmapped).
+	// No mapping tags at all: an unmapped list, valid by design (the render catalog list).
 	if len(brands) == 0 && len(froms) == 0 {
 		return "", nil
 	}
@@ -163,10 +156,41 @@ func ListTagsProblem(tags []string, allowedFrom func(bare string) bool, sanitize
 		return "lists.brandTagsHalfTagged", nil
 	}
 
-	brand, from := brands[0], froms[0]
+	return BrandProblem(brands[0], froms[0], SiteTagOf(tags), allowedFrom, sanitize)
+}
 
-	if !ReBrandSlug.MatchString(brand) {
-		return "lists.brandTagInvalidSlug", []string{"brand", brand}
+// ReservedBrandSlug is the one slug a brands row may not take: /api/brands/health is a static
+// route that resolves before /api/brands/:slug, so a brand named health could never be updated.
+const ReservedBrandSlug = "health"
+
+// maxTagLen is lists.tags' element width (VARCHAR(100)[]): a projected tag longer than this
+// would make every list write of the brand a 500.
+const maxTagLen = 100
+
+// BrandProblem validates one brand's sending identity -- a brands row (BRAND-PICKER-SPEC D1)
+// or the brand:/from:/site: values of a tagged list -- and returns the i18n key of the first
+// problem with its {param} args, or "" when acceptable. site "" means none.
+//
+//   - allowedFrom, when non-nil, must report whether a BARE address is one of the
+//     configured SMTP from_addresses. nil skips the check (upstream's default has no
+//     from_addresses; the v6.2.20 migration receives no SMTP config).
+//   - sanitize validates a bare (display-name-less) From the way the importer validates an
+//     e-mail; nil skips the shape check for bare addresses.
+//
+// Rules, in order: the slug is SES-safe and not the reserved `health`; the From is non-empty
+// and ASCII (nothing RFC 2047-encodes the header), a whole `Display Name <address>` match or
+// a sanitizable bare address, fits a tag, and its address is configured; the site is an
+// absolute http(s) URL that fits a tag.
+func BrandProblem(slug, from, site string, allowedFrom func(bare string) bool, sanitize func(string) (string, error)) (string, []string) {
+	if !ReBrandSlug.MatchString(slug) {
+		return "lists.brandTagInvalidSlug", []string{"brand", slug}
+	}
+	if strings.EqualFold(slug, ReservedBrandSlug) {
+		return "lists.brandSlugReserved", []string{"brand", slug}
+	}
+
+	if strings.TrimSpace(from) == "" {
+		return "lists.brandFromTagInvalid", []string{"from", from}
 	}
 
 	// The From header is emitted verbatim and nothing RFC 2047-encodes it, so a non-ASCII
@@ -190,12 +214,62 @@ func ListTagsProblem(tags []string, allowedFrom func(bare string) bool, sanitize
 		}
 	}
 
-	// The address must be a configured sending identity, or the tag points at a domain
+	if len(FromTagPrefix+from) > maxTagLen {
+		return "lists.brandFromTagTooLong", []string{"from", from}
+	}
+
+	// The address must be a configured sending identity, or the From points at a domain
 	// nobody has verified in SES and every campaign on the list dies at send time with a
 	// 554 the app log never records.
 	if allowedFrom != nil && !allowedFrom(BareAddress(from)) {
 		return "lists.brandFromTagUnknownAddress", []string{"from", from}
 	}
 
+	if site != "" {
+		if !linkresolve.IsAbsoluteHTTP(site) {
+			return "lists.siteTagInvalid", nil
+		}
+		if len(SiteTagPrefix+site) > maxTagLen {
+			return "lists.siteTagTooLong", []string{"site", site}
+		}
+	}
+
 	return "", nil
+}
+
+// IsReservedListTag reports whether a tag, judged after TrimListTag, carries one of the
+// reserved prefixes (brand:, from:, site:). The list API refuses such a tag: the projection of
+// the list's brand is the only writer (BRAND-PICKER-SPEC D2).
+func IsReservedListTag(t string) bool {
+	t = TrimListTag(t)
+	return strings.HasPrefix(t, BrandTagPrefix) || strings.HasPrefix(t, FromTagPrefix) || strings.HasPrefix(t, SiteTagPrefix)
+}
+
+// BrandProjection is the reserved tags a list of the brand carries (BRAND-PICKER-SPEC D2):
+// brand:<slug>, from:<from_email>, and site:<site> when the row has one -- byte-identical to
+// the tags the readers (cmd/campaigns_brand.go, list_brand_tag(), the editor, the integrations
+// scripts) parse. The one implementation, used by the list API, PUT /api/brands' re-projection
+// and the import preset.
+func BrandProjection(b Brand) []string {
+	out := []string{BrandTagPrefix + b.Slug, FromTagPrefix + b.FromEmail}
+	if b.Site.Valid && b.Site.String != "" {
+		out = append(out, SiteTagPrefix+b.Site.String)
+	}
+	return out
+}
+
+// LockedListNames are the lists no API call may update or delete, and of which a second copy may
+// not be created (BRAND-PICKER-SPEC D4). The render catalog's list is created once by the
+// integrations scripts/sync-catalog-campaigns.ts and never edited; that repo's
+// lib/campaign-review/catalog-sync.ts CATALOG_LIST_NAME is pinned to this value by its test.
+var LockedListNames = []string{"Render catalog (never send)"}
+
+// IsLockedListName reports whether a list of this name is locked.
+func IsLockedListName(name string) bool {
+	for _, n := range LockedListNames {
+		if name == n {
+			return true
+		}
+	}
+	return false
 }

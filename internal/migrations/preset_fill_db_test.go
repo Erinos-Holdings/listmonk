@@ -28,7 +28,7 @@ const presetTestJSON = `[{
   "list_type": "private", "list_optin": "single",
   "subscription_status": "confirmed", "backfill": true, "merge": "fill",
   "skip_email_pattern": "@canceled\\.local$",
-  "list_tags": ["brand:rewards", "from:Rewards <hello@rewards.test>"],
+  "list_brand": "rewards",
   "dedupe": { "name": "longest-first", "locale": "first-mapped", "attribs": "last" }
 }]`
 
@@ -64,7 +64,12 @@ func newPresetHarness(t *testing.T) *presetHarness {
 		PostCB:             func(string, any) error { return nil },
 	}, h.db.DB, i)
 
-	ps, err := subimporter.ParsePresets([]byte(presetTestJSON), models.CampaignLangs)
+	// The preset's brand row (BRAND-PICKER-SPEC D5), proved at load through the same live read
+	// the preview and confirm make.
+	h.db.MustExec(`INSERT INTO brands (slug, from_email) VALUES ('rewards', 'Rewards <hello@rewards.test>')`)
+	ps, err := subimporter.ParsePresetsWith([]byte(presetTestJSON), models.CampaignLangs, func(slug string) (models.Brand, bool, error) {
+		return subimporter.LookupBrand(context.Background(), h.db.DB, slug)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

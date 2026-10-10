@@ -88,7 +88,7 @@
         <div>
           <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D9): the form only for users who may save
           it; everyone else reads the name as plain text (the server refuses the save anyway). -->
-          <a v-if="canManageList(props.row.id)" :href="`/lists/${props.row.id}`" @click.prevent="showEditForm(props.row)">
+          <a v-if="canEditList(props.row)" :href="`/lists/${props.row.id}`" @click.prevent="showEditForm(props.row)">
             {{ props.row.name }}
           </a>
           <span v-else data-cy="list-name">{{ props.row.name }}</span>
@@ -225,7 +225,7 @@
             </b-tooltip>
           </router-link>
 
-          <a v-if="canManageList(props.row.id)" href="#"
+          <a v-if="canEditList(props.row)" href="#"
             @click.prevent="showEditForm(props.row)" data-cy="btn-edit" :aria-label="$t('globals.buttons.edit')">
             <b-tooltip :label="$t('globals.buttons.edit')" type="is-dark">
               <b-icon icon="pencil-outline" size="is-small" />
@@ -239,7 +239,7 @@
             </b-tooltip>
           </router-link>
 
-          <a v-if="canManageList(props.row.id)" href="#"
+          <a v-if="canEditList(props.row)" href="#"
             @click.prevent="deleteList(props.row)" data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
             <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
               <b-icon icon="trash-can-outline" size="is-small" />
@@ -276,6 +276,7 @@ import ListForm from './ListForm.vue';
 import HealthChip from '../components/HealthChip.vue';
 import { isSendPlus, sendLangCode } from '../langs';
 import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
+import { isLockedList } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 
 // Fork (list grid). Send-language lines in display order. The API's en already includes none.
 const GRID_LANGS = ['en', 'fr', 'es', 'de', 'it', 'other'];
@@ -384,6 +385,12 @@ export default Vue.extend({
     // $canList, lists:get_all alone is not enough.
     canManageList(id) {
       return canManageList(this.profile, id);
+    },
+
+    // Fork (BRAND-PICKER-SPEC D4) -- the locked render catalog list offers no edit or delete
+    // control (the server refuses both with 409 regardless).
+    canEditList(row) {
+      return this.canManageList(row.id) && !isLockedList(row);
     },
 
     // Show the edit list form.

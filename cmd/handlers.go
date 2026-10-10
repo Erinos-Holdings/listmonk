@@ -212,6 +212,14 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/brands/health", pm(a.GetBrandHealth, "brands:get"))
 		g.GET("/api/brands/health/:brand", pm(a.GetBrandHealthHistory, "brands:get"))
 		g.PUT("/api/brands/health", pm(a.PutBrandHealth, "brands:manage"))
+		// Fork (brand picker) -- BRAND-PICKER-SPEC D1 (brands.go). GET has no pm(): the list form
+		// of a per-list list:manage holder and the Brands page of a brands:get-only user both read
+		// it (the GetLists posture). Writes need lists:manage_all, the permission that could write
+		// the tags before. The static /api/brands/health routes above resolve before :slug, which
+		// is why the slug `health` is reserved (models.BrandProblem). No DELETE (spec §9).
+		g.GET("/api/brands", a.GetBrands)
+		g.POST("/api/brands", pm(a.CreateBrand, "lists:manage_all"))
+		g.PUT("/api/brands/:slug", pm(a.UpdateBrand, "lists:manage_all"))
 		// Fork (system health) -- SES-HEALTH-SPEC D6 (system_health.go). No new permission:
 		// whoever may read Brands may read the system rows; the brand-health writer writes them.
 		g.GET("/api/system/health/:kind", pm(a.GetSystemHealthHistory, "brands:get"))

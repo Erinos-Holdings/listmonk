@@ -70,6 +70,10 @@ type Queries struct {
 	UpdateList           *sqlx.Stmt `query:"update-list"`
 	UpdateListsDate      *sqlx.Stmt `query:"update-lists-date"`
 	DeleteLists          *sqlx.Stmt `query:"delete-lists"`
+	// Fork (BRAND-PICKER-SPEC D4) -- the locked-list checks.
+	GetLockedLists    *sqlx.Stmt `query:"get-locked-lists"`
+	CountListsByName  *sqlx.Stmt `query:"count-lists-by-name"`
+	GetDeleteListsByQ *sqlx.Stmt `query:"get-delete-lists-by-query"`
 
 	CreateCampaign        *sqlx.Stmt `query:"create-campaign"`
 	QueryCampaigns        string     `query:"query-campaigns"`
@@ -142,6 +146,13 @@ type Queries struct {
 	UpsertBrandHealth     *sqlx.Stmt `query:"upsert-brand-health"`
 	GetBrandHealthLatest  *sqlx.Stmt `query:"get-brand-health-latest"`
 	GetBrandHealthHistory *sqlx.Stmt `query:"get-brand-health-history"`
+
+	// Fork (brand picker) -- queries/brands.sql, BRAND-PICKER-SPEC D1.
+	GetBrands           *sqlx.Stmt `query:"get-brands"`
+	GetBrand            *sqlx.Stmt `query:"get-brand"`
+	CreateBrand         *sqlx.Stmt `query:"create-brand"`
+	UpdateBrand         *sqlx.Stmt `query:"update-brand"`
+	ReprojectBrandLists *sqlx.Stmt `query:"reproject-brand-lists"`
 
 	// Fork (system health) -- queries/system.sql, SES-HEALTH-SPEC D6.
 	UpsertSystemHealth     *sqlx.Stmt `query:"upsert-system-health"`

@@ -36,6 +36,15 @@
         <router-link :to="{ name: 'brand', params: { brand: props.row.brand } }">{{ nameOf(props.row) }}</router-link>
         <b-tag v-if="props.row.default" class="is-small ml-2">{{ $t('brands.defaultSender') }}</b-tag>
         <b-tag v-if="props.row.unmapped" class="is-small ml-2">{{ $t('brands.unmapped') }}</b-tag>
+        <!-- BRAND-PICKER-SPEC D7: the brand row's From under the name; "no list" when the row has
+        no list (among the lists this user may see). -->
+        <b-tag v-if="brandRowOf(props.row) && !(props.row.lists || []).length" class="is-small ml-2"
+          data-cy="brand-no-list">
+          {{ $t('brands.noList') }}
+        </b-tag>
+        <p v-if="brandRowOf(props.row)" class="is-size-7 has-text-grey" data-cy="brand-from">
+          {{ brandRowOf(props.row).from_email }}
+        </p>
       </b-table-column>
       <b-table-column v-slot="props" field="domain" :label="$t('brands.domain')">
         {{ props.row.domain }}
@@ -439,6 +448,8 @@ export default Vue.extend({
   data() {
     return {
       rows: [],
+      // BRAND-PICKER-SPEC D7: the brands rows (GET /api/brands), by slug.
+      brandRows: {},
       history: [],
       inputKeys: INPUT_KEYS,
       // BRANDS-UX-SPEC D3/M6: the view owns the sort (Buefy's backend-sorting never sorts and
@@ -529,6 +540,10 @@ export default Vue.extend({
   },
 
   methods: {
+    brandRowOf(row) {
+      return (row && this.brandRows[row.brand]) || null;
+    },
+
     nameOf(row) {
       if (row.unmapped) {
         return row.domain;
@@ -733,6 +748,11 @@ export default Vue.extend({
       }
       this.$api.getBrandsHealth().then((data) => {
         this.rows = Array.isArray(data) ? data : [];
+      });
+      this.$api.getBrands().then((data) => {
+        const byslug = {};
+        (Array.isArray(data) ? data : []).forEach((b) => { byslug[b.slug] = b; });
+        this.brandRows = byslug;
       });
     },
 

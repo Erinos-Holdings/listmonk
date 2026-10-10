@@ -680,7 +680,7 @@ func initTxTemplates(m *manager.Manager, co *core.Core) {
 
 // initImportPresets loads and validates app.import_presets (Fork, import presets). A
 // malformed value logs and disables the feature; it never prevents boot.
-func initImportPresets(ko *koanf.Koanf) []subimporter.Preset {
+func initImportPresets(ko *koanf.Koanf, co *core.Core) []subimporter.Preset {
 	v := ko.Get("app.import_presets")
 	if v == nil {
 		return nil
@@ -690,10 +690,10 @@ func initImportPresets(ko *koanf.Koanf) []subimporter.Preset {
 		lo.Printf("error reading app.import_presets, import presets disabled: %v", err)
 		return nil
 	}
-	// A preset's list_tags are held to the list form's rule, configured from_addresses
-	// included (CAMPAIGN-52-HARDENING D7): a bad seeded tag hides the feature with a logged
-	// error rather than creating a mis-tagged list.
-	presets, err := subimporter.ParsePresetsWith(b, models.CampaignLangs, configuredFromLookup())
+	// A preset's list_brand must name a brands row (BRAND-PICKER-SPEC D5): a missing row hides
+	// the feature with a logged error rather than creating an untagged list. Existence only --
+	// the row is read again at every preview and confirm.
+	presets, err := subimporter.ParsePresetsWith(b, models.CampaignLangs, co.GetBrand)
 	if err != nil {
 		lo.Printf("error loading app.import_presets, import presets disabled: %v", err)
 		return nil

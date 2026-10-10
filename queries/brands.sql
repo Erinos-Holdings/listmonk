@@ -35,3 +35,33 @@ SELECT latest.doc || JSONB_BUILD_OBJECT('lists', COALESCE((
 -- name: get-brand-health-history
 -- One brand's rows over the last $2 days (today included), newest first.
 SELECT doc FROM brand_health WHERE brand = $1 AND day > (CURRENT_DATE - $2::INT) ORDER BY day DESC;
+
+-- Fork (brand picker, integrations BRAND-PICKER-SPEC D1/D2). A brand's sending identity lives in
+-- the brands row; a list's brand, from and site tags are its projection, computed in Go by
+-- models.BrandProjection and written only by the list API, the re-projection below and the
+-- import preset. Every rule on the values is models.BrandProblem.
+
+-- name: get-brands
+SELECT slug, from_email, site, created_at, updated_at FROM brands ORDER BY slug;
+
+-- name: get-brand
+SELECT slug, from_email, site, created_at, updated_at FROM brands WHERE slug = $1;
+
+-- name: create-brand
+-- No conflict target, so the LOWER(slug) unique index refuses a case-only duplicate as well as an
+-- exact one. Zero rows returned means the slug is taken.
+INSERT INTO brands (slug, from_email, site) VALUES ($1, $2, NULLIF($3, ''))
+    ON CONFLICT DO NOTHING RETURNING slug;
+
+-- name: update-brand
+UPDATE brands SET from_email = $2, site = NULLIF($3, ''), updated_at = NOW() WHERE slug = $1 RETURNING slug;
+
+-- name: reproject-brand-lists
+-- Every list of the brand keeps its free tags and takes the new projection ($2). Run in the same
+-- transaction as update-brand, so a failure leaves the row and every list as they were.
+UPDATE lists SET tags = ARRAY(
+        SELECT t FROM UNNEST(tags) AS t
+        WHERE t NOT LIKE 'brand:%' AND t NOT LIKE 'from:%' AND t NOT LIKE 'site:%'
+    )::VARCHAR(100)[] || $2::VARCHAR(100)[],
+    updated_at = NOW()
+    WHERE list_brand_tag(tags) = $1;

@@ -93,16 +93,26 @@ func (a *App) GetList(c echo.Context) error {
 
 // CreateList handles list creation.
 func (a *App) CreateList(c echo.Context) error {
-	l := models.List{}
-	if err := c.Bind(&l); err != nil {
+	var r listReq
+	if err := c.Bind(&r); err != nil {
 		return err
 	}
+	l := r.List
 
 	// Validate.
 	if !strHasLen(l.Name, 1, stdInputMaxLen) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.invalidName"))
 	}
-	if err := a.validateBrandTags(l); err != nil {
+	// Fork (BRAND-PICKER-SPEC D2) -- reserved tags are refused; the brand's projection is the
+	// only writer. Absent brand on create = no reserved tags.
+	tags, _, err := a.listTagsFor(r)
+	if err != nil {
+		return err
+	}
+	l.Tags = tags
+	// Fork (BRAND-PICKER-SPEC D4) -- a second list of a locked name is refused (the route's
+	// lists:manage_all check has already run).
+	if err := a.refuseSecondLocked(l.Name); err != nil {
 		return err
 	}
 
@@ -126,22 +136,35 @@ func (a *App) UpdateList(c echo.Context) error {
 		return err
 	}
 
-	// Incoming params.
-	var l models.List
-	if err := c.Bind(&l); err != nil {
+	// Fork (BRAND-PICKER-SPEC D4) -- a locked list is never updated through the API.
+	if err := a.refuseLocked(id); err != nil {
 		return err
 	}
+
+	// Incoming params.
+	var r listReq
+	if err := c.Bind(&r); err != nil {
+		return err
+	}
+	l := r.List
 
 	// Validate.
 	if !strHasLen(l.Name, 1, stdInputMaxLen) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.invalidName"))
 	}
-	if err := a.validateBrandTags(l); err != nil {
+	// Fork (BRAND-PICKER-SPEC D2) -- reserved tags refused; brand absent keeps the current
+	// projection (merged in the update-list statement), "" clears it, a slug projects its row.
+	tags, keepReserved, err := a.listTagsFor(r)
+	if err != nil {
+		return err
+	}
+	l.Tags = tags
+	if err := a.refuseSecondLocked(l.Name); err != nil {
 		return err
 	}
 
 	// Update the list in the DB.
-	out, err := a.core.UpdateList(id, l)
+	out, err := a.core.UpdateList(id, l, keepReserved)
 	if err != nil {
 		return err
 	}
@@ -156,6 +179,10 @@ func (a *App) DeleteList(c echo.Context) error {
 	// Check if the user has manage permission for the list.
 	user := auth.GetUser(c)
 	if err := user.HasListPerm(auth.PermTypeManage, id); err != nil {
+		return err
+	}
+	// Fork (BRAND-PICKER-SPEC D4) -- after the permission check.
+	if err := a.refuseLocked(id); err != nil {
 		return err
 	}
 
@@ -203,6 +230,10 @@ func (a *App) DeleteLists(c echo.Context) error {
 		if err := user.HasListPerm(auth.PermTypeManage, ids...); err != nil {
 			return err
 		}
+		// Fork (BRAND-PICKER-SPEC D4) -- refused whole when any is locked.
+		if err := a.refuseLocked(ids...); err != nil {
+			return err
+		}
 
 		// Delete the lists from the DB.
 		// Pass getAll=true since we've already verified permissions above.
@@ -213,9 +244,22 @@ func (a *App) DeleteLists(c echo.Context) error {
 		// For query deletion, get the list IDs the user has manage permission for.
 		hasAllPerm, permittedIDs := user.GetPermittedLists(auth.PermTypeManage)
 
-		// Delete the lists from the DB with permission filtering.
-		if err := a.core.DeleteLists(nil, query, hasAllPerm, permittedIDs); err != nil {
+		// Fork (BRAND-PICKER-SPEC D4) -- select exactly what the delete-lists predicate would
+		// remove, refuse the whole delete naming a locked list among them (a partial delete would
+		// hide the refusal), then delete those ids.
+		matched, names, err := a.core.ListsMatchingDeleteQuery(query, hasAllPerm, permittedIDs)
+		if err != nil {
 			return err
+		}
+		for _, n := range names {
+			if models.IsLockedListName(n) {
+				return a.lockedListErr(n)
+			}
+		}
+		if len(matched) > 0 {
+			if err := a.core.DeleteLists(matched, "", true, nil); err != nil {
+				return err
+			}
 		}
 	}
 

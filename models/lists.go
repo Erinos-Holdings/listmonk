@@ -21,16 +21,19 @@ const (
 type List struct {
 	Base
 
-	UUID             string         `db:"uuid" json:"uuid"`
-	Name             string         `db:"name" json:"name"`
-	Type             string         `db:"type" json:"type"`
-	Optin            string         `db:"optin" json:"optin"`
-	Status           string         `db:"status" json:"status"`
-	Tags             pq.StringArray `db:"tags" json:"tags"`
-	Description      string         `db:"description" json:"description"`
-	SubscriberCount  int            `db:"subscriber_count" json:"subscriber_count"`
-	SubscriberCounts StringIntMap   `db:"subscriber_statuses" json:"subscriber_statuses"`
-	SubscriberID     int            `db:"subscriber_id" json:"-"`
+	UUID        string         `db:"uuid" json:"uuid"`
+	Name        string         `db:"name" json:"name"`
+	Type        string         `db:"type" json:"type"`
+	Optin       string         `db:"optin" json:"optin"`
+	Status      string         `db:"status" json:"status"`
+	Tags        pq.StringArray `db:"tags" json:"tags"`
+	Description string         `db:"description" json:"description"`
+	// Fork (BRAND-PICKER-SPEC D2). The list's brand slug, list_brand_tag(tags), or "" for an
+	// untagged list. Read-only on the response: the request binds its own tri-state field.
+	Brand            string       `db:"brand" json:"brand"`
+	SubscriberCount  int          `db:"subscriber_count" json:"subscriber_count"`
+	SubscriberCounts StringIntMap `db:"subscriber_statuses" json:"subscriber_statuses"`
+	SubscriberID     int          `db:"subscriber_id" json:"-"`
 
 	// Fork (list grid, LIST-GRID-SPEC D5/D9). SubscriberGrid is the segment x send-language
 	// grid (query-lists only); the *_count fields are its "all" row, selected as columns so

@@ -27,7 +27,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/gofrs/uuid/v5"
-	"github.com/knadh/listmonk/internal/utils"
 	"github.com/knadh/listmonk/models"
 	"github.com/lib/pq"
 	"golang.org/x/text/cases"
@@ -103,11 +102,16 @@ type Preset struct {
 	Backfill           *bool             `json:"backfill"`
 	Merge              string            `json:"merge"`
 	SkipEmailPattern   string            `json:"skip_email_pattern"`
-	// ListTags are the tags a list CREATED by this preset is born with (an existing list of
-	// the resolved name is reused untouched). Validated at load by the same rule as the
-	// list form (models.ListTagsProblem): a bad tag fails the preset, never a mis-tagged
-	// list. Optional; absent = an untagged list.
-	ListTags []string `json:"list_tags"`
+	// ListBrand is the slug of the brands row the target list belongs to (BRAND-PICKER-SPEC
+	// D5): a list CREATED by the preset is born with the row's projection, an existing
+	// UNTAGGED list of the resolved name is tagged with it on confirm, an existing list of the
+	// same brand is reused, and one of another brand fails the preview. The preset stores the
+	// slug only: the row is read at preview and again at confirm, never cached at boot. Boot
+	// validation proves the row exists. Optional; absent = untagged lists, nothing tagged.
+	ListBrand string `json:"list_brand"`
+	// LegacyListTags is the retired list_tags key. A preset still carrying it fails to load:
+	// silently ignoring it would create every list untagged.
+	LegacyListTags json.RawMessage `json:"list_tags"`
 	// DisplayHeaders is the column list shown to the user as "the exact column names", in
 	// the source file's own order. Optional; when empty it is derived from the mappings.
 	DisplayHeaders []string     `json:"headers"`
@@ -134,10 +138,13 @@ func ParsePresets(b []byte, langs []string) ([]Preset, error) {
 	return ParsePresetsWith(b, langs, nil)
 }
 
-// ParsePresetsWith is ParsePresets with the configured from_addresses lookup a `from:` list
-// tag is checked against (nil skips that check, as the list form does when no SMTP block
-// declares from_addresses).
-func ParsePresetsWith(b []byte, langs []string, allowedFrom func(bare string) bool) ([]Preset, error) {
+// BrandLookup reads one brands row by slug; ok is false when no row has it.
+type BrandLookup func(slug string) (b models.Brand, ok bool, err error)
+
+// ParsePresetsWith is ParsePresets with the brands-row lookup a preset's list_brand is proved
+// against at load (BRAND-PICKER-SPEC D5: existence only; the row itself is read again at preview
+// and confirm). nil skips the check -- the pure tests; the app always passes one.
+func ParsePresetsWith(b []byte, langs []string, brandLookup BrandLookup) ([]Preset, error) {
 	b = bytes.TrimSpace(b)
 	if len(b) == 0 || bytes.Equal(b, []byte("null")) {
 		return nil, nil
@@ -151,7 +158,7 @@ func ParsePresetsWith(b []byte, langs []string, allowedFrom func(bare string) bo
 	seen := map[string]struct{}{}
 	for i := range out {
 		p := &out[i]
-		if err := p.validate(langs, allowedFrom); err != nil {
+		if err := p.validate(langs, brandLookup); err != nil {
 			return nil, fmt.Errorf("preset %d (%q): %w", i, p.Key, err)
 		}
 		if _, dup := seen[p.Key]; dup {
@@ -163,7 +170,7 @@ func ParsePresetsWith(b []byte, langs []string, allowedFrom func(bare string) bo
 	return out, nil
 }
 
-func (p *Preset) validate(langs []string, allowedFrom func(bare string) bool) error {
+func (p *Preset) validate(langs []string, brandLookup BrandLookup) error {
 	if !regexPresetKey.MatchString(p.Key) {
 		return errors.New("key must be non-empty [a-z0-9_-]")
 	}
@@ -260,17 +267,21 @@ func (p *Preset) validate(langs []string, allowedFrom func(bare string) bool) er
 		return fmt.Errorf("unknown merge %q (only %q is supported)", p.Merge, MergeFill)
 	}
 
-	// list_tags: stored trimmed (the shape normalizeListTags gives a form-saved tag) and held
-	// to the list form's rule. Empty entries are dropped.
-	tags := make([]string, 0, len(p.ListTags))
-	for _, t := range p.ListTags {
-		if t = models.TrimListTag(t); t != "" {
-			tags = append(tags, t)
-		}
+	// list_brand (BRAND-PICKER-SPEC D5): the retired list_tags key fails the preset; a named
+	// brand must exist as a brands row. Only existence is proved here -- the row is read again
+	// at preview and confirm.
+	if lt := bytes.TrimSpace(p.LegacyListTags); len(lt) > 0 && !bytes.Equal(lt, []byte("null")) {
+		return errors.New("list_tags is retired: name the brand with list_brand")
 	}
-	p.ListTags = tags
-	if key, args := models.ListTagsProblem(p.ListTags, allowedFrom, utils.SanitizeEmail); key != "" {
-		return fmt.Errorf("list_tags: %s %s", key, strings.Join(args, "="))
+	p.ListBrand = strings.TrimSpace(p.ListBrand)
+	if p.ListBrand != "" && brandLookup != nil {
+		_, ok, err := brandLookup(p.ListBrand)
+		if err != nil {
+			return fmt.Errorf("list_brand %q: %w", p.ListBrand, err)
+		}
+		if !ok {
+			return fmt.Errorf("list_brand %q: no such brand", p.ListBrand)
+		}
 	}
 
 	if p.SkipEmailPattern != "" {
@@ -723,9 +734,90 @@ type ListInfo struct {
 	ID              int    `json:"id,omitempty"`
 	Exists          bool   `json:"exists"`
 	SubscriberCount int    `json:"subscriber_count,omitempty"`
-	// Tags the list WILL be created with (the preset's list_tags); empty for an existing
-	// list, whose own tags are never touched.
+	// Tags the list WILL be created with, or (WillTag) will be ADDED to an existing untagged
+	// list: the projection of the preset's list_brand row as read now. Empty for an existing
+	// list that is reused as it is.
 	Tags []string `json:"tags,omitempty"`
+	// WillTag marks an existing untagged list the confirm will tag as Brand (From).
+	WillTag bool   `json:"will_tag,omitempty"`
+	Brand   string `json:"brand,omitempty"`
+	From    string `json:"from,omitempty"`
+
+	// existingTags are an existing list's stored tags (ResolveList).
+	existingTags []string
+}
+
+// ListBrandConflictError is a preview/confirm refusal: the existing target list belongs to
+// another brand than the preset's list_brand (BRAND-PICKER-SPEC D5).
+type ListBrandConflictError struct {
+	List, Have, Want string
+}
+
+func (e *ListBrandConflictError) Error() string {
+	return fmt.Sprintf("list %q belongs to brand %q, the preset imports as %q", e.List, e.Have, e.Want)
+}
+
+// LookupBrand reads one brands row (the live read the preview and the confirm make).
+func LookupBrand(ctx context.Context, db Querier, slug string) (models.Brand, bool, error) {
+	var b models.Brand
+	err := db.QueryRowContext(ctx, `SELECT slug, from_email, site, created_at, updated_at FROM brands WHERE slug = $1`, slug).
+		Scan(&b.Slug, &b.FromEmail, &b.Site, &b.CreatedAt, &b.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return models.Brand{}, false, nil
+	}
+	if err != nil {
+		return models.Brand{}, false, err
+	}
+	b.DisplayName = models.BrandDisplayName(b.FromEmail)
+	return b, true, nil
+}
+
+// planListBrand reads the preset's brand row NOW and fills the list's plan: a list to create
+// takes the projection; an existing list with no reserved tag will be tagged with it; one of the
+// same brand is reused as it is; any other reserved tag set is a ListBrandConflictError.
+func (p *Preset) planListBrand(ctx context.Context, db Querier, list *ListInfo) error {
+	if p.ListBrand == "" {
+		return nil
+	}
+	b, ok, err := LookupBrand(ctx, db, p.ListBrand)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("list_brand %q: no such brand", p.ListBrand)
+	}
+	proj := models.BrandProjection(b)
+
+	if !list.Exists {
+		list.Tags, list.Brand, list.From = proj, b.Slug, b.FromEmail
+		return nil
+	}
+
+	var (
+		have     string
+		reserved []string
+	)
+	for _, t := range list.existingTags {
+		if models.IsReservedListTag(t) {
+			t = models.TrimListTag(t)
+			reserved = append(reserved, t)
+			if have == "" && strings.HasPrefix(t, models.BrandTagPrefix) {
+				have = strings.TrimPrefix(t, models.BrandTagPrefix)
+			}
+		}
+	}
+	switch {
+	case len(reserved) == 0:
+		list.Tags, list.WillTag, list.Brand, list.From = proj, true, b.Slug, b.FromEmail
+	case have == b.Slug:
+		// Same brand: reused as it is.
+	default:
+		if have == "" {
+			have = strings.Join(reserved, ", ")
+		}
+		return &ListBrandConflictError{List: list.Name, Have: have, Want: b.Slug}
+	}
+	return nil
 }
 
 // FillName is an existing subscriber whose name the import will set.
@@ -756,18 +848,23 @@ type PreviewResult struct {
 // ResolveList finds the list of exactly the given name. Zero matches is a list to create,
 // one is the list, more than one is ErrListAmbiguous.
 func ResolveList(ctx context.Context, db Querier, name string) (ListInfo, error) {
-	rows, err := db.QueryContext(ctx, `SELECT id FROM lists WHERE name = $1 ORDER BY id`, name)
+	rows, err := db.QueryContext(ctx, `SELECT id, COALESCE(tags, '{}') FROM lists WHERE name = $1 ORDER BY id`, name)
 	if err != nil {
 		return ListInfo{}, err
 	}
 	defer rows.Close()
 	ids := []int{}
+	var tags []string
 	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
+		var (
+			id int
+			t  pq.StringArray
+		)
+		if err := rows.Scan(&id, &t); err != nil {
 			return ListInfo{}, err
 		}
 		ids = append(ids, id)
+		tags = t
 	}
 	if err := rows.Err(); err != nil {
 		return ListInfo{}, err
@@ -778,7 +875,7 @@ func ResolveList(ctx context.Context, db Querier, name string) (ListInfo, error)
 	case 0:
 		return info, nil
 	case 1:
-		info.ID, info.Exists = ids[0], true
+		info.ID, info.Exists, info.existingTags = ids[0], true, tags
 		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM subscriber_lists WHERE list_id = $1 AND status <> 'unsubscribed'`, info.ID).Scan(&info.SubscriberCount); err != nil {
 			return ListInfo{}, err
 		}
@@ -831,8 +928,9 @@ func Preview(ctx context.Context, db Querier, im *Importer, p *Preset, filename 
 	if err != nil {
 		return nil, err
 	}
-	if !list.Exists {
-		list.Tags = append([]string(nil), p.ListTags...)
+	// The brand row is read now (BRAND-PICKER-SPEC D5); nothing is written at preview.
+	if err := p.planListBrand(ctx, db, &list); err != nil {
+		return nil, err
 	}
 
 	emails := make([]string, 0, len(parsed.Subs))
@@ -898,19 +996,31 @@ func PrepareImport(ctx context.Context, db Querier, im *Importer, p *Preset, fil
 	if err != nil {
 		return nil, err
 	}
+	// The brand row is read AGAIN at confirm (BRAND-PICKER-SPEC D5): a brand edited between
+	// preview and confirm is projected as it is now.
+	if err := p.planListBrand(ctx, db, &list); err != nil {
+		return nil, err
+	}
 	if !list.Exists {
 		uu, err := uuid.NewV4()
 		if err != nil {
 			return nil, err
 		}
-		// Born with the preset's (trimmed, load-validated) tags; this INSERT bypasses
-		// core, so the trimming happened at load (validate).
+		// Born with the brand row's projection (or untagged without list_brand). This INSERT
+		// bypasses core; the projection is already the stored shape.
 		if err := db.QueryRowContext(ctx,
 			`INSERT INTO lists (uuid, name, type, optin, status, tags, description) VALUES ($1, $2, $3, $4, $5, $6, '') RETURNING id`,
-			uu.String(), listName, p.ListType, p.ListOptin, models.ListStatusActive, pq.StringArray(p.ListTags)).Scan(&list.ID); err != nil {
+			uu.String(), listName, p.ListType, p.ListOptin, models.ListStatusActive, pq.StringArray(list.Tags)).Scan(&list.ID); err != nil {
 			return nil, fmt.Errorf("error creating list %q: %w", listName, err)
 		}
-		list.Tags = append([]string(nil), p.ListTags...)
+	} else if list.WillTag {
+		// An existing UNTAGGED list of the name is tagged as the brand, here, by direct SQL
+		// before RunPreset, not transactional with the subscriber import (as list creation is).
+		if _, err := db.ExecContext(ctx,
+			`UPDATE lists SET tags = COALESCE(tags, '{}') || $2::VARCHAR(100)[], updated_at = NOW() WHERE id = $1`,
+			list.ID, pq.StringArray(list.Tags)); err != nil {
+			return nil, fmt.Errorf("error tagging list %q: %w", listName, err)
+		}
 	}
 
 	return &Prepared{List: list, Parsed: parsed}, nil

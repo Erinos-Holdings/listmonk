@@ -4,6 +4,7 @@ package subimporter
 // synthetic (example.test addresses); nothing here names a real subscriber or deployment.
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -403,52 +404,58 @@ func TestParsePresetsErrors(t *testing.T) {
 	}
 }
 
-// CAMPAIGN-52-HARDENING T6 (I7) -- list_tags round-trip (trimmed) and the validation
-// failures the list form refuses, applied at preset load: a bad tag fails the preset
-// (naming the key and the i18n reason), never a mis-tagged list.
-func TestParsePresetsListTags(t *testing.T) {
-	withTags := func(tags string) []byte {
-		return []byte(strings.Replace(testPresetJSON, `"merge": "fill",`, `"merge": "fill", "list_tags": `+tags+`,`, 1))
+// BRAND-PICKER-SPEC I12 -- a preset names its list's brand by slug (list_brand). Load proves the
+// brands row exists through the injected lookup (existence only: the row is read again at
+// preview and confirm); a missing row, a lookup error and the retired list_tags key each fail
+// the preset, naming its key.
+func TestParsePresetsListBrand(t *testing.T) {
+	with := func(field string) []byte {
+		return []byte(strings.Replace(testPresetJSON, `"merge": "fill",`, `"merge": "fill", `+field+`,`, 1))
+	}
+	rows := map[string]models.Brand{"curated": {Slug: "curated", FromEmail: "Curated <hello@curatedfor.you>"}}
+	calls := 0
+	lookup := func(slug string) (models.Brand, bool, error) {
+		calls++
+		b, ok := rows[slug]
+		return b, ok, nil
 	}
 
-	ps, err := ParsePresets(withTags(`[" brand: curated ", "from: Curated <hello@curatedfor.you> ", "seed"]`), models.CampaignLangs)
+	ps, err := ParsePresetsWith(with(`"list_brand": " curated "`), models.CampaignLangs, lookup)
 	if err != nil {
-		t.Fatalf("valid list_tags: %v", err)
+		t.Fatalf("existing brand: %v", err)
 	}
-	if got := strings.Join(ps[0].ListTags, "|"); got != "brand:curated|from:Curated <hello@curatedfor.you>|seed" {
-		t.Fatalf("list_tags not trimmed/kept: %q", got)
-	}
-
-	// Absent = untagged (nil), the pre-D7 shape.
-	if p := testPreset(t); len(p.ListTags) != 0 {
-		t.Fatalf("absent list_tags should be empty, got %v", p.ListTags)
+	if ps[0].ListBrand != "curated" || calls != 1 {
+		t.Fatalf("list_brand = %q (lookups %d), want the trimmed slug proved once", ps[0].ListBrand, calls)
 	}
 
-	for _, c := range []struct{ name, tags, want string }{
-		{"half-tagged", `["brand:curated"]`, "lists.brandTagsHalfTagged"},
-		{"duplicate brand", `["brand:a", "brand:b", "from:hello@x.test"]`, "lists.brandTagsDuplicate"},
-		{"non-ASCII from", `["brand:curated", "from:Liyorá <hello@x.test>"]`, "lists.brandFromTagNotASCII"},
-		{"bad slug", `["brand:Thirsty Girl", "from:hello@x.test"]`, "lists.brandTagInvalidSlug"},
-		{"site without brand", `["site:https://shop.x.test"]`, "lists.siteTagNeedsBrand"},
-		{"malformed from", `["brand:curated", "from:not an address"]`, "lists.brandFromTagInvalid"},
+	// Absent = untagged lists, no lookup.
+	calls = 0
+	if ps, err := ParsePresetsWith([]byte(testPresetJSON), models.CampaignLangs, lookup); err != nil || ps[0].ListBrand != "" || calls != 0 {
+		t.Fatalf("absent list_brand: %v %q lookups %d", err, ps[0].ListBrand, calls)
+	}
+
+	for _, c := range []struct {
+		name, field string
+		lookup      BrandLookup
+		want        string
+	}{
+		{"no brand row", `"list_brand": "nope"`, lookup, `list_brand "nope": no such brand`},
+		{"lookup error", `"list_brand": "curated"`, func(string) (models.Brand, bool, error) { return models.Brand{}, false, errors.New("db down") }, "db down"},
+		{"retired list_tags", `"list_tags": ["brand:curated", "from:Curated <hello@curatedfor.you>"]`, lookup, "list_tags is retired"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := ParsePresets(withTags(c.tags), models.CampaignLangs)
+			_, err := ParsePresetsWith(with(c.field), models.CampaignLangs, c.lookup)
 			if err == nil {
-				t.Fatalf("want error %s", c.want)
+				t.Fatalf("want error %q", c.want)
 			}
 			if !strings.Contains(err.Error(), `"rewards"`) || !strings.Contains(err.Error(), c.want) {
-				t.Fatalf("error must name the preset key and the i18n reason: %v", err)
+				t.Fatalf("error must name the preset key and the reason: %v", err)
 			}
 		})
 	}
 
-	// The configured from_addresses check applies when the loader supplies one.
-	allowed := func(bare string) bool { return bare == "hello@curatedfor.you" }
-	if _, err := ParsePresetsWith(withTags(`["brand:curated", "from:Curated <hello@curatedfor.you>"]`), models.CampaignLangs, allowed); err != nil {
-		t.Fatalf("configured address: %v", err)
-	}
-	if _, err := ParsePresetsWith(withTags(`["brand:curated", "from:Curated <nobody@else.test>"]`), models.CampaignLangs, allowed); err == nil || !strings.Contains(err.Error(), "lists.brandFromTagUnknownAddress") {
-		t.Fatalf("unconfigured address must fail the preset: %v", err)
+	// A null list_tags (the zero value a re-marshalled preset may carry) is not the retired key.
+	if _, err := ParsePresetsWith(with(`"list_tags": null`), models.CampaignLangs, lookup); err != nil {
+		t.Fatalf("list_tags null: %v", err)
 	}
 }

@@ -186,8 +186,14 @@ func (a *App) readPresetUpload(c echo.Context) (string, []byte, error) {
 
 // presetError maps the preset package's errors to HTTP responses.
 func (a *App) presetError(err error) error {
-	var fe *subimporter.FilenameError
+	var (
+		fe *subimporter.FilenameError
+		bc *subimporter.ListBrandConflictError
+	)
 	switch {
+	case errors.As(err, &bc):
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("import.preset.listBrandConflict", "list", bc.List, "have", bc.Have, "want", bc.Want))
 	case errors.As(err, &fe):
 		return echo.NewHTTPError(http.StatusBadRequest,
 			a.i18n.Ts("import.preset.badFilename", "name", fe.Filename, "pattern", fe.Pattern))

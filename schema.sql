@@ -765,3 +765,15 @@ CREATE TABLE IF NOT EXISTS user_passkeys (
     last_used_at     TIMESTAMP WITH TIME ZONE NULL
 );
 CREATE INDEX IF NOT EXISTS idx_user_passkeys_user ON user_passkeys (user_id);
+
+-- Fork (brand picker): a brand's sending identity; lists carry its projection as tags (v6.2.20,
+-- BRAND-PICKER-SPEC D1). Mirrored in internal/migrations/v6.2.20.go.
+DROP TABLE IF EXISTS brands CASCADE;
+CREATE TABLE IF NOT EXISTS brands (
+    slug             TEXT PRIMARY KEY,
+    from_email       TEXT NOT NULL,
+    site             TEXT NULL,
+    created_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_brands_slug_lower ON brands (LOWER(slug));

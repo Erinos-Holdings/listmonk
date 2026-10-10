@@ -171,61 +171,132 @@ func TestPresetFeederHonoursStop(t *testing.T) {
 	}
 }
 
-// CAMPAIGN-52-HARDENING T6 (I8) -- a list CREATED by a preset carries exactly the preset's
-// list_tags; an existing list of the resolved name keeps its own tags after an import
-// (asserted on the tags column, not only on id reuse). The preview reports the tags it
-// will create with, and nothing for an existing list.
-func TestPresetListTagsCreateVsReuse(t *testing.T) {
+// BRAND-PICKER-SPEC I11 -- the preset's list_brand (the harness preset names "rewards"): a NEW
+// list is created with the brand row's projection; an existing UNTAGGED list of the name is
+// tagged with it on confirm (free tags kept) and the preview says "will tag"; an existing list of
+// the SAME brand is reused untouched; one of ANOTHER brand fails the preview and the confirm,
+// naming both brands, and nothing is written.
+func TestPresetListBrandCreateTagReuseConflict(t *testing.T) {
 	h := newPresetHarness(t)
 	ctx := context.Background()
 	data := []byte("earner_name,earner_email,earner_locale,earned_from_site_url\r\nAnn,ann@example.test,en,\r\n")
 	hash := subimporter.ContentHash(data)
+	const proj = "brand:rewards|from:Rewards <hello@rewards.test>"
 	tags := func(id int) string {
 		var out []string
 		h.db.Select(&out, `SELECT unnest(tags) FROM lists WHERE id = $1 ORDER BY 1`, id)
 		return strings.Join(out, "|")
 	}
+	file := func(kind string) string { return "090426_rewards_" + kind + "_list.csv" }
 
-	// Created: born with the preset's tags; the preview said so.
-	pv, err := subimporter.Preview(ctx, h.db.DB, h.im, h.p, "090426_rewards_bundle_list.csv", data)
+	// New: born with the projection; the preview said so.
+	pv, err := subimporter.Preview(ctx, h.db.DB, h.im, h.p, file("bundle"), data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pv.List.Exists || strings.Join(pv.List.Tags, "|") != "brand:rewards|from:Rewards <hello@rewards.test>" {
-		t.Fatalf("preview of a list to create must carry the preset tags: %+v", pv.List)
+	if pv.List.Exists || pv.List.WillTag || strings.Join(pv.List.Tags, "|") != proj {
+		t.Fatalf("preview of a list to create: %+v", pv.List)
 	}
-	prep, err := subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, "090426_rewards_bundle_list.csv", data, hash)
+	prep, err := subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, file("bundle"), data, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := tags(prep.List.ID); got != "brand:rewards|from:Rewards <hello@rewards.test>" {
+	if got := tags(prep.List.ID); got != proj {
 		t.Fatalf("created list tags = %q", got)
 	}
-	if strings.Join(prep.List.Tags, "|") != "brand:rewards|from:Rewards <hello@rewards.test>" {
-		t.Fatalf("Prepared.List.Tags = %v", prep.List.Tags)
-	}
 
-	// Reused: an existing list of the name keeps its own tags, and the preview shows none.
-	var existing int
-	h.db.Get(&existing, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), '090426 Rewards-Product', 'private', 'single', '{keep,"brand:other","from:Other <hello@other.test>"}') RETURNING id`)
-	pv, err = subimporter.Preview(ctx, h.db.DB, h.im, h.p, "090426_rewards_product_list.csv", data)
+	// Existing untagged: the preview reports "will tag" and writes nothing; the confirm tags it.
+	var untagged int
+	h.db.Get(&untagged, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), '090426 Rewards-Product', 'private', 'single', '{keep}') RETURNING id`)
+	pv, err = subimporter.Preview(ctx, h.db.DB, h.im, h.p, file("product"), data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !pv.List.Exists || pv.List.ID != existing || len(pv.List.Tags) != 0 {
-		t.Fatalf("preview of an existing list: %+v", pv.List)
+	if !pv.List.Exists || pv.List.ID != untagged || !pv.List.WillTag || pv.List.Brand != "rewards" || pv.List.From != "Rewards <hello@rewards.test>" {
+		t.Fatalf("preview of an existing untagged list: %+v", pv.List)
 	}
-	prep, err = subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, "090426_rewards_product_list.csv", data, hash)
+	if got := tags(untagged); got != "keep" {
+		t.Fatalf("the preview wrote tags: %q", got)
+	}
+	prep, err = subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, file("product"), data, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prep.List.ID != existing {
+	if prep.List.ID != untagged {
 		t.Fatalf("existing list not reused: %+v", prep.List)
 	}
-	if got := tags(existing); got != "brand:other|from:Other <hello@other.test>|keep" {
-		t.Fatalf("existing list tags must be untouched, got %q", got)
+	if got := tags(untagged); got != proj+"|keep" {
+		t.Fatalf("existing untagged list after confirm: %q", got)
 	}
-	if len(prep.List.Tags) != 0 {
-		t.Fatalf("Prepared.List.Tags must be empty for a reused list: %v", prep.List.Tags)
+
+	// Existing same brand: reused untouched, no "will tag".
+	pv, err = subimporter.Preview(ctx, h.db.DB, h.im, h.p, file("product"), data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pv.List.Exists || pv.List.WillTag || len(pv.List.Tags) != 0 {
+		t.Fatalf("preview of an existing same-brand list: %+v", pv.List)
+	}
+	before := tags(untagged)
+	if _, err := subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, file("product"), data, hash); err != nil {
+		t.Fatal(err)
+	}
+	if got := tags(untagged); got != before {
+		t.Fatalf("same-brand list changed: %q -> %q", before, got)
+	}
+
+	// Existing other brand: refused at preview and at confirm, naming both, nothing written.
+	var other int
+	h.db.Get(&other, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), '090426 Rewards-Other', 'private', 'single', '{"brand:other","from:Other <hello@other.test>"}') RETURNING id`)
+	l0, s0, m0 := h.counts()
+	_, err = subimporter.Preview(ctx, h.db.DB, h.im, h.p, file("other"), data)
+	var bc *subimporter.ListBrandConflictError
+	if !errors.As(err, &bc) || bc.Have != "other" || bc.Want != "rewards" || bc.List != "090426 Rewards-Other" {
+		t.Fatalf("preview of an other-brand list: %v", err)
+	}
+	if _, err := subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, file("other"), data, hash); !errors.As(err, &bc) {
+		t.Fatalf("confirm of an other-brand list: %v", err)
+	}
+	if l1, s1, m1 := h.counts(); l1 != l0 || s1 != s0 || m1 != m0 {
+		t.Fatalf("a refused import wrote: lists %d->%d subs %d->%d memberships %d->%d", l0, l1, s0, s1, m0, m1)
+	}
+	if got := tags(other); got != "brand:other|from:Other <hello@other.test>" {
+		t.Fatalf("other-brand list changed: %q", got)
+	}
+}
+
+// BRAND-PICKER-SPEC I20 -- the brand row is read at preview AND at confirm, never from a copy made
+// at boot (or at preview): a row changed between preview and confirm is what the created list
+// carries.
+func TestPresetBrandReadLive(t *testing.T) {
+	h := newPresetHarness(t)
+	ctx := context.Background()
+	data := []byte("earner_name,earner_email,earner_locale,earned_from_site_url\r\nAnn,ann@example.test,en,\r\n")
+	file := "090426_rewards_live_list.csv"
+
+	pv, err := subimporter.Preview(ctx, h.db.DB, h.im, h.p, file, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(pv.List.Tags, "|") != "brand:rewards|from:Rewards <hello@rewards.test>" {
+		t.Fatalf("preview tags %v", pv.List.Tags)
+	}
+
+	h.db.MustExec(`UPDATE brands SET from_email = 'Rewards Club <hello@rewards.test>', site = 'https://shop.rewards.test' WHERE slug = 'rewards'`)
+
+	prep, err := subimporter.PrepareImport(ctx, h.db.DB, h.im, h.p, file, data, subimporter.ContentHash(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	h.db.Select(&got, `SELECT unnest(tags) FROM lists WHERE id = $1 ORDER BY 1`, prep.List.ID)
+	if strings.Join(got, "|") != "brand:rewards|from:Rewards Club <hello@rewards.test>|site:https://shop.rewards.test" {
+		t.Fatalf("created list carries %v, want the row as changed after the preview", got)
+	}
+
+	// A row removed after load (SQL only -- the API has no DELETE) fails the preview by name.
+	h.db.MustExec(`DELETE FROM brands WHERE slug = 'rewards'`)
+	if _, err := subimporter.Preview(ctx, h.db.DB, h.im, h.p, file, data); err == nil || !strings.Contains(err.Error(), `"rewards"`) {
+		t.Fatalf("preview with the row gone: %v", err)
 	}
 }

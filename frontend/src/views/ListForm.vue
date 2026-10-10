@@ -44,10 +44,26 @@
           </b-select>
         </b-field>
 
-        <b-field :label="$t('globals.terms.tags')" label-position="on-border" :message="$t('lists.tagsHelp')">
-          <b-taginput v-model="form.tags" name="tags" ellipsis icon="tag-outline"
-            :placeholder="$t('globals.terms.tags')" />
+        <!-- BRAND-PICKER-SPEC D3: the brand is chosen, never typed; the server writes the
+        brand:/from:/site: tags from the brands row. Required, no empty option. -->
+        <b-field :label="$t('lists.brand')" label-position="on-border" :message="$t('lists.brandHelp')">
+          <b-select v-model="brand" name="brand" :placeholder="$t('lists.brand')" required expanded
+            data-cy="list-brand">
+            <option v-for="b in brands" :key="b.slug" :value="b.slug">
+              {{ brandLabel(b) }}
+            </option>
+          </b-select>
         </b-field>
+        <p v-if="chosenBrand" class="is-size-7 has-text-grey mb-4" data-cy="list-brand-from">
+          {{ $t('lists.brandFrom', { from: chosenBrand.from_email }) }}
+        </p>
+
+        <b-field :label="$t('globals.terms.tags')" label-position="on-border" :message="$t('lists.tagsHelp')"
+          :type="tagError ? 'is-danger' : ''">
+          <b-taginput v-model="form.tags" name="tags" ellipsis icon="tag-outline"
+            :placeholder="$t('globals.terms.tags')" :before-adding="beforeAddingTag" />
+        </b-field>
+        <p v-if="tagError" class="help is-danger">{{ tagError }}</p>
 
         <b-field :label="$t('globals.fields.description')" label-position="on-border">
           <b-input :maxlength="2000" v-model="form.description" name="description" type="textarea"
@@ -75,6 +91,9 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import CopyText from '../components/CopyText.vue';
+import {
+  buildListRequest, brandLabel, isReservedTag, splitReservedTags,
+} from '../listBrand.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   name: 'ListForm',
@@ -98,10 +117,28 @@ export default Vue.extend({
         status: 'active',
         tags: [],
       },
+
+      // BRAND-PICKER-SPEC D3: the brands rows (GET /api/brands) and the chosen slug.
+      brands: [],
+      brand: null,
+      tagError: '',
     };
   },
 
   methods: {
+    brandLabel,
+
+    // The server refuses a reserved tag (lists.reservedTag); refuse it here first, with the same
+    // message.
+    beforeAddingTag(tag) {
+      if (isReservedTag(tag)) {
+        this.tagError = this.$t('lists.reservedTag', { tag: String(tag).trim() });
+        return false;
+      }
+      this.tagError = '';
+      return true;
+    },
+
     onSubmit() {
       if (this.isEditing) {
         this.updateList();
@@ -112,7 +149,7 @@ export default Vue.extend({
     },
 
     createList() {
-      this.$api.createList(this.form).then((data) => {
+      this.$api.createList(buildListRequest(this.form, this.brand)).then((data) => {
         this.$emit('finished');
         this.$parent.close();
         this.$utils.toast(this.$t('globals.messages.created', { name: data.name }));
@@ -120,7 +157,7 @@ export default Vue.extend({
     },
 
     updateList() {
-      this.$api.updateList({ id: this.data.id, ...this.form }).then((data) => {
+      this.$api.updateList({ id: this.data.id, ...buildListRequest(this.form, this.brand) }).then((data) => {
         this.$emit('finished');
         this.$parent.close();
         this.$utils.toast(this.$t('globals.messages.updated', { name: data.name }));
@@ -130,6 +167,10 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading', 'profile']),
+
+    chosenBrand() {
+      return this.brands.find((b) => b.slug === this.brand) || null;
+    },
 
     isArchived: {
       get() {
@@ -143,6 +184,13 @@ export default Vue.extend({
 
   mounted() {
     this.form = { ...this.form, ...this.$props.data };
+    // The Tags field shows the free tags only; the reserved ones are the brand's projection. On
+    // edit the select is preset from the row's brand; an untagged list shows it empty and required.
+    this.form.tags = splitReservedTags(this.form.tags).free;
+    this.brand = this.$props.data.brand || null;
+    this.$api.getBrands().then((data) => {
+      this.brands = Array.isArray(data) ? data : [];
+    });
 
     this.$nextTick(() => {
       this.$refs.focus.focus();

@@ -65,6 +65,11 @@
                       class="preset-list-tags">
                       {{ $t('import.preset.listCreateTags', { tags: preset.preview.list.tags.join(', ') }) }}
                     </span>
+                    <!-- BRAND-PICKER-SPEC D5: an existing untagged list is tagged as the preset's brand on confirm. -->
+                    <b-tag v-if="preset.preview.list.exists && preset.preview.list.will_tag" type="is-warning is-light"
+                      class="preset-list-tag">
+                      {{ $t('import.preset.listTag', { brand: preset.preview.list.brand, from: preset.preview.list.from }) }}
+                    </b-tag>
                   </td>
                 </tr>
                 <tr>
