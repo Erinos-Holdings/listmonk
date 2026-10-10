@@ -120,7 +120,9 @@ func SiteTagProblem(tags []string) string {
 // i18n.Ts takes), or "" when the tags are acceptable. Free-form tags are ignored.
 //
 // Since BRAND-PICKER-SPEC the list API no longer accepts reserved tags (they are the
-// server-written projection of the list's brands row), so this holds only the STRUCTURAL
+// server-written projection of the list's brands row), so no production code calls this any
+// more -- it is kept, tested, as the structural rule for a SQL-written tag set (an audit tool
+// or a later sweep); delete it when nothing needs that. It holds only the STRUCTURAL
 // rules a tag set can break -- `site:` placement, at most one brand:/from:, both or neither
 // -- and delegates every rule about the values to BrandProblem: one implementation
 // (CAMPAIGN-52-HARDENING D7).
@@ -195,17 +197,28 @@ func BrandProblem(slug, from, site string, allowedFrom func(bare string) bool, s
 
 	// The From header is emitted verbatim and nothing RFC 2047-encodes it, so a non-ASCII
 	// display name ships a malformed header. `Liyora`, not `Liyorá`.
+	// A control character (CR, LF, TAB, DEL ...) is a header-injection vector: `\s` in
+	// ReFromAddress consumes a newline and `.` matches a CR, so `Curated\r\nX-Injected: y
+	// <hello@x>` would otherwise pass the whole-match check and ship as two headers.
 	for _, r := range from {
 		if r > 127 {
 			return "lists.brandFromTagNotASCII", []string{"from", from}
+		}
+		if r < 0x20 || r == 0x7f {
+			return "lists.brandFromTagInvalid", []string{"from", from}
 		}
 	}
 
 	// Same two accepted shapes as a campaign's From: `Display Name <address>` or a bare
 	// address. ReFromAddress is unanchored, so the match must consume the whole value or
-	// `Liyora <a@b> JUNK` would ship the junk verbatim in the real From header.
-	if m := ReFromAddress.FindStringIndex(from); m != nil {
+	// `Liyora <a@b> JUNK` would ship the junk verbatim in the real From header. The display
+	// name may not itself carry an angle bracket: `<a@b> <c@d>` matches whole with `<a@b>`
+	// as the name, and two addresses in one From is not a shape any client renders the same.
+	if m := ReFromAddress.FindStringSubmatchIndex(from); m != nil {
 		if m[0] != 0 || m[1] != len(from) {
+			return "lists.brandFromTagInvalid", []string{"from", from}
+		}
+		if m[4] >= 0 && strings.ContainsAny(from[m[4]:m[5]], "<>") {
 			return "lists.brandFromTagInvalid", []string{"from", from}
 		}
 	} else if sanitize != nil {

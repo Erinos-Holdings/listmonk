@@ -123,6 +123,20 @@ func TestBrandProblemNewRules(t *testing.T) {
 		{"Health reserved", "Health", "hello@x.com", "", "lists.brandSlugReserved"},
 		{"healthy allowed", "healthy", "hello@x.com", "", ""},
 		{"empty from", "x", "", "", "lists.brandFromTagInvalid"},
+		// Header injection (Stage 4 review finding 1): control characters and a bracketed display name.
+		{"CRLF in display name", "x", "Curated\r\n<hello@x.com>", "", "lists.brandFromTagInvalid"},
+		{"injected header", "x", "Curated\rX-Injected: y <hello@x.com>", "", "lists.brandFromTagInvalid"},
+		{"LF before address", "x", "Curated\n<hello@x.com>", "", "lists.brandFromTagInvalid"},
+		{"tab in display name", "x", "Cur\tated <hello@x.com>", "", "lists.brandFromTagInvalid"},
+		{"DEL in display name", "x", "Curated\x7f <hello@x.com>", "", "lists.brandFromTagInvalid"},
+		{"two angle pairs", "x", "<a@b.com> <c@d.com>", "", "lists.brandFromTagInvalid"},
+		{"bracket in display name", "x", "Cur<ated <hello@x.com>", "", "lists.brandFromTagInvalid"},
+		// The live roster's shapes must keep passing.
+		{"live Curated", "curated", "Curated <hello@curatedfor.you>", "", ""},
+		{"live Thirsty Girl", "thirstygirl", "Thirsty Girl <hello@thirstygirlhydration.com>", "", ""},
+		{"live KNOWN FOR", "knownfor", "KNOWN FOR FRAGRANCE <hello@knownforfragrance.com>", "", ""},
+		{"live BRIM beauty", "brimbeauty", "BRIM beauty <hello@brimbeauty.co>", "", ""},
+		{"bare address", "x", "hello@x.com", "", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

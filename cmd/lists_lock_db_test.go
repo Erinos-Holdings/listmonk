@@ -25,6 +25,13 @@ func TestListLocked(t *testing.T) {
 	}
 	lists := func() int { return f.count(`SELECT COUNT(*) FROM lists`) }
 
+	// A rename onto the locked name while NO copy exists is refused too (Stage 4 review finding 3):
+	// it would lock an ordinary list with SQL as the only undo. Creation is the only way in.
+	early := f.sqlList("Early list")
+	f.wantErr("rename onto, none exists", f.admin.json(http.MethodPut, "/api/lists/"+itoa(early), map[string]any{"name": locked}),
+		http.StatusConflict, "lists.lockedList", "name", locked)
+	f.ok("delete early", f.admin.json(http.MethodDelete, "/api/lists/"+itoa(early), nil))
+
 	// Created once (untagged, as the sync script creates it), then refused while it exists.
 	var l listResp
 	json.Unmarshal(f.ok("create locked", f.admin.json(http.MethodPost, "/api/lists",

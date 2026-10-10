@@ -777,6 +777,11 @@ func LookupBrand(ctx context.Context, db Querier, slug string) (models.Brand, bo
 // same brand is reused as it is; any other reserved tag set is a ListBrandConflictError.
 func (p *Preset) planListBrand(ctx context.Context, db Querier, list *ListInfo) error {
 	if p.ListBrand == "" {
+		// No brand: a list to create is born with an EMPTY tag array, not NULL (pq encodes a nil
+		// slice as SQL NULL; the readers tolerate both, the stored shape should not vary).
+		if !list.Exists && list.Tags == nil {
+			list.Tags = []string{}
+		}
 		return nil
 	}
 	b, ok, err := LookupBrand(ctx, db, p.ListBrand)

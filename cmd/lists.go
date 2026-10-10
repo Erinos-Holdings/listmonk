@@ -159,8 +159,12 @@ func (a *App) UpdateList(c echo.Context) error {
 		return err
 	}
 	l.Tags = tags
-	if err := a.refuseSecondLocked(l.Name); err != nil {
-		return err
+	// A rename ONTO a locked name is refused outright (this list is not locked -- refuseLocked
+	// passed above -- so a locked name here is always a rename-into): with no copy present it
+	// would lock this list, subscribers and brand included, with SQL as the only undo. Creation
+	// (CreateList) is the one way to mint the locked list.
+	if models.IsLockedListName(l.Name) {
+		return a.lockedListErr(l.Name)
 	}
 
 	// Update the list in the DB.
