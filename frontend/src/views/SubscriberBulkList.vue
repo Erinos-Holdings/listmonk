@@ -22,8 +22,10 @@
           </div>
         </b-field>
 
+        <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D8) -- the option set is the
+             caller's, by mode (Subscribers.vue bulkListOptions). -->
         <list-selector label="Target lists" placeholder="Lists to apply to" v-model="form.lists" :selected="form.lists"
-          :all="lists.results" />
+          :all="options" />
 
         <!-- Fork: enabled for every list, not only double opt-in. Sending status=confirmed is the
              only way the ids path's ON CONFLICT re-subscribes a row a subscriber unsubscribed
@@ -67,6 +69,9 @@ export default Vue.extend({
 
   props: {
     numSubscribers: { type: Number, default: 0 },
+    // Fork (global brand, D8) -- the target lists offered: the scope united with the affected
+    // rows' lists (every list under All brands). The modal no longer reads the store.
+    options: { type: Array, default: () => [] },
   },
 
   data() {
@@ -89,7 +94,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['lists', 'loading']),
+    ...mapState(['loading']),
   },
 });
 </script>

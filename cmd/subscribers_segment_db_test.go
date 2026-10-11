@@ -673,7 +673,7 @@ func TestListStatsBackCompat(t *testing.T) {
 		want[r.LegacyStatus()]++
 	}
 
-	lists, _, err := f.app.core.QueryLists("grid-", "", "", "", nil, "id", "asc", true, nil, 0, 0)
+	lists, _, err := f.app.core.QueryLists("grid-", "", "", "", nil, "id", "asc", true, nil, false, 0, 0)
 	if err != nil || len(lists) != 2 {
 		t.Fatalf("QueryLists: %d, %v", len(lists), err)
 	}

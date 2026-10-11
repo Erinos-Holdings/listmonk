@@ -1011,6 +1011,17 @@ func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
 		allCampaigns, permittedLists = user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
 	}
 
+	// Fork (global brand, integrations GLOBAL-BRAND-SPEC D9) -- optional, repeatable list_id: the
+	// global brand's effective list set, a separate scope ANDed with the permission scoping above
+	// (a get_all user still reads every campaign, but sees only the scope's). The ?id= prefill is
+	// never filtered by it (S4: a record outside the brand opens with a notice), so it is ignored
+	// with ids, as query and per_page are.
+	scopeLists, err := parseStringIDs(c.QueryParams()["list_id"])
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
+	}
+
 	query := ""
 	perPage := analyticsPickerPerPage
 	if len(ids) == 0 {
@@ -1018,9 +1029,11 @@ func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
 		if n, err := strconv.Atoi(c.QueryParam("per_page")); err == nil && n > 0 {
 			perPage = min(n, analyticsPickerMaxPerPage)
 		}
+	} else {
+		scopeLists = nil
 	}
 
-	out, err := a.core.QueryAnalyticsCampaigns(ids, query, allCampaigns, permittedLists, isAnalyticsOnly(user), perPage)
+	out, err := a.core.QueryAnalyticsCampaigns(ids, query, allCampaigns, permittedLists, isAnalyticsOnly(user), perPage, scopeLists)
 	if err != nil {
 		return err
 	}

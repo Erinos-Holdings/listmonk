@@ -88,18 +88,15 @@ SELECT JSON_BUILD_OBJECT(
 ) AS data;
 
 -- name: get-dashboard-clients
--- Fork (client stats, CLIENT-STATS-SPEC D6/D7). Views and clicks per email-client token for the
--- main Dashboard's client panel, live (no materialized view). $1 = the list ids of one brand (the
--- list brand tag, resolved by the handler through get-dashboard-brands), or NULL for every
--- campaign. Campaigns are those with ANY campaign_lists row on $1. Per table, the window is
+-- Fork (client stats, CLIENT-STATS-SPEC D6). Views and clicks per email-client token for the
+-- main Dashboard's client panel over every campaign, live (no materialized view). Any scope (a
+-- list-scoped user, the global brand's list_id) reads get-dashboard-clients-scoped instead
+-- (GLOBAL-BRAND-SPEC D5, which retired the panel's own brand parameter). Per table, the window is
 -- get-dashboard-charts-scoped's rule exactly (31 days ending on the day of the latest event of
 -- those campaigns, by MAX(created_at) over the campaign_id index). Raw rows, as the Dashboard charts
 -- count. Unknown client (NULL) is reported as the empty string.
 WITH camps AS (
     SELECT c.id FROM campaigns c
-    WHERE $1::INT[] IS NULL OR EXISTS (
-        SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
-    )
 ),
 vd AS (
     SELECT MAX(created_at)::DATE AS to_date FROM campaign_views WHERE campaign_id IN (SELECT id FROM camps)
@@ -125,10 +122,10 @@ SELECT COALESCE(v.client, c.client) AS client, COALESCE(v.n, 0) AS views, COALES
     FROM v FULL OUTER JOIN c ON v.client = c.client;
 
 -- name: get-dashboard-clients-scoped
--- Fork (client stats, CLIENT-STATS-SPEC D6/D7). get-dashboard-clients for a list-scoped user, with
--- $1/$2 exactly as get-dashboard-counts-scoped ($1 = permitted list ids P, $2 = campaigns get_all,
--- else the campaigns with ANY campaign_lists row on P). Same window and counting. A brand query
--- parameter never reaches this query (D7, the handler ignores it).
+-- Fork (client stats, CLIENT-STATS-SPEC D6/D7; GLOBAL-BRAND-SPEC D5). get-dashboard-clients over a
+-- scope, with $1/$2 exactly as get-dashboard-counts-scoped ($1 = the scope's list ids, $2 =
+-- campaigns get_all, else the campaigns with ANY campaign_lists row on $1; always false under a
+-- global brand list_id). Same window and counting.
 WITH camps AS (
     SELECT c.id FROM campaigns c
     WHERE $2::BOOLEAN OR EXISTS (
@@ -157,14 +154,6 @@ c AS (
 )
 SELECT COALESCE(v.client, c.client) AS client, COALESCE(v.n, 0) AS views, COALESCE(c.n, 0) AS clicks
     FROM v FULL OUTER JOIN c ON v.client = c.client;
-
--- name: get-dashboard-brands
--- Fork (client stats, CLIENT-STATS-SPEC D7). Every list brand tag (list_brand_tag, v6.2.12 -- the
--- one SQL statement of the single-brand-per-list rule) with the ids of its lists, for the main
--- Dashboard's brand picker and the server-side resolution of its brand parameter.
-SELECT list_brand_tag(tags) AS brand, ARRAY_AGG(id ORDER BY id) AS list_ids FROM lists
-    WHERE list_brand_tag(tags) IS NOT NULL
-    GROUP BY 1 ORDER BY 1;
 
 -- name: get-settings
 SELECT JSON_OBJECT_AGG(key, value) AS settings FROM (SELECT * FROM settings ORDER BY key) t;

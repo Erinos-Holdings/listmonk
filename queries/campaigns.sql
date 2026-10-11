@@ -106,6 +106,8 @@ ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 --   $4 all campaigns (campaigns get_all, or blanket list access); else $5 permitted list ids
 --   $6 started campaigns only (analytics-only users, D11)
 --   $7 limit in search mode
+--   $8 the global brand's list ids (GLOBAL-BRAND-SPEC D9), a SEPARATE scope predicate ANDed with
+--      the permission one above (query-campaigns' list filter pattern); empty = no scope
 --   c.sent feeds the page's rates (views / clicks / bounces over Sent, the campaigns list's rule).
 SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.created_at, c.sent
 FROM campaigns c
@@ -124,6 +126,11 @@ WHERE (
         )
     )
     AND (NOT $6::BOOLEAN OR c.started_at IS NOT NULL)
+    AND (
+        CARDINALITY($8::INT[]) = 0 OR EXISTS (
+            SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($8::INT[])
+        )
+    )
 ORDER BY c.created_at DESC, c.id DESC
 LIMIT (CASE WHEN CARDINALITY($1::INT[]) > 0 THEN NULL ELSE $7::INT END);
 

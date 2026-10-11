@@ -213,7 +213,7 @@ func queryListGrid(t *testing.T, h *evergreenHarness, listID int) map[string]map
 	var row struct {
 		Grid models.ListGrid `db:"subscriber_grid"`
 	}
-	if err := h.db.Unsafe().Get(&row, q, listID, "", "", "", "", "", pq.StringArray{}, true, pq.Array([]int{}), 0, 1); err != nil {
+	if err := h.db.Unsafe().Get(&row, q, listID, "", "", "", "", "", pq.StringArray{}, true, pq.Array([]int{}), 0, 1, false); err != nil {
 		t.Fatalf("query-lists %d: %v", listID, err)
 	}
 	out := map[string]map[string]int{}

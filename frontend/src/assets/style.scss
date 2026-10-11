@@ -265,6 +265,12 @@ section {
 }
 .navbar-brand {
   padding: 0 0 0 20px; // the lockup's ink then left-aligns with the sidebar menu glyphs
+  position: relative; // Fork (global brand, D4) -- the selector is placed against it.
+  .brand-selector {
+    z-index: 2; // above the (transparent) navbar menu that follows it
+    display: flex;
+    align-items: center;
+  }
   .favicon {
     display: none;
   }

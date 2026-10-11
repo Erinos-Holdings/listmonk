@@ -26,12 +26,13 @@
           <div class="column is-narrow">
             <!-- Fork (list filter) -- server-side list_id filter on GET /api/campaigns.
                  Single-select (the API param is repeatable); "All lists" sends no param.
-                 Deliberately NOT sticky, unlike the scope pill. -->
+                 Deliberately NOT sticky, unlike the scope pill. Its options are the global brand's
+                 lists (integrations GLOBAL-BRAND-SPEC D7); "All lists" then sends the scope. -->
             <b-field>
               <b-select v-model="queryParams.listID" :disabled="loading.campaigns" @input="onListChange"
                 name="list_id" data-cy="filter-list">
                 <option :value="null">{{ $t('campaigns.allLists') }}</option>
-                <option v-for="l in (lists.results || [])" :key="l.id" :value="l.id">{{ l.name }}</option>
+                <option v-for="l in filterLists" :key="l.id" :value="l.id">{{ l.name }}</option>
               </b-select>
             </b-field>
           </div>
@@ -77,8 +78,9 @@
             <!-- Fork (list filter) -- "select all N" selects the whole QUERY, and the
                  by-query bulk delete carries only query + evergreen, never list_id, so
                  offering it under a list filter would delete campaigns the page is not
-                 showing. Page-level checkboxes stay available. -->
-            <span v-if="!bulk.all && campaigns.total > campaigns.perPage && queryParams.listID === null">
+                 showing. Page-level checkboxes stay available. The same holds under a global
+                 brand (GLOBAL-BRAND-SPEC D7), whose scope is a list_id too. -->
+            <span v-if="!bulk.all && campaigns.total > campaigns.perPage && queryParams.listID === null && !scopeListIds">
               &mdash;
               <a href="#" @click.prevent="onSelectAll" data-cy="select-all-campaigns">
                 {{ $tc('globals.messages.selectAll', campaigns.total, { num: campaigns.total }) }}
@@ -362,6 +364,8 @@ import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus, sendLangCode } from '../langs';
 import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
+import { filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
 // Sent / To send. Bounces keep two decimals (the Dashboard's bounce digits).
@@ -377,6 +381,9 @@ export default Vue.extend({
     EmptyPlaceholder,
     CopyText,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4/D7).
+  mixins: [brandScopeMixin],
 
   data() {
     return {
@@ -556,9 +563,13 @@ export default Vue.extend({
         no_body: true,
       };
 
-      // Fork (list filter) -- "All lists" sends no param at all.
+      // Fork (list filter) -- "All lists" sends no param at all. Fork (global brand,
+      // GLOBAL-BRAND-SPEC D7) -- under a brand "All lists" sends the brand's list ids; a chosen
+      // list (inside the scope by construction) sends that one id.
       if (this.queryParams.listID !== null) {
         params.list_id = this.queryParams.listID;
+      } else if (this.scopeListIds) {
+        params.list_id = this.scopeListIds;
       }
 
       this.$api.getCampaigns(params);
@@ -771,6 +782,29 @@ export default Vue.extend({
     numSelectedCampaigns() {
       return this.bulk.all ? this.campaigns.total : this.bulk.checked.length;
     },
+
+    // Fork (global brand, D7) -- the in-page list filter's options: the scope's lists.
+    filterLists() {
+      return filterByIds(this.lists, this.scopeListIds);
+    },
+  },
+
+  watch: {
+    // Fork (global brand, D4) -- reset the in-page list filter to "All lists" when the chosen
+    // list is outside the new scope, then fetch through refreshCampaigns (the poll's path).
+    brandKey(now, before) {
+      if (before === 'pending' || now === 'pending') {
+        return;
+      }
+      if (this.queryParams.listID !== null && this.scopeListIds
+        && !this.scopeListIds.includes(this.queryParams.listID)) {
+        this.queryParams.listID = null;
+      }
+      this.queryParams.page = 1;
+      this.bulk.checked = [];
+      this.bulk.all = false;
+      this.refreshCampaigns();
+    },
   },
 
   created() {
@@ -778,7 +812,8 @@ export default Vue.extend({
   },
 
   mounted() {
-    this.refreshCampaigns();
+    // Fork (global brand, D3) -- the first scoped fetch waits for the lists (I13).
+    this.afterListsLoaded(() => this.refreshCampaigns());
   },
 
   destroyed() {

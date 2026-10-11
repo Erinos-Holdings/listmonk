@@ -45,7 +45,7 @@ func TestQueryListsSortsBeforePaginating(t *testing.T) {
 			t.Fatalf("prepare query-lists: %v", err)
 		}
 		defer stmt.Close()
-		rows, err := stmt.Queryx(0, "", "", "", "", "", pq.StringArray{}, true, pq.Array([]int{}), offset, limit)
+		rows, err := stmt.Queryx(0, "", "", "", "", "", pq.StringArray{}, true, pq.Array([]int{}), offset, limit, false)
 		if err != nil {
 			t.Fatalf("query-lists: %v", err)
 		}

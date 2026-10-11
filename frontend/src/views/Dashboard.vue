@@ -111,7 +111,9 @@
                         {{ $t('subscribers.status.blocklisted') }}
                       </li>
                       <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7): a list-scoped user's counts
-                      are scoped to their lists, where orphans (no list at all) are 0 by definition. -->
+                      are scoped to their lists, where orphans (no list at all) are 0 by definition.
+                      Under a global brand (GLOBAL-BRAND-SPEC D5) the counts are scoped too, and
+                      blocklisted is that scope's blocklisted members. -->
                       <li v-if="!counts.scoped">
                         <label for="#">{{ $utils.niceNumber(counts.subscribers.orphans) }}</label>
                         {{ $t('dashboard.orphanSubs') }}
@@ -154,22 +156,16 @@
             </article>
           </div>
 
-          <!-- Fork (client stats, integrations CLIENT-STATS-SPEC D6/D7/D9): views, clicks and combined
-               per email client over the charts' window. A list-scoped user's panel covers their
-               permitted lists and has no brand picker (the server ignores ?brand= for them);
-               everyone else picks All brands or one list brand tag. -->
+          <!-- Fork (client stats, integrations CLIENT-STATS-SPEC D6/D9): views, clicks and combined
+               per email client over the charts' window. Its own brand picker is gone (integrations
+               GLOBAL-BRAND-SPEC D5): the global brand selector is the one filter, sent with the
+               counts and charts. -->
           <div class="tile is-parent relative">
             <b-loading v-if="clients.loading" active :is-full-page="false" />
             <article class="tile is-child notification" data-cy="clients">
               <div class="columns is-mobile">
                 <div class="column">
                   <h3 class="title is-size-6">{{ $t('analytics.clients') }}</h3>
-                </div>
-                <div v-if="!clients.scoped && clients.brands.length > 0" class="column is-narrow">
-                  <b-select v-model="clients.brand" size="is-small" data-cy="clients-brand" @input="fetchClients">
-                    <option value="">{{ $t('dashboard.clientsAllBrands') }}</option>
-                    <option v-for="b in clients.brands" :key="b" :value="b">{{ b }}</option>
-                  </b-select>
                 </div>
               </div>
               <b-table :data="clientTableRows" hoverable narrowed
@@ -221,12 +217,16 @@ import {
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
 import { rateCell } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
   components: {
     Chart,
     DashboardSes,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4/D5).
+  mixins: [brandScopeMixin],
 
   data() {
     const canSes = this.$can('brands:get');
@@ -244,13 +244,10 @@ export default Vue.extend({
         campaigns: {},
         messages: 0,
       },
-      // Fork (client stats) -- the client panel; brand "" = all brands.
+      // Fork (client stats) -- the client panel.
       clients: {
         rows: [],
         loading: false,
-        scoped: false,
-        brand: '',
-        brands: [],
         sort: { ...CLIENT_DEFAULT_SORT },
       },
     };
@@ -261,35 +258,31 @@ export default Vue.extend({
       this.$utils.setPref('dashboard.sesPane', this.pane === 'ses');
     },
 
+    // Fork (global brand, D4/D5) -- the three reads together, each with the global brand's
+    // effective list set (no list_id under All brands: today's Dashboard exactly).
     fetchData() {
       this.isCountsLoading = true;
       this.isChartsLoading = true;
+      const params = this.scopeListIds ? { list_id: this.scopeListIds } : {};
 
-      this.$api.getDashboardCounts().then((data) => {
+      this.$api.getDashboardCounts(params).then((data) => {
         this.counts = data;
         this.isCountsLoading = false;
       });
 
-      this.$api.getDashboardCharts().then((data) => {
+      this.$api.getDashboardCharts(params).then((data) => {
         this.isChartsLoading = false;
         this.campaignViews = this.makeChart(data.campaignViews);
         this.campaignClicks = this.makeChart(data.linkClicks);
       });
 
-      this.fetchClients();
+      this.fetchClients(params);
     },
 
-    // Fork (client stats) -- the client panel for the picked brand (never sent when scoped: the
-    // server ignores it there anyway).
-    fetchClients() {
+    // Fork (client stats) -- the client panel over the same scope as the counts.
+    fetchClients(params) {
       this.clients.loading = true;
-      const params = !this.clients.scoped && this.clients.brand ? { brand: this.clients.brand } : {};
       this.$api.getDashboardClients(params).then((data) => {
-        this.clients.scoped = data.scoped === true;
-        this.clients.brands = Array.isArray(data.brands) ? data.brands : [];
-        if (this.clients.brand && !this.clients.brands.includes(this.clients.brand)) {
-          this.clients.brand = '';
-        }
         this.clients.rows = shapeClientRows(data.clients, {
           locale: (this.$i18n && this.$i18n.locale) || 'en',
           unknownLabel: this.$t('analytics.clientsUnknown'),
@@ -347,6 +340,15 @@ export default Vue.extend({
     },
   },
 
+  watch: {
+    // Fork (global brand, D4) -- a selection change re-issues the three reads together.
+    brandKey(now, before) {
+      if (before !== 'pending' && now !== 'pending') {
+        this.fetchData();
+      }
+    },
+  },
+
   created() {
     this.$root.$on('page.refresh', this.fetchData);
   },
@@ -356,7 +358,8 @@ export default Vue.extend({
   },
 
   mounted() {
-    this.fetchData();
+    // Fork (global brand, D3) -- the first scoped fetch waits for the lists (I13).
+    this.afterListsLoaded(() => this.fetchData());
   },
 });
 </script>

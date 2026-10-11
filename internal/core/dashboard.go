@@ -69,36 +69,22 @@ func (c *Core) GetDashboardChartsScoped(listIDs []int, allCampaigns bool) (types
 	return out, nil
 }
 
-// GetDashboardBrands (fork, client stats, CLIENT-STATS-SPEC D7) returns every list brand tag with
-// the ids of its lists: the main Dashboard's brand picker and its server-side brand resolution.
-func (c *Core) GetDashboardBrands() ([]models.DashboardBrand, error) {
-	out := []models.DashboardBrand{}
-	if err := c.q.GetDashboardBrands.Select(&out); err != nil {
-		return nil, echo.NewHTTPError(http.StatusInternalServerError,
-			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard clients", "error", pqErrMsg(err)))
-	}
-	return out, nil
-}
-
-// GetDashboardClients (fork, client stats, CLIENT-STATS-SPEC D6/D7) returns views and clicks per
-// email-client token over the Dashboard window: listIDs nil = every campaign (all brands), else
-// the campaigns on those lists (one brand's). Live, no refreshCache.
-func (c *Core) GetDashboardClients(listIDs []int) ([]models.CampaignAnalyticsClient, error) {
-	var lists any
-	if listIDs != nil {
-		lists = pq.Array(listIDs)
-	}
-
+// GetDashboardClients (fork, client stats, CLIENT-STATS-SPEC D6) returns views and clicks per
+// email-client token over the Dashboard window, over every campaign: the unscoped panel. Any scope
+// (a list-scoped user, the global brand's list_id) reads GetDashboardClientsScoped
+// (GLOBAL-BRAND-SPEC D5). Live, no refreshCache.
+func (c *Core) GetDashboardClients() ([]models.CampaignAnalyticsClient, error) {
 	out := []models.CampaignAnalyticsClient{}
-	if err := c.q.GetDashboardClients.Select(&out, lists); err != nil {
+	if err := c.q.GetDashboardClients.Select(&out); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard clients", "error", pqErrMsg(err)))
 	}
 	return out, nil
 }
 
-// GetDashboardClientsScoped (fork, client stats, CLIENT-STATS-SPEC D7) is GetDashboardClients for a
-// list-scoped user, with the GetDashboardCountsScoped arguments. Live, no refreshCache.
+// GetDashboardClientsScoped (fork, client stats, CLIENT-STATS-SPEC D7; GLOBAL-BRAND-SPEC D5) is
+// GetDashboardClients over a scope, with the GetDashboardCountsScoped arguments. Live, no
+// refreshCache.
 func (c *Core) GetDashboardClientsScoped(listIDs []int, allCampaigns bool) ([]models.CampaignAnalyticsClient, error) {
 	if listIDs == nil {
 		listIDs = []int{}

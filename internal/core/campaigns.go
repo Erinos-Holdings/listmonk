@@ -86,13 +86,18 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 // Campaign Analytics picker rows. ids non-empty returns exactly those that pass scoping (search and
 // limit ignored); otherwise searchStr uses the query-campaigns predicate, plus exact id match when
 // it is numeric. allCampaigns lifts the list filter; else permittedLists is the ANY-list scope (D2).
-// startedOnly hides campaigns that never started (analytics-only users).
-func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns bool, permittedLists []int, startedOnly bool, limit int) ([]models.AnalyticsCampaign, error) {
+// startedOnly hides campaigns that never started (analytics-only users). Fork (global brand,
+// GLOBAL-BRAND-SPEC D9) -- scopeLists (empty = none) keeps the campaigns with ANY campaign_lists
+// row on it, ANDed with the permission scoping, never in its place.
+func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns bool, permittedLists []int, startedOnly bool, limit int, scopeLists []int) ([]models.AnalyticsCampaign, error) {
 	if ids == nil {
 		ids = []int{}
 	}
 	if permittedLists == nil {
 		permittedLists = []int{}
+	}
+	if scopeLists == nil {
+		scopeLists = []int{}
 	}
 
 	// ParseInt at 32 bits: the id is bound as INT, and a longer number (typed digit by digit into
@@ -105,7 +110,7 @@ func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns
 
 	out := []models.AnalyticsCampaign{}
 	if err := c.q.QueryAnalyticsCampaigns.Select(&out, pq.Array(ids), makeSearchString(searchStr), idMatch,
-		allCampaigns, pq.Array(permittedLists), startedOnly, limit); err != nil {
+		allCampaigns, pq.Array(permittedLists), startedOnly, limit, pq.Array(scopeLists)); err != nil {
 		c.log.Printf("error fetching analytics campaigns: %v", err)
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))

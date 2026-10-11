@@ -26,6 +26,9 @@ WITH ls AS (
         -- Optional list IDs based on user permission.
         WHEN $8 = TRUE THEN TRUE ELSE id = ANY($9::INT[])
     END
+    -- Fork (global brand, GLOBAL-BRAND-SPEC D6) -- nobrand=true keeps only the lists with no brand
+    -- tag (list_brand_tag, the one statement of the single-brand rule), the No brand context.
+    AND (NOT $12::BOOLEAN OR list_brand_tag(lists.tags) IS NULL)
 ),
 -- Fork (list grid, LIST-GRID-SPEC D4) -- the view is grouped (list_id, status, segment, lang)
 -- since v6.2.11, so it is summed to (list_id, status) BEFORE JSONB_OBJECT_AGG. That aggregate

@@ -4,7 +4,7 @@
       <div class="column is-10">
         <h1 class="title is-4">
           {{ $t('globals.terms.templates') }}
-          <span v-if="templates.length > 0">({{ templates.length }})</span>
+          <span v-if="shownTemplates.length > 0">({{ shownTemplates.length }})</span>
         </h1>
       </div>
       <div class="column has-text-right">
@@ -16,7 +16,9 @@
       </div>
     </header>
 
-    <b-table :data="templates" :hoverable="true" :loading="loading.templates" default-sort="createdAt">
+    <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D12) -- filtered client-side; the
+         store stays every row (the campaign form's template picker is never filtered, S3). -->
+    <b-table :data="shownTemplates" :hoverable="true" :loading="loading.templates" default-sort="createdAt">
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" :td-attrs="$utils.tdID" sortable>
         <a href="#" @click.prevent="showEditForm(props.row)">
           {{ props.row.name }}
@@ -129,6 +131,8 @@ import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 
 import TemplateForm from './TemplateForm.vue';
 import { isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
+import { filterTemplates } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
   components: {
@@ -136,6 +140,10 @@ export default Vue.extend({
     TemplateForm,
     EmptyPlaceholder,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D12) -- re-filters on a selection change
+  // (shownTemplates is a computed over the selection).
+  mixins: [brandScopeMixin],
 
   data() {
     return {
@@ -230,6 +238,12 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['templates', 'loading']),
+
+    // Fork (global brand, D12) -- a brand's rows plus the brandless rows; No brand the brandless
+    // rows only; All brands every row.
+    shownTemplates() {
+      return filterTemplates(Array.isArray(this.templates) ? this.templates : [], this.brandSelection);
+    },
   },
 
   created() {

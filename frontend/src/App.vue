@@ -11,6 +11,9 @@
             <img class="favicon" src="@/assets/favicon.png" alt="" />
           </router-link>
         </div>
+        <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D4) -- immediately right of the logo,
+             its left edge on the main column's content edge (measured: alignSelector). -->
+        <brand-selector class="navbar-item" :style="selectorStyle" />
       </template>
       <template #end>
         <navigation v-if="isMobile" :is-mobile="isMobile" :active-item="activeItem" :active-group="activeGroup"
@@ -124,16 +127,21 @@ import { uris } from './constants';
 import stepUp, { stepUpError } from './stepUp';
 
 import Navigation from './components/Navigation.vue';
+import BrandSelector from './components/BrandSelector.vue';
 
 export default Vue.extend({
   name: 'App',
 
   components: {
     Navigation,
+    BrandSelector,
   },
 
   data() {
     return {
+      // Fork (global brand, D4) -- the selector's left offset inside the navbar brand, so its
+      // left edge sits on the .main column's content edge; null = natural flow (mobile).
+      selectorLeft: null,
       // Fork (session expiry): throttle for checkSessionOnFocus.
       lastSessionCheck: 0,
       activeItem: {},
@@ -143,6 +151,12 @@ export default Vue.extend({
   },
 
   watch: {
+    // Fork (global brand, D4) -- the navbar and .main render only once the app has loaded and on
+    // a non-bare route, so measure again whenever that changes.
+    isBare() {
+      this.alignSelector();
+    },
+
     $route(to) {
       // Set the current route name to true for active+expanded keys in the
       // menu to pick up.
@@ -158,6 +172,22 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (global brand, D4) -- the selector's left edge on the main column's content edge (the
+    // .main left edge plus its padding), measured because the sidebar's width is Buefy's.
+    alignSelector() {
+      this.$nextTick(() => {
+        const main = document.querySelector('#app .main');
+        const brand = document.querySelector('#app .navbar-brand');
+        if (!main || !brand || this.isMobile) {
+          this.selectorLeft = null;
+          return;
+        }
+        const pad = parseFloat(window.getComputedStyle(main).paddingLeft) || 0;
+        const left = main.getBoundingClientRect().left + pad - brand.getBoundingClientRect().left;
+        this.selectorLeft = left > 0 ? left : null;
+      });
+    },
+
     toggleGroup(group, state) {
       this.activeGroup = state ? { [group]: true } : {};
     },
@@ -348,16 +378,37 @@ export default Vue.extend({
     isMobile() {
       return this.windowWidth <= 768;
     },
+
+    selectorStyle() {
+      if (this.selectorLeft === null) {
+        return {};
+      }
+      return {
+        position: 'absolute', left: `${this.selectorLeft}px`, top: 0, bottom: 0,
+      };
+    },
   },
 
   mounted() {
     // Lists is required across different views. On app load, fetch the lists
     // and have them in the store.
-    this.$api.getLists({ minimal: true, per_page: 'all', status: 'active' });
+    // Fork (global brand, D3) -- the first response sets listsLoaded, which releases the brand
+    // resolution and every Phase 1 page's first scoped fetch. A failed read releases them too: an
+    // empty store is an empty roster (All brands, control hidden), never a page that never loads.
+    this.$api.getLists({ minimal: true, per_page: 'all', status: 'active' })
+      .catch(() => {})
+      .finally(() => this.$store.commit('setListsLoaded'));
+
+    // Fork (global brand, D1) -- the roster's labels and order; a failure leaves slug labels.
+    this.$api.getBrands(true).then((rows) => {
+      this.$store.commit('setBrandRows', rows);
+    }).catch(() => {});
 
     window.addEventListener('resize', () => {
       this.windowWidth = window.innerWidth;
+      this.alignSelector();
     });
+    this.$watch(() => this.$root.isLoaded, () => this.alignSelector(), { immediate: true });
 
     this.listenEvents();
 

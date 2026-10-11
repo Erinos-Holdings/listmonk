@@ -17,6 +17,10 @@
         </h4>
       </header>
       <section expanded class="modal-card-body">
+        <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D11) -- a list outside the selected
+             brand opens with the notice; the form is otherwise unchanged. -->
+        <brand-context-notice v-if="isEditing" :record-brand="data.brand || ''"
+          :kind="$tc('globals.terms.list', 1).toLowerCase()" />
         <!-- BRAND-PICKER-SPEC D4: the locked list (models.LockedListNames) is read-only here --
         every control disabled, no Save; the server refuses the write with 409 regardless. -->
         <b-notification v-if="locked" type="is-warning" :closable="false" data-cy="list-locked">
@@ -50,10 +54,12 @@
         </b-field>
 
         <!-- BRAND-PICKER-SPEC D3: the brand is chosen, never typed; the server writes the
-        brand:/from:/site: tags from the brands row. Required, no empty option. -->
+        brand:/from:/site: tags from the brands row. Required, no empty option. GLOBAL-BRAND-SPEC
+        D10: under a selected brand it is preset to that brand and disabled (a new list, or a list
+        already of that brand); a list of another brand keeps it enabled, with the notice. -->
         <b-field :label="$t('lists.brand')" label-position="on-border" :message="$t('lists.brandHelp')">
           <b-select v-model="brand" name="brand" :placeholder="$t('lists.brand')" :required="!locked" expanded
-            :disabled="locked" data-cy="list-brand">
+            :disabled="locked || brandLocked" data-cy="list-brand">
             <option v-for="b in brands" :key="b.slug" :value="b.slug">
               {{ brandLabel(b) }}
             </option>
@@ -96,16 +102,23 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import CopyText from '../components/CopyText.vue';
+import BrandContextNotice from '../components/BrandContextNotice.vue';
 import {
   buildListRequest, brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
+import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
   name: 'ListForm',
 
   components: {
     CopyText,
+    BrandContextNotice,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D10).
+  mixins: [brandScopeMixin],
 
   props: {
     data: { type: Object, default: () => ({}) },
@@ -180,6 +193,21 @@ export default Vue.extend({
       return this.brands.find((b) => b.slug === this.brand) || null;
     },
 
+    // Fork (global brand, D10) -- the selection's preset for this form ('list': none presets
+    // nothing and locks nothing -- a brandless list is never created by the form).
+    brandDefault() {
+      return formBrandDefault(this.brandSelection, 'list');
+    },
+
+    // The Brand dropdown is disabled under a selected brand for a new list and for a list already
+    // of that brand; a list of another brand keeps it enabled (S4 -- the notice says why).
+    brandLocked() {
+      if (!this.brandDefault.locked) {
+        return false;
+      }
+      return !this.isEditing || (this.$props.data.brand || '') === this.brandDefault.value;
+    },
+
     // The render catalog list: read-only in the form (BRAND-PICKER-SPEC D4).
     locked() {
       return this.isEditing && isLockedList(this.data);
@@ -201,6 +229,10 @@ export default Vue.extend({
     // edit the select is preset from the row's brand; an untagged list shows it empty and required.
     this.form.tags = splitReservedTags(this.form.tags).free;
     this.brand = this.$props.data.brand || null;
+    // Fork (global brand, D10) -- a new list under a selected brand is that brand's.
+    if (!this.isEditing && this.brandDefault.locked) {
+      this.brand = this.brandDefault.value;
+    }
     this.$api.getBrands().then((data) => {
       this.brands = Array.isArray(data) ? data : [];
     });

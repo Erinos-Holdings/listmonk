@@ -21,7 +21,6 @@ type Queries struct {
 	// Fork (client stats, CLIENT-STATS-SPEC D6/D7) -- the Dashboard's live client panel.
 	GetDashboardClients       *sqlx.Stmt `query:"get-dashboard-clients"`
 	GetDashboardClientsScoped *sqlx.Stmt `query:"get-dashboard-clients-scoped"`
-	GetDashboardBrands        *sqlx.Stmt `query:"get-dashboard-brands"`
 
 	InsertSubscriber                *sqlx.Stmt `query:"insert-subscriber"`
 	UpsertSubscriber                *sqlx.Stmt `query:"upsert-subscriber"`

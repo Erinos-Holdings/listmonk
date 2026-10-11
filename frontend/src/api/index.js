@@ -156,18 +156,20 @@ export const getHealth = () => http.get(
 export const reloadApp = () => http.post('/api/admin/reload');
 
 // Dashboard
-export const getDashboardCounts = () => http.get(
+// Fork (global brand, GLOBAL-BRAND-SPEC D5) -- params.list_id (repeatable) is the global brand's
+// effective list set; absent = today's Dashboard.
+export const getDashboardCounts = (params) => http.get(
   '/api/dashboard/counts',
-  { loading: models.dashboard },
+  { params, loading: models.dashboard },
 );
 
-export const getDashboardCharts = () => http.get(
+export const getDashboardCharts = (params) => http.get(
   '/api/dashboard/charts',
-  { loading: models.dashboard },
+  { params, loading: models.dashboard },
 );
 
-// Fork (client stats, CLIENT-STATS-SPEC D7) -- the Dashboard's client panel:
-// {scoped, brand, brands, clients: [{client, views, clicks}]}; params.brand is a list brand tag.
+// Fork (client stats, CLIENT-STATS-SPEC D7; global brand D5) -- the Dashboard's client panel:
+// {scoped, clients: [{client, views, clicks}]}; params.list_id as the counts.
 export const getDashboardClients = (params) => http.get(
   '/api/dashboard/clients',
   { params, loading: models.dashboard },
@@ -257,9 +259,11 @@ export const deleteLists = (params) => http.delete(
 // Fork (brand picker, integrations BRAND-PICKER-SPEC D1/D3). The brands rows
 // [{slug, from_email, site, display_name}], sorted by slug; readable by every logged-in user.
 // Returned verbatim (camelCase: false) so the list form and the Brands page read the API's keys.
-export const getBrands = async () => http.get(
+// Fork (global brand, GLOBAL-BRAND-SPEC D1) -- quiet: the navbar roster's label read; a failure
+// leaves the roster slug-labelled and must not toast.
+export const getBrands = async (quiet = false) => http.get(
   '/api/brands',
-  { camelCase: false },
+  quiet ? { camelCase: false, disableToast: true } : { camelCase: false },
 );
 
 // Fork (persona From, integrations PERSONA-FROM-SPEC D4). A brand's approved sender display

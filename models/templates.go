@@ -8,7 +8,6 @@ import (
 	txttpl "text/template"
 	"time"
 
-	"github.com/lib/pq"
 	null "gopkg.in/volatiletech/null.v6"
 )
 
@@ -129,21 +128,12 @@ type CampaignAnalyticsClient struct {
 	Clicks int    `db:"clicks" json:"clicks"`
 }
 
-// DashboardClients is the Dashboard's client panel (fork, client stats, CLIENT-STATS-SPEC D6/D7):
-// the rows for the selected brand (Brand "" = all brands), the picker's brands (list brand tags),
-// and Scoped -- true for a list-scoped user, whose rows cover their permitted lists only and who
-// gets no picker.
+// DashboardClients is the Dashboard's client panel (fork, client stats, CLIENT-STATS-SPEC D6): the
+// rows, and Scoped -- true when they cover a scope (a list-scoped user's permitted lists, or the
+// global brand's list_id, GLOBAL-BRAND-SPEC D5) rather than every campaign.
 type DashboardClients struct {
 	Scoped  bool                      `json:"scoped"`
-	Brand   string                    `json:"brand"`
-	Brands  []string                  `json:"brands"`
 	Clients []CampaignAnalyticsClient `json:"clients"`
-}
-
-// DashboardBrand is one list brand tag with the ids of its lists (fork, client stats).
-type DashboardBrand struct {
-	Brand   string        `db:"brand"`
-	ListIDs pq.Int64Array `db:"list_ids"`
 }
 
 // AnalyticsCampaign is one row of the Campaign Analytics picker (fork, brand analytics,

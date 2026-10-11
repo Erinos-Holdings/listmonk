@@ -97,6 +97,11 @@
       </div>
     </header>
 
+    <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D11, S4) -- a campaign outside the
+         selected brand opens with the notice; nothing else changes. -->
+    <brand-context-notice v-if="isEditing" :record-brand="recordBrand"
+      :kind="$tc('globals.terms.campaign', 1).toLowerCase()" />
+
     <b-loading :active="loading.campaigns" />
 
     <!-- Fork -- stops at the right edge of the Campaign tab's form column (Name, Subject, ...)
@@ -235,7 +240,10 @@
                     custom-class="is-derived" :placeholder="$t('campaigns.fromAddressPlaceholder')" required />
                 </b-field>
 
-                <list-selector v-model="form.lists" :selected="form.lists" :all="lists.results" :disabled="!canEdit"
+                <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D10) -- the options are the
+                     global brand's lists united with the campaign's saved lists (all lists under
+                     All brands). The template picker is never filtered (S3). -->
+                <list-selector v-model="form.lists" :selected="form.lists" :all="listOptions" :disabled="!canEdit"
                   :label="$t('globals.terms.lists')" :placeholder="$t('campaigns.sendToLists')" />
 
                 <div class="columns">
@@ -535,6 +543,9 @@ import {
   pickerBrandRow, fromToApply, isSyncRepoint, campaignRefs, blockingCampaigns,
 } from '../personaFrom.mjs'; // eslint-disable-line import/extensions
 import { canManageBrandPersonas } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
+import { campaignBrand, filterByIds, scopeUnion } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
+import BrandContextNotice from '../components/BrandContextNotice.vue';
 
 // Fork: the account's local zone for the Send-later helper text. MDT/MST is resolved by Intl
 // per date, so DST never needs a code change.
@@ -601,7 +612,11 @@ export default Vue.extend({
     Media,
     CopyText,
     CampaignPreview,
+    BrandContextNotice,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D10/D11).
+  mixins: [brandScopeMixin],
 
   data() {
     return {
@@ -1857,6 +1872,19 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['serverConfig', 'loading', 'lists', 'templates', 'profile']),
+
+    // Fork (global brand, GLOBAL-BRAND-SPEC D10/I6) -- the list selector's options: the scope
+    // united with the campaign's SAVED lists, so an existing campaign outside the scope keeps its
+    // lists addable and removable; a new campaign offers the scope. Every list under All brands.
+    listOptions() {
+      return filterByIds(this.lists, scopeUnion(this.scopeListIds, [this.data.lists]));
+    },
+
+    // Fork (global brand, D11) -- the saved campaign's brand, from its lists in the active-lists
+    // store; undefined (no notice) when none of them is there.
+    recordBrand() {
+      return campaignBrand(this.data.lists, this.lists);
+    },
 
     // Fork: the Send-later helper text — the scheduled instant in Mountain time (MDT/MST
     // resolved by Intl for that date) and in UTC, 12-hour, no seconds, one format for both.

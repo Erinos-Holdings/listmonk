@@ -5,6 +5,7 @@
         <h1 class="title is-4 mb-2">
           {{ $t('globals.terms.lists') }}
           <span v-if="queryParams.status === 'archived'" class="has-text-grey-light">/ {{ queryParams.status }} </span>
+          <span v-if="brandSelection.kind === 'none'" class="has-text-grey-light">/ {{ $t('lists.nobrand') }} </span>
           <span v-if="!isNaN(lists.total)">({{ lists.total }})</span>
         </h1>
 
@@ -49,7 +50,9 @@
           </a>
           <span class="a">
             {{ $tc('globals.messages.numSelected', numSelectedLists, { num: numSelectedLists }) }}
-            <span v-if="!bulk.all && lists.total > lists.perPage">
+            <!-- Fork (global brand) -- the by-query list delete carries no brand scope, so
+                 "select all" is not offered under a brand: a selection is the page's rows by id. -->
+            <span v-if="!bulk.all && lists.total > lists.perPage && !scopeListIds">
               &mdash;
               <a href="#" @click.prevent="onSelectAll" data-cy="select-all-lists">
                 {{ $tc('globals.messages.selectAll', lists.total, { num: lists.total }) }}
@@ -277,6 +280,8 @@ import HealthChip from '../components/HealthChip.vue';
 import { isSendPlus, sendLangCode } from '../langs';
 import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { isLockedList } from '../listBrand.mjs'; // eslint-disable-line import/extensions
+import { listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (list grid). Send-language lines in display order. The API's en already includes none.
 const GRID_LANGS = ['en', 'fr', 'es', 'de', 'it', 'other'];
@@ -291,6 +296,9 @@ export default Vue.extend({
     EmptyPlaceholder,
     HealthChip,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4/D6).
+  mixins: [brandScopeMixin],
 
   data() {
     return {
@@ -508,12 +516,15 @@ export default Vue.extend({
         order_by: this.queryParams.orderBy,
         order: this.queryParams.order,
         status: this.queryParams.status,
+        // Fork (global brand, D6) -- tag=brand:<slug> / nobrand=true; nothing under All brands.
+        ...listsScopeParams(this.brandSelection),
       }).then((resp) => {
         this.lists = resp;
       });
 
       // Also fetch the minimal lists for the global store that appears
-      // in dropdown menus on other pages like import and campaigns.
+      // in dropdown menus on other pages like import and campaigns. Never scoped: the store is
+      // the brand roster's source (GLOBAL-BRAND-SPEC D1).
       this.$api.getLists({ minimal: true, per_page: 'all', status: 'active' });
     },
 
@@ -524,7 +535,9 @@ export default Vue.extend({
     // so the column set is stable across pages. An empty result set means hidden; a rejected
     // request shows the column (fail open, V8).
     probePending() {
-      this.$api.probeListsPending({ status: this.queryParams.status }).then((resp) => {
+      this.$api.probeListsPending({
+        status: this.queryParams.status, ...listsScopeParams(this.brandSelection),
+      }).then((resp) => {
         const results = (resp && resp.results) || [];
         this.hasPending = ((results[0] && results[0].subscriberGrid
           && results[0].subscriberGrid.all && results[0].subscriberGrid.all.pending) || 0) > 0;
@@ -645,6 +658,19 @@ export default Vue.extend({
     },
   },
 
+  watch: {
+    // Fork (global brand, D4) -- a selection change re-reads the listing from page 1; the bulk
+    // selection made under the old brand is dropped.
+    brandKey(now, before) {
+      if (before === 'pending' || now === 'pending' || this.$route.params.id) {
+        return;
+      }
+      this.queryParams.page = 1;
+      this.bulk = { checked: [], all: false };
+      this.refresh();
+    },
+  },
+
   created() {
     this.$root.$on('page.refresh', this.refresh);
   },
@@ -659,8 +685,11 @@ export default Vue.extend({
         this.showEditForm(data);
       });
     } else {
-      this.getLists();
-      this.probePending();
+      // Fork (global brand, D3) -- the first scoped fetch waits for the lists (I13).
+      this.afterListsLoaded(() => {
+        this.getLists();
+        this.probePending();
+      });
     }
   },
 });

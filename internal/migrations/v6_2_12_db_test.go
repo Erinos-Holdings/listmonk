@@ -280,7 +280,7 @@ func TestListsHealthJoin(t *testing.T) {
 	q := strings.ReplaceAll(h.qs["query-lists"].Query, "%order%", "id ASC")
 	get := func(id int) map[string]any {
 		var l models.List
-		if err := h.db.Unsafe().Get(&l, q, id, "", "", "", "", "", pq.StringArray{}, true, pq.Array([]int{}), 0, 1); err != nil {
+		if err := h.db.Unsafe().Get(&l, q, id, "", "", "", "", "", pq.StringArray{}, true, pq.Array([]int{}), 0, 1, false); err != nil {
 			t.Fatalf("query-lists %d: %v", id, err)
 		}
 		b, _ := json.Marshal(l)

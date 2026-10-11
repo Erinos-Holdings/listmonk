@@ -14,6 +14,11 @@
     </div>
     <hr />
 
+    <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D9/D11, S4) -- a prefilled campaign
+         outside the selected brand stays selected, with the notice (one line per such brand). -->
+    <brand-context-notice v-for="b in noticeBrands" :key="`notice-${b}`" :record-brand="b"
+      :kind="$tc('globals.terms.campaign', 1).toLowerCase()" />
+
     <form @submit.prevent="onSubmit">
       <div class="columns">
         <div class="column is-6">
@@ -148,6 +153,9 @@ import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
+import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
+import BrandContextNotice from '../components/BrandContextNotice.vue';
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
 const RATE_DIGITS = { views: 1, clicks: 1, bounces: 2 };
@@ -170,12 +178,21 @@ const chartColors = [
 export default Vue.extend({
   components: {
     Chart,
+    BrandContextNotice,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4/D9/D11).
+  mixins: [brandScopeMixin],
 
   data() {
     return {
       isSearchLoading: false,
       queriedCampaigns: [],
+      // Fork (global brand, D9) -- the picker's last search (re-run on a selection change; null =
+      // the picker has not been opened yet) and each prefilled campaign's lists ({ id: lists }),
+      // read where the user may read the campaign; absent = brand underivable.
+      lastQuery: null,
+      prefillLists: {},
 
       // Data for each view.
       counts: {
@@ -364,11 +381,21 @@ export default Vue.extend({
 
     // Fork (brand analytics, BRAND-ANALYTICS-SPEC D3/D4) -- the narrow, list-scoped picker endpoint
     // for every user, so the picker never offers a campaign the analytics endpoint would refuse.
+    // Fork (global brand, D9) -- with the global brand's list ids (none under All brands); the
+    // first scoped fetch waits for the lists (I13).
     queryCampaigns(q) {
+      const query = typeof q === 'string' ? q : '';
+      this.lastQuery = query;
+      if (!this.listsLoaded) {
+        this.afterListsLoaded(() => this.queryCampaigns(this.lastQuery));
+        return;
+      }
       this.isSearchLoading = true;
-      this.$api.getAnalyticsCampaigns({
-        query: q,
-      }).then((data) => {
+      const params = { query };
+      if (this.scopeListIds) {
+        params.list_id = this.scopeListIds;
+      }
+      this.$api.getAnalyticsCampaigns(params).then((data) => {
         this.isSearchLoading = false;
         this.queriedCampaigns = data.map((c) => {
           // Change the name to include the ID in the auto-suggest results.
@@ -480,6 +507,7 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['serverConfig']),
+    ...mapState({ storeLists: 'lists' }),
 
     locale() {
       return (this.$i18n && this.$i18n.locale) || 'en';
@@ -508,6 +536,33 @@ export default Vue.extend({
       const { field, order } = this.clients.sort;
       return sortClientRows(this.clients.rows, field, order, this.locale);
     },
+
+    // Fork (global brand, D11) -- the distinct brands of the selected campaigns that carry a
+    // notice under the current selection (contextNotice non-null).
+    noticeBrands() {
+      if (this.brandScope.pending) {
+        return [];
+      }
+      const out = [];
+      this.form.campaigns.forEach((c) => {
+        const b = this.prefillLists[c.id] ? campaignBrand(this.prefillLists[c.id], this.storeLists) : undefined;
+        if (b !== undefined && !out.includes(b) && contextNotice(b, this.brandSelection, this.brandRows)) {
+          out.push(b);
+        }
+      });
+      return out;
+    },
+  },
+
+  watch: {
+    // Fork (global brand, D4) -- re-fetch the picker under the new selection; the picked
+    // campaigns stay (D9).
+    brandKey(now, before) {
+      if (before === 'pending' || now === 'pending' || this.lastQuery === null) {
+        return;
+      }
+      this.queryCampaigns(this.lastQuery);
+    },
   },
 
   created() {
@@ -534,6 +589,18 @@ export default Vue.extend({
           camp.name = `#${camp.id}: ${camp.name}`;
           this.form.campaigns.push(camp);
         });
+
+        // Fork (global brand, D9/D11) -- the prefill is never filtered by the selection (no
+        // list_id above). A prefilled campaign's brand comes from its lists, readable only to a
+        // user who may read the campaign itself; an analytics-only user's is underivable, so no
+        // notice (D11).
+        if (this.$can('campaigns:get_all', 'campaigns:get')) {
+          this.form.campaigns.forEach((c) => {
+            this.$api.getCampaignQuiet(c.id).then((full) => {
+              this.$set(this.prefillLists, c.id, (full && full.lists) || []);
+            }).catch(() => {});
+          });
+        }
 
         // D11 (b): the Campaigns-page link carries only id -- default the range to the selection.
         // A URL with from/to is honoured as-is.

@@ -22,6 +22,7 @@
     "test:context-advice": "node --test src/contextAdvice.test.mjs",
     "test:list-brand": "node --test src/listBrand.test.mjs",
     "test:persona-from": "node --test src/personaFrom.test.mjs",
+    "test:brand-scope": "node --test src/brandScope.test.mjs",
     "test": "node --test src/*.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
   },

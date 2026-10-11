@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
+	"net/url"
 	"syscall"
 	"time"
 
@@ -123,13 +123,70 @@ func (a *App) GetServerConfig(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+// dashboardScope (fork, global brand, integrations GLOBAL-BRAND-SPEC D5) is the Dashboard's read
+// decision: scoped=false is the materialized views (blanket list access, no list_id); scoped=true
+// is the live scoped queries over listIDs, with allCampaigns their campaigns get_all argument.
+type dashboardScope struct {
+	scoped       bool
+	listIDs      []int
+	allCampaigns bool
+}
+
+// dashboardListScope (fork, global brand, GLOBAL-BRAND-SPEC D5, I1, I7) is the ONE rule the three
+// Dashboard reads share. No list_id is today's behaviour exactly -- blanket list access reads the
+// materialized views; a list-scoped user reads the scoped queries over their permitted lists with
+// allCampaigns = campaigns:get_all (BRAND-ANALYTICS-SPEC D7). A list_id (the global brand
+// selector's effective list set, repeatable) reads the scoped queries over permitted ∩ list_id
+// (FilterListsByPerm; the ids unchanged under blanket access), and allCampaigns is FALSE whatever
+// the user's grants: a brand's campaigns are those with ANY campaign_lists row on the scope --
+// get_all widens which campaigns a user may read, not which are the brand's. The selector itself
+// never reaches the server (S1); this is permission ∩ request, as every other list filter.
+func dashboardListScope(user auth.User, qp url.Values) (dashboardScope, error) {
+	hasAll, permitted := user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
+
+	raw, ok := qp["list_id"]
+	if !ok || len(raw) == 0 {
+		if hasAll {
+			return dashboardScope{}, nil
+		}
+		return dashboardScope{scoped: true, listIDs: permitted, allCampaigns: user.HasPerm(auth.PermCampaignsGetAll)}, nil
+	}
+
+	ids, err := parseStringIDs(raw)
+	if err != nil {
+		return dashboardScope{}, err
+	}
+	if hasAll {
+		return dashboardScope{scoped: true, listIDs: ids, allCampaigns: false}, nil
+	}
+	out := user.FilterListsByPerm(auth.PermTypeGet|auth.PermTypeManage, ids)
+	if out == nil {
+		out = []int{}
+	}
+	return dashboardScope{scoped: true, listIDs: out, allCampaigns: false}, nil
+}
+
+// dashboardScopeFor is dashboardListScope on a request, with a malformed list_id as a 400.
+func (a *App) dashboardScopeFor(c echo.Context) (dashboardScope, error) {
+	sc, err := dashboardListScope(auth.GetUser(c), c.QueryParams())
+	if err != nil {
+		return sc, echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
+	}
+	return sc, nil
+}
+
 // GetDashboardCharts returns chart data points to render ont he dashboard.
 func (a *App) GetDashboardCharts(c echo.Context) error {
-	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7) -- a list-scoped user reads live, scoped
-	// charts; everyone with blanket list access keeps the materialized view unchanged.
-	user := auth.GetUser(c)
-	if hasAll, listIDs := user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage); !hasAll {
-		out, err := a.core.GetDashboardChartsScoped(listIDs, user.HasPerm(auth.PermCampaignsGetAll))
+	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7; global brand, GLOBAL-BRAND-SPEC D5) -- a
+	// list-scoped user, or any list_id, reads live, scoped charts; blanket list access with no
+	// list_id keeps the materialized view unchanged.
+	sc, err := a.dashboardScopeFor(c)
+	if err != nil {
+		return err
+	}
+	if sc.scoped {
+		out, err := a.core.GetDashboardChartsScoped(sc.listIDs, sc.allCampaigns)
 		if err != nil {
 			return err
 		}
@@ -147,11 +204,15 @@ func (a *App) GetDashboardCharts(c echo.Context) error {
 
 // GetDashboardCounts returns stats counts to show on the dashboard.
 func (a *App) GetDashboardCounts(c echo.Context) error {
-	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7) -- as GetDashboardCharts: list-scoped
-	// users get live counts over their lists (scoped: true), never the global numbers.
-	user := auth.GetUser(c)
-	if hasAll, listIDs := user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage); !hasAll {
-		out, err := a.core.GetDashboardCountsScoped(listIDs, user.HasPerm(auth.PermCampaignsGetAll))
+	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7; global brand, GLOBAL-BRAND-SPEC D5) -- as
+	// GetDashboardCharts: list-scoped users and any list_id get live counts over the scope
+	// (scoped: true), never the global numbers.
+	sc, err := a.dashboardScopeFor(c)
+	if err != nil {
+		return err
+	}
+	if sc.scoped {
+		out, err := a.core.GetDashboardCountsScoped(sc.listIDs, sc.allCampaigns)
 		if err != nil {
 			return err
 		}
@@ -168,47 +229,29 @@ func (a *App) GetDashboardCounts(c echo.Context) error {
 }
 
 // GetDashboardClients returns the Dashboard's per-email-client views and clicks (fork, client
-// stats, integrations CLIENT-STATS-SPEC D6/D7). The scoped variant is selected exactly as in
-// GetDashboardCharts: a list-scoped user gets the rollup over their permitted lists, and ?brand=
-// is IGNORED for them (D7, review F6) -- no picker, no brands. Everyone else may pass ?brand=<tag>,
-// resolved here to that brand's list ids (a tag no list carries resolves to no lists, so no rows);
-// no ?brand= is every campaign.
+// stats, integrations CLIENT-STATS-SPEC D6). The scoped variant is selected exactly as in
+// GetDashboardCharts (dashboardListScope, GLOBAL-BRAND-SPEC D5): a list-scoped user, or any
+// list_id, gets the rollup over the scope; blanket list access with no list_id is every campaign.
+// The panel's own ?brand= picker is gone (GLOBAL-BRAND-SPEC D5, superseding CLIENT-STATS-SPEC D7):
+// the global brand selector's list_id is the one filter.
 func (a *App) GetDashboardClients(c echo.Context) error {
-	user := auth.GetUser(c)
-	if hasAll, listIDs := user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage); !hasAll {
-		rows, err := a.core.GetDashboardClientsScoped(listIDs, user.HasPerm(auth.PermCampaignsGetAll))
-		if err != nil {
-			return err
-		}
-		return c.JSON(http.StatusOK, okResp{models.DashboardClients{Scoped: true, Brands: []string{}, Clients: rows}})
-	}
-
-	brands, err := a.core.GetDashboardBrands()
+	sc, err := a.dashboardScopeFor(c)
 	if err != nil {
 		return err
 	}
-	out := models.DashboardClients{Brands: make([]string, 0, len(brands))}
-	for _, b := range brands {
-		out.Brands = append(out.Brands, b.Brand)
-	}
-
-	var listIDs []int
-	if brand := strings.TrimSpace(c.QueryParam("brand")); brand != "" {
-		out.Brand = brand
-		listIDs = []int{}
-		for _, b := range brands {
-			if b.Brand == brand {
-				for _, id := range b.ListIDs {
-					listIDs = append(listIDs, int(id))
-				}
-			}
+	if sc.scoped {
+		rows, err := a.core.GetDashboardClientsScoped(sc.listIDs, sc.allCampaigns)
+		if err != nil {
+			return err
 		}
+		return c.JSON(http.StatusOK, okResp{models.DashboardClients{Scoped: true, Clients: rows}})
 	}
 
-	if out.Clients, err = a.core.GetDashboardClients(listIDs); err != nil {
+	rows, err := a.core.GetDashboardClients()
+	if err != nil {
 		return err
 	}
-	return c.JSON(http.StatusOK, okResp{out})
+	return c.JSON(http.StatusOK, okResp{models.DashboardClients{Clients: rows}})
 }
 
 // ReloadApp sends a reload signal to the app, causing a full restart.

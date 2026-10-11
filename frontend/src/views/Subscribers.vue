@@ -32,6 +32,11 @@
       </div>
     </header>
 
+    <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D8/D11, S4) -- a list route outside the
+         selected brand keeps its one list, with the notice. -->
+    <brand-context-notice v-if="queryParams.listID" :record-brand="currentList ? currentList.brand : undefined"
+      :kind="$tc('globals.terms.list', 1).toLowerCase()" />
+
     <section class="subscribers-controls">
       <div class="columns">
         <div class="column is-8">
@@ -236,7 +241,8 @@
 
     <!-- Manage list modal -->
     <b-modal scroll="keep" :aria-modal="true" :active.sync="isBulkListFormVisible" :width="500" class="has-overflow">
-      <subscriber-bulk-list :num-subscribers="listFormTarget ? 1 : numSelectedSubscribers" @finished="bulkChangeLists" />
+      <subscriber-bulk-list :num-subscribers="listFormTarget ? 1 : numSelectedSubscribers" :options="bulkListOptions"
+        @finished="bulkChangeLists" />
     </b-modal>
 
     <!-- Add / edit form modal -->
@@ -257,6 +263,11 @@ import CopyText from '../components/CopyText.vue';
 import {
   CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
 } from '../langs';
+import {
+  effectiveListIds, filterByIds, scopeUnion, subscriberExportParams, subscriberQueryBody,
+} from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
+import BrandContextNotice from '../components/BrandContextNotice.vue';
 
 // Fork (LIST-COLLAPSE-SPEC C11). The languages the picker offers after English (STORED en alone,
 // lang=en_only, its own option) and No language. For these four the stored and the send language
@@ -269,7 +280,11 @@ export default Vue.extend({
     SubscriberBulkList,
     CopyText,
     EmptyPlaceholder,
+    BrandContextNotice,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4/D8).
+  mixins: [brandScopeMixin],
 
   data() {
     return {
@@ -470,7 +485,8 @@ export default Vue.extend({
       this.queryParams = { ...this.queryParams, ...params };
 
       const qp = {
-        list_id: this.queryParams.listID,
+        // Fork (global brand, D8) -- the chosen list, else the global brand's list ids, else none.
+        list_id: effectiveListIds(this.queryParams.listID, this.scopeListIds),
         search: this.queryParams.search,
         query: this.queryParams.queryExp,
         page: this.queryParams.page,
@@ -521,14 +537,10 @@ export default Vue.extend({
         };
       } else {
         // 'All' is selected, blocklist by query.
+        // Fork (global brand, D8/I12) -- the body carries the effective list ids.
         fn = () => {
-          this.$api.blocklistSubscribersByQuery({
-            search: this.queryParams.search,
-            query: this.queryParams.queryExp,
-            list_ids: this.queryParams.listID ? [this.queryParams.listID] : null,
-            subscription_status: this.queryParams.subStatus,
-            ...this.gridFilter,
-          }).then(() => this.querySubscribers());
+          this.$api.blocklistSubscribersByQuery(subscriberQueryBody(this.queryParams, this.scopeListIds))
+            .then(() => this.querySubscribers());
         };
       }
 
@@ -540,29 +552,10 @@ export default Vue.extend({
         ? this.bulk.checked.length : this.subscribers.total;
 
       this.$utils.confirm(this.$t('subscribers.confirmExport', { num }), () => {
-        const q = new URLSearchParams();
-
-        if (this.queryParams.search) {
-          q.append('search', this.queryParams.search);
-        } else if (this.queryParams.queryExp) {
-          q.append('query', this.queryParams.queryExp);
-        }
-
-        if (this.queryParams.listID) {
-          q.append('list_id', this.queryParams.listID);
-        }
-
-        if (this.queryParams.subStatus) {
-          q.append('subscription_status', this.queryParams.subStatus);
-        }
-
-        // Fork (list grid).
-        Object.entries(this.gridFilter).forEach(([k, v]) => q.append(k, v));
-
-        // Export selected subscribers.
-        if (!this.bulk.all && this.bulk.checked.length > 0) {
-          this.bulk.checked.map((s) => q.append('id', s.id));
-        }
+        // Fork (global brand, D8/I12) -- search/query, the effective list ids, status, the grid
+        // filter (list grid) and the selected ids, built by brandScope.mjs.
+        const ids = !this.bulk.all && this.bulk.checked.length > 0 ? this.bulk.checked.map((s) => s.id) : [];
+        const q = new URLSearchParams(subscriberExportParams(this.queryParams, this.scopeListIds, ids));
 
         document.location.href = `${uris.exportSubscribers}?${q.toString()}`;
       });
@@ -588,13 +581,10 @@ export default Vue.extend({
             // If the query expression is empty, explicitly pass `all=true`
             // so that the backend deletes all records in the DB with an empty query string.
             all: this.queryParams.queryExp.trim() === '' && this.queryParams.search.trim() === '',
-            search: this.queryParams.search,
-            query: this.queryParams.queryExp,
-            list_ids: this.queryParams.listID ? [this.queryParams.listID] : null,
-            subscription_status: this.queryParams.subStatus,
             // Fork (list grid, D7). all=true above is sent exactly when a grid-linked page has
             // no search -- the server keeps the segment through it (it never voids a segment).
-            ...this.gridFilter,
+            // Fork (global brand, D8/I12) -- and the effective list ids, which it keeps too.
+            ...subscriberQueryBody(this.queryParams, this.scopeListIds),
           }).then(() => {
             this.querySubscribers();
 
@@ -614,7 +604,8 @@ export default Vue.extend({
         action,
         query: this.fullQueryExp,
         search: this.queryParams.search,
-        list_ids: this.queryParams.listID ? [this.queryParams.listID] : null,
+        // Fork (global brand, D8/I12) -- the effective list ids (read by the by-query path only).
+        list_ids: effectiveListIds(this.queryParams.listID, this.scopeListIds),
         target_list_ids: lists.map((l) => l.id),
         // Fork (evergreen) -- see the bulk modal's checkbox.
         backfill: action === 'add' && !!backfill,
@@ -635,10 +626,9 @@ export default Vue.extend({
         fn = this.$api.addSubscribersToLists;
         data.ids = this.bulk.checked.map((s) => s.id);
       } else {
-        // 'All' is selected, perform by query.
-        data.query = this.queryParams.queryExp;
-        data.subscription_status = this.queryParams.subStatus;
-        Object.assign(data, this.gridFilter); // Fork (list grid, D7).
+        // 'All' is selected, perform by query. Fork (list grid, D7; global brand, D8/I12) -- the
+        // shared by-query body: query, search, status, grid filter and the effective list ids.
+        Object.assign(data, subscriberQueryBody(this.queryParams, this.scopeListIds));
         fn = this.$api.addSubscribersToListsByQuery;
       }
 
@@ -655,6 +645,25 @@ export default Vue.extend({
       if (!visible) {
         this.listFormTarget = null;
       }
+    },
+
+    // Fork (global brand, D4) -- a selection change goes through the route remount (the keyed
+    // <router-view>), which drops the bulk selection and the chosen list with the page, so a
+    // by-query action can never act on a selection made under another scope. The simple search is
+    // carried (withRouteSearch). On the plain subscribers route the push would be a duplicate
+    // (same fullPath, no remount), so the page drops the same state itself and re-reads.
+    brandKey(now, before) {
+      if (before === 'pending' || now === 'pending') {
+        return;
+      }
+      if (this.$route.name === 'subscribers_list') {
+        this.$router.push({ name: 'subscribers', query: this.withRouteSearch({ ...this.$route.query }) });
+        return;
+      }
+      this.isBulkListFormVisible = false;
+      this.listFormTarget = null;
+      this.bulk = { checked: [], all: false };
+      this.querySubscribers({ page: 1 });
     },
   },
 
@@ -713,6 +722,20 @@ export default Vue.extend({
       return this.bulk.checked.length;
     },
 
+    // Fork (global brand, D8/I6) -- the Manage-lists modal's option set, by mode: a row action is
+    // the scope ∪ that row's lists; a bulk selection by ids the scope ∪ the union of the checked
+    // rows' lists (a cross-brand removal stays possible); a bulk selection by query the scope
+    // only. Every list under All brands.
+    bulkListOptions() {
+      let current = [];
+      if (this.listFormTarget) {
+        current = [this.listFormTarget.lists];
+      } else if (!this.bulk.all && this.bulk.checked.length > 0) {
+        current = this.bulk.checked.map((s) => s.lists);
+      }
+      return filterByIds(this.lists, scopeUnion(this.scopeListIds, current));
+    },
+
     // Returns the list that the subscribers are being filtered by in.
     currentList() {
       if (!this.queryParams.listID || !this.lists.results) {
@@ -756,8 +779,8 @@ export default Vue.extend({
         this.showEditForm(data);
       });
     } else {
-      // Get subscribers on load.
-      this.querySubscribers();
+      // Get subscribers on load. Fork (global brand, D3) -- once the lists have loaded (I13).
+      this.afterListsLoaded(() => this.querySubscribers());
     }
   },
 });

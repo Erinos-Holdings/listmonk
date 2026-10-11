@@ -53,8 +53,13 @@ func (a *App) GetLists(c echo.Context) error {
 		order   = c.FormValue("order")
 
 		pg = a.pg.NewFromURL(c.Request().URL.Query())
+
+		// Fork (global brand, GLOBAL-BRAND-SPEC D6) -- the No brand context: lists with no brand
+		// tag. A named brand is the existing tag=brand:<slug>. Both narrow, never widen, the
+		// permission scoping above.
+		noBrand, _ = strconv.ParseBool(c.QueryParam("nobrand"))
 	)
-	res, total, err := a.core.QueryLists(query, typ, optin, status, tags, orderBy, order, hasAllPerm, permittedIDs, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryLists(query, typ, optin, status, tags, orderBy, order, hasAllPerm, permittedIDs, noBrand, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}

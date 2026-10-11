@@ -18,6 +18,11 @@
           </h4>
         </header>
         <section expanded class="modal-card-body mb-0 pb-0">
+          <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D11/D12) -- a template of another
+               brand opens with the notice; a brandless template is every brand's (D12), so it
+               gets none under a named brand. The form is otherwise unchanged. -->
+          <brand-context-notice v-if="isEditing" :record-brand="noticeBrand"
+            :kind="$tc('globals.terms.template', 1).toLowerCase()" />
           <!-- Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10. -->
           <b-message v-if="isOfficial" type="is-warning" class="official-banner" data-cy="official-banner">
             <b-icon icon="lock-outline" size="is-small" /> {{ $t('templates.officialHint') }}
@@ -73,7 +78,9 @@
               <div class="column is-4">
                 <b-field :label="$t('templates.brandSwatches')" label-position="on-border"
                   :message="brandNote ? $t(brandNote, { brand: brandSlug }) : ''">
-                  <b-select v-model="brandSlug" name="brand-swatches" expanded>
+                  <!-- Fork (global brand, D10) -- preset to the selected brand ('' under No brand)
+                       and disabled, for a new template or one already of that brand. -->
+                  <b-select v-model="brandSlug" name="brand-swatches" expanded :disabled="brandLocked">
                     <option value="">{{ $t('templates.brandSwatchesNone') }}</option>
                     <option v-for="b in brandRoster" :key="b" :value="b">{{ b }}</option>
                   </b-select>
@@ -128,6 +135,9 @@ import { BRAND_TAG_PREFIX, brandThemePalette, reBrandSlug } from '../brand';
 import { CAMPAIGN_LANGS } from '../langs';
 import { normalizeMediaTagsLenient } from '../mediaTags';
 import { isOfficialName, runSweep, selectSweepItems } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
+import { formBrandDefault, templateNoticeBrand } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import brandScopeMixin from '../brandScopeMixin';
+import BrandContextNotice from '../components/BrandContextNotice.vue';
 
 export default Vue.extend({
   components: {
@@ -135,7 +145,11 @@ export default Vue.extend({
     CopyText,
     'code-editor': CodeEditor,
     'visual-editor': VisualEditor,
+    BrandContextNotice,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D10).
+  mixins: [brandScopeMixin],
 
   props: {
     data: { type: Object, default: () => { } },
@@ -471,6 +485,27 @@ export default Vue.extend({
       return CAMPAIGN_LANGS;
     },
 
+    // Fork (global brand, D10) -- the selection's preset: a brand's slug, '' under No brand,
+    // nothing under All brands.
+    brandDefault() {
+      return formBrandDefault(this.brandSelection, 'template');
+    },
+
+    // Fork (global brand, D11/D12) -- the notice's record brand (undefined = no notice).
+    noticeBrand() {
+      return templateNoticeBrand(this.$props.data.brand || '', this.brandSelection);
+    },
+
+    // Locked for a new template, and for a saved one already of the selected brand; a template of
+    // another brand keeps the select enabled (S4 -- the notice says why). Never rewrites a saved
+    // template's brand.
+    brandLocked() {
+      if (!this.brandDefault.locked) {
+        return false;
+      }
+      return !this.isEditing || (this.$props.data.brand || '') === this.brandDefault.value;
+    },
+
     // Fork (media tags) -- MEDIA-TAGS-SPEC D3. The media picker's context is the template's
     // brand; no brand = no context.
     mediaContext() {
@@ -513,6 +548,10 @@ export default Vue.extend({
     // D4: restore the persisted brand (the existing brandSlug watcher runs onBrandPick ->
     // theme fetch -> swatch row, with no new code path).
     this.brandSlug = this.$props.data.brand || '';
+    // Fork (global brand, D10) -- a new template under a selection takes its brand.
+    if (!this.isEditing && this.brandDefault.locked) {
+      this.brandSlug = this.brandDefault.value;
+    }
 
     this.$nextTick(() => {
       this.$refs.focus.focus();

@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -492,11 +491,12 @@ func TestBrandAnalyticsDashboardCharts(t *testing.T) {
 	}
 }
 
-// Fork (client stats) -- integrations CLIENT-STATS-SPEC I5 (and D6/D7): GET /api/dashboard/clients.
+// Fork (client stats) -- integrations CLIENT-STATS-SPEC I5 (and D6): GET /api/dashboard/clients.
 // A list-scoped user's rollup covers only the campaigns on their permitted lists (get_all widens the
-// campaigns, as for the counts), ?brand= is ignored for them; everyone else gets every campaign, or
-// one brand's (list brand tag) campaigns with ?brand=; per table, the window is the charts' 31-day
-// rule anchored on that set's latest event.
+// campaigns, as for the counts); everyone else gets every campaign; per table, the window is the
+// charts' 31-day rule anchored on that set's latest event. The panel's own ?brand= is retired
+// (GLOBAL-BRAND-SPEC D5, I8): it is ignored, and the payload carries no brand/brands; the global
+// brand's list_id is the one filter (permitted ∩ list_id, get_all never widening it).
 func TestDashboardClients(t *testing.T) {
 	h := newLinkHarness(t)
 	f := newBAFixture(h)
@@ -531,8 +531,6 @@ func TestDashboardClients(t *testing.T) {
 
 	type panel struct {
 		Scoped  bool                             `json:"scoped"`
-		Brand   string                           `json:"brand"`
-		Brands  []string                         `json:"brands"`
 		Clients []models.CampaignAnalyticsClient `json:"clients"`
 	}
 	call := func(name string, u auth.User, q string) panel {
@@ -547,8 +545,18 @@ func TestDashboardClients(t *testing.T) {
 		if err := json.Unmarshal([]byte(body), &resp); err != nil {
 			t.Fatalf("%s: %s: %v", name, body, err)
 		}
-		if resp.Data.Clients == nil || resp.Data.Brands == nil {
+		if resp.Data.Clients == nil {
 			t.Fatalf("%s: null array in %s", name, body)
+		}
+		// I8: the retired picker's fields are gone from every payload.
+		var keys struct {
+			Data map[string]json.RawMessage `json:"data"`
+		}
+		_ = json.Unmarshal([]byte(body), &keys)
+		for _, k := range []string{"brand", "brands"} {
+			if _, ok := keys.Data[k]; ok {
+				t.Fatalf("%s: payload still carries %q: %s", name, k, body)
+			}
 		}
 		return resp.Data
 	}
@@ -563,16 +571,16 @@ func TestDashboardClients(t *testing.T) {
 	get := []string{auth.PermCampaignsGetAnalytics}
 	onA := "[ 1 0][apple-mail 2 0][browser-ios 0 3][gmail-proxy 1 0]"
 
-	// Scoped on A: only A's campaigns, A's own anchors; scoped, no brands.
+	// Scoped on A: only A's campaigns, A's own anchors; scoped.
 	p := call("scoped on A", baUser(get, f.listA), "")
-	if got := rows(p); got != onA || !p.Scoped || len(p.Brands) != 0 || p.Brand != "" {
-		t.Fatalf("scoped on A: %s scoped=%v brands=%v brand=%q, want %s scoped, no brands", got, p.Scoped, p.Brands, p.Brand, onA)
+	if got := rows(p); got != onA || !p.Scoped {
+		t.Fatalf("scoped on A: %s scoped=%v, want %s scoped", got, p.Scoped, onA)
 	}
 
-	// D7 / review F6: ?brand= is ignored for a list-scoped user -- B's rows never appear.
+	// ?brand= is ignored -- B's rows never appear.
 	p = call("scoped on A, brand=bravo", baUser(get, f.listA), "?brand=bravo")
-	if got := rows(p); got != onA || p.Brand != "" {
-		t.Fatalf("scoped on A with ?brand=bravo: %s brand=%q, want %s (brand ignored)", got, p.Brand, onA)
+	if got := rows(p); got != onA {
+		t.Fatalf("scoped on A with ?brand=bravo: %s, want %s (brand ignored)", got, onA)
 	}
 
 	// No permitted list -> no rows, never the global numbers.
@@ -586,24 +594,74 @@ func TestDashboardClients(t *testing.T) {
 		t.Fatalf("get_all + scoped on A: %s, want %s", got, wantAll)
 	}
 
-	// Unscoped: every campaign, the picker's brands.
+	// Unscoped: every campaign, not scoped.
 	admin := baUser([]string{auth.PermListGetAll})
 	p = call("unscoped", admin, "")
-	if got := rows(p); got != wantAll || p.Scoped || p.Brand != "" || strings.Join(p.Brands, ",") != "alpha,bravo" {
-		t.Fatalf("unscoped: %s scoped=%v brand=%q brands=%v, want %s, alpha,bravo", got, p.Scoped, p.Brand, p.Brands, wantAll)
+	if got := rows(p); got != wantAll || p.Scoped {
+		t.Fatalf("unscoped: %s scoped=%v, want %s", got, p.Scoped, wantAll)
+	}
+	// ...and the retired ?brand= changes nothing (I8).
+	if got := rows(call("unscoped brand=alpha", admin, "?brand=alpha")); got != wantAll {
+		t.Fatalf("unscoped ?brand=alpha: %s, want %s (ignored)", got, wantAll)
 	}
 
-	// ?brand= resolves to that brand's lists: alpha = A's campaigns (equal to the scoped result).
-	p = call("brand alpha", admin, "?brand=alpha")
-	if got := rows(p); got != onA || p.Brand != "alpha" {
-		t.Fatalf("brand=alpha: %s brand=%q, want %s", got, p.Brand, onA)
+	// GLOBAL-BRAND-SPEC D5: list_id = A's campaigns (equal to the scoped result), scoped.
+	p = call("list_id A", admin, fmt.Sprintf("?list_id=%d", f.listA))
+	if got := rows(p); got != onA || !p.Scoped {
+		t.Fatalf("list_id=A: %s scoped=%v, want %s scoped", got, p.Scoped, onA)
 	}
-	// bravo = A+B and B: anchors on 07-20, so A+B's 06-30 view counts and its 05-16 clicks do not.
-	if got, want := rows(call("brand bravo", admin, "?brand=bravo")), "[browser-windows 0 5][gmail-proxy 1 0][outlook-windows 5 0]"; got != want {
-		t.Fatalf("brand=bravo: %s, want %s", got, want)
+	// B = A+B and B: anchors on 07-20, so A+B's 06-30 view counts and its 05-16 clicks do not.
+	if got, want := rows(call("list_id B", admin, fmt.Sprintf("?list_id=%d", f.listB))), "[browser-windows 0 5][gmail-proxy 1 0][outlook-windows 5 0]"; got != want {
+		t.Fatalf("list_id=B: %s, want %s", got, want)
 	}
-	// A tag no list carries -> no rows.
-	if got := rows(call("brand unknown", admin, "?brand=nope")); got != "" {
-		t.Fatalf("brand=nope: %s, want no rows", got)
+	// get_all never widens a list_id scope (allCampaigns false): A's campaigns only.
+	getAll := baUser([]string{auth.PermCampaignsGetAnalytics, auth.PermCampaignsGetAll, auth.PermListGetAll})
+	if got := rows(call("get_all list_id A", getAll, fmt.Sprintf("?list_id=%d", f.listA))); got != onA {
+		t.Fatalf("get_all + list_id=A: %s, want %s", got, onA)
+	}
+	// A list-scoped user's list_id outside their permission -> no rows.
+	if got := rows(call("scoped on A, list_id B", baUser(get, f.listA), fmt.Sprintf("?list_id=%d", f.listB))); got != "" {
+		t.Fatalf("scoped on A with list_id=B: %s, want no rows", got)
+	}
+}
+
+// Fork (global brand) -- integrations GLOBAL-BRAND-SPEC D9 / I1: the picker's list_id is a
+// separate scope ANDed with the permission predicate -- only campaigns with a campaign_lists row on
+// those ids, for a get_all user and for a list-scoped one; the ?id= prefill is never filtered.
+func TestBrandAnalyticsPickerListScope(t *testing.T) {
+	h := newLinkHarness(t)
+	h.app.auth = &auth.Auth{}
+	f := newBAFixture(h)
+	listC := h.baList("C", "private", "single")
+	campC := h.baCamp("Charlie", "finished", 1, listC)
+
+	getAll := baUser([]string{auth.PermCampaignsGetAnalytics, auth.PermCampaignsGetAll}, f.listA)
+	scopedAB := baUser([]string{auth.PermCampaignsGetAnalytics, auth.PermCampaignsGet}, f.listA, f.listB)
+	onB := url.Values{"list_id": {fmt.Sprint(f.listB)}}
+
+	cases := []struct {
+		name string
+		u    auth.User
+		q    url.Values
+		want []int
+	}{
+		{"get_all, no scope", getAll, url.Values{}, sortedInts(f.campA, f.campAB, f.campB, f.draftA, f.summerB, campC)},
+		{"get_all, list_id B", getAll, onB, sortedInts(f.campAB, f.campB, f.summerB)},
+		{"get_all, list_id C", getAll, url.Values{"list_id": {fmt.Sprint(listC)}}, []int{campC}},
+		{"list-scoped A+B, list_id B", scopedAB, onB, sortedInts(f.campAB, f.campB, f.summerB)},
+		// The scope never widens the permission: C is outside the user's lists.
+		{"list-scoped A+B, list_id C", scopedAB, url.Values{"list_id": {fmt.Sprint(listC)}}, []int{}},
+		{"list_id B with a search", getAll, url.Values{"list_id": {fmt.Sprint(f.listB)}, "query": {"summer"}}, []int{f.summerB}},
+		// S4: the prefill is not filtered by the scope.
+		{"id= ignores list_id", getAll, url.Values{"id": {fmt.Sprint(f.campA), fmt.Sprint(campC)}, "list_id": {fmt.Sprint(f.listB)}},
+			sortedInts(f.campA, campC)},
+	}
+	for _, tc := range cases {
+		if got := pickerIDs(t, h, tc.name, tc.u, tc.q); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: ids %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	if code, body := pickerReq(t, h, getAll, url.Values{"list_id": {"x"}}); code != http.StatusBadRequest {
+		t.Fatalf("list_id=x: %d %s, want 400", code, body)
 	}
 }
