@@ -852,6 +852,11 @@ export default Vue.extend({
       overflow-wrap: anywhere;
     }
   }
+  // The bar is a percentage of its cell, so the cell needs a width of its own now that the
+  // Gmail day table sizes its columns to content.
+  .bar-cell {
+    min-width: 120px;
+  }
   .bar {
     display: inline-block;
     height: 8px;
