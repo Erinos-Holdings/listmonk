@@ -201,14 +201,33 @@
             </h3>
             <source-line :sources="sourcesOf('spamRate')" />
             <p v-if="!spamSeries.length" class="is-size-7 has-text-grey">{{ $t('brands.noGmailDays') }}</p>
+            <!-- One row per Gmail day. Only the spam rate is judged (the document's thresholds);
+                 the auth, delivery-error and TLS rates are shown plain -- the Lambda carries no
+                 rule for them and the page states none. A day Google reported without a spam
+                 rate (low volume) still appears, its spam cell a dash. -->
             <table v-else class="table is-narrow is-fullwidth is-size-7">
-              <detail-cols />
-              <thead><tr><th>{{ $t('brands.day') }}</th><th>{{ $t('brands.inputs.spamRate') }}</th><th /></tr></thead>
+              <thead>
+                <tr>
+                  <th>{{ $t('brands.day') }}</th>
+                  <th>{{ $t('brands.inputs.spamRate') }}</th>
+                  <th />
+                  <th>{{ $t('brands.gmail.spf') }}</th>
+                  <th>{{ $t('brands.gmail.dkim') }}</th>
+                  <th>{{ $t('brands.gmail.dmarc') }}</th>
+                  <th>{{ $t('brands.gmail.deliveryErrors') }}</th>
+                  <th>{{ $t('brands.gmail.tls') }}</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr v-for="p in spamSeries" :key="p.day">
                   <td>{{ p.day }}</td>
                   <td><value-tag :level="rateLevel(p.spamRate, detailOf('spamRate').thresholds)" :tip="tipSpamRate()">{{ pct(p.spamRate, 2) }}</value-tag></td>
                   <td class="bar-cell"><span class="bar" :style="{ width: barWidth(p.spamRate) }" /></td>
+                  <td>{{ pct(p.spf, 1) }}</td>
+                  <td>{{ pct(p.dkim, 1) }}</td>
+                  <td>{{ pct(p.dmarc, 1) }}</td>
+                  <td>{{ pct(p.deliveryErrorRate, 2) }}</td>
+                  <td>{{ pct(p.tlsOut, 1) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -385,6 +404,9 @@ import { filterBrandRows } from '../brandScope.mjs'; // eslint-disable-line impo
 // existed lack it and render the unknown chip.
 const INPUT_KEYS = ['config', 'verdict', 'spamRate', 'engagement', 'dnsbl', 'ses'];
 const STRIP_DAYS = 30;
+// The per-day Gmail rates the integrations Lambda stores on a series point (lib/brand-health.ts
+// SeriesPoint); a day is shown when any of them is present.
+const GMAIL_RATE_KEYS = ['spamRate', 'spf', 'dkim', 'dmarc', 'deliveryErrorRate', 'tlsOut'];
 // BRANDS-UX-SPEC D5: chips in these states link to the brand's page.
 const LINKED_STATUSES = ['warn', 'issues'];
 // BRANDS-UX-SPEC D9/review M3: document facts that are a link or a mark, not a fact row.
@@ -536,16 +558,18 @@ export default Vue.extend({
       if (t && typeof t.issues === 'number' && t.issues > 0) {
         return t.issues;
       }
-      return this.spamSeries.reduce((m, p) => Math.max(m, p.spamRate), 0);
+      return this.spamSeries.reduce((m, p) => (typeof p.spamRate === 'number' ? Math.max(m, p.spamRate) : m), 0);
     },
 
-    // The spam-rate series from every stored row (newest row wins a day), newest first.
+    // The Gmail day series from every stored row (newest row wins a day), newest first. A day
+    // counts when Google reported ANY of its rates -- the spam rate is withheld on low-volume
+    // days while the auth and TLS rates still arrive, and those days are shown too.
     spamSeries() {
       const byDay = {};
       [...this.history].reverse().forEach((doc) => {
         const s = doc.inputs && doc.inputs.spamRate && doc.inputs.spamRate.detail && doc.inputs.spamRate.detail.series;
         (Array.isArray(s) ? s : []).forEach((p) => {
-          if (p && p.day && typeof p.spamRate === 'number') {
+          if (p && p.day && GMAIL_RATE_KEYS.some((k) => typeof p[k] === 'number')) {
             byDay[p.day] = p;
           }
         });
