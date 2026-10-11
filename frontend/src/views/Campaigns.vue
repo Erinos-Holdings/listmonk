@@ -140,7 +140,10 @@
               <copy-text :text="props.row.name" hide-text />
             </router-link>
           </p>
+          <!-- Fork: the id leads the subject line (`#12 · <subject>`), the Lists page's sub-line
+          treatment; the subject keeps its copy control. -->
           <p class="is-size-7 has-text-grey">
+            <span data-cy="campaign-id">#{{ props.row.id }}</span> ·
             <copy-text :text="props.row.subject" />
           </p>
           <b-taglist>
