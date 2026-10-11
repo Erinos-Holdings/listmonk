@@ -46,6 +46,10 @@ export default function DividerButton({ buttonElement, onClick, first }: Props) 
         sx={{
           p: 0.12,
           position: 'absolute',
+          // Above the block wrappers (position:relative, later in the DOM, which otherwise
+          // paint over the button and take the click — the first button, at top:0, lies
+          // entirely inside the first block); below the structure tabs/numbers at 2.
+          zIndex: 1,
           top: first ? '0' : '-12px',
           left: '50%',
           transform: 'translateX(-10px)',
