@@ -167,5 +167,24 @@ export default {
     }
     this.chart = new Chart(ctx, conf);
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4; G6 feedback 2026-10-11). The chart
+  // was built once at mount and never read a new `data` prop, so a host that re-fetches in
+  // place (the Dashboard on a brand change, the navbar Refresh) kept its first render until a
+  // reload remounted it. Hand chart.js the new data and let it update.
+  watch: {
+    data(d) {
+      if (this.chart) {
+        this.chart.data = d;
+        this.chart.update();
+      }
+    },
+  },
+
+  beforeDestroy() {
+    if (this.chart) {
+      this.chart.destroy();
+    }
+  },
 };
 </script>
