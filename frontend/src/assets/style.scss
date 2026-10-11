@@ -874,6 +874,11 @@ section.lists {
     }
   }
 
+  /* Fork: the `#id · Brand` line under a list's name. */
+  .list-subline {
+    margin-top: 2px;
+  }
+
   /* Fork (list collapse, LIST-COLLAPSE-SPEC C1/C2/C5/C6). The expand chevrons, the collapsed
   row's Other alarm marker, and one tag per line in the Name and Type cells so both columns can
   shrink to their widest single tag. */

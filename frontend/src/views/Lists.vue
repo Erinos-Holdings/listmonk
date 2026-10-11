@@ -96,7 +96,7 @@
           </a>
           <span v-else data-cy="list-name">{{ props.row.name }}</span>
           <!-- Fork (LIST-COLLAPSE-SPEC C6). `Other` is an alarm, so it survives the collapse: the
-          marker shows on the collapsed row and expands it. -->
+          marker shows on the collapsed row, beside the name, and expands it. -->
           <b-tooltip v-if="hasOther(props.row) && !expanded[props.row.id]" :label="$t('lists.grid.otherHelp')" type="is-dark" multilined
             :triggers="['hover', 'focus']">
             <button type="button" class="grid-other-marker" data-cy="grid-other-marker"
@@ -104,6 +104,15 @@
               <b-icon icon="warning-empty" size="is-small" />
             </button>
           </b-tooltip>
+          <!-- Fork: the id and brand under the name (`#12 · Ruze Pouches`; `#12` alone for a
+          brandless list). List names are not unique, so the brand is what tells two same-named
+          lists apart. The brand rides on the row (`brand`, list_brand_tag); its display name comes
+          from the roster's brands rows, the slug when the row is missing. Under a one-brand
+          selection the brand part is redundant and omitted. Block-level, so it sits below the
+          name and the marker, never between them. -->
+          <p class="is-size-7 has-text-grey list-subline" data-cy="list-subline">
+            {{ listSubline(props.row) }}
+          </p>
           <!-- C3/C4: tags live behind the expand; one per line (C5) so the column can shrink. -->
           <b-taglist v-if="expanded[props.row.id]" class="stacked-tags">
             <b-tag class="is-small" v-for="t in props.row.tags" :key="t" :title="t">
@@ -280,7 +289,7 @@ import HealthChip from '../components/HealthChip.vue';
 import { isSendPlus, sendLangCode } from '../langs';
 import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { isLockedList } from '../listBrand.mjs'; // eslint-disable-line import/extensions
-import { listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { brandLabelOf, listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (list grid). Send-language lines in display order. The API's en already includes none.
@@ -399,6 +408,16 @@ export default Vue.extend({
     // control (the server refuses both with 409 regardless).
     canEditList(row) {
       return this.canManageList(row.id) && !isLockedList(row);
+    },
+
+    // Fork: `#<id> · <brand display name>`, the brand omitted for a brandless list and under a
+    // one-brand selection (every row is that brand).
+    listSubline(row) {
+      const id = `#${row.id}`;
+      if (!row.brand || this.brandSelection.kind === 'brand') {
+        return id;
+      }
+      return `${id} · ${brandLabelOf(row.brand, this.brandRows)}`;
     },
 
     // Show the edit list form.
