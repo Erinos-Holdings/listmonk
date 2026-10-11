@@ -1,4 +1,4 @@
-import { ToastProgrammatic as Toast } from 'buefy';
+import { NotificationProgrammatic as Notification } from 'buefy';
 import axios from 'axios';
 import qs from 'qs';
 import store from '../store';
@@ -126,7 +126,8 @@ http.interceptors.response.use((resp) => {
   }
 
   if (!err.config.disableToast) {
-    Toast.open({
+    // Fork: a sticky, closable notice, like every notice from $utils.toast (utils.js).
+    Notification.open({
       // ESCAPE. Buefy's toast body is `<div v-html="message" />`, so anything angle-bracketed in
       // an error is parsed as an unknown HTML tag and silently dropped -- the admin UI truncating
       // its own errors. A From-mismatch error naming `Curated <hello@curatedfor.you>` rendered as
@@ -135,8 +136,9 @@ http.interceptors.response.use((resp) => {
       message: utils.escapeHTML(msg),
       type: 'is-danger',
       queue: false,
+      indefinite: true,
+      closable: true,
       position: 'is-top',
-      pauseOnHover: true,
     });
   }
 

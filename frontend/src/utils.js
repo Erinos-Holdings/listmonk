@@ -1,6 +1,6 @@
 import {
   DialogProgrammatic as Dialog,
-  ToastProgrammatic as Toast,
+  NotificationProgrammatic as Notification,
 } from 'buefy';
 import dayjs from 'dayjs';
 import dayDuration from 'dayjs/plugin/duration';
@@ -175,14 +175,18 @@ export default class Utils {
     });
   };
 
-  toast = (msg, typ, duration, queue) => {
-    Toast.open({
+  // Fork: every notice (success, info, warning, error) stays on screen until the user closes it
+  // with the X at its top right -- never auto-dismissed, so nothing disappears before it is read.
+  // The signature keeps the callers' (msg, typ, duration, queue) arguments; duration and queue are
+  // ignored (an indefinite notice must never queue the next one behind it).
+  toast = (msg, typ) => {
+    Notification.open({
       message: this.escapeHTML(msg),
       type: !typ ? 'is-success' : typ,
-      queue,
-      duration: duration || 3000,
+      queue: false,
+      indefinite: true,
+      closable: true,
       position: 'is-top',
-      pauseOnHover: true,
     });
   };
 

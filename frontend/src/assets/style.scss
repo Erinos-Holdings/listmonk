@@ -1510,9 +1510,9 @@ th.role-toggle-select a {
 }
 
 
-/* Toasts */
+/* Notices (fork: sticky, closable notifications in place of auto-dismissing toasts; utils.js) */
 .notices {
-  .toast {
+  .toast, .notification {
     @extend .box;
     border-left: 15px solid $grey;
     border-radius: 3px;
@@ -1527,6 +1527,45 @@ th.role-toggle-select a {
       background: $white;
       border-left-color: $green;
       color: $grey-dark;
+    }
+    &.is-warning {
+      background: $white;
+      border-left-color: $warning;
+      color: $grey-dark;
+    }
+    &.is-info {
+      background: $white;
+      border-left-color: $info;
+      color: $grey-dark;
+    }
+  }
+
+  .notification {
+    padding-right: 48px;
+    pointer-events: auto;
+
+    // The close control: a squared X box at the top right of the notice.
+    .delete {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 24px;
+      height: 24px;
+      max-width: 24px;
+      max-height: 24px;
+      min-width: 24px;
+      min-height: 24px;
+      border-radius: 3px;
+      border: 1px solid $grey-light;
+      background: $white;
+
+      &::before, &::after {
+        background: $grey-dark;
+      }
+      &:hover, &:focus {
+        background: $white-ter;
+        border-color: $grey;
+      }
     }
   }
 }

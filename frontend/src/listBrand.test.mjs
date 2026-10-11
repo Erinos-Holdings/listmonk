@@ -50,5 +50,5 @@ test('the locked list and the option label', () => {
   assert.equal(isLockedList({ name: 'Render catalog (never send)' }), true);
   assert.equal(isLockedList({ name: 'Render catalog' }), false);
   assert.equal(isLockedList(null), false);
-  assert.equal(brandLabel({ slug: 'curated', display_name: 'Curated' }), 'Curated — curated');
+  assert.equal(brandLabel({ slug: 'curated', display_name: 'Curated' }), 'Curated');
 });

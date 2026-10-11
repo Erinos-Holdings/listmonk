@@ -44,7 +44,7 @@ export function isLockedList(list) {
   return !!list && LOCKED_LIST_NAMES.includes(list.name);
 }
 
-// brandLabel is the dropdown option label: `display_name — slug`.
+// brandLabel is the dropdown option label: the display name alone (the slug when it is empty).
 export function brandLabel(b) {
-  return `${b.display_name} — ${b.slug}`;
+  return b.display_name || b.slug;
 }
