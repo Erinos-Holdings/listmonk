@@ -8,6 +8,7 @@ import {
   storeLists, rosterFrom, resolveSelection, scopeListIds, listsScopeParams,
   scopeUnion, filterByIds, effectiveListIds, subscriberQueryBody, subscriberExportParams,
   campaignBrand, contextNotice, filterTemplates, formBrandDefault, templateNoticeBrand,
+  mediaScopeContext, presetNoticeBrand, filterBrandRows,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 const BRANDS = [
@@ -245,4 +246,55 @@ test('formBrandDefault: brand presets and locks; none locks the template form on
   assert.deepEqual(formBrandDefault(brand('ruze'), 'template'), { value: 'ruze', locked: true });
   assert.deepEqual(formBrandDefault(NONE, 'list'), { value: null, locked: false });
   assert.deepEqual(formBrandDefault(NONE, 'template'), { value: '', locked: true });
+});
+
+// Phase 2 (integrations GLOBAL-BRAND-PHASE2-SPEC I2, I6, I11).
+
+test('Phase 2 I2 mediaScopeContext: brand = slug chip; none = Untagged; all/pending = All', () => {
+  assert.deepEqual(mediaScopeContext(brand('ruze')), { context: ['ruze'], untagged: false });
+  assert.deepEqual(mediaScopeContext(NONE), { context: [], untagged: true });
+  assert.deepEqual(mediaScopeContext(ALL), { context: [], untagged: false });
+  // Pending resolves to all in the store getter; an absent or malformed selection is all too.
+  assert.deepEqual(mediaScopeContext(undefined), { context: [], untagged: false });
+  assert.deepEqual(mediaScopeContext({ kind: 'brand', slug: '' }), { context: [], untagged: false });
+});
+
+test('Phase 2 I11 presetNoticeBrand: preview brand, else store brand of an existing list, else ""', () => {
+  // A list to create (or an existing untagged list confirm will tag) carries its brand.
+  assert.equal(presetNoticeBrand({ name: 'L', exists: false, brand: 'curated' }, LISTS), 'curated');
+  assert.equal(presetNoticeBrand({
+    name: 'L', id: 40, exists: true, will_tag: true, brand: 'curated',
+  }, LISTS), 'curated');
+  // An existing same-brand list is reused with no brand: the store row's brand.
+  assert.equal(presetNoticeBrand({ name: 'L', id: 9, exists: true }, LISTS), 'ruze');
+  assert.equal(presetNoticeBrand({ name: 'L', id: 37, exists: true }, LISTS), '');
+  // An existing list the store does not hold (not visible, archived): underivable.
+  assert.equal(presetNoticeBrand({ name: 'L', id: 999, exists: true }, LISTS), undefined);
+  assert.equal(presetNoticeBrand({ name: 'L', id: 9, exists: true }, []), undefined);
+  // A list to create with no list_brand: a brandless import list.
+  assert.equal(presetNoticeBrand({ name: 'L', exists: false, tags: [] }, LISTS), '');
+  // No preview: no notice.
+  assert.equal(presetNoticeBrand(null, LISTS), undefined);
+
+  // End to end with contextNotice: Loyalty Rewards (curated) under Ruze; nothing under Curated;
+  // a brandless created list under a brand and under none.
+  const B = [...BRANDS, { slug: 'curated', display_name: 'Curated' }];
+  const n = (pl, sel) => contextNotice(presetNoticeBrand(pl, LISTS), sel, B, { noneLabel: 'No brand' });
+  assert.deepEqual(n({ exists: false, brand: 'curated' }, brand('ruze')), { record: 'Curated', selected: 'Ruze' });
+  assert.equal(n({ exists: false, brand: 'curated' }, brand('curated')), null);
+  assert.deepEqual(n({ exists: false }, brand('ruze')), { record: 'No brand', selected: 'Ruze' });
+  assert.equal(n({ exists: false }, NONE), null);
+  assert.equal(n({ id: 999, exists: true }, brand('ruze')), null);
+});
+
+test('Phase 2 I6 filterBrandRows: a brand shows its row only; none and all every row', () => {
+  const R = [{ brand: 'ruze' }, { brand: 'shala' }, { brand: 'younique' }];
+  assert.deepEqual(filterBrandRows(R, brand('shala')), [{ brand: 'shala' }]);
+  assert.deepEqual(filterBrandRows(R, brand('nope')), []);
+  assert.equal(filterBrandRows(R, NONE).length, 3);
+  assert.equal(filterBrandRows(R, ALL).length, 3);
+  assert.deepEqual(filterBrandRows(undefined, brand('ruze')), []);
+  // The record page's notice comes from contextNotice with the route's slug.
+  assert.deepEqual(contextNotice('thirstygirl', brand('ruze'), BRANDS), { record: 'Thirsty Girl', selected: 'Ruze' });
+  assert.deepEqual(contextNotice('ruze', NONE, BRANDS), { record: 'Ruze', selected: 'No brand' });
 });

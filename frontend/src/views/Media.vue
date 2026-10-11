@@ -169,6 +169,8 @@ import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { BRAND_TAG_PREFIX } from '../brand';
 import { foldMediaTag, isValidMediaTag, normalizeMediaTagsLenient } from '../mediaTags';
+import brandScopeMixin from '../brandScopeMixin';
+import { mediaScopeContext } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -176,6 +178,10 @@ export default Vue.extend({
   },
 
   name: 'Media',
+
+  // Fork (global brand, integrations GLOBAL-BRAND-PHASE2-SPEC D1/D7) -- the /media page only; the
+  // editors' picker (isModal) keeps its record's context (D2).
+  mixins: [brandScopeMixin],
 
   props: {
     isModal: Boolean,
@@ -253,10 +259,13 @@ export default Vue.extend({
     },
 
     // Start from context: every context chip ON; no context = All.
+    // Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D1) -- on the /media page (not the picker) the
+    // context is the selection's: a brand's slug chip, Untagged under No brand, All under All.
     initFilter() {
-      this.chips = normalizeMediaTagsLenient(this.context).map((tag) => ({ tag, on: true, context: true }));
-      this.untaggedOn = false;
-      this.allOn = this.chips.length === 0;
+      const seed = this.isModal ? { context: this.context, untagged: false } : mediaScopeContext(this.brandSelection);
+      this.chips = normalizeMediaTagsLenient(seed.context).map((tag) => ({ tag, on: true, context: true }));
+      this.untaggedOn = seed.untagged;
+      this.allOn = this.chips.length === 0 && !seed.untagged;
     },
 
     onFilterChanged() {
@@ -518,6 +527,17 @@ export default Vue.extend({
         this.onFilterChanged();
       }
     },
+
+    // Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D7) -- the page (never the picker) re-seeds the
+    // filter row and the upload tags from the new selection, discarding any within-page widening,
+    // and re-reads from page 1.
+    brandKey(now, before) {
+      if (this.isModal || before === 'pending' || now === 'pending') {
+        return;
+      }
+      this.initFilter();
+      this.onFilterChanged();
+    },
   },
 
   created() {
@@ -529,9 +549,18 @@ export default Vue.extend({
   },
 
   mounted() {
-    this.initFilter();
-    this.uploadTags = [...this.activeTags];
-    this.getMedia();
+    const first = () => {
+      this.initFilter();
+      this.uploadTags = [...this.activeTags];
+      this.getMedia();
+    };
+    if (this.isModal) {
+      first();
+    } else {
+      // Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D7) -- the page's first scoped read waits
+      // for the lists (Phase 1 I13); the picker's mount is today's.
+      this.afterListsLoaded(first);
+    }
     this.loadTagCounts();
 
     if (this.$utils.getPref('media.upload')) {

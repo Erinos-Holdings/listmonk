@@ -51,6 +51,9 @@
           </template>
 
           <template v-else>
+            <!-- Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D3) -- the preview's list outside the
+                 selected brand gets the S4 notice; the preset buttons and Confirm are never touched. -->
+            <brand-context-notice :record-brand="presetListBrand" :kind="$t('brand.context.kindImportList')" />
             <table class="table is-fullwidth is-narrow preset-preview">
               <tbody>
                 <tr>
@@ -247,7 +250,7 @@
 
           <list-selector v-if="form.mode === 'subscribe'" :label="$t('globals.terms.lists')"
             :placeholder="$t('import.listSubHelp')" :message="$t('import.listSubHelp')" v-model="form.lists"
-            :selected="form.lists" :all="lists.results" />
+            :selected="form.lists" :all="targetLists" />
           <hr />
 
           <b-field :label="$t('import.csvFile')" label-position="on-border">
@@ -329,12 +332,19 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import ListSelector from '../components/ListSelector.vue';
 import LogView from '../components/LogView.vue';
+import BrandContextNotice from '../components/BrandContextNotice.vue';
+import brandScopeMixin from '../brandScopeMixin';
+import { filterByIds, presetNoticeBrand, scopeUnion } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
     ListSelector,
     LogView,
+    BrandContextNotice,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-PHASE2-SPEC D3) -- computes from the store only.
+  mixins: [brandScopeMixin],
 
   props: {
     data: { type: Object, default: () => { } },
@@ -571,6 +581,19 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['lists', 'serverConfig']),
+
+    // Fork (global brand, D3) -- the free-form target picker offers scope ∪ the lists already
+    // chosen (Phase 1 D10's union rule): a ?list_id= prefill outside the scope stays selected,
+    // addable and removable, and a selection change drops nothing. Under All every list.
+    targetLists() {
+      const ids = scopeUnion(this.scopeListIds, [this.form.lists]);
+      return filterByIds(this.lists, ids);
+    },
+
+    // Fork (global brand, D3) -- the preset preview's list brand for the notice.
+    presetListBrand() {
+      return presetNoticeBrand(this.preset.preview && this.preset.preview.list, this.lists);
+    },
 
     // Import progress bar value.
     progress() {

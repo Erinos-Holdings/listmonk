@@ -9,7 +9,7 @@
         <h1 class="title is-4 mb-2">
           <router-link v-if="brandParam" :to="{ name: 'brands' }">{{ $t('brands.title') }}</router-link>
           <template v-else>{{ $t('brands.title') }}</template>
-          <span v-if="!brandParam && rows.length">({{ rows.length }})</span>
+          <span v-if="!brandParam && scopedRows.length">({{ scopedRows.length }})</span>
           <span v-if="current"> / {{ nameOf(current) }}</span>
         </h1>
         <p class="is-size-7 has-text-grey">{{ $t('brands.gmailNote') }}</p>
@@ -73,6 +73,9 @@
 
     <!-- Detail -->
     <div v-else>
+      <!-- Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D6) -- a brand record outside the selection
+           is opened, never hidden: the S4 notice. -->
+      <brand-context-notice :record-brand="brandParam" :kind="$t('brand.context.kindBrand')" />
       <p v-if="!current && !loading.brands" class="has-text-grey">{{ $t('brands.notFound', { brand: brandParam }) }}</p>
 
       <div v-if="current" class="brand-detail">
@@ -370,11 +373,13 @@
 
 <script>
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
+import BrandContextNotice from '../components/BrandContextNotice.vue';
 import {
   compareDay, compareStatus, compareText, isUnlaunchedBrandDoc, sortRows,
 } from '../health-sort';
+import { filterBrandRows } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 // Fork (SES health, SES-HEALTH-SPEC D4/M4): `ses` is the sixth input; rows written before it
 // existed lack it and render the unknown chip.
@@ -442,7 +447,7 @@ const ValueTag = {
 
 export default Vue.extend({
   components: {
-    HealthChip, SourceLine, DetailCols, ValueTag,
+    HealthChip, SourceLine, DetailCols, ValueTag, BrandContextNotice,
   },
 
   data() {
@@ -461,14 +466,24 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading']),
+    // Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D6). Not brandScopeMixin: this view's own
+    // `brandRows` data (the brands rows by slug) would collide with the mixin's store mapping.
+    ...mapGetters(['brandSelection']),
+
+    // Fork (global brand, D6) -- under a named brand only that brand's row; under No brand and
+    // All brands every row. The title count is this set's size, before the hide toggle
+    // (BRANDS-UX-SPEC D4, kept within the scope).
+    scopedRows() {
+      return filterBrandRows(this.rows, this.brandSelection);
+    },
 
     unlaunchedCount() {
-      return this.rows.filter(isUnlaunchedBrandDoc).length;
+      return this.scopedRows.filter(isUnlaunchedBrandDoc).length;
     },
 
     // The table's rows: filtered by the hide toggle, sorted by the view's own sort state.
     visibleRows() {
-      const rows = this.hideUnlaunched ? this.rows.filter((r) => !isUnlaunchedBrandDoc(r)) : this.rows;
+      const rows = this.hideUnlaunched ? this.scopedRows.filter((r) => !isUnlaunchedBrandDoc(r)) : this.scopedRows;
       const comparators = {
         status: (a, b, o) => compareStatus(a.status, b.status, o),
         day: (a, b, o) => compareDay(a.day, b.day, o),

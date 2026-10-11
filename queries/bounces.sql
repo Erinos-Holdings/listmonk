@@ -52,6 +52,13 @@ WHERE ($1 = 0 OR bounces.id = $1)
     AND ($2 = 0 OR bounces.campaign_id = $2)
     AND ($3 = 0 OR bounces.subscriber_id = $3)
     AND ($4 = '' OR bounces.source = $4)
+    -- Fork (global brand, integrations GLOBAL-BRAND-PHASE2-SPEC D5). The selector's list scope,
+    -- empty for none. A brand's bounces are the bounces of its lists' subscribers, at any
+    -- subscription status. It only narrows what bounces get grants.
+    AND (CARDINALITY($7::INT[]) = 0 OR EXISTS (
+        SELECT 1 FROM subscriber_lists
+        WHERE subscriber_lists.subscriber_id = bounces.subscriber_id AND subscriber_lists.list_id = ANY($7::INT[])
+    ))
 ORDER BY %order% OFFSET $5 LIMIT (CASE WHEN $6 < 1 THEN NULL ELSE $6 END);
 
 -- name: delete-bounces

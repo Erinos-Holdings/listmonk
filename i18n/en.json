@@ -28,6 +28,8 @@
     "bounces.source": "Source",
     "bounces.unknownService": "Unknown service.",
     "bounces.view": "View bounces",
+    "brand.context.kindBrand": "brand",
+    "brand.context.kindImportList": "import list",
     "brand.context.notice": "{record} {kind} — {selected} is selected.",
     "brand.selector.all": "All brands",
     "brand.selector.label": "Brand",

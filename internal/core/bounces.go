@@ -13,17 +13,24 @@ var bounceQuerySortFields = []string{"email", "campaign_name", "source", "create
 
 // QueryBounces retrieves paginated bounce entries based on the given params.
 // It also returns the total number of bounce records in the DB.
-func (c *Core) QueryBounces(campID, subID int, source, orderBy, order string, offset, limit int) ([]models.Bounce, int, error) {
+// Fork (global brand, integrations GLOBAL-BRAND-PHASE2-SPEC D5) -- listIDs (nil or empty = no
+// scope) keeps the bounces whose subscriber has a subscriber_lists row on any of them. nil is
+// normalised to an empty array: pq.Array(nil) encodes SQL NULL, under which the predicate
+// would return no rows.
+func (c *Core) QueryBounces(campID, subID int, source, orderBy, order string, offset, limit int, listIDs []int) ([]models.Bounce, int, error) {
 	if !strSliceContains(orderBy, bounceQuerySortFields) {
 		orderBy = "created_at"
 	}
 	if order != SortAsc && order != SortDesc {
 		order = SortDesc
 	}
+	if listIDs == nil {
+		listIDs = []int{}
+	}
 
 	out := []models.Bounce{}
 	stmt := strings.ReplaceAll(c.q.QueryBounces, "%order%", orderBy+" "+order)
-	if err := c.db.Select(&out, stmt, 0, campID, subID, source, offset, limit); err != nil {
+	if err := c.db.Select(&out, stmt, 0, campID, subID, source, offset, limit, pq.Array(listIDs)); err != nil {
 		c.log.Printf("error fetching bounces: %v", err)
 		return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.bounce}", "error", pqErrMsg(err)))
@@ -41,7 +48,8 @@ func (c *Core) QueryBounces(campID, subID int, source, orderBy, order string, of
 func (c *Core) GetBounce(id int) (models.Bounce, error) {
 	var out []models.Bounce
 	stmt := strings.ReplaceAll(c.q.QueryBounces, "%order%", "id "+SortAsc)
-	if err := c.db.Select(&out, stmt, id, 0, 0, "", 0, 1); err != nil {
+	// Fork (global brand, PHASE2 D5) -- the list scope is never applied to a record read.
+	if err := c.db.Select(&out, stmt, id, 0, 0, "", 0, 1, pq.Array([]int{})); err != nil {
 		c.log.Printf("error fetching bounces: %v", err)
 		return models.Bounce{}, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.bounce}", "error", pqErrMsg(err)))

@@ -276,6 +276,48 @@ export function filterTemplates(templates, selection) {
   return rows.filter((t) => tb(t) === '' || tb(t) === selection.slug);
 }
 
+// Phase 2 (integrations GLOBAL-BRAND-PHASE2-SPEC D1, I2): the Media page's seed under a
+// selection -- a brand opens on its slug as one context chip (tag=<slug>); none opens on Untagged
+// (untagged=true; the brandless context is the untagged media); all opens on All, today's.
+export function mediaScopeContext(selection) {
+  if (!selection || selection.kind === 'all' || !isValidSelection(selection)) {
+    return { context: [], untagged: false };
+  }
+  if (selection.kind === 'none') {
+    return { context: [], untagged: true };
+  }
+  return { context: [selection.slug], untagged: false };
+}
+
+// Phase 2 (D3, I11): the brand the preset-import preview's notice is given. The preview carries
+// list.brand only for a list to be created and for an existing untagged list the confirm will tag;
+// an existing list of the same brand is reused with no brand, so its brand is the lists store
+// row's -- undefined when the store has no such row (not visible, or archived): underivable, no
+// notice. A list to be created with no brand is '' (a brandless import list).
+export function presetNoticeBrand(previewList, lists) {
+  if (!previewList || typeof previewList !== 'object') {
+    return undefined;
+  }
+  if (typeof previewList.brand === 'string' && previewList.brand !== '') {
+    return previewList.brand;
+  }
+  if (previewList.exists) {
+    const row = storeLists(lists).find((l) => l && l.id === previewList.id);
+    return row ? brandOf(row) : undefined;
+  }
+  return '';
+}
+
+// Phase 2 (D6, I6): the Brands health table under a selection -- a brand shows its own row only;
+// none and all show every row (a brand row is never brandless, so none has nothing to narrow to).
+export function filterBrandRows(rows, selection) {
+  const r = Array.isArray(rows) ? rows : [];
+  if (!selection || selection.kind !== 'brand' || !isValidSelection(selection)) {
+    return r;
+  }
+  return r.filter((x) => x && x.brand === selection.slug);
+}
+
 // D10: the brand a form presets and disables under a selection -- { value, locked }. Under all
 // nothing is preset (value null, locked false). Under a brand the slug, locked, on both forms.
 // Under none: the template form presets '' and locks; the list form stays enabled and required

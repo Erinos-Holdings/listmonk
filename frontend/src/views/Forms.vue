@@ -68,6 +68,8 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import CodeEditor from '../components/CodeEditor.vue';
+import brandScopeMixin from '../brandScopeMixin';
+import { filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   name: 'ListForm',
@@ -75,6 +77,9 @@ export default Vue.extend({
   components: {
     'code-editor': CodeEditor,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-PHASE2-SPEC D4) -- computes from the store only.
+  mixins: [brandScopeMixin],
 
   data() {
     return {
@@ -148,11 +153,12 @@ export default Vue.extend({
   computed: {
     ...mapState(['loading', 'lists', 'serverConfig']),
 
+    // Fork (global brand, D4) -- the scope's public lists (every public list under All brands).
     publicLists() {
       if (!this.lists.results) {
         return [];
       }
-      return this.lists.results.filter((l) => l.type === 'public');
+      return filterByIds(this.lists, this.scopeListIds).filter((l) => l.type === 'public');
     },
 
     redirectURLs() {
@@ -164,6 +170,15 @@ export default Vue.extend({
   },
 
   watch: {
+    // Fork (global brand, D4/D7) -- `checked` holds indices into publicLists, so whenever that
+    // set changes (a selection change or a lists refresh) the checks are cleared: a stale index
+    // can never name another brand's list.
+    publicLists() {
+      if (this.checked.length > 0) {
+        this.checked = [];
+      }
+    },
+
     checked() {
       this.renderHTML();
     },

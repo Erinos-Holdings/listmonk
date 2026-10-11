@@ -26,7 +26,9 @@
             </a>
             <span>
               {{ $t('globals.messages.numSelected', { num: numSelectedBounces }) }}
-              <span v-if="!bulk.all && bounces.total > bounces.perPage">
+              <!-- Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D5, hazard 105 (a)) -- the by-query
+                   actions are account-wide, so "select all" is not offered under a scope. -->
+              <span v-if="!bulk.all && bounces.total > bounces.perPage && !scopeListIds">
                 &mdash;
                 <a href="#" @click.prevent="selectAllBounces">
                   {{ $t('subscribers.selectAll', { num: bounces.total }) }}
@@ -99,11 +101,15 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
+import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
   components: {
     EmptyPlaceholder,
   },
+
+  // Fork (global brand, integrations GLOBAL-BRAND-PHASE2-SPEC D5/D7).
+  mixins: [brandScopeMixin],
 
   data() {
     return {
@@ -152,13 +158,19 @@ export default Vue.extend({
       this.bulk.checked = [];
       this.bulk.all = false;
 
-      this.$api.getBounces({
+      const params = {
         page: this.queryParams.page,
         order_by: this.queryParams.orderBy,
         order: this.queryParams.order,
         campaign_id: this.queryParams.campaign_id,
         source: this.queryParams.source,
-      }).then((data) => {
+      };
+      // Fork (global brand, D5) -- a brand's bounces are the bounces of its lists' subscribers;
+      // under All brands no list_id is sent (today's rows exactly).
+      if (this.scopeListIds) {
+        params.list_id = this.scopeListIds;
+      }
+      this.$api.getBounces(params).then((data) => {
         this.bounces = data;
       });
     },
@@ -213,6 +225,18 @@ export default Vue.extend({
     },
   },
 
+  watch: {
+    // Fork (global brand, D7) -- a selection change re-reads from page 1; getBounces drops the
+    // bulk selection made under the old scope.
+    brandKey(now, before) {
+      if (before === 'pending' || now === 'pending') {
+        return;
+      }
+      this.queryParams.page = 1;
+      this.getBounces();
+    },
+  },
+
   created() {
     this.$root.$on('page.refresh', this.getBounces);
   },
@@ -230,7 +254,8 @@ export default Vue.extend({
       this.queryParams.source = this.$route.query.source;
     }
 
-    this.getBounces();
+    // Fork (global brand, D7) -- the first scoped read waits for the lists (Phase 1 I13).
+    this.afterListsLoaded(() => this.getBounces());
   },
 });
 </script>

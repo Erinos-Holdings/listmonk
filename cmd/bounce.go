@@ -35,8 +35,17 @@ func (a *App) GetBounces(c echo.Context) error {
 		pg = a.pg.NewFromURL(c.Request().URL.Query())
 	)
 
+	// Fork (global brand, integrations GLOBAL-BRAND-PHASE2-SPEC D5) -- the selector's effective
+	// list set: only the bounces of subscribers on one of these lists (any status). bounces:get is
+	// all-or-nothing and bounces carry no list permission, so this only narrows what it grants.
+	listIDs, err := parseStringIDs(c.QueryParams()["list_id"])
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
+	}
+
 	// Query and fetch bounces from the DB.
-	res, total, err := a.core.QueryBounces(campID, 0, source, orderBy, order, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryBounces(campID, 0, source, orderBy, order, pg.Offset, pg.Limit, listIDs)
 	if err != nil {
 		return err
 	}
@@ -66,7 +75,7 @@ func (a *App) GetSubscriberBounces(c echo.Context) error {
 	}
 
 	// Query and fetch bounces from the DB.
-	out, _, err := a.core.QueryBounces(0, subID, "", "", "", 0, 1000)
+	out, _, err := a.core.QueryBounces(0, subID, "", "", "", 0, 1000, nil)
 	if err != nil {
 		return err
 	}
