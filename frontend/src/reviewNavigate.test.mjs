@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {
   ACK_TIMEOUT_MS, MSG_ACK, MSG_OPENER, MSG_SELECT, RESULT_TIMEOUT_MS,
   acceptAck, acceptOpener, acceptSelect, ackMessage, afterAckWait, campaignLocation, clickDecision,
-  fallbackUrl, isFinalResult, isImageUrl, isValidBlockId, newToken, openerMessage, openerReachable,
+  fallbackUrl, fallbackWindowName, isFinalResult, isImageUrl, isValidBlockId, newToken, openerMessage, openerReachable,
   pushFailureResult, receiverRoute, referenceLine, resultToast, selectFromQuery, selectMessage,
   standardLinks, thumbnailUrl,
 } from './reviewNavigate.mjs'; // eslint-disable-line import/extensions
@@ -144,6 +144,7 @@ test('the new-tab URL: the content page selecting on load; nothing for an invali
   assert.equal(fallbackUrl('/admin/', 7, 'block-1'), '/admin/campaigns/7?select=block-1#content');
   assert.equal(fallbackUrl('/admin', 7, SCRIPT_URL), null);
   assert.equal(fallbackUrl('/admin', -1, 'block-1'), null);
+  assert.equal(fallbackWindowName(7), 'lm-review-editor-7');
   assert.equal(selectFromQuery({ select: 'block-1' }), 'block-1');
   assert.equal(selectFromQuery({ select: 'block-"]' }), null);
   assert.equal(selectFromQuery({ select: ['block-1', 'block-2'] }), null);

@@ -394,7 +394,7 @@ import {
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { contextKeys, contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
-  ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, acceptAck, acceptOpener, afterAckWait, clickDecision, fallbackUrl,
+  ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, acceptAck, acceptOpener, afterAckWait, clickDecision, fallbackUrl, fallbackWindowName,
   isFinalResult, newToken, referenceLine, resultToast, selectMessage, standardLinks,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
@@ -737,7 +737,12 @@ export default Vue.extend({
     openFallback(blockId) {
       const url = fallbackUrl(this.$router.options.base || '', this.id, blockId);
       if (url) {
-        window.open(url, '_blank');
+        // A named window: a second fallback navigates the first tab rather than opening another.
+        // The page it mounts hands itself back as this window's editor (Campaign.vue mounted).
+        const win = window.open(url, fallbackWindowName(this.id));
+        if (win) {
+          win.focus();
+        }
       }
     },
 

@@ -10,7 +10,11 @@
 //   opener -> Inspect window          {type: 'lm-review:ack', token, result: 'received'}   at once
 //   opener -> Inspect window          {type: 'lm-review:ack', token, result: 'selected'|'declined'|'unknown'}
 // No `received` within ACK_TIMEOUT_MS -> the window opens the campaign's content page in a new tab
-// (fallbackUrl). After `received`, a reply later than RESULT_TIMEOUT_MS is ignored.
+// (fallbackUrl, into the named window fallbackWindowName so repeated fallbacks reuse one tab).
+// After `received`, a reply later than RESULT_TIMEOUT_MS is ignored.
+//   fallback tab -> Inspect window     {type: 'lm-review:opener', campaignId}        at mount
+// (2026-10-11) -- the fallback tab adopts itself as the window's editor, so one unreachable admin
+// tab (closed, discarded by the browser, navigated away) costs one new tab, not one per click.
 
 export const MSG_OPENER = 'lm-review:opener';
 export const MSG_SELECT = 'lm-review:select';
@@ -181,6 +185,12 @@ export function fallbackUrl(base, campaignId, blockId) {
   if (!isPositiveInt(campaignId) || !isValidBlockId(blockId)) return null;
   const b = String(base || '').replace(/\/+$/, '');
   return `${b}/campaigns/${campaignId}?select=${encodeURIComponent(blockId)}#content`;
+}
+
+// The window the new-tab fallback opens into: one per campaign, so a second fallback navigates
+// the first tab instead of opening another.
+export function fallbackWindowName(campaignId) {
+  return `lm-review-editor-${campaignId}`;
 }
 
 // The campaign page's one-time read of `?select=` (a valid id or null).

@@ -527,7 +527,7 @@ import {
 } from '../langs';
 import { audienceBox, hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import {
-  SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, openerMessage, selectFromQuery,
+  SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, openerMessage, openerReachable, selectFromQuery,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
@@ -1728,8 +1728,8 @@ export default Vue.extend({
     // that tab as window.opener). window.open navigates the window, so a message posted at once
     // can land on the outgoing document: it is re-posted over the next few seconds, while the
     // window loads. Same origin only.
-    postReviewOpener(win) {
-      const msg = openerMessage(this.data.id);
+    postReviewOpener(win, campaignId = this.data.id) {
+      const msg = openerMessage(campaignId);
       const post = () => {
         try {
           if (win && !win.closed) {
@@ -2483,6 +2483,15 @@ export default Vue.extend({
 
     // Fork (review navigation): the receiver's in-page select (App.vue, §4.5).
     this.$events.$on('review.select', this.onReviewSelect);
+
+    // Fork (review navigation, 2026-10-11): a page the Inspect window opened as its new-tab
+    // fallback (`?select=`, window.opener = that window) tells it that THIS tab is now its
+    // editor, so the next click selects here instead of opening another tab (the admin tab
+    // that clicked Inspect was closed, discarded by the browser, or navigated away). The
+    // campaign is not loaded yet at mount: the id comes from the route.
+    if (this.selectOnLoad && openerReachable(window.opener, window.location.origin)) {
+      this.postReviewOpener(window.opener, parseInt(this.$route.params.id, 10));
+    }
   },
 
   beforeDestroy() {
