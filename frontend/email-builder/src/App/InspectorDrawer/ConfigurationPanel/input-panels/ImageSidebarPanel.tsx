@@ -10,7 +10,7 @@ import { ImageProps } from '@usewaypoint/block-image';
 import React, { useEffect, useRef, useState } from 'react';
 
 import { isAltMissing } from '../../../../documents/blocks/Img/altText';
-import { autoFillCap, createImageWidthMeasurer, decideWidth } from '../../../../documents/blocks/Img/imageWidth';
+import { autoFillCap, createImageSizeMeasurer, decideWidth, decideWidthForHeight, TImageSize } from '../../../../documents/blocks/Img/imageWidth';
 import { ImgPropsSchema, ListmonkImageProps } from '../../../../documents/editor/core';
 import BaseSidebarPanel from './helpers/BaseSidebarPanel';
 import RadioGroupInput from './helpers/inputs/RadioGroupInput';
@@ -41,7 +41,10 @@ export default function ImageSidebarPanel({ data, setData }: ImageSidebarPanelPr
   const dataRef = useRef(data);
   dataRef.current = data;
   const autoPrevRef = useRef<number | null>(null);
-  const measureRef = useRef(createImageWidthMeasurer());
+  // The natural size behind the last auto-fill — a Height typed on an auto-filled Width
+  // re-derives the Width from it (decideWidthForHeight) without another fetch.
+  const naturalRef = useRef<TImageSize | null>(null);
+  const measureRef = useRef(createImageSizeMeasurer());
   const [widthFillSeq, setWidthFillSeq] = useState(0);
   const urlFieldRef = useRef<HTMLDivElement>(null);
   // A typed URL measures after a short pause (every keystroke would otherwise request a
@@ -75,13 +78,17 @@ export default function ImageSidebarPanel({ data, setData }: ImageSidebarPanelPr
     if (!url) {
       return;
     }
-    measureRef.current(url).then((measured) => {
+    measureRef.current(url).then((natural) => {
       const latest = dataRef.current as ListmonkImageProps;
       const cap = autoFillCap(latest?.style?.padding);
-      const width = decideWidth(latest?.props?.width, autoPrevRef.current, measured, cap);
-      if (width === null) {
+      const filled = decideWidth(latest?.props?.width, autoPrevRef.current, natural?.width, cap);
+      if (filled === null) {
         return;
       }
+      // A Height already typed against the previous auto-fill keeps its proportion on the
+      // new image (the swapped-in logo is not stretched to the old one's height).
+      const width = decideWidthForHeight(filled, filled, natural, latest?.props?.height, cap) ?? filled;
+      naturalRef.current = natural;
       autoPrevRef.current = width;
       updateData({ ...latest, props: { ...latest?.props, width } });
       setWidthFillSeq((n) => n + 1);
@@ -169,7 +176,18 @@ export default function ImageSidebarPanel({ data, setData }: ImageSidebarPanelPr
         <TextDimensionInput
           label="Height"
           defaultValue={data.props?.height}
-          onChange={(height) => updateData({ ...data, props: { ...data.props, height } })}
+          onChange={(height) => {
+            const latest = dataRef.current as ListmonkImageProps;
+            const cap = autoFillCap(latest?.style?.padding);
+            const width = decideWidthForHeight(latest?.props?.width, autoPrevRef.current, naturalRef.current, height, cap);
+            if (width === null) {
+              updateData({ ...data, props: { ...data.props, height } });
+              return;
+            }
+            autoPrevRef.current = width;
+            updateData({ ...data, props: { ...data.props, height, width } });
+            setWidthFillSeq((n) => n + 1);
+          }}
         />
       </Stack>
 

@@ -84,6 +84,14 @@ type Props = {
 // markdown toolbar's color popover (MarkdownContentInput) in the same order.
 export default function Picker({ value, onChange, onEnter }: Props) {
   const brandPalettes = useBrandPalettes();
+  // A 3-digit hex is expanded on COMMIT (blur/Enter), never per keystroke: react-colorful
+  // fires onChange as soon as the text is a valid hex, and 3 digits already are, so an
+  // onChange-time expansion fed back through `color` rewrites "#FF5" to "#FFFF55" under a
+  // user still typing "#FF5733" (2026-10-11).
+  const commitShortHex = () => {
+    const n = normalizeHex(value);
+    if (n !== value) onChange(n);
+  };
   return (
     <Stack spacing={1} sx={SX}>
       <BrandSwatches palettes={brandPalettes} value={value} onChange={onChange} />
@@ -91,10 +99,12 @@ export default function Picker({ value, onChange, onEnter }: Props) {
         <HexColorInput
           prefixed
           color={value}
-          onChange={(v) => onChange(normalizeHex(v))}
+          onChange={onChange}
+          onBlur={commitShortHex}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
+              commitShortHex();
               onEnter?.();
             }
           }}

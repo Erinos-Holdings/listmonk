@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { AddOutlined, CloseOutlined } from '@mui/icons-material';
 import { ButtonBase, InputLabel, Menu, Stack } from '@mui/material';
 
+import { normalizeHex } from './normalizeHex';
 import Picker from './Picker';
 
 const BUTTON_SX = {
@@ -74,7 +75,17 @@ export default function ColorInput({ label, defaultValue, onChange, nullable }: 
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
-        onClose={() => setAnchorEl(null)}
+        onClose={() => {
+          setAnchorEl(null);
+          // Click-off commits a short hex left in the field (Picker expands on blur/Enter).
+          if (typeof value === 'string') {
+            const n = normalizeHex(value);
+            if (n !== value) {
+              setValue(n);
+              onChange(n);
+            }
+          }
+        }}
         MenuListProps={{
           sx: { height: 'auto', padding: 0 },
         }}

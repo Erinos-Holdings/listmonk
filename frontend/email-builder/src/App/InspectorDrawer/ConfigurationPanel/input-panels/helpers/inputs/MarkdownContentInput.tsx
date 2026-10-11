@@ -113,7 +113,8 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
       return;
     }
     const { start, end } = colorSelection.current;
-    applyResult(applyColor(value, start, end, pickColor));
+    // Short hex expands on commit only — see ColorInput/Picker.tsx commitShortHex.
+    applyResult(applyColor(value, start, end, normalizeHex(pickColor)));
   };
 
   // Toolbar buttons must not take focus, or the textarea selection collapses
@@ -195,7 +196,7 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
         <Stack spacing={1} sx={PICKER_SX}>
           <BrandSwatches palettes={brandPalettes} value={pickColor} onChange={stageColor} />
           <Box>
-            <HexColorInput prefixed color={pickColor} onChange={(v) => stageColor(normalizeHex(v))} />
+            <HexColorInput prefixed color={pickColor} onChange={stageColor} />
           </Box>
           <HexColorPicker color={pickColor} onChange={stageColor} />
           <Swatch paletteColors={DEFAULT_PRESET_COLORS} value={pickColor} onChange={stageColor} />
