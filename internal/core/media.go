@@ -16,8 +16,8 @@ import (
 
 // QueryMedia returns media entries optionally filtered by a query string.
 //
-// Fork (media tags) -- MEDIA-TAGS-SPEC D4. tags (already normalized) filters with OR; untagged
-// adds rows with no tags; neither means no tag filter.
+// Fork (media tags) -- MEDIA-TAGS-SPEC D4. tags (already normalized) filters with AND (a row
+// must carry every tag); untagged adds rows with no tags; neither means no tag filter.
 func (c *Core) QueryMedia(provider string, s media.Store, query string, tags []string, untagged bool, offset, limit int) ([]media.Media, int, error) {
 	out := []media.Media{}
 

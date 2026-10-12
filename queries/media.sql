@@ -4,16 +4,16 @@
 INSERT INTO media (uuid, filename, thumb, content_type, provider, meta, tags, created_at) VALUES($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id;
 
 -- name: query-media
--- Fork (media tags) -- MEDIA-TAGS-SPEC D4. The tag filter is OR (array overlap), deliberately
--- unlike the lists query's AND containment. $5 is the selected tags, $6 adds untagged rows,
--- and with neither there is no tag filter at all. The filename search ANDs with all of it.
--- A NULL $5 reads as empty, so a nil bind can never blank the page.
+-- Fork (media tags) -- MEDIA-TAGS-SPEC D4 (amended 2026-10-12). The tag filter is AND (array
+-- containment), like the lists query: a row must carry EVERY selected tag. $5 is the selected
+-- tags, $6 ORs in untagged rows, and with neither there is no tag filter at all. The filename
+-- search ANDs with all of it. A NULL $5 reads as empty, so a nil bind can never blank the page.
 -- The LIMIT CASE follows campaigns.sql so per_page=all (limit below 1) returns every row.
 SELECT COUNT(*) OVER () AS total, * FROM media
     WHERE ($1 = '' OR filename ILIKE $1) AND provider=$2
       AND (
         (CARDINALITY(COALESCE($5::VARCHAR(100)[], '{}')) = 0 AND NOT $6::BOOLEAN)
-        OR tags && $5::VARCHAR(100)[]
+        OR (CARDINALITY(COALESCE($5::VARCHAR(100)[], '{}')) > 0 AND tags @> $5::VARCHAR(100)[])
         OR ($6::BOOLEAN AND CARDINALITY(tags) = 0)
       )
     ORDER BY created_at DESC OFFSET $3 LIMIT (CASE WHEN $4 < 1 THEN NULL ELSE $4 END);

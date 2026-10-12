@@ -232,7 +232,7 @@ func (a *App) GetAllMedia(c echo.Context) error {
 		pg = a.pg.NewFromURL(c.Request().URL.Query())
 	)
 
-	// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. Repeatable `tag` (OR) and `untagged=true`.
+	// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. Repeatable `tag` (AND, D4) and `untagged=true`.
 	tags, err := a.normalizeMediaTags(c.QueryParams()["tag"])
 	if err != nil {
 		return err
