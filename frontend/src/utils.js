@@ -175,18 +175,23 @@ export default class Utils {
     });
   };
 
-  // Fork: every notice (success, info, warning, error) stays on screen until the user closes it
-  // with the X at its top right -- never auto-dismissed, so nothing disappears before it is read.
-  // The signature keeps the callers' (msg, typ, duration, queue) arguments; duration and queue are
-  // ignored (an indefinite notice must never queue the next one behind it).
-  toast = (msg, typ) => {
+  // Fork: a warning or error stays on screen until the user closes it with the X at its top right
+  // -- never auto-dismissed, so it is seen and acknowledged. A success or info notice has nothing
+  // to acknowledge: it auto-dismisses after `duration` (default 3 s) with no close control. Never
+  // queued either way (an indefinite notice that queued would hide every later one). The signature
+  // keeps the callers' (msg, typ, duration, queue) arguments; queue is ignored, and duration only
+  // applies to an auto-dismissing notice (hovering one pauses its timer, as upstream's Toast did).
+  toast = (msg, typ, duration) => {
+    const type = !typ ? 'is-success' : typ;
+    const sticky = type === 'is-warning' || type === 'is-danger';
     Notification.open({
       message: this.escapeHTML(msg),
-      type: !typ ? 'is-success' : typ,
+      type,
       queue: false,
-      indefinite: true,
-      closable: true,
       position: 'is-top',
+      ...(sticky
+        ? { indefinite: true, closable: true }
+        : { closable: false, duration: duration || 3000, pauseOnHover: true }),
     });
   };
 
