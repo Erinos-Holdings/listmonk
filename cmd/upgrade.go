@@ -87,6 +87,8 @@ var migList = []migFunc{
 	{"v6.2.20", migrations.V6_2_20},
 	// Fork migration (erinos): persona From -- personas TEXT[] on brands (PERSONA-FROM-SPEC) — see internal/migrations/v6.2.21.go.
 	{"v6.2.21", migrations.V6_2_21},
+	// Fork migration (erinos): sunset v2 -- lists.sunset JSONB, the final-hold guard in subscriber_lists_hold_release() (SUNSET-V2-SPEC) — see internal/migrations/v6.2.22.go.
+	{"v6.2.22", migrations.V6_2_22},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

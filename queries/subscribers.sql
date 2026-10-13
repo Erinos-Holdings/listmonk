@@ -52,6 +52,10 @@ WITH subs AS (
                     subscriber_lists.status AS subscription_status,
                     subscriber_lists.created_at AS subscription_created_at,
                     subscriber_lists.updated_at AS subscription_updated_at,
+                    -- Fork (sunset v2, SUNSET-V2-SPEC D5) -- the third input of
+                    -- subscription_engagement's anchor_at, which the sunset Lambda stamps into
+                    -- a hold (meta.hold.anchor_at). NULL = never confirmed or backfilled.
+                    subscriber_lists.confirmed_at AS subscription_confirmed_at,
                     subscriber_lists.meta AS subscription_meta,
                     lists.*
             ) l)

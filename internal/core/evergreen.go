@@ -66,7 +66,26 @@ type stmtRunner interface {
 // confirmed_at NULL on every row the write creates or flips -- these people are not
 // new (bulk import, archive replay) and no evergreen campaign may welcome them.
 func (c *Core) backfillStmt(stmt *sqlx.Stmt, backfill bool) (stmtRunner, func(error) error, error) {
-	if !backfill {
+	return c.flagsStmt(stmt, SessionFlags{Backfill: backfill})
+}
+
+// SessionFlags are the transaction-local session settings a subscriber_lists write may carry.
+// Backfill: listmonk.backfill (not new -- no confirmed_at, no welcome; see backfillStmt).
+// ReleaseFinal (fork, sunset v2 -- integrations SUNSET-V2-SPEC D6): listmonk.release_final, the
+// only way the hold-release trigger (v6.2.22) lets a FINAL hold (meta.hold.final_at) be released
+// by a status change. Sent only by the person's own authenticated actions (the mirror's storefront
+// join, the manage-preferences page, the sunset Lambda's click release); every other writer leaves
+// a final hold in place.
+type SessionFlags struct {
+	Backfill     bool
+	ReleaseFinal bool
+}
+
+// flagsStmt is backfillStmt for a set of session flags. With no flag set it is the plain prepared
+// statement; with any flag set the statement is bound to a transaction that SET LOCALs each one
+// (a SET LOCAL outside a transaction is a no-op, so a flagged write ALWAYS runs in one).
+func (c *Core) flagsStmt(stmt *sqlx.Stmt, f SessionFlags) (stmtRunner, func(error) error, error) {
+	if !f.Backfill && !f.ReleaseFinal {
 		return stmt, func(err error) error { return err }, nil
 	}
 
@@ -74,9 +93,20 @@ func (c *Core) backfillStmt(stmt *sqlx.Stmt, backfill bool) (stmtRunner, func(er
 	if err != nil {
 		return nil, nil, err
 	}
-	if _, err := tx.Exec("SET LOCAL listmonk.backfill = 'true'"); err != nil {
-		tx.Rollback()
-		return nil, nil, err
+	for _, set := range []struct {
+		on  bool
+		sql string
+	}{
+		{f.Backfill, "SET LOCAL listmonk.backfill = 'true'"},
+		{f.ReleaseFinal, "SET LOCAL listmonk.release_final = 'true'"},
+	} {
+		if !set.on {
+			continue
+		}
+		if _, err := tx.Exec(set.sql); err != nil {
+			tx.Rollback()
+			return nil, nil, err
+		}
 	}
 
 	return tx.Stmtx(stmt), func(err error) error {

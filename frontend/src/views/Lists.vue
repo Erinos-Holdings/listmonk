@@ -290,6 +290,7 @@ import { isSendPlus, sendLangCode } from '../langs';
 import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { isLockedList } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf, listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { withSunsetItem } from '../listSunset.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (list grid). Send-language lines in display order. The API's en already includes none.
@@ -414,10 +415,12 @@ export default Vue.extend({
     // one-brand selection (every row is that brand).
     listSubline(row) {
       const id = `#${row.id}`;
+      // Fork (sunset v2, SUNSET-V2-SPEC D8): a re-engagement queue's countdown is one more
+      // dot-separated item; a list without a stored sunset renders none (listSunset.mjs).
       if (!row.brand || this.brandSelection.kind === 'brand') {
-        return id;
+        return withSunsetItem(id, row.sunset);
       }
-      return `${id} · ${brandLabelOf(row.brand, this.brandRows)}`;
+      return withSunsetItem(`${id} · ${brandLabelOf(row.brand, this.brandRows)}`, row.sunset);
     },
 
     // Show the edit list form.

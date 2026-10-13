@@ -26,7 +26,13 @@ func (c *Core) GetSubscriptions(subID int, subUUID string, allLists bool) ([]mod
 // AddSubscriptions adds list subscriptions to subscribers.
 // backfill (fork, evergreen) marks the subscribers as not new -- see backfillStmt.
 func (c *Core) AddSubscriptions(subIDs, listIDs []int, status string, backfill bool) error {
-	stmt, done, err := c.backfillStmt(c.q.AddSubscribersToLists, backfill)
+	return c.AddSubscriptionsFlags(subIDs, listIDs, status, SessionFlags{Backfill: backfill})
+}
+
+// AddSubscriptionsFlags is AddSubscriptions with the full set of session flags (fork, sunset v2):
+// ReleaseFinal lets the write release a FINAL hold -- see SessionFlags.
+func (c *Core) AddSubscriptionsFlags(subIDs, listIDs []int, status string, f SessionFlags) error {
+	stmt, done, err := c.flagsStmt(c.q.AddSubscribersToLists, f)
 	if err != nil {
 		c.log.Printf("error preparing subscriptions write: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,

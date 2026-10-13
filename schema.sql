@@ -781,3 +781,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_brands_slug_lower ON brands (LOWER(slug));
 -- PERSONA-FROM-SPEC D1). A separate statement so the v6.2.20 mirror above stays byte-equal to its
 -- migration; mirrored in internal/migrations/v6.2.21.go.
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS personas TEXT[] NOT NULL DEFAULT '{}';
+
+-- Fork (sunset v2, SUNSET-V2-SPEC §4.1): the re-engagement queue countdown on lists, and the hold
+-- release trigger that keeps a FINAL hold (meta.hold.final_at) unless the transaction set
+-- listmonk.release_final. Replaces the v6.2.10 trigger function declared above, which stays
+-- byte-equal to its migration; mirrored in internal/migrations/v6.2.22.go.
+
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS sunset JSONB NULL;
+
+CREATE OR REPLACE FUNCTION subscriber_lists_hold_release() RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.status IS DISTINCT FROM NEW.status AND OLD.meta ? 'hold' AND NEW.meta ? 'hold' THEN
+        IF (OLD.meta->'hold') ? 'final_at'
+            AND current_setting('listmonk.release_final', true) IS DISTINCT FROM 'true' THEN
+            RAISE NOTICE 'final hold kept: subscriber % list % (release needs release_final)', OLD.subscriber_id, OLD.list_id;
+            RETURN NULL;
+        END IF;
+        NEW.meta := subscriber_lists_release_hold(NEW.meta, NEW.status::TEXT);
+        NEW.updated_at := NOW();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;

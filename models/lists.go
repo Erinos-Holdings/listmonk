@@ -53,6 +53,13 @@ type List struct {
 	Health    json.RawMessage `db:"health" json:"health,omitempty"`
 	HealthTag json.RawMessage `db:"health_tag" json:"health_tag,omitempty"`
 
+	// Fork (sunset v2, integrations SUNSET-V2-SPEC D8). Sunset is the re-engagement queue
+	// countdown {oldestDays, archiveInDays, asOf} the ListmonkSunset Lambda computes and
+	// PUT /api/lists/:id/sunset stores verbatim (lists.sunset, v6.2.22). NULL on every list that
+	// is not a queue: the slice stays nil and omitempty drops the key, so the Lists page renders
+	// nothing. The fork stores and renders, never computes.
+	Sunset ListSunset `db:"sunset" json:"sunset,omitempty"`
+
 	// This is only relevant when querying the lists of a subscriber.
 	SubscriptionStatus    string    `db:"subscription_status" json:"subscription_status,omitempty"`
 	SubscriptionCreatedAt null.Time `db:"subscription_created_at" json:"subscription_created_at,omitempty"`
@@ -114,6 +121,34 @@ func IsSegment(s string) bool {
 // SEND language -- en includes the none bucket), none, other, or en_only (stored en alone).
 func IsSubscriberLangFilter(s string) bool {
 	return s == SubscriberLangNone || s == SubscriberLangOther || s == SubscriberLangEnOnly || IsCampaignLang(s)
+}
+
+// ListSunset (fork, sunset v2) is lists.sunset: raw JSON that scans a SQL NULL as empty (a
+// json.RawMessage cannot scan NULL), so `omitempty` drops the key for every list without one.
+type ListSunset []byte
+
+// Scan implements sql.Scanner.
+func (s *ListSunset) Scan(v any) error {
+	switch x := v.(type) {
+	case nil:
+		*s = nil
+	case []byte:
+		*s = append(ListSunset(nil), x...)
+	case string:
+		*s = ListSunset(x)
+	default:
+		return fmt.Errorf("lists.sunset: unsupported type %T", v)
+	}
+	return nil
+}
+
+// MarshalJSON emits the stored document verbatim (null when empty, though omitempty normally
+// drops the key first).
+func (s ListSunset) MarshalJSON() ([]byte, error) {
+	if len(s) == 0 {
+		return []byte("null"), nil
+	}
+	return []byte(s), nil
 }
 
 // ListGridRow is one row of the grid. Total is the sum of the five segments.

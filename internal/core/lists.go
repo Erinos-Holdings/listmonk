@@ -197,6 +197,22 @@ func (c *Core) UpdateList(id int, l models.List, keepReserved bool) (models.List
 	return c.GetList(id, "")
 }
 
+// UpdateListSunset stores a list's re-engagement queue countdown verbatim (fork, sunset v2 --
+// integrations SUNSET-V2-SPEC D8; the caller has validated its shape). A missing list is a 404.
+func (c *Core) UpdateListSunset(id int, sunset []byte) error {
+	res, err := c.q.UpdateListSunset.Exec(id, string(sunset))
+	if err != nil {
+		c.log.Printf("error updating list sunset: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.list}", "error", pqErrMsg(err)))
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return echo.NewHTTPError(http.StatusNotFound,
+			c.i18n.Ts("globals.messages.notFound", "name", "{globals.terms.list}"))
+	}
+	return nil
+}
+
 // DeleteList deletes a list.
 func (c *Core) DeleteList(id int) error {
 	return c.DeleteLists([]int{id}, "", true, nil)

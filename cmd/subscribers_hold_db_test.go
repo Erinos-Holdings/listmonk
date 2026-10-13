@@ -96,6 +96,18 @@ func (f *holdFixture) hold(ids []int, rule string, bound *time.Time, relabel boo
 	return out
 }
 
+// finalize stamps meta.hold.final_at on a held row the way the sunset Lambda's archive phase does
+// (sunset v2, SUNSET-V2-SPEC D5): a same-rule hold call, merged into the stored hold.
+func (f *holdFixture) finalize(id int, rule string) {
+	f.t.Helper()
+	res, err := f.app.core.HoldSubscriptions([]int{id}, f.brandID, map[string]any{
+		"reason": "never-engaged", "source": "test", "rule": rule, "final_at": "2027-10-12T15:00:00Z",
+	}, nil, false)
+	if err != nil || res.Held != 1 {
+		f.t.Fatalf("finalize %d: %+v %v", id, res, err)
+	}
+}
+
 func skipWhy(res models.HoldResult, id int) string {
 	for _, s := range res.Skipped {
 		if s.ID == id {
@@ -413,6 +425,17 @@ func TestHoldRelease_EveryStatusWriter(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
+		// Fork (sunset v2, SUNSET-V2-SPEC J4) -- the writer that releases an ordinary hold above
+		// keeps a FINAL hold when the write does not carry release_final.
+		{"add confirmed on a FINAL hold, no release_final", kept, func(id int, _, _ string) {
+			f.finalize(id, "r1")
+			if err := co.AddSubscriptions([]int{id}, []int{f.brandID}, "confirmed", true); err != nil {
+				t.Fatal(err)
+			}
+			if r := f.row(id, f.brandID); r.meta(t)["hold"].(map[string]any)["final_at"] == nil {
+				t.Fatalf("final hold lost its final_at: %s", r.Meta)
+			}
+		}},
 	}
 
 	for _, tc := range cases {
@@ -472,6 +495,196 @@ func TestHoldRelease_EveryStatusWriter(t *testing.T) {
 	}
 	if m := f.row(id, f.brandID).meta(t); len(m) != 0 {
 		t.Fatalf("no-hold writes produced meta %v", m)
+	}
+}
+
+// TestHoldRelease_FinalRequiresFlag -- integrations SUNSET-V2-SPEC J4 (§4.5). A hold carrying
+// final_at (the 365-day archive) is released ONLY by a write carrying release_final: an unflagged
+// `add confirmed` (admin bulk add, with or without backfill), a CSV import with the status
+// overwrite, listmonk's public-form re-join (the insert conflict arm: update-subscriber-with-lists
+// with allowResubscribe) and an unflagged lists-action add all leave the row exactly as it was --
+// and the API answers OK (silent). A flagged lists-action add, with or without backfill, releases it
+// to hold_released{to:'confirmed'}. A real unsubscribe still releases it to 'unsubscribed'. The
+// session flag never leaks to a later unflagged write.
+func TestHoldRelease_FinalRequiresFlag(t *testing.T) {
+	f := newHoldFixture(t)
+	co := f.app.core
+	qs := parseQueries(t)
+	upsert, err := f.db.Preparex(qs["upsert-subscriber"].Query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const (
+		kept        = "kept"
+		released    = "released"
+		releasedOut = "released-unsubscribed"
+	)
+	addBody := func(id int, extra string) string {
+		return `{"action":"add","status":"confirmed","ids":[` + itoa(id) + `],"target_list_ids":[` + itoa(f.brandID) + `]` + extra + `}`
+	}
+	manageOK := func(body string) {
+		if code, resp := f.manage(body); code != http.StatusOK {
+			t.Fatalf("lists action %s: %d %s", body, code, resp)
+		}
+	}
+	n := 0
+	cases := []struct {
+		name     string
+		want     string
+		backfill bool
+		write    func(id int, email string)
+	}{
+		{"admin add confirmed (no flag)", kept, false, func(id int, _ string) {
+			if err := co.AddSubscriptions([]int{id}, []int{f.brandID}, "confirmed", false); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"admin add confirmed + backfill (no flag)", kept, false, func(id int, _ string) {
+			if err := co.AddSubscriptions([]int{id}, []int{f.brandID}, "confirmed", true); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"import overwrite (upsert-subscriber, status overwrite)", kept, false, func(_ int, email string) {
+			if _, err := upsert.Exec("00000000-0000-0000-0000-000000000003", email, "n", "{}", "{"+itoa(f.brandID)+"}", "confirmed", false, true); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"public form re-join (insert conflict arm)", kept, false, func(id int, email string) {
+			if _, _, err := co.UpdateSubscriberWithLists(id, models.Subscriber{Email: email, Name: "n", Status: "enabled"},
+				nil, []string{f.brandUUID}, false, false, true, nil, true); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"lists action add confirmed, no release_final (silent at the API)", kept, false, func(id int, _ string) {
+			manageOK(addBody(id, ""))
+		}},
+		{"flagged add without backfill", released, false, func(id int, _ string) {
+			manageOK(addBody(id, `,"release_final":true`))
+		}},
+		{"flagged add with backfill", released, true, func(id int, _ string) {
+			manageOK(addBody(id, `,"backfill":true,"release_final":true`))
+		}},
+		{"admin add after a flagged write (SET LOCAL does not leak)", kept, false, func(id int, _ string) {
+			if err := co.AddSubscriptions([]int{id}, []int{f.brandID}, "confirmed", false); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"real unsubscribe (SET-clause release)", releasedOut, false, func(id int, _ string) {
+			if err := co.UnsubscribeLists([]int{id}, []int{f.brandID}, nil); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	}
+
+	for _, tc := range cases {
+		n++
+		email := "final" + itoa(n) + "@x"
+		id, _ := f.sub(email, f.brandID, "confirmed")
+		f.hold([]int{id}, "r1", nil, false)
+		f.finalize(id, "r1")
+		f.age(id, f.brandID)
+		before := f.row(id, f.brandID)
+
+		tc.write(id, email)
+
+		r := f.row(id, f.brandID)
+		m := r.meta(t)
+		rel, _ := m["hold_released"].(map[string]any)
+		switch tc.want {
+		case kept:
+			if r.Status != "unsubscribed" || string(r.Meta) != string(before.Meta) || !r.UpdatedAt.Equal(before.UpdatedAt) {
+				t.Fatalf("%s: want the final hold untouched, got %s %s (updated %v -> %v)", tc.name, r.Status, r.Meta, before.UpdatedAt, r.UpdatedAt)
+			}
+		case released, releasedOut:
+			to := "confirmed"
+			if tc.want == releasedOut {
+				to = "unsubscribed"
+			}
+			if r.Status != to || m["hold"] != nil || rel == nil || rel["to"] != to {
+				t.Fatalf("%s: want released to %s, got %s %s", tc.name, to, r.Status, r.Meta)
+			}
+			if h, _ := rel["hold"].(map[string]any); h == nil || h["final_at"] == nil {
+				t.Fatalf("%s: the released record lost the final hold: %s", tc.name, r.Meta)
+			}
+			// backfill keeps confirmed_at as it was (no welcome); without it the transition stamps it.
+			if tc.want == released && sameTime(r.ConfirmedAt, before.ConfirmedAt) != tc.backfill {
+				t.Fatalf("%s: confirmed_at %v -> %v with backfill=%v", tc.name, before.ConfirmedAt, r.ConfirmedAt, tc.backfill)
+			}
+		}
+	}
+
+	// An ordinary (non-final) hold is released by an unflagged add exactly as before.
+	id, _ := f.sub("ordinary@x", f.brandID, "confirmed")
+	f.hold([]int{id}, "r1", nil, false)
+	if err := co.AddSubscriptions([]int{id}, []int{f.brandID}, "confirmed", true); err != nil {
+		t.Fatal(err)
+	}
+	if r := f.row(id, f.brandID); r.Status != "confirmed" {
+		t.Fatalf("an ordinary hold must still release on an unflagged add: %s %s", r.Status, r.Meta)
+	}
+}
+
+// TestSunsetV2Predicates_PassTableAllowlist -- integrations SUNSET-V2-SPEC §4.3 / D4. The queue
+// predicates of lib/sunset.ts queuePredicates (copied verbatim for brand list $L, queues $Q1/$Q2;
+// keep in step with that file) run through the subscriber query API: each passes
+// validateQueryTables -- the ask-received predicate names campaign_sends, which v6.2.22 added to
+// the allowlist -- and the evergreen arm of "ask received" selects exactly the queue-1 row that an
+// evergreen sent to after the row was created.
+func TestSunsetV2Predicates_PassTableAllowlist(t *testing.T) {
+	f := newHoldFixture(t)
+	var q1, q2 int
+	f.db.Get(&q1, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Brand re-engagement 1', 'private', 'single', '{reengage:1:1}') RETURNING id`)
+	f.db.Get(&q2, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Brand re-engagement 2', 'private', 'single', '{reengage:1:2}') RETURNING id`)
+	L, Q1, Q2 := itoa(f.brandID), itoa(q1), itoa(q2)
+
+	clickRelease := "subscribers.id IN (SELECT k.subscriber_id FROM link_clicks k JOIN links l ON l.id = k.link_id " +
+		"JOIN campaign_lists cl ON cl.campaign_id = k.campaign_id " +
+		"JOIN subscriber_lists b ON b.subscriber_id = k.subscriber_id AND b.list_id = " + L + " " +
+		"WHERE cl.list_id IN (" + Q1 + ", " + Q2 + ") AND b.status = 'unsubscribed' AND b.meta ? 'hold' " +
+		"AND k.created_at > (b.meta->'hold'->>'at')::timestamptz AND l.url NOT LIKE '%manage-preferences.curatedfor.you%')"
+	askReceived := "subscribers.id IN (SELECT q.subscriber_id FROM subscriber_lists q WHERE q.list_id = " + Q1 + " AND (" +
+		"EXISTS (SELECT 1 FROM campaigns c JOIN campaign_lists cl ON cl.campaign_id = c.id WHERE cl.list_id = " + Q1 + " " +
+		"AND c.type = 'regular' AND c.evergreen = false AND c.status = 'finished' AND c.started_at > q.created_at " +
+		"AND (c.attribs->>'lang' IS NULL OR c.attribs->>'lang' = COALESCE(NULLIF(LOWER(LEFT(subscribers.attribs->>'lang', 2)), ''), 'en'))) " +
+		"OR EXISTS (SELECT 1 FROM campaign_sends s JOIN campaigns c ON c.id = s.campaign_id JOIN campaign_lists cl ON cl.campaign_id = c.id " +
+		"WHERE cl.list_id = " + Q1 + " AND c.evergreen = true AND s.subscriber_id = q.subscriber_id AND s.sent_at IS NOT NULL AND s.sent_at > q.created_at)))"
+	decline := "subscribers.id IN (SELECT b.subscriber_id FROM subscriber_lists b WHERE b.list_id = " + L + " " +
+		"AND b.status = 'unsubscribed' AND b.meta ? 'hold' AND EXISTS (SELECT 1 FROM subscriber_lists q " +
+		"WHERE q.subscriber_id = b.subscriber_id AND q.list_id IN (" + Q1 + ", " + Q2 + ") " +
+		"AND (q.status = 'unsubscribed' OR subscribers.status = 'blocklisted')))"
+	archive := "subscribers.status <> 'blocklisted' AND subscribers.id IN (SELECT subscriber_id FROM subscriber_lists WHERE list_id = " + L + " " +
+		"AND status = 'unsubscribed' AND meta ? 'hold' AND meta->'hold'->>'reason' = 'never-engaged' AND NOT (meta->'hold' ? 'final_at') " +
+		"AND COALESCE(meta->'hold'->>'anchor_at', meta->'hold'->>'at')::timestamptz <= '2027-11-01T15:00:00Z'::timestamptz - INTERVAL '365 days')"
+
+	// Fixtures for the evergreen arm: two held subscribers on queue 1; an evergreen on queue 1 sent
+	// to the first after its queue row was created, and to the second BEFORE (a stale send).
+	sent, _ := f.sub("sent@x", f.brandID, "confirmed")
+	stale, _ := f.sub("stale@x", f.brandID, "confirmed")
+	f.hold([]int{sent, stale}, "r1", nil, false)
+	for _, id := range []int{sent, stale} {
+		f.db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status, created_at) VALUES ($1, $2, 'confirmed', NOW() - INTERVAL '2 days')`, id, q1)
+	}
+	var ev int
+	f.db.Get(&ev, `INSERT INTO campaigns (uuid, name, subject, from_email, body, messenger, template_id, evergreen, status) VALUES (gen_random_uuid(), 'ask 1', 's', 'f@x', 'b', 'email', (SELECT id FROM templates LIMIT 1), true, 'running') RETURNING id`)
+	f.db.MustExec(`INSERT INTO campaign_lists (campaign_id, list_id, list_name) VALUES ($1, $2, 'q1')`, ev, q1)
+	f.db.MustExec(`INSERT INTO campaign_sends (campaign_id, subscriber_id, claimed_at, sent_at) VALUES ($1, $2, NOW(), NOW() - INTERVAL '1 day'), ($1, $3, NOW(), NOW() - INTERVAL '3 days')`, ev, sent, stale)
+
+	for name, pred := range map[string]string{"clickRelease": clickRelease, "askReceived": askReceived, "decline": decline, "archive": archive} {
+		if _, _, err := f.app.core.QuerySubscribers("", pred, nil, "", models.SubscriberFilter{}, "", "", 0, 100); err != nil {
+			t.Fatalf("%s rejected: %v", name, err)
+		}
+	}
+	got, _, err := f.app.core.QuerySubscribers("", askReceived, nil, "", models.SubscriberFilter{}, "", "", 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != sent {
+		ids := []int{}
+		for _, s := range got {
+			ids = append(ids, s.ID)
+		}
+		t.Fatalf("askReceived evergreen arm = %v, want [%d]", ids, sent)
 	}
 }
 

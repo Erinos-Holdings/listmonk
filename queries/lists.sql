@@ -154,6 +154,11 @@ c AS (
 )
 SELECT COUNT(*) FROM l, c;
 
+-- name: update-list-sunset
+-- Fork (sunset v2, SUNSET-V2-SPEC D8) -- stores the queue countdown $2 verbatim. updated_at is
+-- deliberately left alone: the Lambda writes this daily and it is not an edit of the list.
+UPDATE lists SET sunset=$2::JSONB WHERE id = $1;
+
 -- name: update-lists-date
 UPDATE lists SET updated_at=NOW() WHERE id = ANY($1);
 

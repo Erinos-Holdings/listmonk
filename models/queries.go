@@ -69,6 +69,8 @@ type Queries struct {
 	UpdateList           *sqlx.Stmt `query:"update-list"`
 	UpdateListsDate      *sqlx.Stmt `query:"update-lists-date"`
 	DeleteLists          *sqlx.Stmt `query:"delete-lists"`
+	// Fork (sunset v2, SUNSET-V2-SPEC D8) -- the queue countdown write.
+	UpdateListSunset *sqlx.Stmt `query:"update-list-sunset"`
 	// Fork (BRAND-PICKER-SPEC D4) -- the locked-list checks.
 	GetLockedLists    *sqlx.Stmt `query:"get-locked-lists"`
 	CountListsByName  *sqlx.Stmt `query:"count-lists-by-name"`

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/internal/i18n"
 	"github.com/knadh/listmonk/internal/notifs"
 	"github.com/knadh/listmonk/internal/subimporter"
@@ -39,6 +40,10 @@ type subQueryReq struct {
 	All                bool   `json:"all"`
 	// Fork (evergreen) -- see subimporter.SessionOpt.Backfill.
 	Backfill bool `json:"backfill"`
+	// Fork (sunset v2, SUNSET-V2-SPEC D6) -- action "add" on ManageSubscriberLists only: the
+	// write may release a FINAL hold (core.SessionFlags.ReleaseFinal). Sent only by the person's
+	// own authenticated actions; ignored by every other action and endpoint.
+	ReleaseFinal bool `json:"release_final"`
 
 	// Fork (holds) -- action "hold" on ManageSubscriberLists only. See holdSubscriberLists.
 	// Fork (list grid, LIST-GRID-SPEC D6) -- the server-authored segment/lang filter. Own
@@ -553,7 +558,7 @@ func (a *App) ManageSubscriberLists(c echo.Context) error {
 	var err error
 	switch req.Action {
 	case "add":
-		err = a.core.AddSubscriptions(subIDs, listIDs, req.Status, req.Backfill)
+		err = a.core.AddSubscriptionsFlags(subIDs, listIDs, req.Status, core.SessionFlags{Backfill: req.Backfill, ReleaseFinal: req.ReleaseFinal})
 	case "remove":
 		err = a.core.DeleteSubscriptions(subIDs, listIDs)
 	case "unsubscribe":

@@ -31,6 +31,9 @@ var (
 		// validator inspects the EXPLAIN plan, so the function's inner tables must be allowed
 		// for the sunset predicate (integrations SUNSET-SPEC D7) to pass.
 		"campaign_send_failures": {},
+		// Fork (sunset v2) -- the evergreen arm of the "ask received" predicate reads the
+		// per-recipient evergreen send log (integrations SUNSET-V2-SPEC D4, §4.3).
+		"campaign_sends": {},
 	}
 )
 

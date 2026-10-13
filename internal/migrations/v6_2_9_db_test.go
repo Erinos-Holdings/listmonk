@@ -138,7 +138,7 @@ func TestMediaTags(t *testing.T) {
 	}{
 		{"no filter returns every row", "", nil, false, []string{"a.png", "ab.png", "b.png", "none.png"}},
 		{"one tag", "", []string{"a"}, false, []string{"a.png", "ab.png"}},
-		{"two tags OR, not AND", "", []string{"a", "b"}, false, []string{"a.png", "ab.png", "b.png"}},
+		{"two tags AND, like lists (MEDIA-TAGS-SPEC D4 amended 2026-10-12)", "", []string{"a", "b"}, false, []string{"ab.png"}},
 		{"unknown tag", "", []string{"zzz"}, false, []string{}},
 		{"untagged alone", "", nil, true, []string{"none.png"}},
 		{"untagged ORs in", "", []string{"b"}, true, []string{"ab.png", "b.png", "none.png"}},
@@ -159,7 +159,7 @@ func TestMediaTags(t *testing.T) {
 
 	// ---- I2 (pagination): a positive limit still limits; total counts the whole match. ----
 	{
-		rows, err := query.Queryx("%%", mediaTagsProvider, 0, 1, pq.StringArray{"a", "b"}, false)
+		rows, err := query.Queryx("%%", mediaTagsProvider, 0, 1, pq.StringArray{"a"}, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -173,8 +173,8 @@ func TestMediaTags(t *testing.T) {
 			total = m["total"].(int64)
 		}
 		rows.Close()
-		if n != 1 || total != 3 {
-			t.Fatalf("limit 1: got %d rows total %d, want 1 row total 3", n, total)
+		if n != 1 || total != 2 {
+			t.Fatalf("limit 1: got %d rows total %d, want 1 row total 2", n, total)
 		}
 	}
 
