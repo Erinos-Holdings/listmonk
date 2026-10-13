@@ -54,7 +54,7 @@
                  switching resets the page and the bulk selection (bulk delete is scoped too).
                  Disabled while a fetch is in flight so two quick clicks cannot leave the table
                  showing one kind while the pill (and a bulk delete) is on the other. -->
-            <b-field>
+            <b-field class="segmented">
               <b-radio-button v-model="queryParams.evergreen" :native-value="false" type="is-primary"
                 :disabled="loading.campaigns"
                 data-cy="scope-broadcasts" @input="onScopeChange">

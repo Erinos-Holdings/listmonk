@@ -5,17 +5,19 @@
        over the FULL roster. Hidden when the selector is hidden or locked, or without brands:get
        (no documents are fetched); disabled while the selection is pending. -->
   <div v-if="shown" class="launch-filter" data-cy="launch-filter" role="group" :aria-label="$t('brand.launch.label')">
-    <b-field>
-      <b-radio-button v-model="value" native-value="all" size="is-small" :disabled="brandScope.pending"
-        data-cy="launch-all">
+    <!-- .segmented: the shared one-control treatment (style.scss), also on the Campaigns page's
+         Broadcasts | Automations toggle. -->
+    <b-field class="segmented">
+      <b-radio-button v-model="value" native-value="all" size="is-small" type="is-primary"
+        :disabled="brandScope.pending" data-cy="launch-all">
         {{ $t('brand.launch.all') }}
       </b-radio-button>
-      <b-radio-button v-model="value" native-value="launched" size="is-small" :disabled="brandScope.pending"
-        data-cy="launch-launched">
+      <b-radio-button v-model="value" native-value="launched" size="is-small" type="is-primary"
+        :disabled="brandScope.pending" data-cy="launch-launched">
         {{ $t('brand.launch.launched', { n: counts.launched }) }}
       </b-radio-button>
-      <b-radio-button v-model="value" native-value="unlaunched" size="is-small" :disabled="brandScope.pending"
-        data-cy="launch-unlaunched">
+      <b-radio-button v-model="value" native-value="unlaunched" size="is-small" type="is-primary"
+        :disabled="brandScope.pending" data-cy="launch-unlaunched">
         {{ $t('brand.launch.unlaunched', { n: counts.unlaunched }) }}
       </b-radio-button>
     </b-field>

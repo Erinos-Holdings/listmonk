@@ -281,6 +281,15 @@ section {
     flex-wrap: nowrap;
     width: max-content;
     align-items: center;
+    // The measured offset lands the wrapper's border box on the content edge; Bulma's
+    // .navbar-item side padding would push the selector 0.75rem past it.
+    padding-left: 0;
+    padding-right: 0;
+    // The same gap the Campaigns page keeps between its list dropdown and the search box
+    // (two Bulma columns: 2 × 0.75rem).
+    .launch-filter {
+      margin-left: 1.5rem;
+    }
   }
   .favicon {
     display: none;
@@ -633,13 +642,56 @@ body.is-noscroll {
   }
 }
 
-// Fork (evergreen) -- b-radio-button renders as .b-radio.radio.button, and Buefy's
-// .b-radio.radio sets line-height 1.25 while .button uses 1.5. With the height: auto
-// override above, that makes the Campaigns scope pill 3.75px shorter than the
-// adjacent search input/button. Restore the button line-height so they match.
-// Scoped to the Campaigns page so no other b-radio-button (the Users form) changes.
-section.campaigns .b-radio.radio.button {
-  line-height: 1.5;
+// Fork -- .segmented: a b-field of b-radio-buttons drawn as ONE control (the navbar's launch
+// filter, the Campaigns page's Broadcasts | Automations toggle): a $grey-lightest track inside a
+// 1px $primary ring, the selected segment a raised primary pill. Replaces Buefy's has-addons
+// look, where each segment carries its own border and reads as three adjacent buttons.
+// Heights match the adjacent select/input, which the override above sets to height auto with
+// 10px vertical padding: a borderless segment at 8px + the track's 2px padding + 1px ring gives
+// the same 18px + 22px (is-small) / 22.5px + 22px box. The segment's line-height is pinned to
+// the button's 1.5 because Buefy's .b-radio.radio sets 1.25 (the Users form's b-radio-buttons
+// are not .segmented and keep Buefy's look).
+.field.segmented.has-addons {
+  background: $grey-lightest;
+  border: 1px solid $primary;
+  border-radius: 5px;
+  padding: 2px;
+  gap: 2px;
+
+  .control:not(:last-child) {
+    margin-right: 0;
+  }
+
+  .b-radio.radio.button {
+    height: auto;
+    line-height: 1.5;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: $grey-dark;
+    box-shadow: none;
+
+    &:not(.is-small) {
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+
+    &:hover {
+      color: $grey-darker;
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 2px rgba($primary, 0.3);
+    }
+
+    &.is-selected {
+      background: $primary;
+      color: $white;
+      font-weight: 400;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+  }
 }
 
 // Fork (evergreen) -- the "Days after joining" label sits above its compact number input,
@@ -1702,6 +1754,11 @@ th.role-toggle-select a {
     min-width: 0;
     width: auto;
     flex-wrap: wrap;
+    padding-left: 0.75rem; // no measured offset here: keep Bulma's navbar-item spacing
+    padding-right: 0.75rem;
+    .launch-filter {
+      margin-left: 0.5rem; // the wrapped second row's indent, as reviewed
+    }
   }
 }
 

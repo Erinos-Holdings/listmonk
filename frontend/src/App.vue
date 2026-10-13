@@ -19,7 +19,7 @@
              desktop, where it is absolutely positioned. -->
         <div v-if="!brandScope.hidden" class="navbar-item brand-context" :style="selectorStyle">
           <brand-selector />
-          <launch-filter class="ml-2" />
+          <launch-filter />
         </div>
       </template>
       <template #end>
