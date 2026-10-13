@@ -772,8 +772,8 @@ export default Vue.extend({
       if (!this.$can('brands:get')) {
         return;
       }
-      // Fork (launch filter, LAUNCH-FILTER-SPEC D3) -- the store's one fetch path; a refresh here
-      // also updates the navbar filter's counts.
+      // Fork (launch filter, LAUNCH-FILTER-SPEC D3) -- the store's one fetch path (this page has no
+      // page.refresh listener; it runs on mount); the commit also updates the navbar filter's counts.
       this.$store.dispatch('loadBrandHealth');
       this.$api.getBrands().then((data) => {
         const byslug = {};

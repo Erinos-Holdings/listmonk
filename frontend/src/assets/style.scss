@@ -272,11 +272,14 @@ section {
     align-items: center;
   }
   // Fork (launch filter, LAUNCH-FILTER-SPEC D4/D10) -- the selector and the launch filter in one
-  // row; the filter wraps after the selector when the width demands.
+  // row. On desktop the wrapper is absolutely positioned past the brand's own width (App.vue
+  // selectorStyle), where an auto width shrinks to min-content -- so it is max-content and never
+  // wraps (review H1); it wraps only at phone width, below, where it is in natural flow.
   .brand-context {
     z-index: 2;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    width: max-content;
     align-items: center;
   }
   .favicon {
@@ -1687,6 +1690,18 @@ th.role-toggle-select a {
   }
   .navbar-item.user .navbar-link {
     padding: 15px;
+  }
+}
+
+// Fork (launch filter, LAUNCH-FILTER-SPEC D10, review M2) -- at phone width (App.vue isMobile) the
+// wrapper is a natural-flow navbar item; Bulma's .navbar-item never shrinks, so give it room to
+// shrink and let the filter wrap under the selector instead of pushing the burger off the edge.
+@media screen and (max-width: 768px) {
+  .navbar-brand .brand-context {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    flex-wrap: wrap;
   }
 }
 

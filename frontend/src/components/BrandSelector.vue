@@ -3,6 +3,8 @@
        brands, the roster's brands by display name, No brand. A presentation filter only (S1).
        Disabled placeholder until the lists load (D3); disabled with the brand shown when locked
        (S5); hidden when the roster is empty (D2). -->
+  <!-- The hidden guard is this component's own contract; App.vue's brand-context wrapper repeats
+       it so the wrapper (and the launch filter) leave the navbar with it (LAUNCH-FILTER-SPEC D4). -->
   <div v-if="!brandScope.hidden" class="brand-selector" data-cy="brand-selector">
     <b-select :value="value" :disabled="brandScope.pending || brandScope.locked" size="is-small"
       :aria-label="$t('brand.selector.label')" @input="onInput">
