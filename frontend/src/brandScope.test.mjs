@@ -9,6 +9,7 @@ import {
   scopeUnion, filterByIds, effectiveListIds, subscriberQueryBody, subscriberExportParams,
   campaignBrand, contextNotice, filterTemplates, formBrandDefault, templateNoticeBrand,
   mediaScopeContext, presetNoticeBrand, filterBrandRows,
+  launchOf, matchesLaunch, applyLaunch, launchCounts, filterRowsByLaunch, launchApplies,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 const BRANDS = [
@@ -297,4 +298,135 @@ test('Phase 2 I6 filterBrandRows: a brand shows its row only; none and all every
   // The record page's notice comes from contextNotice with the route's slug.
   assert.deepEqual(contextNotice('thirstygirl', brand('ruze'), BRANDS), { record: 'Thirsty Girl', selected: 'Ruze' });
   assert.deepEqual(contextNotice('ruze', NONE, BRANDS), { record: 'Ruze', selected: 'No brand' });
+});
+
+// Fork (launch filter, integrations LAUNCH-FILTER-SPEC I1-I5) ----------------------------------
+// The health documents: shala unlaunched; ruze, younique launched; no document for thirstygirl.
+const DOCS = [
+  { brand: 'ruze', status: 'ok' },
+  { brand: 'shala', status: 'unknown' },
+  { brand: 'younique', status: 'warn' },
+];
+
+test('I1 launchOf: unknown is unlaunched; ok/warn/issues, no status and no document are launched', () => {
+  assert.equal(launchOf('shala', DOCS), 'unlaunched');
+  assert.equal(launchOf('ruze', DOCS), 'launched');
+  assert.equal(launchOf('younique', DOCS), 'launched');
+  assert.equal(launchOf('x', [{ brand: 'x', status: 'issues' }]), 'launched');
+  assert.equal(launchOf('x', [{ brand: 'x' }]), 'launched');
+  assert.equal(launchOf('x', [{ brand: 'x', status: 2 }]), 'launched');
+  // No document at all.
+  assert.equal(launchOf('thirstygirl', DOCS), 'launched');
+  assert.equal(launchOf('ruze', []), 'launched');
+  assert.equal(launchOf('ruze', undefined), 'launched');
+  // matchesLaunch: all (and an unknown value) matches everything.
+  assert.equal(matchesLaunch('shala', 'all', DOCS), true);
+  assert.equal(matchesLaunch('shala', 'bogus', DOCS), true);
+  assert.equal(matchesLaunch('shala', 'launched', DOCS), false);
+  assert.equal(matchesLaunch('shala', 'unlaunched', DOCS), true);
+  assert.equal(matchesLaunch('thirstygirl', 'unlaunched', DOCS), false);
+});
+
+test('I2 applyLaunch: all unchanged; launched/unlaunched the matching brands in order; none kept', () => {
+  const roster = rosterFrom(LISTS, BRANDS); // ruze, shala, younique + none
+  const slugs = (r) => r.brands.map((b) => b.slug);
+  assert.deepEqual(applyLaunch(roster, 'all', DOCS), roster);
+  assert.deepEqual(slugs(applyLaunch(roster, 'launched', DOCS)), ['ruze', 'younique']);
+  assert.deepEqual(slugs(applyLaunch(roster, 'unlaunched', DOCS)), ['shala']);
+  ['all', 'launched', 'unlaunched', 'bogus', undefined].forEach((l) => {
+    assert.equal(applyLaunch(roster, l, DOCS).none, true, String(l));
+  });
+  const noNone = rosterFrom({ results: [{ id: 9, brand: 'ruze' }, { id: 16, brand: 'shala' }] }, BRANDS);
+  assert.equal(applyLaunch(noNone, 'unlaunched', DOCS).none, false);
+  // An unknown value behaves as all.
+  assert.deepEqual(applyLaunch(roster, 'bogus', DOCS), roster);
+  assert.deepEqual(applyLaunch(roster, null, DOCS), roster);
+  // No documents: every brand launched.
+  assert.deepEqual(slugs(applyLaunch(roster, 'launched', [])), ['ruze', 'shala', 'younique']);
+  assert.deepEqual(slugs(applyLaunch(roster, 'unlaunched', [])), []);
+  // The input roster is not mutated.
+  assert.deepEqual(slugs(roster), ['ruze', 'shala', 'younique']);
+});
+
+test('I3 resolveSelection offered: hidden/locked by the full roster, a stored brand by the offered', () => {
+  const roster = rosterFrom(LISTS, BRANDS);
+  const launched = applyLaunch(roster, 'launched', DOCS);
+  // shala is in the roster but not offered: all, not locked, not hidden.
+  const r = resolveSelection(brand('shala'), roster, true, launched);
+  assert.deepEqual(r, {
+    pending: false, selection: ALL, locked: false, hidden: false,
+  });
+  // A brand still offered is kept; none is kept (applyLaunch never drops it).
+  assert.deepEqual(resolveSelection(brand('ruze'), roster, true, launched).selection, brand('ruze'));
+  assert.deepEqual(resolveSelection(NONE, roster, true, launched).selection, NONE);
+  // A two-brand roster narrowed to one offered brand is NOT locked.
+  const two = rosterFrom({ results: [{ id: 9, brand: 'ruze' }, { id: 16, brand: 'shala' }] }, BRANDS);
+  const twoOffered = applyLaunch(two, 'unlaunched', DOCS);
+  assert.equal(twoOffered.brands.length, 1);
+  const r2 = resolveSelection(brand('ruze'), two, true, twoOffered);
+  assert.equal(r2.locked, false);
+  assert.equal(r2.hidden, false);
+  assert.deepEqual(r2.selection, ALL);
+  // A one-brand roster is still locked whatever offered holds.
+  const one = rosterFrom({ results: [{ id: 16, brand: 'shala' }] }, BRANDS);
+  [applyLaunch(one, 'launched', DOCS), { brands: [], none: false }, undefined].forEach((o) => {
+    const r3 = resolveSelection(ALL, one, true, o);
+    assert.equal(r3.locked, true);
+    assert.deepEqual(r3.selection, brand('shala'));
+  });
+  // Pending stays pending.
+  assert.deepEqual(resolveSelection(brand('ruze'), roster, false, launched), { pending: true });
+  // offered omitted = today's behaviour.
+  assert.deepEqual(resolveSelection(brand('shala'), roster, true), resolveSelection(brand('shala'), roster, true, roster));
+  assert.deepEqual(resolveSelection(brand('shala'), roster).selection, brand('shala'));
+});
+
+test('D4 launchApplies: only while the selector is shown and unlocked (full roster)', () => {
+  assert.equal(launchApplies(rosterFrom(LISTS, BRANDS)), true);
+  assert.equal(launchApplies(rosterFrom({ results: [{ id: 9, brand: 'ruze' }, { id: 16, brand: 'shala' }] }, BRANDS)), true);
+  // One brand + a brandless list is not locked.
+  assert.equal(launchApplies(rosterFrom({ results: [{ id: 9, brand: 'ruze' }, { id: 37, brand: '' }] }, BRANDS)), true);
+  // Locked (one brand) and hidden (empty roster) do not apply.
+  assert.equal(launchApplies(rosterFrom({ results: [{ id: 9, brand: 'ruze' }] }, BRANDS)), false);
+  assert.equal(launchApplies(rosterFrom([], BRANDS)), false);
+  assert.equal(launchApplies(undefined), false);
+});
+
+test('I4 launchCounts: unknown documents unlaunched, every other brand launched; sums to the roster', () => {
+  const roster = rosterFrom(LISTS, BRANDS);
+  assert.deepEqual(launchCounts(roster, DOCS), { launched: 2, unlaunched: 1 });
+  assert.deepEqual(launchCounts(roster, []), { launched: 3, unlaunched: 0 });
+  const withTg = rosterFrom({ results: [...LISTS.results, { id: 50, brand: 'thirstygirl' }] }, BRANDS);
+  const c = launchCounts(withTg, DOCS);
+  assert.deepEqual(c, { launched: 3, unlaunched: 1 });
+  assert.equal(c.launched + c.unlaunched, withTg.brands.length);
+  assert.deepEqual(launchCounts(undefined, DOCS), { launched: 0, unlaunched: 0 });
+});
+
+test('I5 filterRowsByLaunch: Brands rows by their own status; SES rows by their brand\'s document', () => {
+  const bySlug = (r) => r.brand;
+  const BR = [
+    { brand: 'younique', status: 'warn' },
+    { brand: 'shala', status: 'unknown' },
+    { brand: 'ruze', status: 'ok' },
+    { brand: 'zeta', status: 'unknown' },
+  ];
+  const b = (l) => filterRowsByLaunch(BR, l, bySlug, BR).map(bySlug);
+  assert.deepEqual(b('all'), ['younique', 'shala', 'ruze', 'zeta']);
+  assert.deepEqual(b('launched'), ['younique', 'ruze']);
+  assert.deepEqual(b('unlaunched'), ['shala', 'zeta']);
+
+  const SES = [
+    { brand: 'unattributed', status: 'ok', sends: 4 },
+    { brand: 'shala', status: 'ok', sends: 120 },
+    { brand: 'ruze', status: 'unknown', sends: 0 },
+    { brand: 'thirstygirl', status: 'unknown', sends: 0 },
+  ];
+  const s = (l) => filterRowsByLaunch(SES, l, bySlug, DOCS).map(bySlug);
+  assert.deepEqual(s('all'), ['unattributed', 'shala', 'ruze', 'thirstygirl']);
+  // shala's DOCUMENT is unknown: dropped under launched though the SES row shows sends.
+  assert.deepEqual(s('launched'), ['unattributed', 'ruze', 'thirstygirl']);
+  // No document (unattributed, thirstygirl): kept under all/launched, dropped under unlaunched.
+  assert.deepEqual(s('unlaunched'), ['shala']);
+  assert.deepEqual(filterRowsByLaunch(undefined, 'launched', bySlug, DOCS), []);
 });

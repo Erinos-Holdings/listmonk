@@ -13,7 +13,14 @@
         </div>
         <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D4) -- immediately right of the logo,
              its left edge on the main column's content edge (measured: alignSelector). -->
-        <brand-selector class="navbar-item" :style="selectorStyle" />
+        <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D4/D10) -- the launch filter in natural
+             flow immediately right of the selector. Both sit in one wrapper so the measured offset
+             (alignSelector, unchanged) still puts the SELECTOR's left edge on the content edge on
+             desktop, where it is absolutely positioned. -->
+        <div v-if="!brandScope.hidden" class="navbar-item brand-context" :style="selectorStyle">
+          <brand-selector />
+          <launch-filter class="ml-2" />
+        </div>
       </template>
       <template #end>
         <navigation v-if="isMobile" :is-mobile="isMobile" :active-item="activeItem" :active-group="activeGroup"
@@ -117,7 +124,7 @@
 
 <script>
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import { NavigationFailureType, isNavigationFailure } from 'vue-router';
 import {
   RESULT_TIMEOUT_MS, acceptSelect, ackMessage, campaignLocation, isFinalResult, pushFailureResult, receiverRoute,
@@ -128,6 +135,7 @@ import stepUp, { stepUpError } from './stepUp';
 
 import Navigation from './components/Navigation.vue';
 import BrandSelector from './components/BrandSelector.vue';
+import LaunchFilter from './components/LaunchFilter.vue';
 
 export default Vue.extend({
   name: 'App',
@@ -135,6 +143,7 @@ export default Vue.extend({
   components: {
     Navigation,
     BrandSelector,
+    LaunchFilter,
   },
 
   data() {
@@ -357,6 +366,8 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['serverConfig', 'profile']),
+    // Fork (launch filter, LAUNCH-FILTER-SPEC D4) -- the brand-context wrapper renders with the selector.
+    ...mapGetters(['brandScope']),
 
     // Fork (campaign review, D11): routes with meta.bare render without the sidebar and navbar.
     isBare() {
@@ -403,6 +414,13 @@ export default Vue.extend({
     this.$api.getBrands(true).then((rows) => {
       this.$store.commit('setBrandRows', rows);
     }).catch(() => {});
+
+    // Fork (launch filter, LAUNCH-FILTER-SPEC D3, I9) -- the health documents for the launch filter,
+    // only for a user who holds brands:get (a Brand Analytics creator never issues the request).
+    // Not a loading gate: nothing waits on it.
+    if (this.$can('brands:get')) {
+      this.$store.dispatch('loadBrandHealth');
+    }
 
     window.addEventListener('resize', () => {
       this.windowWidth = window.innerWidth;

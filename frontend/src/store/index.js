@@ -3,7 +3,7 @@ import Vuex from 'vuex';
 import { models } from '../constants';
 import Utils from '../utils';
 import {
-  ALL, resolveSelection, rosterFrom, scopeListIds,
+  ALL, applyLaunch, launchApplies, normalizeLaunch, resolveSelection, rosterFrom, scopeListIds,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 Vue.use(Vuex);
@@ -35,6 +35,12 @@ export default new Vuex.Store({
     brandRows: [],
     // Fork (global brand, S7) -- the user's stored choice; brandScope (below) resolves it.
     brandStored: prefs.getPref('brand.global') || ALL,
+    // Fork (launch filter, integrations LAUNCH-FILTER-SPEC D1) -- the navbar launch filter's stored
+    // value; the launch getter resolves an unknown one to 'all'.
+    launchStored: prefs.getPref('brand.launch') || 'all',
+    // Fork (launch filter, D3) -- the GET /api/brands/health documents. Empty (never fetched, or a
+    // failed read) means every brand is launched. Never a loading gate.
+    brandHealth: [],
   },
 
   mutations: {
@@ -66,6 +72,32 @@ export default new Vuex.Store({
       state.brandStored = selection;
       prefs.setPref('brand.global', selection);
     },
+
+    // Fork (launch filter, LAUNCH-FILTER-SPEC D1, I7) -- the launch filter's change: the store and
+    // the pref, no reload. The `brand.launch` pref's one writer; only LaunchFilter.vue calls it.
+    selectLaunch(state, launch) {
+      const v = normalizeLaunch(launch);
+      state.launchStored = v;
+      prefs.setPref('brand.launch', v);
+    },
+
+    // Fork (launch filter, D3).
+    setBrandHealth(state, rows) {
+      state.brandHealth = Array.isArray(rows) ? rows : [];
+    },
+  },
+
+  actions: {
+    // Fork (launch filter, LAUNCH-FILTER-SPEC D3) -- the one fetch path of the health documents
+    // (App.vue on mount under brands:get, the Brands page on mount and refresh). A failed read
+    // commits nothing. $api is set on the prototype before the app mounts (main.js); importing
+    // the api module here would be a cycle (it imports this store).
+    loadBrandHealth({ commit }) {
+      return Vue.prototype.$api.getBrandsHealth().then((rows) => {
+        commit('setBrandHealth', rows);
+        return rows;
+      }).catch(() => {});
+    },
   },
 
   getters: {
@@ -86,7 +118,24 @@ export default new Vuex.Store({
     // selection ({ pending } until listsLoaded). Recomputed when the lists store changes, so a
     // stored brand whose lists all left the store falls back to All brands.
     brandRoster: (state) => rosterFrom(state[models.lists], state.brandRows),
-    brandScope: (state, getters) => resolveSelection(state.brandStored, getters.brandRoster, state.listsLoaded),
+    // Fork (launch filter, LAUNCH-FILTER-SPEC D1/D5/D6) -- the resolved launch value, the health
+    // documents and the roster the selector offers (the full roster narrowed by the filter).
+    // brandScope resolves against the offered roster; hidden/locked stay the full roster's.
+    // The launch value is 'all' wherever the control is not on screen (D4: the selector hidden or
+    // locked, or no brands:get -- no documents, every brand launched), so a stored value can never
+    // narrow anything invisibly. $can is set on the prototype before the app mounts (main.js).
+    launch: (state, getters) => {
+      const can = typeof Vue.prototype.$can === 'function' && Vue.prototype.$can('brands:get');
+      return can && launchApplies(getters.brandRoster) ? normalizeLaunch(state.launchStored) : 'all';
+    },
+    brandHealth: (state) => state.brandHealth,
+    offeredRoster: (state, getters) => applyLaunch(getters.brandRoster, getters.launch, state.brandHealth),
+    brandScope: (state, getters) => resolveSelection(
+      state.brandStored,
+      getters.brandRoster,
+      state.listsLoaded,
+      getters.offeredRoster,
+    ),
 
     // The resolved selection (All brands while pending) and its effective list set (D3): null =
     // send no parameter.

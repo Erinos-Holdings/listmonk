@@ -9,17 +9,12 @@
         <h1 class="title is-4 mb-2">
           <router-link v-if="brandParam" :to="{ name: 'brands' }">{{ $t('brands.title') }}</router-link>
           <template v-else>{{ $t('brands.title') }}</template>
-          <span v-if="!brandParam && scopedRows.length">({{ scopedRows.length }})</span>
+          <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D8) -- the count is the rows shown;
+          the navbar launch filter replaced this page's hide toggle. -->
+          <span v-if="!brandParam && visibleRows.length">({{ visibleRows.length }})</span>
           <span v-if="current"> / {{ nameOf(current) }}</span>
         </h1>
         <p class="is-size-7 has-text-grey">{{ $t('brands.gmailNote') }}</p>
-      </div>
-      <!-- BRANDS-UX-SPEC D4: hides exactly the documents whose own overall status is unknown
-      (health-sort.mjs); the title's count stays the total. Sticky per browser. -->
-      <div v-if="!brandParam && $can('brands:get')" class="column is-narrow has-text-right">
-        <b-switch v-model="hideUnlaunched" data-cy="hide-unlaunched" @input="onHideChange">
-          {{ $t('brands.hideUnlaunched', { n: unlaunchedCount }) }}
-        </b-switch>
       </div>
     </header>
 
@@ -396,9 +391,9 @@ import { mapGetters, mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 import {
-  compareDay, compareStatus, compareText, isUnlaunchedBrandDoc, sortRows,
+  compareDay, compareStatus, compareText, sortRows,
 } from '../health-sort';
-import { filterBrandRows } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { filterBrandRows, filterRowsByLaunch } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 // Fork (SES health, SES-HEALTH-SPEC D4/M4): `ses` is the sixth input; rows written before it
 // existed lack it and render the unknown chip.
@@ -414,7 +409,6 @@ const FACTS_EXCLUDED = ['logoUrl', 'registrySource'];
 // BRANDS-UX-SPEC D3: text columns (Brand, Channel) sort A-Z on the first click; every other
 // column is worst / largest first.
 const ASC_FIRST_FIELDS = ['name', 'channel'];
-const PREF_HIDE = 'brands.hideUnlaunched';
 
 const isHttpUrl = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
 
@@ -474,7 +468,6 @@ export default Vue.extend({
 
   data() {
     return {
-      rows: [],
       // BRAND-PICKER-SPEC D7: the brands rows (GET /api/brands), by slug.
       brandRows: {},
       history: [],
@@ -482,7 +475,6 @@ export default Vue.extend({
       // BRANDS-UX-SPEC D3/M6: the view owns the sort (Buefy's backend-sorting never sorts and
       // never emits the initial default-sort); a re-fetch never resets it.
       sort: { field: 'name', order: 'asc' },
-      hideUnlaunched: this.$utils.getPref(PREF_HIDE) === true,
     };
   },
 
@@ -490,22 +482,21 @@ export default Vue.extend({
     ...mapState(['loading']),
     // Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D6). Not brandScopeMixin: this view's own
     // `brandRows` data (the brands rows by slug) would collide with the mixin's store mapping.
-    ...mapGetters(['brandSelection']),
+    // Fork (launch filter, LAUNCH-FILTER-SPEC D3/D8) -- the health documents are the store's
+    // (one fetch path, loadBrandHealth) and the launch value is the navbar filter's.
+    ...mapGetters(['brandSelection', 'launch']),
+    ...mapGetters({ rows: 'brandHealth' }),
 
     // Fork (global brand, D6) -- under a named brand only that brand's row; under No brand and
-    // All brands every row. The title count is this set's size, before the hide toggle
-    // (BRANDS-UX-SPEC D4, kept within the scope).
+    // All brands every row.
     scopedRows() {
       return filterBrandRows(this.rows, this.brandSelection);
     },
 
-    unlaunchedCount() {
-      return this.scopedRows.filter(isUnlaunchedBrandDoc).length;
-    },
-
-    // The table's rows: filtered by the hide toggle, sorted by the view's own sort state.
+    // The table's rows: the global brand selection first, then the navbar launch filter (D8: the
+    // rows' own documents decide), sorted by the view's own sort state.
     visibleRows() {
-      const rows = this.hideUnlaunched ? this.scopedRows.filter((r) => !isUnlaunchedBrandDoc(r)) : this.scopedRows;
+      const rows = filterRowsByLaunch(this.scopedRows, this.launch, (r) => r.brand, this.scopedRows);
       const comparators = {
         status: (a, b, o) => compareStatus(a.status, b.status, o),
         day: (a, b, o) => compareDay(a.day, b.day, o),
@@ -777,17 +768,13 @@ export default Vue.extend({
       this.sort = { field, order };
     },
 
-    onHideChange(v) {
-      this.$utils.setPref(PREF_HIDE, v === true);
-    },
-
     fetchRows() {
       if (!this.$can('brands:get')) {
         return;
       }
-      this.$api.getBrandsHealth().then((data) => {
-        this.rows = Array.isArray(data) ? data : [];
-      });
+      // Fork (launch filter, LAUNCH-FILTER-SPEC D3) -- the store's one fetch path; a refresh here
+      // also updates the navbar filter's counts.
+      this.$store.dispatch('loadBrandHealth');
       this.$api.getBrands().then((data) => {
         const byslug = {};
         (Array.isArray(data) ? data : []).forEach((b) => { byslug[b.slug] = b; });

@@ -12,6 +12,10 @@
 //   already permission-filtered by the server). brand is the list's slug, '' when brandless.
 // brands: the GET /api/brands rows ({ slug, display_name, ... }), used for labels and order only.
 
+// Fork (launch filter, integrations LAUNCH-FILTER-SPEC D2) -- the one unlaunched rule (a brand
+// health document whose own overall status is unknown), shared with the Brands table.
+import { isUnlaunchedBrandDoc } from './health-sort.mjs'; // eslint-disable-line import/extensions
+
 export const ALL = Object.freeze({ kind: 'all' });
 export const NONE = Object.freeze({ kind: 'none' });
 
@@ -77,12 +81,18 @@ function isValidSelection(s) {
 // A stored brand not in the roster, or none when the roster has no brandless list, resolves to
 // all (S7). A roster of exactly one brand and no brandless list locks every stored value to that
 // brand (S5). An empty roster resolves to all with the control hidden.
-export function resolveSelection(stored, roster, loaded = true) {
+// Fork (launch filter, integrations LAUNCH-FILTER-SPEC D6) -- `offered` is the roster the launch
+// filter leaves offered (applyLaunch). hidden and locked are decided by the FULL roster; a stored
+// brand is valid only when it is in the OFFERED roster, else all (S7, against the offered set).
+// Omitted, offered is the roster: today's behaviour exactly.
+export function resolveSelection(stored, roster, loaded = true, offered = roster) {
   if (!loaded) {
     return { pending: true };
   }
   const r = roster || { brands: [], none: false };
   const brands = Array.isArray(r.brands) ? r.brands : [];
+  const o = offered || { brands: [], none: false };
+  const offeredBrands = Array.isArray(o.brands) ? o.brands : [];
 
   if (brands.length === 0 && !r.none) {
     return {
@@ -97,7 +107,7 @@ export function resolveSelection(stored, roster, loaded = true) {
 
   let selection = ALL;
   if (isValidSelection(stored)) {
-    if (stored.kind === 'brand' && brands.some((b) => b.slug === stored.slug)) {
+    if (stored.kind === 'brand' && offeredBrands.some((b) => b.slug === stored.slug)) {
       selection = { kind: 'brand', slug: stored.slug };
     } else if (stored.kind === 'none' && r.none) {
       selection = NONE;
@@ -316,6 +326,67 @@ export function filterBrandRows(rows, selection) {
     return r;
   }
   return r.filter((x) => x && x.brand === selection.slug);
+}
+
+// Fork (launch filter, integrations LAUNCH-FILTER-SPEC D1/D2). The navbar's All | Launched |
+// Unlaunched filter: a PRESENTATION filter on the selector's options and the two health tables,
+// never a scope (D7 -- no scope function here takes a launch value). docs are the
+// GET /api/brands/health rows ({ brand, status, ... }).
+export const LAUNCH_VALUES = Object.freeze(['all', 'launched', 'unlaunched']);
+
+// D1: an unknown value resolves to 'all'.
+export function normalizeLaunch(launch) {
+  return LAUNCH_VALUES.includes(launch) ? launch : 'all';
+}
+
+// D4: the filter applies only while the selector is shown and unlocked -- decided by the FULL
+// roster, as resolveSelection decides hidden/locked. Where it does not apply the store resolves
+// the launch value to 'all', so a value stored under a wider roster (or by another user of the
+// same browser) can never narrow a dropdown or table whose control is not on screen.
+export function launchApplies(roster) {
+  const r = resolveSelection(null, roster, true);
+  return !r.hidden && !r.locked;
+}
+
+// D2: a brand is unlaunched iff its document's own status is unknown; no document = launched.
+export function launchOf(slug, docs) {
+  const doc = (Array.isArray(docs) ? docs : []).find((d) => d && d.brand === slug);
+  return isUnlaunchedBrandDoc(doc) ? 'unlaunched' : 'launched';
+}
+
+// D2: 'all' (and any unknown value) matches every brand.
+export function matchesLaunch(slug, launch, docs) {
+  const l = normalizeLaunch(launch);
+  return l === 'all' || launchOf(slug, docs) === l;
+}
+
+// D5: the roster narrowed to the matching brands, roster order kept; none unchanged (a brandless
+// list is no brand -- No brand stays offered under every value).
+export function applyLaunch(roster, launch, docs) {
+  const r = roster || { brands: [], none: false };
+  const brands = Array.isArray(r.brands) ? r.brands : [];
+  if (normalizeLaunch(launch) === 'all') {
+    return r;
+  }
+  return { ...r, brands: brands.filter((b) => matchesLaunch(b.slug, launch, docs)) };
+}
+
+// D4: the control's counts over the roster's brands; the two sum to the roster size.
+export function launchCounts(roster, docs) {
+  const brands = roster && Array.isArray(roster.brands) ? roster.brands : [];
+  const unlaunched = brands.filter((b) => launchOf(b.slug, docs) === 'unlaunched').length;
+  return { launched: brands.length - unlaunched, unlaunched };
+}
+
+// D8/D9: the table rows whose brand matches, row order kept. slugOf gives a row's brand; docs is
+// the documents the launch state is read from (the Brands rows themselves, or the store's for the
+// SES pane, where a row with no document -- unattributed -- is launched).
+export function filterRowsByLaunch(rows, launch, slugOf, docs) {
+  const r = Array.isArray(rows) ? rows : [];
+  if (normalizeLaunch(launch) === 'all') {
+    return r;
+  }
+  return r.filter((x) => matchesLaunch(slugOf(x), launch, docs));
 }
 
 // D10: the brand a form presets and disables under a selection -- { value, locked }. Under all

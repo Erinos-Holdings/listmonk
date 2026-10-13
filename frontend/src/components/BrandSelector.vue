@@ -9,8 +9,10 @@
       <option v-if="brandScope.pending" value="">…</option>
       <template v-else>
         <option v-if="!brandScope.locked" value="all">{{ $t('brand.selector.all') }}</option>
-        <option v-for="b in brandRoster.brands" :key="b.slug" :value="`brand:${b.slug}`">{{ b.label }}</option>
-        <option v-if="brandRoster.none && !brandScope.locked" value="none">{{ $t('brand.selector.none') }}</option>
+        <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D5) -- the roster the launch filter
+             leaves offered; locked/hidden stay the full roster's (brandScope). -->
+        <option v-for="b in offeredRoster.brands" :key="b.slug" :value="`brand:${b.slug}`">{{ b.label }}</option>
+        <option v-if="offeredRoster.none && !brandScope.locked" value="none">{{ $t('brand.selector.none') }}</option>
       </template>
     </b-select>
   </div>
@@ -24,7 +26,7 @@ export default Vue.extend({
   name: 'BrandSelector',
 
   computed: {
-    ...mapGetters(['brandScope', 'brandRoster']),
+    ...mapGetters(['brandScope', 'offeredRoster']),
 
     value() {
       if (this.brandScope.pending) {

@@ -116,16 +116,11 @@
 
       <!-- Per-brand table (a copy of the same run's per-brand SES inputs) -->
       <div class="box">
-        <!-- BRANDS-UX-SPEC D4: the hide toggle sits right-aligned on the title's line; it hides
-        only unknown rows with no sends (health-sort.mjs). Sticky per browser. -->
+        <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D9) -- the rows follow the navbar
+        launch filter; this pane's own hide toggle is retired into it. -->
         <div class="level mb-3">
           <div class="level-left">
             <h3 class="title is-6">{{ $t('dashboard.ses.brands') }}</h3>
-          </div>
-          <div class="level-right">
-            <b-switch v-model="hideUnlaunched" data-cy="ses-hide-unlaunched" @input="onHideChange">
-              {{ $t('brands.hideUnlaunched', { n: unlaunchedCount }) }}
-            </b-switch>
           </div>
         </div>
         <!-- BRANDS-UX-SPEC D3: backend-sorting -- the view owns {field, order} and sorts its own
@@ -184,11 +179,12 @@
 
 <script>
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
 import {
-  compareAlarms, compareNumber, compareStatus, isUnlaunchedSesRow, sortRows,
+  compareAlarms, compareNumber, compareStatus, sortRows,
 } from '../health-sort';
+import { filterRowsByLaunch } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 const RATE_KEYS = ['accountRates', 'listmonkRates'];
 const RATES = [
@@ -200,7 +196,6 @@ const RATES = [
 const UNLINKED = ['unattributed'];
 // BRANDS-UX-SPEC D3: the Brand column (field 'name') is the only ascending-first column.
 const ASC_FIRST_FIELDS = ['name'];
-const PREF_HIDE = 'dashboard.ses.hideUnlaunched';
 const NUMERIC_FIELDS = ['sends', 'deliveries', 'bounceRate', 'complaintRate'];
 const nameOf = (row) => row.displayName || row.brand || '';
 
@@ -214,23 +209,23 @@ export default Vue.extend({
       rates: RATES,
       // BRANDS-UX-SPEC D3/M6: the view owns the sort; a re-fetch (page.refresh) never resets it.
       sort: { field: 'name', order: 'asc' },
-      hideUnlaunched: this.$utils.getPref(PREF_HIDE) === true,
     };
   },
 
   computed: {
     ...mapState(['loading']),
+    // Fork (launch filter, LAUNCH-FILTER-SPEC D9) -- the navbar filter's value and the store's
+    // brand health documents.
+    ...mapGetters(['launch', 'brandHealth']),
 
     brandRows() {
       return (this.doc && Array.isArray(this.doc.brands)) ? this.doc.brands : [];
     },
 
-    unlaunchedCount() {
-      return this.brandRows.filter(isUnlaunchedSesRow).length;
-    },
-
+    // D9: a row's launch state is its BRAND's document, not the SES row's own status; a row with
+    // no document (unattributed) is launched.
     visibleRows() {
-      const rows = this.hideUnlaunched ? this.brandRows.filter((r) => !isUnlaunchedSesRow(r)) : this.brandRows;
+      const rows = filterRowsByLaunch(this.brandRows, this.launch, (r) => r.brand, this.brandHealth);
       const comparators = {
         status: (a, b, o) => compareStatus(a.status, b.status, o),
         alarms: (a, b, o) => compareAlarms(a.alarms, b.alarms, o),
@@ -341,10 +336,6 @@ export default Vue.extend({
         order = 'desc';
       }
       this.sort = { field, order };
-    },
-
-    onHideChange(v) {
-      this.$utils.setPref(PREF_HIDE, v === true);
     },
 
     linkable(row) {

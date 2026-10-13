@@ -15,7 +15,6 @@ import {
   withBrandTiebreak,
   sortRows,
   isUnlaunchedBrandDoc,
-  isUnlaunchedSesRow,
 } from './health-sort.mjs'; // eslint-disable-line import/extensions
 
 const sortVals = (vals, cmp, order) => [...vals].sort((a, b) => cmp(a, b, order));
@@ -139,14 +138,5 @@ test('I2 isUnlaunchedBrandDoc: status === "unknown" and nothing else', () => {
   assert.equal(isUnlaunchedBrandDoc({ status: 2 }), false);
   assert.equal(isUnlaunchedBrandDoc(null), false);
 });
-
-// I3 ------------------------------------------------------------------------------------------
-test('I3 isUnlaunchedSesRow: only unknown with no sends', () => {
-  assert.equal(isUnlaunchedSesRow({ status: 'unknown', sends: 0 }), true);
-  assert.equal(isUnlaunchedSesRow({ status: 'unknown', sends: null }), true);
-  assert.equal(isUnlaunchedSesRow({ status: 'unknown', sends: 1 }), false);
-  assert.equal(isUnlaunchedSesRow({ status: 'ok', sends: 0 }), false);
-  assert.equal(isUnlaunchedSesRow({ status: 'warn', sends: 0 }), false);
-  assert.equal(isUnlaunchedSesRow({ status: 'issues', sends: null }), false);
-  assert.equal(isUnlaunchedSesRow(null), false);
-});
+// Fork (launch filter, integrations LAUNCH-FILTER-SPEC I8) -- the SES pane's own hide rule and its
+// I3 test are deleted; the launch filter's rows are tested in brandScope.test.mjs (I5).

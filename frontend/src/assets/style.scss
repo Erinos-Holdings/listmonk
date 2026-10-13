@@ -271,6 +271,14 @@ section {
     display: flex;
     align-items: center;
   }
+  // Fork (launch filter, LAUNCH-FILTER-SPEC D4/D10) -- the selector and the launch filter in one
+  // row; the filter wraps after the selector when the width demands.
+  .brand-context {
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
   .favicon {
     display: none;
   }
