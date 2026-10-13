@@ -12,10 +12,11 @@
 // test/emoji-insert.test.cjs evaluates it standalone in the builder's CI test step, and the SPA
 // imports it by relative path.
 
-// The self-hosted emoji data (D3), served by the Go binary on the admin surface. The version is
-// in the filename because the admin static route answers HEAD with 405, so the picker's ETag
-// revalidation never sees a changed file at the same URL. frontend/package.json's postinstall
-// writes the file under this name; src/emojiData.test.mjs pins the two together (I3).
+// The self-hosted emoji data (D3), served by the Go binary on the admin surface, which answers
+// the picker's HEAD revalidation with a content ETag (cmd/static_etag.go) -- that, not the
+// version in the name, is what makes a data bump reach a browser that cached the old file.
+// frontend/package.json's postinstall writes the file under this name; src/emojiData.test.mjs
+// pins the two together (I3).
 export const EMOJI_DATA_PATH = '/admin/static/emoji-data-1.8.0.json';
 
 function offset(value, fallback, max) {

@@ -1017,8 +1017,11 @@ func initHTTPServer(cfg *Config, urlCfg *UrlConfig, i *i18n.I18n, fs stuffbin.Fi
 	// Public (subscriber) facing static files.
 	srv.GET("/public/static/*", echo.WrapHandler(fSrv))
 
-	// Admin (frontend) facing static files.
-	srv.GET("/admin/static/*", echo.WrapHandler(fSrv))
+	// Admin (frontend) facing static files. Fork (emoji picker, integrations EMOJI-PICKER-SPEC
+	// D3): HEAD is answered and GET/HEAD carry a content ETag -- see static_etag.go.
+	adminStatic := newStaticETagger(fs.Read).wrap(echo.WrapHandler(fSrv))
+	srv.GET("/admin/static/*", adminStatic)
+	srv.HEAD("/admin/static/*", adminStatic)
 
 	// Public (subscriber) facing media upload files.
 	var (

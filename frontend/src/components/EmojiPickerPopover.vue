@@ -108,7 +108,9 @@ export default {
 <style scoped>
 .emoji-picker-popover {
   position: fixed;
-  z-index: 100;
+  /* Above TinyMCE's fullscreen container (oxide skin: 1200, its aux layer 1201) so the richtext
+     toolbar's picker is visible in fullscreen; nothing else on the page sits that high. */
+  z-index: 1300;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   border-radius: 6px;
   background: #fff;
