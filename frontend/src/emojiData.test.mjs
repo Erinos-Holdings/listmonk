@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EMOJI_DATA_PATH } from '../email-builder/src/emojiInsert.js'; // eslint-disable-line import/extensions, import/no-relative-packages
+import { EMOJI_PICKER_TAB_ICONS } from '../email-builder/src/emojiPickerStyle.js'; // eslint-disable-line import/extensions, import/no-relative-packages
 
 const frontend = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataPkg = path.join(frontend, 'node_modules', 'emoji-picker-element-data');
@@ -22,6 +23,13 @@ test('I3: EMOJI_DATA_PATH names the installed data version, and the committed fi
   const committed = path.join(frontend, 'public', 'static', `emoji-data-${version}.json`);
   assert.ok(fs.existsSync(committed), `${committed} is missing -- run yarn (postinstall) and commit it`);
   assert.equal(sha256(committed), sha256(path.join(dataPkg, 'en', 'emojibase', 'data.json')));
+});
+
+test('I9: the tab icon table covers exactly the groups the installed data carries (minus the skin-tone components, group 2)', () => {
+  const data = JSON.parse(fs.readFileSync(path.join(dataPkg, 'en', 'emojibase', 'data.json'), 'utf8'));
+  const dataGroups = [...new Set(data.map((e) => e.group))].filter((g) => g !== 2).sort((a, b) => a - b);
+  const iconGroups = EMOJI_PICKER_TAB_ICONS.map((t) => t.group);
+  assert.deepEqual(iconGroups, dataGroups, 'a data bump added or removed a category: update EMOJI_PICKER_TAB_ICONS (and check picker.js allGroups)');
 });
 
 test('I4: no source passes a third-party dataSource (jsdelivr / unpkg)', () => {

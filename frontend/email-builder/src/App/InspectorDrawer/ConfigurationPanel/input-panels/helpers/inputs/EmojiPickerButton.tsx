@@ -14,6 +14,7 @@ import { EmojiEmotionsOutlined } from '@mui/icons-material';
 import { IconButton, Popover, Tooltip } from '@mui/material';
 
 import { EMOJI_DATA_PATH } from '../../../../../../emojiInsert';
+import { styleEmojiPicker } from '../../../../../../emojiPickerStyle';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -48,6 +49,8 @@ export default function EmojiPickerButton({ onOpen, onPick, title = 'Insert emoj
     // D8: the light theme, explicitly (the OS dark preference never flips the picker). Set on
     // the element directly -- React's className handling on custom elements varies by version.
     pickerEl.classList.add('light');
+    // D12: the category icons and row tints (once; the shadow root exists from construction).
+    styleEmojiPicker(pickerEl);
     const handler = (ev: Event) => {
       const unicode = (ev as CustomEvent<{ unicode?: string }>).detail?.unicode;
       setAnchor(null);

@@ -3,7 +3,7 @@
     popover under its anchor. The element is created on the FIRST open (v-if) and kept
     afterwards (v-show), so a page where nobody picks never fetches the emoji data. -->
   <div v-if="created" v-show="open" ref="panel" class="emoji-picker-popover" :style="position">
-    <emoji-picker class="light" :data-source="dataSource" @emoji-click="onEmojiClick" />
+    <emoji-picker ref="picker" class="light" :data-source="dataSource" @emoji-click="onEmojiClick" />
   </div>
 </template>
 
@@ -12,6 +12,8 @@
 // is a sibling workspace, not an installed dependency of the SPA.
 // eslint-disable-next-line import/no-relative-packages
 import { EMOJI_DATA_PATH } from '../../email-builder/src/emojiInsert';
+// eslint-disable-next-line import/no-relative-packages
+import { styleEmojiPicker } from '../../email-builder/src/emojiPickerStyle';
 
 // The picker's rendered size (8 columns at the library's default sizes) -- used only to keep
 // the popover inside the viewport.
@@ -40,6 +42,9 @@ export default {
     open(on) {
       if (on) {
         this.created = true;
+        // D12: the category icons and row tints, appended to the element's shadow root once it
+        // exists (the v-if above renders it on this tick).
+        this.$nextTick(() => styleEmojiPicker(this.$refs.picker));
         this.place();
         document.addEventListener('mousedown', this.onOutside, true);
         document.addEventListener('keydown', this.onKey, true);
