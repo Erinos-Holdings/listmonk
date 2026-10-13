@@ -2,6 +2,11 @@
   <div class="richtext-editor" v-if="isRichtextReady">
     <tiny-mce v-model="computedValue" :disabled="disabled" :init="richtextConf" />
 
+    <!-- Fork (emoji picker, integrations EMOJI-PICKER-SPEC D2): the toolbar's emoji button opens
+      this component's picker; the pick goes in at TinyMCE's own selection. -->
+    <emoji-picker-popover :open="isEmojiOpen" :anchor="emojiAnchor" @pick="onEmojiPick"
+      @close="isEmojiOpen = false" />
+
     <b-modal scroll="keep" :width="1200" :aria-modal="true" :active.sync="isRichtextSourceVisible">
       <div>
         <section expanded class="modal-card-body preview">
@@ -86,6 +91,7 @@ import 'tinymce/themes/silver';
 import { colors, uris } from '../constants';
 import Media from '../views/Media.vue';
 import CodeEditor from './CodeEditor.vue';
+import EmojiPickerPopover from './EmojiPickerPopover.vue';
 
 // Map of listmonk language codes to corresponding TinyMCE language files.
 const LANGS = {
@@ -110,6 +116,7 @@ export default {
     Media,
     'tiny-mce': TinyMce,
     'code-editor': CodeEditor,
+    EmojiPickerPopover,
   },
 
   props: {
@@ -132,6 +139,8 @@ export default {
       richtextConf: {},
       richTextSourceBody: '',
       contentType: '',
+      isEmojiOpen: false,
+      emojiAnchor: null,
     };
   },
 
@@ -169,6 +178,20 @@ export default {
             onAction: this.onOpenInsertHTML,
           });
 
+          // Fork (emoji picker, EMOJI-PICKER-SPEC D2): the same picker as the subject and
+          // preheader, not TinyMCE's bundled emoticons plugin.
+          this.emojiEditor = editor;
+          editor.ui.registry.addButton('emoji', {
+            icon: 'emoji',
+            tooltip: this.$t('campaigns.insertEmoji'),
+            onAction: () => this.onToggleEmoji(editor),
+          });
+          // A click or Esc inside the editor iframe never reaches the page document.
+          editor.on('mousedown', () => { this.isEmojiOpen = false; });
+          editor.on('keydown', (e) => {
+            if (e.key === 'Escape') this.isEmojiOpen = false;
+          });
+
           editor.on('CloseWindow', () => {
             editor.selection.getNode().scrollIntoView(false);
           });
@@ -190,7 +213,7 @@ export default {
         toolbar: `undo redo | formatselect styleselect fontsizeselect |
                   bold italic underline strikethrough forecolor backcolor subscript superscript |
                   alignleft aligncenter alignright alignjustify |
-                  bullist numlist table image insert-html | outdent indent | link hr removeformat |
+                  bullist numlist table image insert-html emoji | outdent indent | link hr removeformat |
                   html fullscreen help`,
         fontsize_formats: '10px 11px 12px 14px 15px 16px 18px 24px 36px',
         skin: false,
@@ -235,6 +258,31 @@ export default {
 
     onOpenInsertHTML() {
       this.isInsertHTMLVisible = true;
+    },
+
+    // Fork (emoji picker): the toolbar button toggles the picker under itself.
+    onToggleEmoji(editor) {
+      if (this.disabled) return;
+      if (this.isEmojiOpen) {
+        this.isEmojiOpen = false;
+        return;
+      }
+      const container = editor.getContainer();
+      const label = this.$t('campaigns.insertEmoji');
+      const button = container && Array.from(container.querySelectorAll('[aria-label]'))
+        .find((el) => el.getAttribute('aria-label') === label);
+      this.emojiAnchor = button || container;
+      this.isEmojiOpen = true;
+    },
+
+    // The pick is exactly the picker's unicode (D5/I2), inserted at TinyMCE's selection.
+    onEmojiPick(unicode) {
+      this.isEmojiOpen = false;
+      const editor = this.emojiEditor;
+      if (!editor || this.disabled) return;
+      editor.focus();
+      editor.insertContent(unicode);
+      this.computedValue = editor.getContent();
     },
 
     onInsertHTML() {

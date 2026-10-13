@@ -1,6 +1,7 @@
 import Vue from 'vue';
 import Buefy from 'buefy';
 import VueI18n from 'vue-i18n';
+import 'emoji-picker-element';
 
 import App from './App.vue';
 import router from './router';
@@ -15,6 +16,11 @@ const i18n = new VueI18n();
 
 Vue.use(Buefy, {});
 Vue.config.productionTip = false;
+
+// Fork (emoji picker, integrations EMOJI-PICKER-SPEC D4): the side-effect import defines the
+// <emoji-picker> custom element once for this bundle (the builder iframe imports its own copy);
+// Vue must not warn on the unknown tag. No element exists until a picker is first opened (D8).
+Vue.config.ignoredElements = ['emoji-picker'];
 
 // Fork (brand analytics, integrations BRAND-ANALYTICS-SPEC D10). The logged-in profile, where the
 // router guard and initConfig can both read it. It loads asynchronously AFTER the initial

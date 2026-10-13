@@ -205,6 +205,7 @@
     "campaigns.fromAddress": "From address",
     "campaigns.fromAddressPlaceholder": "Your Name <noreply@yoursite.com>",
     "campaigns.headerReserved": "The header \"{header}\" cannot be set on a campaign. The From is set by the campaign's sender, never by a custom header.",
+    "campaigns.insertEmoji": "Insert emoji",
     "campaigns.invalid": "Invalid campaign",
     "campaigns.invalidCustomHeaders": "Invalid custom headers: {error}",
     "campaigns.markdown": "Markdown",

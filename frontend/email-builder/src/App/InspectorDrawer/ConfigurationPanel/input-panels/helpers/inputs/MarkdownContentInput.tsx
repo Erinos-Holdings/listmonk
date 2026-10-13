@@ -13,11 +13,13 @@ import { Box, IconButton, Menu, Stack, TextField, Tooltip } from '@mui/material'
 import { HexColorInput, HexColorPicker } from 'react-colorful';
 
 import { useBrandPalettes } from '../../../../../../documents/editor/EditorContext';
+import { insertEmoji } from '../../../../../../emojiInsert';
 
 import BrandSwatches from './ColorInput/BrandSwatches';
 import { normalizeHex } from './ColorInput/normalizeHex';
 import { DEFAULT_PRESET_COLORS } from './ColorInput/Picker';
 import Swatch from './ColorInput/Swatch';
+import EmojiPickerButton from './EmojiPickerButton';
 import {
   applyBlockquote, applyBulletList, applyColor, applyEnclose, applyLink, applyWrap, FormatResult,
 } from './markdownFormat';
@@ -66,6 +68,8 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
   // a ONE-SHOT text edit, so it stages everything and commits exactly once on close-by-
   // click-off. Esc cancels; opening and clicking off untouched inserts nothing.
   const colorDirty = useRef(false);
+  // Fork (emoji picker, EMOJI-PICKER-SPEC D6): captured when the emoji popover opens, as above.
+  const emojiSelection = useRef<{ start: number; end: number } | null>(null);
 
   useEffect(() => {
     const sel = pendingSelection.current;
@@ -169,6 +173,17 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
           const { start, end } = currentSelection();
           applyResult(applyBlockquote(value, start, end));
         })}
+        {/* Fork (emoji picker, EMOJI-PICKER-SPEC D2): an emoji is text, not markup, so this
+          button is enabled whether or not Markdown is on (not a toolbarButton). */}
+        <EmojiPickerButton
+          onOpen={() => {
+            emojiSelection.current = currentSelection();
+          }}
+          onPick={(emoji) => {
+            const sel = emojiSelection.current;
+            applyResult(insertEmoji(value, sel?.start, sel?.end, emoji));
+          }}
+        />
       </Stack>
       <TextField
         fullWidth

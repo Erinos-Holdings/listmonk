@@ -149,15 +149,23 @@
                 </b-field>
 
                 <b-field :label="$t('campaigns.subject')" label-position="on-border">
-                  <b-input :maxlength="5000" v-model="form.subject" name="subject" :disabled="!canEdit"
-                    :placeholder="$t('campaigns.subject')" required />
+                  <!-- Fork (emoji picker, integrations EMOJI-PICKER-SPEC D2): the right icon opens the
+                    page's one picker (shared with the preheader); none for a non-editor. -->
+                  <b-input :maxlength="5000" v-model="form.subject" name="subject" ref="subject" :disabled="!canEdit"
+                    :placeholder="$t('campaigns.subject')" required
+                    :icon-right="canEdit ? 'emoticon-outline' : null" icon-right-clickable
+                    @icon-right-click="openEmoji('subject')" />
                 </b-field>
 
                 <b-field :label="$t('campaigns.preheader')" label-position="on-border"
                   :message="$t('campaigns.preheaderHelp')">
-                  <b-input :maxlength="500" v-model="form.preheader" name="preheader" :disabled="!canEdit"
-                    :placeholder="$t('campaigns.preheader')" />
+                  <b-input :maxlength="500" v-model="form.preheader" name="preheader" ref="preheader" :disabled="!canEdit"
+                    :placeholder="$t('campaigns.preheader')"
+                    :icon-right="canEdit ? 'emoticon-outline' : null" icon-right-clickable
+                    @icon-right-click="openEmoji('preheader')" />
                 </b-field>
+                <emoji-picker-popover :open="emoji.open" :anchor="emoji.anchor" @pick="onEmojiPick"
+                  @close="emoji.open = false" />
 
                 <!-- Fork (multi-language campaigns) -- attribs.lang. Hidden behind app.lang_enable
                   until subscribers carry a language; a campaign that already has one always
@@ -546,6 +554,9 @@ import { canManageBrandPersonas } from '../accessPolicy.mjs'; // eslint-disable-
 import { campaignBrand, filterByIds, scopeUnion } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
+import EmojiPickerPopover from '../components/EmojiPickerPopover.vue';
+// eslint-disable-next-line import/no-relative-packages
+import { insertEmoji } from '../../email-builder/src/emojiInsert';
 
 // Fork: the account's local zone for the Send-later helper text. MDT/MST is resolved by Intl
 // per date, so DST never needs a code change.
@@ -613,6 +624,7 @@ export default Vue.extend({
     CopyText,
     CampaignPreview,
     BrandContextNotice,
+    EmojiPickerPopover,
   },
 
   // Fork (global brand, integrations GLOBAL-BRAND-SPEC D10/D11).
@@ -635,6 +647,12 @@ export default Vue.extend({
       isAttachModalOpen: false,
       isPreviewingArchive: false,
       activeTab: 'campaign',
+
+      // Fork (emoji picker, EMOJI-PICKER-SPEC D2/D6): which field opened the shared picker and
+      // that field's selection when it opened.
+      emoji: {
+        open: false, field: null, anchor: null, start: null, end: null,
+      },
 
       data: {},
 
@@ -754,6 +772,67 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (emoji picker, integrations EMOJI-PICKER-SPEC D2/D5/D6). The subject's or preheader's
+    // native <input> (b-input wraps it).
+    emojiInput(field) {
+      const ref = this.$refs[field];
+      return ref && ref.$el ? ref.$el.querySelector('input') : null;
+    },
+
+    // The right icons carry the tooltip/aria label (b-input has no prop for it).
+    labelEmojiIcons() {
+      ['subject', 'preheader'].forEach((field) => {
+        const ref = this.$refs[field];
+        const icon = ref && ref.$el ? ref.$el.querySelector('.icon.is-right') : null;
+        if (icon) {
+          icon.setAttribute('title', this.$t('campaigns.insertEmoji'));
+          icon.setAttribute('aria-label', this.$t('campaigns.insertEmoji'));
+          icon.setAttribute('role', 'button');
+        }
+      });
+    },
+
+    // Opens the shared picker for a field, recording the field's selection now (D6); the same
+    // icon again closes it.
+    openEmoji(field) {
+      if (!this.canEdit) return;
+      if (this.emoji.open && this.emoji.field === field) {
+        this.emoji.open = false;
+        return;
+      }
+      const input = this.emojiInput(field);
+      const ref = this.$refs[field];
+      this.emoji = {
+        open: true,
+        field,
+        anchor: (ref && ref.$el && ref.$el.querySelector('.icon.is-right')) || input,
+        start: input ? input.selectionStart : null,
+        end: input ? input.selectionEnd : null,
+      };
+    },
+
+    // Inserts the pick at the recorded selection (D5), closes the picker and puts the caret
+    // after the emoji. A field at its maxlength does not grow.
+    onEmojiPick(unicode) {
+      const { field, start, end } = this.emoji;
+      this.emoji.open = false;
+      if (!field || !this.canEdit) return;
+
+      const input = this.emojiInput(field);
+      const res = insertEmoji(this.form[field] || '', start, end, unicode);
+      if (input && input.maxLength > 0 && res.text.length > input.maxLength) {
+        this.$nextTick(() => input.focus());
+        return;
+      }
+      this.form[field] = res.text;
+      this.$nextTick(() => {
+        if (input) {
+          input.focus();
+          input.setSelectionRange(res.selectionStart, res.selectionEnd);
+        }
+      });
+    },
+
     // Fork (langs.js, the "+" convention). The Language select names a send audience.
     sendLangLabel(code) {
       return sendLangLabel(code);
@@ -2316,6 +2395,15 @@ export default Vue.extend({
   watch: {
     selectedLists() {
       this.form.lists = this.selectedLists;
+    },
+
+    // Fork (emoji picker): the right icons appear/disappear with canEdit; label them when they do.
+    canEdit: {
+      immediate: true,
+      handler(on) {
+        if (!on) this.emoji.open = false;
+        this.$nextTick(this.labelEmojiIcons);
+      },
     },
 
     // Re-derive on every list change, and again when the lists store finishes loading (which is

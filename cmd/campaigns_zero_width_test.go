@@ -27,6 +27,13 @@ func TestZeroWidthFields(t *testing.T) {
 		{"both", "\u200b", models.JSON{"preheader": "\ufeff"}, "subject,preheader"},
 		{"non-string preheader ignored", "ok", models.JSON{"preheader": 42}, ""},
 		{"nbsp and thin space are not zero-width", "a b c", models.JSON{"preheader": "x y"}, ""},
+		// EMOJI-PICKER-SPEC D7 / I5: a ZWJ joining a rune above U+00FF is an emoji sequence.
+		{"ZWJ family emoji", "\U0001F468‍\U0001F469", models.JSON{}, ""},
+		{"ZWJ heart on fire", "❤️‍\U0001F525", models.JSON{}, ""},
+		{"ZWJ family emoji in preheader", "ok", models.JSON{"preheader": "hi \U0001F468‍\U0001F469‍\U0001F467"}, ""},
+		{"ZWJ at position 0", "‍ab", models.JSON{}, "subject"},
+		{"ZWJ after Latin-1", "é‍b", models.JSON{}, "subject"},
+		{"ZWSP between emoji", "\U0001F468​\U0001F469", models.JSON{}, "subject"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

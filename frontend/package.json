@@ -24,8 +24,9 @@
     "test:persona-from": "node --test src/personaFrom.test.mjs",
     "test:brand-scope": "node --test src/brandScope.test.mjs",
     "test:list-sunset": "node --test src/listSunset.test.mjs",
+    "test:emoji-data": "node --test src/emojiData.test.mjs",
     "test": "node --test src/*.test.mjs",
-    "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js"
+    "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js && node -e \"const fs=require('fs');const d='node_modules/emoji-picker-element-data/';const v=JSON.parse(fs.readFileSync(d+'package.json','utf8')).version;fs.copyFileSync(d+'en/emojibase/data.json','public/static/emoji-data-'+v+'.json')\""
   },
   "dependencies": {
     "@codemirror/commands": "^6.8.1",
@@ -46,6 +47,8 @@
     "chart.js": "^4.4.1",
     "codemirror": "^6.0.0",
     "dayjs": "^1.11.10",
+    "emoji-picker-element": "^1.29.1",
+    "emoji-picker-element-data": "^1.8.0",
     "indent.js": "^0.3.5",
     "js-beautify": "^1.15.1",
     "prismjs": "^1.30.0",
