@@ -779,15 +779,15 @@ export default Vue.extend({
       return ref && ref.$el ? ref.$el.querySelector('input') : null;
     },
 
-    // The right icons carry the tooltip/aria label (b-input has no prop for it). No role: Buefy's
-    // icon is a non-focusable span, so it must not announce itself as a button.
+    // The right icons carry the tooltip (b-input has no prop for it). No role and no aria-label:
+    // Buefy's icon is a non-focusable span, so it must not announce itself as a button, and a
+    // label on a generic element is ARIA-prohibited (ignored).
     labelEmojiIcons() {
       ['subject', 'preheader'].forEach((field) => {
         const ref = this.$refs[field];
         const icon = ref && ref.$el ? ref.$el.querySelector('.icon.is-right') : null;
         if (icon) {
           icon.setAttribute('title', this.$t('campaigns.insertEmoji'));
-          icon.setAttribute('aria-label', this.$t('campaigns.insertEmoji'));
         }
       });
     },

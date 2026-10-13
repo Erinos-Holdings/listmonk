@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"path"
 	"sync"
 
 	"github.com/labstack/echo/v4"
@@ -31,19 +32,23 @@ func newStaticETagger(read func(path string) ([]byte, error)) *staticETagger {
 	return &staticETagger{read: read}
 }
 
-// etag returns the quoted ETag for path, or "" when the file cannot be read (the wrapped file
-// server then answers as it would have anyway).
-func (s *staticETagger) etag(path string) string {
-	if v, ok := s.tags.Load(path); ok {
+// etag returns the quoted ETag for the request path, or "" when the file cannot be read (the
+// wrapped file server then answers as it would have anyway). The cache is keyed by the CLEANED
+// path -- the file server and stuffbin both clean before serving, so `/admin/static/./x` and
+// `/admin/static/x` are one file; keying by the raw path would let a caller grow the map
+// without bound with `./` variants (stage 4b, M1).
+func (s *staticETagger) etag(reqPath string) string {
+	key := path.Clean(reqPath)
+	if v, ok := s.tags.Load(key); ok {
 		return v.(string)
 	}
-	b, err := s.read(path)
+	b, err := s.read(key)
 	if err != nil {
 		return ""
 	}
 	sum := sha256.Sum256(b)
 	tag := `"` + hex.EncodeToString(sum[:8]) + `"`
-	s.tags.Store(path, tag)
+	s.tags.Store(key, tag)
 	return tag
 }
 

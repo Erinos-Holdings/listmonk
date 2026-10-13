@@ -90,6 +90,30 @@ func TestAdminStaticETagAndHEAD(t *testing.T) {
 	}
 }
 
+// Stage 4b M1: the tag cache is keyed by the cleaned path, so unclean spellings of one file
+// share one entry (an unauthenticated caller cannot grow the map with `./` variants).
+func TestAdminStaticETagCacheKeyIsCleaned(t *testing.T) {
+	reads := 0
+	e := newStaticETagger(func(p string) ([]byte, error) {
+		reads++
+		if p != "/admin/static/x.js" {
+			return nil, errors.New("not found: " + p)
+		}
+		return []byte("x"), nil
+	})
+	first := e.etag("/admin/static/x.js")
+	for _, variant := range []string{"/admin/static/./x.js", "/admin/static//x.js", "/admin/static/a/../x.js", "/admin/static/././x.js"} {
+		if got := e.etag(variant); got != first || got == "" {
+			t.Fatalf("%s: want the one tag %q, got %q", variant, first, got)
+		}
+	}
+	entries := 0
+	e.tags.Range(func(_, _ any) bool { entries++; return true })
+	if entries != 1 || reads != 1 {
+		t.Fatalf("want one cache entry and one read for five spellings of one file, got %d entries, %d reads", entries, reads)
+	}
+}
+
 // The real server registers the HEAD route and the wrapped handler on the admin static path
 // (initHTTPServer); a source pin, since initHTTPServer needs the whole app to run.
 func TestAdminStaticRouteRegistersHEAD(t *testing.T) {
