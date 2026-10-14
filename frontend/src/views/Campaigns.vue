@@ -451,9 +451,6 @@ export default Vue.extend({
     canCancel(c) {
       return c.status === 'running' || c.status === 'paused';
     },
-    canResume(c) {
-      return c.status === 'paused';
-    },
     isSheduled(c) {
       return c.status === 'scheduled' || c.sendAt !== null;
     },

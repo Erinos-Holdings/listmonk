@@ -98,6 +98,9 @@ func TestCampaignsListReviewPassed(t *testing.T) {
 	}
 	absent := func(name string, rs map[int]map[string]json.RawMessage, id int) {
 		t.Helper()
+		if rs[id] == nil {
+			t.Fatalf("%s: campaign %d missing from the page", name, id)
+		}
 		if _, ok := field(rs[id]); ok {
 			t.Fatalf("%s: review_passed present: %s", name, rs[id]["review_passed"])
 		}
