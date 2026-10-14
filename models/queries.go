@@ -24,6 +24,11 @@ type Queries struct {
 	GetDashboardClients       *sqlx.Stmt `query:"get-dashboard-clients"`
 	GetDashboardClientsScoped *sqlx.Stmt `query:"get-dashboard-clients-scoped"`
 
+	// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4) -- the Dashboard's live
+	// Location panel: the client panel's queries keyed by country.
+	GetDashboardCountries       *sqlx.Stmt `query:"get-dashboard-countries"`
+	GetDashboardCountriesScoped *sqlx.Stmt `query:"get-dashboard-countries-scoped"`
+
 	InsertSubscriber                *sqlx.Stmt `query:"insert-subscriber"`
 	UpsertSubscriber                *sqlx.Stmt `query:"upsert-subscriber"`
 	UpsertSubscriberFill            *sqlx.Stmt `query:"upsert-subscriber-fill"`

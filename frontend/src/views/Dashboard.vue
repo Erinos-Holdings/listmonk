@@ -117,19 +117,21 @@
                   </div>
 
                   <div class="column is-6">
-                    <!-- Nothing to list when expanded under a scope (Stage 4 F6): no blank column. -->
-                    <ul v-if="!subsExpanded || !counts.scoped" class="no has-text-grey">
+                    <ul class="no has-text-grey">
+                      <!-- Fork (dashboard counts, DASHBOARD-COUNTS-SPEC R1) -- Held, Unsubscribed and
+                      Blocklisted read rate-first over the public lists' total; Active and Pending
+                      are plain counts (dashboardSubs.mjs::segmentCell decides). -->
                       <template v-if="!subsExpanded">
                         <li v-for="r in subsRows" :key="r.key" :data-cy="`subscribers-${r.key}`">
-                          <label for="#">{{ $utils.niceNumber(subsAll[r.key] || 0) }}</label>
+                          <label for="#">{{ subsLineText(r) }}</label>
                           {{ $t(r.label) }}
                         </li>
                       </template>
-                      <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7): a list-scoped user's counts
-                      are scoped to their lists, where orphans (no list at all) are 0 by definition.
-                      Under a global brand (GLOBAL-BRAND-SPEC D5) the counts are scoped too.
-                      Orphans has no language, so it stays a line when expanded. -->
-                      <li v-if="!counts.scoped">
+                      <!-- Fork (dashboard counts, R3) -- Orphans in every scope (0 under a scope by
+                      definition: a list-scoped user's or a global brand's counts cover lists, and an
+                      orphan is on none) and when expanded (it has no language), so the column is
+                      never empty. -->
+                      <li data-cy="subscribers-orphans">
                         <label for="#">{{ $utils.niceNumber(counts.subscribers.orphans) }}</label>
                         {{ $t('dashboard.orphanSubs') }}
                       </li>
@@ -147,11 +149,20 @@
                     </tr>
                   </thead>
                   <tbody>
+                    <!-- Fork (dashboard counts, R1) -- each rate cell over THAT column's total. -->
                     <tr v-for="r in subsRows" :key="r.key">
                       <td class="has-text-grey">{{ $t(r.label) }}</td>
                       <td v-for="col in subsColumns" :key="col.key" class="has-text-right"
                         :data-cy="`subscribers-${r.key}-${col.key}`" :title="subsCellTitle(col, r.key)">
-                        {{ $utils.formatNumber(col.row[r.key] || 0) }}
+                        {{ subsCellText(col, r) }}
+                      </td>
+                    </tr>
+                    <!-- The Total row: each column's denominator, a plain count. -->
+                    <tr class="subs-total">
+                      <td class="has-text-grey">{{ $t('dashboard.subsTotal') }}</td>
+                      <td v-for="col in subsColumns" :key="col.key" class="has-text-right"
+                        :data-cy="`subscribers-total-${col.key}`">
+                        {{ $utils.formatNumber(col.row.total || 0) }}
                       </td>
                     </tr>
                   </tbody>
@@ -171,18 +182,12 @@
                     </p>
                   </div>
                   <div class="column is-6">
+                    <!-- Fork (dashboard counts, R1/R2) -- rate-first over Messages sent; Complaints
+                    is a named subset of Bounces (every bounce row), its label saying so. -->
                     <ul class="no has-text-grey">
-                      <li data-cy="engagement-views">
-                        <label for="#">{{ $utils.niceNumber(engagement.views || 0) }}</label>
-                        {{ $t('campaigns.views') }}
-                      </li>
-                      <li data-cy="engagement-clicks">
-                        <label for="#">{{ $utils.niceNumber(engagement.clicks || 0) }}</label>
-                        {{ $t('campaigns.clicks') }}
-                      </li>
-                      <li data-cy="engagement-bounces">
-                        <label for="#">{{ $utils.niceNumber(engagement.bounces || 0) }}</label>
-                        {{ $t('globals.terms.bounces') }}
+                      <li v-for="l in engagementLines" :key="l.key" :data-cy="`engagement-${l.key}`">
+                        <label for="#">{{ pctText(l.count, l.denominator) }}</label>
+                        <span :title="l.help ? $t(l.help) : null">{{ $t(l.label) }}</span>
                       </li>
                     </ul>
                   </div>
@@ -207,6 +212,40 @@
                   <chart type="line" v-if="campaignClicks" :data="campaignClicks" />
                 </div>
               </div>
+            </article>
+          </div>
+
+          <!-- Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4): views and clicks per
+               country over the client panel's window, scope and RAW row count (the Analytics
+               Location table dedupes under individual tracking -- a recorded divergence). Rows
+               shaped and sorted by countryRows.mjs, Unknown last; each number with its share of
+               the column. -->
+          <div class="tile is-parent relative">
+            <b-loading v-if="countries.loading" active :is-full-page="false" />
+            <article class="tile is-child notification" data-cy="countries">
+              <div class="columns is-mobile">
+                <div class="column">
+                  <h3 class="title is-size-6">{{ $t('analytics.location') }}</h3>
+                </div>
+              </div>
+              <b-table :data="countryTableRows" hoverable narrowed
+                backend-sorting :default-sort="[countries.sort.field, countries.sort.order]" @sort="onCountrySort">
+                <b-table-column v-slot="props" field="name" :label="$t('analytics.locationCountry')" sortable>
+                  <span :class="{ 'has-text-grey': props.row.unknown }" :title="props.row.country">{{ props.row.name }}</span>
+                </b-table-column>
+                <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
+                  {{ $utils.formatNumber(props.row.views) }}
+                  <span v-if="countryShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ countryShare(props.row.views, 'views') }})</span>
+                </b-table-column>
+                <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
+                  {{ $utils.formatNumber(props.row.clicks) }}
+                  <span v-if="countryShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ countryShare(props.row.clicks, 'clicks') }})</span>
+                </b-table-column>
+                <template #empty v-if="!countries.loading">
+                  <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
+                </template>
+              </b-table>
+              <p class="is-size-7 has-text-grey mt-2">{{ $t('dashboard.clientsWindow') }} {{ $t('analytics.locationHint') }}</p>
             </article>
           </div>
 
@@ -271,7 +310,12 @@ import {
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
 import { rateCell } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
-import { subscriberColumns, subscriberRows } from '../dashboardSubs.mjs'; // eslint-disable-line import/extensions
+import {
+  DEFAULT_SORT as COUNTRY_DEFAULT_SORT, shapeCountryRows, sortCountryRows,
+} from '../countryRows.mjs'; // eslint-disable-line import/extensions
+import {
+  engagementLines, pctCount, segmentCell, subscriberColumns, subscriberRows,
+} from '../dashboardSubs.mjs'; // eslint-disable-line import/extensions
 import { isSendPlus, sendLangCode } from '../langs';
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -308,6 +352,12 @@ export default Vue.extend({
         rows: [],
         loading: false,
         sort: { ...CLIENT_DEFAULT_SORT },
+      },
+      // Fork (dashboard counts, DASHBOARD-COUNTS-SPEC R4) -- the Location panel.
+      countries: {
+        rows: [],
+        loading: false,
+        sort: { ...COUNTRY_DEFAULT_SORT },
       },
     };
   },
@@ -353,8 +403,35 @@ export default Vue.extend({
       });
     },
 
-    // Fork (global brand, D4/D5) -- the three reads together, each with the global brand's
-    // effective list set (no list_id under All brands: today's Dashboard exactly).
+    // Fork (dashboard counts, R1) -- a rate-first line: "39.5% (751)", or the count alone when
+    // the denominator is 0. A null denominator (Active, Pending) is a plain count, niceNumber as
+    // the other containers' lines.
+    pctText(count, denominator) {
+      if (denominator === null) {
+        return this.$utils.niceNumber(count || 0);
+      }
+      const c = pctCount(count, denominator, (n) => this.$utils.formatNumber(n));
+      return c.pct ? `${c.pct} (${c.count})` : c.count;
+    },
+
+    // The collapsed segment line: the all column.
+    subsLineText(seg) {
+      const c = segmentCell({ key: 'all', row: this.subsAll }, seg);
+      return this.pctText(c.count, c.denominator);
+    },
+
+    // An expanded-table cell, over THAT column's total; plain cells keep formatNumber.
+    subsCellText(col, seg) {
+      const c = segmentCell(col, seg);
+      if (c.denominator === null) {
+        return this.$utils.formatNumber(c.count);
+      }
+      return this.pctText(c.count, c.denominator);
+    },
+
+    // Fork (global brand, D4/D5) -- the reads together (counts, charts, clients and -- DASHBOARD-
+    // COUNTS-SPEC R4 -- countries), each with the global brand's effective list set (no list_id
+    // under All brands: today's Dashboard exactly).
     fetchData() {
       this.isCountsLoading = true;
       this.isChartsLoading = true;
@@ -372,6 +449,29 @@ export default Vue.extend({
       });
 
       this.fetchClients(params);
+      this.fetchCountries(params);
+    },
+
+    // Fork (dashboard counts, R4) -- the Location panel over the same scope as the counts.
+    fetchCountries(params) {
+      this.countries.loading = true;
+      this.$api.getDashboardCountries(params).then((data) => {
+        this.countries.rows = shapeCountryRows(data.countries, {
+          locale: (this.$i18n && this.$i18n.locale) || 'en',
+          unknownLabel: this.$t('analytics.locationUnknown'),
+        });
+      }).finally(() => {
+        this.countries.loading = false;
+      });
+    },
+
+    onCountrySort(field, order) {
+      this.countries.sort = { field, order };
+    },
+
+    // A country's share of the column's own total (Unknown included), as the Analytics table.
+    countryShare(n, field) {
+      return rateCell(n, this.countryTotals[field], 1).pct;
     },
 
     // Fork (client stats) -- the client panel over the same scope as the counts.
@@ -439,8 +539,19 @@ export default Vue.extend({
       return subscriberColumns(this.subsGrid, !!(this.serverConfig && this.serverConfig.lang_enabled));
     },
 
-    engagement() {
-      return this.counts.engagement || {};
+    // Fork (dashboard counts, R1/R2) -- Views, Clicks, Bounces, Complaints over Messages sent.
+    engagementLines() {
+      return engagementLines(this.counts.engagement, this.counts.messages);
+    },
+
+    // Fork (dashboard counts, R4) -- the Location panel's column totals and sorted rows.
+    countryTotals() {
+      return this.countries.rows.reduce((t, r) => ({ views: t.views + (r.views || 0), clicks: t.clicks + (r.clicks || 0) }), { views: 0, clicks: 0 });
+    },
+
+    countryTableRows() {
+      const { field, order } = this.countries.sort;
+      return sortCountryRows(this.countries.rows, field, order, (this.$i18n && this.$i18n.locale) || 'en');
     },
     dayjs() {
       return dayjs;
@@ -457,7 +568,7 @@ export default Vue.extend({
   },
 
   watch: {
-    // Fork (global brand, D4) -- a selection change re-issues the three reads together.
+    // Fork (global brand, D4) -- a selection change re-issues the reads together (fetchData).
     brandKey(now, before) {
       if (before !== 'pending' && now !== 'pending') {
         this.fetchData();

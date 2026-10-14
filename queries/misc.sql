@@ -71,6 +71,13 @@ ec AS (
 eb AS (
     SELECT campaign_id, COUNT(campaign_id) AS num FROM bounces
     WHERE campaign_id IN (SELECT id FROM camps) GROUP BY campaign_id
+),
+-- Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R2) -- Complaints is a named SUBSET
+-- of Bounces (raw rows of type complaint on C); eb above keeps get-campaign-stats' definition,
+-- every bounce row, complaints included (hazard 96, one Bounces definition).
+ebc AS (
+    SELECT COUNT(*) AS num FROM bounces
+    WHERE campaign_id IN (SELECT id FROM camps) AND type = 'complaint'
 )
 SELECT JSON_BUILD_OBJECT(
     'subscribers', JSON_BUILD_OBJECT(
@@ -99,7 +106,8 @@ SELECT JSON_BUILD_OBJECT(
     'engagement', JSON_BUILD_OBJECT(
         'views', (SELECT COALESCE(SUM(num), 0) FROM ev),
         'clicks', (SELECT COALESCE(SUM(num), 0) FROM ec),
-        'bounces', (SELECT COALESCE(SUM(num), 0) FROM eb)
+        'bounces', (SELECT COALESCE(SUM(num), 0) FROM eb),
+        'complaints', (SELECT num FROM ebc)
     ),
     'scoped', NOT $3::BOOLEAN
 ) AS data;
@@ -212,6 +220,71 @@ c AS (
 )
 SELECT COALESCE(v.client, c.client) AS client, COALESCE(v.n, 0) AS views, COALESCE(c.n, 0) AS clicks
     FROM v FULL OUTER JOIN c ON v.client = c.client;
+
+-- name: get-dashboard-countries
+-- Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4). The Dashboard's Location panel,
+-- get-dashboard-clients keyed by country instead of client -- every campaign, the same window
+-- (31 days ending on the day of the latest event of those campaigns, per table) and the same RAW
+-- row count (CLIENT-STATS-SPEC D6's charts rule; the Analytics Location table dedupes per
+-- (subscriber, campaign) under individual tracking -- a recorded divergence). Unknown country
+-- (NULL) is reported as the empty string. Any scope reads get-dashboard-countries-scoped.
+WITH camps AS (
+    SELECT c.id FROM campaigns c
+),
+vd AS (
+    SELECT MAX(created_at)::DATE AS to_date FROM campaign_views WHERE campaign_id IN (SELECT id FROM camps)
+),
+v AS (
+    SELECT COALESCE(country, '') AS country, COUNT(*) AS n FROM campaign_views
+        WHERE campaign_id IN (SELECT id FROM camps)
+        AND created_at >= (SELECT to_date FROM vd) - INTERVAL '30 DAY'
+        AND created_at < (SELECT to_date FROM vd) + INTERVAL '1 day'
+        GROUP BY 1
+),
+cd AS (
+    SELECT MAX(created_at)::DATE AS to_date FROM link_clicks WHERE campaign_id IN (SELECT id FROM camps)
+),
+c AS (
+    SELECT COALESCE(country, '') AS country, COUNT(*) AS n FROM link_clicks
+        WHERE campaign_id IN (SELECT id FROM camps)
+        AND created_at >= (SELECT to_date FROM cd) - INTERVAL '30 DAY'
+        AND created_at < (SELECT to_date FROM cd) + INTERVAL '1 day'
+        GROUP BY 1
+)
+SELECT COALESCE(v.country, c.country) AS country, COALESCE(v.n, 0) AS views, COALESCE(c.n, 0) AS clicks
+    FROM v FULL OUTER JOIN c ON v.country = c.country;
+
+-- name: get-dashboard-countries-scoped
+-- Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4). get-dashboard-countries over a
+-- scope, with $1/$2 exactly as get-dashboard-clients-scoped. Same window and counting.
+WITH camps AS (
+    SELECT c.id FROM campaigns c
+    WHERE $2::BOOLEAN OR EXISTS (
+        SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
+    )
+),
+vd AS (
+    SELECT MAX(created_at)::DATE AS to_date FROM campaign_views WHERE campaign_id IN (SELECT id FROM camps)
+),
+v AS (
+    SELECT COALESCE(country, '') AS country, COUNT(*) AS n FROM campaign_views
+        WHERE campaign_id IN (SELECT id FROM camps)
+        AND created_at >= (SELECT to_date FROM vd) - INTERVAL '30 DAY'
+        AND created_at < (SELECT to_date FROM vd) + INTERVAL '1 day'
+        GROUP BY 1
+),
+cd AS (
+    SELECT MAX(created_at)::DATE AS to_date FROM link_clicks WHERE campaign_id IN (SELECT id FROM camps)
+),
+c AS (
+    SELECT COALESCE(country, '') AS country, COUNT(*) AS n FROM link_clicks
+        WHERE campaign_id IN (SELECT id FROM camps)
+        AND created_at >= (SELECT to_date FROM cd) - INTERVAL '30 DAY'
+        AND created_at < (SELECT to_date FROM cd) + INTERVAL '1 day'
+        GROUP BY 1
+)
+SELECT COALESCE(v.country, c.country) AS country, COALESCE(v.n, 0) AS views, COALESCE(c.n, 0) AS clicks
+    FROM v FULL OUTER JOIN c ON v.country = c.country;
 
 -- name: get-settings
 SELECT JSON_OBJECT_AGG(key, value) AS settings FROM (SELECT * FROM settings ORDER BY key) t;

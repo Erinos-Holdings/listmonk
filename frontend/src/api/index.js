@@ -177,6 +177,12 @@ export const getDashboardClients = (params) => http.get(
   { params, loading: models.dashboard },
 );
 
+// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4) -- the Location panel.
+export const getDashboardCountries = (params) => http.get(
+  '/api/dashboard/countries',
+  { params, loading: models.dashboard },
+);
+
 // Lists.
 export const getLists = (params) => http.get(
   '/api/lists',

@@ -57,7 +57,9 @@ func TestBrandAnalyticsQueriesParse(t *testing.T) {
 	}
 	for file, names := range map[string][]string{
 		"campaigns.sql": {"query-analytics-campaigns"},
-		"misc.sql":      {"get-dashboard-counts-scoped", "get-dashboard-charts-scoped"},
+		// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4) -- the Location panel's two.
+		"misc.sql": {"get-dashboard-counts-scoped", "get-dashboard-charts-scoped",
+			"get-dashboard-countries", "get-dashboard-countries-scoped"},
 	} {
 		b, err := os.ReadFile(filepath.Join(root, "queries", file))
 		if err != nil {

@@ -136,6 +136,13 @@ type DashboardClients struct {
 	Clients []CampaignAnalyticsClient `json:"clients"`
 }
 
+// DashboardCountries is the Dashboard's Location panel (fork, dashboard counts, integrations
+// DASHBOARD-COUNTS-SPEC R4): the DashboardClients shape with per-country rows.
+type DashboardCountries struct {
+	Scoped    bool                       `json:"scoped"`
+	Countries []CampaignAnalyticsCountry `json:"countries"`
+}
+
 // AnalyticsCampaign is one row of the Campaign Analytics picker (fork, brand analytics,
 // BRAND-ANALYTICS-SPEC D3): exactly the fields the picker needs, nothing a creator must not read.
 type AnalyticsCampaign struct {

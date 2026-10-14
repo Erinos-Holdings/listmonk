@@ -255,6 +255,29 @@ func (a *App) GetDashboardClients(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{models.DashboardClients{Clients: rows}})
 }
 
+// GetDashboardCountries returns the Dashboard's per-country views and clicks (fork, dashboard
+// counts, integrations DASHBOARD-COUNTS-SPEC R4): GetDashboardClients keyed by country, with the
+// same dashboardScopeFor branching, window and raw count.
+func (a *App) GetDashboardCountries(c echo.Context) error {
+	sc, err := a.dashboardScopeFor(c)
+	if err != nil {
+		return err
+	}
+	if sc.scoped {
+		rows, err := a.core.GetDashboardCountriesScoped(sc.listIDs, sc.allCampaigns)
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, okResp{models.DashboardCountries{Scoped: true, Countries: rows}})
+	}
+
+	rows, err := a.core.GetDashboardCountries()
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, okResp{models.DashboardCountries{Countries: rows}})
+}
+
 // ReloadApp sends a reload signal to the app, causing a full restart.
 func (a *App) ReloadApp(c echo.Context) error {
 	go func() {

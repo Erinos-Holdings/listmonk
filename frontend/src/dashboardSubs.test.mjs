@@ -1,8 +1,10 @@
-// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC I3, D2/D3). Run: npm run
+// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC I3, D2/D3; Revision 2 I10/I11). Run: npm run
 // test:dashboard-subs (node --test src/dashboardSubs.test.mjs src/gridLines.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { subscriberColumns, subscriberRows } from './dashboardSubs.mjs'; // eslint-disable-line import/extensions
+import {
+  engagementLines, pctCount, segmentCell, subscriberColumns, subscriberRows,
+} from './dashboardSubs.mjs'; // eslint-disable-line import/extensions
 import { gridLines } from './gridLines.mjs'; // eslint-disable-line import/extensions
 
 const cell = (o) => ({
@@ -46,4 +48,82 @@ test('columns: all then the gridLines keys -- the one rule', () => {
   });
   assert.deepEqual(subscriberColumns(grids[1], true).map((c) => c.key), ['all', 'en', 'fr']);
   assert.deepEqual(subscriberColumns(grids[1], false).map((c) => c.key), ['all']);
+});
+
+// Revision 2 -- I10: pctCount is rate-first with the count, the count alone at a 0 denominator,
+// one decimal.
+test('pctCount: one decimal, the count beside it', () => {
+  assert.deepEqual(pctCount(751, 1901), { pct: '39.5%', count: '751' });
+  assert.deepEqual(pctCount(1, 3), { pct: '33.3%', count: '1' });
+  assert.deepEqual(pctCount(0, 10), { pct: '0.0%', count: '0' });
+  assert.deepEqual(pctCount(12345, 12345), { pct: '100.0%', count: '12,345' });
+});
+
+test('pctCount: a 0, null or missing denominator leaves the count alone', () => {
+  [0, null, undefined, NaN].forEach((d) => {
+    assert.deepEqual(pctCount(7, d), { pct: null, count: '7' });
+  });
+});
+
+test('pctCount: fmt formats the count', () => {
+  assert.deepEqual(pctCount(1500, 3000, (n) => `<${n}>`), { pct: '50.0%', count: '<1500>' });
+});
+
+// I11: segment rates are over THAT column's total; Active and Pending are plain counts.
+test('segmentCell: Held/Unsubscribed/Blocklisted over the column total, Active/Pending plain', () => {
+  const g = {
+    all: cell({
+      active: 6, held: 2, unsubscribed: 1, blocked: 1, pending: 1, total: 11,
+    }),
+    en: cell({ active: 4, held: 2, total: 6 }),
+    fr: cell({
+      active: 2, unsubscribed: 1, blocked: 1, pending: 1, total: 5,
+    }),
+  };
+  const rows = subscriberRows(g);
+  const cols = subscriberColumns(g, true);
+  assert.deepEqual(cols.map((c) => c.key), ['all', 'en', 'fr']);
+  const seg = (k) => rows.find((r) => r.key === k);
+  cols.forEach((col) => {
+    ['held', 'unsubscribed', 'blocked'].forEach((k) => {
+      assert.deepEqual(segmentCell(col, seg(k)), { count: col.row[k], denominator: col.row.total });
+    });
+    ['active', 'pending'].forEach((k) => {
+      assert.deepEqual(segmentCell(col, seg(k)), { count: col.row[k], denominator: null });
+      assert.equal(pctCount(col.row[k], segmentCell(col, seg(k)).denominator).pct, null);
+    });
+  });
+  // The en column's Held is 2 of en's 6, not of all's 11.
+  assert.equal(pctCount(2, segmentCell(cols[1], seg('held')).denominator).pct, '33.3%');
+});
+
+test('segmentCell: an empty column has a 0 denominator, so the count stands alone', () => {
+  const c = segmentCell({ key: 'all', row: cell({}) }, subscriberRows({})[1]);
+  assert.deepEqual(c, { count: 0, denominator: 0 });
+  assert.equal(pctCount(c.count, c.denominator).pct, null);
+  assert.deepEqual(segmentCell(undefined, subscriberRows({})[1]), { count: 0, denominator: 0 });
+});
+
+// I11 + R2: Views, Clicks, Bounces, Complaints, in that order, every one over Messages sent.
+test('engagementLines: the R2 order, each over messages', () => {
+  const lines = engagementLines({
+    views: 19025, clicks: 1136, bounces: 265, complaints: 4,
+  }, 40610);
+  assert.deepEqual(lines.map((l) => l.key), ['views', 'clicks', 'bounces', 'complaints']);
+  assert.deepEqual(lines.map((l) => l.label), [
+    'campaigns.views', 'campaigns.clicks', 'globals.terms.bounces', 'dashboard.ses.complaints',
+  ]);
+  lines.forEach((l) => assert.equal(l.denominator, 40610));
+  assert.deepEqual(lines.map((l) => l.count), [19025, 1136, 265, 4]);
+  assert.equal(lines[3].help, 'dashboard.complaintsHelp');
+  assert.equal(pctCount(lines[2].count, lines[2].denominator).pct, '0.7%');
+});
+
+test('engagementLines: nothing sent or no payload yet -- zeros, counts alone', () => {
+  const lines = engagementLines(undefined, undefined);
+  assert.equal(lines.length, 4);
+  lines.forEach((l) => {
+    assert.equal(l.count, 0);
+    assert.equal(pctCount(l.count, l.denominator).pct, null);
+  });
 });

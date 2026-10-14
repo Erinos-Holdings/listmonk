@@ -97,3 +97,30 @@ func (c *Core) GetDashboardClientsScoped(listIDs []int, allCampaigns bool) ([]mo
 	}
 	return out, nil
 }
+
+// GetDashboardCountries (fork, dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4) is
+// GetDashboardClients keyed by country: views and clicks per country code ("" = unknown) over the
+// Dashboard window and every campaign, raw rows. Live, no refreshCache.
+func (c *Core) GetDashboardCountries() ([]models.CampaignAnalyticsCountry, error) {
+	out := []models.CampaignAnalyticsCountry{}
+	if err := c.q.GetDashboardCountries.Select(&out); err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard countries", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
+// GetDashboardCountriesScoped (fork, dashboard counts, DASHBOARD-COUNTS-SPEC R4) is
+// GetDashboardCountries over a scope, with the GetDashboardClientsScoped arguments.
+func (c *Core) GetDashboardCountriesScoped(listIDs []int, allCampaigns bool) ([]models.CampaignAnalyticsCountry, error) {
+	if listIDs == nil {
+		listIDs = []int{}
+	}
+
+	out := []models.CampaignAnalyticsCountry{}
+	if err := c.q.GetDashboardCountriesScoped.Select(&out, pq.Array(listIDs), allCampaigns); err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard countries", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}

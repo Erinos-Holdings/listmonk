@@ -7,7 +7,9 @@ package main
 // total = grid.all.total and blocklisted = grid.all.blocked. I2: engagement.views/clicks/bounces =
 // get-campaign-stats summed over the scope's campaigns C, in BOTH individual-tracking modes, each
 // statement prepared through prepareQueries as cmd/init.go does at boot (TestCampaignStatsCounting's
-// pattern). Shares newLinkHarness and the brand-analytics fixtures (LISTMONK_TEST_PG opt-in).
+// pattern). I8 (Revision 2, R2): engagement.complaints = the complaint-type bounce rows on C, a
+// subset of bounces, which keeps every row. Shares newLinkHarness and the brand-analytics fixtures
+// (LISTMONK_TEST_PG opt-in).
 
 import (
 	"encoding/json"
@@ -107,6 +109,15 @@ func TestDashboardCountsDB(t *testing.T) {
 	bounce(cB, sNone, 1)
 	view(cNone, sEn, 1)
 	bounce(cNone, sFr, 1)
+	// I8 (Revision 2, R2): a complaint and an explicit hard bounce on cA, a complaint on cB.
+	// Complaints is a subset of Bounces -- every one of these rows also counts as a bounce.
+	typedBounce := func(camp, sub int, typ string) {
+		h.db.MustExec(`INSERT INTO bounces (campaign_id, subscriber_id, source, type) VALUES ($1, $2, 'test', $3::bounce_type)`, camp, sub, typ)
+	}
+	typedBounce(cA, sFr, "complaint")
+	typedBounce(cA, sEn, "hard")
+	typedBounce(cB, sNone, "complaint")
+	complaintsOn := map[int]int{cA: 1, cB: 1}
 
 	admin := baUser([]string{auth.PermListGetAll, auth.PermCampaignsGetAll, auth.PermCampaignsGet})
 
@@ -187,9 +198,10 @@ func TestDashboardCountsDB(t *testing.T) {
 			Grid        models.ListGrid `json:"grid"`
 		} `json:"subscribers"`
 		Engagement struct {
-			Views   int `json:"views"`
-			Clicks  int `json:"clicks"`
-			Bounces int `json:"bounces"`
+			Views      int `json:"views"`
+			Clicks     int `json:"clicks"`
+			Bounces    int `json:"bounces"`
+			Complaints int `json:"complaints"`
 		} `json:"engagement"`
 		Scoped bool `json:"scoped"`
 	}
@@ -259,6 +271,15 @@ func TestDashboardCountsDB(t *testing.T) {
 			if e, w := [3]int{got.Engagement.Views, got.Engagement.Clicks, got.Engagement.Bounces}, stats(q, tc.camps); e != w {
 				t.Fatalf("%s: engagement %v, want get-campaign-stats summed %v", name, e, w)
 			}
+
+			// I8: complaints = the complaint rows on C; bounces (above) keeps every row.
+			wantC := 0
+			for _, c := range tc.camps {
+				wantC += complaintsOn[c]
+			}
+			if got.Engagement.Complaints != wantC || got.Engagement.Complaints > got.Engagement.Bounces {
+				t.Fatalf("%s: complaints %d (bounces %d), want %d", name, got.Engagement.Complaints, got.Engagement.Bounces, wantC)
+			}
 		}
 	}
 	ko.Set("privacy.individual_tracking", true)
@@ -280,5 +301,9 @@ func TestDashboardCountsDB(t *testing.T) {
 	ko.Set("privacy.individual_tracking", true)
 	if stats(on, allCamps) == stats(off, allCamps) {
 		t.Fatal("fixture: the two tracking modes count alike")
+	}
+	// I8's fixture: Bounces counts the complaint and hard rows too (2+1+1 untyped + 3 typed).
+	if b := stats(on, allCamps)[2]; b != 7 {
+		t.Fatalf("fixture: bounces over every campaign %d, want 7 (complaints included)", b)
 	}
 }

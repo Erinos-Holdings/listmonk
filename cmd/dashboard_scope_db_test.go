@@ -109,7 +109,7 @@ func TestDashboardListScopeDB(t *testing.T) {
 
 	// An empty set: a list no campaign or subscriber is on, and a list-scoped user's list_id
 	// outside their permission -- the exact zero shape, scoped.
-	wantZero := `{"campaigns":{"by_status":{},"total":0},"engagement":{"bounces":0,"clicks":0,"views":0},"lists":{"optin_double":0,"optin_single":0,"private":0,"public":0,"total":0},"messages":0,"scoped":true,"subscribers":{"blocklisted":0,"grid":{"all":{"active":0,"blocked":0,"held":0,"pending":0,"total":0,"unsubscribed":0}},"orphans":0,"total":0}}`
+	wantZero := `{"campaigns":{"by_status":{},"total":0},"engagement":{"bounces":0,"clicks":0,"complaints":0,"views":0},"lists":{"optin_double":0,"optin_single":0,"private":0,"public":0,"total":0},"messages":0,"scoped":true,"subscribers":{"blocklisted":0,"grid":{"all":{"active":0,"blocked":0,"held":0,"pending":0,"total":0,"unsubscribed":0}},"orphans":0,"total":0}}`
 	if got := baJSON(counts(admin, "?list_id=999999")); got != wantZero {
 		t.Fatalf("list_id=999999\n got  %s\n want %s", got, wantZero)
 	}

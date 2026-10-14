@@ -390,7 +390,8 @@ func TestBrandAnalyticsDashboardCounts(t *testing.T) {
 	// gridA: A's four subscriptions (a, ab active; unsub; block blocklisted), none with a language.
 	const gridA = `{"all":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1},"en":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1},"none":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1}}`
 	const gridZero = `{"all":{"active":0,"blocked":0,"held":0,"pending":0,"total":0,"unsubscribed":0}}`
-	const noEngagement = `"engagement":{"bounces":0,"clicks":0,"views":0}`
+	// Revision 2 (R2): engagement carries complaints, a subset of bounces.
+	const noEngagement = `"engagement":{"bounces":0,"clicks":0,"complaints":0,"views":0}`
 
 	// Scoped on A: A's subscriptions (4, one blocklisted); A and A+B campaigns (draft included --
 	// the Dashboard counts statuses).
@@ -638,6 +639,117 @@ func TestDashboardClients(t *testing.T) {
 	// A list-scoped user's list_id outside their permission -> no rows.
 	if got := rows(call("scoped on A, list_id B", baUser(get, f.listA), fmt.Sprintf("?list_id=%d", f.listB))); got != "" {
 		t.Fatalf("scoped on A with list_id=B: %s, want no rows", got)
+	}
+}
+
+// Fork (dashboard counts) -- integrations DASHBOARD-COUNTS-SPEC I9 (Revision 2, R4): GET
+// /api/dashboard/countries is the clients endpoint's window, scope rule and raw count, keyed by
+// country. The same rows carry a client and a country; per scope, Σ views/clicks over countries
+// equals Σ over clients, NULL country reads "", and scoped follows dashboardScopeFor.
+func TestDashboardCountries(t *testing.T) {
+	h := newLinkHarness(t)
+	f := newBAFixture(h)
+	var link int
+	h.db.Get(&link, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), 'https://co.test') RETURNING id`)
+
+	// client/country "" = NULL; day d at noon in the session's time zone.
+	view := func(camp int, client, country, day string, n int) {
+		for i := 0; i < n; i++ {
+			h.db.MustExec(`INSERT INTO campaign_views (campaign_id, client, country, created_at) VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), ($4::DATE + TIME '12:00')::TIMESTAMP)`, camp, client, country, day)
+		}
+	}
+	click := func(camp int, client, country, day string, n int) {
+		for i := 0; i < n; i++ {
+			h.db.MustExec(`INSERT INTO link_clicks (campaign_id, link_id, client, country, created_at) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''), ($5::DATE + TIME '12:00')::TIMESTAMP)`, camp, link, client, country, day)
+		}
+	}
+
+	// TestDashboardClients' rows, each with a country: A's views anchor on 06-30 (05-30 out), A's
+	// clicks on 06-15 (05-15 out); B only on 07-20.
+	view(f.campA, "apple-mail", "US", "2026-06-30", 2)
+	view(f.campAB, "gmail-proxy", "", "2026-06-30", 1)
+	view(f.campA, "", "CA", "2026-06-10", 1)
+	view(f.campA, "apple-mail", "US", "2026-05-30", 4)
+	click(f.campA, "browser-ios", "US", "2026-06-15", 1)
+	click(f.campAB, "browser-ios", "CA", "2026-05-16", 2)
+	click(f.campA, "browser-ios", "", "2026-05-15", 3)
+	view(f.campB, "outlook-windows", "GB", "2026-07-20", 5)
+	click(f.campB, "browser-windows", "GB", "2026-07-20", 5)
+
+	type countriesPanel struct {
+		Scoped    bool                              `json:"scoped"`
+		Countries []models.CampaignAnalyticsCountry `json:"countries"`
+	}
+	type clientsPanel struct {
+		Scoped  bool                             `json:"scoped"`
+		Clients []models.CampaignAnalyticsClient `json:"clients"`
+	}
+	fetch := func(name, path string, u auth.User, q string, fn echo.HandlerFunc, out any) {
+		t.Helper()
+		code, body := baCall(t, u, path+q, fn)
+		if code != http.StatusOK {
+			t.Fatalf("%s %s: %d %s", name, path, code, body)
+		}
+		resp := struct {
+			Data any `json:"data"`
+		}{Data: out}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("%s %s: %s: %v", name, path, body, err)
+		}
+	}
+	rows := func(p countriesPanel) string {
+		sort.Slice(p.Countries, func(i, j int) bool { return p.Countries[i].Country < p.Countries[j].Country })
+		out := ""
+		for _, r := range p.Countries {
+			out += fmt.Sprintf("[%s %d %d]", r.Country, r.Views, r.Clicks)
+		}
+		return out
+	}
+
+	get := []string{auth.PermCampaignsGetAnalytics}
+	admin := baUser([]string{auth.PermListGetAll})
+	getAll := baUser([]string{auth.PermCampaignsGetAnalytics, auth.PermCampaignsGetAll, auth.PermListGetAll})
+	onA := "[ 1 0][CA 1 2][US 2 1]"
+	everyCamp := "[ 1 0][GB 5 5][US 2 0]"
+	cases := []struct {
+		name   string
+		u      auth.User
+		q      string
+		want   string
+		scoped bool
+	}{
+		{"scoped on A", baUser(get, f.listA), "", onA, true},
+		{"no lists", baUser(get), "", "", true},
+		{"get_all scoped", baUser([]string{auth.PermCampaignsGetAnalytics, auth.PermCampaignsGetAll}, f.listA), "", everyCamp, true},
+		{"unscoped", admin, "", everyCamp, false},
+		{"list_id A", admin, fmt.Sprintf("?list_id=%d", f.listA), onA, true},
+		{"list_id B", admin, fmt.Sprintf("?list_id=%d", f.listB), "[ 1 0][GB 5 5]", true},
+		{"get_all list_id A", getAll, fmt.Sprintf("?list_id=%d", f.listA), onA, true},
+		{"scoped on A, list_id B", baUser(get, f.listA), fmt.Sprintf("?list_id=%d", f.listB), "", true},
+	}
+	for _, tc := range cases {
+		var co countriesPanel
+		var cl clientsPanel
+		fetch(tc.name, "/api/dashboard/countries", tc.u, tc.q, h.app.GetDashboardCountries, &co)
+		fetch(tc.name, "/api/dashboard/clients", tc.u, tc.q, h.app.GetDashboardClients, &cl)
+		if co.Countries == nil {
+			t.Fatalf("%s: null countries array", tc.name)
+		}
+		if got := rows(co); got != tc.want || co.Scoped != tc.scoped {
+			t.Fatalf("%s: %s scoped=%v, want %s scoped=%v", tc.name, got, co.Scoped, tc.want, tc.scoped)
+		}
+		// The same window, scope and raw count as the clients panel.
+		var cv, cc, kv, kc int
+		for _, r := range co.Countries {
+			cv, cc = cv+r.Views, cc+r.Clicks
+		}
+		for _, r := range cl.Clients {
+			kv, kc = kv+r.Views, kc+r.Clicks
+		}
+		if cv != kv || cc != kc || co.Scoped != cl.Scoped {
+			t.Fatalf("%s: countries Σ views %d clicks %d scoped %v != clients Σ views %d clicks %d scoped %v",
+				tc.name, cv, cc, co.Scoped, kv, kc, cl.Scoped)
+		}
 	}
 }
 
