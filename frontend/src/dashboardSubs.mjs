@@ -61,6 +61,7 @@ export function engagementLines(engagement, messages) {
     { key: 'views', label: 'campaigns.views' },
     { key: 'clicks', label: 'campaigns.clicks' },
     { key: 'bounces', label: 'globals.terms.bounces' },
-    { key: 'complaints', label: 'dashboard.ses.complaints', help: 'dashboard.complaintsHelp' },
+    // Stage 4 F2 -- the subset relation is in the label, not only the hover.
+    { key: 'complaints', label: 'dashboard.complaintsLine', help: 'dashboard.complaintsHelp' },
   ].map((l) => ({ ...l, count: e[l.key] || 0, denominator: messages || 0 }));
 }

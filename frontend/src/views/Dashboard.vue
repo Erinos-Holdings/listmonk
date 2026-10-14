@@ -186,7 +186,7 @@
                     is a named subset of Bounces (every bounce row), its label saying so. -->
                     <ul class="no has-text-grey">
                       <li v-for="l in engagementLines" :key="l.key" :data-cy="`engagement-${l.key}`">
-                        <label for="#">{{ pctText(l.count, l.denominator) }}</label>
+                        <label for="#">{{ pctText(l.count, l.denominator, (n) => $utils.niceNumber(n)) }}</label>
                         <span :title="l.help ? $t(l.help) : null">{{ $t(l.label) }}</span>
                       </li>
                     </ul>
@@ -245,7 +245,8 @@
                   <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
                 </template>
               </b-table>
-              <p class="is-size-7 has-text-grey mt-2">{{ $t('dashboard.clientsWindow') }} {{ $t('analytics.locationHint') }}</p>
+              <!-- Stage 4 F1 -- the Dashboard's own hint: this panel counts raw rows, the Analytics table dedupes. -->
+              <p class="is-size-7 has-text-grey mt-2">{{ $t('dashboard.clientsWindow') }} {{ $t('dashboard.locationHint') }}</p>
             </article>
           </div>
 
@@ -404,29 +405,27 @@ export default Vue.extend({
     },
 
     // Fork (dashboard counts, R1) -- a rate-first line: "39.5% (751)", or the count alone when
-    // the denominator is 0. A null denominator (Active, Pending) is a plain count, niceNumber as
-    // the other containers' lines.
-    pctText(count, denominator) {
+    // the denominator is 0. A null denominator (Active, Pending) is a plain count. One number
+    // format per list (Stage 4 F3): fmt is niceNumber on the collapsed lines, as the other
+    // containers' lines, and formatNumber in the expanded table.
+    pctText(count, denominator, fmt) {
       if (denominator === null) {
-        return this.$utils.niceNumber(count || 0);
+        return fmt(count || 0);
       }
-      const c = pctCount(count, denominator, (n) => this.$utils.formatNumber(n));
+      const c = pctCount(count, denominator, fmt);
       return c.pct ? `${c.pct} (${c.count})` : c.count;
     },
 
     // The collapsed segment line: the all column.
     subsLineText(seg) {
       const c = segmentCell({ key: 'all', row: this.subsAll }, seg);
-      return this.pctText(c.count, c.denominator);
+      return this.pctText(c.count, c.denominator, (n) => this.$utils.niceNumber(n));
     },
 
-    // An expanded-table cell, over THAT column's total; plain cells keep formatNumber.
+    // An expanded-table cell, over THAT column's total.
     subsCellText(col, seg) {
       const c = segmentCell(col, seg);
-      if (c.denominator === null) {
-        return this.$utils.formatNumber(c.count);
-      }
-      return this.pctText(c.count, c.denominator);
+      return this.pctText(c.count, c.denominator, (n) => this.$utils.formatNumber(n));
     },
 
     // Fork (global brand, D4/D5) -- the reads together (counts, charts, clients and -- DASHBOARD-

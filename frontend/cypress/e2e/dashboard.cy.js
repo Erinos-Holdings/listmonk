@@ -46,7 +46,7 @@ describe('Dashboard', () => {
       .should('contain', '0 Views')
       .and('contain', '0 Clicks')
       .and('contain', '0 Bounces')
-      .and('contain', '0 Complaints');
+      .and('contain', '0 Complaints (in Bounces)');
 
     // The Location panel (R4).
     cy.get('[data-cy=countries]').should('contain', 'Location');

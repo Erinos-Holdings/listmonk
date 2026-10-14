@@ -111,7 +111,7 @@ test('engagementLines: the R2 order, each over messages', () => {
   }, 40610);
   assert.deepEqual(lines.map((l) => l.key), ['views', 'clicks', 'bounces', 'complaints']);
   assert.deepEqual(lines.map((l) => l.label), [
-    'campaigns.views', 'campaigns.clicks', 'globals.terms.bounces', 'dashboard.ses.complaints',
+    'campaigns.views', 'campaigns.clicks', 'globals.terms.bounces', 'dashboard.complaintsLine',
   ]);
   lines.forEach((l) => assert.equal(l.denominator, 40610));
   assert.deepEqual(lines.map((l) => l.count), [19025, 1136, 265, 4]);
