@@ -23,16 +23,11 @@ func (c *Core) GetDashboardCharts() (types.JSONText, error) {
 }
 
 // GetDashboardCounts returns stats counts to show on the dashboard.
+// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D5) -- the unscoped read is the one
+// live counts query over every list and every campaign (unscoped = true). mat_dashboard_counts is
+// no longer read, so it is no longer refreshed here (RefreshMatViews still refreshes it).
 func (c *Core) GetDashboardCounts() (types.JSONText, error) {
-	_ = c.refreshCache(matDashboardCounts, false)
-
-	var out types.JSONText
-	if err := c.q.GetDashboardCounts.Get(&out); err != nil {
-		return nil, echo.NewHTTPError(http.StatusInternalServerError,
-			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard stats", "error", pqErrMsg(err)))
-	}
-
-	return out, nil
+	return c.dashboardCounts([]int{}, true, true)
 }
 
 // GetDashboardCountsScoped (fork, brand analytics, BRAND-ANALYTICS-SPEC D7) returns the Dashboard
@@ -40,12 +35,17 @@ func (c *Core) GetDashboardCounts() (types.JSONText, error) {
 // campaign instead of those targeting P. A live read -- it never touches refreshCache, which would
 // refresh the global view for nothing.
 func (c *Core) GetDashboardCountsScoped(listIDs []int, allCampaigns bool) (types.JSONText, error) {
+	return c.dashboardCounts(listIDs, allCampaigns, false)
+}
+
+// dashboardCounts (fork, DASHBOARD-COUNTS-SPEC D5) runs the one counts statement for both paths.
+func (c *Core) dashboardCounts(listIDs []int, allCampaigns, unscoped bool) (types.JSONText, error) {
 	if listIDs == nil {
 		listIDs = []int{}
 	}
 
 	var out types.JSONText
-	if err := c.q.GetDashboardCountsScoped.Get(&out, pq.Array(listIDs), allCampaigns); err != nil {
+	if err := c.q.GetDashboardCountsScoped.Get(&out, pq.Array(listIDs), allCampaigns, unscoped); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard stats", "error", pqErrMsg(err)))
 	}

@@ -93,6 +93,18 @@
             <div class="tile is-parent relative">
               <b-loading v-if="isCountsLoading" active :is-full-page="false" />
               <article class="tile is-child notification" data-cy="subscribers">
+                <!-- Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D1-D3, D7). The
+                subscriptions of the PUBLIC lists in scope (each brand's master opt-in list), summed,
+                with the Lists grid's segments. Collapsed = the segment lines; expanded = a segment x
+                send-language table whose columns are the Lists grid's lines rule (gridLines.mjs).
+                Sticky per browser. Numbers link nowhere (N1). The fontello subset has plus/minus,
+                no *-box-outline, so the box is drawn in CSS as on the Lists grid. -->
+                <button type="button" class="expand-btn subs-expand" data-cy="subscribers-expand"
+                  :title="subsExpanded ? $t('dashboard.subsCollapse') : $t('dashboard.subsExpand')"
+                  :aria-label="subsExpanded ? $t('dashboard.subsCollapse') : $t('dashboard.subsExpand')"
+                  :aria-expanded="subsExpanded ? 'true' : 'false'" @click="toggleSubs">
+                  <b-icon :icon="subsExpanded ? 'minus' : 'plus'" size="is-small" />
+                </button>
                 <div class="columns is-mobile">
                   <div class="column is-6">
                     <p class="title">
@@ -106,14 +118,16 @@
 
                   <div class="column is-6">
                     <ul class="no has-text-grey">
-                      <li>
-                        <label for="#">{{ $utils.niceNumber(counts.subscribers.blocklisted) }}</label>
-                        {{ $t('subscribers.status.blocklisted') }}
-                      </li>
+                      <template v-if="!subsExpanded">
+                        <li v-for="r in subsRows" :key="r.key" :data-cy="`subscribers-${r.key}`">
+                          <label for="#">{{ $utils.niceNumber(subsAll[r.key] || 0) }}</label>
+                          {{ $t(r.label) }}
+                        </li>
+                      </template>
                       <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7): a list-scoped user's counts
                       are scoped to their lists, where orphans (no list at all) are 0 by definition.
-                      Under a global brand (GLOBAL-BRAND-SPEC D5) the counts are scoped too, and
-                      blocklisted is that scope's blocklisted members. -->
+                      Under a global brand (GLOBAL-BRAND-SPEC D5) the counts are scoped too.
+                      Orphans has no language, so it stays a line when expanded. -->
                       <li v-if="!counts.scoped">
                         <label for="#">{{ $utils.niceNumber(counts.subscribers.orphans) }}</label>
                         {{ $t('dashboard.orphanSubs') }}
@@ -121,9 +135,32 @@
                     </ul>
                   </div><!-- subscriber breakdown -->
                 </div><!-- subscriber columns -->
+                <table v-if="subsExpanded" class="table is-narrow subs-grid" data-cy="subscribers-grid">
+                  <thead>
+                    <tr>
+                      <th />
+                      <th v-for="col in subsColumns" :key="col.key" class="has-text-right"
+                        :data-cy="`subscribers-col-${col.key}`" :title="subsColTitle(col.key)">
+                        {{ subsColLabel(col.key) }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in subsRows" :key="r.key">
+                      <td class="has-text-grey">{{ $t(r.label) }}</td>
+                      <td v-for="col in subsColumns" :key="col.key" class="has-text-right"
+                        :data-cy="`subscribers-${r.key}-${col.key}`" :title="subsCellTitle(col, r.key)">
+                        {{ $utils.formatNumber(col.row[r.key] || 0) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
                 <hr />
-                <div class="columns" data-cy="messages">
-                  <div class="column is-12">
+                <!-- Fork (dashboard counts, D4) -- Views, Clicks and Bounces over the scope's
+                campaigns, each get-campaign-stats' per-campaign number summed (a view has ONE
+                definition, CAMPAIGN-RATES-SPEC D1). -->
+                <div class="columns is-mobile" data-cy="messages">
+                  <div class="column is-6">
                     <p class="title">
                       <b-icon icon="email-outline" />
                       {{ $utils.niceNumber(counts.messages) }}
@@ -131,6 +168,22 @@
                     <p class="is-size-6 has-text-grey">
                       {{ $t('dashboard.messagesSent') }}
                     </p>
+                  </div>
+                  <div class="column is-6">
+                    <ul class="no has-text-grey">
+                      <li data-cy="engagement-views">
+                        <label for="#">{{ $utils.niceNumber(engagement.views || 0) }}</label>
+                        {{ $t('campaigns.views') }}
+                      </li>
+                      <li data-cy="engagement-clicks">
+                        <label for="#">{{ $utils.niceNumber(engagement.clicks || 0) }}</label>
+                        {{ $t('campaigns.clicks') }}
+                      </li>
+                      <li data-cy="engagement-bounces">
+                        <label for="#">{{ $utils.niceNumber(engagement.bounces || 0) }}</label>
+                        {{ $t('globals.terms.bounces') }}
+                      </li>
+                    </ul>
                   </div>
                 </div>
               </article><!-- subscribers -->
@@ -217,6 +270,8 @@ import {
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
 import { rateCell } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
+import { subscriberColumns, subscriberRows } from '../dashboardSubs.mjs'; // eslint-disable-line import/extensions
+import { isSendPlus, sendLangCode } from '../langs';
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -234,6 +289,9 @@ export default Vue.extend({
       canSes,
       // Overview unless the user may see SES and last chose it.
       pane: canSes && this.$utils.getPref('dashboard.sesPane') === true ? 'ses' : 'overview',
+      // Fork (dashboard counts, DASHBOARD-COUNTS-SPEC D3) -- the Subscribers container's
+      // language table, sticky per browser (the dashboard.sesPane pattern).
+      subsExpanded: this.$utils.getPref('dashboard.subsExpanded') === true,
       isChartsLoading: true,
       isCountsLoading: true,
       campaignViews: null,
@@ -256,6 +314,42 @@ export default Vue.extend({
   methods: {
     onPaneChange() {
       this.$utils.setPref('dashboard.sesPane', this.pane === 'ses');
+    },
+
+    // Fork (dashboard counts, D3).
+    toggleSubs() {
+      this.subsExpanded = !this.subsExpanded;
+      this.$utils.setPref('dashboard.subsExpanded', this.subsExpanded);
+    },
+
+    // The expanded table's headers: All, then the send-language codes (EN+ for en) and Other --
+    // the Lists grid's labels and help.
+    subsColLabel(key) {
+      if (key === 'all') {
+        return this.$t('globals.terms.all');
+      }
+      if (key === 'other') {
+        return this.$t('lists.grid.other');
+      }
+      return sendLangCode(key);
+    },
+
+    subsColTitle(key) {
+      if (key === 'other') {
+        return this.$t('lists.grid.otherHelp');
+      }
+      return isSendPlus(key) ? this.$t('langs.sendPlusHelp') : null;
+    },
+
+    // The Lists grid's enSplit rule: an en number that includes no-language subscribers says so.
+    subsCellTitle(col, seg) {
+      if (col.key !== 'en' || !col.none || !(col.none[seg] > 0)) {
+        return null;
+      }
+      return this.$t('lists.grid.enSplit', {
+        en: this.$utils.formatNumber(col.row[seg] - col.none[seg]),
+        none: this.$utils.formatNumber(col.none[seg]),
+      });
     },
 
     // Fork (global brand, D4/D5) -- the three reads together, each with the global brand's
@@ -325,7 +419,28 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['settings']),
+    ...mapState(['settings', 'serverConfig']),
+
+    // Fork (dashboard counts, D2/D3/D6) -- the API's subscribers.grid; the module decides the lines.
+    subsGrid() {
+      return (this.counts.subscribers && this.counts.subscribers.grid) || {};
+    },
+
+    subsAll() {
+      return this.subsGrid.all || {};
+    },
+
+    subsRows() {
+      return subscriberRows(this.subsGrid);
+    },
+
+    subsColumns() {
+      return subscriberColumns(this.subsGrid, !!(this.serverConfig && this.serverConfig.lang_enabled));
+    },
+
+    engagement() {
+      return this.counts.engagement || {};
+    },
     dayjs() {
       return dayjs;
     },

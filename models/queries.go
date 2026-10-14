@@ -12,9 +12,11 @@ import (
 // Queries contains all prepared SQL queries.
 type Queries struct {
 	GetDashboardCharts *sqlx.Stmt `query:"get-dashboard-charts"`
-	GetDashboardCounts *sqlx.Stmt `query:"get-dashboard-counts"`
 
 	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D7) -- live Dashboard reads for list-scoped users.
+	// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D5) -- GetDashboardCountsScoped is
+	// the ONE counts statement for both paths (upstream's get-dashboard-counts, a
+	// mat_dashboard_counts read, is retired); it is interpolated at boot (cmd/init.go).
 	GetDashboardCountsScoped *sqlx.Stmt `query:"get-dashboard-counts-scoped"`
 	GetDashboardChartsScoped *sqlx.Stmt `query:"get-dashboard-charts-scoped"`
 

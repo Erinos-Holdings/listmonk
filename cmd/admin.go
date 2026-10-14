@@ -219,7 +219,8 @@ func (a *App) GetDashboardCounts(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{out})
 	}
 
-	// Get the chart data from the DB.
+	// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D5) -- the unscoped read is the
+	// same live query over every list and campaign (scoped: false), no longer mat_dashboard_counts.
 	out, err := a.core.GetDashboardCounts()
 	if err != nil {
 		return err

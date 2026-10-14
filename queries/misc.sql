@@ -1,33 +1,84 @@
 -- name: get-dashboard-charts
 SELECT data FROM mat_dashboard_charts;
 
--- name: get-dashboard-counts
-SELECT data FROM mat_dashboard_counts;
-
 -- name: get-dashboard-counts-scoped
--- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7). The Dashboard counts for a list-scoped user,
--- live (no materialized view, no cache), in the mat_dashboard_counts shape plus scoped=true and
--- never a null. $1 = permitted list ids (P), $2 = campaigns get_all (C = every campaign, else the
--- campaigns with ANY campaign_lists row on P -- the D2 rule). Subscribers are every
--- subscriber_lists row on P in any subscription status (the Lists page's population), counted
--- once across lists; orphans are 0 by definition.
+-- raw: true
+-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7; dashboard counts, integrations
+-- DASHBOARD-COUNTS-SPEC D1/D4/D5/D6). The ONE Dashboard counts query, live (no materialized view,
+-- no cache) for every reader -- mat_dashboard_counts is no longer read. $1 = the scope's list ids,
+-- $2 = campaigns get_all (C = every campaign, else the campaigns with ANY campaign_lists row on $1
+-- -- the BRAND-ANALYTICS D2 rule), $3 = unscoped (blanket list access, no list_id), which reads
+-- every list and every campaign (the Go side passes $2 = true with it) and is the only read that
+-- computes orphans (account-wide, else 0). Subscribers are the SUBSCRIPTIONS of the PUBLIC lists in
+-- scope (a brand's public list is its master opt-in list, every private list a derivative), summed
+-- per segment and per language with the Lists grid's own definitions (subscription_segment,
+-- subscriber_lang, send_lang) from the base tables. grid has query-lists' subscriber_grid shape;
+-- total and blocklisted are its all row. engagement sums get-campaign-stats over C, the counted
+-- expression interpolated at boot with the same statsSel (cmd/init.go), so the two never disagree.
 WITH camps AS (
-    SELECT c.status, c.sent FROM campaigns c
+    SELECT c.id, c.status, c.sent FROM campaigns c
     WHERE $2::BOOLEAN OR EXISTS (
         SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
     )
 ),
-subs AS (
-    SELECT DISTINCT sl.subscriber_id FROM subscriber_lists sl WHERE sl.list_id = ANY($1::INT[])
-),
 lst AS (
-    SELECT type, optin FROM lists WHERE id = ANY($1::INT[])
+    SELECT id, type, optin FROM lists WHERE $3::BOOLEAN OR id = ANY($1::INT[])
+),
+seg AS (
+    SELECT subscription_segment(sl.status, sl.meta, s.status, l.optin) AS segment,
+        subscriber_lang(s.attribs) AS lang, COUNT(*)::BIGINT AS n
+    FROM lst l
+    JOIN subscriber_lists sl ON (sl.list_id = l.id)
+    JOIN subscribers s ON (s.id = sl.subscriber_id)
+    WHERE l.type = 'public'
+    GROUP BY 1, 2
+),
+cells AS (
+    SELECT send_lang(lang) AS k, segment, SUM(n)::BIGINT AS n FROM seg GROUP BY 1, 2
+    UNION ALL
+    SELECT 'none' AS k, segment, SUM(n)::BIGINT AS n FROM seg WHERE lang = 'none' GROUP BY 2
+    UNION ALL
+    SELECT 'all' AS k, segment, SUM(n)::BIGINT AS n FROM seg GROUP BY 2
+),
+gridrows AS (
+    SELECT k, JSONB_BUILD_OBJECT(
+        'active', COALESCE(SUM(n) FILTER (WHERE segment = 'active'), 0),
+        'held', COALESCE(SUM(n) FILTER (WHERE segment = 'held'), 0),
+        'unsubscribed', COALESCE(SUM(n) FILTER (WHERE segment = 'unsubscribed'), 0),
+        'pending', COALESCE(SUM(n) FILTER (WHERE segment = 'pending'), 0),
+        'blocked', COALESCE(SUM(n) FILTER (WHERE segment = 'blocked'), 0),
+        'total', COALESCE(SUM(n), 0)) AS cell
+    FROM cells GROUP BY k
+),
+grid AS (
+    SELECT COALESCE((SELECT JSONB_OBJECT_AGG(k, cell) FROM gridrows), '{}'::JSONB) AS g
+),
+fullgrid AS (
+    SELECT g || JSONB_BUILD_OBJECT('all', COALESCE(g->'all',
+        '{"active": 0, "held": 0, "unsubscribed": 0, "pending": 0, "blocked": 0, "total": 0}'::JSONB)) AS g
+    FROM grid
+),
+ev AS (
+    SELECT campaign_id, COUNT(%[1]s) AS num FROM campaign_views
+    WHERE campaign_id IN (SELECT id FROM camps) GROUP BY campaign_id
+),
+ec AS (
+    SELECT campaign_id, COUNT(%[1]s) AS num FROM link_clicks
+    WHERE campaign_id IN (SELECT id FROM camps) GROUP BY campaign_id
+),
+eb AS (
+    SELECT campaign_id, COUNT(campaign_id) AS num FROM bounces
+    WHERE campaign_id IN (SELECT id FROM camps) GROUP BY campaign_id
 )
 SELECT JSON_BUILD_OBJECT(
     'subscribers', JSON_BUILD_OBJECT(
-        'total', (SELECT COUNT(*) FROM subs),
-        'blocklisted', (SELECT COUNT(*) FROM subs JOIN subscribers s ON s.id = subs.subscriber_id WHERE s.status = 'blocklisted'),
-        'orphans', 0
+        'total', (SELECT (g->'all'->>'total')::BIGINT FROM fullgrid),
+        'blocklisted', (SELECT (g->'all'->>'blocked')::BIGINT FROM fullgrid),
+        'orphans', (CASE WHEN $3::BOOLEAN THEN (
+            SELECT COUNT(*) FROM subscribers s
+            WHERE NOT EXISTS (SELECT 1 FROM subscriber_lists sl WHERE sl.subscriber_id = s.id)
+        ) ELSE 0 END),
+        'grid', (SELECT g FROM fullgrid)
     ),
     'lists', JSON_BUILD_OBJECT(
         'total', (SELECT COUNT(*) FROM lst),
@@ -43,7 +94,12 @@ SELECT JSON_BUILD_OBJECT(
         ), '{}'::JSON)
     ),
     'messages', (SELECT COALESCE(SUM(sent), 0) FROM camps),
-    'scoped', TRUE
+    'engagement', JSON_BUILD_OBJECT(
+        'views', (SELECT COALESCE(SUM(num), 0) FROM ev),
+        'clicks', (SELECT COALESCE(SUM(num), 0) FROM ec),
+        'bounces', (SELECT COALESCE(SUM(num), 0) FROM eb)
+    ),
+    'scoped', NOT $3::BOOLEAN
 ) AS data;
 
 -- name: get-dashboard-charts-scoped

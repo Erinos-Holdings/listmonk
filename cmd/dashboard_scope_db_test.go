@@ -5,7 +5,8 @@ package main
 // campaigns as GET /api/campaigns?list_id= does over the same ids (allCampaigns is false), its
 // subscribers and lists as the scope's, and every read is scoped; a scope outside a list-scoped
 // user's permission, or an empty one, is the zero shape. With no list_id the blanket-access
-// Dashboard is still the materialized views (I7). Shares newLinkHarness (LISTMONK_TEST_PG opt-in).
+// Dashboard is the unscoped live read, scoped: false (I7 as amended by DASHBOARD-COUNTS-SPEC I5).
+// Shares newLinkHarness (LISTMONK_TEST_PG opt-in).
 
 import (
 	"encoding/json"
@@ -84,15 +85,20 @@ func TestDashboardListScopeDB(t *testing.T) {
 	if got, want := num(onB, "campaigns", "total"), campaignsTotal(f.listB); got != want || got != 3 {
 		t.Fatalf("list_id=B: campaigns.total %d, campaigns listing %d, want both 3", got, want)
 	}
-	// B's subscribers in any subscription status (ab, b, blockb), one blocklisted; one list.
-	if got := num(onB, "subscribers", "total"); got != 3 {
-		t.Fatalf("list_id=B: subscribers.total %d, want 3", got)
+	// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D1) -- subscribers are the
+	// subscriptions of the scope's PUBLIC lists: B is private, so none; one list.
+	if got := num(onB, "subscribers", "total"); got != 0 {
+		t.Fatalf("list_id=B: subscribers.total %d, want 0 (B is private)", got)
 	}
-	if got := num(onB, "subscribers", "blocklisted"); got != 1 {
-		t.Fatalf("list_id=B: subscribers.blocklisted %d, want 1", got)
+	if got := num(onB, "subscribers", "blocklisted"); got != 0 {
+		t.Fatalf("list_id=B: subscribers.blocklisted %d, want 0 (B is private)", got)
 	}
 	if got := num(onB, "lists", "total"); got != 1 {
 		t.Fatalf("list_id=B: lists.total %d, want 1", got)
+	}
+	// A is public: its two subscriptions (a, ab).
+	if got := num(counts(admin, fmt.Sprintf("?list_id=%d", f.listA)), "subscribers", "total"); got != 2 {
+		t.Fatalf("list_id=A: subscribers.total %d, want 2", got)
 	}
 
 	// list_id = A and C together.
@@ -103,7 +109,7 @@ func TestDashboardListScopeDB(t *testing.T) {
 
 	// An empty set: a list no campaign or subscriber is on, and a list-scoped user's list_id
 	// outside their permission -- the exact zero shape, scoped.
-	wantZero := `{"campaigns":{"by_status":{},"total":0},"lists":{"optin_double":0,"optin_single":0,"private":0,"public":0,"total":0},"messages":0,"scoped":true,"subscribers":{"blocklisted":0,"orphans":0,"total":0}}`
+	wantZero := `{"campaigns":{"by_status":{},"total":0},"engagement":{"bounces":0,"clicks":0,"views":0},"lists":{"optin_double":0,"optin_single":0,"private":0,"public":0,"total":0},"messages":0,"scoped":true,"subscribers":{"blocklisted":0,"grid":{"all":{"active":0,"blocked":0,"held":0,"pending":0,"total":0,"unsubscribed":0}},"orphans":0,"total":0}}`
 	if got := baJSON(counts(admin, "?list_id=999999")); got != wantZero {
 		t.Fatalf("list_id=999999\n got  %s\n want %s", got, wantZero)
 	}
@@ -124,13 +130,22 @@ func TestDashboardListScopeDB(t *testing.T) {
 		t.Fatalf("charts list_id=B: not scoped: %s (%v)", body, err)
 	}
 
-	// I7: no list_id -- the materialized view, no scoped key.
+	// I7, amended by integrations DASHBOARD-COUNTS-SPEC I5/D5: no list_id -- the unscoped live read
+	// over every list and campaign, scoped: false (mat_dashboard_counts is no longer read; its
+	// lists and campaigns blocks still agree).
 	got := counts(admin, "")
-	if want := matView(t, h, "mat_dashboard_counts"); !reflect.DeepEqual(got, want) {
-		t.Fatalf("no list_id\n got  %s\n want %s", baJSON(got), baJSON(want))
+	if got["scoped"] != false {
+		t.Fatalf("no list_id: scoped %v, want false", got["scoped"])
 	}
-	if _, ok := got["scoped"]; ok {
-		t.Fatal("no list_id: counts carry a scoped key")
+	h.db.MustExec(`REFRESH MATERIALIZED VIEW mat_dashboard_counts`)
+	mv := matView(t, h, "mat_dashboard_counts")
+	for _, k := range []string{"lists", "campaigns", "messages"} {
+		if !reflect.DeepEqual(got[k], mv[k]) {
+			t.Fatalf("no list_id: %s\n got  %s\n view %s", k, baJSON(got[k]), baJSON(mv[k]))
+		}
+	}
+	if n := num(got, "subscribers", "total"); n != 2 {
+		t.Fatalf("no list_id: subscribers.total %d, want 2 (A, the one public list)", n)
 	}
 
 	// A malformed list_id is a 400, never the unscoped numbers.

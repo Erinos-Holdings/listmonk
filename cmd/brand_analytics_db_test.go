@@ -4,8 +4,9 @@ package main
 // through the handlers: the Campaign Analytics picker (GET /api/analytics/campaigns) is scoped by
 // the ANY-list rule and gated on campaigns:get_analytics through the same a.auth.Perm wrapper
 // handlers.go uses; the analytics endpoint stays all-or-nothing over several ids; the Dashboard
-// counts and charts are live and scoped for list-scoped users, byte-for-byte the materialized views
-// for everyone else, and null-free. Shares newLinkHarness (LISTMONK_TEST_PG opt-in; see
+// counts and charts are live and scoped for list-scoped users, the charts byte-for-byte the
+// materialized view for everyone else (the counts are one live query for both since
+// DASHBOARD-COUNTS-SPEC D5), and null-free. Shares newLinkHarness (LISTMONK_TEST_PG opt-in; see
 // link_redirect_db_test.go).
 
 import (
@@ -383,52 +384,67 @@ func TestBrandAnalyticsDashboardCounts(t *testing.T) {
 	counts := h.app.GetDashboardCounts
 	get := []string{auth.PermCampaignsGetAnalytics}
 
-	// Scoped on A: A's subscribers in any subscription status (4, one blocklisted); A and A+B
-	// campaigns (draft included -- the Dashboard counts statuses).
+	// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D1/D6) -- subscribers are the
+	// subscriptions of the PUBLIC lists in scope (A is public; B and C are private and contribute
+	// nothing), with the Lists grid as subscribers.grid; engagement is zero (no events here).
+	// gridA: A's four subscriptions (a, ab active; unsub; block blocklisted), none with a language.
+	const gridA = `{"all":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1},"en":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1},"none":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1}}`
+	const gridZero = `{"all":{"active":0,"blocked":0,"held":0,"pending":0,"total":0,"unsubscribed":0}}`
+	const noEngagement = `"engagement":{"bounces":0,"clicks":0,"views":0}`
+
+	// Scoped on A: A's subscriptions (4, one blocklisted); A and A+B campaigns (draft included --
+	// the Dashboard counts statuses).
 	onA := dashJSON(t, baUser(get, f.listA), "counts", counts)
-	wantA := `{"campaigns":{"by_status":{"draft":1,"finished":1,"running":1},"total":3},"lists":{"optin_double":0,"optin_single":1,"private":0,"public":1,"total":1},"messages":15,"scoped":true,"subscribers":{"blocklisted":1,"orphans":0,"total":4}}`
+	wantA := `{"campaigns":{"by_status":{"draft":1,"finished":1,"running":1},"total":3},` + noEngagement + `,"lists":{"optin_double":0,"optin_single":1,"private":0,"public":1,"total":1},"messages":15,"scoped":true,"subscribers":{"blocklisted":1,"grid":` + gridA + `,"orphans":0,"total":4}}`
 	if got := baJSON(onA); got != wantA {
 		t.Fatalf("scoped on A\n got  %s\n want %s", got, wantA)
 	}
 
-	// Scoped on A and B: the A+B subscriber counted once.
+	// Scoped on A and B: B is private, so the subscribers are A's alone.
 	onAB := dashJSON(t, baUser(get, f.listA, f.listB), "counts", counts)
-	wantAB := `{"campaigns":{"by_status":{"draft":1,"finished":2,"paused":1,"running":1},"total":5},"lists":{"optin_double":1,"optin_single":1,"private":1,"public":1,"total":2},"messages":25,"scoped":true,"subscribers":{"blocklisted":2,"orphans":0,"total":6}}`
+	wantAB := `{"campaigns":{"by_status":{"draft":1,"finished":2,"paused":1,"running":1},"total":5},` + noEngagement + `,"lists":{"optin_double":1,"optin_single":1,"private":1,"public":1,"total":2},"messages":25,"scoped":true,"subscribers":{"blocklisted":1,"grid":` + gridA + `,"orphans":0,"total":4}}`
 	if got := baJSON(onAB); got != wantAB {
 		t.Fatalf("scoped on A+B\n got  %s\n want %s", got, wantAB)
 	}
 
 	// campaigns:get_all + list-scoped: every campaign, but only A's lists and subscribers.
 	allCamps := dashJSON(t, baUser([]string{auth.PermCampaignsGetAnalytics, auth.PermCampaignsGetAll}, f.listA), "counts", counts)
-	wantAll := `{"campaigns":{"by_status":{"cancelled":1,"draft":1,"finished":3,"paused":1,"running":1},"total":7},"lists":{"optin_double":0,"optin_single":1,"private":0,"public":1,"total":1},"messages":1125,"scoped":true,"subscribers":{"blocklisted":1,"orphans":0,"total":4}}`
+	wantAll := `{"campaigns":{"by_status":{"cancelled":1,"draft":1,"finished":3,"paused":1,"running":1},"total":7},` + noEngagement + `,"lists":{"optin_double":0,"optin_single":1,"private":0,"public":1,"total":1},"messages":1125,"scoped":true,"subscribers":{"blocklisted":1,"grid":` + gridA + `,"orphans":0,"total":4}}`
 	if got := baJSON(allCamps); got != wantAll {
 		t.Fatalf("get_all + scoped on A\n got  %s\n want %s", got, wantAll)
 	}
 
 	// I6 counts: no permitted list -> the exact zero shape, never global numbers.
 	none := dashJSON(t, baUser(get), "counts", counts)
-	wantNone := `{"campaigns":{"by_status":{},"total":0},"lists":{"optin_double":0,"optin_single":0,"private":0,"public":0,"total":0},"messages":0,"scoped":true,"subscribers":{"blocklisted":0,"orphans":0,"total":0}}`
+	wantNone := `{"campaigns":{"by_status":{},"total":0},` + noEngagement + `,"lists":{"optin_double":0,"optin_single":0,"private":0,"public":0,"total":0},"messages":0,"scoped":true,"subscribers":{"blocklisted":0,"grid":` + gridZero + `,"orphans":0,"total":0}}`
 	if got := baJSON(none); got != wantNone {
 		t.Fatalf("no lists\n got  %s\n want %s", got, wantNone)
 	}
 
-	// Unscoped (blanket list access, and Super Admin): exactly the materialized view, no scoped key.
+	// Unscoped (blanket list access, and Super Admin): the same live query over every list and
+	// campaign (DASHBOARD-COUNTS-SPEC D5), scoped false, orphans account-wide; the lists and
+	// campaigns blocks still equal upstream's mat_dashboard_counts.
 	superAdmin := baUser(nil)
 	superAdmin.UserRoleID = auth.SuperAdminRoleID
+	wantUnscoped := `{"blocklisted":1,"grid":` + gridA + `,"orphans":1,"total":4}`
 	for name, u := range map[string]auth.User{
 		"lists:get_all":    baUser([]string{auth.PermListGetAll, auth.PermCampaignsGetAll}),
 		"lists:manage_all": baUser([]string{auth.PermListManageAll}),
 		"super admin":      superAdmin,
 	} {
 		got := dashJSON(t, u, "counts", counts)
-		if want := matView(t, h, "mat_dashboard_counts"); !reflect.DeepEqual(got, want) {
-			t.Fatalf("%s: counts\n got  %s\n want %s", name, baJSON(got), baJSON(want))
+		if got["scoped"] != false {
+			t.Fatalf("%s: unscoped counts scoped %v, want false", name, got["scoped"])
 		}
-		if _, ok := got["scoped"]; ok {
-			t.Fatalf("%s: unscoped counts carry a scoped key", name)
+		if s := baJSON(got["subscribers"]); s != wantUnscoped {
+			t.Fatalf("%s: subscribers\n got  %s\n want %s", name, s, wantUnscoped)
 		}
-		if got["subscribers"].(map[string]any)["total"].(float64) != 8 {
-			t.Fatalf("%s: global subscriber total %v, want 8", name, got["subscribers"])
+		h.db.MustExec(`REFRESH MATERIALIZED VIEW mat_dashboard_counts`)
+		mv := matView(t, h, "mat_dashboard_counts")
+		for _, k := range []string{"lists", "campaigns", "messages"} {
+			if !reflect.DeepEqual(got[k], mv[k]) {
+				t.Fatalf("%s: %s\n got  %s\n view %s", name, k, baJSON(got[k]), baJSON(mv[k]))
+			}
 		}
 	}
 }

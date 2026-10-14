@@ -927,6 +927,54 @@ section.dashboard {
   .notification {
     border-width: 0;
   }
+
+  /* Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D3). The Subscribers container's
+  +/- toggle at its top right (the Lists grid's boxed glyph -- the fontello subset has plus and
+  minus, no *-box-outline), and the expanded segment x language table. */
+  article[data-cy=subscribers] {
+    position: relative;
+  }
+  .subs-expand {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 1px solid $grey-light;
+    border-radius: 3px;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    color: $grey;
+    line-height: 1;
+
+    .icon {
+      width: 1rem;
+      height: 1rem;
+      font-size: 0.7rem;
+    }
+    &:hover {
+      border-color: $primary;
+    }
+  }
+  .subs-grid {
+    margin: 0 30px 20px 30px;
+    width: auto;
+    background: transparent;
+
+    th, td {
+      padding: 2px 10px;
+      border: 0;
+    }
+    th {
+      font-weight: normal;
+      color: $grey;
+    }
+  }
 }
 
 /* Lists page */

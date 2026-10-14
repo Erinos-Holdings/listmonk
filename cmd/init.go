@@ -453,6 +453,10 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	// unique/total mode exactly (same counted expression, same row filter).
 	qMap["get-campaign-client-counts"].Query = fmt.Sprintf(qMap["get-campaign-client-counts"].Query, countrySel, countryFilter)
 	qMap["get-campaign-stats"].Query = fmt.Sprintf(qMap["get-campaign-stats"].Query, statsSel)
+	// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D4) -- the Dashboard's
+	// engagement (views, clicks) is get-campaign-stats summed over the scope's campaigns, so it is
+	// interpolated with the SAME statsSel: the two cannot disagree.
+	qMap["get-dashboard-counts-scoped"].Query = fmt.Sprintf(qMap["get-dashboard-counts-scoped"].Query, statsSel)
 
 	// Scan and prepare all queries.
 	var q models.Queries

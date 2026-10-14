@@ -26,6 +26,7 @@
     "test:list-sunset": "node --test src/listSunset.test.mjs",
     "test:list-trigger": "node --test src/listTrigger.test.mjs",
     "test:emoji-data": "node --test src/emojiData.test.mjs",
+    "test:dashboard-subs": "node --test src/dashboardSubs.test.mjs src/gridLines.test.mjs",
     "test": "node --test src/*.test.mjs",
     "postinstall": "cp node_modules/altcha/dist/altcha.umd.cjs ../static/public/static/altcha.umd.js && node -e \"const fs=require('fs');const d='node_modules/emoji-picker-element-data/';const v=JSON.parse(fs.readFileSync(d+'package.json','utf8')).version;fs.copyFileSync(d+'en/emojibase/data.json','public/static/emoji-data-'+v+'.json')\""
   },

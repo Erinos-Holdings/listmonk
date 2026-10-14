@@ -73,7 +73,17 @@ func TestBrandAnalyticsQueriesParse(t *testing.T) {
 				t.Errorf("%s: query %q missing or empty after parse", file, n)
 				continue
 			}
-			if len(got.Tags) != 0 {
+			// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D4) -- the counts query is
+			// interpolated at boot and marked "-- raw: true" like get-campaign-stats; that one tag
+			// is expected, any other is a colon-bearing comment line.
+			tags := map[string]string{}
+			for k, v := range got.Tags {
+				tags[k] = v
+			}
+			if n == "get-dashboard-counts-scoped" && tags["raw"] == "true" {
+				delete(tags, "raw")
+			}
+			if len(tags) != 0 {
 				t.Errorf("%s: query %q carries extra tags %v (a colon-bearing comment line?)", file, n, got.Tags)
 			}
 		}
