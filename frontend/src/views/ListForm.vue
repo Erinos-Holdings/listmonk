@@ -81,14 +81,11 @@
             :placeholder="$t('globals.fields.description')" :disabled="locked" />
         </b-field>
 
-        <b-field :message="$t('lists.archivedHelp')" :label="$t('lists.archived')">
-          <b-switch v-model="isArchived" name="status" :disabled="locked" />
-        </b-field>
-
-        <!-- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D7): edit only (a trigger is set on an
-        existing list); every control follows the locked flag. The badge reads the STORED
+        <!-- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D7; shown on NEW lists too since the
+        G10 pass -- the form creates, then PUTs the trigger onto the new id, because POST ignores
+        the fields by design). Every control follows the locked flag. The badge reads the STORED
         trigger_sync, written by the reconciler (listTrigger.mjs). -->
-        <div v-if="isEditing" class="list-join-trigger mt-5" data-cy="list-join-trigger">
+        <div class="list-join-trigger mt-5" data-cy="list-join-trigger">
           <p class="has-text-weight-semibold mb-2">
             {{ $t('lists.joinTrigger') }}
             <b-tag v-if="triggerBadge" :type="triggerBadgeType" class="ml-2" data-cy="list-trigger-badge">
@@ -119,12 +116,16 @@
               {{ $t('lists.transactional') }}
             </b-checkbox>
           </b-field>
-          <p class="is-size-7 has-text-grey">
+          <p v-if="isEditing" class="is-size-7 has-text-grey">
             <router-link :to="{ path: '/campaigns/new', query: { list_id: data.id } }" @click.native="$parent.close()">
               {{ $t('lists.joinTriggerAutomation') }}
             </router-link>
           </p>
         </div>
+
+        <b-field :message="$t('lists.archivedHelp')" :label="$t('lists.archived')" class="mt-5">
+          <b-switch v-model="isArchived" name="status" :disabled="locked" />
+        </b-field>
       </section>
       <footer class="modal-card-foot has-text-right">
         <b-button @click="$parent.close()">
@@ -219,10 +220,32 @@ export default Vue.extend({
     },
 
     createList() {
+      // The server's POST ignores join_trigger/transactional (LIST-JOIN-TRIGGER-SPEC D3), so a
+      // trigger chosen on a new list is applied with a second call onto the created id. The
+      // list exists either way; a refused trigger surfaces as the PUT's error toast.
+      const joinTrigger = buildJoinTrigger(this.triggerOption, this.skusText);
+      const wantsTrigger = joinTrigger !== null || (this.canTransactional && this.transactional);
       this.$api.createList(buildListFormRequest(this.form, this.brand)).then((data) => {
-        this.$emit('finished');
-        this.$parent.close();
-        this.$utils.toast(this.$t('globals.messages.created', { name: data.name }));
+        const done = () => {
+          this.$emit('finished');
+          this.$parent.close();
+          this.$utils.toast(this.$t('globals.messages.created', { name: data.name }));
+        };
+        if (!wantsTrigger) {
+          done();
+          return;
+        }
+        const req = buildListFormRequest(this.form, this.brand, {
+          joinTrigger,
+          canTransactional: this.canTransactional,
+          transactional: this.transactional,
+        });
+        // On a refused trigger the list still exists: close and refresh anyway (the API layer
+        // has toasted the reason), so a retry edits the created list instead of creating twice.
+        this.$api.updateList({ id: data.id, ...req }).then(done, () => {
+          this.$emit('finished');
+          this.$parent.close();
+        });
       });
     },
 
