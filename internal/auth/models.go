@@ -83,6 +83,10 @@ const (
 	// Fork (brand health, BRAND-HEALTH-SPEC D10).
 	PermBrandsGet    = "brands:get"
 	PermBrandsManage = "brands:manage"
+
+	// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D5) -- set or change a list's transactional
+	// flag, and change the join trigger or brand of a list whose stored flag is true.
+	PermListTransactional = "lists:transactional"
 )
 
 // Base holds common fields shared across models.

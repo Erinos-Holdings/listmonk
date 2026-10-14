@@ -141,17 +141,32 @@ func (a *App) UpdateList(c echo.Context) error {
 		return err
 	}
 
-	// Fork (BRAND-PICKER-SPEC D4) -- a locked list is never updated through the API.
-	if err := a.refuseLocked(id); err != nil {
-		return err
-	}
-
 	// Incoming params.
 	var r listReq
 	if err := c.Bind(&r); err != nil {
 		return err
 	}
 	l := r.List
+
+	// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D5) -- the transactional permission check
+	// runs FIRST: a refused request applies nothing (name, tags, brand, join_trigger included).
+	// The current row is read only when the request carries a field the trigger rules read.
+	var cur models.List
+	needCur := listTriggerCarried(r) || r.Brand != nil
+	if needCur {
+		var err error
+		if cur, err = a.core.GetList(id, ""); err != nil {
+			return err
+		}
+		if err := a.checkListTriggerPerm(user, r, cur); err != nil {
+			return err
+		}
+	}
+
+	// Fork (BRAND-PICKER-SPEC D4) -- a locked list is never updated through the API.
+	if err := a.refuseLocked(id); err != nil {
+		return err
+	}
 
 	// Validate.
 	if !strHasLen(l.Name, 1, stdInputMaxLen) {
@@ -172,10 +187,34 @@ func (a *App) UpdateList(c echo.Context) error {
 		return a.lockedListErr(l.Name)
 	}
 
+	// Fork (list join triggers, D3/D2) -- the trigger shape and the brand rule are validated
+	// BEFORE the main update, so a 400 leaves the whole list unchanged.
+	var tp listTriggerPlan
+	if needCur {
+		if tp, err = a.planListTrigger(r, cur); err != nil {
+			return err
+		}
+	}
+
 	// Update the list in the DB.
 	out, err := a.core.UpdateList(id, l, keepReserved)
 	if err != nil {
 		return err
+	}
+
+	// Fork (list join triggers, D4) -- the trigger write, one statement after update-list (not
+	// atomic with it: an error here leaves the main update applied and is returned; a retry
+	// converges). It no-ops, stamps included, when nothing differs from the stored row.
+	if tp.write {
+		changed, err := a.core.UpdateListTrigger(id, tp.joinTrigger, tp.transactional, user.Username)
+		if err != nil {
+			return err
+		}
+		if changed {
+			if out, err = a.core.GetList(id, ""); err != nil {
+				return err
+			}
+		}
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})

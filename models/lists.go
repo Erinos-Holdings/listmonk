@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/lib/pq"
 	null "gopkg.in/volatiletech/null.v6"
@@ -58,7 +59,22 @@ type List struct {
 	// PUT /api/lists/:id/sunset stores verbatim (lists.sunset, v6.2.22). NULL on every list that
 	// is not a queue: the slice stays nil and omitempty drops the key, so the Lists page renders
 	// nothing. The fork stores and renders, never computes.
-	Sunset ListSunset `db:"sunset" json:"sunset,omitempty"`
+	Sunset ListJSON `db:"sunset" json:"sunset,omitempty"`
+
+	// Fork (list join triggers, integrations LIST-JOIN-TRIGGER-SPEC D1/D3). JoinTrigger is a
+	// generic list attribute -- {"kind":"first_order"} or {"kind":"skus","skus":[...]} -- whose
+	// SHAPE the fork validates (cmd/lists_trigger.go) and whose meaning an external reconciler
+	// owns; Transactional is gated by lists:transactional; TriggerSetBy/TriggerSetAt are the
+	// audit stamps (moved only on a real change); TriggerSync is the reconciler's write-back
+	// (PUT /api/lists/:id/trigger-sync), stored verbatim. The request binds its own tri-state
+	// fields (listReq), so these are read-only on the response.
+	// The two stamps are pointers so a NULL is OMITTED from the response (a null.* struct would
+	// marshal as an explicit null -- omitempty never drops a struct).
+	JoinTrigger   ListJSON   `db:"join_trigger" json:"join_trigger,omitempty"`
+	Transactional bool       `db:"transactional" json:"transactional"`
+	TriggerSetBy  *string    `db:"trigger_set_by" json:"trigger_set_by,omitempty"`
+	TriggerSetAt  *time.Time `db:"trigger_set_at" json:"trigger_set_at,omitempty"`
+	TriggerSync   ListJSON   `db:"trigger_sync" json:"trigger_sync,omitempty"`
 
 	// This is only relevant when querying the lists of a subscriber.
 	SubscriptionStatus    string    `db:"subscription_status" json:"subscription_status,omitempty"`
@@ -123,28 +139,29 @@ func IsSubscriberLangFilter(s string) bool {
 	return s == SubscriberLangNone || s == SubscriberLangOther || s == SubscriberLangEnOnly || IsCampaignLang(s)
 }
 
-// ListSunset (fork, sunset v2) is lists.sunset: raw JSON that scans a SQL NULL as empty (a
+// ListJSON (fork, sunset v2; generalized for list join triggers) is a nullable JSONB column on
+// lists (sunset, join_trigger, trigger_sync): raw JSON that scans a SQL NULL as empty (a
 // json.RawMessage cannot scan NULL), so `omitempty` drops the key for every list without one.
-type ListSunset []byte
+type ListJSON []byte
 
 // Scan implements sql.Scanner.
-func (s *ListSunset) Scan(v any) error {
+func (s *ListJSON) Scan(v any) error {
 	switch x := v.(type) {
 	case nil:
 		*s = nil
 	case []byte:
-		*s = append(ListSunset(nil), x...)
+		*s = append(ListJSON(nil), x...)
 	case string:
-		*s = ListSunset(x)
+		*s = ListJSON(x)
 	default:
-		return fmt.Errorf("lists.sunset: unsupported type %T", v)
+		return fmt.Errorf("lists JSON column: unsupported type %T", v)
 	}
 	return nil
 }
 
 // MarshalJSON emits the stored document verbatim (null when empty, though omitempty normally
 // drops the key first).
-func (s ListSunset) MarshalJSON() ([]byte, error) {
+func (s ListJSON) MarshalJSON() ([]byte, error) {
 	if len(s) == 0 {
 		return []byte("null"), nil
 	}

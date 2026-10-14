@@ -803,3 +803,14 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D1): a list's join trigger (shape only -- an
+-- external reconciler gives it meaning), the permission-gated transactional flag, the audit
+-- stamps and the reconciler's write-back. Mirrored in internal/migrations/v6.2.23.go (the role-1
+-- grant there needs nothing here -- schema.sql carries no role rows).
+
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS join_trigger JSONB NULL;
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS transactional BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_set_by TEXT NULL;
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_set_at TIMESTAMP WITH TIME ZONE NULL;
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_sync JSONB NULL;

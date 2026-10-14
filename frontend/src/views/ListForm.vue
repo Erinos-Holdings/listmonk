@@ -84,6 +84,47 @@
         <b-field :message="$t('lists.archivedHelp')" :label="$t('lists.archived')">
           <b-switch v-model="isArchived" name="status" :disabled="locked" />
         </b-field>
+
+        <!-- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D7): edit only (a trigger is set on an
+        existing list); every control follows the locked flag. The badge reads the STORED
+        trigger_sync, written by the reconciler (listTrigger.mjs). -->
+        <div v-if="isEditing" class="list-join-trigger mt-5" data-cy="list-join-trigger">
+          <p class="has-text-weight-semibold mb-2">
+            {{ $t('lists.joinTrigger') }}
+            <b-tag v-if="triggerBadge" :type="triggerBadgeType" class="ml-2" data-cy="list-trigger-badge">
+              {{ triggerBadgeText }}
+            </b-tag>
+          </p>
+          <b-field>
+            <b-radio v-model="triggerOption" native-value="none" name="join_trigger" :disabled="locked">
+              {{ $t('lists.joinTriggerNone') }}
+            </b-radio>
+          </b-field>
+          <b-field :message="triggerOption === 'first_order' ? $t('lists.joinTriggerLatency') : ''">
+            <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger" :disabled="locked">
+              {{ $t('lists.joinTriggerFirstOrder') }}
+            </b-radio>
+          </b-field>
+          <b-field :message="triggerOption === 'skus' ? $t('lists.joinTriggerLatency') : ''">
+            <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="locked">
+              {{ $t('lists.joinTriggerSkus') }}
+            </b-radio>
+          </b-field>
+          <b-field v-if="triggerOption === 'skus'" :message="$t('lists.joinTriggerSkusHelp')">
+            <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
+              data-cy="list-trigger-skus" />
+          </b-field>
+          <b-field v-if="canTransactional" :message="$t('lists.transactionalHelp')">
+            <b-checkbox v-model="transactional" name="transactional" :disabled="locked" data-cy="list-transactional">
+              {{ $t('lists.transactional') }}
+            </b-checkbox>
+          </b-field>
+          <p class="is-size-7 has-text-grey">
+            <router-link :to="{ path: '/campaigns/new', query: { list_id: data.id } }" @click.native="$parent.close()">
+              {{ $t('lists.joinTriggerAutomation') }}
+            </router-link>
+          </p>
+        </div>
       </section>
       <footer class="modal-card-foot has-text-right">
         <b-button @click="$parent.close()">
@@ -104,8 +145,11 @@ import { mapState } from 'vuex';
 import CopyText from '../components/CopyText.vue';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 import {
-  buildListRequest, brandLabel, isLockedList, isReservedTag, splitReservedTags,
+  brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
+import {
+  buildJoinTrigger, buildListFormRequest, skusToText, triggerBadge, triggerOption,
+} from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -140,6 +184,11 @@ export default Vue.extend({
       brands: [],
       brand: null,
       tagError: '',
+
+      // LIST-JOIN-TRIGGER-SPEC D7: the trigger radio, the SKU textarea and the checkbox.
+      triggerOption: 'none',
+      skusText: '',
+      transactional: false,
     };
   },
 
@@ -170,7 +219,7 @@ export default Vue.extend({
     },
 
     createList() {
-      this.$api.createList(buildListRequest(this.form, this.brand)).then((data) => {
+      this.$api.createList(buildListFormRequest(this.form, this.brand)).then((data) => {
         this.$emit('finished');
         this.$parent.close();
         this.$utils.toast(this.$t('globals.messages.created', { name: data.name }));
@@ -178,7 +227,13 @@ export default Vue.extend({
     },
 
     updateList() {
-      this.$api.updateList({ id: this.data.id, ...buildListRequest(this.form, this.brand) }).then((data) => {
+      // D7/F3: an allow-listed body; transactional only when the checkbox is rendered (D5).
+      const req = buildListFormRequest(this.form, this.brand, {
+        joinTrigger: buildJoinTrigger(this.triggerOption, this.skusText),
+        canTransactional: this.canTransactional,
+        transactional: this.transactional,
+      });
+      this.$api.updateList({ id: this.data.id, ...req }).then((data) => {
         this.$emit('finished');
         this.$parent.close();
         this.$utils.toast(this.$t('globals.messages.updated', { name: data.name }));
@@ -208,6 +263,30 @@ export default Vue.extend({
       return !this.isEditing || (this.$props.data.brand || '') === this.brandDefault.value;
     },
 
+    // LIST-JOIN-TRIGGER-SPEC D5/D7: the Transactional checkbox is rendered only for holders of
+    // lists:transactional.
+    canTransactional() {
+      return this.$can('lists:transactional');
+    },
+
+    // The badge from the STORED trigger and trigger_sync (null = no trigger, no badge).
+    triggerBadge() {
+      return triggerBadge(this.data.join_trigger, this.data.trigger_sync);
+    },
+
+    triggerBadgeText() {
+      const b = this.triggerBadge;
+      if (!b) return '';
+      if (b.state === 'live') return this.$t(b.key, { time: this.$utils.niceDate(b.params.time, true) });
+      return this.$t(b.key, b.params);
+    },
+
+    triggerBadgeType() {
+      const b = this.triggerBadge;
+      if (!b) return '';
+      return { live: 'is-success', invalid: 'is-danger', pending: 'is-warning' }[b.state];
+    },
+
     // The render catalog list: read-only in the form (BRAND-PICKER-SPEC D4).
     locked() {
       return this.isEditing && isLockedList(this.data);
@@ -229,6 +308,11 @@ export default Vue.extend({
     // edit the select is preset from the row's brand; an untagged list shows it empty and required.
     this.form.tags = splitReservedTags(this.form.tags).free;
     this.brand = this.$props.data.brand || null;
+    // LIST-JOIN-TRIGGER-SPEC D7: the section starts from the stored trigger.
+    const jt = this.$props.data.join_trigger;
+    this.triggerOption = triggerOption(jt);
+    this.skusText = skusToText(jt && jt.skus);
+    this.transactional = !!this.$props.data.transactional;
     // Fork (global brand, D10) -- a new list under a selected brand is that brand's.
     if (!this.isEditing && this.brandDefault.locked) {
       this.brand = this.brandDefault.value;

@@ -213,6 +213,41 @@ func (c *Core) UpdateListSunset(id int, sunset []byte) error {
 	return nil
 }
 
+// UpdateListTrigger stores a list's RESULTING join trigger (nil = NULL) and transactional flag
+// with the audit stamp user (fork, list join triggers -- LIST-JOIN-TRIGGER-SPEC D4; the caller
+// has validated and normalized the trigger). One statement that no-ops when neither differs from
+// the stored row; changed reports whether it wrote.
+func (c *Core) UpdateListTrigger(id int, joinTrigger []byte, transactional bool, setBy string) (bool, error) {
+	var jt any
+	if len(joinTrigger) > 0 {
+		jt = string(joinTrigger)
+	}
+	res, err := c.q.UpdateListTrigger.Exec(id, jt, transactional, setBy)
+	if err != nil {
+		c.log.Printf("error updating list trigger: %v", err)
+		return false, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.list}", "error", pqErrMsg(err)))
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// UpdateListTriggerSync stores the reconciler's write-back verbatim (fork, list join triggers --
+// LIST-JOIN-TRIGGER-SPEC D6; the caller has validated its shape). A missing list is a 404.
+func (c *Core) UpdateListTriggerSync(id int, doc []byte) error {
+	res, err := c.q.UpdateListTriggerSync.Exec(id, string(doc))
+	if err != nil {
+		c.log.Printf("error updating list trigger sync: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.list}", "error", pqErrMsg(err)))
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return echo.NewHTTPError(http.StatusNotFound,
+			c.i18n.Ts("globals.messages.notFound", "name", "{globals.terms.list}"))
+	}
+	return nil
+}
+
 // DeleteList deletes a list.
 func (c *Core) DeleteList(id int) error {
 	return c.DeleteLists([]int{id}, "", true, nil)

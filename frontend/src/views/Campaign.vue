@@ -541,6 +541,7 @@ import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
 import ListSelector from '../components/ListSelector.vue';
+import { pickerLabel } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import Media from './Media.vue';
 import { normalizeMediaTagsLenient } from '../mediaTags';
 import {
@@ -1955,8 +1956,12 @@ export default Vue.extend({
     // Fork (global brand, GLOBAL-BRAND-SPEC D10/I6) -- the list selector's options: the scope
     // united with the campaign's SAVED lists, so an existing campaign outside the scope keeps its
     // lists addable and removable; a new campaign offers the scope. Every list under All brands.
+    // LIST-JOIN-TRIGGER-SPEC D7: each option carries a derived dropdown label -- a list with a
+    // join trigger reads "<name> — joins on first purchase / SKU purchase"; the chosen tag shows
+    // the name unchanged (ListSelector).
     listOptions() {
-      return filterByIds(this.lists, scopeUnion(this.scopeListIds, [this.data.lists]));
+      return filterByIds(this.lists, scopeUnion(this.scopeListIds, [this.data.lists]))
+        .map((l) => ({ ...l, label: pickerLabel(l) }));
     },
 
     // Fork (global brand, D11) -- the saved campaign's brand, from its lists in the active-lists

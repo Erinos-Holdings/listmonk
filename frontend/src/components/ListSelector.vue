@@ -16,7 +16,7 @@
       label-position="on-border">
       <b-autocomplete v-model="query" :placeholder="placeholder" clearable dropdown-position="top"
         :disabled="all.length === 0 || $props.disabled" :keep-first="true" :clear-on-select="true" :open-on-focus="true"
-        :data="filteredLists" @select="selectList" field="name" />
+        :data="filteredLists" @select="selectList" field="label" />
     </b-field>
   </div>
 </template>
@@ -80,6 +80,9 @@ export default {
 
   computed: {
     // Return the list of unselected lists.
+    // Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D7) -- the dropdown renders and filters on
+    // `label`: a parent may pass a derived label per list (the campaign form's trigger suffix);
+    // otherwise it is the name. The chosen tag always shows the name.
     filteredLists() {
       // Get a map of IDs of the user subscriptions. eg: {1: true, 2: true};
       const subIDs = this.selectedItems.reduce((obj, item) => ({ ...obj, [item.id]: true }), {});
@@ -87,9 +90,9 @@ export default {
       // Filter lists from the global lists whose IDs are not in the user's
       // subscribed ist.
       const q = this.query.toLowerCase();
-      return this.$props.all.filter(
-        (l) => (!(l.id in subIDs) && l.name.toLowerCase().indexOf(q) >= 0),
-      );
+      return this.$props.all
+        .map((l) => (l.label ? l : { ...l, label: l.name }))
+        .filter((l) => (!(l.id in subIDs) && l.label.toLowerCase().indexOf(q) >= 0));
     },
   },
 

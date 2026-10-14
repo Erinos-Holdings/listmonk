@@ -125,6 +125,7 @@ func TestSuperAdminHoldsEveryPermission(t *testing.T) {
 		{"v6.2.12", func() error { return V6_2_12(h.db, nil, nil, lo) }},
 		{"v6.2.14", func() error { return V6_2_14(h.db, nil, nil, lo) }},
 		{"v6.2.17", func() error { return V6_2_17(h.db, nil, nil, lo) }},
+		{"v6.2.23", func() error { return V6_2_23(h.db, nil, nil, lo) }},
 	}
 	for _, g := range granting {
 		if err := g.run(); err != nil {

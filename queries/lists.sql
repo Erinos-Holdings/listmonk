@@ -159,6 +159,25 @@ SELECT COUNT(*) FROM l, c;
 -- deliberately left alone: the Lambda writes this daily and it is not an edit of the list.
 UPDATE lists SET sunset=$2::JSONB WHERE id = $1;
 
+-- name: update-list-trigger
+-- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D4) -- one statement, compared against the OLD
+-- row. $2 and $3 are the RESULTING join_trigger and transactional (a field absent from the request
+-- carries its current value). Nothing changes, and the stamps stay, unless either differs, and
+-- trigger_sync is nulled only when join_trigger changed (SET expressions read the old row).
+-- RowsAffected tells the caller whether anything changed.
+UPDATE lists SET
+    trigger_sync = (CASE WHEN join_trigger IS DISTINCT FROM $2::JSONB THEN NULL ELSE trigger_sync END),
+    join_trigger = $2::JSONB,
+    transactional = $3,
+    trigger_set_by = $4,
+    trigger_set_at = NOW()
+WHERE id = $1 AND (join_trigger IS DISTINCT FROM $2::JSONB OR transactional IS DISTINCT FROM $3);
+
+-- name: update-list-trigger-sync
+-- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D6) -- stores the reconciler's write-back $2
+-- verbatim. updated_at is left alone, as for update-list-sunset (not an edit of the list).
+UPDATE lists SET trigger_sync=$2::JSONB WHERE id = $1;
+
 -- name: update-lists-date
 UPDATE lists SET updated_at=NOW() WHERE id = ANY($1);
 

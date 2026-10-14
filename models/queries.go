@@ -71,6 +71,10 @@ type Queries struct {
 	DeleteLists          *sqlx.Stmt `query:"delete-lists"`
 	// Fork (sunset v2, SUNSET-V2-SPEC D8) -- the queue countdown write.
 	UpdateListSunset *sqlx.Stmt `query:"update-list-sunset"`
+	// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D4/D6) -- the trigger write and the
+	// reconciler's write-back.
+	UpdateListTrigger     *sqlx.Stmt `query:"update-list-trigger"`
+	UpdateListTriggerSync *sqlx.Stmt `query:"update-list-trigger-sync"`
 	// Fork (BRAND-PICKER-SPEC D4) -- the locked-list checks.
 	GetLockedLists    *sqlx.Stmt `query:"get-locked-lists"`
 	CountListsByName  *sqlx.Stmt `query:"count-lists-by-name"`

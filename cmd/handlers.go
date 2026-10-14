@@ -174,6 +174,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Fork (sunset v2, SUNSET-V2-SPEC D8) -- the queue countdown, list manage permission
 		// checked in the handler (the UpdateList posture).
 		g.PUT("/api/lists/:id/sunset", hasID(a.PutListSunset))
+		// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D6) -- the reconciler's write-back;
+		// lists:manage_all (its own user, never a per-list role), also checked in the handler.
+		g.PUT("/api/lists/:id/trigger-sync", pm(hasID(a.PutListTriggerSync), "lists:manage_all"))
 		g.DELETE("/api/lists", a.DeleteLists)
 		g.DELETE("/api/lists/:id", hasID(a.DeleteList))
 

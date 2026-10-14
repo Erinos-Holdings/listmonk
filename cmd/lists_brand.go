@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -21,9 +22,17 @@ import (
 // (nil) keeps the list's current projection on update and writes none on create; "" means an
 // untagged list; a slug must name a brands row. The embedded List.Brand (the response field) is
 // shadowed by this one in JSON decoding.
+//
+// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D3) -- join_trigger and transactional shadow the
+// embedded response fields the same way. JoinTrigger is a json.RawMessage, NOT a pointer: a JSON
+// null into a pointer field decodes to nil, indistinguishable from absent, while a RawMessage
+// keeps the literal `null` (= clear) and stays empty when the key is absent (= unchanged).
+// Transactional is a *bool: absent and a JSON null are both nil (= unchanged). POST ignores both.
 type listReq struct {
 	models.List
-	Brand *string `json:"brand"`
+	Brand         *string         `json:"brand"`
+	JoinTrigger   json.RawMessage `json:"join_trigger"`
+	Transactional *bool           `json:"transactional"`
 }
 
 // listTagsFor applies the reserved-tag refusal and the brand projection to a request. It returns
