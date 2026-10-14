@@ -117,7 +117,8 @@
                   </div>
 
                   <div class="column is-6">
-                    <ul class="no has-text-grey">
+                    <!-- Nothing to list when expanded under a scope (Stage 4 F6): no blank column. -->
+                    <ul v-if="!subsExpanded || !counts.scoped" class="no has-text-grey">
                       <template v-if="!subsExpanded">
                         <li v-for="r in subsRows" :key="r.key" :data-cy="`subscribers-${r.key}`">
                           <label for="#">{{ $utils.niceNumber(subsAll[r.key] || 0) }}</label>

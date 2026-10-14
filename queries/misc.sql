@@ -22,7 +22,7 @@ WITH camps AS (
     )
 ),
 lst AS (
-    SELECT id, type, optin FROM lists WHERE $3::BOOLEAN OR id = ANY($1::INT[])
+    SELECT id, type, optin, status FROM lists WHERE $3::BOOLEAN OR id = ANY($1::INT[])
 ),
 seg AS (
     SELECT subscription_segment(sl.status, sl.meta, s.status, l.optin) AS segment,
@@ -30,7 +30,9 @@ seg AS (
     FROM lst l
     JOIN subscriber_lists sl ON (sl.list_id = l.id)
     JOIN subscribers s ON (s.id = sl.subscriber_id)
-    WHERE l.type = 'public'
+    -- Active only (Stage 4 F1) -- the brand scope's effective list set is loaded active-only, so
+    -- All brands must equal the sum of the brands; an archived list keeps its subscriptions.
+    WHERE l.type = 'public' AND l.status = 'active'
     GROUP BY 1, 2
 ),
 cells AS (

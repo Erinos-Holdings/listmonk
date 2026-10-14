@@ -35,6 +35,10 @@ func TestDashboardCountsDB(t *testing.T) {
 	pubB := h.baList("Bravo", "public", "double")
 	h.db.MustExec(`UPDATE lists SET tags = '{brand:alpha}' WHERE id = ANY($1)`, pq.Array([]int{pubA, privA}))
 	h.db.MustExec(`UPDATE lists SET tags = '{brand:bravo}' WHERE id = $1`, pubB)
+	// An ARCHIVED public list on alpha (Stage 4 F1): it keeps its subscriptions and counts nowhere
+	// -- the brand scope never loads it, and the unscoped read must agree with the brands' sum.
+	arcA := h.baList("Alpha old", "public", "single")
+	h.db.MustExec(`UPDATE lists SET tags = '{brand:alpha}', status = 'archived' WHERE id = $1`, arcA)
 
 	lang := func(sub int, l string) {
 		h.db.MustExec(`UPDATE subscribers SET attribs = JSONB_BUILD_OBJECT('lang', $2::TEXT) WHERE id = $1`, sub, l)
@@ -58,6 +62,8 @@ func TestDashboardCountsDB(t *testing.T) {
 	lang(sOther, "xx")
 	sPriv := h.baSub("priv@x", "enabled", map[int]string{privA: "confirmed"})
 	h.baSub("orphan@x", "enabled", nil)
+	// On the archived public list only: excluded from every scope's grid (F1), never an orphan.
+	h.baSub("archived@x", "enabled", map[int]string{arcA: "confirmed"})
 
 	// Campaigns: one per list and one on no list.
 	cA := h.baCamp("On A", "finished", 10, pubA)
