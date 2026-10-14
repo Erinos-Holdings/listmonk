@@ -321,44 +321,57 @@ func (a *App) reviewGate(id int, next string) error {
 	if err != nil {
 		return err
 	}
-	if cm.Type == models.CampaignTypeOptin {
-		return nil
-	}
-
-	hash := core.CampaignBundleHash(cm)
-	row, err := a.core.GetReviewByHash(id, hash)
+	reason, err := a.reviewGateReason(cm)
 	if err != nil {
 		return err
 	}
-	refuse := func(reason string) error {
+	if reason != "" {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("campaigns.reviewRequired", "reason", reason))
+	}
+	return nil
+}
+
+// reviewGateReason is the gate's one verdict computation (integrations LIST-START-GLYPH-SPEC D2),
+// shared by reviewGate and the campaigns list's review_passed: "" = pass (or type=optin, never
+// gated), otherwise the i18n refusal reason. cm is the campaign row (c.* + lists), which is all
+// CampaignBundleHash reads.
+func (a *App) reviewGateReason(cm models.Campaign) (string, error) {
+	if cm.Type == models.CampaignTypeOptin {
+		return "", nil
+	}
+
+	id := cm.ID
+	hash := core.CampaignBundleHash(cm)
+	row, err := a.core.GetReviewByHash(id, hash)
+	if err != nil {
+		return "", err
 	}
 	if row == nil {
 		state, err := a.core.GetLatestReview(cm)
 		if err != nil {
-			return err
+			return "", err
 		}
 		switch {
 		case state.Review == nil:
-			return refuse(a.i18n.T("campaigns.reviewReasonNotInspected"))
+			return a.i18n.T("campaigns.reviewReasonNotInspected"), nil
 		case state.Review.Status == models.ReviewStatusRunning:
-			return refuse(a.i18n.T("campaigns.reviewReasonRunning"))
+			return a.i18n.T("campaigns.reviewReasonRunning"), nil
 		case state.Review.BundleHash != hash:
-			return refuse(a.i18n.T("campaigns.reviewReasonEdited"))
+			return a.i18n.T("campaigns.reviewReasonEdited"), nil
 		default:
-			return refuse(a.i18n.T("campaigns.reviewReasonNotInspected"))
+			return a.i18n.T("campaigns.reviewReasonNotInspected"), nil
 		}
 	}
 
 	ds, err := a.core.GetReviewDispositions(id)
 	if err != nil {
-		return err
+		return "", err
 	}
 	v := review.Verdict(json.RawMessage(row.Report), ds)
 	if v.Verdict != review.VerdictPass {
-		return refuse(a.i18n.Ts("campaigns.reviewReasonBlocked", "n", itoaInt(len(v.Blockers))))
+		return a.i18n.Ts("campaigns.reviewReasonBlocked", "n", itoaInt(len(v.Blockers))), nil
 	}
-	return nil
+	return "", nil
 }
 
 // reviewGuardOnEdit (D6's save-path rule, the footer guard's own hole): a SCHEDULED campaign is

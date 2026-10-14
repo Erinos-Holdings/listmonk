@@ -102,6 +102,24 @@ func (a *App) GetCampaigns(c echo.Context) error {
 		return err
 	}
 
+	// Fork (integrations LIST-START-GLYPH-SPEC D1/D2) -- the review gate's verdict per gated row,
+	// computed by the gate's own function and BEFORE the body is stripped (the hash reads it).
+	if reviewEnabled() {
+		for i := range res {
+			cm := &res[i]
+			if (cm.Status != models.CampaignStatusDraft && cm.Status != models.CampaignStatusPaused) ||
+				cm.Type == models.CampaignTypeOptin {
+				continue
+			}
+			reason, err := a.reviewGateReason(*cm)
+			if err != nil {
+				return err
+			}
+			passed := reason == ""
+			cm.ReviewPassed = &passed
+		}
+	}
+
 	// Remove the body from the response if requested.
 	if noBody {
 		for i := range res {

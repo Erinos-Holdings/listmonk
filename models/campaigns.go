@@ -109,6 +109,12 @@ type Campaign struct {
 	// stored in Attribs, which is client-owned round-tripped data; a client that
 	// round-trips warnings back is harmlessly ignored.
 	Warnings []string `db:"-" json:"warnings,omitempty"`
+
+	// ReviewPassed (fork, integrations LIST-START-GLYPH-SPEC D1) is set only by the campaigns
+	// list handler, only while the review gate is on, only for draft/paused non-optin rows: the
+	// gate's own verdict on the row's current bundle. Absent everywhere else; a courtesy for the
+	// list glyph, never a control (the status PUT re-runs the gate).
+	ReviewPassed *bool `db:"-" json:"review_passed,omitempty"`
 }
 
 // CampaignMeta contains fields tracking a campaign's progress.

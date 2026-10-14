@@ -256,9 +256,11 @@
         <div>
           <!-- Fork (campaign review, CAMPAIGN-INSPECT-SPEC §3.2) -- with the gate on, Start/Resume/
                Schedule are replaced by one "Open to inspect" glyph, OUTSIDE the campaigns:send block
-               so Marketing sees it; the status endpoint would refuse an uninspected start anyway. -->
-          <router-link v-if="serverConfig.review_enabled && $can('campaigns:manage_all', 'campaigns:manage')
-            && canInspect(props.row)" :to="{ name: 'campaign', params: { id: props.row.id } }"
+               so Marketing sees it; the status endpoint would refuse an uninspected start anyway.
+               A row the server marks review_passed (and a user who can send) gets its ordinary
+               Start/Resume/Schedule glyph instead (LIST-START-GLYPH-SPEC D3, campaignGlyph.mjs). -->
+          <router-link v-if="$can('campaigns:manage_all', 'campaigns:manage')
+            && glyph(props.row) === 'inspect'" :to="{ name: 'campaign', params: { id: props.row.id } }"
             data-cy="btn-open-inspect" :aria-label="$t('campaigns.review.openToInspect')">
             <b-tooltip :label="$t('campaigns.review.openToInspect')" type="is-dark">
               <b-icon icon="creation" size="is-small" />
@@ -267,7 +269,7 @@
 
           <!-- start / pause / resume / scheduled -->
           <template v-if="$can('campaigns:send')">
-            <a v-if="canStart(props.row) && !gatedRow(props.row)" href="#"
+            <a v-if="glyph(props.row) === 'start'" href="#"
               @click.prevent="$utils.confirm(null, () => changeCampaignStatus(props.row, 'running'))"
               data-cy="btn-start" :aria-label="$t('campaigns.start')">
               <b-tooltip :label="$t('campaigns.start')" type="is-dark">
@@ -283,7 +285,7 @@
               </b-tooltip>
             </a>
 
-            <a v-if="canResume(props.row) && !gatedRow(props.row)" href="#"
+            <a v-if="glyph(props.row) === 'resume'" href="#"
               @click.prevent="$utils.confirm(null, () => changeCampaignStatus(props.row, 'running'))"
               data-cy="btn-resume" :aria-label="$t('campaigns.send')">
               <b-tooltip :label="$t('campaigns.send')" type="is-dark">
@@ -291,7 +293,7 @@
               </b-tooltip>
             </a>
 
-            <a v-if="canSchedule(props.row) && !gatedRow(props.row)" href="#"
+            <a v-if="glyph(props.row) === 'schedule'" href="#"
               @click.prevent="$utils.confirm($t('campaigns.confirmSchedule'), () => changeCampaignStatus(props.row, 'scheduled'))"
               data-cy="btn-schedule" :aria-label="$t('campaigns.schedule')">
               <b-tooltip :label="$t('campaigns.schedule')" type="is-dark">
@@ -368,6 +370,7 @@ import { isSendPlus, sendLangCode } from '../langs';
 import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
@@ -428,13 +431,16 @@ export default Vue.extend({
     canStart(c) {
       return c.status === 'draft' && !c.sendAt;
     },
-    // Fork (campaign review): the rows whose Start/Resume/Schedule glyph becomes "Open to inspect".
-    canInspect(c) {
-      return (c.status === 'draft' || c.status === 'paused') && c.type !== 'optin';
-    },
-    // A row whose start glyphs the gate replaces (opt-in confirmations are never gated).
-    gatedRow(c) {
-      return !!this.serverConfig.review_enabled && c.type !== 'optin';
+    // Fork (campaign review, LIST-START-GLYPH-SPEC D3): the row's start-side glyph -- 'inspect',
+    // 'start', 'resume', 'schedule' or 'none'. The row is camelCased by the API client.
+    glyph(c) {
+      return listGlyph(
+        {
+          status: c.status, type: c.type, send_at: c.sendAt, review_passed: c.reviewPassed,
+        },
+        this.serverConfig.review_enabled,
+        this.$can('campaigns:send'),
+      );
     },
     canSchedule(c) {
       return c.status === 'draft' && c.sendAt;
