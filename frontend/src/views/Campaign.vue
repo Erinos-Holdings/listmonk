@@ -682,6 +682,10 @@ export default Vue.extend({
       // persistent inline notice is the `brandFromRepointed` computed, which is self-clearing.
       brandFromLoadPending: false,
 
+      // True once syncBrandDerivation has reloaded the lists store for a selected list the
+      // store lacked (unresolvedLists); one reload per page, never a loop.
+      listsRefetched: false,
+
       // Fork (persona From, PERSONA-FROM-SPEC D5). The brands rows (GET /api/brands, fetched
       // once at mount) and the state of that fetch -- a THIRD async arrival beside the lists
       // store and serverConfig, which syncBrandDerivation waits for like the other two. Then
@@ -1092,6 +1096,14 @@ export default Vue.extend({
       // itself. Not assigning a falsy value also keeps `required` a genuine backstop rather than
       // something this code trips by itself.
       const d = this.brandDerivation;
+      if (d.unsettled && !this.listsRefetched) {
+        // A selected list the store lacks: reload the store once (the lists.results watcher
+        // re-runs this when it lands). Once only, so a list that is genuinely gone (archived)
+        // does not loop; it then stays unsettled with the inline notice, the From untouched.
+        this.listsRefetched = true;
+        this.$api.getLists({ minimal: true, per_page: 'all', status: 'active' }).catch(() => {});
+        return;
+      }
       if (d.error || !d.fromEmail) {
         return;
       }
@@ -2205,6 +2217,15 @@ export default Vue.extend({
       return (this.form.lists || []).map((l) => all.find((x) => x.id === l.id) || l);
     },
 
+    // The selected lists the loaded lists store has NO entry for. A campaign's own list objects
+    // carry no tags, so a list missing from the store (created after the store loaded in a
+    // long-lived tab, or archived) must never be read as "unmapped" -- that derived the default
+    // From and announced a false repoint to hello@curatedfor.you (2026-10-16, campaign 207).
+    unresolvedLists() {
+      const all = this.lists.results || [];
+      return (this.form.lists || []).filter((l) => !all.some((x) => x.id === l.id));
+    },
+
     // Fork (media tags) -- MEDIA-TAGS-SPEC D3. The media picker's context: the derived brand
     // (the `curated` default for unmapped lists included; nothing on a derivation error) plus
     // the campaign's own Tags, lenient-normalized -- a tag failing the media-tag rule is
@@ -2235,11 +2256,20 @@ export default Vue.extend({
     },
 
     // Resolve the selected lists to one brand + From pair, or to the reason it cannot be done.
-    // Returns { error, brand, fromEmail, unmapped }.
+    // Returns { error, brand, fromEmail, unmapped, unsettled }.
     brandDerivation() {
       const err = (error) => ({
-        error, brand: null, fromEmail: null, unmapped: false,
+        error, brand: null, fromEmail: null, unmapped: false, unsettled: false,
       });
+
+      // A selected list the store has not loaded is not yet derivable: no From (so
+      // syncBrandDerivation and fromToApply wait, as they do for an unloaded server config),
+      // no error (nothing is blocked -- the server enforces the From on save anyway).
+      if (this.lists.results && this.unresolvedLists.length > 0) {
+        return {
+          error: null, brand: null, fromEmail: null, unmapped: false, unsettled: true,
+        };
+      }
 
       const mapped = [];
       const halfTagged = [];
@@ -2338,6 +2368,12 @@ export default Vue.extend({
 
       if (this.brandDerivation.unmapped) {
         return this.$t('campaigns.brandFromDefault', { brand: this.brandDerivation.brand });
+      }
+
+      if (this.brandDerivation.unsettled) {
+        return this.$t('campaigns.brandFromUnsettled', {
+          lists: this.unresolvedLists.map((l) => l.name).join(', '),
+        });
       }
 
       const derived = this.$t('campaigns.brandFromDerived', { brand: this.brandDerivation.brand });

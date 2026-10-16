@@ -61,11 +61,11 @@ test('personaFrom composes <persona> <address>', () => {
   assert.equal(personaFrom('Elizabeth at Ruze', RUZE), LIZ);
 });
 
-test('senderOptions puts the brand From first, then the personas in stored order', () => {
+test('senderOptions puts the brand From first, then the personas in stored order, each labelled with its address', () => {
   assert.deepEqual(senderOptions(TG), [
-    { value: TG.from_email, label: 'Thirsty Girl', persona: null },
-    { value: NAT, label: 'Natasha at Thirsty Girl', persona: 'Natasha at Thirsty Girl' },
-    { value: JO, label: 'Jo at Thirsty Girl', persona: 'Jo at Thirsty Girl' },
+    { value: TG.from_email, label: TG.from_email, persona: null },
+    { value: NAT, label: NAT, persona: 'Natasha at Thirsty Girl' },
+    { value: JO, label: JO, persona: 'Jo at Thirsty Girl' },
   ]);
   assert.deepEqual(senderOptions(BARE), [{ value: BARE.from_email, label: BARE.from_email, persona: null }]);
   // A row from an older server (no personas key) and no row at all.

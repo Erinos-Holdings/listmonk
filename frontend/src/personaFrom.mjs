@@ -34,14 +34,20 @@ export function findBrandRow(brands, slug) {
 }
 
 // senderOptions are the picker's options: the brand From first, then the brand's personas in
-// stored order. `persona` is null on the brand's own entry.
+// stored order. `persona` is null on the brand's own entry. The label is the whole From --
+// display name AND address -- so the address the campaign sends from is always on the page
+// (2026-10-16: a display-name-only label hid it, and a false repoint toast then had nothing
+// on the page to contradict it).
 export function senderOptions(brandRow) {
   if (!brandRow) {
     return [];
   }
   return [
-    { value: brandRow.from_email, label: brandRow.display_name, persona: null },
-    ...personasOf(brandRow).map((p) => ({ value: personaFrom(p, brandRow), label: p, persona: p })),
+    { value: brandRow.from_email, label: brandRow.from_email, persona: null },
+    ...personasOf(brandRow).map((p) => {
+      const from = personaFrom(p, brandRow);
+      return { value: from, label: from, persona: p };
+    }),
   ];
 }
 
