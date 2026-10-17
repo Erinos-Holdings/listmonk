@@ -650,8 +650,10 @@ body.is-noscroll {
 // 10px vertical padding: a borderless segment at 8px + the track's 2px padding + 1px ring gives
 // the same 18px + 22px (is-small) / 22.5px + 22px box. The segment's line-height is pinned to
 // the button's 1.5 because Buefy's .b-radio.radio sets 1.25 (the Users form's b-radio-buttons
-// are not .segmented and keep Buefy's look).
-.field.segmented.has-addons {
+// are not .segmented and keep Buefy's look). A b-field with addons renders its class on an OUTER
+// .field and has-addons on an inner .field-body > .field, so the rule must target the inner one.
+.field.segmented > .field-body > .field.has-addons {
+  flex-grow: 0; // Bulma's .field-body > .field grows; the track hugs its segments
   background: $grey-lightest;
   border: 1px solid $primary;
   border-radius: 5px;
