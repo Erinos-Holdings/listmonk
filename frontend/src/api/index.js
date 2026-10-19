@@ -524,6 +524,13 @@ export const getCampaignLinkCounts = async (params) => http.get(
   { params, loading: models.campaigns },
 );
 
+// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D4) -- shop-link clicks per
+// stored kind: [{kind, count}], kind "none" = no stored link, "unknown" = no subscriber.
+export const getCampaignShopLinkCounts = async (params) => http.get(
+  '/api/campaigns/analytics/shop_links',
+  { params, loading: models.campaigns },
+);
+
 // Fork (location stats) -- views and clicks per country: [{country, views, clicks}], country "" = unknown.
 export const getCampaignCountryCounts = async (params) => http.get(
   '/api/campaigns/analytics/countries',

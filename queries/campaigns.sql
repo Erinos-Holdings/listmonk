@@ -425,6 +425,26 @@ SELECT COUNT(%s) AS "count", url
     WHERE campaign_id=ANY($1) AND link_clicks.created_at >= $2 AND link_clicks.created_at <= $3
     GROUP BY links.url ORDER BY "count" DESC LIMIT 50;
 
+-- name: get-campaign-shop-link-counts
+-- raw: true
+-- Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D1-D3) -- clicks on the
+-- campaign's shop links (a stored links.url that contains shop_links, the unexpanded expression)
+-- bucketed by the clicking subscriber's stored kind for the brand named in the expression (the first
+-- token after shop_links, in either grammar the resolver accepts). A known subscriber with no entry
+-- (or an entry with no kind) is none, a click with no subscriber is unknown. The counted expression
+-- is the link counts' own, prepared on boot (cmd/init.go) with the same linkSel. The substring test
+-- is POSITION, never a LIKE pattern, because this text goes through Sprintf on boot.
+SELECT COUNT(%s) AS "count",
+    (CASE WHEN link_clicks.subscriber_id IS NULL THEN 'unknown'
+        ELSE COALESCE(NULLIF(subscribers.attribs->'shop_links'->SUBSTRING(links.url FROM 'shop_links[."[:space:]]*([A-Za-z0-9_-]+)')->>'kind', ''), 'none')
+    END) AS kind
+    FROM link_clicks
+    JOIN links ON (link_clicks.link_id = links.id)
+    LEFT JOIN subscribers ON (subscribers.id = link_clicks.subscriber_id)
+    WHERE link_clicks.campaign_id=ANY($1) AND link_clicks.created_at >= $2 AND link_clicks.created_at <= $3
+        AND POSITION('shop_links' IN links.url) > 0
+    GROUP BY 2 ORDER BY "count" DESC, kind;
+
 -- name: export-campaign-views
 SELECT campaign_views.campaign_id,
        COALESCE(campaigns.uuid::TEXT, '') AS campaign_uuid,

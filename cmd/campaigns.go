@@ -991,6 +991,17 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{out})
 	}
 
+	// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D4) -- shop-link clicks
+	// per stored kind, beside links: after the permission loop and date validation, inheriting both.
+	if typ == "shop_links" {
+		out, err := a.core.GetCampaignAnalyticsShopLinks(ids, from, to)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Get the analytics numbers from the DB for the campaigns.
 	out, err := a.core.GetCampaignAnalyticsCounts(ids, typ, from, to)
 	if err != nil {

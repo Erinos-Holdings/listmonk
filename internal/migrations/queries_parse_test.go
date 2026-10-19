@@ -10,6 +10,7 @@ package migrations
 // coupling.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,6 +89,44 @@ func TestBrandAnalyticsQueriesParse(t *testing.T) {
 			if len(tags) != 0 {
 				t.Errorf("%s: query %q carries extra tags %v (a colon-bearing comment line?)", file, n, got.Tags)
 			}
+		}
+	}
+}
+
+// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC I6) -- the shop-link counts
+// query is interpolated on boot through fmt.Sprintf (cmd/init.go), so a bare % anywhere in its text
+// (a LIKE pattern) would corrupt the prepared SQL. Parse it as the app does, interpolate it with both
+// counted expressions, and assert no %! verb error and no leftover placeholder; its only tag is raw.
+func TestShopLinkCountsQueryInterpolates(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "queries", "campaigns.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, err := goyesql.ParseBytes(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := q["get-campaign-shop-link-counts"]
+	if !ok || !strings.Contains(got.Query, "SELECT") {
+		t.Fatal("get-campaign-shop-link-counts missing or empty after parse")
+	}
+	if len(got.Tags) != 1 || got.Tags["raw"] != "true" {
+		t.Errorf("get-campaign-shop-link-counts tags %v, want only raw=true (a colon-bearing comment line?)", got.Tags)
+	}
+	if n := strings.Count(got.Query, "%"); n != 1 {
+		t.Errorf("query text carries %d percent signs, want exactly the one placeholder", n)
+	}
+	for _, sel := range []string{"*", "DISTINCT subscriber_id"} {
+		s := fmt.Sprintf(got.Query, sel)
+		if strings.Contains(s, "%!") || strings.Contains(s, "%s") {
+			t.Errorf("interpolated with %q: verb error or leftover placeholder\n%s", sel, s)
+		}
+		if !strings.Contains(s, "COUNT("+sel+")") {
+			t.Errorf("interpolated with %q: counted expression not in place\n%s", sel, s)
 		}
 	}
 }

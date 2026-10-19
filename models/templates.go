@@ -111,6 +111,16 @@ type CampaignAnalyticsLink struct {
 	Count int    `db:"count" json:"count"`
 }
 
+// CampaignAnalyticsShopLink is one row of the shop-link attribution analytics (fork, shop-link
+// attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D3/D4): Kind is the clicking subscriber's
+// stored shop-link kind for the link's brand (self, creator, founder, corporate, or any other
+// stored string verbatim), "none" for a known subscriber with no entry, "unknown" for a click
+// with no subscriber. Kinds and counts only -- no PII.
+type CampaignAnalyticsShopLink struct {
+	Kind  string `db:"kind" json:"kind"`
+	Count int    `db:"count" json:"count"`
+}
+
 // CampaignAnalyticsCountry is one row of the per-country analytics (fork, location stats):
 // Country is the ISO 3166-1 alpha-2 code, or "" for unknown.
 type CampaignAnalyticsCountry struct {

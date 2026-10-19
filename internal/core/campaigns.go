@@ -632,6 +632,20 @@ func (c *Core) GetCampaignAnalyticsLinks(campIDs []int, typ, fromDate, toDate st
 	return out, nil
 }
 
+// GetCampaignAnalyticsShopLinks returns the shop-link clicks per stored kind for the given
+// campaign IDs (fork, shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D4), in the
+// GetCampaignAnalyticsLinks shape. The dates are validated by the caller.
+func (c *Core) GetCampaignAnalyticsShopLinks(campIDs []int, fromDate, toDate string) ([]models.CampaignAnalyticsShopLink, error) {
+	out := []models.CampaignAnalyticsShopLink{}
+	if err := c.q.GetCampaignShopLinkCounts.Select(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
+		c.log.Printf("error fetching campaign shop links: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
 // GetCampaignAnalyticsCountries returns views and clicks per country for the given campaign IDs
 // (fork, location stats). The dates are validated by the caller.
 func (c *Core) GetCampaignAnalyticsCountries(campIDs []int, fromDate, toDate string) ([]models.CampaignAnalyticsCountry, error) {

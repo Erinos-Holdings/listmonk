@@ -448,6 +448,10 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 		Tags:  map[string]string{"name": "get-campaign-click-counts"},
 	}
 	qMap["get-campaign-link-counts"].Query = fmt.Sprintf(qMap["get-campaign-link-counts"].Query, linkSel)
+	// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D3) -- the shop-link
+	// bucket counts use the SAME counted expression as the link counts, so a subscriber counts once
+	// per bucket under individual tracking, exactly as Links.
+	qMap["get-campaign-shop-link-counts"].Query = fmt.Sprintf(qMap["get-campaign-shop-link-counts"].Query, linkSel)
 	qMap["get-campaign-country-counts"].Query = fmt.Sprintf(qMap["get-campaign-country-counts"].Query, countrySel, countryFilter)
 	// Fork (client stats, CLIENT-STATS-SPEC D5) -- the per-client counts follow the country query's
 	// unique/total mode exactly (same counted expression, same row filter).

@@ -71,6 +71,8 @@
               <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
             </h4>
             <h4 v-else>{{ v.name }}</h4>
+            <!-- Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the hint under the title. -->
+            <p v-if="k === 'shopLinks'" class="is-size-7 has-text-grey" data-cy="shop-links-hint">{{ $t('analytics.shopLinksHint') }}</p>
             <chart :type="v.type" v-if="!v.loading" :data="v.data" :on-click="v.onClick" />
           </div>
           <div class="column is-2 donut-container">
@@ -153,6 +155,7 @@ import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
+import { shapeShopLinkBars } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
@@ -200,6 +203,8 @@ export default Vue.extend({
         clicks: 0,
         bounces: 0,
         links: 0,
+        // Fork (shop-link attribution, SHOP-LINK-ATTRIBUTION-SPEC D5).
+        shopLinks: 0,
       },
       urls: [],
       // Fork (campaign rates) -- the Sent of the campaigns the charts were fetched for: the
@@ -243,6 +248,17 @@ export default Vue.extend({
           fn: this.$api.getCampaignLinkCounts,
           chartFn: this.makeLinksChart,
           onClick: this.onLinkClick,
+        },
+
+        // Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- directly after
+        // links so it renders under it; a bar per stored kind, no ring, no click-through.
+        shopLinks: {
+          name: this.$t('analytics.shopLinks'),
+          type: 'bar',
+          data: null,
+          loading: false,
+          fn: this.$api.getCampaignShopLinkCounts,
+          chartFn: this.makeShopLinksChart,
         },
       },
 
@@ -323,6 +339,30 @@ export default Vue.extend({
         datasets: [
           {
             data: data.map((l) => l.count),
+            backgroundColor: chartColors,
+          }],
+      };
+
+      return { points: out, donut: null };
+    },
+
+    // Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the bars' order
+    // and labels are shopLinkBars.mjs's; the Links bar styling.
+    makeShopLinksChart(typ, camps, data) {
+      const { labels, data: points } = shapeShopLinkBars(data, {
+        self: this.$t('analytics.shopLinkSelf'),
+        creator: this.$t('analytics.shopLinkCreator'),
+        founder: this.$t('analytics.shopLinkFounder'),
+        corporate: this.$t('analytics.shopLinkCorporate'),
+        none: this.$t('analytics.shopLinkNone'),
+        unknown: this.$t('analytics.shopLinkUnknown'),
+      });
+
+      const out = {
+        labels,
+        datasets: [
+          {
+            data: points,
             backgroundColor: chartColors,
           }],
       };
