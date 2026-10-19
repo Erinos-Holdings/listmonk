@@ -103,7 +103,9 @@
                 </b-field>
               </div>
             </div>
-            <!-- Fork (shop-link header total, 2026-10-19) -- the Links hint: per-link clickers, not unique clickers. -->
+            <!-- Fork (shop-link header total, 2026-10-19) -- the Clicks and Links hints: unique clickers
+                 versus per-link clickers. -->
+            <p v-if="k === 'clicks'" class="is-size-7 has-text-grey" data-cy="clicks-hint">{{ $t('analytics.clicksHint') }}</p>
             <p v-if="k === 'links'" class="is-size-7 has-text-grey" data-cy="links-hint">{{ $t('analytics.linksHint') }}</p>
             <!-- Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the hint under the title. -->
             <p v-if="k === 'shopLinks'" class="is-size-7 has-text-grey" data-cy="shop-links-hint">{{ $t('analytics.shopLinksHint') }}</p>
@@ -207,6 +209,8 @@ import BrandContextNotice from '../components/BrandContextNotice.vue';
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
 // Fork (shop-link header total, 2026-10-19) -- shopLinks joins the rate headers: the shop-link
 // clicks (every kind, the sum getData keeps in counts.shopLinks) over the selection's Sent.
+// EVERY chart in `charts` needs an entry here AND in `counts` -- the header template reads
+// totalCells[k] for each one, and a missing key is an undefined cell at render.
 const RATE_DIGITS = {
   views: 1, clicks: 1, bounces: 2, links: 1, shopLinks: 1,
 };
@@ -682,6 +686,9 @@ export default Vue.extend({
         if (agg.pct) {
           return { pct: agg.pct, count: `${agg.count} of ${agg.audience}` };
         }
+        // No snapshot: the count alone -- a rate over Sent here would contradict the view's
+        // "No audience snapshot" note (sanity check 2026-10-19).
+        return { pct: '', count: fmt(totalShopLinkClicks(this.shopLinks.rows, opts)) };
       }
       // The header describes the bars on screen: Hide No link drops that row from the total too.
       return rateCell(totalShopLinkClicks(this.shopLinks.rows, opts), this.sent.total, RATE_DIGITS.shopLinks, fmt);
