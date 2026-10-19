@@ -83,8 +83,8 @@
                    shop-link clicks as a rate over Sent, the count in grey. -->
               <h4>
                 {{ v.name }}
-                <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
-                <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
+                <template v-if="!v.loading && shopLinksHeaderCell.pct">{{ shopLinksHeaderCell.pct }}</template>
+                <span class="has-text-grey-light">({{ shopLinksHeaderCell.count }})</span>
               </h4>
               <div class="shop-links-controls">
                 <!-- Fork (hide No link, 2026-10-19) -- drops the No link bar from either view. -->
@@ -197,7 +197,7 @@ import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
-import { shapeShopLinkBars } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
+import { aggregateShopLinkRate, shapeShopLinkBars } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
@@ -666,6 +666,20 @@ export default Vue.extend({
     totalCells() {
       const fmt = this.$utils.formatNumber.bind(this.$utils);
       return Object.fromEntries(Object.keys(RATE_DIGITS).map((k) => [k, rateCell(this.counts[k], this.sent.total, RATE_DIGITS[k], fmt)]));
+    },
+
+    // Fork (shop-link header total, 2026-10-19) -- the Shop Link Attribution header's cell: in
+    // the Counts view the clicks over Sent (totalCells, the Clicks header's shape); in the Rate
+    // view the aggregate rate, clicks over the snapshot audience, with "n of N" in grey. With no
+    // audience the Rate view shows the Counts cell.
+    shopLinksHeaderCell() {
+      if (this.shopLinksView === 'rate') {
+        const agg = aggregateShopLinkRate(this.shopLinks.rows, this.$utils.formatNumber.bind(this.$utils));
+        if (agg.pct) {
+          return { pct: agg.pct, count: `${agg.count} of ${agg.audience}` };
+        }
+      }
+      return this.totalCells.shopLinks;
     },
 
     countryTotals() {

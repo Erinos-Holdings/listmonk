@@ -42,6 +42,26 @@ const byRank = (a, b) => {
 // RANK_KINDS and OPTIONAL_KINDS to its display string (the kind itself when a label is missing);
 // view is 'counts' (default) or 'rate'; fmt formats a count (the locale formatter in the view;
 // String by default).
+// Fork (shop-link header total, 2026-10-19) -- the Rate view's header: the aggregate rate, every
+// kind's clicks over every kind's snapshot audience (kinds with a null audience -- unknown, or a
+// selection with no snapshot -- contribute neither). Returns { pct, count, audience }; pct is null
+// when there is no audience (the view then falls back to the counts header).
+export function aggregateShopLinkRate(rows, fmt = String) {
+  let count = 0;
+  let audience = 0;
+  (Array.isArray(rows) ? rows : []).forEach((r) => {
+    if (!r || typeof r.kind !== 'string' || r.audience === null || r.audience === undefined) {
+      return;
+    }
+    count += num(r.count);
+    audience += num(r.audience);
+  });
+  if (audience <= 0) {
+    return { pct: null, count: fmt(count), audience: fmt(audience) };
+  }
+  return { pct: `${((100 * count) / audience).toFixed(1)}%`, count: fmt(count), audience: fmt(audience) };
+}
+
 // Fork (hide No link, 2026-10-19) -- opts.hideNone drops the `none` bar from either view (the
 // user's toggle beside Counts | Rate); the row is still in the input, only the bar is hidden.
 export function shapeShopLinkBars(rows, labels = {}, view = 'counts', fmt = String, opts = {}) {

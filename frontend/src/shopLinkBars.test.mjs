@@ -3,7 +3,7 @@
 // (node --test src/*.test.mjs). No dependency: Node's built-in runner.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shapeShopLinkBars } from './shopLinkBars.mjs'; // eslint-disable-line import/extensions
+import { aggregateShopLinkRate, shapeShopLinkBars } from './shopLinkBars.mjs'; // eslint-disable-line import/extensions
 
 const labels = {
   self: 'Self',
@@ -92,6 +92,23 @@ test('I6 rate: a rate over 100% is shown as computed; ties by count desc, then r
     { kind: 'founder', count: 1, audience: 2 },
     { kind: 'creator', count: 1, audience: 2 },
   ], labels, 'rate')), ['Self=150|150.0% (3 of 2)', 'Corporate=50|50.0% (2 of 4)', 'Creator=50|50.0% (1 of 2)', 'Founder=50|50.0% (1 of 2)']);
+});
+
+test('aggregateShopLinkRate: clicks over audience across kinds; unknown and null audiences excluded', () => {
+  const rows = [
+    {
+      kind: 'founder', count: 54, audience: 1449, snapshots: 1,
+    },
+    {
+      kind: 'self', count: 7, audience: 118, snapshots: 1,
+    },
+    {
+      kind: 'unknown', count: 9, audience: null, snapshots: 1,
+    },
+  ];
+  assert.deepEqual(aggregateShopLinkRate(rows), { pct: '3.9%', count: '61', audience: '1567' });
+  assert.deepEqual(aggregateShopLinkRate([{ kind: 'self', count: 3, audience: null }]), { pct: null, count: '0', audience: '0' });
+  assert.deepEqual(aggregateShopLinkRate([]), { pct: null, count: '0', audience: '0' });
 });
 
 test('hideNone: the No link bar is dropped from both views, nothing else moves', () => {
