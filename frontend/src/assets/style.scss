@@ -1267,6 +1267,23 @@ section.analytics {
   .donut-container {
     position: relative;
   }
+
+  // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6) -- the Shop Link Attribution title
+  // and its Counts | Rate toggle on one row.
+  .shop-links-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+
+    h4 {
+      margin-bottom: 0;
+    }
+
+    .field {
+      margin-bottom: 0;
+    }
+  }
 }
 
 .chart canvas {

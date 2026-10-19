@@ -1,4 +1,5 @@
-// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC I7). Run: yarn test
+// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC I7; shop-link rate,
+// SHOP-LINK-RATE-SPEC I6 -- the counts view's sort replaces the parent's rank order). Run: yarn test
 // (node --test src/*.test.mjs). No dependency: Node's built-in runner.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,62 +14,94 @@ const labels = {
   unknown: 'Unknown',
 };
 
-test('I7 the four kinds always, in rank order, zero-filled', () => {
-  assert.deepEqual(shapeShopLinkBars([], labels), {
-    labels: ['Self', 'Creator', 'Founder', 'Corporate'],
-    data: [0, 0, 0, 0],
-  });
+// The bars as "Label=value|text", for compact assertions.
+const bars = (o) => o.labels.map((l, i) => `${l}=${o.data[i]}|${o.texts[i]}`);
+
+test('I6 counts: the four kinds always, zero-filled, ties in rank order', () => {
+  const empty = shapeShopLinkBars([], labels);
+  assert.deepEqual(empty.labels, ['Self', 'Creator', 'Founder', 'Corporate']);
+  assert.deepEqual(empty.data, [0, 0, 0, 0]);
+  assert.deepEqual(empty.texts, ['0', '0', '0', '0']);
+  assert.equal(empty.noSnapshot, true);
   assert.deepEqual(shapeShopLinkBars(null, labels).data, [0, 0, 0, 0]);
-  // Backend order is count desc; the bars keep rank order regardless.
-  assert.deepEqual(shapeShopLinkBars([
-    { kind: 'founder', count: 90 },
-    { kind: 'self', count: 4 },
-    { kind: 'corporate', count: 2 },
-  ], labels), {
-    labels: ['Self', 'Creator', 'Founder', 'Corporate'],
-    data: [4, 0, 90, 2],
-  });
 });
 
-test('I7 No link and Unknown only when non-zero, after the four kinds', () => {
+test('I6 counts: sorted by count desc, ties by rank (self, creator, founder, corporate, none, unknown, extras)', () => {
+  assert.deepEqual(bars(shapeShopLinkBars([
+    { kind: 'founder', count: 34 },
+    { kind: 'self', count: 7 },
+    { kind: 'corporate', count: 7 },
+    { kind: 'none', count: 7 },
+    { kind: 'unknown', count: 7 },
+    { kind: 'partner', count: 7 },
+  ], labels)), [
+    'Founder=34|34', 'Self=7|7', 'Corporate=7|7', 'No link=7|7', 'Unknown=7|7', 'partner=7|7', 'Creator=0|0',
+  ]);
+});
+
+test('I6 counts: No link, Unknown and extras only when non-zero', () => {
   assert.deepEqual(shapeShopLinkBars([
     { kind: 'unknown', count: 3 },
-    { kind: 'none', count: 0 },
+    { kind: 'none', count: 0, audience: 4 },
+    { kind: 'partner', count: 0, audience: 2 },
     { kind: 'creator', count: 1 },
-  ], labels), {
-    labels: ['Self', 'Creator', 'Founder', 'Corporate', 'Unknown'],
-    data: [0, 1, 0, 0, 3],
-  });
-  assert.deepEqual(shapeShopLinkBars([
-    { kind: 'unknown', count: 3 },
-    { kind: 'none', count: 5 },
-  ], labels), {
-    labels: ['Self', 'Creator', 'Founder', 'Corporate', 'No link', 'Unknown'],
-    data: [0, 0, 0, 0, 5, 3],
-  });
+  ], labels).labels, ['Unknown', 'Creator', 'Self', 'Founder', 'Corporate']);
 });
 
-test('I7 extra kinds verbatim, after None/Unknown, by count desc then name', () => {
-  assert.deepEqual(shapeShopLinkBars([
-    { kind: 'partner', count: 2 },
-    { kind: 'none', count: 1 },
-    { kind: 'zeta', count: 7 },
+test('I6 counts: extras verbatim, ties by name; counts coerced; malformed rows ignored; label fallback', () => {
+  assert.deepEqual(bars(shapeShopLinkBars([
+    { kind: 'zeta', count: 2 },
     { kind: 'alpha', count: 2 },
-    { kind: 'self', count: 1 },
-  ], labels), {
-    labels: ['Self', 'Creator', 'Founder', 'Corporate', 'No link', 'zeta', 'alpha', 'partner'],
-    data: [1, 0, 0, 0, 1, 7, 2, 2],
-  });
-});
-
-test('I7 counts coerced to numbers; malformed rows ignored; a missing label falls back to the kind', () => {
-  assert.deepEqual(shapeShopLinkBars([
     { kind: 'self', count: '4' },
     { kind: 'creator', count: null },
     { count: 9 },
     null,
-  ], { self: 'Self' }), {
-    labels: ['Self', 'creator', 'founder', 'corporate'],
-    data: [4, 0, 0, 0],
-  });
+  ], { self: 'Self' })), ['Self=4|4', 'alpha=2|2', 'zeta=2|2', 'creator=0|0', 'founder=0|0', 'corporate=0|0']);
+});
+
+test('I6 counts: the text goes through the formatter', () => {
+  const fmt = (n) => n.toLocaleString('en-US');
+  assert.deepEqual(shapeShopLinkBars([{ kind: 'founder', count: 1234 }], labels, 'counts', fmt).texts[0], '1,234');
+});
+
+// The backend repeats snapshots on every row; the shaping does not read it.
+const rateRows = [
+  { kind: 'founder', count: 34, audience: 1688 },
+  { kind: 'self', count: 7, audience: 142 },
+  { kind: 'creator', count: 0, audience: 282 },
+  { kind: 'corporate', count: 1, audience: 116 },
+  { kind: 'none', count: 1, audience: 0 },
+  { kind: 'unknown', count: 2, audience: null },
+  { kind: 'partner', count: 0, audience: 0 },
+];
+
+test('I6 rate: sorted by rate desc; text "x% (n of N)"; unknown and zero-zero kinds hidden', () => {
+  const fmt = (n) => n.toLocaleString('en-US');
+  const o = shapeShopLinkBars(rateRows, labels, 'rate', fmt);
+  assert.equal(o.noSnapshot, false);
+  // No link (1 of 0) and Creator (0 of 282) tie at rate 0: count desc puts No link first.
+  assert.deepEqual(o.labels, ['Self', 'Founder', 'Corporate', 'No link', 'Creator']);
+  assert.deepEqual(o.texts, ['4.9% (7 of 142)', '2.0% (34 of 1,688)', '0.9% (1 of 116)', '1 of 0', '0.0% (0 of 282)']);
+  assert.ok(Math.abs(o.data[0] - (700 / 142)) < 1e-9);
+  // Drift: clicks against audience 0 is shown with value 0.
+  assert.equal(o.data[3], 0);
+});
+
+test('I6 rate: a rate over 100% is shown as computed; ties by count desc, then rank', () => {
+  assert.deepEqual(bars(shapeShopLinkBars([
+    { kind: 'self', count: 3, audience: 2 },
+    { kind: 'corporate', count: 2, audience: 4 },
+    { kind: 'founder', count: 1, audience: 2 },
+    { kind: 'creator', count: 1, audience: 2 },
+  ], labels, 'rate')), ['Self=150|150.0% (3 of 2)', 'Corporate=50|50.0% (2 of 4)', 'Creator=50|50.0% (1 of 2)', 'Founder=50|50.0% (1 of 2)']);
+});
+
+test('I6 rate: every audience null is flagged and renders no bars', () => {
+  const o = shapeShopLinkBars([
+    { kind: 'founder', count: 3, audience: null },
+    { kind: 'unknown', count: 1, audience: null },
+  ], labels, 'rate');
+  assert.equal(o.noSnapshot, true);
+  assert.deepEqual(o.labels, []);
+  assert.equal(shapeShopLinkBars([], labels, 'rate').noSnapshot, true);
 });

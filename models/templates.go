@@ -116,9 +116,16 @@ type CampaignAnalyticsLink struct {
 // stored shop-link kind for the link's brand (self, creator, founder, corporate, or any other
 // stored string verbatim), "none" for a known subscriber with no entry, "unknown" for a click
 // with no subscriber. Kinds and counts only -- no PII.
+//
+// Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D5) -- Audience is the SUM of the selected
+// campaigns' send-time snapshot rows for the kind (0 for a kind absent from an existing snapshot),
+// nil on every row when no selected campaign has a snapshot and nil for "unknown" always;
+// Snapshots is how many of the selected campaigns have a snapshot, repeated on every row.
 type CampaignAnalyticsShopLink struct {
-	Kind  string `db:"kind" json:"kind"`
-	Count int    `db:"count" json:"count"`
+	Kind      string `db:"kind" json:"kind"`
+	Count     int    `db:"count" json:"count"`
+	Audience  *int   `db:"audience" json:"audience"`
+	Snapshots int    `db:"snapshots" json:"snapshots"`
 }
 
 // CampaignAnalyticsCountry is one row of the per-country analytics (fork, location stats):

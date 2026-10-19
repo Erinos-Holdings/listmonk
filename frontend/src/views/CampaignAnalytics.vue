@@ -70,10 +70,35 @@
               <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
               <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
             </h4>
-            <h4 v-else>{{ v.name }}</h4>
+            <h4 v-else-if="k !== 'shopLinks'">{{ v.name }}</h4>
+            <!-- Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6) -- the Counts | Rate toggle
+                 in the chart's header row (the .segmented LaunchFilter shape). -->
+            <div v-else class="shop-links-head" data-cy="shop-links-head">
+              <h4>{{ v.name }}</h4>
+              <b-field class="segmented" role="group" :aria-label="$t('analytics.shopLinksView')">
+                <b-radio-button v-model="shopLinksViewModel" native-value="counts" size="is-small" type="is-primary"
+                  data-cy="shop-links-counts">
+                  {{ $t('analytics.shopLinksCounts') }}
+                </b-radio-button>
+                <b-radio-button v-model="shopLinksViewModel" native-value="rate" size="is-small" type="is-primary"
+                  data-cy="shop-links-rate">
+                  {{ $t('analytics.shopLinksRate') }}
+                </b-radio-button>
+              </b-field>
+            </div>
             <!-- Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the hint under the title. -->
             <p v-if="k === 'shopLinks'" class="is-size-7 has-text-grey" data-cy="shop-links-hint">{{ $t('analytics.shopLinksHint') }}</p>
-            <chart :type="v.type" v-if="!v.loading" :data="v.data" :on-click="v.onClick" />
+            <!-- Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6/D7) -- the rate view's notes. -->
+            <template v-if="k === 'shopLinks' && !v.loading && shopLinksView === 'rate'">
+              <p v-if="shopLinksNoSnapshot" class="is-size-7 has-text-grey mt-2" data-cy="shop-links-no-snapshot">
+                {{ $t('analytics.shopLinksNoSnapshot') }}
+              </p>
+              <p v-else-if="shopLinksPartial" class="is-size-7 has-text-grey" data-cy="shop-links-partial">
+                {{ $t('analytics.shopLinksPartial') }}
+              </p>
+            </template>
+            <chart :type="v.type" v-if="!v.loading && !(k === 'shopLinks' && shopLinksView === 'rate' && shopLinksNoSnapshot)"
+              :data="v.data" :on-click="v.onClick" />
           </div>
           <div class="column is-2 donut-container">
             <chart type="donut" v-if="!v.loading" :data="v.donutData" />
@@ -207,6 +232,11 @@ export default Vue.extend({
         shopLinks: 0,
       },
       urls: [],
+      // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6) -- the Counts | Rate view (read
+      // from the pref at mount; this view is the pref's one writer), and the raw rows and selection
+      // size of the last fetch, kept so a toggle re-shapes the chart without a refetch.
+      shopLinksView: 'counts',
+      shopLinks: { rows: [], selection: 0 },
       // Fork (campaign rates) -- the Sent of the campaigns the charts were fetched for: the
       // total (headers, Location) and per id (the ring). Set at fetch time, so editing the picker
       // before the next search does not move the denominators under the numbers.
@@ -339,6 +369,8 @@ export default Vue.extend({
         datasets: [
           {
             data: data.map((l) => l.count),
+            // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D8) -- the counts at the bar ends.
+            texts: data.map((l) => this.$utils.formatNumber(l.count)),
             backgroundColor: chartColors,
           }],
       };
@@ -346,28 +378,34 @@ export default Vue.extend({
       return { points: out, donut: null };
     },
 
-    // Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the bars' order
-    // and labels are shopLinkBars.mjs's; the Links bar styling.
+    // Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5; shop-link rate,
+    // SHOP-LINK-RATE-SPEC D6) -- keeps the fetch's raw rows and selection size, then shapes them for
+    // the current view.
     makeShopLinksChart(typ, camps, data) {
-      const { labels, data: points } = shapeShopLinkBars(data, {
+      this.shopLinks = { rows: Array.isArray(data) ? data : [], selection: camps.length };
+      return { points: this.shopLinksPoints(), donut: null };
+    },
+
+    // The bars' order, labels and texts are shopLinkBars.mjs's; the Links bar styling.
+    shopLinksPoints() {
+      const { labels, data: points, texts } = shapeShopLinkBars(this.shopLinks.rows, {
         self: this.$t('analytics.shopLinkSelf'),
         creator: this.$t('analytics.shopLinkCreator'),
         founder: this.$t('analytics.shopLinkFounder'),
         corporate: this.$t('analytics.shopLinkCorporate'),
         none: this.$t('analytics.shopLinkNone'),
         unknown: this.$t('analytics.shopLinkUnknown'),
-      });
+      }, this.shopLinksView, (n) => this.$utils.formatNumber(n));
 
-      const out = {
+      return {
         labels,
         datasets: [
           {
             data: points,
+            texts,
             backgroundColor: chartColors,
           }],
       };
-
-      return { points: out, donut: null };
     },
 
     makeCharts(typ, campaigns, data) {
@@ -558,6 +596,33 @@ export default Vue.extend({
       return (this.$i18n && this.$i18n.locale) || 'en';
     },
 
+    // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6/D7) -- the toggle's model: the only
+    // writer of the analytics.shopLinksView pref; a change re-shapes the kept rows (no refetch).
+    shopLinksViewModel: {
+      get() {
+        return this.shopLinksView;
+      },
+      set(v) {
+        this.shopLinksView = v === 'rate' ? 'rate' : 'counts';
+        this.$utils.setPref('analytics.shopLinksView', this.shopLinksView);
+        if (this.charts.shopLinks.data) {
+          this.charts.shopLinks.data = this.shopLinksPoints();
+        }
+      },
+    },
+
+    // No selected campaign has an audience snapshot (every audience null).
+    shopLinksNoSnapshot() {
+      return !this.shopLinks.rows.some((r) => r && r.audience !== null && r.audience !== undefined);
+    },
+
+    // Some, not all, of the selected campaigns have a snapshot.
+    shopLinksPartial() {
+      const r = this.shopLinks.rows[0];
+      const n = r && Number.isFinite(r.snapshots) ? r.snapshots : 0;
+      return n > 0 && n < this.shopLinks.selection;
+    },
+
     // The chart headers' { pct, count } per metric (review tidy: a computed, not a :set attribute).
     totalCells() {
       const fmt = this.$utils.formatNumber.bind(this.$utils);
@@ -620,6 +685,10 @@ export default Vue.extend({
   },
 
   mounted() {
+    // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6) -- the remembered view, read at
+    // mount; default counts.
+    this.shopLinksView = this.$utils.getPref('analytics.shopLinksView') === 'rate' ? 'rate' : 'counts';
+
     // Fetch one or more campaigns if there are ?id params, wait for the fetches
     // to finish, add them to the campaign selector and submit the form.
     const ids = this.$utils.parseQueryIDs(this.$route.query.id);

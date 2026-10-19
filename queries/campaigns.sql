@@ -434,16 +434,77 @@ SELECT COUNT(%s) AS "count", url
 -- (or an entry with no kind) is none, a click with no subscriber is unknown. The counted expression
 -- is the link counts' own, prepared on boot (cmd/init.go) with the same linkSel. The substring test
 -- is POSITION, never a LIKE pattern, because this text goes through Sprintf on boot.
-SELECT COUNT(%s) AS "count",
-    (CASE WHEN link_clicks.subscriber_id IS NULL THEN 'unknown'
-        ELSE COALESCE(NULLIF(subscribers.attribs->'shop_links'->SUBSTRING(links.url FROM 'shop_links[."[:space:]]*([A-Za-z0-9_-]+)')->>'kind', ''), 'none')
-    END) AS kind
-    FROM link_clicks
-    JOIN links ON (link_clicks.link_id = links.id)
-    LEFT JOIN subscribers ON (subscribers.id = link_clicks.subscriber_id)
-    WHERE link_clicks.campaign_id=ANY($1) AND link_clicks.created_at >= $2 AND link_clicks.created_at <= $3
-        AND POSITION('shop_links' IN links.url) > 0
-    GROUP BY 2 ORDER BY "count" DESC, kind;
+-- Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D3/D5) -- each kind also carries its
+-- audience, the SUM of the selected campaigns' send-time snapshot rows for that kind across their
+-- brands (campaign_shop_link_audience; a kind absent from an existing snapshot reads 0), NULL on
+-- every row when no selected campaign has a snapshot and NULL for unknown always; and snapshots,
+-- how many of the selected campaigns have one. A kind with audience but no clicks is a row with
+-- count 0. The brand regex below is linkresolve.ShopLinkBrandPattern verbatim (pinned by its test).
+WITH clicks AS (
+    SELECT COUNT(%s) AS n,
+        (CASE WHEN link_clicks.subscriber_id IS NULL THEN 'unknown'
+            ELSE COALESCE(NULLIF(subscribers.attribs->'shop_links'->SUBSTRING(links.url FROM 'shop_links[."[:space:]]*([A-Za-z0-9_-]+)')->>'kind', ''), 'none')
+        END) AS kind
+        FROM link_clicks
+        JOIN links ON (link_clicks.link_id = links.id)
+        LEFT JOIN subscribers ON (subscribers.id = link_clicks.subscriber_id)
+        WHERE link_clicks.campaign_id=ANY($1) AND link_clicks.created_at >= $2 AND link_clicks.created_at <= $3
+            AND POSITION('shop_links' IN links.url) > 0
+        GROUP BY 2
+),
+aud AS (
+    SELECT kind, SUM(audience)::INT AS audience FROM campaign_shop_link_audience
+        WHERE campaign_id = ANY($1) GROUP BY kind
+),
+snaps AS (
+    SELECT COUNT(DISTINCT campaign_id)::INT AS n FROM campaign_shop_link_audience WHERE campaign_id = ANY($1)
+)
+SELECT COALESCE(clicks.n, 0) AS "count", COALESCE(clicks.kind, aud.kind) AS kind,
+    (CASE WHEN snaps.n = 0 OR COALESCE(clicks.kind, aud.kind) = 'unknown' THEN NULL
+        ELSE COALESCE(aud.audience, 0) END) AS audience,
+    snaps.n AS snapshots
+    FROM clicks FULL OUTER JOIN aud ON (aud.kind = clicks.kind)
+    CROSS JOIN snaps
+    ORDER BY "count" DESC, kind;
+
+-- name: snapshot-campaign-shop-link-audience
+-- Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D1/D2/D4) -- the audience snapshot taken
+-- at claim. Campaign $1's audience under get-campaign-lang-audience's predicate (its lists' opt-in
+-- rules, not blocklisted, its attribs.lang), counted once per subscriber per (brand, kind) for each
+-- brand in $2 (the brands its body's shop-link expressions name). The kind vocabulary is the click
+-- query's, with none for no entry, no kind or an empty kind. Inserted ONLY when the campaign has no
+-- snapshot yet, so a pause/resume, a restart or a re-claim never overwrites the original. A kind
+-- nobody in the audience holds gets no row (absent reads 0).
+WITH camp AS (
+    SELECT id, type, attribs->>'lang' AS lang FROM campaigns WHERE id = $1::INT
+),
+campLists AS (
+    SELECT lists.id AS list_id, optin FROM lists
+    INNER JOIN campaign_lists ON (campaign_lists.list_id = lists.id)
+    WHERE campaign_lists.campaign_id = $1::INT
+),
+aud AS (
+    SELECT b.brand,
+        COALESCE(NULLIF(s.attribs->'shop_links'->b.brand->>'kind', ''), 'none') AS kind,
+        sl.subscriber_id
+    FROM camp
+    JOIN campLists cl ON TRUE
+    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
+        AND (
+            CASE
+                WHEN camp.type = 'optin' THEN sl.status = 'unconfirmed' AND cl.optin = 'double'
+                WHEN cl.optin = 'double' THEN sl.status = 'confirmed'
+                ELSE sl.status != 'unsubscribed'
+            END
+        )
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+        AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
+    CROSS JOIN UNNEST($2::TEXT[]) AS b(brand)
+)
+INSERT INTO campaign_shop_link_audience (campaign_id, brand, kind, audience)
+    SELECT $1::INT, brand, kind, COUNT(DISTINCT subscriber_id)::INT FROM aud
+    WHERE NOT EXISTS (SELECT 1 FROM campaign_shop_link_audience WHERE campaign_id = $1::INT)
+    GROUP BY brand, kind;
 
 -- name: export-campaign-views
 SELECT campaign_views.campaign_id,

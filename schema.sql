@@ -814,3 +814,16 @@ ALTER TABLE lists ADD COLUMN IF NOT EXISTS transactional BOOLEAN NOT NULL DEFAUL
 ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_set_by TEXT NULL;
 ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_set_at TIMESTAMP WITH TIME ZONE NULL;
 ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_sync JSONB NULL;
+
+-- Fork (shop-link rate, SHOP-LINK-RATE-SPEC D1): a broadcast's audience by shop-link kind per
+-- brand, snapshotted once at claim -- the Shop Link Attribution chart's rate denominator.
+-- Mirrored in internal/migrations/v6.2.24.go (the CREATE only; the DROP is schema.sql's).
+DROP TABLE IF EXISTS campaign_shop_link_audience CASCADE;
+CREATE TABLE IF NOT EXISTS campaign_shop_link_audience (
+    campaign_id      INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    brand            TEXT NOT NULL,
+    kind             TEXT NOT NULL,
+    audience         INTEGER NOT NULL,
+    taken_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (campaign_id, brand, kind)
+);

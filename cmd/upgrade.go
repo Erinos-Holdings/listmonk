@@ -91,6 +91,8 @@ var migList = []migFunc{
 	{"v6.2.22", migrations.V6_2_22},
 	// Fork migration (erinos): list join triggers -- lists.join_trigger/transactional/trigger_set_by/trigger_set_at/trigger_sync and the lists:transactional grant to role 1 (LIST-JOIN-TRIGGER-SPEC) — see internal/migrations/v6.2.23.go.
 	{"v6.2.23", migrations.V6_2_23},
+	// Fork migration (erinos): shop-link rate -- the campaign_shop_link_audience snapshot table (SHOP-LINK-RATE-SPEC) — see internal/migrations/v6.2.24.go.
+	{"v6.2.24", migrations.V6_2_24},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

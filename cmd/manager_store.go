@@ -2,8 +2,11 @@ package main
 
 import (
 	"database/sql"
+	"log"
+
 	"github.com/gofrs/uuid/v5"
 	"github.com/knadh/listmonk/internal/core"
+	"github.com/knadh/listmonk/internal/linkresolve"
 	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/internal/media"
 	"github.com/knadh/listmonk/models"
@@ -16,6 +19,9 @@ type store struct {
 	queries *models.Queries
 	core    *core.Core
 	media   media.Store
+	// Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D4) -- where a swallowed audience
+	// snapshot error is logged.
+	log *log.Logger
 }
 
 type runningCamp struct {
@@ -28,11 +34,12 @@ type runningCamp struct {
 	Lang sql.NullString `db:"lang"`
 }
 
-func newManagerStore(q *models.Queries, c *core.Core, m media.Store) *store {
+func newManagerStore(q *models.Queries, c *core.Core, m media.Store, lo *log.Logger) *store {
 	return &store{
 		queries: q,
 		core:    c,
 		media:   m,
+		log:     lo,
 	}
 }
 
@@ -42,7 +49,34 @@ func newManagerStore(q *models.Queries, c *core.Core, m media.Store) *store {
 func (s *store) NextCampaigns(currentIDs []int64, sentCounts []int64) ([]*models.Campaign, error) {
 	var out []*models.Campaign
 	err := s.queries.NextCampaigns.Select(&out, pq.Int64Array(currentIDs), pq.Int64Array(sentCounts))
-	return out, err
+	if err != nil {
+		return out, err
+	}
+
+	// Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D4) -- after the claim, snapshot each
+	// broadcast's audience by shop-link kind per brand its body names. The query inserts only when
+	// the campaign has no snapshot yet, so a re-claim (pause/resume, restart, full pipe) is a no-op.
+	// Evergreens are never snapshotted (their audience is the campaign_sends trickle, and an idle
+	// one is returned every tick). A failure is logged and swallowed -- it never blocks the send.
+	for _, c := range out {
+		if c.Evergreen {
+			continue
+		}
+		s.snapshotShopLinkAudience(c)
+	}
+	return out, nil
+}
+
+// snapshotShopLinkAudience runs the D2 snapshot for one claimed broadcast (fork, shop-link rate,
+// integrations SHOP-LINK-RATE-SPEC D2/D3). No shop-link expression in the body = no query.
+func (s *store) snapshotShopLinkAudience(c *models.Campaign) {
+	brands := linkresolve.ShopLinkBrands(linkresolve.Expressions(models.TransformTrackLinks(c.Body, c.ContentType)))
+	if len(brands) == 0 {
+		return
+	}
+	if _, err := s.queries.SnapshotCampaignShopLinkAudience.Exec(c.ID, pq.StringArray(brands)); err != nil && s.log != nil {
+		s.log.Printf("error snapshotting shop-link audience for campaign %d (%s): %v", c.ID, c.Name, err)
+	}
 }
 
 // NextSubscribers retrieves a subset of subscribers of a given campaign.

@@ -121,6 +121,10 @@ type Queries struct {
 	// boot with the link counts' counted expression.
 	GetCampaignShopLinkCounts *sqlx.Stmt `query:"get-campaign-shop-link-counts"`
 
+	// Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D2/D4) -- the audience snapshot the
+	// manager's store takes once per broadcast at claim.
+	SnapshotCampaignShopLinkAudience *sqlx.Stmt `query:"snapshot-campaign-shop-link-audience"`
+
 	NextCampaigns           *sqlx.Stmt `query:"next-campaigns"`
 	GetRunningCampaign      *sqlx.Stmt `query:"get-running-campaign"`
 	NextCampaignSubscribers *sqlx.Stmt `query:"next-campaign-subscribers"`

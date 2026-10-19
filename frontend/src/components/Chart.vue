@@ -6,6 +6,7 @@
 
 <script>
 import Chart from 'chart.js/auto';
+import { barLabelPlacement, INSIDE } from '../barLabels.mjs'; // eslint-disable-line import/extensions
 
 const DEFAULT_DONUT = {
   type: 'doughnut',
@@ -119,6 +120,17 @@ const DEFAULT_BAR = {
         },
         bodySpacing: 10,
         padding: 10,
+        // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6) -- a dataset carrying
+        // `texts` (the end-of-bar labels) shows its text, as the donut shows `rates`.
+        callbacks: {
+          label: (item) => {
+            const data = item.chart.data.datasets[item.datasetIndex];
+            if (Array.isArray(data.texts) && typeof data.texts[item.dataIndex] === 'string') {
+              return data.texts[item.dataIndex];
+            }
+            return `${item.formattedValue}`;
+          },
+        },
       },
     },
     scales: {
@@ -133,6 +145,50 @@ const DEFAULT_BAR = {
         },
       },
     },
+  },
+};
+
+// Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D8) -- end-of-bar labels. For a bar chart
+// whose dataset carries `texts` (one string per bar), each text is drawn at the bar's end: inside,
+// white, right-aligned BAR_LABEL_PAD px from the end when it fits (barLabels.mjs owns the rule),
+// otherwise outside, dark, BAR_LABEL_GAP px past the end. A chart without `texts` is unchanged.
+// Registered per instance (the config's plugins), never globally. The bar charts here are
+// horizontal (DEFAULT_BAR's indexAxis 'y'); a vertical bar chart gets no labels.
+const BAR_LABEL_PAD = 8;
+const BAR_LABEL_GAP = 6;
+const barLabels = {
+  id: 'barLabels',
+  afterDatasetsDraw(chart) {
+    if (chart.options.indexAxis !== 'y') {
+      return;
+    }
+    const { ctx } = chart;
+    chart.data.datasets.forEach((ds, i) => {
+      const meta = chart.getDatasetMeta(i);
+      if (!Array.isArray(ds.texts) || meta.hidden) {
+        return;
+      }
+      ctx.save();
+      ctx.font = `12px ${Chart.defaults.font.family}`;
+      ctx.textBaseline = 'middle';
+      meta.data.forEach((el, j) => {
+        const text = ds.texts[j];
+        if (typeof text !== 'string' || text === '') {
+          return;
+        }
+        const barPx = el.x - el.base;
+        if (barLabelPlacement(barPx, ctx.measureText(text).width, BAR_LABEL_PAD) === INSIDE) {
+          ctx.textAlign = 'right';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(text, el.x - BAR_LABEL_PAD, el.y);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.fillStyle = '#363636';
+          ctx.fillText(text, Math.max(el.x, el.base) + BAR_LABEL_GAP, el.y);
+        }
+      });
+      ctx.restore();
+    });
   },
 };
 
@@ -167,6 +223,11 @@ export default {
     // overwrite the other's onClick (the Links click-through died, or a Shop Link bar opened a
     // Links URL).
     const conf = { ...def, options: { ...def.options }, data: this.$props.data };
+    // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D8) -- the end-of-bar labels, per
+    // instance.
+    if (def === DEFAULT_BAR) {
+      conf.plugins = [barLabels];
+    }
     if (this.$props.onClick) {
       conf.options.onClick = this.$props.onClick;
     }

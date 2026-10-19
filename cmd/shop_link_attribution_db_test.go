@@ -40,6 +40,41 @@ func shopLinkRows(t *testing.T, body string) string {
 	return strings.Join(out, " ")
 }
 
+// shopLinkRateRows decodes a type=shop_links response body into "kind=count/audience" pairs in
+// response order (audience "null" when absent) plus the snapshots value, which must be the same on
+// every row. Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D5/I5).
+func shopLinkRateRows(t *testing.T, body string) (string, int) {
+	t.Helper()
+	var resp struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatalf("body %s: %v", body, err)
+	}
+	out := make([]string, 0, len(resp.Data))
+	snaps := -1
+	for _, r := range resp.Data {
+		a, ok := r["audience"]
+		if !ok {
+			t.Fatalf("row without an audience field: %s", body)
+		}
+		aud := "null"
+		if a != nil {
+			aud = fmt.Sprint(a)
+		}
+		s, ok := r["snapshots"].(float64)
+		if !ok {
+			t.Fatalf("row without a numeric snapshots field: %s", body)
+		}
+		if snaps >= 0 && int(s) != snaps {
+			t.Fatalf("snapshots differs across rows: %s", body)
+		}
+		snaps = int(s)
+		out = append(out, fmt.Sprintf("%s=%v/%s", r["kind"], r["count"], aud))
+	}
+	return strings.Join(out, " "), snaps
+}
+
 // TestShopLinkAttribution is I1, I2, I3 and I4: one campaign with a shop link in each grammar, a
 // thirstygirl shop link and a static link, through GET /api/campaigns/analytics/shop_links in both
 // preparations of the query.
@@ -156,6 +191,55 @@ func TestShopLinkAttribution(t *testing.T) {
 	}
 	if got, want := shopLinkRows(t, body), "none=3 corporate=2 creator=2 founder=1 partner=1 self=1 unknown=0"; got != want {
 		t.Fatalf("two campaigns\n got  %s\n want %s", got, want)
+	}
+
+	// Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC I5) -- with no snapshot anywhere,
+	// every audience is null and snapshots is 0.
+	if got, n := shopLinkRateRows(t, body); n != 0 || strings.Contains(got, "/0") || strings.Count(got, "/null") != 7 {
+		t.Fatalf("no snapshot: %s (snapshots %d), want every audience null and snapshots 0", got, n)
+	}
+
+	// Snapshot rows for both campaigns (two brands on camp, so audiences sum across brands), and a
+	// third campaign with clicks but no snapshot.
+	snap := func(c int, brand, kind string, n int) {
+		db.MustExec(`INSERT INTO campaign_shop_link_audience (campaign_id, brand, kind, audience) VALUES ($1, $2, $3, $4)`, c, brand, kind, n)
+	}
+	snap(camp, "ruze", "self", 10)
+	snap(camp, "ruze", "creator", 20)
+	snap(camp, "ruze", "founder", 30)
+	snap(camp, "ruze", "none", 5)
+	snap(camp, "thirstygirl", "corporate", 4)
+	snap(camp, "thirstygirl", "none", 40)
+	snap(otherCamp, "ruze", "creator", 7)
+	snap(otherCamp, "ruze", "self", 1)
+	noSnap := newCamp("No snapshot")
+	click(noSnap, newSub("creator3@x", entry("ruze", "creator")), ruzeDot, 1)
+
+	for _, tc := range []struct {
+		name  string
+		ids   []int
+		want  string
+		snaps int
+	}{
+		// One snapshot: summed across brands; partner (absent from the snapshot) reads 0; unknown null.
+		{"one campaign", []int{camp}, "none=3/45 corporate=2/4 creator=1/20 founder=1/30 partner=1/0 self=1/10 unknown=0/null", 1},
+		// A kind with audience but no clicks is a count-0 row.
+		{"other campaign", []int{otherCamp}, "creator=1/7 self=0/1", 1},
+		// Full selection: summed across the campaigns.
+		{"both snapshotted", []int{camp, otherCamp}, "none=3/45 corporate=2/4 creator=2/27 founder=1/30 partner=1/0 self=1/11 unknown=0/null", 2},
+		// Partial: the campaign without a snapshot adds clicks, no audience.
+		{"partial", []int{camp, noSnap}, "none=3/45 corporate=2/4 creator=2/20 founder=1/30 partner=1/0 self=1/10 unknown=0/null", 1},
+		// None: null audiences.
+		{"none snapshotted", []int{noSnap}, "creator=1/null", 0},
+	} {
+		code, body := analyticsMultiReq(t, h, member, "shop_links", tc.ids...)
+		if code != http.StatusOK {
+			t.Fatalf("%s: %d %s", tc.name, code, body)
+		}
+		got, n := shopLinkRateRows(t, body)
+		if got != tc.want || n != tc.snaps {
+			t.Fatalf("%s\n got  %s (snapshots %d)\n want %s (snapshots %d)", tc.name, got, n, tc.want, tc.snaps)
+		}
 	}
 }
 
