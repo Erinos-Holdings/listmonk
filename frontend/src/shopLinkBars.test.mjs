@@ -3,7 +3,7 @@
 // (node --test src/*.test.mjs). No dependency: Node's built-in runner.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aggregateShopLinkRate, shapeShopLinkBars } from './shopLinkBars.mjs'; // eslint-disable-line import/extensions
+import { aggregateShopLinkRate, shapeShopLinkBars, totalShopLinkClicks } from './shopLinkBars.mjs'; // eslint-disable-line import/extensions
 
 const labels = {
   self: 'Self',
@@ -109,6 +109,24 @@ test('aggregateShopLinkRate: clicks over audience across kinds; unknown and null
   assert.deepEqual(aggregateShopLinkRate(rows), { pct: '3.9%', count: '61', audience: '1567' });
   assert.deepEqual(aggregateShopLinkRate([{ kind: 'self', count: 3, audience: null }]), { pct: null, count: '0', audience: '0' });
   assert.deepEqual(aggregateShopLinkRate([]), { pct: null, count: '0', audience: '0' });
+});
+
+test('header totals honour hideNone: the none row leaves both the count and the aggregate', () => {
+  const rows = [
+    {
+      kind: 'founder', count: 54, audience: 1449, snapshots: 1,
+    },
+    {
+      kind: 'none', count: 1, audience: 3, snapshots: 1,
+    },
+    {
+      kind: 'unknown', count: 2, audience: null, snapshots: 1,
+    },
+  ];
+  assert.equal(totalShopLinkClicks(rows), 57);
+  assert.equal(totalShopLinkClicks(rows, { hideNone: true }), 56);
+  assert.deepEqual(aggregateShopLinkRate(rows), { pct: '3.8%', count: '55', audience: '1452' });
+  assert.deepEqual(aggregateShopLinkRate(rows, String, { hideNone: true }), { pct: '3.7%', count: '54', audience: '1449' });
 });
 
 test('hideNone: the No link bar is dropped from both views, nothing else moves', () => {

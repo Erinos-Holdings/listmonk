@@ -46,11 +46,14 @@ const byRank = (a, b) => {
 // kind's clicks over every kind's snapshot audience (kinds with a null audience -- unknown, or a
 // selection with no snapshot -- contribute neither). Returns { pct, count, audience }; pct is null
 // when there is no audience (the view then falls back to the counts header).
-export function aggregateShopLinkRate(rows, fmt = String) {
+export function aggregateShopLinkRate(rows, fmt = String, opts = {}) {
   let count = 0;
   let audience = 0;
   (Array.isArray(rows) ? rows : []).forEach((r) => {
     if (!r || typeof r.kind !== 'string' || r.audience === null || r.audience === undefined) {
+      return;
+    }
+    if (opts.hideNone && r.kind === 'none') {
       return;
     }
     count += num(r.count);
@@ -60,6 +63,17 @@ export function aggregateShopLinkRate(rows, fmt = String) {
     return { pct: null, count: fmt(count), audience: fmt(audience) };
   }
   return { pct: `${((100 * count) / audience).toFixed(1)}%`, count: fmt(count), audience: fmt(audience) };
+}
+
+// Fork (shop-link header total, 2026-10-19) -- the Counts view's header count: every row's clicks,
+// minus the `none` row when opts.hideNone (the header describes the bars on screen).
+export function totalShopLinkClicks(rows, opts = {}) {
+  return (Array.isArray(rows) ? rows : []).reduce((sum, r) => {
+    if (!r || typeof r.kind !== 'string' || (opts.hideNone && r.kind === 'none')) {
+      return sum;
+    }
+    return sum + num(r.count);
+  }, 0);
 }
 
 // Fork (hide No link, 2026-10-19) -- opts.hideNone drops the `none` bar from either view (the

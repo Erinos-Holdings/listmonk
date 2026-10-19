@@ -13,6 +13,7 @@
     "analytics.fromDate": "From",
     "analytics.invalidDates": "Invalid `from` or `to` dates.",
     "analytics.links": "Links",
+    "analytics.linksHint": "Clickers per link: a subscriber who clicked two links counts once in each, so this total can exceed Clicks, which counts each subscriber once.",
     "analytics.rateHint": "Views, clicks and bounces within the date range are shown as a rate over the selected campaigns' Sent (each campaign over its own Sent in the ring), with the count in parentheses.",
     "analytics.location": "Location",
     "analytics.locationCountry": "Country",

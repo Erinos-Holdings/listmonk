@@ -103,6 +103,8 @@
                 </b-field>
               </div>
             </div>
+            <!-- Fork (shop-link header total, 2026-10-19) -- the Links hint: per-link clickers, not unique clickers. -->
+            <p v-if="k === 'links'" class="is-size-7 has-text-grey" data-cy="links-hint">{{ $t('analytics.linksHint') }}</p>
             <!-- Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the hint under the title. -->
             <p v-if="k === 'shopLinks'" class="is-size-7 has-text-grey" data-cy="shop-links-hint">{{ $t('analytics.shopLinksHint') }}</p>
             <!-- Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6/D7) -- the rate view's notes. -->
@@ -197,7 +199,7 @@ import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
-import { aggregateShopLinkRate, shapeShopLinkBars } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
+import { aggregateShopLinkRate, shapeShopLinkBars, totalShopLinkClicks } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
@@ -673,13 +675,16 @@ export default Vue.extend({
     // view the aggregate rate, clicks over the snapshot audience, with "n of N" in grey. With no
     // audience the Rate view shows the Counts cell.
     shopLinksHeaderCell() {
+      const fmt = this.$utils.formatNumber.bind(this.$utils);
+      const opts = { hideNone: this.shopLinksHideNone };
       if (this.shopLinksView === 'rate') {
-        const agg = aggregateShopLinkRate(this.shopLinks.rows, this.$utils.formatNumber.bind(this.$utils));
+        const agg = aggregateShopLinkRate(this.shopLinks.rows, fmt, opts);
         if (agg.pct) {
           return { pct: agg.pct, count: `${agg.count} of ${agg.audience}` };
         }
       }
-      return this.totalCells.shopLinks;
+      // The header describes the bars on screen: Hide No link drops that row from the total too.
+      return rateCell(totalShopLinkClicks(this.shopLinks.rows, opts), this.sent.total, RATE_DIGITS.shopLinks, fmt);
     },
 
     countryTotals() {
