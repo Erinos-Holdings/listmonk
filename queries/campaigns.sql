@@ -416,6 +416,19 @@ c AS (
 SELECT COALESCE(v.client, c.client) AS client, COALESCE(v.n, 0) AS views, COALESCE(c.n, 0) AS clicks
     FROM v FULL OUTER JOIN c ON v.client = c.client;
 
+-- name: get-campaign-bounce-type-counts
+-- Fork (bounce types, integrations BOUNCE-TYPES-SPEC D1) -- the selected campaigns' bounces in the
+-- date range per type (hard, soft, complaint) for the Bounces header's split, counted the way the
+-- Bounces line (get-campaign-bounce-counts) counts, raw rows under every privacy setting, so the
+-- split sums exactly to the line's total. A subscriber with a hard and a soft bounce counts once in
+-- each type and twice in the total, and one bouncing twice with one type counts twice. A type with
+-- no rows is absent. Rows are ordered hard, soft, complaint.
+SELECT type, COUNT(*) AS "count"
+    FROM bounces
+    WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3
+    GROUP BY type
+    ORDER BY (CASE type WHEN 'hard' THEN 1 WHEN 'soft' THEN 2 ELSE 3 END);
+
 -- name: get-campaign-link-counts
 -- raw: true
 -- %s = * or DISTINCT subscriber_id (prepared based on based on individual tracking=on/off). Prepared on boot.

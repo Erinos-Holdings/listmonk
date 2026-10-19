@@ -117,6 +117,10 @@ type Queries struct {
 	// Fork (client stats, CLIENT-STATS-SPEC D5) -- interpolated on boot like the country counts.
 	GetCampaignClientCounts *sqlx.Stmt `query:"get-campaign-client-counts"`
 
+	// Fork (bounce types, integrations BOUNCE-TYPES-SPEC D1) -- raw rows per type, like the Bounces
+	// line (no boot-time interpolation).
+	GetCampaignBounceTypeCounts *sqlx.Stmt `query:"get-campaign-bounce-type-counts"`
+
 	// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D3) -- interpolated on
 	// boot with the link counts' counted expression.
 	GetCampaignShopLinkCounts *sqlx.Stmt `query:"get-campaign-shop-link-counts"`

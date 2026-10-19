@@ -65,10 +65,14 @@
             <b-loading v-if="v.loading" :active="v.loading" :is-full-page="false" />
             <!-- Fork (campaign rates) -- the total as a rate over the selection's Sent, count in grey,
                  the campaigns list's shape; the count alone when nothing was sent. -->
+            <!-- Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- the Bounces count is
+                 followed by its non-zero types ("4: 3 hard, 1 soft"); the plain count until the
+                 split loads or when every type is zero. -->
             <h4 v-if="v.type !== 'bar'">
               {{ v.name }}
               <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
-              <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
+              <span class="has-text-grey-light" :data-cy="k === 'bounces' ? 'bounces-total' : null">({{ totalCells[k].count }}<template
+                  v-if="k === 'bounces' && bounceSplit">: {{ bounceSplit }}</template>)</span>
             </h4>
             <!-- Fork (shop-link header total, 2026-10-19) -- Links too: its clicks over Sent, count in grey. -->
             <h4 v-else-if="k !== 'shopLinks'">
@@ -106,6 +110,8 @@
             <!-- Fork (shop-link header total, 2026-10-19) -- the Clicks and Links hints: unique clickers
                  versus per-link clickers. -->
             <p v-if="k === 'clicks'" class="is-size-7 has-text-grey" data-cy="clicks-hint">{{ $t('analytics.clicksHint') }}</p>
+            <!-- Fork (bounce types, integrations BOUNCE-TYPES-SPEC D4) -- the Bounces hint. -->
+            <p v-if="k === 'bounces'" class="is-size-7 has-text-grey" data-cy="bounces-hint">{{ $t('analytics.bouncesHint') }}</p>
             <p v-if="k === 'links'" class="is-size-7 has-text-grey" data-cy="links-hint">{{ $t('analytics.linksHint') }}</p>
             <!-- Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the hint under the title. -->
             <p v-if="k === 'shopLinks'" class="is-size-7 has-text-grey" data-cy="shop-links-hint">{{ $t('analytics.shopLinksHint') }}</p>
@@ -201,6 +207,7 @@ import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
+import { bounceSplitText } from '../bounceTypes.mjs'; // eslint-disable-line import/extensions
 import { aggregateShopLinkRate, shapeShopLinkBars, totalShopLinkClicks } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -337,6 +344,10 @@ export default Vue.extend({
         fetched: false,
         sort: { ...CLIENT_DEFAULT_SORT },
       },
+
+      // Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- the raw rows of the Bounces
+      // header's split ([{ type, count }]); empty until the split loads.
+      bounceTypes: [],
 
       form: {
         campaigns: [],
@@ -599,6 +610,20 @@ export default Vue.extend({
       this.clients.sort = { field, order };
     },
 
+    // Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- the Bounces header's split, fetched
+    // beside the charts for the same campaigns and range (the getCountries shape). Cleared first so
+    // a new selection never shows the previous one's split; a failed fetch leaves the plain count.
+    getBounceTypes(camps) {
+      this.bounceTypes = [];
+      this.$api.getCampaignBounceTypeCounts({
+        id: camps.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((data) => {
+        this.bounceTypes = Array.isArray(data) ? data : [];
+      }).catch(() => {});
+    },
+
     // A client's share of the column's own total (Unknown included), as countryShare.
     clientShare(n, field) {
       return rateCell(n, this.clientTotalsSum[field], 1).pct;
@@ -672,6 +697,17 @@ export default Vue.extend({
     totalCells() {
       const fmt = this.$utils.formatNumber.bind(this.$utils);
       return Object.fromEntries(Object.keys(RATE_DIGITS).map((k) => [k, rateCell(this.counts[k], this.sent.total, RATE_DIGITS[k], fmt)]));
+    },
+
+    // Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- "3 hard, 1 soft" after the Bounces
+    // count, or "" (the plain count) when the split has not loaded or every type is zero.
+    bounceSplit() {
+      const fmt = this.$utils.formatNumber.bind(this.$utils);
+      return bounceSplitText(this.bounceTypes, {
+        hard: this.$t('analytics.bounceHard'),
+        soft: this.$t('analytics.bounceSoft'),
+        complaint: this.$t('analytics.bounceComplaint'),
+      }, fmt);
     },
 
     // Fork (shop-link header total, 2026-10-19) -- the Shop Link Attribution header's cell: in
@@ -812,6 +848,8 @@ export default Vue.extend({
           this.getCountries(this.form.campaigns);
           // Fork (client stats) -- the Email clients table.
           this.getClients(this.form.campaigns);
+          // Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- the Bounces header's split.
+          this.getBounceTypes(this.form.campaigns);
         });
       });
     }
