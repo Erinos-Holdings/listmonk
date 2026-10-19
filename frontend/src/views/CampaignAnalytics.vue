@@ -70,11 +70,22 @@
               <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
               <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
             </h4>
-            <h4 v-else-if="k !== 'shopLinks'">{{ v.name }}</h4>
+            <!-- Fork (shop-link header total, 2026-10-19) -- Links too: its clicks over Sent, count in grey. -->
+            <h4 v-else-if="k !== 'shopLinks'">
+              {{ v.name }}
+              <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
+              <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
+            </h4>
             <!-- Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6) -- the Counts | Rate toggle
                  in the chart's header row (the .segmented LaunchFilter shape). -->
             <div v-else class="shop-links-head" data-cy="shop-links-head">
-              <h4>{{ v.name }}</h4>
+              <!-- Fork (shop-link header total, 2026-10-19) -- the Clicks header's shape: the
+                   shop-link clicks as a rate over Sent, the count in grey. -->
+              <h4>
+                {{ v.name }}
+                <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
+                <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
+              </h4>
               <div class="shop-links-controls">
                 <!-- Fork (hide No link, 2026-10-19) -- drops the No link bar from either view. -->
                 <b-checkbox v-model="shopLinksHideNoneModel" size="is-small" data-cy="shop-links-hide-none">
@@ -192,7 +203,11 @@ import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
-const RATE_DIGITS = { views: 1, clicks: 1, bounces: 2 };
+// Fork (shop-link header total, 2026-10-19) -- shopLinks joins the rate headers: the shop-link
+// clicks (every kind, the sum getData keeps in counts.shopLinks) over the selection's Sent.
+const RATE_DIGITS = {
+  views: 1, clicks: 1, bounces: 2, links: 1, shopLinks: 1,
+};
 
 // The view's end-of-day convention for To: today 23:59.
 const endOfToday = () => dayjs().set('hour', 23).set('minute', 59).set('seconds', 0);
