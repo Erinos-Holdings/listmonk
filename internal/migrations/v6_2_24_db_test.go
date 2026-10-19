@@ -1,8 +1,8 @@
 package migrations
 
 // Fork (shop-link rate) -- integrations SHOP-LINK-RATE-SPEC D1 / I4: v6.2.24 creates
-// campaign_shop_link_audience with the D1 columns and primary key, is idempotent, and schema.sql's
-// tail block is the migration's DDL preceded by its DROP TABLE IF EXISTS line. Same opt-in harness
+// campaign_shop_link_audience with the D1 columns and primary key, is idempotent, and schema.sql
+// contains the migration's DDL preceded by its DROP TABLE IF EXISTS line. Same opt-in harness
 // as evergreen_db_test.go (LISTMONK_TEST_PG).
 
 import (
@@ -85,13 +85,15 @@ func TestShopLinkAudienceMigration_V6_2_24(t *testing.T) {
 		t.Fatalf("deleting the campaign left %d snapshot rows (want ON DELETE CASCADE)", n)
 	}
 
-	// schema.sql's tail block = the DROP line + the migration's DDL, byte-equal (F8).
+	// schema.sql carries the DROP line + the migration's DDL, byte-equal (F8).
+	// Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D1/I9) -- a Contains pin, not a
+	// tail pin: the agreement is the pair, not its position (v6.2.25's block now follows it).
 	schema, err := os.ReadFile(filepath.Join("..", "..", "schema.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	mirror := "DROP TABLE IF EXISTS campaign_shop_link_audience CASCADE;\n" + strings.TrimSpace(shopLinkAudienceDDL)
-	if !strings.HasSuffix(strings.TrimSpace(string(schema)), mirror) {
-		t.Fatal("schema.sql's last block is not the DROP line followed by the v6.2.24 DDL, byte-equal")
+	if !strings.Contains(string(schema), mirror) {
+		t.Fatal("schema.sql does not contain the DROP line followed by the v6.2.24 DDL, byte-equal")
 	}
 }

@@ -659,7 +659,7 @@ func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlCon
 		LinkFallback:          lf.forCampaign,
 		ScanInterval:          time.Second * 5,
 		ScanCampaigns:         !ko.Bool("passive"),
-	}, newManagerStore(q, co, md, lo), i, lo)
+	}, newManagerStore(q, co, md, db, lo), i, lo) // Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D3) -- db for the snapshot's transaction.
 
 	// Attach all messengers to the campaign manager.
 	for _, m := range msgrs {

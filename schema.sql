@@ -827,3 +827,16 @@ CREATE TABLE IF NOT EXISTS campaign_shop_link_audience (
     taken_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     PRIMARY KEY (campaign_id, brand, kind)
 );
+
+-- Fork (shop-link frozen, SHOP-LINK-FROZEN-SPEC D1) -- the kind each recipient of a broadcast held
+-- per brand at claim, written in the same statement as the summary above; clicks bucket through it.
+-- No foreign key to subscribers (a deleted subscriber's clicks already read unknown); the primary
+-- key is the only index. Mirrored in internal/migrations/v6.2.25.go (the CREATE only).
+DROP TABLE IF EXISTS campaign_shop_link_recipients CASCADE;
+CREATE TABLE IF NOT EXISTS campaign_shop_link_recipients (
+    campaign_id      INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    subscriber_id    INTEGER NOT NULL,
+    brand            TEXT NOT NULL,
+    kind             TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, subscriber_id, brand)
+);

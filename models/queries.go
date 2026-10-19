@@ -125,6 +125,10 @@ type Queries struct {
 	// manager's store takes once per broadcast at claim.
 	SnapshotCampaignShopLinkAudience *sqlx.Stmt `query:"snapshot-campaign-shop-link-audience"`
 
+	// Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D6) -- the GC of both snapshot
+	// tables, run with the click GC.
+	DeleteCampaignShopLinkSnapshots *sqlx.Stmt `query:"delete-campaign-shop-link-snapshots"`
+
 	NextCampaigns           *sqlx.Stmt `query:"next-campaigns"`
 	GetRunningCampaign      *sqlx.Stmt `query:"get-running-campaign"`
 	NextCampaignSubscribers *sqlx.Stmt `query:"next-campaign-subscribers"`

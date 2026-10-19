@@ -65,16 +65,25 @@ func (a *App) GCCampaignAnalytics(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
 	}
 
+	// Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D6) -- the shop-link snapshots
+	// serve the click join, so all and clicks also delete them (by the snapshot's taken_at); views
+	// touches neither table.
 	switch c.Param("type") {
 	case "all":
 		if err := a.core.DeleteCampaignViews(t); err != nil {
 			return err
 		}
-		err = a.core.DeleteCampaignLinkClicks(t)
+		if err := a.core.DeleteCampaignLinkClicks(t); err != nil {
+			return err
+		}
+		err = a.core.DeleteCampaignShopLinkSnapshots(t)
 	case "views":
 		err = a.core.DeleteCampaignViews(t)
 	case "clicks":
-		err = a.core.DeleteCampaignLinkClicks(t)
+		if err := a.core.DeleteCampaignLinkClicks(t); err != nil {
+			return err
+		}
+		err = a.core.DeleteCampaignShopLinkSnapshots(t)
 	default:
 		err = echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
 	}

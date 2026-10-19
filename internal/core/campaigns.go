@@ -765,3 +765,15 @@ func (c *Core) DeleteCampaignLinkClicks(before time.Time) error {
 
 	return nil
 }
+
+// DeleteCampaignShopLinkSnapshots deletes both shop-link snapshot tables' rows for campaigns whose
+// snapshot was taken before a given date, in one statement.
+// Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D6) -- run with the click GC.
+func (c *Core) DeleteCampaignShopLinkSnapshots(before time.Time) error {
+	if _, err := c.q.DeleteCampaignShopLinkSnapshots.Exec(before); err != nil {
+		c.log.Printf("error deleting campaign shop-link snapshots: %s", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, c.i18n.Ts("public.errorProcessingRequest"))
+	}
+
+	return nil
+}

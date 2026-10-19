@@ -93,6 +93,8 @@ var migList = []migFunc{
 	{"v6.2.23", migrations.V6_2_23},
 	// Fork migration (erinos): shop-link rate -- the campaign_shop_link_audience snapshot table (SHOP-LINK-RATE-SPEC) — see internal/migrations/v6.2.24.go.
 	{"v6.2.24", migrations.V6_2_24},
+	// Fork migration (erinos): shop-link frozen -- the campaign_shop_link_recipients per-recipient kind snapshot (SHOP-LINK-FROZEN-SPEC) — see internal/migrations/v6.2.25.go.
+	{"v6.2.25", migrations.V6_2_25},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

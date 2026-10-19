@@ -7,6 +7,10 @@ package main
 // preparations (I4), and type=shop_links is refused exactly where type=links is (I5). Shares
 // newLinkHarness (LISTMONK_TEST_PG opt-in; see link_redirect_db_test.go) and the brand-analytics
 // users (brand_analytics_db_test.go).
+//
+// Fork (shop-link frozen) -- integrations SHOP-LINK-FROZEN-SPEC I2/I3: a click buckets by its
+// subscriber's campaign_shop_link_recipients kind for the link's brand when the row exists, else by
+// the kind held today; a NULL subscriber stays unknown.
 
 import (
 	"encoding/json"
@@ -22,6 +26,7 @@ import (
 	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/models"
+	"github.com/lib/pq"
 )
 
 // shopLinkRows decodes a type=shop_links response body into "kind=count" pairs in response order.
@@ -240,6 +245,49 @@ func TestShopLinkAttribution(t *testing.T) {
 		if got != tc.want || n != tc.snaps {
 			t.Fatalf("%s\n got  %s (snapshots %d)\n want %s (snapshots %d)", tc.name, got, n, tc.want, tc.snaps)
 		}
+	}
+	// (Every case above is also I3's fallback for a campaign with a summary but no recipient rows,
+	// a broadcast sent before the recipient table existed, and for noSnap, a campaign with none.)
+
+	// Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC I2) -- clicks bucket by the kind
+	// held at send. A campaign snapshotted through the real statement, then one recipient's kind
+	// changes: their click counts under the SNAPSHOT kind.
+	frozen := newCamp("Frozen")
+	member0 := func(email, attribs string) int {
+		id := newSub(email, attribs)
+		db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $2, 'confirmed')`, id, list)
+		return id
+	}
+	fzSelf := member0("fz-self@x", entry("ruze", "self"))
+	fzFounder := member0("fz-founder@x", entry("ruze", "founder"))
+	if _, err := h.q.SnapshotCampaignShopLinkAudience.Exec(frozen, pq.StringArray{"ruze"}); err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	db.MustExec(`UPDATE subscribers SET attribs = $1::JSONB WHERE id = $2`, entry("ruze", "corporate"), fzSelf)
+	click(frozen, fzSelf, ruzeDot, 1)
+	click(frozen, fzFounder, ruzeIndex, 1)
+	// I3: a subscriber who joined after the snapshot (no recipient row on a campaign that has
+	// them) buckets by today's kind, and a NULL subscriber is unknown.
+	click(frozen, member0("fz-late@x", entry("ruze", "creator")), ruzeDot, 1)
+	click(frozen, 0, ruzeDot, 1)
+	code, body = analyticsMultiReq(t, h, member, "shop_links", frozen)
+	if code != http.StatusOK {
+		t.Fatalf("frozen: %d %s", code, body)
+	}
+	if got, n := shopLinkRateRows(t, body); got != "creator=1/0 founder=1/1 self=1/1 unknown=0/null" || n != 1 {
+		t.Fatalf("frozen campaign\n got  %s (snapshots %d)\n want creator=1/0 founder=1/1 self=1/1 unknown=0/null (snapshots 1)", got, n)
+	}
+
+	// I2 (the brand is the expression's): a recipient row for camp's founder@x under thirstygirl
+	// moves only their thirstygirl click (corporate today -> creator at send); their ruze clicks have
+	// no ruze row and stay founder by today's kind (I3).
+	db.MustExec(`INSERT INTO campaign_shop_link_recipients (campaign_id, subscriber_id, brand, kind) VALUES ($1, $2, 'thirstygirl', 'creator')`, camp, sFounder)
+	code, body = analyticsMultiReq(t, h, member, "shop_links", camp)
+	if code != http.StatusOK {
+		t.Fatalf("camp with a recipient row: %d %s", code, body)
+	}
+	if got, want := shopLinkRows(t, body), "none=3 creator=2 corporate=1 founder=1 partner=1 self=1 unknown=0"; got != want {
+		t.Fatalf("camp with a thirstygirl recipient row\n got  %s\n want %s", got, want)
 	}
 }
 

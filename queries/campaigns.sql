@@ -440,13 +440,26 @@ SELECT COUNT(%s) AS "count", url
 -- every row when no selected campaign has a snapshot and NULL for unknown always; and snapshots,
 -- how many of the selected campaigns have one. A kind with audience but no clicks is a row with
 -- count 0. The brand regex below is linkresolve.ShopLinkBrandPattern verbatim (pinned by its test).
+-- Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D4) -- a click buckets by the kind its
+-- subscriber held at send, the campaign_shop_link_recipients row for (the click's campaign, its
+-- subscriber, the brand in the link's expression), a primary-key lookup with at most one row per
+-- click, so neither linkSel preparation's count changes. With no such row (an evergreen, a campaign
+-- sent before the table existed, a failed snapshot, a member who joined after the first claim) it
+-- falls back to the kind held today, as before, and a click with no subscriber stays unknown. The
+-- lateral exposes only frozen_kind so the counted expression's bare subscriber_id stays unambiguous.
 WITH clicks AS (
     SELECT COUNT(%s) AS n,
         (CASE WHEN link_clicks.subscriber_id IS NULL THEN 'unknown'
-            ELSE COALESCE(NULLIF(subscribers.attribs->'shop_links'->SUBSTRING(links.url FROM 'shop_links[."[:space:]]*([A-Za-z0-9_-]+)')->>'kind', ''), 'none')
+            ELSE COALESCE(frozen.frozen_kind, NULLIF(subscribers.attribs->'shop_links'->lb.brand->>'kind', ''), 'none')
         END) AS kind
         FROM link_clicks
         JOIN links ON (link_clicks.link_id = links.id)
+        CROSS JOIN LATERAL (SELECT SUBSTRING(links.url FROM 'shop_links[."[:space:]]*([A-Za-z0-9_-]+)') AS brand) lb
+        LEFT JOIN LATERAL (
+            SELECT r.kind AS frozen_kind FROM campaign_shop_link_recipients r
+                WHERE r.campaign_id = link_clicks.campaign_id AND r.subscriber_id = link_clicks.subscriber_id
+                    AND r.brand = lb.brand
+        ) frozen ON TRUE
         LEFT JOIN subscribers ON (subscribers.id = link_clicks.subscriber_id)
         WHERE link_clicks.campaign_id=ANY($1) AND link_clicks.created_at >= $2 AND link_clicks.created_at <= $3
             AND POSITION('shop_links' IN links.url) > 0
@@ -475,6 +488,12 @@ SELECT COALESCE(clicks.n, 0) AS "count", COALESCE(clicks.kind, aud.kind) AS kind
 -- query's, with none for no entry, no kind or an empty kind. Inserted ONLY when the campaign has no
 -- snapshot yet, so a pause/resume, a restart or a re-claim never overwrites the original. A kind
 -- nobody in the audience holds gets no row (absent reads 0).
+-- Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D2) -- ONE statement writes both
+-- tables. r inserts one campaign_shop_link_recipients row per audience member per brand with the
+-- kind held now, under the one NOT EXISTS guard on the summary, and RETURNs what it inserted; the
+-- summary is the GROUP BY of exactly those rows, so it equals the recipients by construction. A
+-- re-run inserts nothing into either table (an empty r). A concurrent double claim aborts the
+-- loser's whole statement on a primary key, leaving the tables consistent (one logged error line).
 WITH camp AS (
     SELECT id, type, attribs->>'lang' AS lang FROM campaigns WHERE id = $1::INT
 ),
@@ -500,11 +519,15 @@ aud AS (
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
     CROSS JOIN UNNEST($2::TEXT[]) AS b(brand)
+),
+r AS (
+    INSERT INTO campaign_shop_link_recipients (campaign_id, subscriber_id, brand, kind)
+        SELECT DISTINCT $1::INT, subscriber_id, brand, kind FROM aud
+        WHERE NOT EXISTS (SELECT 1 FROM campaign_shop_link_audience WHERE campaign_id = $1::INT)
+        RETURNING campaign_id, subscriber_id, brand, kind
 )
 INSERT INTO campaign_shop_link_audience (campaign_id, brand, kind, audience)
-    SELECT $1::INT, brand, kind, COUNT(DISTINCT subscriber_id)::INT FROM aud
-    WHERE NOT EXISTS (SELECT 1 FROM campaign_shop_link_audience WHERE campaign_id = $1::INT)
-    GROUP BY brand, kind;
+    SELECT campaign_id, brand, kind, COUNT(*)::INT FROM r GROUP BY 1, 2, 3;
 
 -- name: export-campaign-views
 SELECT campaign_views.campaign_id,
@@ -703,6 +726,16 @@ DELETE FROM campaign_views WHERE created_at < $1;
 
 -- name: delete-campaign-link-clicks
 DELETE FROM link_clicks WHERE created_at < $1;
+
+-- name: delete-campaign-shop-link-snapshots
+-- Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D6) -- the snapshot serves the click
+-- join, so it is GC'd with the clicks, keyed by the summary's taken_at. ONE statement deletes the
+-- summary rows and the recipient rows of the same campaigns, so recipients can never be gone while
+-- a summary stays (which the click join would read as drift).
+WITH gone AS (
+    DELETE FROM campaign_shop_link_audience WHERE taken_at < $1 RETURNING campaign_id
+)
+DELETE FROM campaign_shop_link_recipients WHERE campaign_id IN (SELECT campaign_id FROM gone);
 
 -- name: get-one-campaign-subscriber
 SELECT * FROM subscribers

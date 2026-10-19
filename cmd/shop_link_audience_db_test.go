@@ -6,6 +6,12 @@ package main
 // subscriber), exactly once; an evergreen and a body without a shop-link expression run no snapshot
 // query; a snapshot failure is logged and swallowed. Shares newLinkHarness (LISTMONK_TEST_PG opt-in;
 // see link_redirect_db_test.go).
+//
+// Fork (shop-link frozen) -- integrations SHOP-LINK-FROZEN-SPEC I1/I6/I7/I8. The same claim also
+// writes one campaign_shop_link_recipients row per audience member per brand (one statement, so the
+// summary is the recipients' GROUP BY); the snapshot now runs in a goroutine, so every assertion
+// follows st.snapshots.Wait() after NextCampaigns; and the goroutine's recover keeps a panic in the
+// snapshot from taking the process down.
 
 import (
 	"bytes"
@@ -38,6 +44,55 @@ func audienceRows(t *testing.T, h *linkHarness, camp int) string {
 	return strings.Join(out, " ")
 }
 
+// recipientRows reads a campaign's per-recipient snapshot as sorted "email/brand/kind" triples.
+// Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC I1/I6).
+func recipientRows(t *testing.T, h *linkHarness, camp int) string {
+	t.Helper()
+	var rows []struct {
+		Email string `db:"email"`
+		Brand string `db:"brand"`
+		Kind  string `db:"kind"`
+	}
+	if err := h.db.Select(&rows, `SELECT COALESCE(s.email, '#' || r.subscriber_id::TEXT) AS email, r.brand, r.kind
+		FROM campaign_shop_link_recipients r LEFT JOIN subscribers s ON s.id = r.subscriber_id
+		WHERE r.campaign_id = $1`, camp); err != nil {
+		t.Fatal(err)
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, fmt.Sprintf("%s/%s/%s", r.Email, r.Brand, r.Kind))
+	}
+	sort.Strings(out)
+	return strings.Join(out, " ")
+}
+
+// assertSummaryIsRecipientsGroupBy is I7: for every campaign with a snapshot, the summary rows
+// equal SELECT brand, kind, COUNT(*) FROM recipients GROUP BY brand, kind, in both directions.
+func assertSummaryIsRecipientsGroupBy(t *testing.T, h *linkHarness) {
+	t.Helper()
+	var diff []string
+	if err := h.db.Select(&diff, `
+		WITH g AS (
+			SELECT campaign_id, brand, kind, COUNT(*)::INT AS audience FROM campaign_shop_link_recipients
+				GROUP BY campaign_id, brand, kind
+		),
+		a AS (SELECT campaign_id, brand, kind, audience FROM campaign_shop_link_audience)
+		SELECT COALESCE(a.campaign_id, g.campaign_id)::TEXT || '/' || COALESCE(a.brand, g.brand) || '/' ||
+			COALESCE(a.kind, g.kind) || ' summary=' || COALESCE(a.audience::TEXT, '-') || ' recipients=' || COALESCE(g.audience::TEXT, '-')
+		FROM a FULL OUTER JOIN g ON (a.campaign_id = g.campaign_id AND a.brand = g.brand AND a.kind = g.kind)
+		WHERE a.audience IS DISTINCT FROM g.audience`); err != nil {
+		t.Fatal(err)
+	}
+	if len(diff) != 0 {
+		t.Fatalf("summary is not the recipients' GROUP BY: %v", diff)
+	}
+	var n int
+	h.db.Get(&n, `SELECT COUNT(*) FROM campaign_shop_link_audience`)
+	if n == 0 {
+		t.Fatal("I7 vacuous: no summary rows in the fixture")
+	}
+}
+
 func trackLinkBody(exprs ...string) string {
 	var b strings.Builder
 	b.WriteString("<p>Hello</p>")
@@ -53,7 +108,7 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 	db := h.db
 
 	var buf bytes.Buffer
-	st := newManagerStore(h.q, h.app.core, nil, log.New(&buf, "", 0))
+	st := newManagerStore(h.q, h.app.core, nil, db, log.New(&buf, "", 0))
 
 	newList := func(name string) int {
 		var id int
@@ -141,6 +196,8 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NextCampaigns: %v", err)
 		}
+		// Fork (shop-link frozen, SHOP-LINK-FROZEN-SPEC D3) -- the snapshots run in goroutines.
+		st.snapshots.Wait()
 		got := map[int]bool{}
 		for _, c := range out {
 			got[c.ID] = true
@@ -187,16 +244,58 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 		t.Fatalf("first claim logged: %s", buf.String())
 	}
 
+	// Fork (shop-link frozen, SHOP-LINK-FROZEN-SPEC I1) -- the same claim wrote one recipient row per
+	// audience member with the kind held at that moment (both@x once despite two lists; the
+	// blocklisted and the unsubscribed have none).
+	wantA := "both@x/ruze/founder corp@x/ruze/corporate creator@x/ruze/creator emptykind@x/ruze/none founder@x/ruze/founder none@x/ruze/none self@x/ruze/self"
+	if got := recipientRows(t, h, campA); got != wantA {
+		t.Fatalf("campaign A recipients\n got  %s\n want %s", got, wantA)
+	}
+	// I6: two brands in a body -> two recipient rows per recipient.
+	wantB := "both@x/ruze/founder both@x/thirstygirl/none corp@x/ruze/corporate corp@x/thirstygirl/none " +
+		"creator@x/ruze/creator creator@x/thirstygirl/none emptykind@x/ruze/none emptykind@x/thirstygirl/none " +
+		"founder@x/ruze/founder founder@x/thirstygirl/corporate none@x/ruze/none none@x/thirstygirl/none " +
+		"self@x/ruze/self self@x/thirstygirl/none"
+	if got := recipientRows(t, h, campB); got != wantB {
+		t.Fatalf("campaign B recipients (two brands)\n got  %s\n want %s", got, wantB)
+	}
+	if got, want := recipientRows(t, h, campD), "dconf@x/ruze/self"; got != want {
+		t.Fatalf("campaign D recipients (double opt-in)\n got  %s\n want %s", got, want)
+	}
+	if got, want := recipientRows(t, h, campF), "fr@x/ruze/creator"; got != want {
+		t.Fatalf("campaign F recipients (lang fr)\n got  %s\n want %s", got, want)
+	}
+	if got := recipientRows(t, h, campC); got != "" {
+		t.Fatalf("campaign C (no shop link) has recipient rows: %s", got)
+	}
+	if got := recipientRows(t, h, campE); got != "" {
+		t.Fatalf("evergreen campaign E has recipient rows: %s", got)
+	}
+	// I7: the summary is the recipients' GROUP BY for every snapshotted campaign.
+	assertSummaryIsRecipientsGroupBy(t, h)
+
 	var takenA time.Time
 	db.Get(&takenA, `SELECT MIN(taken_at) FROM campaign_shop_link_audience WHERE campaign_id = $1`, campA)
 
 	// A re-claim (the campaigns excluded from current again) after the audience changed: the
 	// original rows and taken_at stay, and no error line was swallowed (F6).
 	newSub("late@x", "enabled", entry("ruze", "self"), on1)
+	// Fork (shop-link frozen, SHOP-LINK-FROZEN-SPEC I1) -- and another recipient's kind changes.
+	db.MustExec(`UPDATE subscribers SET attribs = $1::JSONB WHERE email = 'self@x'`, entry("ruze", "corporate"))
 	returned([]int{campA, campB, campC, campE})
 	if got, want := audienceRows(t, h, campA), "ruze/corporate=1 ruze/creator=1 ruze/founder=2 ruze/none=2 ruze/self=1"; got != want {
 		t.Fatalf("re-claim changed campaign A's snapshot\n got  %s\n want %s", got, want)
 	}
+	if got := recipientRows(t, h, campA); got != wantA {
+		t.Fatalf("re-claim changed campaign A's recipients\n got  %s\n want %s", got, wantA)
+	}
+	if got := recipientRows(t, h, campB); got != wantB {
+		t.Fatalf("re-claim changed campaign B's recipients\n got  %s\n want %s", got, wantB)
+	}
+	if got := recipientRows(t, h, campE); got != "" {
+		t.Fatalf("re-claim gave evergreen campaign E recipient rows: %s", got)
+	}
+	assertSummaryIsRecipientsGroupBy(t, h)
 	var takenA2 time.Time
 	var nA int
 	db.Get(&takenA2, `SELECT MAX(taken_at) FROM campaign_shop_link_audience WHERE campaign_id = $1`, campA)
@@ -226,6 +325,61 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 	}
 	if n := strings.Count(logged, "error snapshotting shop-link audience"); n != 4 {
 		t.Fatalf("%d snapshot error lines, want 4: %q", n, logged)
+	}
+}
+
+// TestShopLinkAudiencePanicRecovered is SHOP-LINK-FROZEN-SPEC I8: a panic inside the snapshot
+// goroutine (the snapshot statement nil-ed on a COPY of the queries struct, so the transaction's
+// Stmtx dereferences nil) is recovered and logged with the campaign; NextCampaigns returns the
+// campaign, snapshots.Wait() returns, and this test is still running to assert it.
+func TestShopLinkAudiencePanicRecovered(t *testing.T) {
+	h := newLinkHarness(t)
+	db := h.db
+
+	q := *h.q
+	q.SnapshotCampaignShopLinkAudience = nil
+	var buf bytes.Buffer
+	st := newManagerStore(&q, h.app.core, nil, db, log.New(&buf, "", 0))
+
+	var list, sub, camp int
+	if err := db.Get(&list, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Ruze', 'public', 'single', '{brand:ruze}') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Get(&sub, `INSERT INTO subscribers (uuid, email, name, attribs) VALUES (gen_random_uuid(), 'p@x', 'S', '{"shop_links":{"ruze":{"url":"https://x.test/s","kind":"self"}}}') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $2, 'confirmed')`, sub, list)
+	if err := db.Get(&camp, `INSERT INTO campaigns (uuid, name, subject, from_email, body, content_type, messenger, status, template_id)
+		VALUES (gen_random_uuid(), 'Panicky', 's', 'f@x', $1, 'richtext', 'email', 'running', (SELECT id FROM templates LIMIT 1)) RETURNING id`,
+		trackLinkBody(`{{ .Subscriber.Attribs.shop_links.ruze.url }}`)); err != nil {
+		t.Fatal(err)
+	}
+	db.MustExec(`INSERT INTO campaign_lists (campaign_id, list_id, list_name) VALUES ($1, $2, 'L')`, camp, list)
+
+	out, err := st.NextCampaigns([]int64{}, []int64{})
+	if err != nil {
+		t.Fatalf("NextCampaigns: %v", err)
+	}
+	found := false
+	for _, c := range out {
+		found = found || c.ID == camp
+	}
+	if !found {
+		t.Fatalf("NextCampaigns did not return campaign %d", camp)
+	}
+	st.snapshots.Wait()
+
+	logged := buf.String()
+	if want := fmt.Sprintf("panic snapshotting shop-link audience for campaign %d (Panicky)", camp); !strings.Contains(logged, want) {
+		t.Fatalf("recover did not log %q: %q", want, logged)
+	}
+	if !strings.Contains(logged, "goroutine ") {
+		t.Fatalf("recover log carries no stack: %q", logged)
+	}
+	var n int
+	db.Get(&n, `SELECT (SELECT COUNT(*) FROM campaign_shop_link_audience) + (SELECT COUNT(*) FROM campaign_shop_link_recipients)`)
+	if n != 0 {
+		t.Fatalf("%d snapshot rows written after a panic, want 0", n)
 	}
 }
 

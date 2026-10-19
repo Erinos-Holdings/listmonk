@@ -27,7 +27,7 @@
     "analytics.shopLinkUnknown": "Unknown",
     "analytics.shopLinks": "Shop Link Attribution",
     "analytics.shopLinksCounts": "Counts",
-    "analytics.shopLinksHint": "Clicks on the campaign's shop links, by the kind of shop link each subscriber holds today for the link's brand. Rate = those clicks over the recipients who held that kind when the campaign was sent (recorded at send for broadcasts since this chart's release; campaign 215's was reconstructed; automations have no rate). Attribution can change after a send, so a rate can move. No link = no stored shop link for that brand, so the click went to the brand site.",
+    "analytics.shopLinksHint": "Clicks on the campaign's shop links, by the kind of shop link each recipient held when the campaign was sent (recorded at send for broadcasts since frozen attribution was released; campaign 215's was reconstructed; automations and older sends use the kind held today). Rate = those clicks over the recipients who held that kind at send. No link = no stored shop link for that brand, so the click went to the brand site.",
     "analytics.shopLinksNoSnapshot": "No audience snapshot for this selection",
     "analytics.shopLinksPartial": "Rate covers only the selected campaigns that have an audience snapshot.",
     "analytics.shopLinksRate": "Rate",
