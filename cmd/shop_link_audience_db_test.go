@@ -109,6 +109,33 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 	campC := newCamp("C", trackLinkBody(`{{ .Subscriber.Attribs.rewards_site_url }}`), false, l1) // I2: no shop link
 	campE := newCamp("E", trackLinkBody(ruze), true, l1)                                          // I1/F1: evergreen
 
+	// Stage 4 F1 -- the claim predicate's other two arms. (a) A double-opt-in list: only the
+	// confirmed member is in the audience. (b) A French campaign: only the fr subscriber is.
+	var lDouble int
+	if err := db.Get(&lDouble, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Ruze double', 'public', 'double', '{brand:ruze}') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	newSub("dconf@x", "enabled", entry("ruze", "self"), map[int]string{lDouble: "confirmed"})
+	newSub("dunconf@x", "enabled", entry("ruze", "founder"), map[int]string{lDouble: "unconfirmed"})
+	campD := newCamp("D", trackLinkBody(ruze), false, lDouble)
+
+	lLang := newList("Ruze lang")
+	newSub("fr@x", "enabled", `{"lang":"fr","shop_links":{"ruze":{"url":"https://x.test/c","kind":"creator"}}}`, map[int]string{lLang: "confirmed"})
+	newSub("en@x", "enabled", `{"lang":"en","shop_links":{"ruze":{"url":"https://x.test/s","kind":"self"}}}`, map[int]string{lLang: "confirmed"})
+	campF := newCamp("F", trackLinkBody(ruze), false, lLang)
+	db.MustExec(`UPDATE campaigns SET attribs = '{"lang":"fr"}' WHERE id = $1`, campF)
+
+	// paritySum asserts a campaign's per-brand snapshot sum equals the claim's to_send.
+	paritySum := func(camp int, brand string) {
+		t.Helper()
+		var toSend, sum int
+		db.Get(&toSend, `SELECT to_send FROM campaigns WHERE id = $1`, camp)
+		db.Get(&sum, `SELECT COALESCE(SUM(audience), 0) FROM campaign_shop_link_audience WHERE campaign_id = $1 AND brand = $2`, camp, brand)
+		if toSend != sum {
+			t.Fatalf("campaign %d: to_send %d, %s snapshot sum %d (the claim and the snapshot predicates drifted)", camp, toSend, brand, sum)
+		}
+	}
+
 	returned := func(ids []int) map[int]bool {
 		out, err := st.NextCampaigns([]int64{}, []int64{})
 		if err != nil {
@@ -140,6 +167,16 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 	if got, want := audienceRows(t, h, campB), "ruze/corporate=1 ruze/creator=1 ruze/founder=2 ruze/none=2 ruze/self=1 thirstygirl/corporate=1 thirstygirl/none=6"; got != want {
 		t.Fatalf("campaign B snapshot (two brands)\n got  %s\n want %s", got, want)
 	}
+	paritySum(campB, "ruze")
+	paritySum(campB, "thirstygirl")
+	if got, want := audienceRows(t, h, campD), "ruze/self=1"; got != want {
+		t.Fatalf("campaign D snapshot (double opt-in)\n got  %s\n want %s", got, want)
+	}
+	paritySum(campD, "ruze")
+	if got, want := audienceRows(t, h, campF), "ruze/creator=1"; got != want {
+		t.Fatalf("campaign F snapshot (lang fr)\n got  %s\n want %s", got, want)
+	}
+	paritySum(campF, "ruze")
 	if got := audienceRows(t, h, campC); got != "" {
 		t.Fatalf("campaign C (no shop link) has a snapshot: %s", got)
 	}
@@ -172,12 +209,12 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 	}
 
 	// I2: a snapshot failure (the table dropped) is logged and NextCampaigns still returns the
-	// campaigns. Only the two shop-link broadcasts log; the evergreen and the no-shop-link body
+	// campaigns. Only the four shop-link broadcasts log; the evergreen and the no-shop-link body
 	// run no snapshot query at all (a query would fail and log here).
 	db.MustExec(`DROP TABLE campaign_shop_link_audience`)
 	returned([]int{campA, campB, campC, campE})
 	logged := buf.String()
-	for _, id := range []int{campA, campB} {
+	for _, id := range []int{campA, campB, campD, campF} {
 		if !strings.Contains(logged, fmt.Sprintf("campaign %d ", id)) {
 			t.Fatalf("snapshot failure for campaign %d not logged: %q", id, logged)
 		}
@@ -187,8 +224,8 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 			t.Fatalf("campaign %d ran a snapshot query: %q", id, logged)
 		}
 	}
-	if n := strings.Count(logged, "error snapshotting shop-link audience"); n != 2 {
-		t.Fatalf("%d snapshot error lines, want 2: %q", n, logged)
+	if n := strings.Count(logged, "error snapshotting shop-link audience"); n != 4 {
+		t.Fatalf("%d snapshot error lines, want 4: %q", n, logged)
 	}
 }
 

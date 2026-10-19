@@ -22,7 +22,6 @@ test('I6 counts: the four kinds always, zero-filled, ties in rank order', () => 
   assert.deepEqual(empty.labels, ['Self', 'Creator', 'Founder', 'Corporate']);
   assert.deepEqual(empty.data, [0, 0, 0, 0]);
   assert.deepEqual(empty.texts, ['0', '0', '0', '0']);
-  assert.equal(empty.noSnapshot, true);
   assert.deepEqual(shapeShopLinkBars(null, labels).data, [0, 0, 0, 0]);
 });
 
@@ -78,7 +77,6 @@ const rateRows = [
 test('I6 rate: sorted by rate desc; text "x% (n of N)"; unknown and zero-zero kinds hidden', () => {
   const fmt = (n) => n.toLocaleString('en-US');
   const o = shapeShopLinkBars(rateRows, labels, 'rate', fmt);
-  assert.equal(o.noSnapshot, false);
   // No link (1 of 0) and Creator (0 of 282) tie at rate 0: count desc puts No link first.
   assert.deepEqual(o.labels, ['Self', 'Founder', 'Corporate', 'No link', 'Creator']);
   assert.deepEqual(o.texts, ['4.9% (7 of 142)', '2.0% (34 of 1,688)', '0.9% (1 of 116)', '1 of 0', '0.0% (0 of 282)']);
@@ -96,12 +94,11 @@ test('I6 rate: a rate over 100% is shown as computed; ties by count desc, then r
   ], labels, 'rate')), ['Self=150|150.0% (3 of 2)', 'Corporate=50|50.0% (2 of 4)', 'Creator=50|50.0% (1 of 2)', 'Founder=50|50.0% (1 of 2)']);
 });
 
-test('I6 rate: every audience null is flagged and renders no bars', () => {
+test('I6 rate: every audience null renders no bars (the view owns the no-snapshot note)', () => {
   const o = shapeShopLinkBars([
     { kind: 'founder', count: 3, audience: null },
     { kind: 'unknown', count: 1, audience: null },
   ], labels, 'rate');
-  assert.equal(o.noSnapshot, true);
-  assert.deepEqual(o.labels, []);
-  assert.equal(shapeShopLinkBars([], labels, 'rate').noSnapshot, true);
+  assert.deepEqual(o, { labels: [], data: [], texts: [] });
+  assert.deepEqual(shapeShopLinkBars([], labels, 'rate'), { labels: [], data: [], texts: [] });
 });

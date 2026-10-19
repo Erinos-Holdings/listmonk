@@ -14,7 +14,8 @@
 // denominator). Drift is shown, not hidden: the numerator is the kind held today, the denominator
 // the kind held at send, so a kind can carry clicks against audience 0 (value 0, text "n of 0") or
 // read over 100% (shown as computed). Sorted by rate desc, ties by count desc, then rank order.
-// When no row has an audience, noSnapshot is true (the view shows a note instead of a chart).
+// When no row has an audience the rate view has no bars; whether to show the "no snapshot" note
+// is the view's one definition (CampaignAnalytics.vue shopLinksNoSnapshot).
 
 export const RANK_KINDS = Object.freeze(['self', 'creator', 'founder', 'corporate']);
 export const OPTIONAL_KINDS = Object.freeze(['none', 'unknown']);
@@ -37,10 +38,10 @@ const byRank = (a, b) => {
   return a.localeCompare(b, 'en');
 };
 
-// shapeShopLinkBars returns { labels, data, texts, noSnapshot } for a bar chart. labels maps each
-// of RANK_KINDS and OPTIONAL_KINDS to its display string (the kind itself when a label is
-// missing); view is 'counts' (default) or 'rate'; fmt formats a count (the locale formatter in the
-// view; String by default). noSnapshot is true when no row carries an audience.
+// shapeShopLinkBars returns { labels, data, texts } for a bar chart. labels maps each of
+// RANK_KINDS and OPTIONAL_KINDS to its display string (the kind itself when a label is missing);
+// view is 'counts' (default) or 'rate'; fmt formats a count (the locale formatter in the view;
+// String by default).
 export function shapeShopLinkBars(rows, labels = {}, view = 'counts', fmt = String) {
   const counts = new Map();
   const audiences = new Map();
@@ -55,9 +56,7 @@ export function shapeShopLinkBars(rows, labels = {}, view = 'counts', fmt = Stri
   });
 
   const label = (k) => (typeof labels[k] === 'string' && labels[k] !== '' ? labels[k] : k);
-  const out = {
-    labels: [], data: [], texts: [], noSnapshot: audiences.size === 0,
-  };
+  const out = { labels: [], data: [], texts: [] };
   const push = (k, value, text) => {
     out.labels.push(label(k));
     out.data.push(value);
