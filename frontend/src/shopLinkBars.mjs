@@ -42,11 +42,16 @@ const byRank = (a, b) => {
 // RANK_KINDS and OPTIONAL_KINDS to its display string (the kind itself when a label is missing);
 // view is 'counts' (default) or 'rate'; fmt formats a count (the locale formatter in the view;
 // String by default).
-export function shapeShopLinkBars(rows, labels = {}, view = 'counts', fmt = String) {
+// Fork (hide No link, 2026-10-19) -- opts.hideNone drops the `none` bar from either view (the
+// user's toggle beside Counts | Rate); the row is still in the input, only the bar is hidden.
+export function shapeShopLinkBars(rows, labels = {}, view = 'counts', fmt = String, opts = {}) {
   const counts = new Map();
   const audiences = new Map();
   (Array.isArray(rows) ? rows : []).forEach((r) => {
     if (!r || typeof r.kind !== 'string') {
+      return;
+    }
+    if (opts.hideNone && r.kind === 'none') {
       return;
     }
     counts.set(r.kind, (counts.get(r.kind) || 0) + num(r.count));

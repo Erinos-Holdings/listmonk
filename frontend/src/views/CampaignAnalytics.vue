@@ -75,16 +75,22 @@
                  in the chart's header row (the .segmented LaunchFilter shape). -->
             <div v-else class="shop-links-head" data-cy="shop-links-head">
               <h4>{{ v.name }}</h4>
-              <b-field class="segmented" role="group" :aria-label="$t('analytics.shopLinksView')">
-                <b-radio-button v-model="shopLinksViewModel" native-value="counts" size="is-small" type="is-primary"
-                  data-cy="shop-links-counts">
-                  {{ $t('analytics.shopLinksCounts') }}
-                </b-radio-button>
-                <b-radio-button v-model="shopLinksViewModel" native-value="rate" size="is-small" type="is-primary"
-                  data-cy="shop-links-rate">
-                  {{ $t('analytics.shopLinksRate') }}
-                </b-radio-button>
-              </b-field>
+              <div class="shop-links-controls">
+                <!-- Fork (hide No link, 2026-10-19) -- drops the No link bar from either view. -->
+                <b-checkbox v-model="shopLinksHideNoneModel" size="is-small" data-cy="shop-links-hide-none">
+                  {{ $t('analytics.shopLinksHideNone') }}
+                </b-checkbox>
+                <b-field class="segmented" role="group" :aria-label="$t('analytics.shopLinksView')">
+                  <b-radio-button v-model="shopLinksViewModel" native-value="counts" size="is-small" type="is-primary"
+                    data-cy="shop-links-counts">
+                    {{ $t('analytics.shopLinksCounts') }}
+                  </b-radio-button>
+                  <b-radio-button v-model="shopLinksViewModel" native-value="rate" size="is-small" type="is-primary"
+                    data-cy="shop-links-rate">
+                    {{ $t('analytics.shopLinksRate') }}
+                  </b-radio-button>
+                </b-field>
+              </div>
             </div>
             <!-- Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the hint under the title. -->
             <p v-if="k === 'shopLinks'" class="is-size-7 has-text-grey" data-cy="shop-links-hint">{{ $t('analytics.shopLinksHint') }}</p>
@@ -236,6 +242,9 @@ export default Vue.extend({
       // from the pref at mount; this view is the pref's one writer), and the raw rows and selection
       // size of the last fetch, kept so a toggle re-shapes the chart without a refetch.
       shopLinksView: 'counts',
+      // Fork (hide No link, 2026-10-19) -- the "Hide No link" checkbox's state (pref
+      // analytics.shopLinksHideNone, read at mount; the shopLinksHideNoneModel setter is its one writer).
+      shopLinksHideNone: false,
       shopLinks: { rows: [], selection: 0 },
       // Fork (campaign rates) -- the Sent of the campaigns the charts were fetched for: the
       // total (headers, Location) and per id (the ring). Set at fetch time, so editing the picker
@@ -395,7 +404,7 @@ export default Vue.extend({
         corporate: this.$t('analytics.shopLinkCorporate'),
         none: this.$t('analytics.shopLinkNone'),
         unknown: this.$t('analytics.shopLinkUnknown'),
-      }, this.shopLinksView, (n) => this.$utils.formatNumber(n));
+      }, this.shopLinksView, (n) => this.$utils.formatNumber(n), { hideNone: this.shopLinksHideNone });
 
       return {
         labels,
@@ -611,6 +620,21 @@ export default Vue.extend({
       },
     },
 
+    // Fork (hide No link, 2026-10-19) -- the checkbox's model: the only writer of the
+    // analytics.shopLinksHideNone pref; a change re-shapes the kept rows (no refetch).
+    shopLinksHideNoneModel: {
+      get() {
+        return this.shopLinksHideNone;
+      },
+      set(v) {
+        this.shopLinksHideNone = !!v;
+        this.$utils.setPref('analytics.shopLinksHideNone', this.shopLinksHideNone ? 'true' : 'false');
+        if (this.charts.shopLinks.data) {
+          this.charts.shopLinks.data = this.shopLinksPoints();
+        }
+      },
+    },
+
     // No selected campaign has an audience snapshot (every audience null).
     shopLinksNoSnapshot() {
       return !this.shopLinks.rows.some((r) => r && r.audience !== null && r.audience !== undefined);
@@ -688,6 +712,8 @@ export default Vue.extend({
     // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6) -- the remembered view, read at
     // mount; default counts.
     this.shopLinksView = this.$utils.getPref('analytics.shopLinksView') === 'rate' ? 'rate' : 'counts';
+    // Fork (hide No link, 2026-10-19) -- the remembered checkbox; default shown.
+    this.shopLinksHideNone = this.$utils.getPref('analytics.shopLinksHideNone') === 'true';
 
     // Fetch one or more campaigns if there are ?id params, wait for the fetches
     // to finish, add them to the campaign selector and submit the form.

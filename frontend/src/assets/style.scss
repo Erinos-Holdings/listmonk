@@ -1283,6 +1283,13 @@ section.analytics {
     .field {
       margin-bottom: 0;
     }
+
+    // Fork (hide No link, 2026-10-19) -- the checkbox and the Counts | Rate toggle side by side.
+    .shop-links-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
   }
 }
 

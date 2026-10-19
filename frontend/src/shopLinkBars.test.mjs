@@ -94,6 +94,27 @@ test('I6 rate: a rate over 100% is shown as computed; ties by count desc, then r
   ], labels, 'rate')), ['Self=150|150.0% (3 of 2)', 'Corporate=50|50.0% (2 of 4)', 'Creator=50|50.0% (1 of 2)', 'Founder=50|50.0% (1 of 2)']);
 });
 
+test('hideNone: the No link bar is dropped from both views, nothing else moves', () => {
+  const rows = [
+    {
+      kind: 'founder', count: 54, audience: 1449, snapshots: 1,
+    },
+    {
+      kind: 'none', count: 1, audience: 3, snapshots: 1,
+    },
+    {
+      kind: 'self', count: 7, audience: 118, snapshots: 1,
+    },
+  ];
+  const counts = shapeShopLinkBars(rows, labels, 'counts', String, { hideNone: true });
+  assert.deepEqual(counts.labels, ['Founder', 'Self', 'Creator', 'Corporate']);
+  const rate = shapeShopLinkBars(rows, labels, 'rate', String, { hideNone: true });
+  assert.deepEqual(rate.labels, ['Self', 'Founder']);
+  // Default: the bar stays.
+  assert.ok(shapeShopLinkBars(rows, labels, 'rate').labels.includes('No link'));
+  assert.ok(shapeShopLinkBars(rows, labels, 'counts').labels.includes('No link'));
+});
+
 test('I6 rate: every audience null renders no bars (the view owns the no-snapshot note)', () => {
   const o = shapeShopLinkBars([
     { kind: 'founder', count: 3, audience: null },
