@@ -326,6 +326,10 @@ func TestShopLinkAudienceSnapshot(t *testing.T) {
 	if n := strings.Count(logged, "error snapshotting shop-link audience"); n != 4 {
 		t.Fatalf("%d snapshot error lines, want 4: %q", n, logged)
 	}
+	// Stage 4 F2 -- the failed statement rolled back whole: campaign A's recipient rows are unchanged.
+	if got := recipientRows(t, h, campA); got != wantA {
+		t.Fatalf("failed re-claim changed campaign A's recipients\n got  %s\n want %s", got, wantA)
+	}
 }
 
 // TestShopLinkAudiencePanicRecovered is SHOP-LINK-FROZEN-SPEC I8: a panic inside the snapshot
@@ -380,6 +384,46 @@ func TestShopLinkAudiencePanicRecovered(t *testing.T) {
 	db.Get(&n, `SELECT (SELECT COUNT(*) FROM campaign_shop_link_audience) + (SELECT COUNT(*) FROM campaign_shop_link_recipients)`)
 	if n != 0 {
 		t.Fatalf("%d snapshot rows written after a panic, want 0", n)
+	}
+}
+
+// TestShopLinkSnapshotNoCampaignRace is SHOP-LINK-FROZEN Stage 4 F1: the manager goes on to
+// newPipe(c) -> LoadInlineImages, which assigns c.Body on the *models.Campaign NextCampaigns
+// returned, while the snapshot goroutine runs. The goroutine must hold no pointer into the campaign,
+// so writing the returned campaign's Body and ContentType before Wait() is race-free (run with -race).
+func TestShopLinkSnapshotNoCampaignRace(t *testing.T) {
+	h := newLinkHarness(t)
+	db := h.db
+	st := newManagerStore(h.q, h.app.core, nil, db, log.New(&bytes.Buffer{}, "", 0))
+
+	var list, sub, camp int
+	if err := db.Get(&list, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Ruze', 'public', 'single', '{brand:ruze}') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Get(&sub, `INSERT INTO subscribers (uuid, email, name, attribs) VALUES (gen_random_uuid(), 'r@x', 'S', '{"shop_links":{"ruze":{"url":"https://x.test/s","kind":"self"}}}') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $2, 'confirmed')`, sub, list)
+	if err := db.Get(&camp, `INSERT INTO campaigns (uuid, name, subject, from_email, body, content_type, messenger, status, template_id)
+		VALUES (gen_random_uuid(), 'Racy', 's', 'f@x', $1, 'richtext', 'email', 'running', (SELECT id FROM templates LIMIT 1)) RETURNING id`,
+		trackLinkBody(`{{ .Subscriber.Attribs.shop_links.ruze.url }}`)); err != nil {
+		t.Fatal(err)
+	}
+	db.MustExec(`INSERT INTO campaign_lists (campaign_id, list_id, list_name) VALUES ($1, $2, 'L')`, camp, list)
+
+	out, err := st.NextCampaigns([]int64{}, []int64{})
+	if err != nil {
+		t.Fatalf("NextCampaigns: %v", err)
+	}
+	// What LoadInlineImages does on the same pointer, before the snapshot has finished.
+	for _, c := range out {
+		c.Body = c.Body + " "
+		c.ContentType = "html"
+	}
+	st.snapshots.Wait()
+
+	if got := recipientRows(t, h, camp); got != "r@x/ruze/self" {
+		t.Fatalf("recipients = %q, want r@x/ruze/self", got)
 	}
 }
 

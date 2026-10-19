@@ -68,38 +68,41 @@ func (s *store) NextCampaigns(currentIDs []int64, sentCounts []int64) ([]*models
 	// one is returned every tick). A failure is logged and swallowed -- it never blocks the send.
 	// Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D3) -- each snapshot runs in its
 	// own goroutine so the scan loop never waits on it, tracked by s.snapshots, and a panic inside
-	// it is recovered and logged (the sender's hot path shares this process).
+	// it is recovered and logged (the sender's hot path shares this process). The brands are read
+	// from the body HERE, synchronously (Stage 4 F1): the manager goes on to newPipe(c) ->
+	// LoadInlineImages, which assigns c.Body, so the goroutine holds no pointer into the campaign --
+	// only its id, name and brands. No shop-link expression in the body = no goroutine, no query.
 	for _, c := range out {
 		if c.Evergreen {
 			continue
 		}
+		brands := linkresolve.ShopLinkBrands(linkresolve.Expressions(models.TransformTrackLinks(c.Body, c.ContentType)))
+		if len(brands) == 0 {
+			continue
+		}
 		s.snapshots.Add(1)
-		go func(c *models.Campaign) {
+		go func(id int, name string, brands []string) {
 			defer s.snapshots.Done()
 			defer func() {
 				if r := recover(); r != nil {
-					s.logf("panic snapshotting shop-link audience for campaign %d (%s): %v\n%s", c.ID, c.Name, r, debug.Stack())
+					s.logf("panic snapshotting shop-link audience for campaign %d (%s): %v\n%s", id, name, r, debug.Stack())
 				}
 			}()
-			s.snapshotShopLinkAudience(c)
-		}(c)
+			s.snapshotShopLinkAudience(id, name, brands)
+		}(c.ID, c.Name, brands)
 	}
 	return out, nil
 }
 
 // snapshotShopLinkAudience runs the D2 snapshot for one claimed broadcast (fork, shop-link rate,
-// integrations SHOP-LINK-RATE-SPEC D2/D3). No shop-link expression in the body = no query.
+// integrations SHOP-LINK-RATE-SPEC D2/D3) over the brands its body names.
 // Fork (shop-link frozen, integrations SHOP-LINK-FROZEN-SPEC D2/D3) -- the one statement writes the
 // recipient rows and the summary; it runs in an explicit transaction under SET LOCAL
 // statement_timeout = '60s' (a SET LOCAL outside a transaction is a no-op), so any error, a timeout
 // included, rolls back and nothing partial exists. The error is logged and dropped.
-func (s *store) snapshotShopLinkAudience(c *models.Campaign) {
-	brands := linkresolve.ShopLinkBrands(linkresolve.Expressions(models.TransformTrackLinks(c.Body, c.ContentType)))
-	if len(brands) == 0 {
-		return
-	}
-	if err := s.runShopLinkSnapshot(c.ID, brands); err != nil {
-		s.logf("error snapshotting shop-link audience for campaign %d (%s): %v", c.ID, c.Name, err)
+func (s *store) snapshotShopLinkAudience(id int, name string, brands []string) {
+	if err := s.runShopLinkSnapshot(id, brands); err != nil {
+		s.logf("error snapshotting shop-link audience for campaign %d (%s): %v", id, name, err)
 	}
 }
 
