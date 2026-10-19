@@ -91,7 +91,9 @@ func TestShopLinkAttribution(t *testing.T) {
 		sCorp    = newSub("corp@x", entry("ruze", "corporate"))
 		sNone    = newSub("none@x", `{}`)
 		sNoKind  = newSub("nokind@x", `{"shop_links":{"ruze":{"url":"https://x.test/n"}}}`)
-		sOdd     = newSub("odd@x", entry("ruze", "partner"))
+		// D3 (Stage 4 F4): an empty-string kind is none too (no live row has the shape).
+		sEmptyKind = newSub("emptykind@x", `{"shop_links":{"ruze":{"url":"https://x.test/e","kind":""}}}`)
+		sOdd       = newSub("odd@x", entry("ruze", "partner"))
 		// I1: clicks only the static link; its kind would surface as a bucket if static clicks counted.
 		sStatic = newSub("static@x", entry("ruze", "staticonly"))
 	)
@@ -110,6 +112,7 @@ func TestShopLinkAttribution(t *testing.T) {
 	click(camp, sCorp, ruzeDot, 1)
 	click(camp, sNone, ruzeDot, 1)
 	click(camp, sNoKind, ruzeIndex, 1)
+	click(camp, sEmptyKind, ruzeDot, 1)
 	click(camp, sOdd, ruzeDot, 1)
 	click(camp, 0, ruzeDot, 2)
 	// I1: static-link clicks never appear (a subscriber of their own, a known one, and anonymous).
@@ -127,7 +130,7 @@ func TestShopLinkAttribution(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("shop_links: %d %s", code, body)
 	}
-	if got, want := shopLinkRows(t, body), "corporate=2 none=2 creator=1 founder=1 partner=1 self=1 unknown=0"; got != want {
+	if got, want := shopLinkRows(t, body), "none=3 corporate=2 creator=1 founder=1 partner=1 self=1 unknown=0"; got != want {
 		t.Fatalf("unique buckets\n got  %s\n want %s", got, want)
 	}
 
@@ -142,7 +145,7 @@ func TestShopLinkAttribution(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("shop_links total: %d %s", code, body)
 	}
-	if got, want := shopLinkRows(t, body), "founder=3 corporate=2 none=2 self=2 unknown=2 creator=1 partner=1"; got != want {
+	if got, want := shopLinkRows(t, body), "founder=3 none=3 corporate=2 self=2 unknown=2 creator=1 partner=1"; got != want {
 		t.Fatalf("total buckets\n got  %s\n want %s", got, want)
 	}
 
@@ -151,7 +154,7 @@ func TestShopLinkAttribution(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("shop_links two campaigns: %d %s", code, body)
 	}
-	if got, want := shopLinkRows(t, body), "corporate=2 creator=2 none=2 founder=1 partner=1 self=1 unknown=0"; got != want {
+	if got, want := shopLinkRows(t, body), "none=3 corporate=2 creator=2 founder=1 partner=1 self=1 unknown=0"; got != want {
 		t.Fatalf("two campaigns\n got  %s\n want %s", got, want)
 	}
 }

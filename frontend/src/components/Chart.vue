@@ -161,7 +161,12 @@ export default {
         break;
     }
 
-    const conf = { ...def, data: this.$props.data };
+    // Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC Stage 4 F1) -- the
+    // options object is copied per instance: the defaults are module-level and chart.js keeps
+    // `options` by reference, so with two bar charts on one page the last to mount used to
+    // overwrite the other's onClick (the Links click-through died, or a Shop Link bar opened a
+    // Links URL).
+    const conf = { ...def, options: { ...def.options }, data: this.$props.data };
     if (this.$props.onClick) {
       conf.options.onClick = this.$props.onClick;
     }

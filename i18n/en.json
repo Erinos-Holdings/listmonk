@@ -26,7 +26,7 @@
     "analytics.shopLinkSelf": "Self",
     "analytics.shopLinkUnknown": "Unknown",
     "analytics.shopLinks": "Shop Link Attribution",
-    "analytics.shopLinksHint": "Clicks on the campaign's shop link, by the storefront each subscriber's link pointed to when clicked. No link = sent to the brand site because the subscriber had no stored shop link.",
+    "analytics.shopLinksHint": "Clicks on the campaign's shop links, by the kind of shop link each subscriber holds now for the link's brand (attribution can change after a send, so the split is as of today, not as of the click). No link = the subscriber has no stored shop link for that brand, so the click went to the brand site.",
     "analytics.trackingDisabled": "E-mail tracking is globally disabled. No new views or clicks are being recorded.",
     "analytics.title": "Analytics",
     "analytics.toDate": "To",
