@@ -1260,7 +1260,9 @@ section.analytics {
   }
 
   .chart {
-    margin-bottom: 100px;
+    // Fork (2026-10-19) -- 1.5rem, Bulma's mt-5: the same gap the Location and Email clients
+    // sections keep, in place of upstream's 100px.
+    margin-bottom: 1.5rem;
     max-width: 100%;
   }
 
