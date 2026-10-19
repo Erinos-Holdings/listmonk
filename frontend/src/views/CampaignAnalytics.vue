@@ -72,7 +72,7 @@
               {{ v.name }}
               <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
               <span class="has-text-grey-light" :data-cy="k === 'bounces' ? 'bounces-total' : null">({{ totalCells[k].count }}<template
-                  v-if="k === 'bounces' && bounceSplit">: {{ bounceSplit }}</template>)</span>
+                  v-if="k === 'bounces' && !v.loading && bounceSplit">: {{ bounceSplit }}</template>)</span>
             </h4>
             <!-- Fork (shop-link header total, 2026-10-19) -- Links too: its clicks over Sent, count in grey. -->
             <h4 v-else-if="k !== 'shopLinks'">

@@ -5,7 +5,7 @@
     "analytics.bounceComplaint": "complaints",
     "analytics.bounceHard": "hard",
     "analytics.bounceSoft": "soft",
-    "analytics.bouncesHint": "Bounces over Sent. Hard = permanent failures, soft = temporary ones, complaints = spam reports; a subscriber with more than one type counts once in each.",
+    "analytics.bouncesHint": "Bounces over Sent. Hard = permanent failures, soft = temporary ones, complaints = spam reports; every bounce is counted, so a subscriber with a hard and a soft bounce appears in both.",
     "analytics.clients": "Email clients",
     "analytics.clientsClient": "Client",
     "analytics.clientsCombined": "Combined",
