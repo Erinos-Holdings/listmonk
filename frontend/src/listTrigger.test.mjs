@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   TRIGGER_NONE, TRIGGER_FIRST_ORDER, TRIGGER_SKUS,
   triggerOption, skusToText, textToSkus, buildJoinTrigger, triggerBadge,
-  listTriggerItem, withTriggerItem, pickerLabel, buildListFormRequest,
+  listTriggerItem, withTriggerItem, pickerLabel, buildListFormRequest, storedTrigger, storedTriggerSync,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 test('option <-> document round-trip', () => {
@@ -52,6 +52,23 @@ test('sub-line item: the kind and the state word, never the error text', () => {
   assert.equal(inv.includes('secret'), false);
   assert.equal(withTriggerItem('#7 · Acme', { join_trigger: { kind: 'first_order' }, trigger_sync: { state: 'live' } }), '#7 · Acme · joins on first order · live');
   assert.equal(withTriggerItem('#5', { name: 'x' }), '#5');
+});
+
+// The API client camel-cases every response (utils.camelKeys, deep), so a browser row carries
+// joinTrigger / triggerSync / syncedAt. Every reader accepts both spellings (found 2026-10-19:
+// the form preset to None for a live first-order list).
+test('readers accept the camel-cased row the browser actually holds', () => {
+  const row = { name: 'Acme first order', joinTrigger: { kind: 'first_order' }, triggerSync: { state: 'live', syncedAt: '2026-10-17T06:10:38Z' } };
+  assert.deepEqual(storedTrigger(row), { kind: 'first_order' });
+  assert.deepEqual(storedTriggerSync(row), { state: 'live', syncedAt: '2026-10-17T06:10:38Z' });
+  assert.equal(triggerOption(storedTrigger(row)), TRIGGER_FIRST_ORDER);
+  assert.equal(triggerBadge(storedTrigger(row), storedTriggerSync(row)).params.time, '2026-10-17T06:10:38Z');
+  assert.equal(listTriggerItem(row), 'joins on first order · live');
+  assert.equal(pickerLabel(row), 'Acme first order — joins on first purchase');
+  // The wire spelling still wins when both are present, and an absent trigger is none either way.
+  assert.deepEqual(storedTrigger({ join_trigger: null, joinTrigger: { kind: 'skus' } }), null);
+  assert.equal(storedTrigger({}), undefined);
+  assert.equal(listTriggerItem({ joinTrigger: null }), '');
 });
 
 test('picker label', () => {

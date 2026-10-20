@@ -149,7 +149,7 @@ import {
   brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import {
-  buildJoinTrigger, buildListFormRequest, skusToText, triggerBadge, triggerOption,
+  buildJoinTrigger, buildListFormRequest, skusToText, storedTrigger, storedTriggerSync, triggerBadge, triggerOption,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -294,7 +294,7 @@ export default Vue.extend({
 
     // The badge from the STORED trigger and trigger_sync (null = no trigger, no badge).
     triggerBadge() {
-      return triggerBadge(this.data.join_trigger, this.data.trigger_sync);
+      return triggerBadge(storedTrigger(this.data), storedTriggerSync(this.data));
     },
 
     triggerBadgeText() {
@@ -331,8 +331,9 @@ export default Vue.extend({
     // edit the select is preset from the row's brand; an untagged list shows it empty and required.
     this.form.tags = splitReservedTags(this.form.tags).free;
     this.brand = this.$props.data.brand || null;
-    // LIST-JOIN-TRIGGER-SPEC D7: the section starts from the stored trigger.
-    const jt = this.$props.data.join_trigger;
+    // LIST-JOIN-TRIGGER-SPEC D7: the section starts from the stored trigger (read under either
+    // key spelling -- the row arrives camel-cased, storedTrigger).
+    const jt = storedTrigger(this.$props.data);
     this.triggerOption = triggerOption(jt);
     this.skusText = skusToText(jt && jt.skus);
     this.transactional = !!this.$props.data.transactional;

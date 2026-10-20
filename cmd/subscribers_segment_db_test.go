@@ -701,6 +701,14 @@ func TestListStatsBackCompat(t *testing.T) {
 		if err := f.q.QuerySubscribersCountAll.Get(&got, fmt.Sprintf("{%d}", l.ID), ""); err != nil || got != len(f.rows) {
 			t.Fatalf("count-all list %s = %d, want %d (%v)", l.Name, got, len(f.rows), err)
 		}
+
+		// The single-list GET runs the same statement; its subscriber_count must equal the paged
+		// one (it read double until 2026-10-19 -- upstream's Go re-sum of subscriber_statuses on
+		// top of the SQL sum, which QueryLists never had).
+		one, err := f.app.core.GetList(l.ID, "")
+		if err != nil || one.SubscriberCount != len(f.rows) {
+			t.Fatalf("GetList %s subscriber_count = %d, want %d (%v)", l.Name, one.SubscriberCount, len(f.rows), err)
+		}
 	}
 	var total int
 	if err := f.q.QuerySubscribersCountAll.Get(&total, "{}", ""); err != nil || total != len(f.rows) {

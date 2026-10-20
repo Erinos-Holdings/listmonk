@@ -25,15 +25,11 @@ func (c *Core) GetLists(typ, status string, getAll bool, permittedIDs []int) ([]
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
 	}
 
-	// Replace null tags.
+	// Replace null tags. (Fork: no Go re-sum of subscriber_statuses here -- get-lists carries no
+	// counts at all, and the counted paths sum in SQL; see GetList.)
 	for i, l := range out {
 		if l.Tags == nil {
 			out[i].Tags = []string{}
-		}
-
-		// Total counts.
-		for _, c := range l.SubscriberCounts {
-			out[i].SubscriberCount += c
 		}
 	}
 
@@ -95,13 +91,12 @@ func (c *Core) GetList(id int, uuid string) (models.List, error) {
 			c.i18n.Ts("globals.messages.notFound", "name", "{globals.terms.list}"))
 	}
 
+	// Fork: subscriber_count is summed by query-lists itself (the statuses CTE), so upstream's
+	// re-sum of subscriber_statuses here doubled the single-list GET (found 2026-10-19: 386 on a
+	// 193-member list; the paged QueryLists never re-summed and was right).
 	out := res[0]
 	if out.Tags == nil {
 		out.Tags = []string{}
-	}
-	// Total counts.
-	for _, c := range out.SubscriberCounts {
-		out.SubscriberCount += c
 	}
 
 	return out, nil

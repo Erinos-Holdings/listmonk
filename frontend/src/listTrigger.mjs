@@ -17,6 +17,22 @@ export const LIST_REQUEST_KEYS = ['name', 'type', 'optin', 'status', 'tags', 'de
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
+// storedTrigger / storedTriggerSync read the two server fields off a list row under EITHER key
+// spelling: the API client camel-cases every response by default (api/index.js, utils.camelKeys,
+// deep), so a row from GET /api/lists carries joinTrigger / triggerSync (and synced_at as
+// syncedAt), while a test fixture or a verbatim read carries the wire names. Reading only the
+// wire names left every stored trigger invisible in the browser (found 2026-10-19: the form
+// preset to None for a live first-order list, and a Save from there would have cleared it).
+export function storedTrigger(list) {
+  const l = list || {};
+  return l.join_trigger !== undefined ? l.join_trigger : l.joinTrigger;
+}
+
+export function storedTriggerSync(list) {
+  const l = list || {};
+  return l.trigger_sync !== undefined ? l.trigger_sync : l.triggerSync;
+}
+
 // triggerOption is the radio value for a stored join_trigger.
 export function triggerOption(joinTrigger) {
   if (!isObj(joinTrigger)) return TRIGGER_NONE;
@@ -50,7 +66,8 @@ export function buildJoinTrigger(option, skusText) {
 export function triggerBadge(joinTrigger, triggerSync) {
   if (triggerOption(joinTrigger) === TRIGGER_NONE) return null;
   if (isObj(triggerSync) && triggerSync.state === 'live') {
-    return { state: 'live', key: 'lists.triggerSyncLive', params: { time: triggerSync.synced_at || '' } };
+    const time = triggerSync.synced_at !== undefined ? triggerSync.synced_at : triggerSync.syncedAt;
+    return { state: 'live', key: 'lists.triggerSyncLive', params: { time: time || '' } };
   }
   if (isObj(triggerSync) && triggerSync.state === 'invalid') {
     return { state: 'invalid', key: 'lists.triggerSyncInvalid', params: { error: triggerSync.error || '' } };
@@ -61,11 +78,10 @@ export function triggerBadge(joinTrigger, triggerSync) {
 // listTriggerItem is the Lists page sub-line item, or '' for a list without a trigger. The state
 // word only -- never the error text.
 export function listTriggerItem(list) {
-  const l = list || {};
-  const opt = triggerOption(l.join_trigger);
+  const opt = triggerOption(storedTrigger(list));
   if (opt === TRIGGER_NONE) return '';
   const what = opt === TRIGGER_FIRST_ORDER ? 'joins on first order' : 'joins on SKU purchase';
-  const badge = triggerBadge(l.join_trigger, l.trigger_sync);
+  const badge = triggerBadge(storedTrigger(list), storedTriggerSync(list));
   const state = { pending: 'pending sync', live: 'live', invalid: 'invalid' }[badge.state];
   return `${what} · ${state}`;
 }
@@ -81,7 +97,7 @@ export function withTriggerItem(subline, list) {
 export function pickerLabel(list) {
   const l = list || {};
   const name = l.name || '';
-  const opt = triggerOption(l.join_trigger);
+  const opt = triggerOption(storedTrigger(l));
   if (opt === TRIGGER_FIRST_ORDER) return `${name} — joins on first purchase`;
   if (opt === TRIGGER_SKUS) return `${name} — joins on SKU purchase`;
   return name;
