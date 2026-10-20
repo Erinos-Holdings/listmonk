@@ -69,6 +69,15 @@ check('I1: empty emoji leaves the text unchanged',
 r = insertEmoji('hello', 1, 3, undefined);
 check('I1: a missing emoji leaves the text unchanged', r.text === 'hello', show(r));
 
+// ATTRIBUTE-PICKER-SPEC I5: the attribute picker inserts through the same rule -- a roster
+// expression replaces a mid-text selection whole and the caret lands just after it.
+{
+  const expr = '{{ or .Subscriber.FirstName "there" }}';
+  r = insertEmoji('Hi NAME, welcome', 3, 7, expr);
+  check('I5 (attribute picker): a roster expression replaces the mid-text selection',
+    same(r, `Hi ${expr}, welcome`, 3 + expr.length), show(r));
+}
+
 // ---- I2: nothing but the emoji is inserted ------------------------------------------------
 r = insertEmoji('ab', 1, 1, '❤️‍🔥');
 check('I2: the ZWJ emoji is inserted verbatim', r.text === 'a❤️‍🔥b', show(r));

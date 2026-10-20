@@ -31,6 +31,7 @@ export default function HeadingSidebarPanel({ data, setData }: HeadingSidebarPan
         label="Content"
         rows={3}
         emojiPicker
+        attributePicker="text"
         defaultValue={data.props?.text ?? HeadingPropsDefaults.text}
         onChange={(text) => {
           updateData({ ...data, props: { ...data.props, text } });

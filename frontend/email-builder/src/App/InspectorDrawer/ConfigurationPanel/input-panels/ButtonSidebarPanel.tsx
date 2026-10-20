@@ -57,6 +57,7 @@ export default function ButtonSidebarPanel({ data, setData }: ButtonSidebarPanel
       />
       <TextInput
         label="Url"
+        attributePicker="link"
         defaultValue={url}
         onChange={(url) => updateData({ ...data, props: { ...data.props, url } })}
       />

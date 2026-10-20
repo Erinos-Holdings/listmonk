@@ -1,0 +1,80 @@
+// Fork (attribute picker) -- integrations ATTRIBUTE-PICKER-SPEC D3/D5/D6.
+//
+// The builder's one "Insert attribute" button: an IconButton opening an MUI Menu of the roster
+// group for the field's kind (src/attributes.js). Used by the Text block's ribbon
+// (MarkdownContentInput) and TextInput's attributePicker prop (Heading, Button Url, Image link).
+// The caller owns the field: onOpen captures its selection (the button never takes focus),
+// onPick receives exactly the item's `expr` and inserts it through src/emojiInsert.js.
+//
+// The shop link's brand is the editing context's (useOfficialContext -- the campaign's derived
+// brand or the template's brand column), never the global brand selector (D3). A disabled item
+// shows its reason as secondary text inside the item -- never a Tooltip, which MUI's
+// pointer-events: none on a disabled MenuItem would never show (D6).
+import React, { useState } from 'react';
+
+import { DataObjectOutlined } from '@mui/icons-material';
+import { IconButton, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
+
+import { attributeMenu } from '../../../../../../attributes';
+import { useOfficialContext } from '../../../../../../documents/editor/EditorContext';
+
+type Item = { id: string; label: string; expr: string; disabled: boolean; reason: string };
+
+type Props = {
+  kind: 'text' | 'link';
+  onOpen: () => void;
+  onPick: (expr: string) => void;
+  title?: string;
+};
+
+export default function AttributeMenuButton({ kind, onOpen, onPick, title = 'Insert attribute' }: Props) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // null before the host pushes a context -- treated as no brand (the shop link reads disabled).
+  const context = useOfficialContext();
+  const items: Item[] = attributeMenu(kind, { brand: context?.brand ?? null }).items;
+
+  return (
+    <>
+      <Tooltip title={title}>
+        <span>
+          <IconButton
+            size="small"
+            aria-label={title}
+            // The field's selection must survive the click (the ribbon's keepSelection).
+            onMouseDown={(ev) => ev.preventDefault()}
+            onClick={(ev) => {
+              onOpen();
+              setAnchor(ev.currentTarget);
+            }}
+          >
+            <DataObjectOutlined fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Menu
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
+        // The field keeps its selection; the menu must not steal focus back on close.
+        disableRestoreFocus
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        {items.map((it) => (
+          <MenuItem
+            key={it.id}
+            disabled={it.disabled}
+            onClick={() => {
+              setAnchor(null);
+              if (!it.disabled && it.expr) {
+                onPick(it.expr);
+              }
+            }}
+          >
+            <ListItemText primary={it.label} secondary={it.disabled ? it.reason : undefined} />
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}

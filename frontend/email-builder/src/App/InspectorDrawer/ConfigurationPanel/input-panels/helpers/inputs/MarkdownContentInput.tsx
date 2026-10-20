@@ -19,6 +19,7 @@ import BrandSwatches from './ColorInput/BrandSwatches';
 import { normalizeHex } from './ColorInput/normalizeHex';
 import { DEFAULT_PRESET_COLORS } from './ColorInput/Picker';
 import Swatch from './ColorInput/Swatch';
+import AttributeMenuButton from './AttributeMenuButton';
 import EmojiPickerButton from './EmojiPickerButton';
 import {
   applyBlockquote, applyBulletList, applyColor, applyEnclose, applyLink, applyWrap, FormatResult,
@@ -182,6 +183,19 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
           onPick={(emoji) => {
             const sel = emojiSelection.current;
             applyResult(insertEmoji(value, sel?.start, sel?.end, emoji));
+          }}
+        />
+        {/* Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D2/D5/D6): an expression is text, so
+          enabled whether or not Markdown is on; the text group only (a Markdown link
+          destination cannot carry an expression -- CommonMark refuses the space). */}
+        <AttributeMenuButton
+          kind="text"
+          onOpen={() => {
+            emojiSelection.current = currentSelection();
+          }}
+          onPick={(expr) => {
+            const sel = emojiSelection.current;
+            applyResult(insertEmoji(value, sel?.start, sel?.end, expr));
           }}
         />
       </Stack>

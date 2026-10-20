@@ -4,6 +4,7 @@ import { InputAdornment, InputProps, TextField } from '@mui/material';
 
 import { insertEmoji } from '../../../../../../emojiInsert';
 
+import AttributeMenuButton from './AttributeMenuButton';
 import EmojiPickerButton from './EmojiPickerButton';
 
 type Props = {
@@ -17,9 +18,12 @@ type Props = {
   // Fork (emoji picker, integrations EMOJI-PICKER-SPEC D2): an emoji button as the field's end
   // adornment; the pick goes through onChange like typed text.
   emojiPicker?: boolean;
+  // Fork (attribute picker, integrations ATTRIBUTE-PICKER-SPEC D2/D6): an "Insert attribute"
+  // button as a second end adornment, offering the roster group for the field's kind.
+  attributePicker?: 'text' | 'link';
   onChange: (v: string) => void;
 };
-export default function TextInput({ helperText, label, placeholder, rows, InputProps, defaultValue, className, emojiPicker, onChange }: Props) {
+export default function TextInput({ helperText, label, placeholder, rows, InputProps, defaultValue, className, emojiPicker, attributePicker, onChange }: Props) {
   const [value, setValue] = useState(defaultValue);
   const isMultiline = typeof rows === 'number' && rows > 1;
 
@@ -38,24 +42,29 @@ export default function TextInput({ helperText, label, placeholder, rows, InputP
     }
   }, [value]);
 
-  const endAdornment = emojiPicker ? (
+  // The emoji and the attribute buttons share one recorded selection and one insertion rule
+  // (ATTRIBUTE-PICKER-SPEC D5): the pick replaces the selection captured when the button opened.
+  const recordSelection = () => {
+    const el = inputRef.current;
+    emojiSelection.current = el ? { start: el.selectionStart, end: el.selectionEnd } : null;
+  };
+  const insertAtSelection = (str: string) => {
+    const sel = emojiSelection.current;
+    const res = insertEmoji(value, sel?.start, sel?.end, str);
+    if (res.text === value) {
+      return;
+    }
+    pendingSelection.current = { start: res.selectionStart, end: res.selectionEnd };
+    setValue(res.text);
+    onChange(res.text);
+  };
+
+  const endAdornment = emojiPicker || attributePicker ? (
     <InputAdornment position="end">
-      <EmojiPickerButton
-        onOpen={() => {
-          const el = inputRef.current;
-          emojiSelection.current = el ? { start: el.selectionStart, end: el.selectionEnd } : null;
-        }}
-        onPick={(emoji) => {
-          const sel = emojiSelection.current;
-          const res = insertEmoji(value, sel?.start, sel?.end, emoji);
-          if (res.text === value) {
-            return;
-          }
-          pendingSelection.current = { start: res.selectionStart, end: res.selectionEnd };
-          setValue(res.text);
-          onChange(res.text);
-        }}
-      />
+      {emojiPicker && <EmojiPickerButton onOpen={recordSelection} onPick={insertAtSelection} />}
+      {attributePicker && (
+        <AttributeMenuButton kind={attributePicker} onOpen={recordSelection} onPick={insertAtSelection} />
+      )}
     </InputAdornment>
   ) : null;
 

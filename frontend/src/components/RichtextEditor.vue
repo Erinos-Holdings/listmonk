@@ -92,6 +92,8 @@ import { colors, uris } from '../constants';
 import Media from '../views/Media.vue';
 import CodeEditor from './CodeEditor.vue';
 import EmojiPickerPopover from './EmojiPickerPopover.vue';
+// eslint-disable-next-line import/no-relative-packages
+import { attributeMenu } from '../../email-builder/src/attributes';
 
 // Map of listmonk language codes to corresponding TinyMCE language files.
 const LANGS = {
@@ -106,6 +108,13 @@ const LANGS = {
   ro: 'ro',
   tr: 'tr',
 };
+
+// Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D6): the mdi `code-braces` glyph as a TinyMCE
+// icon (TinyMCE's default icon pack has no braces).
+const CODE_BRACES_SVG = '<svg width="24" height="24" viewBox="0 0 24 24"><path d="'
+  + 'M8,3A2,2 0 0,0 6,5V9A2,2 0 0,1 4,11H3V13H4A2,2 0 0,1 6,15V19A2,2 0 0,0 8,21H10V19H8V14'
+  + 'A2,2 0 0,0 6,12A2,2 0 0,0 8,10V5H10V3M16,3A2,2 0 0,1 18,5V9A2,2 0 0,0 20,11H21V13H20A2,2 0 0,0 18,15V19'
+  + 'A2,2 0 0,1 16,21H14V19H16V14A2,2 0 0,1 18,12A2,2 0 0,1 16,10V5H14V3H16Z"/></svg>';
 
 const TRACK_LINK = 'trackLink';
 const TRACK_SUFFIX = '@TrackLink';
@@ -186,6 +195,20 @@ export default {
             tooltip: this.$t('campaigns.insertEmoji'),
             onAction: () => this.onToggleEmoji(editor),
           });
+          // Fork (attribute picker, integrations ATTRIBUTE-PICKER-SPEC D2/D5/D6): TinyMCE's own
+          // menu of the roster's text group, inserted at its selection as the emoji is.
+          editor.ui.registry.addIcon('code-braces', CODE_BRACES_SVG);
+          editor.ui.registry.addMenuButton('attributes', {
+            icon: 'code-braces',
+            tooltip: this.$t('campaigns.insertAttribute'),
+            fetch: (callback) => {
+              callback(attributeMenu('text').items.map((it) => ({
+                type: 'menuitem',
+                text: this.attributeLabel(it),
+                onAction: () => this.onAttributePick(editor, it.expr),
+              })));
+            },
+          });
           // A click or Esc inside the editor iframe never reaches the page document.
           editor.on('mousedown', () => { this.isEmojiOpen = false; });
           editor.on('keydown', (e) => {
@@ -213,7 +236,7 @@ export default {
         toolbar: `undo redo | formatselect styleselect fontsizeselect |
                   bold italic underline strikethrough forecolor backcolor subscript superscript |
                   alignleft aligncenter alignright alignjustify |
-                  bullist numlist table image insert-html emoji | outdent indent | link hr removeformat |
+                  bullist numlist table image insert-html emoji attributes | outdent indent | link hr removeformat |
                   html fullscreen help`,
         fontsize_formats: '10px 11px 12px 14px 15px 16px 18px 24px 36px',
         skin: false,
@@ -283,6 +306,22 @@ export default {
       editor.focus();
       editor.insertContent(unicode);
       this.computedValue = editor.getContent();
+    },
+
+    // Fork (attribute picker): the expression goes in at TinyMCE's selection; entity_encoding
+    // 'raw' keeps its quotes as `"`.
+    onAttributePick(editor, expr) {
+      if (!editor || !expr || this.disabled) return;
+      editor.focus();
+      editor.insertContent(expr);
+      this.computedValue = editor.getContent();
+    },
+
+    // D8: the roster's ids keyed into i18n (`first_name` -> `attributes.firstName`); the roster's
+    // English label when a locale lacks the key.
+    attributeLabel(item) {
+      const key = `attributes.${item.id.replace(/_([a-z])/g, (m, c) => c.toUpperCase())}`;
+      return this.$te(key) ? this.$t(key) : item.label;
     },
 
     onInsertHTML() {
