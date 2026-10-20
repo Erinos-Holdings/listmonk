@@ -55,8 +55,6 @@ export default function AttributeMenuButton({ kind, onOpen, onPick, title = 'Ins
         anchorEl={anchor}
         open={Boolean(anchor)}
         onClose={() => setAnchor(null)}
-        // The field keeps its selection; the menu must not steal focus back on close.
-        disableRestoreFocus
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >

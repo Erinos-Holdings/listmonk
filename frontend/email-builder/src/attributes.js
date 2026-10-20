@@ -20,6 +20,12 @@
 // Plain ESM, dependency-free (I9): test/attributes.test.cjs evaluates it standalone in the
 // builder's CI test step, and the SPA imports it by relative path.
 
+// attributeI18nKey maps a roster id to the SPA's i18n key (`first_name` -> `attributes.firstName`);
+// the SPA renders `$te(key) ? $t(key) : item.label` (D8). One mapping for every SPA surface.
+export function attributeI18nKey(id) {
+  return `attributes.${String(id).replace(/_([a-z])/g, (m, c) => c.toUpperCase())}`;
+}
+
 // isTemplateIdent is the one rule for the dotted `.Attribs.shop_links.<slug>.url` grammar.
 export function isTemplateIdent(slug) {
   return typeof slug === 'string' && /^[A-Za-z0-9_]+$/.test(slug);

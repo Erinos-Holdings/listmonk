@@ -93,7 +93,7 @@ import Media from '../views/Media.vue';
 import CodeEditor from './CodeEditor.vue';
 import EmojiPickerPopover from './EmojiPickerPopover.vue';
 // eslint-disable-next-line import/no-relative-packages
-import { attributeMenu } from '../../email-builder/src/attributes';
+import { attributeMenu, attributeI18nKey } from '../../email-builder/src/attributes';
 
 // Map of listmonk language codes to corresponding TinyMCE language files.
 const LANGS = {
@@ -317,10 +317,9 @@ export default {
       this.computedValue = editor.getContent();
     },
 
-    // D8: the roster's ids keyed into i18n (`first_name` -> `attributes.firstName`); the roster's
-    // English label when a locale lacks the key.
+    // D8: the roster's English label when a locale lacks the key.
     attributeLabel(item) {
-      const key = `attributes.${item.id.replace(/_([a-z])/g, (m, c) => c.toUpperCase())}`;
+      const key = attributeI18nKey(item.id);
       return this.$te(key) ? this.$t(key) : item.label;
     },
 

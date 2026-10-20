@@ -21,7 +21,9 @@ const mod = { exports: {} };
 new Function('module', 'exports', 'require', js)(mod, mod.exports, () => {
   throw new Error('attributes.js must stay dependency-free');
 });
-const { attributeMenu, shopLinkExpr, isTemplateIdent } = mod.exports;
+const {
+  attributeMenu, shopLinkExpr, isTemplateIdent, attributeI18nKey,
+} = mod.exports;
 
 let failed = 0;
 function check(name, ok, detail) {
@@ -101,6 +103,17 @@ check('I4: an unknown kind returns no items', attributeMenu('html', { brand: 'ru
 check('I4: a missing kind returns no items', attributeMenu(undefined, undefined).items.length === 0);
 for (const it of [...text, ...link]) {
   check(`every item has a label: ${it.id}`, typeof it.label === 'string' && it.label !== '');
+}
+
+// ---- D8: the SPA's i18n key per text id (Stage 4 F2 — one mapping, pinned) ------------------
+const I18N_PINS = {
+  first_name: 'attributes.firstName',
+  last_name: 'attributes.lastName',
+  name: 'attributes.name',
+  email: 'attributes.email',
+};
+for (const [id, key] of Object.entries(I18N_PINS)) {
+  check(`D8: i18n key for ${id} is ${key}`, attributeI18nKey(id) === key, attributeI18nKey(id));
 }
 
 console.log(failed === 0 ? 'attributes: all checks pass' : `attributes: ${failed} FAILED`);

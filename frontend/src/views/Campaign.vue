@@ -596,7 +596,7 @@ import EmojiPickerPopover from '../components/EmojiPickerPopover.vue';
 // eslint-disable-next-line import/no-relative-packages
 import { insertEmoji } from '../../email-builder/src/emojiInsert';
 // eslint-disable-next-line import/no-relative-packages
-import { attributeMenu } from '../../email-builder/src/attributes';
+import { attributeMenu, attributeI18nKey } from '../../email-builder/src/attributes';
 
 // Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D6): the mdi `code-braces` path, drawn inline
 // because the fontello subset (src/assets/icons) does not pack the glyph.
@@ -922,10 +922,9 @@ export default Vue.extend({
       });
     },
 
-    // D8: the roster's ids keyed into i18n (`first_name` -> `attributes.firstName`); the roster's
-    // English label when a locale lacks the key.
+    // D8: the roster's English label when a locale lacks the key.
     attributeLabel(item) {
-      const key = `attributes.${item.id.replace(/_([a-z])/g, (m, c) => c.toUpperCase())}`;
+      const key = attributeI18nKey(item.id);
       return this.$te(key) ? this.$t(key) : item.label;
     },
 
