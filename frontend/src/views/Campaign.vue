@@ -164,7 +164,7 @@
                       @active-change="(on) => on && openAttribute('subject')">
                       <template #trigger>
                         <span class="icon is-clickable" :title="$t('campaigns.insertAttribute')" @mousedown.prevent>
-                          <svg viewBox="0 0 24 24" width="1.25em" height="1.25em" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
                             <path fill="currentColor" :d="dataObjectPath" /></svg>
                         </span>
                       </template>
@@ -187,7 +187,7 @@
                       @active-change="(on) => on && openAttribute('preheader')">
                       <template #trigger>
                         <span class="icon is-clickable" :title="$t('campaigns.insertAttribute')" @mousedown.prevent>
-                          <svg viewBox="0 0 24 24" width="1.25em" height="1.25em" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
                             <path fill="currentColor" :d="dataObjectPath" /></svg>
                         </span>
                       </template>

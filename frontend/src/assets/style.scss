@@ -1911,6 +1911,13 @@ th.role-toggle-select a {
     .icon:hover {
       color: #363636;
     }
+
+    /* The builder's IconButton draws this path at MUI "small" (20px); an em size inherits the
+       right-icon cell's font-size and comes out half again as large. */
+    svg {
+      width: 20px;
+      height: 20px;
+    }
   }
 }
 
