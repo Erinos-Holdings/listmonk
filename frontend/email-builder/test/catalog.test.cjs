@@ -6,7 +6,11 @@
 //   - every catalog-*.json is in the manifest and every manifest sheet has its file;
 //   - each compiles through the BUILT bundle under the canary context, to at most 80,000 bytes (U10),
 //     and the file's sha256 is the manifest's (a hand edit fails here: never edit a catalog-*.json);
-//   - with the bundle the manifest was generated with, each sheet compiles to the bytes recorded;
+//   - each sheet compiles to the bytes the manifest records, WHATEVER bundle built it: equal bytes
+//     prove the release moved no sheet (a stale manifest bundle sha is then bookkeeping); different
+//     bytes are a compile-changing release — the runbook's "Render catalog" point 7 applies before
+//     it ships (until 2026-10-20 this comparison was skipped with a NOTE whenever the sha differed,
+//     which is exactly when it matters);
 //   - I23: every control of every sidebar panel is named in the manifest's axis table, and the table
 //     names no control the panels lack. A new editor control fails this suite until the generator's
 //     table names it (and the catalog is regenerated). A new value-dependent branch in
@@ -76,11 +80,15 @@ try {
     const bytes = Buffer.byteLength(html, 'utf8');
     check(`${s.stem}: compiles`, typeof html === 'string' && html.length > 0);
     check(`${s.stem}: at most ${HARD_BYTES} compiled bytes (${bytes})`, bytes <= HARD_BYTES);
-    if (sameBundle) check(`${s.stem}: compiles to the manifest's ${s.bytes} bytes under the bundle it was generated with`, bytes === s.bytes, bytes);
+    check(
+      `${s.stem}: compiles to the manifest's ${s.bytes} bytes${sameBundle ? '' : ' through a bundle the manifest was not generated with (equal bytes: the release moved no sheet)'}`,
+      bytes === s.bytes,
+      `${bytes} — compiled output moved: a compile-changing release; follow the runbook's "Render catalog" point 7 (regenerate, price the re-buy) before shipping`,
+    );
     check(`${s.stem}: its last row is the END row`, JSON.parse(text)[JSON.parse(text).root.data.childrenIds.slice(-1)[0]]?.data?.props?.text === `END ${s.stem}`);
     check(`${s.stem}: lists its units`, Array.isArray(s.units) && s.units.length > 0 && s.units.every((u) => typeof u.key === 'string' && typeof u.row === 'string'));
   }
-  if (!sameBundle) console.log(`NOTE  the built bundle (${umdSha.slice(0, 12)}) is not the one the manifest was generated with (${manifest.bundleSha256.slice(0, 12)}): byte equality not checked — regenerate the catalog`);
+  if (!sameBundle) console.log(`NOTE  the built bundle (${umdSha.slice(0, 12)}) is not the one the manifest was generated with (${manifest.bundleSha256.slice(0, 12)}); the byte checks above are the proof that no sheet moved`);
 } finally {
   dom.window.close();
 }
