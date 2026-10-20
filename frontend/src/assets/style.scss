@@ -1875,6 +1875,45 @@ th.role-toggle-select a {
   white-space: nowrap;
 }
 
+/* Fork (attribute picker; Campaign.vue, integrations ATTRIBUTE-PICKER-SPEC D6): the subject's
+   and preheader's "Insert attribute" glyph sits inside the field, left of the emoji icon, in
+   the same 2.5em cell Bulma gives a right icon. */
+.attribute-field {
+  position: relative;
+
+  /* Room for two right icons (has-icons-right pads for one). */
+  .input {
+    padding-right: 5em;
+  }
+
+  .attribute-trigger {
+    position: absolute;
+    top: 0;
+    right: 2.5em;
+    height: 2.5em;
+    width: 2.5em;
+    z-index: 4;
+
+    .dropdown-trigger,
+    .icon {
+      height: 100%;
+      width: 100%;
+    }
+
+    .icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #7a7a7a;
+      cursor: pointer;
+    }
+
+    .icon:hover {
+      color: #363636;
+    }
+  }
+}
+
 /* Fork (campaign-page audience box; Campaign.vue, rule in audience-box.mjs). */
 section.campaign {
   /* Room under the buttons for the part of the box that rises above the tab strip. */

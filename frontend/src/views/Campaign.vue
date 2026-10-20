@@ -151,55 +151,52 @@
                 <b-field :label="$t('campaigns.subject')" label-position="on-border">
                   <!-- Fork (emoji picker, integrations EMOJI-PICKER-SPEC D2): the right icon opens the
                     page's one picker (shared with the preheader); none for a non-editor. -->
-                  <b-input :maxlength="5000" v-model="form.subject" name="subject" ref="subject" :disabled="!canEdit"
-                    :placeholder="$t('campaigns.subject')" required expanded
-                    :icon-right="canEdit ? 'emoticon-outline' : null" icon-right-clickable
-                    @icon-right-click="openEmoji('subject')" />
-                  <!-- Fork (attribute picker, integrations ATTRIBUTE-PICKER-SPEC D2/D6): the text
-                    group as an addon dropdown; disabled, not hidden, for a non-editor. -->
-                  <p class="control">
-                    <b-dropdown position="is-bottom-left" :disabled="!canEdit"
+                  <!-- Fork (attribute picker, integrations ATTRIBUTE-PICKER-SPEC D2/D6): a second
+                    in-field glyph left of the emoji one (the same icon as the builder's button,
+                    drawn inline -- the fontello subset does not pack it); none for a non-editor,
+                    like the emoji icon. One wrapper keeps the b-field to one child (no addons). -->
+                  <div class="attribute-field">
+                    <b-input :maxlength="5000" v-model="form.subject" name="subject" ref="subject" :disabled="!canEdit"
+                      :placeholder="$t('campaigns.subject')" required
+                      :icon-right="canEdit ? 'emoticon-outline' : null" icon-right-clickable
+                      @icon-right-click="openEmoji('subject')" />
+                    <b-dropdown v-if="canEdit" position="is-bottom-left" class="attribute-trigger"
                       @active-change="(on) => on && openAttribute('subject')">
                       <template #trigger>
-                        <b-button :disabled="!canEdit"
-                          :title="$t('campaigns.insertAttribute')" :aria-label="$t('campaigns.insertAttribute')"
-                          @mousedown.native.prevent>
-                          <!-- mdi code-braces, inline: the fontello subset does not pack it. -->
-                          <span class="icon"><svg viewBox="0 0 24 24" width="1.25em" height="1.25em"
-                            aria-hidden="true"><path fill="currentColor" :d="codeBracesPath" /></svg></span>
-                        </b-button>
+                        <span class="icon is-clickable" :title="$t('campaigns.insertAttribute')" @mousedown.prevent>
+                          <svg viewBox="0 0 24 24" width="1.25em" height="1.25em" aria-hidden="true">
+                            <path fill="currentColor" :d="dataObjectPath" /></svg>
+                        </span>
                       </template>
                       <b-dropdown-item v-for="it in attributeItems" :key="it.id"
                         @click="onAttributePick(it.expr)">
                         {{ attributeLabel(it) }}
                       </b-dropdown-item>
                     </b-dropdown>
-                  </p>
+                  </div>
                 </b-field>
 
                 <b-field :label="$t('campaigns.preheader')" label-position="on-border"
                   :message="$t('campaigns.preheaderHelp')">
-                  <b-input :maxlength="500" v-model="form.preheader" name="preheader" ref="preheader" :disabled="!canEdit"
-                    :placeholder="$t('campaigns.preheader')" expanded
-                    :icon-right="canEdit ? 'emoticon-outline' : null" icon-right-clickable
-                    @icon-right-click="openEmoji('preheader')" />
-                  <p class="control">
-                    <b-dropdown position="is-bottom-left" :disabled="!canEdit"
+                  <div class="attribute-field">
+                    <b-input :maxlength="500" v-model="form.preheader" name="preheader" ref="preheader" :disabled="!canEdit"
+                      :placeholder="$t('campaigns.preheader')"
+                      :icon-right="canEdit ? 'emoticon-outline' : null" icon-right-clickable
+                      @icon-right-click="openEmoji('preheader')" />
+                    <b-dropdown v-if="canEdit" position="is-bottom-left" class="attribute-trigger"
                       @active-change="(on) => on && openAttribute('preheader')">
                       <template #trigger>
-                        <b-button :disabled="!canEdit"
-                          :title="$t('campaigns.insertAttribute')" :aria-label="$t('campaigns.insertAttribute')"
-                          @mousedown.native.prevent>
-                          <span class="icon"><svg viewBox="0 0 24 24" width="1.25em" height="1.25em"
-                            aria-hidden="true"><path fill="currentColor" :d="codeBracesPath" /></svg></span>
-                        </b-button>
+                        <span class="icon is-clickable" :title="$t('campaigns.insertAttribute')" @mousedown.prevent>
+                          <svg viewBox="0 0 24 24" width="1.25em" height="1.25em" aria-hidden="true">
+                            <path fill="currentColor" :d="dataObjectPath" /></svg>
+                        </span>
                       </template>
                       <b-dropdown-item v-for="it in attributeItems" :key="it.id"
                         @click="onAttributePick(it.expr)">
                         {{ attributeLabel(it) }}
                       </b-dropdown-item>
                     </b-dropdown>
-                  </p>
+                  </div>
                 </b-field>
                 <emoji-picker-popover :open="emoji.open" :anchor="emoji.anchor" @pick="onEmojiPick"
                   @close="emoji.open = false" />
@@ -598,11 +595,14 @@ import { insertEmoji } from '../../email-builder/src/emojiInsert';
 // eslint-disable-next-line import/no-relative-packages
 import { attributeMenu, attributeI18nKey } from '../../email-builder/src/attributes';
 
-// Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D6): the mdi `code-braces` path, drawn inline
-// because the fontello subset (src/assets/icons) does not pack the glyph.
-const CODE_BRACES_PATH = 'M8,3A2,2 0 0,0 6,5V9A2,2 0 0,1 4,11H3V13H4A2,2 0 0,1 6,15V19A2,2 0 0,0 8,21H10V19H8V14'
-  + 'A2,2 0 0,0 6,12A2,2 0 0,0 8,10V5H10V3M16,3A2,2 0 0,1 18,5V9A2,2 0 0,0 20,11H21V13H20A2,2 0 0,0 18,15V19'
-  + 'A2,2 0 0,1 16,21H14V19H16V14A2,2 0 0,1 18,12A2,2 0 0,1 16,10V5H14V3H16Z';
+// Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D6): the builder button's glyph (MUI
+// DataObjectOutlined, 24px viewBox), drawn inline because the fontello subset
+// (src/assets/icons) does not pack it. The same path is registered as a TinyMCE icon in
+// RichtextEditor.vue.
+const DATA_OBJECT_PATH = 'M4 7v2c0 .55-.45 1-1 1H2v4h1c.55 0 1 .45 1 1v2c0 1.65 1.35 3 3 3h3v-2H7c-.55 0-1-.45-1-1'
+  + 'v-2c0-1.3-.84-2.42-2-2.83v-.34C5.16 11.42 6 10.3 6 9V7c0-.55.45-1 1-1h3V4H7C5.35 4 4 5.35 4 7m17 3'
+  + 'c-.55 0-1-.45-1-1V7c0-1.65-1.35-3-3-3h-3v2h3c.55 0 1 .45 1 1v2c0 1.3.84 2.42 2 2.83v.34'
+  + 'c-1.16.41-2 1.52-2 2.83v2c0 .55-.45 1-1 1h-3v2h3c1.65 0 3-1.35 3-3v-2c0-.55.45-1 1-1h1v-4z';
 
 // Fork: the account's local zone for the Send-later helper text. MDT/MST is resolved by Intl
 // per date, so DST never needs a code change.
@@ -703,7 +703,7 @@ export default Vue.extend({
       // Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D5): which field opened an attribute
       // dropdown and that field's selection when it opened.
       attribute: { field: null, start: null, end: null },
-      codeBracesPath: CODE_BRACES_PATH,
+      dataObjectPath: DATA_OBJECT_PATH,
 
       data: {},
 
