@@ -12,6 +12,9 @@
 // - The shop link is bare: no `or`, no fallback, no `index` (D4). An empty value falls back to
 //   the brand site at click time (hazard 52); a template fallback cannot say "signed up before
 //   launch".
+// - The product link (integrations PRODUCT-LINK-SPEC, link group only) is the one item that
+//   REPLACES the field: it rewrites the URL already typed (productRefUrl) to carry the
+//   subscriber's referral slug.
 //
 // Adding an attribute = a row here + its pin in test/attributes.test.cjs (I1) (+ a text
 // attribute's `attributes.<camelCasedId>` key in i18n/en.json -- the SPA's surfaces offer the
@@ -37,6 +40,79 @@ export function shopLinkExpr(brand) {
     return null;
   }
   return `{{ .Subscriber.Attribs.shop_links.${brand}.url }}`;
+}
+
+// Fork (product link) -- integrations PRODUCT-LINK-SPEC D1/D2. productRefExpr is the referral
+// slug with an EMPTY-STRING fallback: the `or ... ""` is load-bearing (a missing `slug` key would
+// otherwise render `<no value>`, the resolver's KindEmpty, and the click would fall back to the
+// brand homepage, losing the product page). Never a non-empty fallback -- that would be false
+// attribution.
+export function productRefExpr(brand) {
+  if (!isTemplateIdent(brand)) {
+    return null;
+  }
+  return `{{ or .Subscriber.Attribs.shop_links.${brand}.slug "" }}`;
+}
+
+const NO_BRAND_REASON = 'Choose a list first';
+const badBrandReason = (brand) => `Brand slug ${brand} is not a template identifier`;
+const NO_URL_REASON = 'Type or paste the product page URL first';
+
+// productRefUrl(value, brand) -> { url } | { reason }. Strips every existing `ref` query param
+// (any case, literal or templated) and appends `ref=<productRefExpr>` last, before any
+// #fragment. Wholly textual (D2): parsing only locates the `#` and `?` boundaries; the path,
+// the other params (in order) and the fragment are kept byte-identical -- never re-encoded
+// through new URL(). Idempotent: the output is a fixed point. A pasted creator ref can never
+// survive into a campaign.
+export function productRefUrl(value, brand) {
+  if (brand === null || brand === undefined || brand === '') {
+    return { reason: NO_BRAND_REASON };
+  }
+  const expr = productRefExpr(brand);
+  if (expr === null) {
+    return { reason: badBrandReason(brand) };
+  }
+  const v = typeof value === 'string' ? value.trim() : '';
+  // An absolute http(s) URL with a literal host: refuses empty, relative, other schemes and a
+  // value that is only (or starts with) a template expression.
+  if (!/^https?:\/\/[^\s/?#{}]+/i.test(v)) {
+    return { reason: NO_URL_REASON };
+  }
+
+  const hashAt = v.indexOf('#');
+  const fragment = hashAt >= 0 ? v.slice(hashAt) : '';
+  const beforeHash = hashAt >= 0 ? v.slice(0, hashAt) : v;
+  const qAt = beforeHash.indexOf('?');
+  const base = qAt >= 0 ? beforeHash.slice(0, qAt) : beforeHash;
+  const query = qAt >= 0 ? beforeHash.slice(qAt + 1) : '';
+
+  const kept = query.split('&').filter((p) => {
+    if (p === '') {
+      return false;
+    }
+    const eq = p.indexOf('=');
+    const name = eq >= 0 ? p.slice(0, eq) : p;
+    return name.toLowerCase() !== 'ref';
+  });
+  const joined = kept.length > 0 ? `?${kept.join('&')}&` : '?';
+  return { url: `${base}${joined}ref=${expr}${fragment}` };
+}
+
+function productLinkItem(brand, value) {
+  const res = productRefUrl(value, brand);
+  if (res.url === undefined) {
+    return {
+      id: 'product_link', label: 'Personalize product link', expr: '', disabled: true, reason: res.reason, replace: true,
+    };
+  }
+  return {
+    id: 'product_link',
+    label: `Personalize product link (${brand})`,
+    expr: res.url,
+    disabled: false,
+    reason: '',
+    replace: true,
+  };
 }
 
 const TEXT_ITEMS = [
@@ -67,11 +143,15 @@ function shopLinkItem(brand) {
   };
 }
 
-// attributeMenu(kind, context) -> { items: [{ id, label, expr, disabled, reason }] }. kind is
-// 'text' | 'link'; context is { brand } (a slug, null or undefined). A disabled item is shown,
-// never hidden, and has expr '' and a non-empty reason. An unknown kind returns no items.
+// attributeMenu(kind, context) -> { items: [{ id, label, expr, disabled, reason, replace? }] }.
+// kind is 'text' | 'link'; context is { brand, value? } (brand a slug, null or undefined; value
+// the field's current text, for the product link). A disabled item is shown, never hidden, and
+// has expr '' and a non-empty reason. `expr` is the exact string to insert, or -- when
+// `replace` is true (only product_link) -- the exact string the field becomes; an item without
+// `replace` inserts at the caret. An unknown kind returns no items.
 export function attributeMenu(kind, context) {
   const brand = context ? context.brand : undefined;
+  const value = context ? context.value : undefined;
   if (kind === 'text') {
     return { items: TEXT_ITEMS.map((it) => ({ ...it, disabled: false, reason: '' })) };
   }
@@ -79,6 +159,7 @@ export function attributeMenu(kind, context) {
     return {
       items: [
         shopLinkItem(brand),
+        productLinkItem(brand, value),
         {
           id: 'unsubscribe', label: 'Unsubscribe link', expr: '{{ UnsubscribeURL }}', disabled: false, reason: '',
         },

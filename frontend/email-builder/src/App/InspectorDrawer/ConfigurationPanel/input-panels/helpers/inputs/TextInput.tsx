@@ -58,12 +58,27 @@ export default function TextInput({ helperText, label, placeholder, rows, InputP
     setValue(res.text);
     onChange(res.text);
   };
+  // PRODUCT-LINK-SPEC D2/D3: the product link replaces the whole field (caret to the end).
+  const replaceValue = (str: string) => {
+    if (str === value) {
+      return;
+    }
+    pendingSelection.current = { start: str.length, end: str.length };
+    setValue(str);
+    onChange(str);
+  };
 
   const endAdornment = emojiPicker || attributePicker ? (
     <InputAdornment position="end">
       {emojiPicker && <EmojiPickerButton onOpen={recordSelection} onPick={insertAtSelection} />}
       {attributePicker && (
-        <AttributeMenuButton kind={attributePicker} onOpen={recordSelection} onPick={insertAtSelection} />
+        <AttributeMenuButton
+          kind={attributePicker}
+          onOpen={recordSelection}
+          onPick={insertAtSelection}
+          value={value}
+          onReplace={replaceValue}
+        />
       )}
     </InputAdornment>
   ) : null;

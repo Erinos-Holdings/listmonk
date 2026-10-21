@@ -269,3 +269,63 @@ func TestCheck(t *testing.T) {
 		t.Fatalf("if/else keys = %v err=%v", keys, err)
 	}
 }
+
+// integrations PRODUCT-LINK-SPEC I4 (fork half): the builder's product-link transform output
+// (frontend/email-builder/src/attributes.js::productRefUrl, pinned in test/attributes.test.cjs)
+// parses, reads only `shop_links`, and resolves to the product page with an EMPTY ref when the
+// brand entry has no slug -- never KindEmpty (the brand-homepage fallback). The middle case is
+// the F1 tripwire: it fails if the expression reverts to the bare `.slug`.
+//
+// The spec expected a subscriber with NO entry for the brand to error KindExec. text/template
+// does not: a missing map key yields an invalid value, a field of an invalid value is again
+// invalid (no error), and `or` falls to "" -- so a missing entry, a missing `shop_links` and nil
+// attribs all keep the product page with an empty ref, like a slug-less entry. KindExec (the
+// brand-site fallback) arises only when an intermediate value is a JSON null or not an object;
+// those cases are pinned last as the real residual. (Implementation-stage gap, recorded.)
+func TestProductLink(t *testing.T) {
+	const url = `https://ruzepouches.com/pk/Ruze-Energy/?ref={{ or .Subscriber.Attribs.shop_links.ruze.slug "" }}`
+
+	others, keys, err := Check(url)
+	if err != nil || len(others) != 0 || !reflect.DeepEqual(keys, []string{"shop_links"}) {
+		t.Fatalf("Check: others=%v keys=%v err=%v", others, keys, err)
+	}
+
+	got, err := Resolve(url, sub(map[string]any{
+		"shop_links": map[string]any{"ruze": map[string]any{"kind": "creator", "slug": "kara", "url": "https://ruzepouches.com/?ref=kara"}},
+	}))
+	if err != nil || got != "https://ruzepouches.com/pk/Ruze-Energy/?ref=kara" {
+		t.Fatalf("attributed: got %q err=%v", got, err)
+	}
+
+	got, err = Resolve(url, sub(map[string]any{
+		"shop_links": map[string]any{"ruze": map[string]any{"kind": "corporate", "url": "https://ruzepouches.com/"}},
+	}))
+	if err != nil || got != "https://ruzepouches.com/pk/Ruze-Energy/?ref=" {
+		t.Fatalf("slug-less entry must keep the product page with an empty ref: got %q err=%v", got, err)
+	}
+
+	for name, attribs := range map[string]map[string]any{
+		"no ruze entry": {"shop_links": map[string]any{"thirstygirl": map[string]any{"slug": "kara"}}},
+		"no shop_links": {},
+		"nil attribs":   nil,
+		"null slug":     {"shop_links": map[string]any{"ruze": map[string]any{"slug": nil}}},
+	} {
+		got, err := Resolve(url, sub(attribs))
+		if err != nil || got != "https://ruzepouches.com/pk/Ruze-Energy/?ref=" {
+			t.Fatalf("%s: want the product page with an empty ref, got %q err=%v", name, got, err)
+		}
+	}
+
+	for name, attribs := range map[string]map[string]any{
+		"null ruze entry":       {"shop_links": map[string]any{"ruze": nil}},
+		"string ruze entry":     {"shop_links": map[string]any{"ruze": "https://ruzepouches.com/"}},
+		"null shop_links":       {"shop_links": nil},
+		"non-object shop_links": {"shop_links": "x"},
+	} {
+		got, err := Resolve(url, sub(attribs))
+		e, ok := err.(*Error)
+		if !ok || e.Kind != KindExec || got != "" {
+			t.Fatalf("%s: want KindExec, got %q err=%v", name, got, err)
+		}
+	}
+}
