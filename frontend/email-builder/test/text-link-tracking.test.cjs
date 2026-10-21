@@ -90,5 +90,15 @@ for (const [name, md, want] of [
     hrefs(dq).length === 0 && !dq.includes('Shop now') && dq.includes('Before'));
 }
 
+// ---- amendment A2: the markdown SHOP LINK form compiles to the Button-proven bare-expression
+// href (`href="{{ ...url }}"` -- hazard 52's click-time shape; TrackLink wraps any {{ }} href).
+{
+  const SHOP = '{{ .Subscriber.Attribs.shop_links.ruze.url }}';
+  const html = compileText(`[Magic Link](<${SHOP}>)`);
+  const hs = hrefs(html);
+  check('A2: one anchor, href is the bare shop-link expression', hs.length === 1 && hs[0] === SHOP, JSON.stringify(hs));
+  check('A2: the label survives', html.includes('Magic Link'));
+}
+
 console.log(failed ? `\n${failed} FAILURES` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

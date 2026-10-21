@@ -120,7 +120,12 @@ export function productRefUrl(value, brand) {
 // would end a CommonMark `<...>` destination early and recreate the U+0022 failure from the
 // repair's own output). Returns { lead, label, dest, trail } or null.
 const MD_LINK = /^(\s*)\[([^[\]\n]*)\]\(([^\n]*)\)(\s*)$/;
-export function parseMarkdownLink(value) {
+
+// matchMarkdownLink -- the link SHAPE alone (label rules, destination untouched). The markdown
+// shop link (amendment A2) replaces the destination wholesale, so it needs no dest validation:
+// accepting any destination is what lets a broken hand-built `[label]({{ ... }})` be repaired
+// by selecting it and picking Shop link. Returns { lead, label, raw, trail } or null.
+export function matchMarkdownLink(value) {
   if (typeof value !== 'string') {
     return null;
   }
@@ -128,7 +133,17 @@ export function parseMarkdownLink(value) {
   if (m === null) {
     return null;
   }
-  const raw = m[3];
+  return {
+    lead: m[1], label: m[2], raw: m[3], trail: m[4],
+  };
+}
+
+export function parseMarkdownLink(value) {
+  const m = matchMarkdownLink(value);
+  if (m === null) {
+    return null;
+  }
+  const raw = m.raw;
   let dest;
   if (raw.startsWith('<')) {
     if (!raw.endsWith('>') || raw.length < 2) {
@@ -147,7 +162,9 @@ export function parseMarkdownLink(value) {
   if (dest === '' || !/^https?:\/\//i.test(dest)) {
     return null;
   }
-  return { lead: m[1], label: m[2], dest, trail: m[4] };
+  return {
+    lead: m.lead, label: m.label, dest, trail: m.trail,
+  };
 }
 
 const MARKDOWN_NO_URL_REASON = 'Select the product page URL, or a [text](url) link, first';
@@ -216,6 +233,24 @@ function shopLinkItem(brand) {
   };
 }
 
+// Amendment A2: on the markdown group the shop link is selection-aware, mirroring the product
+// link. A selection matching the link SHAPE gets its destination REPLACED wholesale with
+// `<{{ ...url }}>` -- the angle brackets carry the spaced expression (a bare one renders as
+// literal text), and the compiled `href="{{ ...url }}"` is the Button shop link's
+// production-proven shape (hazard 52). Any other selection keeps the caret-insert plain item.
+function markdownShopLinkItem(brand, value) {
+  const base = shopLinkItem(brand);
+  const md = matchMarkdownLink(value);
+  if (base.disabled || md === null) {
+    return base;
+  }
+  return {
+    ...base,
+    expr: `${md.lead}[${md.label}](<${base.expr}>)${md.trail}`,
+    replace: true,
+  };
+}
+
 // attributeMenu(kind, context) -> { items: [{ id, label, expr, disabled, reason, replace? }] }.
 // kind is 'text' (subject/preheader, Heading, richtext), 'link' (Button Url, Image link) or
 // 'markdown' (the Text block's ribbon); context is { brand, value? } (brand a slug, null or
@@ -234,7 +269,9 @@ function shopLinkItem(brand) {
 // tracked Text route -- the product link rewrites it to `[text](<url?ref=…>)` (the angle
 // brackets carry the spaced expression), which compiles to an anchor TrackLink wraps exactly
 // like a Button's. A hand-typed double-quoted expression in a markdown link is worse than
-// untracked: the sanitizer deletes the anchor AND its label (runbook hazard 102).
+// untracked: the sanitizer deletes the anchor AND its label (runbook hazard 102). The shop
+// link mirrors it (amendment A2): a selected `[text](anything)` becomes
+// `[text](<{{ ...url }}>)`, the destination replaced wholesale.
 export function attributeMenu(kind, context) {
   const brand = context ? context.brand : undefined;
   const value = context ? context.value : undefined;
@@ -249,7 +286,7 @@ export function attributeMenu(kind, context) {
     return {
       items: [
         ...text,
-        shopLinkItem(brand),
+        markdownShopLinkItem(brand, value),
         productLinkItem(brand, value, MARKDOWN_NO_URL_REASON),
       ],
     };

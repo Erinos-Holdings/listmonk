@@ -297,6 +297,32 @@ check('TL I5: a bare URL keeps the plain transform',
     mdExpr('[a](https://x.test/p?q={{.X<}})') === '');
 }
 
+// ---- A2: the markdown SHOP LINK is selection-aware -- [label](anything) gets its destination
+// replaced wholesale with <{{ ...url }}>; any other selection keeps the caret-insert item.
+{
+  const SHOP = '{{ .Subscriber.Attribs.shop_links.ruze.url }}';
+  const shopItem = (value) => attributeMenu('markdown', { brand: 'ruze', value }).items.find((i) => i.id === 'shop_link');
+  check('TL A2: [Magic Link](x) -> destination replaced, byte-exact',
+    shopItem('[Magic Link](x)').expr === `[Magic Link](<${SHOP}>)` && shopItem('[Magic Link](x)').replace === true,
+    show(shopItem('[Magic Link](x)')));
+  check('TL A2: the broken hand-built expression dest is accepted and repaired',
+    shopItem(`[Magic Link](${SHOP})`).expr === `[Magic Link](<${SHOP}>)`);
+  check('TL A2: fixed point', shopItem(shopItem('[Magic Link](x)').expr).expr === shopItem('[Magic Link](x)').expr);
+  check('TL A2: outer whitespace kept verbatim',
+    shopItem(' [a](x) ').expr === ` [a](<${SHOP}>) `, show(shopItem(' [a](x) ').expr));
+  check('TL A2: a non-link selection keeps the caret-insert item (no replace)',
+    shopItem('hello').replace === undefined && shopItem('hello').expr === SHOP && shopItem('').replace === undefined);
+  check('TL A2: the destination half carries no double quote (I3)',
+    !shopItem('[say "hi"](x)').expr.slice(shopItem('[say "hi"](x)').expr.lastIndexOf('(<')).includes('"'));
+  {
+    const it = attributeMenu('markdown', { brand: null, value: '[a](x)' }).items.find((i) => i.id === 'shop_link');
+    check('TL A2: no brand -> disabled base item, no replace',
+      it.disabled === true && it.replace === undefined && it.reason === 'Choose a list first', show(it));
+  }
+  check('TL A2: the link group is untouched (shop link stays whole-field insert)',
+    attributeMenu('link', { brand: 'ruze', value: '[a](x)' }).items.find((i) => i.id === 'shop_link').replace === undefined);
+}
+
 // ---- I5: refused shapes, each disabled with the D2 reason ----------------------------------
 for (const [name, v] of [
   ['title form', '[a](https://x/ "t")'],
