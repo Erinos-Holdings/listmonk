@@ -111,10 +111,12 @@ export function productRefUrl(value, brand) {
 // `<`, `>`, newline and whitespace. Refused, deliberately: the CommonMark TITLE form
 // (`[a](url "t")` -- a naive parse hands the title to the transform and the `"` makes the
 // sanitizer DELETE the anchor and its label, hazard 102), nested brackets, multi-line, and an
-// unbracketed dest holding `(`/`)` (where CommonMark ends the destination is not ours to guess).
-// The one widening: inside `<...>` whitespace is admitted within a `{{ ... }}` action carrying
-// no `"` -- our own output's ref expression -- so transforming the output is a fixed point.
-// Returns { lead, label, dest, trail } or null.
+// unbracketed dest holding a literal `(`/`)` (where CommonMark ends the destination is not ours
+// to guess). The one widening, BOTH forms (amendment A1): whitespace is admitted within a
+// `{{ ... }}` action carrying no `"` -- so transforming our own bracketed output is a fixed
+// point, and the hand-typed UNBRACKETED form (which GFM autolinks into an unbalanced `{{` in an
+// href, failing the save with `bad character U+0022`) is accepted and REPAIRED to the bracketed
+// form. Returns { lead, label, dest, trail } or null.
 const MD_LINK = /^(\s*)\[([^[\]\n]*)\]\(([^\n]*)\)(\s*)$/;
 export function parseMarkdownLink(value) {
   if (typeof value !== 'string') {
@@ -136,7 +138,7 @@ export function parseMarkdownLink(value) {
     }
   } else {
     dest = raw.trim();
-    if (/[\s"<>()]/.test(dest)) {
+    if (/[\s"<>()]/.test(dest.replace(/\{\{[^{}"]*\}\}/g, 'x'))) {
       return null;
     }
   }

@@ -275,6 +275,20 @@ check('TL I5: dest whitespace trimmed',
 check('TL I5: a bare URL keeps the plain transform',
   mdExpr('https://ruzepouches.com/pk/X/?ref=kara') === `https://ruzepouches.com/pk/X/?ref=${REF}`);
 
+// ---- A1: the hand-typed UNBRACKETED expression form is accepted and repaired ----------------
+// (G6 field case: without <> GFM autolinks the URL up to the space, href carries an unbalanced
+// `{{` and the save fails `bad character U+0022`; the action is the repair.)
+{
+  const typed = `[Energy](https://ruzepouches.com/pk/Ruze-Energy?ref=${REF})`;
+  check('TL A1: unbracketed expression dest -> repaired to the bracketed pinned form',
+    mdExpr(typed) === `[Energy](<https://ruzepouches.com/pk/Ruze-Energy?ref=${REF}>)`, show(mdExpr(typed)));
+  check('TL A1: the repair is a fixed point', mdExpr(mdExpr(typed)) === mdExpr(typed));
+  check('TL A1: unbracketed action + literal whitespace still refused',
+    mdExpr(`[a](https://x.test/p q?ref=${REF})`) === '');
+  check('TL A1: unbracketed quoted action still refused',
+    mdExpr('[a](https://x.test/p?n={{ or .Subscriber.FirstName "there" }})') === '');
+}
+
 // ---- I5: refused shapes, each disabled with the D2 reason ----------------------------------
 for (const [name, v] of [
   ['title form', '[a](https://x/ "t")'],
