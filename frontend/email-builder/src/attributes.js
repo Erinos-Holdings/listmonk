@@ -116,7 +116,9 @@ export function productRefUrl(value, brand) {
 // `{{ ... }}` action carrying no `"` -- so transforming our own bracketed output is a fixed
 // point, and the hand-typed UNBRACKETED form (which GFM autolinks into an unbalanced `{{` in an
 // href, failing the save with `bad character U+0022`) is accepted and REPAIRED to the bracketed
-// form. Returns { lead, label, dest, trail } or null.
+// form. The action-interior class bars `"` AND `<`/`>` (A1 review M1: a `>` inside an action
+// would end a CommonMark `<...>` destination early and recreate the U+0022 failure from the
+// repair's own output). Returns { lead, label, dest, trail } or null.
 const MD_LINK = /^(\s*)\[([^[\]\n]*)\]\(([^\n]*)\)(\s*)$/;
 export function parseMarkdownLink(value) {
   if (typeof value !== 'string') {
@@ -133,12 +135,12 @@ export function parseMarkdownLink(value) {
       return null;
     }
     dest = raw.slice(1, -1).trim();
-    if (/[\s"<>]/.test(dest.replace(/\{\{[^{}"]*\}\}/g, 'x'))) {
+    if (/[\s"<>]/.test(dest.replace(/\{\{[^{}"<>]*\}\}/g, 'x'))) {
       return null;
     }
   } else {
     dest = raw.trim();
-    if (/[\s"<>()]/.test(dest.replace(/\{\{[^{}"]*\}\}/g, 'x'))) {
+    if (/[\s"<>()]/.test(dest.replace(/\{\{[^{}"<>]*\}\}/g, 'x'))) {
       return null;
     }
   }

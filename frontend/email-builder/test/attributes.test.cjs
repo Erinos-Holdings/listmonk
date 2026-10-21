@@ -287,6 +287,14 @@ check('TL I5: a bare URL keeps the plain transform',
     mdExpr(`[a](https://x.test/p q?ref=${REF})`) === '');
   check('TL A1: unbracketed quoted action still refused',
     mdExpr('[a](https://x.test/p?n={{ or .Subscriber.FirstName "there" }})') === '');
+  // A1 review M1: a `>` inside an action would end a CommonMark <...> destination early and
+  // recreate the U+0022 save failure from the repair's own output — refused in BOTH forms.
+  check('TL A1 M1: > inside an action refused, unbracketed',
+    mdExpr('[a](https://x.test/p?q={{.X>}})') === '');
+  check('TL A1 M1: > inside an action refused, bracketed',
+    mdExpr('[a](<https://x.test/p?q={{.X>}}>)') === '');
+  check('TL A1 M1: < inside an action refused, unbracketed',
+    mdExpr('[a](https://x.test/p?q={{.X<}})') === '');
 }
 
 // ---- I5: refused shapes, each disabled with the D2 reason ----------------------------------
