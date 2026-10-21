@@ -55,6 +55,9 @@ type Props = {
 
 export default function MarkdownContentInput({ label, rows, defaultValue, markdownEnabled, onChange }: Props) {
   const [value, setValue] = useState(defaultValue);
+  // The selection at the attribute menu's open, for the product link's transform (state so the
+  // opening render sees it).
+  const [attributeSelText, setAttributeSelText] = useState('');
   const brandPalettes = useBrandPalettes();
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
@@ -185,17 +188,27 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
             applyResult(insertEmoji(value, sel?.start, sel?.end, emoji));
           }}
         />
-        {/* Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D2/D5/D6): an expression is text, so
-          enabled whether or not Markdown is on; the text group only (a Markdown link
-          destination cannot carry an expression -- CommonMark refuses the space). */}
+        {/* Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D2/D5/D6; 'markdown' group since
+          2026-10-21): an expression is text, so enabled whether or not Markdown is on. The shop
+          and product links insert PLAIN TEXT -- a Markdown link destination cannot carry an
+          expression (CommonMark refuses the space), so these are never tracked links. The
+          product link transforms the SELECTION (the URL the author selected); attributeSelText
+          is state, not a ref, so the menu computed at open reads the fresh selection. */}
         <AttributeMenuButton
-          kind="text"
+          kind="markdown"
+          value={attributeSelText}
           onOpen={() => {
-            emojiSelection.current = currentSelection();
+            const sel = currentSelection();
+            emojiSelection.current = sel;
+            setAttributeSelText(value.slice(sel.start, sel.end));
           }}
           onPick={(expr) => {
             const sel = emojiSelection.current;
             applyResult(insertEmoji(value, sel?.start, sel?.end, expr));
+          }}
+          onReplace={(v) => {
+            const sel = emojiSelection.current;
+            applyResult(insertEmoji(value, sel?.start, sel?.end, v));
           }}
         />
       </Stack>

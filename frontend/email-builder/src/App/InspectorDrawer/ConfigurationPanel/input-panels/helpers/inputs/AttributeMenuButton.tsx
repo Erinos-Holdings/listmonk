@@ -6,7 +6,7 @@
 // The caller owns the field: onOpen captures its selection (the button never takes focus),
 // onPick receives exactly the item's `expr` and inserts it through src/emojiInsert.js; an item
 // with `replace: true` (the product link, PRODUCT-LINK-SPEC D3) goes to onReplace instead and
-// becomes the whole field value.
+// becomes the whole field value ('link') or the selection ('markdown' -- the ribbon).
 //
 // The shop link's brand is the editing context's (useOfficialContext -- the campaign's derived
 // brand or the template's brand column), never the global brand selector (D3). A disabled item
@@ -23,12 +23,13 @@ import { useOfficialContext } from '../../../../../../documents/editor/EditorCon
 type Item = { id: string; label: string; expr: string; disabled: boolean; reason: string; replace?: boolean };
 
 type Props = {
-  kind: 'text' | 'link';
+  kind: 'text' | 'link' | 'markdown';
   onOpen: () => void;
   onPick: (expr: string) => void;
-  // PRODUCT-LINK-SPEC D3: the field's current text (the product link transforms it) and the
-  // whole-field replacement for an item with `replace: true`. A caller passing no `value` gets
-  // the product link disabled with its reason.
+  // PRODUCT-LINK-SPEC D3: the text the product link transforms (the whole field on 'link', the
+  // selection on 'markdown') and the replacement callback for an item with `replace: true` (the
+  // caller decides what it replaces). A caller passing no `value` gets the product link
+  // disabled with its reason.
   value?: string;
   onReplace?: (v: string) => void;
   title?: string;

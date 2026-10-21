@@ -6,7 +6,8 @@
 // (App/.../helpers/inputs/AttributeMenuButton.tsx). A pick inserts `expr` exactly, through
 // emojiInsert.js::insertEmoji (TinyMCE: its own insertContent).
 //
-// - `text` surfaces get the text group, URL surfaces the link group -- never both (D2).
+// - `text` surfaces get the text group, URL surfaces the link group (D2); since 2026-10-21 the
+//   Text block's ribbon is the one 'markdown' surface, text group + the two shop items.
 // - The shop link's brand is the EDITING CONTEXT's brand (the campaign's derived brand, or a
 //   template's brand column), never the global brand selector (D3).
 // - The shop link is bare: no `or`, no fallback, no `index` (D4). An empty value falls back to
@@ -101,11 +102,12 @@ export function productRefUrl(value, brand) {
   return { url: `${base}${joined}ref=${expr}${fragment}` };
 }
 
-function productLinkItem(brand, value) {
+function productLinkItem(brand, value, noUrlReason) {
   const res = productRefUrl(value, brand);
   if (res.url === undefined) {
+    const reason = noUrlReason && res.reason === NO_URL_REASON ? noUrlReason : res.reason;
     return {
-      id: 'product_link', label: 'Personalize product link', expr: '', disabled: true, reason: res.reason, replace: true,
+      id: 'product_link', label: 'Personalize product link', expr: '', disabled: true, reason, replace: true,
     };
   }
   return {
@@ -147,28 +149,35 @@ function shopLinkItem(brand) {
 }
 
 // attributeMenu(kind, context) -> { items: [{ id, label, expr, disabled, reason, replace? }] }.
-// kind is 'text' | 'link'; context is { brand, value? } (brand a slug, null or undefined; value
-// the field's current text, for the product link). A disabled item is shown, never hidden, and
-// has expr '' and a non-empty reason. `expr` is the exact string to insert, or -- when
-// `replace` is true (only product_link) -- the exact string the field becomes; an item without
-// `replace` inserts at the caret. An unknown kind returns no items.
+// kind is 'text' (subject/preheader, Heading, richtext), 'link' (Button Url, Image link) or
+// 'markdown' (the Text block's ribbon); context is { brand, value? } (brand a slug, null or
+// undefined; value the field's current text for 'link', the SELECTION for 'markdown' -- the
+// product link transforms it). A disabled item is shown, never hidden, and has expr '' and a
+// non-empty reason. `expr` is the exact string to insert, or -- when `replace` is true (only
+// product_link) -- the exact string the field (or the selection, on 'markdown') becomes; an
+// item without `replace` inserts at the caret. An unknown kind returns no items.
+//
+// 2026-10-21 (user): the link group lost `{{ UnsubscribeURL }}` / `{{ MessageURL }}` (the
+// official footers carry both; authors never place them), and 'markdown' adds the shop and
+// product links to the Text block. In a Text block they render as PLAIN TEXT -- a Markdown
+// link destination cannot carry a spaced expression -- so they are never tracked; the Button
+// and Image link stay the tracked route.
 export function attributeMenu(kind, context) {
   const brand = context ? context.brand : undefined;
   const value = context ? context.value : undefined;
+  const text = TEXT_ITEMS.map((it) => ({ ...it, disabled: false, reason: '' }));
   if (kind === 'text') {
-    return { items: TEXT_ITEMS.map((it) => ({ ...it, disabled: false, reason: '' })) };
+    return { items: text };
   }
   if (kind === 'link') {
+    return { items: [shopLinkItem(brand), productLinkItem(brand, value)] };
+  }
+  if (kind === 'markdown') {
     return {
       items: [
+        ...text,
         shopLinkItem(brand),
-        productLinkItem(brand, value),
-        {
-          id: 'unsubscribe', label: 'Unsubscribe link', expr: '{{ UnsubscribeURL }}', disabled: false, reason: '',
-        },
-        {
-          id: 'message', label: 'View in browser', expr: '{{ MessageURL }}', disabled: false, reason: '',
-        },
+        productLinkItem(brand, value, 'Select the product page URL first'),
       ],
     };
   }

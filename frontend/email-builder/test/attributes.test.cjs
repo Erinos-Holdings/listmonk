@@ -49,8 +49,6 @@ const TEXT_PINS = {
 };
 const LINK_PINS = {
   shop_link: '{{ .Subscriber.Attribs.shop_links.ruze.url }}',
-  unsubscribe: '{{ UnsubscribeURL }}',
-  message: '{{ MessageURL }}',
 };
 const text = attributeMenu('text', { brand: 'ruze' }).items;
 const link = attributeMenu('link', { brand: 'ruze' }).items;
@@ -97,9 +95,35 @@ check('isTemplateIdent', isTemplateIdent('ruze') && isTemplateIdent('a_1') && !i
 // ---- I4: groups, exactly and in order -------------------------------------------------------
 check('I4: text ids in order', show(text.map((i) => i.id)) === show(['first_name', 'last_name', 'name', 'email']),
   show(text.map((i) => i.id)));
-// PRODUCT-LINK-SPEC D3 inserts product_link after shop_link (the one edit to an existing pin).
-check('I4: link ids in order', show(link.map((i) => i.id)) === show(['shop_link', 'product_link', 'unsubscribe', 'message']),
+// 2026-10-21 (user): UnsubscribeURL / MessageURL removed from the link group (the official
+// footers carry both); the Text block's 'markdown' group is text + the two shop items.
+check('I4: link ids in order', show(link.map((i) => i.id)) === show(['shop_link', 'product_link']),
   show(link.map((i) => i.id)));
+check('I4: no unsubscribe/message anywhere',
+  ['link', 'text', 'markdown'].every((k) => attributeMenu(k, { brand: 'ruze' }).items
+    .every((i) => i.id !== 'unsubscribe' && i.id !== 'message' && !/UnsubscribeURL|MessageURL/.test(i.expr))));
+const markdown = attributeMenu('markdown', { brand: 'ruze', value: 'https://ruzepouches.com/pk/X/' }).items;
+check('I4: markdown ids in order',
+  show(markdown.map((i) => i.id)) === show(['first_name', 'last_name', 'name', 'email', 'shop_link', 'product_link']),
+  show(markdown.map((i) => i.id)));
+check('markdown: text items match the text group byte-for-byte',
+  show(markdown.slice(0, 4)) === show(text), show(markdown.slice(0, 4)));
+check('markdown: shop link enabled with the brand',
+  markdown[4].disabled === false && markdown[4].expr === '{{ .Subscriber.Attribs.shop_links.ruze.url }}');
+check('markdown: product link transforms the selection',
+  markdown[5].disabled === false && markdown[5].replace === true
+    && markdown[5].expr === 'https://ruzepouches.com/pk/X/?ref={{ or .Subscriber.Attribs.shop_links.ruze.slug `` }}',
+  show(markdown[5]));
+{
+  const it = attributeMenu('markdown', { brand: 'ruze', value: '' }).items.find((i) => i.id === 'product_link');
+  check('markdown: no selection -> disabled with the select reason',
+    it && it.disabled === true && it.reason === 'Select the product page URL first', show(it));
+}
+{
+  const it = attributeMenu('link', { brand: 'ruze', value: '' }).items.find((i) => i.id === 'product_link');
+  check('link: the no-URL reason is unchanged on link fields',
+    it && it.disabled === true && it.reason === 'Type or paste the product page URL first', show(it));
+}
 check('I4: an unknown kind returns no items', attributeMenu('html', { brand: 'ruze' }).items.length === 0);
 check('I4: a missing kind returns no items', attributeMenu(undefined, undefined).items.length === 0);
 for (const it of [...text, ...link]) {
