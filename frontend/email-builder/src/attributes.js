@@ -13,9 +13,11 @@
 // - The shop link is bare: no `or`, no fallback, no `index` (D4). An empty value falls back to
 //   the brand site at click time (hazard 52); a template fallback cannot say "signed up before
 //   launch".
-// - The product link (integrations PRODUCT-LINK-SPEC, link group only) is the one item that
-//   REPLACES the field: it rewrites the URL already typed (productRefUrl) to carry the
-//   subscriber's referral slug.
+// - The product link (integrations PRODUCT-LINK-SPEC; link and markdown groups) is the one item
+//   that REPLACES the field (or, on 'markdown', the selection): it rewrites the URL already
+//   typed (productRefUrl) to carry the subscriber's referral slug. On 'markdown' a selected
+//   bare URL becomes plain text (never tracked); a selected `[text](url)` link becomes a
+//   tracked markdown link (TEXT-LINK-TRACKING-SPEC D2, parseMarkdownLink).
 //
 // Adding an attribute = a row here + its pin in test/attributes.test.cjs (I1) (+ a text
 // attribute's `attributes.<camelCasedId>` key in i18n/en.json -- the SPA's surfaces offer the
@@ -102,7 +104,69 @@ export function productRefUrl(value, brand) {
   return { url: `${base}${joined}ref=${expr}${fragment}` };
 }
 
+// Fork (text link tracking) -- integrations TEXT-LINK-TRACKING-SPEC D2 (M1). The CONSERVATIVE
+// markdown-link grammar the Text ribbon's product link personalizes in place: the whole
+// selection (outer whitespace aside, kept verbatim) is `[label](dest)` or `[label](<dest>)`,
+// `label` free of `[`, `]` and newline, `dest` (trimmed) an absolute http(s) URL free of `"`,
+// `<`, `>`, newline and whitespace. Refused, deliberately: the CommonMark TITLE form
+// (`[a](url "t")` -- a naive parse hands the title to the transform and the `"` makes the
+// sanitizer DELETE the anchor and its label, hazard 102), nested brackets, multi-line, and an
+// unbracketed dest holding `(`/`)` (where CommonMark ends the destination is not ours to guess).
+// The one widening: inside `<...>` whitespace is admitted within a `{{ ... }}` action carrying
+// no `"` -- our own output's ref expression -- so transforming the output is a fixed point.
+// Returns { lead, label, dest, trail } or null.
+const MD_LINK = /^(\s*)\[([^[\]\n]*)\]\(([^\n]*)\)(\s*)$/;
+export function parseMarkdownLink(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const m = MD_LINK.exec(value);
+  if (m === null) {
+    return null;
+  }
+  const raw = m[3];
+  let dest;
+  if (raw.startsWith('<')) {
+    if (!raw.endsWith('>') || raw.length < 2) {
+      return null;
+    }
+    dest = raw.slice(1, -1).trim();
+    if (/[\s"<>]/.test(dest.replace(/\{\{[^{}"]*\}\}/g, 'x'))) {
+      return null;
+    }
+  } else {
+    dest = raw.trim();
+    if (/[\s"<>()]/.test(dest)) {
+      return null;
+    }
+  }
+  if (dest === '' || !/^https?:\/\//i.test(dest)) {
+    return null;
+  }
+  return { lead: m[1], label: m[2], dest, trail: m[4] };
+}
+
+const MARKDOWN_NO_URL_REASON = 'Select the product page URL, or a [text](url) link, first';
+
 function productLinkItem(brand, value, noUrlReason) {
+  // 'markdown' only (the caller passes noUrlReason): a selected markdown link is personalized
+  // in place -- [label](<transformed dest>), angle-bracketed because the ref expression has
+  // spaces (CommonMark refuses a spaced bare destination). Compiled, the anchor's href carries
+  // the expression and TrackLink wraps it like a Button's (TEXT-LINK-TRACKING-SPEC §1, I1).
+  const md = noUrlReason ? parseMarkdownLink(value) : null;
+  if (md !== null) {
+    const r = productRefUrl(md.dest, brand);
+    if (r.url !== undefined) {
+      return {
+        id: 'product_link',
+        label: `Personalize product link (${brand})`,
+        expr: `${md.lead}[${md.label}](<${r.url}>)${md.trail}`,
+        disabled: false,
+        reason: '',
+        replace: true,
+      };
+    }
+  }
   const res = productRefUrl(value, brand);
   if (res.url === undefined) {
     const reason = noUrlReason && res.reason === NO_URL_REASON ? noUrlReason : res.reason;
@@ -159,9 +223,14 @@ function shopLinkItem(brand) {
 //
 // 2026-10-21 (user): the link group lost `{{ UnsubscribeURL }}` / `{{ MessageURL }}` (the
 // official footers carry both; authors never place them), and 'markdown' adds the shop and
-// product links to the Text block. In a Text block they render as PLAIN TEXT -- a Markdown
-// link destination cannot carry a spaced expression -- so they are never tracked; the Button
-// and Image link stay the tracked route.
+// product links to the Text block. Inserted bare, they render as PLAIN TEXT and are never
+// tracked (a client that linkifies one produces an untracked click).
+//
+// 2026-10-21 (TEXT-LINK-TRACKING-SPEC D2): a selected `[text](url)` markdown link IS the
+// tracked Text route -- the product link rewrites it to `[text](<url?ref=…>)` (the angle
+// brackets carry the spaced expression), which compiles to an anchor TrackLink wraps exactly
+// like a Button's. A hand-typed double-quoted expression in a markdown link is worse than
+// untracked: the sanitizer deletes the anchor AND its label (runbook hazard 102).
 export function attributeMenu(kind, context) {
   const brand = context ? context.brand : undefined;
   const value = context ? context.value : undefined;
@@ -177,7 +246,7 @@ export function attributeMenu(kind, context) {
       items: [
         ...text,
         shopLinkItem(brand),
-        productLinkItem(brand, value, 'Select the product page URL first'),
+        productLinkItem(brand, value, MARKDOWN_NO_URL_REASON),
       ],
     };
   }

@@ -189,10 +189,10 @@ export default function MarkdownContentInput({ label, rows, defaultValue, markdo
           }}
         />
         {/* Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D2/D5/D6; 'markdown' group since
-          2026-10-21): an expression is text, so enabled whether or not Markdown is on. The shop
-          and product links insert PLAIN TEXT -- a Markdown link destination cannot carry an
-          expression (CommonMark refuses the space), so these are never tracked links. The
-          product link transforms the SELECTION (the URL the author selected); attributeSelText
+          2026-10-21): an expression is text, so enabled whether or not Markdown is on. Inserted
+          bare, the shop and product links are PLAIN TEXT, never tracked. The product link
+          transforms the SELECTION: a bare URL stays plain text; a selected [text](url) link
+          becomes [text](<url?ref=...>), a tracked link (TEXT-LINK-TRACKING-SPEC D2); attributeSelText
           is state, not a ref, so the menu computed at open reads the fresh selection. */}
         <AttributeMenuButton
           kind="markdown"

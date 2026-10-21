@@ -116,8 +116,10 @@ check('markdown: product link transforms the selection',
   show(markdown[5]));
 {
   const it = attributeMenu('markdown', { brand: 'ruze', value: '' }).items.find((i) => i.id === 'product_link');
+  // TEXT-LINK-TRACKING-SPEC D2: the reason names the markdown-link selection too (was
+  // 'Select the product page URL first').
   check('markdown: no selection -> disabled with the select reason',
-    it && it.disabled === true && it.reason === 'Select the product page URL first', show(it));
+    it && it.disabled === true && it.reason === 'Select the product page URL, or a [text](url) link, first', show(it));
 }
 {
   const it = attributeMenu('link', { brand: 'ruze', value: '' }).items.find((i) => i.id === 'product_link');
@@ -236,6 +238,105 @@ for (const [name, ctx, reason] of [
   check('PL I7: existing items carry no replace', withValue.every((i) => i.replace === undefined));
   check('PL I7: text group unchanged by value',
     show(attributeMenu('text', { brand: 'ruze', value: 'https://x.test/' }).items) === show(text));
+}
+
+// ==== TEXT-LINK-TRACKING-SPEC (integrations) -- the markdown-link flow (D2) ================
+const MD_REASON = 'Select the product page URL, or a [text](url) link, first';
+const mdItem = (value, brand = 'ruze') => attributeMenu('markdown', { brand, value }).items.find((i) => i.id === 'product_link');
+const mdExpr = (value) => mdItem(value).expr;
+
+// ---- I5: the flow ---------------------------------------------------------------------------
+{
+  const it = mdItem('[Buy](https://ruzepouches.com/pk/X/?ref=kara)');
+  check('TL I5: [Buy](url?ref=kara) -> ref stripped, transformed, angle-bracketed',
+    it.disabled === false && it.replace === true && it.reason === '' && it.label === 'Personalize product link (ruze)'
+      && it.expr === `[Buy](<https://ruzepouches.com/pk/X/?ref=${REF}>)`, show(it));
+}
+check('TL I5: the spec I5 literal, byte for byte',
+  mdExpr('[Buy](https://ruzepouches.com/pk/X/?ref=kara)')
+    === '[Buy](<https://ruzepouches.com/pk/X/?ref={{ or .Subscriber.Attribs.shop_links.ruze.slug `` }}>)');
+check('TL I5: [Buy](<url>) round-trips to the same',
+  mdExpr('[Buy](<https://ruzepouches.com/pk/X/?ref=kara>)') === `[Buy](<https://ruzepouches.com/pk/X/?ref=${REF}>)`,
+  mdExpr('[Buy](<https://ruzepouches.com/pk/X/?ref=kara>)'));
+for (const inp of [
+  '[Buy](https://ruzepouches.com/pk/X/?ref=kara)', '[Buy](<https://x.test/p?a=1#r>)', '[Shop now](https://x.test/)',
+  '  [Buy](https://x.test/p)  ',
+]) {
+  const once = mdExpr(inp);
+  check(`TL I5: fixed point ${inp}`, once !== '' && mdExpr(once) === once, show(once));
+}
+check('TL I5: params kept, fragment after ref',
+  mdExpr('[a](https://x.test/p?utm_source=x&REF=k#reviews)') === `[a](<https://x.test/p?utm_source=x&ref=${REF}#reviews>)`,
+  mdExpr('[a](https://x.test/p?utm_source=x&REF=k#reviews)'));
+check('TL I5: outer whitespace of the selection kept verbatim',
+  mdExpr(' [a](https://x.test/p) ') === ` [a](<https://x.test/p?ref=${REF}>) `, show(mdExpr(' [a](https://x.test/p) ')));
+check('TL I5: dest whitespace trimmed',
+  mdExpr('[a]( https://x.test/p )') === `[a](<https://x.test/p?ref=${REF}>)`, show(mdExpr('[a]( https://x.test/p )')));
+check('TL I5: a bare URL keeps the plain transform',
+  mdExpr('https://ruzepouches.com/pk/X/?ref=kara') === `https://ruzepouches.com/pk/X/?ref=${REF}`);
+
+// ---- I5: refused shapes, each disabled with the D2 reason ----------------------------------
+for (const [name, v] of [
+  ['title form', '[a](https://x/ "t")'],
+  ['title form, bracketed', '[a](<https://x/> "t")'],
+  ['title form, single quotes', "[a](https://x/ 't')"],
+  ['label containing ]', '[a]b](https://x/)'],
+  ['nested brackets', '[a [b]](https://x/)'],
+  ['open bracket in label', '[a [b](https://x/)'],
+  ['multi-line selection', '[a](https://x/)\n[b](https://y/)'],
+  ['multi-line label', '[a\nb](https://x/)'],
+  ['two links on a line', '[a](https://x/) and [b](https://y/)'],
+  ['two adjacent links', '[a](https://x/)[b](https://y/)'],
+  ['two adjacent bracketed links', '[a](<https://x/>)[b](<https://y/>)'],
+  ['dest with whitespace', '[a](https://x/p q)'],
+  ['bracketed dest with whitespace outside an action', '[a](<https://x/p q>)'],
+  ['dest with "', '[a](https://x/p?n="x")'],
+  ['bracketed dest with a quoted expression', '[a](<https://x/p?n={{ or .Subscriber.FirstName "there" }}>)'],
+  ['dest with <', '[a](https://x/<p)'],
+  ['dest with >', '[a](https://x/p>)'],
+  ['unclosed angle bracket', '[a](<https://x/p)'],
+  ['unbracketed dest with parens', '[a](https://x/p)foo)'],
+  ['non-URL dest', '[a](/pk/X/)'],
+  ['mailto dest', '[a](mailto:a@b.c)'],
+  ['empty dest', '[a]()'],
+  ['expression host', '[a](<https://{{ .Subscriber.Attribs.host }}/p>)'],
+  ['text around the link', 'Buy [a](https://x/) now'],
+  ['non-URL text', 'hello'],
+  ['empty selection', ''],
+]) {
+  const it = mdItem(v);
+  check(`TL I5: refused ${name}`, it && it.disabled === true && it.expr === '' && it.reason === MD_REASON && it.replace === true, show(it));
+}
+check('TL I5: a markdown link still needs a brand',
+  mdItem('[a](https://x/)', null).reason === 'Choose a list first'
+  && mdItem('[a](https://x/)', 'thirsty-girl').reason === 'Brand slug thirsty-girl is not a template identifier');
+
+// ---- I6: the link group never parses markdown ----------------------------------------------
+{
+  const it = attributeMenu('link', { brand: 'ruze', value: '[a](https://x/)' }).items.find((i) => i.id === 'product_link');
+  check('TL I6: link group refuses a markdown link with its unchanged reason',
+    it && it.disabled === true && it.reason === 'Type or paste the product page URL first', show(it));
+}
+
+// ---- I3: no expression the link items of the markdown group return carries a `"` ---------
+// (hazard 102 / M2: a `"` in a markdown destination makes the sanitizer DELETE the anchor and
+// its label). The text items are excluded by design: first_name's `"there"` is a greeting,
+// never placed in a destination by the picker.
+{
+  const inputs = [
+    '', 'https://x.test/p', '[a](https://x/)', '[a](<https://x/?ref=kara>)', '[a](https://x/ "t")',
+    '[a](<https://x/p?n={{ or .Subscriber.FirstName "there" }}>)', 'https://x.test/p?ref="k"',
+    `[Buy](<https://ruzepouches.com/pk/X/?ref=${REF}>)`,
+  ];
+  let quoted = [];
+  for (const brand of ['ruze', 'thirstygirl', null]) {
+    for (const value of inputs) {
+      for (const it of attributeMenu('markdown', { brand, value }).items) {
+        if ((it.id === 'product_link' || it.id === 'shop_link') && it.expr.includes('"')) quoted.push(`${it.id}:${value}`);
+      }
+    }
+  }
+  check('TL I3: no markdown-group link expression contains "', quoted.length === 0, quoted.join(' | '));
 }
 
 console.log(failed === 0 ? 'attributes: all checks pass' : `attributes: ${failed} FAILED`);
