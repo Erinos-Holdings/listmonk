@@ -337,6 +337,15 @@ check('TL I5: a markdown link still needs a brand',
     }
   }
   check('TL I3: no markdown-group link expression contains "', quoted.length === 0, quoted.join(' | '));
+
+  // Stage-4 L1: a `"` in the LABEL is allowed and harmless (anchor text) -- the guard is the
+  // DESTINATION. Pin that a quoted-label link is enabled and its (<...>) half is quote-free.
+  const ql = attributeMenu('markdown', { brand: 'ruze', value: '[say "hi"](https://x.test/p)' })
+    .items.find((i) => i.id === 'product_link');
+  const qlDest = ql && ql.expr.slice(ql.expr.lastIndexOf('(<'));
+  check('TL I3: quoted label enabled, destination half quote-free',
+    ql && ql.disabled === false && ql.expr.startsWith('[say "hi"](<') && qlDest && !qlDest.includes('"'),
+    ql && ql.expr);
 }
 
 console.log(failed === 0 ? 'attributes: all checks pass' : `attributes: ${failed} FAILED`);
