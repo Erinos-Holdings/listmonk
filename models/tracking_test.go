@@ -295,6 +295,37 @@ func TestTransformTrackLinksDynamic(t *testing.T) {
 	}
 }
 
+// integrations PRODUCT-LINK-SPEC (stage-4 review F1, runbook hazard 102): the product link's
+// compiled shape is tracked. The builder's quote hack un-escapes &quot; inside {{ }} into a raw
+// `"`, so the picker's fallback must be an empty BACKQUOTED raw string: with it the anchor and
+// the Button's VML marker are wrapped in TrackLink; with the old double-quoted "" the anchor is
+// left untracked and the marker span survives into the body (broken Outlook-desktop href).
+// The double-quote cases pin the hazard; attributes.test.cjs pins the picker's literal.
+func TestProductLinkTrackedBackquoteFallback(t *testing.T) {
+	const marker = `<span data-lm-vml-href="%s"></span>`
+	const bq = "https://ruzepouches.com/pk/X/?ref={{ or .Subscriber.Attribs.shop_links.ruze.slug `` }}"
+	const dq = `https://ruzepouches.com/pk/X/?ref={{ or .Subscriber.Attribs.shop_links.ruze.slug "" }}`
+	tracked := `{{ TrackLink "` + bq + `" . }}`
+
+	if got, want := TransformTrackLinks(`<a href="`+bq+`">x</a>`, CampaignContentTypeVisual), `<a href="`+tracked+`">x</a>`; got != want {
+		t.Fatalf("backquote anchor not tracked:\n got  %s\n want %s", got, want)
+	}
+	vmlIn := `{{ Safe "…href=\"" }}` + fmt.Sprintf(marker, bq) + `{{ Safe "\"…" }}`
+	if got, want := TransformTrackLinks(vmlIn, CampaignContentTypeVisual), `{{ Safe "…href=\"" }}`+tracked+`{{ Safe "\"…" }}`; got != want {
+		t.Fatalf("backquote VML marker not tracked:\n got  %s\n want %s", got, want)
+	}
+
+	// Hazard 102: the double-quoted form is never wrapped.
+	dqAnchor := `<a href="` + dq + `">x</a>`
+	if got := TransformTrackLinks(dqAnchor, CampaignContentTypeVisual); got != dqAnchor {
+		t.Fatalf("double-quote anchor changed (hazard 102 no longer holds?):\n got %s", got)
+	}
+	dqVML := `{{ Safe "…href=\"" }}` + fmt.Sprintf(marker, dq) + `{{ Safe "\"…" }}`
+	if got := TransformTrackLinks(dqVML, CampaignContentTypeVisual); strings.Contains(got, "TrackLink") || !strings.Contains(got, "data-lm-vml-href") {
+		t.Fatalf("double-quote VML marker was consumed (hazard 102 no longer holds?):\n got %s", got)
+	}
+}
+
 // I1 -- the compiled dynamic TrackLink call is a valid template: the whole visual body
 // compiles, and rendering with a FuncMap whose TrackLink echoes its argument shows the
 // argument is the unexpanded, entity-decoded expression (quote escapes undone).

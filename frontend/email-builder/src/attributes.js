@@ -43,15 +43,18 @@ export function shopLinkExpr(brand) {
 }
 
 // Fork (product link) -- integrations PRODUCT-LINK-SPEC D1/D2. productRefExpr is the referral
-// slug with an EMPTY-STRING fallback: the `or ... ""` is load-bearing (a missing `slug` key would
+// slug with an EMPTY-STRING fallback: the `or` is load-bearing (a missing `slug` key would
 // otherwise render `<no value>`, the resolver's KindEmpty, and the click would fall back to the
-// brand homepage, losing the product page). Never a non-empty fallback -- that would be false
-// attribution.
+// brand homepage, losing the product page). The fallback is an EMPTY BACKQUOTED raw string
+// (two backticks), NEVER a double-quoted "" -- runbook hazard 102: the builder's quote hack
+// un-escapes &quot; inside {{ }} into a raw `"` mid-attribute, so TrackLink never wraps the
+// href (untracked) and a Button's data-lm-vml-href marker breaks Outlook desktop. Pinned by
+// models/tracking_test.go. Never a non-empty fallback -- that would be false attribution.
 export function productRefExpr(brand) {
   if (!isTemplateIdent(brand)) {
     return null;
   }
-  return `{{ or .Subscriber.Attribs.shop_links.${brand}.slug "" }}`;
+  return `{{ or .Subscriber.Attribs.shop_links.${brand}.slug \`\` }}`;
 }
 
 const NO_BRAND_REASON = 'Choose a list first';

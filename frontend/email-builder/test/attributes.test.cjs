@@ -120,9 +120,11 @@ for (const [id, key] of Object.entries(I18N_PINS)) {
 // ==== PRODUCT-LINK-SPEC (integrations) -- the product-page referral transform ===============
 // The literal lands in live hrefs: a change here is the acknowledgment. The same literal is
 // pinned in Go (internal/linkresolve TestProductLink, I4) and in the integrations campaign
-// review (tests/lib/campaign-review/attribute-roster.test.ts, I4).
-const REF = '{{ or .Subscriber.Attribs.shop_links.ruze.slug "" }}';
+// review (tests/lib/campaign-review/attribute-roster.test.ts, I4). The fallback is an empty
+// BACKQUOTED raw string -- never "" (runbook hazard 102; models/tracking_test.go pins why).
+const REF = '{{ or .Subscriber.Attribs.shop_links.ruze.slug `` }}';
 check('PL D1: productRefExpr(ruze) exact', productRefExpr('ruze') === REF, productRefExpr('ruze'));
+check('PL D1: no double quote in the expression (hazard 102)', !productRefExpr('ruze').includes('"'));
 check('PL D1: productRefExpr refuses a non-identifier', productRefExpr('thirsty-girl') === null);
 const pr = (v, b = 'ruze') => productRefUrl(v, b);
 const prUrl = (v, b) => pr(v, b).url;

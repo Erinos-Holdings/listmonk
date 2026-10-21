@@ -283,7 +283,7 @@ func TestCheck(t *testing.T) {
 // brand-site fallback) arises only when an intermediate value is a JSON null or not an object;
 // those cases are pinned last as the real residual. (Implementation-stage gap, recorded.)
 func TestProductLink(t *testing.T) {
-	const url = `https://ruzepouches.com/pk/Ruze-Energy/?ref={{ or .Subscriber.Attribs.shop_links.ruze.slug "" }}`
+	const url = "https://ruzepouches.com/pk/Ruze-Energy/?ref={{ or .Subscriber.Attribs.shop_links.ruze.slug `` }}"
 
 	others, keys, err := Check(url)
 	if err != nil || len(others) != 0 || !reflect.DeepEqual(keys, []string{"shop_links"}) {
