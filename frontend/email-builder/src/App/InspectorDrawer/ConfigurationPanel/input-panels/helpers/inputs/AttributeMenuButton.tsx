@@ -5,8 +5,9 @@
 // (MarkdownContentInput) and TextInput's attributePicker prop (Heading, Button Url, Image link).
 // The caller owns the field: onOpen captures its selection (the button never takes focus),
 // onPick receives exactly the item's `expr` and inserts it through src/emojiInsert.js; an item
-// with `replace: true` (the product link, PRODUCT-LINK-SPEC D3) goes to onReplace instead and
-// becomes the whole field value ('link') or the selection ('markdown' -- the ribbon).
+// with `replace: true` (the product link, PRODUCT-LINK-SPEC D3; on 'markdown' the shop link
+// too, TEXT-LINK-TRACKING A2) goes to onReplace instead and becomes the whole field value
+// ('link') or the selection ('markdown' -- the ribbon).
 //
 // The shop link's brand is the editing context's (useOfficialContext -- the campaign's derived
 // brand or the template's brand column), never the global brand selector (D3). A disabled item

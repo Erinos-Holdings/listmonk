@@ -13,11 +13,12 @@
 // - The shop link is bare: no `or`, no fallback, no `index` (D4). An empty value falls back to
 //   the brand site at click time (hazard 52); a template fallback cannot say "signed up before
 //   launch".
-// - The product link (integrations PRODUCT-LINK-SPEC; link and markdown groups) is the one item
-//   that REPLACES the field (or, on 'markdown', the selection): it rewrites the URL already
-//   typed (productRefUrl) to carry the subscriber's referral slug. On 'markdown' a selected
-//   bare URL becomes plain text (never tracked); a selected `[text](url)` link becomes a
-//   tracked markdown link (TEXT-LINK-TRACKING-SPEC D2, parseMarkdownLink).
+// - The product link (integrations PRODUCT-LINK-SPEC; link and markdown groups) REPLACES the
+//   field (or, on 'markdown', the selection): it rewrites the URL already typed (productRefUrl)
+//   to carry the subscriber's referral slug. On 'markdown' a selected bare URL becomes plain
+//   text (never tracked); a selected `[text](url)` link becomes a tracked markdown link
+//   (TEXT-LINK-TRACKING-SPEC D2, parseMarkdownLink) -- and the SHOP LINK replaces there too
+//   (A2): a selected [label](anything) gets its destination swapped for <{{ ...url }}>.
 //
 // Adding an attribute = a row here + its pin in test/attributes.test.cjs (I1) (+ a text
 // attribute's `attributes.<camelCasedId>` key in i18n/en.json -- the SPA's surfaces offer the
