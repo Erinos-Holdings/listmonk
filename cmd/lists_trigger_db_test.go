@@ -196,6 +196,18 @@ func TestListTriggerTriState(t *testing.T) {
 		"sku not string":    `{"kind":"skus","skus":["a",3]}`,
 		"sku too long":      `{"kind":"skus","skus":["` + long + `"]}`,
 		"too many skus":     `{"kind":"skus","skus":[` + strings.Join(many, ",") + `]}`,
+		// NO-PURCHASE-STEPS-SPEC I1 -- the no_purchase kind's refusals.
+		"days missing":    `{"kind":"no_purchase"}`,
+		"days null":       `{"kind":"no_purchase","days":null}`,
+		"days float":      `{"kind":"no_purchase","days":7.5}`,
+		"days 7.0":        `{"kind":"no_purchase","days":7.0}`,
+		"days exponent":   `{"kind":"no_purchase","days":7e0}`,
+		"days string":     `{"kind":"no_purchase","days":"7"}`,
+		"days 0":          `{"kind":"no_purchase","days":0}`,
+		"days negative":   `{"kind":"no_purchase","days":-3}`,
+		"days 366":        `{"kind":"no_purchase","days":366}`,
+		"days huge":       `{"kind":"no_purchase","days":99999999}`,
+		"no_purchase key": `{"kind":"no_purchase","days":7,"skus":["a"]}`,
 	} {
 		if code, _ := th.put(list, `{"name":"Must not apply","join_trigger":`+jtBody+`}`, marketer); code != http.StatusBadRequest {
 			t.Fatalf("%s: want 400, got %d", name, code)
@@ -211,6 +223,28 @@ func TestListTriggerTriState(t *testing.T) {
 	}
 	if code, _ := th.put(list, `{"name":"Acme buyers 2","join_trigger":{"kind":"skus","skus":["`+strings.Repeat("y", 100)+`",`+strings.Join(exact[:199], ",")+`,"S0"]}}`, marketer); code != http.StatusOK {
 		t.Fatalf("at the limits: %d", code)
+	}
+
+	// NO-PURCHASE-STEPS-SPEC I1 -- no_purchase: days 1 and 365 are the limits; stored normalized.
+	for _, days := range []string{"1", "365", " 7 "} {
+		if code, _ := th.put(list, `{"name":"Acme buyers 2","join_trigger":{ "days" : `+days+`, "kind":"no_purchase" }}`, marketer); code != http.StatusOK {
+			t.Fatalf("no_purchase days %s: %d", days, code)
+		}
+		want := `{"days": ` + strings.TrimSpace(days) + `, "kind": "no_purchase"}`
+		if r := th.row(list); str(r.JoinTrigger) != want {
+			t.Fatalf("no_purchase days %s stored as %s, want %s", days, str(r.JoinTrigger), want)
+		}
+	}
+	// The pure validator's normalized output (key order kind, days; the other kinds unchanged).
+	for in, want := range map[string]string{
+		`{"days":30,"kind":"no_purchase"}`: `{"kind":"no_purchase","days":30}`,
+		`{"kind":"first_order"}`:           `{"kind":"first_order"}`,
+		`{"kind":"skus","skus":[" A "]}`:   `{"kind":"skus","skus":["a"]}`,
+	} {
+		got, err := validateJoinTrigger([]byte(in))
+		if err != nil || string(got) != want {
+			t.Fatalf("validateJoinTrigger(%s) = %s, %v; want %s", in, got, err, want)
+		}
 	}
 
 	// null clears.

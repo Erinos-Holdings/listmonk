@@ -1,6 +1,7 @@
 // Fork (list join triggers, integrations LIST-JOIN-TRIGGER-SPEC D7). The pure half of the Lists
 // form's "Who joins automatically" section, the Lists page sub-line item and the campaign list
-// picker label. The server stores join_trigger ({kind: 'first_order'} or {kind: 'skus', skus}) and
+// picker label. The server stores join_trigger ({kind: 'first_order'}, {kind: 'skus', skus} or
+// {kind: 'no_purchase', days} -- NO-PURCHASE-STEPS-SPEC D7) and
 // the reconciler's write-back trigger_sync ({synced_at, state: 'live'|'invalid', slug?, error?});
 // this module only maps them to and from the form and formats them -- the fork stores and
 // renders, never computes. Tested by listTrigger.test.mjs.
@@ -10,6 +11,10 @@ import { buildListRequest } from './listBrand.mjs'; // eslint-disable-line impor
 export const TRIGGER_NONE = 'none';
 export const TRIGGER_FIRST_ORDER = 'first_order';
 export const TRIGGER_SKUS = 'skus';
+// NO-PURCHASE-STEPS-SPEC D1/D7 -- a "still deciding" step: {kind: 'no_purchase', days: N}, N 1-365.
+export const TRIGGER_NO_PURCHASE = 'no_purchase';
+export const DAYS_MIN = 1;
+export const DAYS_MAX = 365;
 
 // The keys the list form sends (F3) -- never the spread GET row, whose sunset, health,
 // subscriber_grid, trigger_* and transactional keys must not ride back to the server.
@@ -38,7 +43,30 @@ export function triggerOption(joinTrigger) {
   if (!isObj(joinTrigger)) return TRIGGER_NONE;
   if (joinTrigger.kind === TRIGGER_FIRST_ORDER) return TRIGGER_FIRST_ORDER;
   if (joinTrigger.kind === TRIGGER_SKUS) return TRIGGER_SKUS;
+  if (joinTrigger.kind === TRIGGER_NO_PURCHASE) return TRIGGER_NO_PURCHASE;
   return TRIGGER_NONE;
+}
+
+// storedDays is the days input's value for a stored join_trigger: its days for a no_purchase
+// trigger, else '' (the field starts empty for every other kind).
+export function storedDays(joinTrigger) {
+  if (triggerOption(joinTrigger) !== TRIGGER_NO_PURCHASE) return '';
+  const d = joinTrigger.days;
+  return Number.isInteger(d) ? String(d) : '';
+}
+
+// textToDays is the days number the form sends for the input's text: a whole number written as
+// digits (surrounding spaces ignored), else null. The range 1-365 is the server's rule (D1); an
+// out-of-range or missing value is sent as-is and refused there (400 lists.triggerInvalid).
+export function textToDays(text) {
+  const s = String(text == null ? '' : text).trim();
+  return /^\d{1,6}$/.test(s) ? Number(s) : null;
+}
+
+// daysValid mirrors the server's range for the field's inline state only -- the server decides.
+export function daysValid(text) {
+  const d = textToDays(text);
+  return d !== null && d >= DAYS_MIN && d <= DAYS_MAX;
 }
 
 // skusToText is the textarea text for a stored SKU array, one per line.
@@ -52,12 +80,22 @@ export function textToSkus(text) {
   return String(text == null ? '' : text).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
 }
 
-// buildJoinTrigger is the join_trigger the form sends for a radio value and the textarea text:
-// null for none (clears), the document otherwise.
-export function buildJoinTrigger(option, skusText) {
+// buildJoinTrigger is the join_trigger the form sends for a radio value, the textarea text and the
+// days input text: null for none (clears), the document otherwise.
+export function buildJoinTrigger(option, skusText, daysText) {
   if (option === TRIGGER_FIRST_ORDER) return { kind: TRIGGER_FIRST_ORDER };
   if (option === TRIGGER_SKUS) return { kind: TRIGGER_SKUS, skus: textToSkus(skusText) };
+  if (option === TRIGGER_NO_PURCHASE) return { kind: TRIGGER_NO_PURCHASE, days: textToDays(daysText) };
   return null;
+}
+
+// triggerWhat is the sub-line's kind phrase for a stored trigger ('' for none).
+function triggerWhat(joinTrigger) {
+  const opt = triggerOption(joinTrigger);
+  if (opt === TRIGGER_FIRST_ORDER) return 'joins on first order';
+  if (opt === TRIGGER_SKUS) return 'joins on SKU purchase';
+  if (opt === TRIGGER_NO_PURCHASE) return `joins on day ${joinTrigger.days} no-purchase`;
+  return '';
 }
 
 // triggerBadge is the badge beside the section title: null when the list has no trigger, else
@@ -80,7 +118,7 @@ export function triggerBadge(joinTrigger, triggerSync) {
 export function listTriggerItem(list) {
   const opt = triggerOption(storedTrigger(list));
   if (opt === TRIGGER_NONE) return '';
-  const what = opt === TRIGGER_FIRST_ORDER ? 'joins on first order' : 'joins on SKU purchase';
+  const what = triggerWhat(storedTrigger(list));
   const badge = triggerBadge(storedTrigger(list), storedTriggerSync(list));
   const state = { pending: 'pending sync', live: 'live', invalid: 'invalid' }[badge.state];
   return `${what} · ${state}`;
@@ -100,6 +138,7 @@ export function pickerLabel(list) {
   const opt = triggerOption(storedTrigger(l));
   if (opt === TRIGGER_FIRST_ORDER) return `${name} — joins on first purchase`;
   if (opt === TRIGGER_SKUS) return `${name} — joins on SKU purchase`;
+  if (opt === TRIGGER_NO_PURCHASE) return `${name} — joins when still deciding (day ${storedTrigger(l).days})`;
   return name;
 }
 

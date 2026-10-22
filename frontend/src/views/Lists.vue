@@ -419,7 +419,8 @@ export default Vue.extend({
       // Fork (sunset v2, SUNSET-V2-SPEC D8): a re-engagement queue's countdown is one more
       // dot-separated item; a list without a stored sunset renders none (listSunset.mjs).
       // LIST-JOIN-TRIGGER-SPEC D7: a list with a join trigger gains one more item, its kind and
-      // sync state (listTrigger.mjs).
+      // sync state (listTrigger.mjs) -- for a NO-PURCHASE-STEPS-SPEC D7 step, `joins on day <N>
+      // no-purchase`.
       if (!row.brand || this.brandSelection.kind === 'brand') {
         return withTriggerItem(withSunsetItem(id, row.sunset), row);
       }

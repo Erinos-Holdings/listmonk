@@ -1,7 +1,8 @@
 package main
 
 // Fork (list join triggers) -- integrations LIST-JOIN-TRIGGER-SPEC D1-D6. A list may carry a join
-// trigger ({"kind":"first_order"} or {"kind":"skus","skus":[...]}) and a transactional flag. The
+// trigger ({"kind":"first_order"}, {"kind":"skus","skus":[...]} or -- NO-PURCHASE-STEPS-SPEC D1 --
+// {"kind":"no_purchase","days":N}) and a transactional flag. The
 // fork validates SHAPE only and stores; an external reconciler reads the lists, gives the trigger
 // its meaning and writes its state back through PUT /api/lists/:id/trigger-sync. The fork stores
 // and renders, never computes.
@@ -45,18 +46,29 @@ const (
 
 	joinTriggerFirstOrder = "first_order"
 	joinTriggerSkus       = "skus"
+	// joinTriggerNoPurchase is the "still deciding" step (integrations NO-PURCHASE-STEPS-SPEC D1):
+	// {"kind":"no_purchase","days":N}, N an integer 1-365. Shape only -- the reconciler owns meaning.
+	joinTriggerNoPurchase = "no_purchase"
+
+	// minJoinTriggerDays and maxJoinTriggerDays bound a no_purchase trigger's days.
+	minJoinTriggerDays = 1
+	maxJoinTriggerDays = 365
 )
+
+// joinTriggerKindErr is the refusal for a missing or unknown kind.
+var joinTriggerKindErr = fmt.Errorf("join_trigger.kind must be %q, %q or %q", joinTriggerFirstOrder, joinTriggerSkus, joinTriggerNoPurchase)
 
 // normalizedJoinTrigger is the stored form; field order fixes the stored key order.
 type normalizedJoinTrigger struct {
 	Kind string   `json:"kind"`
 	Skus []string `json:"skus,omitempty"`
+	Days int      `json:"days,omitempty"`
 }
 
 // validateJoinTrigger checks a non-null join_trigger object and returns its normalized JSON: kind
-// first_order with no other key, or kind skus with a skus array of strings -- trimmed,
-// lower-cased, de-duplicated in order, none empty, each at most 100 characters, at most 200 of
-// them. Anything else is refused.
+// first_order with no other key; kind skus with a skus array of strings -- trimmed, lower-cased,
+// de-duplicated in order, none empty, each at most 100 characters, at most 200 of them; or kind
+// no_purchase with days a JSON integer 1-365 and no other key. Anything else is refused.
 func validateJoinTrigger(raw []byte) ([]byte, error) {
 	var doc map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &doc); err != nil || doc == nil {
@@ -64,9 +76,21 @@ func validateJoinTrigger(raw []byte) ([]byte, error) {
 	}
 	var kind string
 	if k, ok := doc["kind"]; !ok || json.Unmarshal(k, &kind) != nil {
-		return nil, fmt.Errorf("join_trigger.kind must be %q or %q", joinTriggerFirstOrder, joinTriggerSkus)
+		return nil, joinTriggerKindErr
 	}
 	switch kind {
+	case joinTriggerNoPurchase:
+		for k := range doc {
+			if k != "kind" && k != "days" {
+				return nil, fmt.Errorf("join_trigger has an unknown key: %s", k)
+			}
+		}
+		days, ok := jsonInt(doc["days"])
+		if !ok || days < minJoinTriggerDays || days > maxJoinTriggerDays {
+			return nil, fmt.Errorf("join_trigger.days must be a whole number from %d to %d", minJoinTriggerDays, maxJoinTriggerDays)
+		}
+		return json.Marshal(normalizedJoinTrigger{Kind: kind, Days: days})
+
 	case joinTriggerFirstOrder:
 		for k := range doc {
 			if k != "kind" {
@@ -112,7 +136,30 @@ func validateJoinTrigger(raw []byte) ([]byte, error) {
 		}
 		return json.Marshal(normalizedJoinTrigger{Kind: kind, Skus: out})
 	}
-	return nil, fmt.Errorf("join_trigger.kind must be %q or %q", joinTriggerFirstOrder, joinTriggerSkus)
+	return nil, joinTriggerKindErr
+}
+
+// jsonInt reads a JSON number literal written as a plain integer (digits, optional leading
+// minus): 7 passes; 7.0, 7e0, "7", null and an absent value do not.
+func jsonInt(raw json.RawMessage) (int, bool) {
+	s := strings.TrimSpace(string(raw))
+	if s == "" || len(s) > 6 {
+		return 0, false
+	}
+	n := 0
+	for i, r := range s {
+		if i == 0 && r == '-' && len(s) > 1 {
+			continue
+		}
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+		n = n*10 + int(r-'0')
+	}
+	if s[0] == '-' {
+		n = -n
+	}
+	return n, true
 }
 
 // sameJSON compares two JSON documents by value (the stored JSONB comes back re-formatted). An

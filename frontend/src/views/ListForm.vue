@@ -111,6 +111,18 @@
             <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
               data-cy="list-trigger-skus" />
           </b-field>
+          <!-- NO-PURCHASE-STEPS-SPEC D7: a "still deciding" step -- {kind: no_purchase, days}. -->
+          <b-field>
+            <b-radio v-model="triggerOption" native-value="no_purchase" name="join_trigger" :disabled="locked"
+              data-cy="list-trigger-no-purchase">
+              {{ $t('lists.joinTriggerNoPurchase') }}
+            </b-radio>
+          </b-field>
+          <b-field v-if="triggerOption === 'no_purchase'" :label="$t('lists.joinTriggerDays')"
+            :type="daysText === '' || daysOk ? '' : 'is-danger'" :message="$t('lists.joinTriggerNoPurchaseHelp')">
+            <b-input v-model="daysText" type="number" min="1" max="365" step="1" name="join_trigger_days"
+              :disabled="locked" data-cy="list-trigger-days" />
+          </b-field>
           <b-field v-if="canTransactional" :message="$t('lists.transactionalHelp')">
             <b-checkbox v-model="transactional" name="transactional" :disabled="locked" data-cy="list-transactional">
               {{ $t('lists.transactional') }}
@@ -149,7 +161,8 @@ import {
   brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import {
-  buildJoinTrigger, buildListFormRequest, skusToText, storedTrigger, storedTriggerSync, triggerBadge, triggerOption,
+  buildJoinTrigger, buildListFormRequest, daysValid, skusToText, storedDays, storedTrigger, storedTriggerSync,
+  triggerBadge, triggerOption,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -189,6 +202,8 @@ export default Vue.extend({
       // LIST-JOIN-TRIGGER-SPEC D7: the trigger radio, the SKU textarea and the checkbox.
       triggerOption: 'none',
       skusText: '',
+      // NO-PURCHASE-STEPS-SPEC D7: the no_purchase step's days input.
+      daysText: '',
       transactional: false,
     };
   },
@@ -223,7 +238,7 @@ export default Vue.extend({
       // The server's POST ignores join_trigger/transactional (LIST-JOIN-TRIGGER-SPEC D3), so a
       // trigger chosen on a new list is applied with a second call onto the created id. The
       // list exists either way; a refused trigger surfaces as the PUT's error toast.
-      const joinTrigger = buildJoinTrigger(this.triggerOption, this.skusText);
+      const joinTrigger = buildJoinTrigger(this.triggerOption, this.skusText, this.daysText);
       const wantsTrigger = joinTrigger !== null || (this.canTransactional && this.transactional);
       this.$api.createList(buildListFormRequest(this.form, this.brand)).then((data) => {
         const done = () => {
@@ -252,7 +267,7 @@ export default Vue.extend({
     updateList() {
       // D7/F3: an allow-listed body; transactional only when the checkbox is rendered (D5).
       const req = buildListFormRequest(this.form, this.brand, {
-        joinTrigger: buildJoinTrigger(this.triggerOption, this.skusText),
+        joinTrigger: buildJoinTrigger(this.triggerOption, this.skusText, this.daysText),
         canTransactional: this.canTransactional,
         transactional: this.transactional,
       });
@@ -290,6 +305,11 @@ export default Vue.extend({
     // lists:transactional.
     canTransactional() {
       return this.$can('lists:transactional');
+    },
+
+    // NO-PURCHASE-STEPS-SPEC D7: the days field's inline state (the server is the control).
+    daysOk() {
+      return daysValid(this.daysText);
     },
 
     // The badge from the STORED trigger and trigger_sync (null = no trigger, no badge).
@@ -336,6 +356,7 @@ export default Vue.extend({
     const jt = storedTrigger(this.$props.data);
     this.triggerOption = triggerOption(jt);
     this.skusText = skusToText(jt && jt.skus);
+    this.daysText = storedDays(jt);
     this.transactional = !!this.$props.data.transactional;
     // Fork (global brand, D10) -- a new list under a selected brand is that brand's.
     if (!this.isEditing && this.brandDefault.locked) {

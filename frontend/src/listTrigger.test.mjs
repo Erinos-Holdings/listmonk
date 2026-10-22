@@ -3,8 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  TRIGGER_NONE, TRIGGER_FIRST_ORDER, TRIGGER_SKUS,
-  triggerOption, skusToText, textToSkus, buildJoinTrigger, triggerBadge,
+  TRIGGER_NONE, TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NO_PURCHASE,
+  triggerOption, skusToText, textToSkus, buildJoinTrigger, triggerBadge, storedDays, textToDays, daysValid,
   listTriggerItem, withTriggerItem, pickerLabel, buildListFormRequest, storedTrigger, storedTriggerSync,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
@@ -21,6 +21,43 @@ test('option <-> document round-trip', () => {
   const stored = { kind: 'skus', skus: ['widget-a', 'b-2'] };
   assert.deepEqual(buildJoinTrigger(triggerOption(stored), skusToText(stored.skus)), stored);
   assert.deepEqual(buildJoinTrigger(triggerOption({ kind: 'first_order' }), ''), { kind: 'first_order' });
+});
+
+// NO-PURCHASE-STEPS-SPEC I10 -- the no_purchase kind: option <-> document, the days field, the
+// picker label and the sub-line item.
+test('no_purchase: option <-> document round-trip and the days field', () => {
+  const stored = { kind: 'no_purchase', days: 7 };
+  assert.equal(triggerOption(stored), TRIGGER_NO_PURCHASE);
+  assert.equal(storedDays(stored), '7');
+  assert.deepEqual(buildJoinTrigger(triggerOption(stored), '', storedDays(stored)), stored);
+  assert.deepEqual(buildJoinTrigger(TRIGGER_NO_PURCHASE, 'ignored', ' 14 '), { kind: 'no_purchase', days: 14 });
+  // The days field starts empty for every other kind; the other kinds ignore it.
+  assert.equal(storedDays({ kind: 'first_order' }), '');
+  assert.equal(storedDays(null), '');
+  assert.equal(storedDays({ kind: 'no_purchase', days: 'x' }), '');
+  assert.deepEqual(buildJoinTrigger(TRIGGER_FIRST_ORDER, '', '7'), { kind: 'first_order' });
+  // Non-digits send null (the server refuses -- it is the control); digits pass whatever the range.
+  ['', ' ', '7.5', '-3', 'seven', null, undefined, '1e2'].forEach((bad) => assert.equal(textToDays(bad), null, String(bad)));
+  assert.equal(textToDays('366'), 366);
+  assert.deepEqual(buildJoinTrigger(TRIGGER_NO_PURCHASE, '', ''), { kind: 'no_purchase', days: null });
+  // The inline range mirror: 1 and 365 are the limits.
+  assert.equal(daysValid('1'), true);
+  assert.equal(daysValid('365'), true);
+  ['0', '366', '', '2.5'].forEach((bad) => assert.equal(daysValid(bad), false, bad));
+});
+
+test('no_purchase: picker label and sub-line item', () => {
+  const l = { name: 'Ruze Still Deciding', join_trigger: { kind: 'no_purchase', days: 7 } };
+  assert.equal(pickerLabel(l), 'Ruze Still Deciding — joins when still deciding (day 7)');
+  assert.equal(listTriggerItem(l), 'joins on day 7 no-purchase · pending sync');
+  const live = { ...l, trigger_sync: { state: 'live', slug: 'ruze-no-purchase-56' } };
+  assert.equal(listTriggerItem(live), 'joins on day 7 no-purchase · live');
+  assert.equal(withTriggerItem('#56 · Ruze', live), '#56 · Ruze · joins on day 7 no-purchase · live');
+  // The camel-cased browser row reads the same.
+  const camel = { name: 'Step 2', joinTrigger: { kind: 'no_purchase', days: 14 }, triggerSync: { state: 'invalid', error: 'x' } };
+  assert.equal(pickerLabel(camel), 'Step 2 — joins when still deciding (day 14)');
+  assert.equal(listTriggerItem(camel), 'joins on day 14 no-purchase · invalid');
+  assert.deepEqual(triggerBadge(storedTrigger(camel), storedTriggerSync(camel)), { state: 'invalid', key: 'lists.triggerSyncInvalid', params: { error: 'x' } });
 });
 
 test('SKU textarea <-> array: one per line, trimmed, blank lines dropped', () => {
