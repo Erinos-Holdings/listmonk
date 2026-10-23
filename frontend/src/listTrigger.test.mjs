@@ -6,7 +6,40 @@ import {
   TRIGGER_NONE, TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NO_PURCHASE,
   triggerOption, skusToText, textToSkus, buildJoinTrigger, triggerBadge, storedDays, textToDays, daysValid,
   listTriggerItem, withTriggerItem, pickerLabel, buildListFormRequest, storedTrigger, storedTriggerSync,
+  LIST_TYPE_BROADCAST, LIST_TYPE_JOURNEY, listTypeOf, journeyOption, buildListTypeTrigger,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
+
+// JOURNEY-UX-SPEC I7 -- the Broadcast | Journey selector (D8, F4).
+test('I7: stored trigger <-> selector value and the Journey pane radio', () => {
+  [null, undefined, { kind: 'nope' }, []].forEach((jt) => {
+    assert.equal(listTypeOf(jt), LIST_TYPE_BROADCAST, JSON.stringify(jt));
+    assert.equal(journeyOption(jt), TRIGGER_FIRST_ORDER, JSON.stringify(jt));
+  });
+  [{ kind: 'first_order' }, { kind: 'skus', skus: ['a'] }, { kind: 'no_purchase', days: 7 }].forEach((jt) => {
+    assert.equal(listTypeOf(jt), LIST_TYPE_JOURNEY, jt.kind);
+    assert.equal(journeyOption(jt), jt.kind);
+  });
+  // The camel-cased browser row reads the same.
+  assert.equal(listTypeOf(storedTrigger({ joinTrigger: { kind: 'no_purchase', days: 3 } })), LIST_TYPE_JOURNEY);
+});
+
+test('I7: Broadcast sends null; Journey builds today\'s documents and never null', () => {
+  [TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NO_PURCHASE, TRIGGER_NONE, undefined].forEach((opt) => {
+    assert.equal(buildListTypeTrigger(LIST_TYPE_BROADCAST, opt, 'a', '7'), null, String(opt));
+  });
+  const stored = [{ kind: 'first_order' }, { kind: 'skus', skus: ['widget-a', 'b-2'] }, { kind: 'no_purchase', days: 7 }];
+  stored.forEach((jt) => {
+    const got = buildListTypeTrigger(listTypeOf(jt), journeyOption(jt), skusToText(jt.skus), storedDays(jt));
+    assert.deepEqual(got, jt, jt.kind);
+    assert.deepEqual(got, buildJoinTrigger(triggerOption(jt), skusToText(jt.skus), storedDays(jt)), jt.kind);
+  });
+  // F4: Journey on a list with no stored trigger preselects first_order; no radio still emits a kind.
+  assert.deepEqual(buildListTypeTrigger(LIST_TYPE_JOURNEY, journeyOption(null), '', ''), { kind: 'first_order' });
+  [undefined, null, '', TRIGGER_NONE, 'nope'].forEach((opt) => {
+    assert.deepEqual(buildListTypeTrigger(LIST_TYPE_JOURNEY, opt, '', ''), { kind: 'first_order' }, String(opt));
+  });
+  assert.deepEqual(buildListTypeTrigger(LIST_TYPE_JOURNEY, TRIGGER_NO_PURCHASE, '', ' 14 '), { kind: 'no_purchase', days: 14 });
+});
 
 test('option <-> document round-trip', () => {
   assert.equal(triggerOption(null), TRIGGER_NONE);

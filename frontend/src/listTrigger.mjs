@@ -89,6 +89,33 @@ export function buildJoinTrigger(option, skusText, daysText) {
   return null;
 }
 
+// Fork (journey form UX, integrations JOURNEY-UX-SPEC D8/D14 F4). The list form's Broadcast |
+// Journey selector over the same join_trigger: Journey iff a trigger is stored; Broadcast (the
+// retired None) saves join_trigger null. The Journey pane's radio always carries a kind
+// (journeyOption), so a Journey-labeled save never stores null.
+export const LIST_TYPE_BROADCAST = 'broadcast';
+export const LIST_TYPE_JOURNEY = 'journey';
+
+// listTypeOf is the selector value for a stored join_trigger.
+export function listTypeOf(joinTrigger) {
+  return triggerOption(joinTrigger) === TRIGGER_NONE ? LIST_TYPE_BROADCAST : LIST_TYPE_JOURNEY;
+}
+
+// journeyOption is the Journey pane's radio for a stored join_trigger: its kind, else first_order.
+export function journeyOption(joinTrigger) {
+  const opt = triggerOption(joinTrigger);
+  return opt === TRIGGER_NONE ? TRIGGER_FIRST_ORDER : opt;
+}
+
+// buildListTypeTrigger is the join_trigger the form sends for the selector value and the Journey
+// pane's values: null for Broadcast; for Journey the buildJoinTrigger document, a missing or none
+// radio reading first_order -- never null.
+export function buildListTypeTrigger(listType, option, skusText, daysText) {
+  if (listType !== LIST_TYPE_JOURNEY) return null;
+  const opt = [TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NO_PURCHASE].includes(option) ? option : TRIGGER_FIRST_ORDER;
+  return buildJoinTrigger(opt, skusText, daysText);
+}
+
 // triggerWhat is the sub-line's kind phrase for a stored trigger ('' for none).
 function triggerWhat(joinTrigger) {
   const opt = triggerOption(joinTrigger);

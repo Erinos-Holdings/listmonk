@@ -31,28 +31,6 @@
             :placeholder="$t('globals.fields.name')" required :disabled="locked" />
         </b-field>
 
-        <b-field :label="$t('lists.type')" label-position="on-border" :message="$t('lists.typeHelp')">
-          <b-select v-model="form.type" name="type" :placeholder="$t('lists.typeHelp')" required expanded :disabled="locked">
-            <option value="private">
-              {{ $t('lists.types.private') }}
-            </option>
-            <option value="public">
-              {{ $t('lists.types.public') }}
-            </option>
-          </b-select>
-        </b-field>
-
-        <b-field :label="$t('lists.optin')" label-position="on-border" :message="$t('lists.optinHelp')">
-          <b-select v-model="form.optin" name="optin" placeholder="Opt-in type" required expanded :disabled="locked">
-            <option value="single">
-              {{ $t('lists.optins.single') }}
-            </option>
-            <option value="double">
-              {{ $t('lists.optins.double') }}
-            </option>
-          </b-select>
-        </b-field>
-
         <!-- BRAND-PICKER-SPEC D3: the brand is chosen, never typed; the server writes the
         brand:/from:/site: tags from the brands row. Required, no empty option. GLOBAL-BRAND-SPEC
         D10: under a selected brand it is preset to that brand and disabled (a new list, or a list
@@ -69,6 +47,72 @@
           {{ $t('lists.brandFrom', { from: chosenBrand.from_email }) }}
         </p>
 
+        <!-- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D7; shown on NEW lists too since the
+        G10 pass -- the form creates, then PUTs the trigger onto the new id, because POST ignores
+        the fields by design). Every control follows the locked flag. The badge reads the STORED
+        trigger_sync, written by the reconciler (listTrigger.mjs). JOURNEY-UX-SPEC D8: a Broadcast |
+        Journey selector over the same join_trigger -- Broadcast saves null (the retired None), the
+        Journey pane always carries a kind (F4). -->
+        <div class="list-join-trigger mt-5" data-cy="list-join-trigger">
+          <p class="has-text-weight-semibold mb-2">
+            {{ $t('lists.campaignType') }}
+            <b-tag v-if="triggerBadge" :type="triggerBadgeType" class="ml-2" data-cy="list-trigger-badge">
+              {{ triggerBadgeText }}
+            </b-tag>
+          </p>
+          <b-field :message="$t('lists.campaignTypeHelp')" data-cy="list-campaign-type">
+            <b-radio-button v-model="listType" native-value="broadcast" type="is-primary" :disabled="locked">
+              {{ $t('lists.campaignTypeBroadcast') }}
+            </b-radio-button>
+            <b-radio-button v-model="listType" native-value="journey" type="is-primary" :disabled="locked">
+              {{ $t('lists.campaignTypeJourney') }}
+            </b-radio-button>
+          </b-field>
+          <div v-if="listType === 'journey'" class="list-journey-pane" data-cy="list-journey-pane">
+            <b-field :message="triggerOption === 'first_order' ? $t('lists.joinTriggerLatency') : ''">
+              <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger" :disabled="locked">
+                {{ $t('lists.joinTriggerFirstOrder') }}
+              </b-radio>
+            </b-field>
+            <b-field :message="triggerOption === 'skus' ? $t('lists.joinTriggerLatency') : ''">
+              <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="locked">
+                {{ $t('lists.joinTriggerSkus') }}
+              </b-radio>
+            </b-field>
+            <b-field v-if="triggerOption === 'skus'" :message="$t('lists.joinTriggerSkusHelp')">
+              <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
+                data-cy="list-trigger-skus" />
+            </b-field>
+            <!-- NO-PURCHASE-STEPS-SPEC D7: a "still deciding" step -- {kind: no_purchase, days}. -->
+            <b-field>
+              <b-radio v-model="triggerOption" native-value="no_purchase" name="join_trigger" :disabled="locked"
+                data-cy="list-trigger-no-purchase">
+                {{ $t('lists.joinTriggerNoPurchase') }}
+              </b-radio>
+            </b-field>
+            <b-field v-if="triggerOption === 'no_purchase'" :label="$t('lists.joinTriggerDays')"
+              :type="daysText === '' || daysOk ? '' : 'is-danger'" :message="$t('lists.joinTriggerNoPurchaseHelp')">
+              <b-input v-model="daysText" type="number" min="1" max="365" step="1" name="join_trigger_days"
+                :disabled="locked" data-cy="list-trigger-days" />
+            </b-field>
+          </div>
+          <!-- JOURNEY-UX-SPEC F8: in both selector states -- Broadcast lists host automations too. -->
+          <p v-if="isEditing" class="is-size-7 has-text-grey">
+            <router-link :to="{ path: '/campaigns/new', query: { list_id: data.id } }" @click.native="$parent.close()">
+              {{ $t('lists.joinTriggerAutomation') }}
+            </router-link>
+          </p>
+        </div>
+
+        <!-- JOURNEY-UX-SPEC D10/D11: Transactional apart from the journey section; then Tags,
+        Description; Type and Opt-in demoted (defaults private/single), side by side. -->
+        <hr />
+        <b-field v-if="canTransactional" :message="$t('lists.transactionalHelp')">
+          <b-checkbox v-model="transactional" name="transactional" :disabled="locked" data-cy="list-transactional">
+            {{ $t('lists.transactional') }}
+          </b-checkbox>
+        </b-field>
+
         <b-field :label="$t('globals.terms.tags')" label-position="on-border" :message="$t('lists.tagsHelp')"
           :type="tagError ? 'is-danger' : ''">
           <b-taginput v-model="form.tags" name="tags" ellipsis icon="tag-outline"
@@ -81,58 +125,33 @@
             :placeholder="$t('globals.fields.description')" :disabled="locked" />
         </b-field>
 
-        <!-- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D7; shown on NEW lists too since the
-        G10 pass -- the form creates, then PUTs the trigger onto the new id, because POST ignores
-        the fields by design). Every control follows the locked flag. The badge reads the STORED
-        trigger_sync, written by the reconciler (listTrigger.mjs). -->
-        <div class="list-join-trigger mt-5" data-cy="list-join-trigger">
-          <p class="has-text-weight-semibold mb-2">
-            {{ $t('lists.joinTrigger') }}
-            <b-tag v-if="triggerBadge" :type="triggerBadgeType" class="ml-2" data-cy="list-trigger-badge">
-              {{ triggerBadgeText }}
-            </b-tag>
-          </p>
-          <b-field>
-            <b-radio v-model="triggerOption" native-value="none" name="join_trigger" :disabled="locked">
-              {{ $t('lists.joinTriggerNone') }}
-            </b-radio>
-          </b-field>
-          <b-field :message="triggerOption === 'first_order' ? $t('lists.joinTriggerLatency') : ''">
-            <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger" :disabled="locked">
-              {{ $t('lists.joinTriggerFirstOrder') }}
-            </b-radio>
-          </b-field>
-          <b-field :message="triggerOption === 'skus' ? $t('lists.joinTriggerLatency') : ''">
-            <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="locked">
-              {{ $t('lists.joinTriggerSkus') }}
-            </b-radio>
-          </b-field>
-          <b-field v-if="triggerOption === 'skus'" :message="$t('lists.joinTriggerSkusHelp')">
-            <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
-              data-cy="list-trigger-skus" />
-          </b-field>
-          <!-- NO-PURCHASE-STEPS-SPEC D7: a "still deciding" step -- {kind: no_purchase, days}. -->
-          <b-field>
-            <b-radio v-model="triggerOption" native-value="no_purchase" name="join_trigger" :disabled="locked"
-              data-cy="list-trigger-no-purchase">
-              {{ $t('lists.joinTriggerNoPurchase') }}
-            </b-radio>
-          </b-field>
-          <b-field v-if="triggerOption === 'no_purchase'" :label="$t('lists.joinTriggerDays')"
-            :type="daysText === '' || daysOk ? '' : 'is-danger'" :message="$t('lists.joinTriggerNoPurchaseHelp')">
-            <b-input v-model="daysText" type="number" min="1" max="365" step="1" name="join_trigger_days"
-              :disabled="locked" data-cy="list-trigger-days" />
-          </b-field>
-          <b-field v-if="canTransactional" :message="$t('lists.transactionalHelp')">
-            <b-checkbox v-model="transactional" name="transactional" :disabled="locked" data-cy="list-transactional">
-              {{ $t('lists.transactional') }}
-            </b-checkbox>
-          </b-field>
-          <p v-if="isEditing" class="is-size-7 has-text-grey">
-            <router-link :to="{ path: '/campaigns/new', query: { list_id: data.id } }" @click.native="$parent.close()">
-              {{ $t('lists.joinTriggerAutomation') }}
-            </router-link>
-          </p>
+        <hr />
+        <div class="columns">
+          <div class="column is-6">
+            <b-field :label="$t('lists.type')" label-position="on-border" :message="$t('lists.typeHelp')">
+              <b-select v-model="form.type" name="type" :placeholder="$t('lists.typeHelp')" required expanded
+                :disabled="locked">
+                <option value="private">
+                  {{ $t('lists.types.private') }}
+                </option>
+                <option value="public">
+                  {{ $t('lists.types.public') }}
+                </option>
+              </b-select>
+            </b-field>
+          </div>
+          <div class="column is-6">
+            <b-field :label="$t('lists.optin')" label-position="on-border" :message="$t('lists.optinHelp')">
+              <b-select v-model="form.optin" name="optin" placeholder="Opt-in type" required expanded :disabled="locked">
+                <option value="single">
+                  {{ $t('lists.optins.single') }}
+                </option>
+                <option value="double">
+                  {{ $t('lists.optins.double') }}
+                </option>
+              </b-select>
+            </b-field>
+          </div>
         </div>
 
         <b-field :message="$t('lists.archivedHelp')" :label="$t('lists.archived')" class="mt-5">
@@ -161,8 +180,8 @@ import {
   brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import {
-  buildJoinTrigger, buildListFormRequest, daysValid, skusToText, storedDays, storedTrigger, storedTriggerSync,
-  triggerBadge, triggerOption,
+  buildListFormRequest, buildListTypeTrigger, daysValid, journeyOption, listTypeOf, skusToText, storedDays,
+  storedTrigger, storedTriggerSync, triggerBadge, LIST_TYPE_BROADCAST,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -199,8 +218,11 @@ export default Vue.extend({
       brand: null,
       tagError: '',
 
-      // LIST-JOIN-TRIGGER-SPEC D7: the trigger radio, the SKU textarea and the checkbox.
-      triggerOption: 'none',
+      // JOURNEY-UX-SPEC D8: Broadcast | Journey (Broadcast on a new list).
+      listType: LIST_TYPE_BROADCAST,
+      // LIST-JOIN-TRIGGER-SPEC D7: the Journey pane's radio (always a kind, F4), the SKU textarea
+      // and the checkbox.
+      triggerOption: 'first_order',
       skusText: '',
       // NO-PURCHASE-STEPS-SPEC D7: the no_purchase step's days input.
       daysText: '',
@@ -238,7 +260,7 @@ export default Vue.extend({
       // The server's POST ignores join_trigger/transactional (LIST-JOIN-TRIGGER-SPEC D3), so a
       // trigger chosen on a new list is applied with a second call onto the created id. The
       // list exists either way; a refused trigger surfaces as the PUT's error toast.
-      const joinTrigger = buildJoinTrigger(this.triggerOption, this.skusText, this.daysText);
+      const joinTrigger = buildListTypeTrigger(this.listType, this.triggerOption, this.skusText, this.daysText);
       const wantsTrigger = joinTrigger !== null || (this.canTransactional && this.transactional);
       this.$api.createList(buildListFormRequest(this.form, this.brand)).then((data) => {
         const done = () => {
@@ -267,7 +289,7 @@ export default Vue.extend({
     updateList() {
       // D7/F3: an allow-listed body; transactional only when the checkbox is rendered (D5).
       const req = buildListFormRequest(this.form, this.brand, {
-        joinTrigger: buildJoinTrigger(this.triggerOption, this.skusText, this.daysText),
+        joinTrigger: buildListTypeTrigger(this.listType, this.triggerOption, this.skusText, this.daysText),
         canTransactional: this.canTransactional,
         transactional: this.transactional,
       });
@@ -354,7 +376,8 @@ export default Vue.extend({
     // LIST-JOIN-TRIGGER-SPEC D7: the section starts from the stored trigger (read under either
     // key spelling -- the row arrives camel-cased, storedTrigger).
     const jt = storedTrigger(this.$props.data);
-    this.triggerOption = triggerOption(jt);
+    this.listType = listTypeOf(jt);
+    this.triggerOption = journeyOption(jt);
     this.skusText = skusToText(jt && jt.skus);
     this.daysText = storedDays(jt);
     this.transactional = !!this.$props.data.transactional;

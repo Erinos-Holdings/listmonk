@@ -53,6 +53,28 @@ func (c *Core) evergreenCollision(cm models.Campaign) (string, bool, error) {
 	return row.Name, true, nil
 }
 
+// DelayedEvergreen is a non-cancelled evergreen with a nonzero delay on a list.
+type DelayedEvergreen struct {
+	ID   int    `db:"id"`
+	Name string `db:"name"`
+}
+
+// GetListDelayedEvergreen returns a non-cancelled evergreen with a nonzero delay on the list, if
+// any (fork, integrations JOURNEY-UX-SPEC D5.1).
+func (c *Core) GetListDelayedEvergreen(listID int) (DelayedEvergreen, bool, error) {
+	var row DelayedEvergreen
+	err := c.q.GetListDelayedEvergreen.Get(&row, listID)
+	if err == sql.ErrNoRows {
+		return row, false, nil
+	}
+	if err != nil {
+		c.log.Printf("error checking list evergreens: %v", err)
+		return row, false, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+	return row, true, nil
+}
+
 // stmtRunner is the subset of *sqlx.Stmt the backfill-aware writers use.
 type stmtRunner interface {
 	Get(dest interface{}, args ...interface{}) error

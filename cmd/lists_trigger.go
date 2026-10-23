@@ -250,7 +250,36 @@ func (a *App) planListTrigger(r listReq, cur models.List) (listTriggerPlan, erro
 	if p.joinTrigger != nil && brand == "" {
 		return p, echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.triggerNeedsBrand"))
 	}
+
+	// Fork (integrations JOURNEY-UX-SPEC D5.1) -- the list-side half of D5 (validateCampaignFields):
+	// a request carrying a no_purchase trigger is refused while a non-cancelled evergreen with a
+	// nonzero delay targets the list. Nothing re-validates the campaign when the trigger is set, and
+	// the sweep joins members on their due day, so such a delay would land the nudge late.
+	if r.JoinTrigger != nil && joinTriggerKind(p.joinTrigger) == joinTriggerNoPurchase {
+		ev, found, err := a.core.GetListDelayedEvergreen(cur.ID)
+		if err != nil {
+			return p, err
+		}
+		if found {
+			return p, echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("lists.triggerNoPurchaseDelayedEvergreen",
+				"name", ev.Name, "id", fmt.Sprintf("%d", ev.ID)))
+		}
+	}
 	return p, nil
+}
+
+// joinTriggerKind is a stored or normalized join_trigger's kind, "" for NULL or an unreadable one.
+func joinTriggerKind(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var doc struct {
+		Kind string `json:"kind"`
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return ""
+	}
+	return doc.Kind
 }
 
 func isJSONNull(raw []byte) bool {

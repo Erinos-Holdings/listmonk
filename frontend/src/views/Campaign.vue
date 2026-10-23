@@ -246,31 +246,41 @@
                 <!-- The brand's persona set, for lists:manage_all holders only: one chip per
                      persona whose close is the delete control, and an inline add. The chip's close
                      is disabled while an editable or running campaign carries the persona (the
-                     server's 409 is the control); the span keeps the tooltip firing over it. -->
-                <div v-if="senderRow && canManagePersonas" class="persona-admin mb-4" data-cy="persona-admin">
-                  <b-taglist v-if="senderRow.personas.length > 0" class="mb-1">
-                    <template v-for="p in senderRow.personas">
-                      <b-tooltip v-if="personaBlockers(p).length > 0" :key="p" :label="personaInUseLabel(p)"
-                        type="is-dark" multilined>
-                        <span><b-tag closable disabled>{{ p }}</b-tag></span>
-                      </b-tooltip>
-                      <b-tag v-else :key="p" closable :disabled="personaBusy" @close="removePersona(p)">
-                        {{ p }}
-                      </b-tag>
-                    </template>
-                  </b-taglist>
-                  <b-field grouped>
-                    <b-input v-model="newPersona" size="is-small" name="new_persona" expanded
-                      :placeholder="$t('campaigns.personaAddPlaceholder', { brand: senderRow.display_name })"
-                      :disabled="personaBusy" @keydown.native.enter.prevent="addPersona" />
-                    <p class="control">
-                      <b-button size="is-small" :loading="personaBusy" :disabled="newPersona.trim() === ''"
-                        @click="addPersona">
-                        {{ $t('campaigns.personaAdd') }}
-                      </b-button>
-                    </p>
-                  </b-field>
-                </div>
+                     server's 409 is the control); the span keeps the tooltip firing over it.
+                     JOURNEY-UX-SPEC D7: behind a collapsible, collapsed by default. -->
+                <b-collapse v-if="senderRow && canManagePersonas" :open="false" class="mb-4"
+                  data-cy="persona-edit">
+                  <template #trigger="props">
+                    <a class="is-size-7" :aria-expanded="props.open ? 'true' : 'false'">
+                      <b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" />
+                      {{ $t('campaigns.personaEdit') }}
+                    </a>
+                  </template>
+                  <div class="persona-admin mt-2" data-cy="persona-admin">
+                    <b-taglist v-if="senderRow.personas.length > 0" class="mb-1">
+                      <template v-for="p in senderRow.personas">
+                        <b-tooltip v-if="personaBlockers(p).length > 0" :key="p" :label="personaInUseLabel(p)"
+                          type="is-dark" multilined>
+                          <span><b-tag closable disabled>{{ p }}</b-tag></span>
+                        </b-tooltip>
+                        <b-tag v-else :key="p" closable :disabled="personaBusy" @close="removePersona(p)">
+                          {{ p }}
+                        </b-tag>
+                      </template>
+                    </b-taglist>
+                    <b-field grouped>
+                      <b-input v-model="newPersona" size="is-small" name="new_persona" expanded
+                        :placeholder="$t('campaigns.personaAddPlaceholder', { brand: senderRow.display_name })"
+                        :disabled="personaBusy" @keydown.native.enter.prevent="addPersona" />
+                      <p class="control">
+                        <b-button size="is-small" :loading="personaBusy" :disabled="newPersona.trim() === ''"
+                          @click="addPersona">
+                          {{ $t('campaigns.personaAdd') }}
+                        </b-button>
+                      </p>
+                    </b-field>
+                  </div>
+                </b-collapse>
 
                 <b-field v-if="!senderRow" :label="$t('campaigns.fromAddress')" label-position="on-border"
                   :type="brandDerivation.error ? 'is-danger' : ''" :message="brandFromMessage">
@@ -285,8 +295,65 @@
                 <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D10) -- the options are the
                      global brand's lists united with the campaign's saved lists (all lists under
                      All brands). The template picker is never filtered (S3). -->
-                <list-selector v-model="form.lists" :selected="form.lists" :all="listOptions" :disabled="!canEdit"
-                  :label="$t('globals.terms.lists')" :placeholder="$t('campaigns.sendToLists')" />
+                <!-- JOURNEY-UX-SPEC D2/D2.1: a user's list change runs the auto-enable
+                     (onListsInput); the journey block below renders campaignListUx.mjs's answer. -->
+                <list-selector :value="form.lists" @input="onListsInput" :selected="form.lists" :all="listOptions"
+                  :disabled="!canEdit" :label="$t('globals.terms.lists')" :placeholder="$t('campaigns.sendToLists')" />
+
+                <!-- JOURNEY-UX-SPEC D3: notices only, never blocking (the server allows both). -->
+                <template v-if="canEdit">
+                  <b-message v-if="journeyNotices.noPurchase" type="is-info" size="is-small" :closable="false"
+                    data-cy="journey-no-purchase-notice">
+                    {{ $t('campaigns.noPurchaseListNotice') }}
+                  </b-message>
+                  <b-message v-if="journeyNotices.broadcastToTrigger" type="is-warning" size="is-small"
+                    :closable="false" data-cy="journey-broadcast-warning">
+                    {{ $t('campaigns.broadcastToTriggerWarning', { lists: journeyNotices.triggerLists.join(', ') }) }}
+                  </b-message>
+                  <p v-if="journeyUx.oneListHint" class="help mb-3" data-cy="journey-one-list-hint">
+                    {{ $t('campaigns.evergreenOneList') }}
+                  </p>
+                </template>
+
+                <!-- Fork (evergreen) -- an evergreen campaign never finishes; it keeps sending to
+                     subscribers who join its (single) list after it is started. JOURNEY-UX-SPEC D2/D6:
+                     the journey block follows the lists; visibility is journeyUx (campaignListUx.mjs),
+                     which keeps the evergreen_enabled || form.evergreen gate (F7). -->
+                <div class="columns" v-if="journeyUx.showEvergreen">
+                  <div class="column is-6">
+                    <b-field :label="$t('campaigns.evergreen')" data-cy="btn-evergreen" class="evergreen-field"
+                      :message="form.evergreen ? $t('campaigns.evergreenHelp') : ''">
+                      <b-switch :value="form.evergreen" @input="onJourneyToggle('evergreen', $event)"
+                        :disabled="!canEdit || form.sendLater" />
+                    </b-field>
+                  </div>
+                  <div class="column">
+                    <b-field v-if="journeyUx.showDelay" :label="$t('campaigns.evergreenDelay')" class="evergreen-delay"
+                      data-cy="evergreen-delay">
+                      <b-numberinput v-model="form.sendDelayDays" :min="0" :max="365" :disabled="!canEdit"
+                        controls-position="compact" />
+                    </b-field>
+                  </div>
+                </div>
+
+                <div class="columns" v-if="journeyUx.showSendLater">
+                  <div class="column is-4">
+                    <b-field :label="$t('campaigns.sendLater')" data-cy="btn-send-later">
+                      <b-switch :value="form.sendLater" @input="onJourneyToggle('sendLater', $event)"
+                        :disabled="!canEdit || form.evergreen" />
+                    </b-field>
+                  </div>
+                  <div class="column">
+                    <br />
+                    <b-field v-if="form.sendLater" data-cy="send_at" :message="sendAtMessage">
+                      <b-datetimepicker v-model="form.sendAtDate" :disabled="!canEdit" required editable mobile-native
+                        position="is-top-right" :placeholder="$t('campaigns.dateAndTime')" icon="calendar-clock"
+                        :timepicker="{ hourFormat: '24' }" :datetime-formatter="formatDateTime"
+                        horizontal-time-picker />
+                    </b-field>
+                  </div>
+                </div>
+                <hr />
 
                 <div class="columns">
                   <div class="column is-6">
@@ -324,42 +391,6 @@
                   <b-taginput v-model="form.tags" name="tags" :disabled="!canEdit" ellipsis icon="tag-outline"
                     :placeholder="$t('globals.terms.tags')" />
                 </b-field>
-                <hr />
-
-                <div class="columns">
-                  <div class="column is-4">
-                    <b-field :label="$t('campaigns.sendLater')" data-cy="btn-send-later">
-                      <b-switch v-model="form.sendLater" :disabled="!canEdit || form.evergreen" />
-                    </b-field>
-                  </div>
-                  <div class="column">
-                    <br />
-                    <b-field v-if="form.sendLater" data-cy="send_at" :message="sendAtMessage">
-                      <b-datetimepicker v-model="form.sendAtDate" :disabled="!canEdit" required editable mobile-native
-                        position="is-top-right" :placeholder="$t('campaigns.dateAndTime')" icon="calendar-clock"
-                        :timepicker="{ hourFormat: '24' }" :datetime-formatter="formatDateTime"
-                        horizontal-time-picker />
-                    </b-field>
-                  </div>
-                </div>
-
-                <!-- Fork (evergreen) -- an evergreen campaign never finishes; it keeps sending to
-                     subscribers who join its (single) list after it is started. -->
-                <div class="columns" v-if="serverConfig.evergreen_enabled || form.evergreen">
-                  <div class="column is-6">
-                    <b-field :label="$t('campaigns.evergreen')" data-cy="btn-evergreen" class="evergreen-field"
-                      :message="form.evergreen ? $t('campaigns.evergreenHelp') : ''">
-                      <b-switch v-model="form.evergreen" :disabled="!canEdit || form.sendLater" />
-                    </b-field>
-                  </div>
-                  <div class="column">
-                    <b-field v-if="form.evergreen" :label="$t('campaigns.evergreenDelay')" class="evergreen-delay"
-                      data-cy="evergreen-delay">
-                      <b-numberinput v-model="form.sendDelayDays" :min="0" :max="365" :disabled="!canEdit"
-                        controls-position="compact" />
-                    </b-field>
-                  </div>
-                </div>
 
                 <div>
                   <p class="has-text-right">
@@ -576,6 +607,9 @@ import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
 import ListSelector from '../components/ListSelector.vue';
 import { pickerLabel } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
+import {
+  journeyMatrix, journeyNotices, journeyPayload, manualToggle, selectionChange, selectionClasses, selectionRow,
+} from '../campaignListUx.mjs'; // eslint-disable-line import/extensions
 import Media from './Media.vue';
 import { normalizeMediaTagsLenient } from '../mediaTags';
 import {
@@ -746,6 +780,11 @@ export default Vue.extend({
       personaUses: [],
       newPersona: '',
       personaBusy: false,
+
+      // Fork (journey form UX, JOURNEY-UX-SPEC D2.1) -- the Journey automation / Send later values
+      // as they were before an auto-enable, restored when that selection change is undone
+      // (campaignListUx.mjs selectionChange); null when there is nothing to restore.
+      journeyShadow: null,
 
       // The brand swatch row(s) currently pushed into the visual editor's color picker, and
       // the slug of the latest theme request. The slug doubles as the stale-response guard:
@@ -1605,17 +1644,46 @@ export default Vue.extend({
       return this.foldAttribs(attribs || {});
     },
 
-    // Fork (evergreen) -- days field untouched: send the raw seconds back unchanged.
-    sendDelaySecsPayload() {
-      if (!this.form.evergreen) {
-        return 0;
-      }
-      const days = Math.max(0, Number(this.form.sendDelayDays) || 0);
-      const raw = Number(this.form.sendDelaySecs) || 0;
-      if (Math.round(raw / 86400) === days) {
-        return raw;
-      }
-      return days * 86400;
+    // Fork (journey form UX, JOURNEY-UX-SPEC D2/D4) -- the evergreen, send_at and send_delay_secs
+    // fields of the save payload: a hidden toggle submits its forced value, a hidden no_purchase
+    // delay submits 0, an untouched days field sends the raw stored seconds (campaignListUx.mjs).
+    journeyFields() {
+      return journeyPayload(this.journeyUx, {
+        evergreen: this.form.evergreen,
+        sendLater: this.form.sendLater,
+        sendAt: toSendAtMinute(this.form.sendAtDate),
+        sendDelayDays: this.form.sendDelayDays,
+        sendDelaySecs: this.form.sendDelaySecs,
+      });
+    },
+
+    // Fork (journey form UX, D2.1) -- the list selector's input: take the new selection, then run
+    // the auto-enable for it (a selection change made in this session).
+    onListsInput(lists) {
+      this.form.lists = lists;
+      this.applySelectionChange('user');
+    },
+
+    applySelectionChange(source) {
+      const r = selectionChange({
+        source,
+        editable: this.journeyEditable,
+        row: this.journeyRow,
+        evergreenEnabled: !!this.serverConfig.evergreen_enabled,
+        toggles: { evergreen: this.form.evergreen, sendLater: this.form.sendLater },
+        shadow: this.journeyShadow,
+      });
+      this.form.evergreen = r.toggles.evergreen;
+      this.form.sendLater = r.toggles.sendLater;
+      this.journeyShadow = r.shadow;
+    },
+
+    // A hand-set Journey automation / Send later is the user's own choice from then on.
+    onJourneyToggle(key, value) {
+      const r = manualToggle({ toggles: { evergreen: this.form.evergreen, sendLater: this.form.sendLater }, key, value });
+      this.form.evergreen = r.toggles.evergreen;
+      this.form.sendLater = r.toggles.sendLater;
+      this.journeyShadow = r.shadow;
     },
 
     // Fork (evergreen) -- pause from the editor so a running welcome can be edited.
@@ -1771,12 +1839,11 @@ export default Vue.extend({
         messenger: this.form.messenger,
         type: 'regular',
         tags: this.form.tags,
-        send_at: this.sendAtPayload(),
         headers: this.form.headers,
         attribs: this.form.attribs,
         media: this.form.media.map((m) => m.id),
-        evergreen: !!this.form.evergreen,
-        send_delay_secs: this.sendDelaySecsPayload(),
+        // evergreen, send_at, send_delay_secs (JOURNEY-UX-SPEC D2/D4).
+        ...this.journeyFields(),
       };
 
       this.$api.createCampaign(data).then((d) => {
@@ -1806,7 +1873,6 @@ export default Vue.extend({
         messenger: this.form.messenger,
         type: 'regular',
         tags: this.form.tags,
-        send_at: this.sendAtPayload(),
         headers: this.form.headers,
         attribs: this.form.attribs,
         template_id: this.form.content.templateId,
@@ -1818,8 +1884,8 @@ export default Vue.extend({
         archive_template_id: this.form.archiveTemplateId,
         archive_meta: this.form.archiveMeta,
         media: this.form.media.map((m) => m.id),
-        evergreen: !!this.form.evergreen,
-        send_delay_secs: this.sendDelaySecsPayload(),
+        // evergreen, send_at, send_delay_secs (JOURNEY-UX-SPEC D2/D4).
+        ...this.journeyFields(),
       };
 
       let typMsg = 'globals.messages.updated';
@@ -2064,6 +2130,37 @@ export default Vue.extend({
     listOptions() {
       return filterByIds(this.lists, scopeUnion(this.scopeListIds, [this.data.lists]))
         .map((l) => ({ ...l, label: pickerLabel(l) }));
+    },
+
+    // Fork (journey form UX, JOURNEY-UX-SPEC D1/D2/D3) -- the selected lists classified by their
+    // join triggers (resolved against the list options; an unresolvable id is none, F6), the D2
+    // row, and campaignListUx.mjs's answers. Editable = canEdit && !isStarted (D2.2).
+    journeySelection() {
+      return selectionClasses(this.form.lists, this.listOptions);
+    },
+
+    journeyRow() {
+      return selectionRow(this.journeySelection);
+    },
+
+    journeyEditable() {
+      return this.canEdit && !this.isStarted;
+    },
+
+    journeyUx() {
+      return journeyMatrix({
+        row: this.journeyRow,
+        editable: this.journeyEditable,
+        evergreenEnabled: !!this.serverConfig.evergreen_enabled,
+        evergreen: this.form.evergreen,
+        storedEvergreen: this.isEditing && !!this.data.evergreen,
+        shadow: this.journeyShadow,
+      });
+    },
+
+    journeyNotices() {
+      const evergreen = !!this.form.evergreen && !this.journeyUx.forceEvergreenOff;
+      return journeyNotices(this.journeySelection, evergreen);
     },
 
     // Fork (global brand, D11) -- the saved campaign's brand, from its lists in the active-lists
@@ -2531,7 +2628,14 @@ export default Vue.extend({
 
   watch: {
     selectedLists() {
+      // Fork (journey form UX, D2.1) -- a new campaign's preselected lists (?list_id=) auto-enable
+      // like a user's pick; a store reload that leaves the ids as they are does not.
+      const ids = (ls) => (ls || []).map((l) => l.id).sort((a, b) => a - b).join(',');
+      const changed = ids(this.form.lists) !== ids(this.selectedLists);
       this.form.lists = this.selectedLists;
+      if (this.isNew && changed) {
+        this.applySelectionChange('preselect');
+      }
     },
 
     // Fork (emoji picker): the right icons appear/disappear with canEdit; label them when they do.

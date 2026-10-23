@@ -1461,6 +1461,20 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 	if c.SendDelaySecs < 0 {
 		return c, errors.New(a.i18n.T("campaigns.evergreenInvalidDelay"))
 	}
+	// Fork (journey form UX, integrations JOURNEY-UX-SPEC D5) -- an evergreen on a no_purchase list
+	// sends on join: the sweep joins each member on the day they come due, so a delay would stack on
+	// the list's own days. Create and update only (the start path runs no field validation; D5.1
+	// in lists_trigger.go closes the list side). The one list is read only when a delay is set, and
+	// a failed read fails the save.
+	if c.Evergreen && c.SendDelaySecs > 0 && len(c.ListIDs) == 1 {
+		l, err := a.core.GetList(c.ListIDs[0], "")
+		if err != nil {
+			return c, err
+		}
+		if joinTriggerKind(l.JoinTrigger) == joinTriggerNoPurchase {
+			return c, errors.New(a.i18n.T("campaigns.evergreenNoPurchaseDelay"))
+		}
+	}
 
 	if !a.manager.HasMessenger(c.Messenger) {
 		// If it's a specific SMTP, but it's no longer available (removed/disabled), fall back to general email messenger.

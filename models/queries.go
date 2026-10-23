@@ -146,6 +146,7 @@ type Queries struct {
 	// Fork (evergreen) -- see queries/evergreen.sql.
 	NextEvergreenSubscribers *sqlx.Stmt `query:"next-evergreen-subscribers"`
 	GetEvergreenCollision    *sqlx.Stmt `query:"get-evergreen-collision"`
+	GetListDelayedEvergreen  *sqlx.Stmt `query:"get-list-delayed-evergreen"`
 	MarkEvergreenSent        *sqlx.Stmt `query:"mark-evergreen-sent"`
 	ReleaseEvergreenClaim    *sqlx.Stmt `query:"release-evergreen-claim"`
 	// Fork (send retry, SEND-RETRY-SPEC D5) -- see queries/campaigns.sql.

@@ -25,6 +25,7 @@
     "test:brand-scope": "node --test src/brandScope.test.mjs",
     "test:list-sunset": "node --test src/listSunset.test.mjs",
     "test:list-trigger": "node --test src/listTrigger.test.mjs",
+    "test:campaign-list-ux": "node --test src/campaignListUx.test.mjs",
     "test:emoji-data": "node --test src/emojiData.test.mjs",
     "test:dashboard-subs": "node --test src/dashboardSubs.test.mjs src/gridLines.test.mjs",
     "test": "node --test src/*.test.mjs",

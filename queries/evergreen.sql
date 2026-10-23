@@ -110,6 +110,16 @@ WHERE c.evergreen AND c.status = 'running' AND c.id != $1
   AND NOT (c.attribs->>'lang' IS NOT NULL AND $5::TEXT IS NOT NULL AND c.attribs->>'lang' <> $5::TEXT)
 LIMIT 1;
 
+-- name: get-list-delayed-evergreen
+-- Fork (integrations JOURNEY-UX-SPEC D5.1) -- an evergreen with a nonzero delay on the list, in
+-- any status but cancelled (an evergreen never finishes; a draft one can still be started with no
+-- further validation). Setting a no_purchase join trigger on such a list is refused. At most one row.
+SELECT c.id, c.name FROM campaigns c
+JOIN campaign_lists cl ON cl.campaign_id = c.id
+WHERE cl.list_id = $1 AND c.evergreen AND c.send_delay_secs > 0 AND c.status != 'cancelled'
+ORDER BY c.id
+LIMIT 1;
+
 -- name: mark-evergreen-sent
 -- The worker's delivery attempt succeeded, or failed only after the message data was
 -- handed to the server (it may have been accepted -- consuming the claim is what stops
