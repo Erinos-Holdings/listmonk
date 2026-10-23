@@ -74,7 +74,9 @@ test('I2: >= 2 lists -- Journey hidden and submitted false, Send later shown, de
   assert.deepEqual(locks(m), [false, false]);
   assert.equal(m.forceEvergreenOff, true);
   assert.equal(m.oneListHint, false);
-  // A stored evergreen (or a form one, e.g. the Automations New button's) shows the hint.
+  // A stored evergreen shows the hint. (A form-only evergreen reaches the MULTI matrix with the
+  // flag already re-derived false when the second list carries a trigger -- the hint is for the
+  // stored case; stage A2 F3 recorded the gap as accepted.)
   assert.equal(journeyMatrix({
     ...ED, row: ROW_MULTI, evergreen: false, storedEvergreen: true,
   }).oneListHint, true);
