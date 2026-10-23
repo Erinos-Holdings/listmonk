@@ -35,12 +35,25 @@ type listReq struct {
 	Transactional *bool           `json:"transactional"`
 }
 
+// repermissionTagPrefix is the Sunset V1 queue tag (repermission:<id>), retired: nothing writes it,
+// and the campaign review refuses a campaign on a list carrying it (D1.8c). Fork (integrations
+// JOURNEY-UX-SPEC A1.7) -- refused like a reserved prefix, but NOT a projection tag:
+// models.IsReservedListTag stays brand:/from:/site: only (the import preset and the update-list
+// merge read it as "the brand's projection").
+const repermissionTagPrefix = "repermission:"
+
+// isRefusedListTag reports a typed tag the list API refuses besides the projection, judged after
+// trimming outer whitespace (as the form's isReservedTag does).
+func isRefusedListTag(t string) bool {
+	return strings.HasPrefix(strings.TrimSpace(t), repermissionTagPrefix)
+}
+
 // listTagsFor applies the reserved-tag refusal and the brand projection to a request. It returns
 // the tags to store and keepReserved (brand absent).
 func (a *App) listTagsFor(r listReq) ([]string, bool, error) {
 	free := make([]string, 0, len(r.Tags))
 	for _, t := range r.Tags {
-		if models.IsReservedListTag(t) {
+		if models.IsReservedListTag(t) || isRefusedListTag(t) {
 			return nil, false, echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("lists.reservedTag", "tag", strings.TrimSpace(t)))
 		}
 		free = append(free, t)

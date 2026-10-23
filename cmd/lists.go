@@ -152,7 +152,8 @@ func (a *App) UpdateList(c echo.Context) error {
 	// runs FIRST: a refused request applies nothing (name, tags, brand, join_trigger included).
 	// The current row is read only when the request carries a field the trigger rules read.
 	var cur models.List
-	needCur := listTriggerCarried(r) || r.Brand != nil
+	// JOURNEY-UX-SPEC A1.1b: a type of public is judged against the stored trigger too.
+	needCur := listTriggerCarried(r) || r.Brand != nil || r.Type == models.ListTypePublic
 	if needCur {
 		var err error
 		if cur, err = a.core.GetList(id, ""); err != nil {

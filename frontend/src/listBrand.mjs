@@ -3,26 +3,36 @@
 // the brands row, so the form shows and sends only the FREE tags. The server refuses a reserved
 // tag (lists.reservedTag); the form refuses it first. Tested by listBrand.test.mjs.
 
-export const RESERVED_TAG_PREFIXES = ['brand:', 'from:', 'site:'];
+// The brand's projection: written by the server, hidden by the form.
+export const PROJECTION_TAG_PREFIXES = ['brand:', 'from:', 'site:'];
+
+// Fork (integrations JOURNEY-UX-SPEC A1.7) -- every prefix a typed tag may not carry: the
+// projection, and repermission: (the retired Sunset V1 queue tag, refused by the server too --
+// cmd/lists_brand.go). repermission: is not projection, so a stored one is NOT hidden: it shows
+// as a tag, and the save is refused until it is removed, rather than dropping it silently.
+export const RESERVED_TAG_PREFIXES = [...PROJECTION_TAG_PREFIXES, 'repermission:'];
 
 // The locked list (models.LockedListNames in the Go backend): no edit or delete control is
 // offered for it; the server refuses both with 409 regardless.
 export const LOCKED_LIST_NAMES = ['Render catalog (never send)'];
 
+const trimTag = (tag) => String(tag == null ? '' : tag).trim();
+
 // isReservedTag judges the way the server does: after trimming outer whitespace and the
 // whitespace between a reserved prefix and its value (` brand: x` is reserved).
 export function isReservedTag(tag) {
-  const t = String(tag == null ? '' : tag).trim();
+  const t = trimTag(tag);
   return RESERVED_TAG_PREFIXES.some((p) => t.startsWith(p));
 }
 
 // splitReservedTags separates a list's stored tags into the free tags the form shows and the
-// reserved ones it hides.
+// projection tags it hides.
 export function splitReservedTags(tags) {
   const free = [];
   const reserved = [];
   (Array.isArray(tags) ? tags : []).forEach((t) => {
-    (isReservedTag(t) ? reserved : free).push(t);
+    const proj = PROJECTION_TAG_PREFIXES.some((p) => trimTag(t).startsWith(p));
+    (proj ? reserved : free).push(t);
   });
   return { free, reserved };
 }

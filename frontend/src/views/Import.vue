@@ -335,6 +335,7 @@ import LogView from '../components/LogView.vue';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 import brandScopeMixin from '../brandScopeMixin';
 import { filterByIds, presetNoticeBrand, scopeUnion } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { addableLists } from '../campaignListUx.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -585,9 +586,11 @@ export default Vue.extend({
     // Fork (global brand, D3) -- the free-form target picker offers scope ∪ the lists already
     // chosen (Phase 1 D10's union rule): a ?list_id= prefill outside the scope stays selected,
     // addable and removable, and a selection change drops nothing. Under All every list.
+    // Fork (integrations JOURNEY-UX-SPEC A1.2) -- never a no_purchase step list: an import naming
+    // one is refused at start, in any mode (the server is the control).
     targetLists() {
       const ids = scopeUnion(this.scopeListIds, [this.form.lists]);
-      return filterByIds(this.lists, ids);
+      return addableLists(filterByIds(this.lists, ids));
     },
 
     // Fork (global brand, D3) -- the preset preview's list brand for the notice.
@@ -611,7 +614,7 @@ export default Vue.extend({
     const ids = this.$utils.parseQueryIDs(this.$route.query.list_id);
     if (ids.length > 0 && this.lists.results) {
       this.$nextTick(() => {
-        this.form.lists = this.lists.results.filter((l) => ids.indexOf(l.id) > -1);
+        this.form.lists = addableLists(this.lists.results.filter((l) => ids.indexOf(l.id) > -1));
       });
     }
   },

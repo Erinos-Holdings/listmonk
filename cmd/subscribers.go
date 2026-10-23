@@ -278,6 +278,11 @@ func (a *App) CreateSubscriber(c echo.Context) error {
 		return err
 	}
 
+	// Fork (JOURNEY-UX-SPEC A1.1) -- a new subscriber's every list is an add.
+	if err := a.refuseStepListAdd(user, nil, listIDs); err != nil {
+		return err
+	}
+
 	// Insert the subscriber into the DB.
 	sub, _, err := a.core.InsertSubscriber(req.Subscriber, listIDs, nil, req.PreconfirmSubs, false, req.Backfill)
 	if err != nil {
@@ -336,6 +341,12 @@ func (a *App) UpdateSubscriber(c echo.Context) error {
 		return err
 	}
 	if err := a.validateIncomingSubLang(stored.Attribs, req.Attribs); err != nil {
+		return err
+	}
+
+	// Fork (JOURNEY-UX-SPEC A1.1) -- a step list the subscriber is already on round-trips; a new
+	// one is refused to a session.
+	if err := a.refuseStepListAdd(user, []int{id}, listIDs); err != nil {
 		return err
 	}
 
@@ -418,6 +429,10 @@ func (a *App) PatchSubscriber(c echo.Context) error {
 		listIDs = user.FilterListsByPerm(auth.PermTypeManage, *req.Lists)
 		if len(*req.Lists) > 0 && len(listIDs) == 0 {
 			return echo.NewHTTPError(http.StatusForbidden, a.i18n.Ts("globals.messages.permissionDenied", "name", "lists"))
+		}
+		// Fork (JOURNEY-UX-SPEC A1.1) -- the lists replace the subscriptions: as UpdateSubscriber.
+		if err := a.refuseStepListAdd(user, []int{id}, listIDs); err != nil {
+			return err
 		}
 	}
 
@@ -558,6 +573,10 @@ func (a *App) ManageSubscriberLists(c echo.Context) error {
 	var err error
 	switch req.Action {
 	case "add":
+		// Fork (JOURNEY-UX-SPEC A1.1) -- add only; remove and unsubscribe stay open for cleanup.
+		if err := a.refuseStepListAdd(user, subIDs, listIDs); err != nil {
+			return err
+		}
 		err = a.core.AddSubscriptionsFlags(subIDs, listIDs, req.Status, core.SessionFlags{Backfill: req.Backfill, ReleaseFinal: req.ReleaseFinal})
 	case "remove":
 		err = a.core.DeleteSubscriptions(subIDs, listIDs)
@@ -770,6 +789,11 @@ func (a *App) ManageSubscriberListsByQuery(c echo.Context) error {
 	var err error
 	switch req.Action {
 	case "add":
+		// Fork (JOURNEY-UX-SPEC A1.1) -- the query's subscribers are not known up front, so any
+		// step list among the targets refuses a session's add.
+		if err := a.refuseStepListAdd(user, nil, targetListIDs); err != nil {
+			return err
+		}
 		err = a.core.AddSubscriptionsByQuery(req.Search, req.Query, sourceListIDs, targetListIDs, req.Status, req.SubscriptionStatus, req.filter(), req.Backfill)
 	case "remove":
 		err = a.core.DeleteSubscriptionsByQuery(req.Search, req.Query, sourceListIDs, targetListIDs, req.SubscriptionStatus, req.filter())

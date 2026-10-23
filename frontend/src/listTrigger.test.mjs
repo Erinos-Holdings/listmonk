@@ -7,7 +7,19 @@ import {
   triggerOption, skusToText, textToSkus, buildJoinTrigger, triggerBadge, storedDays, textToDays, daysValid,
   listTriggerItem, withTriggerItem, pickerLabel, buildListFormRequest, storedTrigger, storedTriggerSync,
   LIST_TYPE_BROADCAST, LIST_TYPE_JOURNEY, listTypeOf, journeyOption, buildListTypeTrigger,
+  listTypeHelpKey, triggerHelpKeys,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
+
+// JOURNEY-UX-SPEC IA4 -- the selector's help follows the value (A1.4); A1.3's bold lead + prose.
+test('IA4: type help per selector value; the Sends lead and prose per trigger radio', () => {
+  assert.equal(listTypeHelpKey(LIST_TYPE_BROADCAST), 'lists.campaignTypeHelpBroadcast');
+  assert.equal(listTypeHelpKey(LIST_TYPE_JOURNEY), 'lists.campaignTypeHelpJourney');
+  [undefined, null, '', 'nope'].forEach((v) => assert.equal(listTypeHelpKey(v), 'lists.campaignTypeHelpBroadcast', String(v)));
+  assert.deepEqual(triggerHelpKeys(TRIGGER_FIRST_ORDER), { lead: 'lists.joinTriggerFirstOrderSends', body: 'lists.joinTriggerLatency' });
+  assert.deepEqual(triggerHelpKeys(TRIGGER_SKUS), { lead: 'lists.joinTriggerSkusSends', body: 'lists.joinTriggerLatency' });
+  assert.deepEqual(triggerHelpKeys(TRIGGER_NO_PURCHASE), { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerNoPurchaseHelp' });
+  [TRIGGER_NONE, undefined, 'nope'].forEach((v) => assert.equal(triggerHelpKeys(v), null, String(v)));
+});
 
 // JOURNEY-UX-SPEC I7 -- the Broadcast | Journey selector (D8, F4).
 test('I7: stored trigger <-> selector value and the Journey pane radio', () => {

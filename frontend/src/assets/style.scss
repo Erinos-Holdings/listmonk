@@ -270,6 +270,17 @@ section {
     z-index: 2; // above the (transparent) navbar menu that follows it
     display: flex;
     align-items: center;
+
+    // Fork (integrations JOURNEY-UX-SPEC A1.16/A1.17) -- the blue ring marks a GLOBAL selector
+    // (its state follows the user across pages; .segmented.is-global is the same rule), and the
+    // font matches the Campaigns page's Broadcasts | Journeys toggle (1rem). The vertical padding
+    // keeps the is-small box height (18px + 22px) beside the launch filter.
+    .select select {
+      border: 1px solid $primary;
+      font-size: 1rem;
+      padding-top: 7px;
+      padding-bottom: 7px;
+    }
   }
   // Fork (launch filter, LAUNCH-FILTER-SPEC D4/D10) -- the selector and the launch filter in one
   // row. On desktop the wrapper is absolutely positioned past the brand's own width (App.vue
@@ -644,7 +655,7 @@ body.is-noscroll {
 
 // Fork -- .segmented: a b-field of b-radio-buttons drawn as ONE control (the navbar's launch
 // filter, the Campaigns page's Broadcasts | Automations toggle): a $grey-lightest track inside a
-// 1px $primary ring, the selected segment a raised primary pill. Replaces Buefy's has-addons
+// 1px ring, the selected segment a raised primary pill. Replaces Buefy's has-addons
 // look, where each segment carries its own border and reads as three adjacent buttons.
 // Heights match the adjacent select/input, which the override above sets to height auto with
 // 10px vertical padding: a borderless segment at 8px + the track's 2px padding + 1px ring gives
@@ -652,10 +663,14 @@ body.is-noscroll {
 // the button's 1.5 because Buefy's .b-radio.radio sets 1.25 (the Users form's b-radio-buttons
 // are not .segmented and keep Buefy's look). A b-field with addons renders its class on an OUTER
 // .field and has-addons on an inner .field-body > .field, so the rule must target the inner one.
+// Fork (integrations JOURNEY-UX-SPEC A1.16/A1.17) -- the 1px $primary ring is reserved for GLOBAL
+// selectors (state that follows the user across pages: the navbar's brand selector and launch
+// filter, .segmented.is-global); a page-local filter such as the Campaigns toggle takes the
+// neutral input border.
 .field.segmented > .field-body > .field.has-addons {
   flex-grow: 0; // Bulma's .field-body > .field grows; the track hugs its segments
   background: $grey-lightest;
-  border: 1px solid $primary;
+  border: 1px solid $grey-lighter;
   border-radius: 5px;
   padding: 2px;
   gap: 2px;
@@ -694,6 +709,10 @@ body.is-noscroll {
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
     }
   }
+}
+
+.field.segmented.is-global > .field-body > .field.has-addons {
+  border-color: $primary;
 }
 
 // Fork (evergreen) -- the "Days after joining" label sits above its compact number input,
@@ -1870,6 +1889,13 @@ th.role-toggle-select a {
   }
 }
 
+/* Fork (integrations JOURNEY-UX-SPEC A1.8): "Edit sender display names" sits tight under the
+   sender field's help (a b-field's own bottom margin is 0.75rem) and carries the gap below it. */
+.persona-edit {
+  margin-top: -0.5rem;
+  margin-bottom: 1.5rem;
+}
+
 /* Fork (evergreen) -- keep the campaign form's "Send automatically to new subscribers" label on one line. */
 .evergreen-field .label {
   white-space: nowrap;
@@ -1878,18 +1904,47 @@ th.role-toggle-select a {
 /* Fork (attribute picker; Campaign.vue, integrations ATTRIBUTE-PICKER-SPEC D6): the subject's
    and preheader's "Insert attribute" glyph sits inside the field, left of the emoji icon, in
    the same 2.5em cell Bulma gives a right icon. */
+/* Fork (integrations JOURNEY-UX-SPEC A1.11): the emoji icon (Buefy icon-right, Bulma's pale
+   #dbdbdb) and the {} glyph (currentColor SVG) share one adornment treatment: the same mid-grey,
+   darker on hover, the same 20px glyph, and half the gap between them (the {} cell sits 1.875em
+   from the right instead of 2.5em). The email-builder's toolbar instances match their toolbar
+   neighbours instead, deliberately. */
+$input-adornment: #9a9a9a;
+$input-adornment-hover: #4a4a4a;
+
 .attribute-field {
   position: relative;
 
   /* Room for two right icons (has-icons-right pads for one). */
   .input {
-    padding-right: 5em;
+    padding-right: 4.375em;
+  }
+
+  .control.has-icons-right .icon.is-right {
+    color: $input-adornment;
+
+    i,
+    i::before {
+      font-size: 20px;
+    }
+
+    &:hover {
+      color: $input-adornment-hover;
+    }
+  }
+
+  .control.has-icons-right .input:focus ~ .icon.is-right {
+    color: $input-adornment;
+
+    &:hover {
+      color: $input-adornment-hover;
+    }
   }
 
   .attribute-trigger {
     position: absolute;
     top: 0;
-    right: 2.5em;
+    right: 1.875em;
     height: 2.5em;
     width: 2.5em;
     z-index: 4;
@@ -1904,12 +1959,12 @@ th.role-toggle-select a {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #7a7a7a;
+      color: $input-adornment;
       cursor: pointer;
     }
 
     .icon:hover {
-      color: #363636;
+      color: $input-adornment-hover;
     }
 
     /* The builder's IconButton draws this path at MUI "small" (20px); an em size inherits the

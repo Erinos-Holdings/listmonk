@@ -148,6 +148,30 @@
                     :placeholder="$t('globals.fields.name')" required autofocus />
                 </b-field>
 
+                <!-- Fork (multi-language campaigns) -- attribs.lang. Hidden behind app.lang_enable
+                  until subscribers carry a language; a campaign that already has one always
+                  shows it. Locked once started (server-enforced too).
+                  Fork (LIST-GRID-SPEC D11) -- a REGULAR campaign has no "All": a whole-list send is
+                  English to the fr/es/de/it readers, the server keeps the stored language on
+                  update and refuses to start or schedule without one. "All" survives read-only
+                  on a language-less campaign that can no longer be edited (history), and as a
+                  real choice on an OPT-IN campaign -- the double opt-in confirmation, which must
+                  reach every language, so its field shows only when someone hand-set a language
+                  and lets them clear it.
+                  JOURNEY-UX-SPEC A1.10: between Name and Subject -- it decides the content below. -->
+                <b-field :label="$t('campaigns.lang')" label-position="on-border" :message="$t('campaigns.langHelp')"
+                  v-if="showLang">
+                  <b-select v-model="form.lang" name="lang" :disabled="!canEdit || isStarted" expanded data-cy="lang"
+                    :title="sendLangTitle(form.lang)"
+                    :required="!isOptin">
+                    <option v-if="showLangAll" value="">{{ $t('campaigns.langAll') }}</option>
+                    <!-- A campaign's language is a SEND audience: English+ (langs.js). -->
+                    <option v-for="l in langOptions" :key="l.code" :value="l.code" :title="sendLangTitle(l.code)">
+                      {{ sendLangLabel(l.code) }}
+                    </option>
+                  </b-select>
+                </b-field>
+
                 <b-field :label="$t('campaigns.subject')" label-position="on-border">
                   <!-- Fork (emoji picker, integrations EMOJI-PICKER-SPEC D2): the right icon opens the
                     page's one picker (shared with the preheader); none for a non-editor. -->
@@ -201,28 +225,14 @@
                 <emoji-picker-popover :open="emoji.open" :anchor="emoji.anchor" @pick="onEmojiPick"
                   @close="emoji.open = false" />
 
-                <!-- Fork (multi-language campaigns) -- attribs.lang. Hidden behind app.lang_enable
-                  until subscribers carry a language; a campaign that already has one always
-                  shows it. Locked once started (server-enforced too).
-                  Fork (LIST-GRID-SPEC D11) -- a REGULAR campaign has no "All": a whole-list send is
-                  English to the fr/es/de/it readers, the server keeps the stored language on
-                  update and refuses to start or schedule without one. "All" survives read-only
-                  on a language-less campaign that can no longer be edited (history), and as a
-                  real choice on an OPT-IN campaign -- the double opt-in confirmation, which must
-                  reach every language, so its field shows only when someone hand-set a language
-                  and lets them clear it. -->
-                <b-field :label="$t('campaigns.lang')" label-position="on-border" :message="$t('campaigns.langHelp')"
-                  v-if="showLang">
-                  <b-select v-model="form.lang" name="lang" :disabled="!canEdit || isStarted" expanded data-cy="lang"
-                    :title="sendLangTitle(form.lang)"
-                    :required="!isOptin">
-                    <option v-if="showLangAll" value="">{{ $t('campaigns.langAll') }}</option>
-                    <!-- A campaign's language is a SEND audience: English+ (langs.js). -->
-                    <option v-for="l in langOptions" :key="l.code" :value="l.code" :title="sendLangTitle(l.code)">
-                      {{ sendLangLabel(l.code) }}
-                    </option>
-                  </b-select>
-                </b-field>
+                <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D10) -- the options are the
+                     global brand's lists united with the campaign's saved lists (all lists under
+                     All brands). The template picker is never filtered (S3). -->
+                <!-- JOURNEY-UX-SPEC A1.12: a user's list change re-derives the journey toggles when
+                     the selection's class changes (onListsInput); the sender section and the
+                     journey block below render campaignListUx.mjs's answers. -->
+                <list-selector :value="form.lists" @input="onListsInput" :selected="form.lists" :all="listOptions"
+                  :disabled="!canEdit" :label="$t('globals.terms.lists')" :placeholder="$t('campaigns.sendToLists')" />
 
                 <!-- READ-ONLY BY DESIGN: the From address is a property of the brand, derived from
                      the selected lists' `from:` tag. The escape hatch is editing the list, not the
@@ -234,8 +244,11 @@
                      first, then the brand's approved persona display names -- a display-name
                      variant on the brand's own address, never free text. The server refuses any
                      other From (cmd/campaigns.go validateCampaignFields); this is the convenience.
-                     Unmapped, errored, or the brands fetch failed: the read-only input below. -->
-                <b-field v-if="senderRow" :label="$t('campaigns.senderName')" label-position="on-border"
+                     Unmapped, errored, or the brands fetch failed: the read-only input below.
+                     JOURNEY-UX-SPEC A1.9: the sender section follows the list selector and renders
+                     only once a list is selected (senderUx, campaignListUx.mjs senderSection); the
+                     derivation itself is unchanged. -->
+                <b-field v-if="senderUx.picker" :label="$t('campaigns.senderName')" label-position="on-border"
                   :message="brandFromMessage">
                   <b-select v-model="form.fromEmail" name="from_email" :disabled="!canEdit" expanded required>
                     <option v-for="o in senderSelectOptions" :key="o.value" :value="o.value">
@@ -247,8 +260,9 @@
                      persona whose close is the delete control, and an inline add. The chip's close
                      is disabled while an editable or running campaign carries the persona (the
                      server's 409 is the control); the span keeps the tooltip firing over it.
-                     JOURNEY-UX-SPEC D7: behind a collapsible, collapsed by default. -->
-                <b-collapse v-if="senderRow && canManagePersonas" :open="false" class="mb-4"
+                     JOURNEY-UX-SPEC D7: behind a collapsible, collapsed by default. A1.8: tight to
+                     the sender field above, the gap below it (persona-edit, scoped style). -->
+                <b-collapse v-if="senderUx.picker && canManagePersonas" :open="false" class="persona-edit"
                   data-cy="persona-edit">
                   <template #trigger="props">
                     <a class="is-size-7" :aria-expanded="props.open ? 'true' : 'false'">
@@ -282,7 +296,7 @@
                   </div>
                 </b-collapse>
 
-                <b-field v-if="!senderRow" :label="$t('campaigns.fromAddress')" label-position="on-border"
+                <b-field v-if="senderUx.fallback" :label="$t('campaigns.fromAddress')" label-position="on-border"
                   :type="brandDerivation.error ? 'is-danger' : ''" :message="brandFromMessage">
                   <!-- custom-class, NOT class: in Vue 2 a `class` on a component lands on its ROOT
                        element, which for b-input is the wrapping div.control -- so the styling
@@ -291,14 +305,6 @@
                   <b-input :maxlength="200" v-model="form.fromEmail" name="from_email" :disabled="!canEdit" readonly
                     custom-class="is-derived" :placeholder="$t('campaigns.fromAddressPlaceholder')" required />
                 </b-field>
-
-                <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D10) -- the options are the
-                     global brand's lists united with the campaign's saved lists (all lists under
-                     All brands). The template picker is never filtered (S3). -->
-                <!-- JOURNEY-UX-SPEC D2/D2.1: a user's list change runs the auto-enable
-                     (onListsInput); the journey block below renders campaignListUx.mjs's answer. -->
-                <list-selector :value="form.lists" @input="onListsInput" :selected="form.lists" :all="listOptions"
-                  :disabled="!canEdit" :label="$t('globals.terms.lists')" :placeholder="$t('campaigns.sendToLists')" />
 
                 <!-- JOURNEY-UX-SPEC D3: notices only, never blocking (the server allows both). -->
                 <template v-if="canEdit">
@@ -310,6 +316,11 @@
                     :closable="false" data-cy="journey-broadcast-warning">
                     {{ $t('campaigns.broadcastToTriggerWarning', { lists: journeyNotices.triggerLists.join(', ') }) }}
                   </b-message>
+                  <!-- A1.14: a re-engagement queue list (tagged reengage:) -- both modes are the ask. -->
+                  <b-message v-if="reengageNote" type="is-info" size="is-small" :closable="false"
+                    data-cy="journey-reengage-note">
+                    {{ $t('campaigns.reengageQueueNote') }}
+                  </b-message>
                   <p v-if="journeyUx.oneListHint" class="help mb-3" data-cy="journey-one-list-hint">
                     {{ $t('campaigns.evergreenOneList') }}
                   </p>
@@ -318,18 +329,19 @@
                 <!-- Fork (evergreen) -- an evergreen campaign never finishes; it keeps sending to
                      subscribers who join its (single) list after it is started. JOURNEY-UX-SPEC D2/D6:
                      the journey block follows the lists; visibility is journeyUx (campaignListUx.mjs),
-                     which keeps the evergreen_enabled || form.evergreen gate (F7). -->
+                     which keeps the evergreen_enabled || form.evergreen gate (F7). A1.13: a single
+                     trigger list locks Journey automation (and a stored schedule) as rendered. -->
                 <div class="columns" v-if="journeyUx.showEvergreen">
                   <div class="column is-6">
                     <b-field :label="$t('campaigns.evergreen')" data-cy="btn-evergreen" class="evergreen-field"
-                      :message="form.evergreen ? $t('campaigns.evergreenHelp') : ''">
-                      <b-switch :value="form.evergreen" @input="onJourneyToggle('evergreen', $event)"
-                        :disabled="!canEdit || form.sendLater" />
+                      :message="evergreenMessage">
+                      <b-switch v-model="form.evergreen"
+                        :disabled="!canEdit || form.sendLater || journeyUx.lockEvergreen" />
                     </b-field>
                   </div>
                   <div class="column">
                     <b-field v-if="journeyUx.showDelay" :label="$t('campaigns.evergreenDelay')" class="evergreen-delay"
-                      data-cy="evergreen-delay">
+                      data-cy="evergreen-delay" :message="$t('campaigns.evergreenDelayHelp')">
                       <b-numberinput v-model="form.sendDelayDays" :min="0" :max="365" :disabled="!canEdit"
                         controls-position="compact" />
                     </b-field>
@@ -339,14 +351,15 @@
                 <div class="columns" v-if="journeyUx.showSendLater">
                   <div class="column is-4">
                     <b-field :label="$t('campaigns.sendLater')" data-cy="btn-send-later">
-                      <b-switch :value="form.sendLater" @input="onJourneyToggle('sendLater', $event)"
-                        :disabled="!canEdit || form.evergreen" />
+                      <b-switch v-model="form.sendLater"
+                        :disabled="!canEdit || form.evergreen || journeyUx.lockSendLater" />
                     </b-field>
                   </div>
                   <div class="column">
                     <br />
                     <b-field v-if="form.sendLater" data-cy="send_at" :message="sendAtMessage">
-                      <b-datetimepicker v-model="form.sendAtDate" :disabled="!canEdit" required editable mobile-native
+                      <b-datetimepicker v-model="form.sendAtDate" :disabled="!canEdit || journeyUx.lockSendLater"
+                        required editable mobile-native
                         position="is-top-right" :placeholder="$t('campaigns.dateAndTime')" icon="calendar-clock"
                         :timepicker="{ hourFormat: '24' }" :datetime-formatter="formatDateTime"
                         horizontal-time-picker />
@@ -608,7 +621,8 @@ import Editor from '../components/Editor.vue';
 import ListSelector from '../components/ListSelector.vue';
 import { pickerLabel } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import {
-  journeyMatrix, journeyNotices, journeyPayload, manualToggle, selectionChange, selectionClasses, selectionRow,
+  hasReengageList, journeyMatrix, journeyNotices, journeyPayload, selectionChange, selectionClasses,
+  selectionClassKey, selectionRow, senderSection,
 } from '../campaignListUx.mjs'; // eslint-disable-line import/extensions
 import Media from './Media.vue';
 import { normalizeMediaTagsLenient } from '../mediaTags';
@@ -780,11 +794,6 @@ export default Vue.extend({
       personaUses: [],
       newPersona: '',
       personaBusy: false,
-
-      // Fork (journey form UX, JOURNEY-UX-SPEC D2.1) -- the Journey automation / Send later values
-      // as they were before an auto-enable, restored when that selection change is undone
-      // (campaignListUx.mjs selectionChange); null when there is nothing to restore.
-      journeyShadow: null,
 
       // The brand swatch row(s) currently pushed into the visual editor's color picker, and
       // the slug of the latest theme request. The slug doubles as the stale-response guard:
@@ -1657,33 +1666,28 @@ export default Vue.extend({
       });
     },
 
-    // Fork (journey form UX, D2.1) -- the list selector's input: take the new selection, then run
-    // the auto-enable for it (a selection change made in this session).
+    // Fork (journey form UX, JOURNEY-UX-SPEC A1.12) -- the list selector's input: take the new
+    // selection, then re-derive the toggles if its class changed (a selection change made in this
+    // session). A hand-set toggle is plain v-model and sticks until the next class change.
     onListsInput(lists) {
-      this.form.lists = lists;
-      this.applySelectionChange('user');
+      this.setLists(lists, 'user');
     },
 
-    applySelectionChange(source) {
-      const r = selectionChange({
+    // setLists assigns form.lists and runs the re-derive, classing the previous selection against
+    // the options as they stood before the assignment.
+    setLists(lists, source) {
+      const prevClass = selectionClassKey(this.journeySelection);
+      this.form.lists = lists;
+      const t = selectionChange({
         source,
         editable: this.journeyEditable,
-        row: this.journeyRow,
+        prevClass,
+        nextClass: selectionClassKey(this.journeySelection),
         evergreenEnabled: !!this.serverConfig.evergreen_enabled,
         toggles: { evergreen: this.form.evergreen, sendLater: this.form.sendLater },
-        shadow: this.journeyShadow,
       });
-      this.form.evergreen = r.toggles.evergreen;
-      this.form.sendLater = r.toggles.sendLater;
-      this.journeyShadow = r.shadow;
-    },
-
-    // A hand-set Journey automation / Send later is the user's own choice from then on.
-    onJourneyToggle(key, value) {
-      const r = manualToggle({ toggles: { evergreen: this.form.evergreen, sendLater: this.form.sendLater }, key, value });
-      this.form.evergreen = r.toggles.evergreen;
-      this.form.sendLater = r.toggles.sendLater;
-      this.journeyShadow = r.shadow;
+      this.form.evergreen = t.evergreen;
+      this.form.sendLater = t.sendLater;
     },
 
     // Fork (evergreen) -- pause from the editor so a running welcome can be edited.
@@ -2153,14 +2157,33 @@ export default Vue.extend({
         editable: this.journeyEditable,
         evergreenEnabled: !!this.serverConfig.evergreen_enabled,
         evergreen: this.form.evergreen,
+        sendLater: this.form.sendLater,
         storedEvergreen: this.isEditing && !!this.data.evergreen,
-        shadow: this.journeyShadow,
       });
     },
 
     journeyNotices() {
       const evergreen = !!this.form.evergreen && !this.journeyUx.forceEvergreenOff;
       return journeyNotices(this.journeySelection, evergreen);
+    },
+
+    // A1.13: the switch's help -- why it is locked (a single trigger list), then the evergreen
+    // help when on. b-field renders an array as one line per entry.
+    evergreenMessage() {
+      const out = [];
+      if (this.journeyUx.lockEvergreen) out.push(this.$t('campaigns.evergreenTriggerLocked'));
+      if (this.form.evergreen) out.push(this.$t('campaigns.evergreenHelp'));
+      return out.length > 0 ? out : '';
+    },
+
+    // A1.14: a selected re-engagement queue list (tagged reengage:).
+    reengageNote() {
+      return hasReengageList(this.form.lists, this.listOptions);
+    },
+
+    // A1.9: the sender section, only once a list is selected.
+    senderUx() {
+      return senderSection((this.form.lists || []).length, !!this.senderRow);
     },
 
     // Fork (global brand, D11) -- the saved campaign's brand, from its lists in the active-lists
@@ -2628,14 +2651,12 @@ export default Vue.extend({
 
   watch: {
     selectedLists() {
-      // Fork (journey form UX, D2.1) -- a new campaign's preselected lists (?list_id=) auto-enable
-      // like a user's pick; a store reload that leaves the ids as they are does not.
+      // Fork (journey form UX, A1.12) -- a new campaign's preselected lists (?list_id=) re-derive
+      // like a user's pick; a store reload that leaves the ids as they are does not, and a stored
+      // campaign's lists never do ('load').
       const ids = (ls) => (ls || []).map((l) => l.id).sort((a, b) => a - b).join(',');
       const changed = ids(this.form.lists) !== ids(this.selectedLists);
-      this.form.lists = this.selectedLists;
-      if (this.isNew && changed) {
-        this.applySelectionChange('preselect');
-      }
+      this.setLists(this.selectedLists, this.isNew && changed ? 'preselect' : 'load');
     },
 
     // Fork (emoji picker): the right icons appear/disappear with canEdit; label them when they do.

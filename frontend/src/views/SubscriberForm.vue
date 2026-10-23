@@ -49,7 +49,7 @@
         <b-tabs type="is-boxed" :animated="false">
           <b-tab-item :label="$t('globals.terms.lists')" label-position="on-border">
             <list-selector :label="$t('subscribers.lists')" :placeholder="$t('subscribers.listsPlaceholder')"
-              :message="$t('subscribers.listsHelp')" v-model="form.lists" :selected="form.lists" :all="lists.results" />
+              :message="$t('subscribers.listsHelp')" v-model="form.lists" :selected="form.lists" :all="addLists" />
             <div class="columns">
               <div class="column is-7">
                 <b-field :message="$t('subscribers.preconfirmHelp')">
@@ -175,6 +175,7 @@ import { mapState } from 'vuex';
 import ListSelector from '../components/ListSelector.vue';
 import CopyText from '../components/CopyText.vue';
 import SubscriberActivity from '../components/SubscriberActivity.vue';
+import { addableLists } from '../campaignListUx.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -338,6 +339,14 @@ export default Vue.extend({
 
     hasOptinList() {
       return this.form.lists.some((l) => l.optin === 'double');
+    },
+
+    // Fork (integrations JOURNEY-UX-SPEC A1.2) -- the picker never offers a no_purchase step list as
+    // a NEW addition (the server refuses a session's add); one the subscriber is already on stays
+    // (shown, removable, re-addable before a save).
+    addLists() {
+      const stored = ((this.$props.isEditing && this.$props.data.lists) || []).map((l) => l.id);
+      return addableLists(this.lists.results, stored);
     },
   },
 

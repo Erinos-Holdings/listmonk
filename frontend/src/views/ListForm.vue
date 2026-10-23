@@ -35,7 +35,10 @@
         brand:/from:/site: tags from the brands row. Required, no empty option. GLOBAL-BRAND-SPEC
         D10: under a selected brand it is preset to that brand and disabled (a new list, or a list
         already of that brand); a list of another brand keeps it enabled, with the notice. -->
-        <b-field :label="$t('lists.brand')" label-position="on-border" :message="$t('lists.brandHelp')">
+        <!-- JOURNEY-UX-SPEC A1.5: the From line sits directly under the help (no field margin
+        between them while it shows). -->
+        <b-field :label="$t('lists.brand')" label-position="on-border" :message="$t('lists.brandHelp')"
+          :class="{ 'mb-0': !!chosenBrand }">
           <b-select v-model="brand" name="brand" :placeholder="$t('lists.brand')" :required="!locked" expanded
             :disabled="locked || brandLocked" data-cy="list-brand">
             <option v-for="b in brands" :key="b.slug" :value="b.slug">
@@ -60,7 +63,8 @@
               {{ triggerBadgeText }}
             </b-tag>
           </p>
-          <b-field :message="$t('lists.campaignTypeHelp')" data-cy="list-campaign-type">
+          <!-- JOURNEY-UX-SPEC A1.4: the help follows the selection (listTypeHelpKey). -->
+          <b-field :message="$t(listTypeHelpKey(listType))" data-cy="list-campaign-type">
             <b-radio-button v-model="listType" native-value="broadcast" type="is-primary" :disabled="locked">
               {{ $t('lists.campaignTypeBroadcast') }}
             </b-radio-button>
@@ -68,16 +72,24 @@
               {{ $t('lists.campaignTypeJourney') }}
             </b-radio-button>
           </b-field>
+          <!-- JOURNEY-UX-SPEC A1.3: each selected radio's help is a bold "Sends ..." lead, then the
+          prose (triggerHelpKeys); Buefy's message prop is plain text, so the message slot. -->
           <div v-if="listType === 'journey'" class="list-journey-pane" data-cy="list-journey-pane">
-            <b-field :message="triggerOption === 'first_order' ? $t('lists.joinTriggerLatency') : ''">
+            <b-field>
               <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger" :disabled="locked">
                 {{ $t('lists.joinTriggerFirstOrder') }}
               </b-radio>
+              <template v-if="triggerOption === 'first_order'" #message>
+                <strong>{{ $t(triggerHelp.lead) }}</strong> {{ $t(triggerHelp.body) }}
+              </template>
             </b-field>
-            <b-field :message="triggerOption === 'skus' ? $t('lists.joinTriggerLatency') : ''">
+            <b-field>
               <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="locked">
                 {{ $t('lists.joinTriggerSkus') }}
               </b-radio>
+              <template v-if="triggerOption === 'skus'" #message>
+                <strong>{{ $t(triggerHelp.lead) }}</strong> {{ $t(triggerHelp.body) }}
+              </template>
             </b-field>
             <b-field v-if="triggerOption === 'skus'" :message="$t('lists.joinTriggerSkusHelp')">
               <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
@@ -91,9 +103,12 @@
               </b-radio>
             </b-field>
             <b-field v-if="triggerOption === 'no_purchase'" :label="$t('lists.joinTriggerDays')"
-              :type="daysText === '' || daysOk ? '' : 'is-danger'" :message="$t('lists.joinTriggerNoPurchaseHelp')">
+              :type="daysText === '' || daysOk ? '' : 'is-danger'">
               <b-input v-model="daysText" type="number" min="1" max="365" step="1" name="join_trigger_days"
                 :disabled="locked" data-cy="list-trigger-days" />
+              <template #message>
+                <strong>{{ $t(triggerHelp.lead) }}</strong> {{ $t(triggerHelp.body) }}
+              </template>
             </b-field>
           </div>
           <!-- JOURNEY-UX-SPEC F8: in both selector states -- Broadcast lists host automations too. -->
@@ -180,8 +195,8 @@ import {
   brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import {
-  buildListFormRequest, buildListTypeTrigger, daysValid, journeyOption, listTypeOf, skusToText, storedDays,
-  storedTrigger, storedTriggerSync, triggerBadge, LIST_TYPE_BROADCAST,
+  buildListFormRequest, buildListTypeTrigger, daysValid, journeyOption, listTypeHelpKey, listTypeOf, skusToText,
+  storedDays, storedTrigger, storedTriggerSync, triggerBadge, triggerHelpKeys, LIST_TYPE_BROADCAST,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -232,6 +247,7 @@ export default Vue.extend({
 
   methods: {
     brandLabel,
+    listTypeHelpKey,
 
     // The server refuses a reserved tag (lists.reservedTag); refuse it here first, with the same
     // message.
@@ -327,6 +343,12 @@ export default Vue.extend({
     // lists:transactional.
     canTransactional() {
       return this.$can('lists:transactional');
+    },
+
+    // JOURNEY-UX-SPEC A1.3: the selected radio's Sends lead and prose (i18n keys). A missing
+    // option reads as empty keys; the template renders it only under its own radio.
+    triggerHelp() {
+      return triggerHelpKeys(this.triggerOption) || { lead: '', body: '' };
     },
 
     // NO-PURCHASE-STEPS-SPEC D7: the days field's inline state (the server is the control).

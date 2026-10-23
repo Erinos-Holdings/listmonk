@@ -111,7 +111,8 @@ func TestListBrandProjection(t *testing.T) {
 
 // I2 -- a write whose tags carry a reserved tag (any of the three prefixes, the whitespace form
 // included) is refused 400 lists.reservedTag, with or without brand, on create and update, and
-// nothing is written. repermission:<id> is not reserved.
+// nothing is written. JOURNEY-UX-SPEC A1.7 (IA7): the retired repermission:<id> is refused the same
+// way; a free tag, the reengage: queue tag included, round-trips.
 func TestListReservedTagRefused(t *testing.T) {
 	f := newBPFixture(t)
 	f.listsFixture()
@@ -119,7 +120,8 @@ func TestListReservedTagRefused(t *testing.T) {
 	before := f.tags(id)
 	lists := f.count(`SELECT COUNT(*) FROM lists`)
 
-	for _, tag := range []string{"brand:x", " brand: x", "from:X <hello@acme.test>", "site:https://x.test", "  site:https://x.test "} {
+	for _, tag := range []string{"brand:x", " brand: x", "from:X <hello@acme.test>", "site:https://x.test", "  site:https://x.test ",
+		"repermission:12", " repermission:3 "} {
 		for _, brand := range []any{nil, "acme", ""} {
 			body := map[string]any{"name": "New", "tags": []string{"ok", tag}}
 			if brand != nil {
@@ -137,10 +139,10 @@ func TestListReservedTagRefused(t *testing.T) {
 		t.Fatalf("a refused update changed the tags: %q -> %q", before, got)
 	}
 
-	// The system-set repermission tag is a free tag.
-	f.ok("repermission", f.admin.json(http.MethodPut, "/api/lists/"+itoa(id), map[string]any{"name": "Existing", "tags": []string{"repermission:12"}}))
-	if got := f.tags(id); got != "brand:acme|from:Acme <hello@acme.test>|repermission:12|site:https://shop.acme.test" {
-		t.Fatalf("repermission tag: %q", got)
+	// Free tags, the machine-written reengage: queue tag among them, are kept.
+	f.ok("free tags", f.admin.json(http.MethodPut, "/api/lists/"+itoa(id), map[string]any{"name": "Existing", "tags": []string{"reengage:5:1", "holiday"}}))
+	if got := f.tags(id); got != "brand:acme|from:Acme <hello@acme.test>|holiday|reengage:5:1|site:https://shop.acme.test" {
+		t.Fatalf("free tags: %q", got)
 	}
 }
 

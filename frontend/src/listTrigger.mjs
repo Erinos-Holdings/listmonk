@@ -116,6 +116,27 @@ export function buildListTypeTrigger(listType, option, skusText, daysText) {
   return buildJoinTrigger(opt, skusText, daysText);
 }
 
+// Fork (integrations JOURNEY-UX-SPEC A1.4) -- the selector's help follows the selection: one
+// i18n key per value (Broadcast for anything that is not Journey).
+export function listTypeHelpKey(listType) {
+  return listType === LIST_TYPE_JOURNEY ? 'lists.campaignTypeHelpJourney' : 'lists.campaignTypeHelpBroadcast';
+}
+
+// A1.3 -- a trigger radio's help: a bold "Sends ..." lead sentence, then the prose. null for a
+// radio that carries no help (none, or an unknown option).
+export function triggerHelpKeys(option) {
+  switch (option) {
+    case TRIGGER_FIRST_ORDER:
+      return { lead: 'lists.joinTriggerFirstOrderSends', body: 'lists.joinTriggerLatency' };
+    case TRIGGER_SKUS:
+      return { lead: 'lists.joinTriggerSkusSends', body: 'lists.joinTriggerLatency' };
+    case TRIGGER_NO_PURCHASE:
+      return { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerNoPurchaseHelp' };
+    default:
+      return null;
+  }
+}
+
 // triggerWhat is the sub-line's kind phrase for a stored trigger ('' for none).
 function triggerWhat(joinTrigger) {
   const opt = triggerOption(joinTrigger);

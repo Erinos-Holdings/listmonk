@@ -22,7 +22,27 @@
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page"
       :per-page="campaigns.perPage" :total="campaigns.total" hoverable checkable backend-sorting @sort="onSort">
       <template #top-left>
+        <!-- Fork (integrations JOURNEY-UX-SPEC A1.15) -- the scope toggle far left, then the list
+             filter, then the search. -->
         <div class="columns">
+          <div class="column is-narrow">
+            <!-- Fork (evergreen) -- Broadcasts | Automations scope pill. Server-side filter;
+                 switching resets the page and the bulk selection (bulk delete is scoped too).
+                 Disabled while a fetch is in flight so two quick clicks cannot leave the table
+                 showing one kind while the pill (and a bulk delete) is on the other. -->
+            <b-field class="segmented">
+              <b-radio-button v-model="queryParams.evergreen" :native-value="false" type="is-primary"
+                :disabled="loading.campaigns"
+                data-cy="scope-broadcasts" @input="onScopeChange">
+                {{ $t('campaigns.typeBroadcasts') }}
+              </b-radio-button>
+              <b-radio-button v-model="queryParams.evergreen" :native-value="true" type="is-primary"
+                :disabled="loading.campaigns"
+                data-cy="scope-automations" @input="onScopeChange">
+                {{ $t('campaigns.typeAutomations') }}
+              </b-radio-button>
+            </b-field>
+          </div>
           <div class="column is-narrow">
             <!-- Fork (list filter) -- server-side list_id filter on GET /api/campaigns.
                  Single-select (the API param is repeatable); "All lists" sends no param.
@@ -48,24 +68,6 @@
                 </b-field>
               </div>
             </form>
-          </div>
-          <div class="column is-narrow">
-            <!-- Fork (evergreen) -- Broadcasts | Automations scope pill. Server-side filter;
-                 switching resets the page and the bulk selection (bulk delete is scoped too).
-                 Disabled while a fetch is in flight so two quick clicks cannot leave the table
-                 showing one kind while the pill (and a bulk delete) is on the other. -->
-            <b-field class="segmented">
-              <b-radio-button v-model="queryParams.evergreen" :native-value="false" type="is-primary"
-                :disabled="loading.campaigns"
-                data-cy="scope-broadcasts" @input="onScopeChange">
-                {{ $t('campaigns.typeBroadcasts') }}
-              </b-radio-button>
-              <b-radio-button v-model="queryParams.evergreen" :native-value="true" type="is-primary"
-                :disabled="loading.campaigns"
-                data-cy="scope-automations" @input="onScopeChange">
-                {{ $t('campaigns.typeAutomations') }}
-              </b-radio-button>
-            </b-field>
           </div>
         </div>
 

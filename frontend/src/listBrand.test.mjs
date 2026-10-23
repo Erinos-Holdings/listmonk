@@ -11,18 +11,21 @@ import {
   brandLabel,
 } from './listBrand.mjs'; // eslint-disable-line import/extensions
 
+// JOURNEY-UX-SPEC IA7 (A1.7): repermission: is refused like the projection prefixes.
 test('isReservedTag judges after trimming, like the server', () => {
-  ['brand:x', ' brand: x', 'from:A <a@b.test>', '  site:https://x.test ', 'site:'].forEach((t) => {
+  ['brand:x', ' brand: x', 'from:A <a@b.test>', '  site:https://x.test ', 'site:', 'repermission:12', ' repermission:3 '].forEach((t) => {
     assert.equal(isReservedTag(t), true, t);
   });
-  ['repermission:12', 'holiday-2026', 'brandx', 'my brand:x', '', null].forEach((t) => {
+  ['holiday-2026', 'brandx', 'my brand:x', 'reengage:4:1', 'repermission', '', null].forEach((t) => {
     assert.equal(isReservedTag(t), false, String(t));
   });
 });
 
+// A stored repermission: tag is not projection: it stays visible (the save is then refused) rather
+// than being dropped silently; free tags round-trip.
 test('splitReservedTags hides the projection and keeps the free tags in order', () => {
-  const { free, reserved } = splitReservedTags(['b', 'brand:acme', 'from:Acme <hello@acme.test>', 'a', 'site:https://s.test', 'repermission:3']);
-  assert.deepEqual(free, ['b', 'a', 'repermission:3']);
+  const { free, reserved } = splitReservedTags(['b', 'brand:acme', 'from:Acme <hello@acme.test>', 'a', 'site:https://s.test', 'repermission:3', 'reengage:4:1']);
+  assert.deepEqual(free, ['b', 'a', 'repermission:3', 'reengage:4:1']);
   assert.deepEqual(reserved, ['brand:acme', 'from:Acme <hello@acme.test>', 'site:https://s.test']);
   assert.deepEqual(splitReservedTags(undefined), { free: [], reserved: [] });
 });

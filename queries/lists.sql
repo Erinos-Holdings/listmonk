@@ -199,6 +199,20 @@ SELECT id, name FROM lists WHERE id = ANY($1::INT[]) AND name = ANY($2::TEXT[]) 
 -- name: count-lists-by-name
 SELECT COUNT(*) FROM lists WHERE name = $1;
 
+-- name: get-step-list-add
+-- Fork (integrations JOURNEY-UX-SPEC A1.1) -- the first list among $2 whose join_trigger kind is
+-- no_purchase (a "still deciding" step list) on which a write would ADD a membership row: any such
+-- list when $1 (the existing subscriber ids) is empty -- a new subscriber, an import, a by-query
+-- add -- else one on which some subscriber of $1 has no row yet. At most one row.
+SELECT l.id, l.name FROM lists l
+WHERE l.id = ANY($2::INT[]) AND l.join_trigger->>'kind' = 'no_purchase'
+  AND (COALESCE(CARDINALITY($1::INT[]), 0) = 0 OR EXISTS (
+    SELECT 1 FROM UNNEST($1::INT[]) AS s(id)
+    WHERE NOT EXISTS (SELECT 1 FROM subscriber_lists sl WHERE sl.subscriber_id = s.id AND sl.list_id = l.id)
+  ))
+ORDER BY l.id
+LIMIT 1;
+
 -- name: get-delete-lists-by-query
 -- Fork (BRAND-PICKER-SPEC D4) -- the ids and names delete-lists would remove for a by-query
 -- delete (its exact predicate with an empty id array), so the handler can refuse a delete that

@@ -23,9 +23,11 @@
         </b-field>
 
         <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D8) -- the option set is the
-             caller's, by mode (Subscribers.vue bulkListOptions). -->
+             caller's, by mode (Subscribers.vue bulkListOptions). JOURNEY-UX-SPEC A1.2: under Add
+             the no_purchase step lists are left out (the server refuses a session's add); Remove
+             and Unsubscribe offer every list, so cleanup keeps its only bulk UI. -->
         <list-selector label="Target lists" placeholder="Lists to apply to" v-model="form.lists" :selected="form.lists"
-          :all="options" />
+          :all="pickerOptions" />
 
         <!-- Fork: enabled for every list, not only double opt-in. Sending status=confirmed is the
              only way the ids path's ON CONFLICT re-subscribes a row a subscriber unsubscribed
@@ -61,6 +63,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import ListSelector from '../components/ListSelector.vue';
+import { manageListOptions } from '../campaignListUx.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -95,6 +98,17 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading']),
+
+    pickerOptions() {
+      return manageListOptions(this.options, this.form.action);
+    },
+  },
+
+  watch: {
+    // A step list chosen under Remove/Unsubscribe is dropped when the action becomes Add.
+    'form.action': function onAction(action) {
+      this.form.lists = manageListOptions(this.form.lists, action);
+    },
   },
 });
 </script>

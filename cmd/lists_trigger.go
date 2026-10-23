@@ -265,6 +265,18 @@ func (a *App) planListTrigger(r listReq, cur models.List) (listTriggerPlan, erro
 				"name", ev.Name, "id", fmt.Sprintf("%d", ev.ID)))
 		}
 	}
+
+	// Fork (integrations JOURNEY-UX-SPEC A1.1b) -- a no_purchase step list is never public: the
+	// public subscription path refuses only private lists, so a public step list would let the
+	// public form add members, each one mailed by the running evergreen. Judged on the RESULTING
+	// type and trigger, so neither half of the pair can be set while the other stands.
+	typ := cur.Type
+	if r.Type != "" {
+		typ = r.Type
+	}
+	if typ == models.ListTypePublic && joinTriggerKind(p.joinTrigger) == joinTriggerNoPurchase {
+		return p, echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.noPurchasePublic"))
+	}
 	return p, nil
 }
 

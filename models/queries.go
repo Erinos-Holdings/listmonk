@@ -86,6 +86,8 @@ type Queries struct {
 	GetLockedLists    *sqlx.Stmt `query:"get-locked-lists"`
 	CountListsByName  *sqlx.Stmt `query:"count-lists-by-name"`
 	GetDeleteListsByQ *sqlx.Stmt `query:"get-delete-lists-by-query"`
+	// Fork (integrations JOURNEY-UX-SPEC A1.1) -- the step-list membership-add check.
+	GetStepListAdd *sqlx.Stmt `query:"get-step-list-add"`
 
 	CreateCampaign        *sqlx.Stmt `query:"create-campaign"`
 	QueryCampaigns        string     `query:"query-campaigns"`

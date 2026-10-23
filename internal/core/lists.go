@@ -1,6 +1,7 @@
 package core
 
 import (
+	"database/sql"
 	"net/http"
 
 	"github.com/gofrs/uuid/v5"
@@ -286,6 +287,30 @@ func (c *Core) LockedListsOf(ids []int) ([]string, error) {
 		out = append(out, r.Name)
 	}
 	return out, nil
+}
+
+// StepListAdd returns the first no_purchase step list among listIDs on which the write would add
+// a membership row (fork, integrations JOURNEY-UX-SPEC A1.1): any of them when existing is empty
+// (a new subscriber, an import, a by-query add), else one on which some subscriber in existing
+// has no row yet. found is false when the write adds no step-list row.
+func (c *Core) StepListAdd(existing, listIDs []int) (id int, name string, found bool, err error) {
+	if len(listIDs) == 0 {
+		return 0, "", false, nil
+	}
+	if existing == nil {
+		existing = []int{}
+	}
+	var row lockedList
+	err = c.q.GetStepListAdd.Get(&row, pq.Array(existing), pq.Array(listIDs))
+	if err == sql.ErrNoRows {
+		return 0, "", false, nil
+	}
+	if err != nil {
+		c.log.Printf("error reading step lists: %v", err)
+		return 0, "", false, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
+	}
+	return row.ID, row.Name, true, nil
 }
 
 // CountListsByName returns how many lists carry exactly this name.

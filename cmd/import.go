@@ -34,6 +34,13 @@ func (a *App) ImportSubscribers(c echo.Context) error {
 	// Blocklist mode doesn't require list subscriptions.
 	user := auth.GetUser(c)
 	opt.ListIDs = user.FilterListsByPerm(auth.PermTypeManage, opt.ListIDs)
+
+	// Fork (integrations JOURNEY-UX-SPEC A1.1) -- an import naming a step list is refused at start
+	// in any mode, blocklist included.
+	if err := a.refuseStepListAdd(user, nil, opt.ListIDs); err != nil {
+		return err
+	}
+
 	if len(opt.ListIDs) == 0 && opt.Mode != subimporter.ModeBlocklist {
 		return echo.NewHTTPError(http.StatusForbidden,
 			a.i18n.Ts("globals.messages.permissionDenied", "name", "lists"))
@@ -261,6 +268,11 @@ func (a *App) ImportPresetStart(c echo.Context) error {
 	prep, err := subimporter.PrepareImport(c.Request().Context(), a.db.DB, a.importer, p, name, data, c.FormValue("content_hash"))
 	if err != nil {
 		return a.presetError(err)
+	}
+	// Fork (integrations JOURNEY-UX-SPEC A1.1) -- a resolved step-list target is refused before
+	// the session starts. A list PrepareImport created or tagged just now carries no trigger.
+	if err := a.refuseStepListAdd(user, nil, []int{prep.List.ID}); err != nil {
+		return err
 	}
 	if err := a.importer.RunPreset(p, name, prep.List.ID, prep.Parsed.Subs); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError,

@@ -6,8 +6,9 @@
        (no documents are fetched); disabled while the selection is pending. -->
   <div v-if="shown" class="launch-filter" data-cy="launch-filter" role="group" :aria-label="$t('brand.launch.label')">
     <!-- .segmented: the shared one-control treatment (style.scss), also on the Campaigns page's
-         Broadcasts | Automations toggle. -->
-    <b-field class="segmented">
+         Broadcasts | Automations toggle. is-global: the blue ring of a selector whose state follows
+         the user across pages (integrations JOURNEY-UX-SPEC A1.16/A1.17). -->
+    <b-field class="segmented is-global">
       <b-radio-button v-model="value" native-value="all" size="is-small" type="is-primary"
         :disabled="brandScope.pending" data-cy="launch-all">
         {{ $t('brand.launch.all') }}
