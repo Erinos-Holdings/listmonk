@@ -643,16 +643,19 @@ func TestSunsetV2Predicates_PassTableAllowlist(t *testing.T) {
 		"JOIN subscriber_lists b ON b.subscriber_id = k.subscriber_id AND b.list_id = " + L + " " +
 		"WHERE cl.list_id IN (" + Q1 + ", " + Q2 + ") AND b.status = 'unsubscribed' AND b.meta ? 'hold' " +
 		"AND k.created_at > (b.meta->'hold'->>'at')::timestamptz AND l.url NOT LIKE '%manage-preferences.curatedfor.you%')"
-	askReceived := "subscribers.id IN (SELECT q.subscriber_id FROM subscriber_lists q WHERE q.list_id = " + Q1 + " AND (" +
+	// Decorrelated via the qs/bs join aliases since 2026-10-23 (integrations lib/sunset.ts, the
+	// win-back scale work): a bare outer `subscribers.` reference inside the IN-subquery made
+	// Postgres re-evaluate it per outer row — quadratic past ~100K subscribers.
+	askReceived := "subscribers.id IN (SELECT q.subscriber_id FROM subscriber_lists q JOIN subscribers qs ON qs.id = q.subscriber_id WHERE q.list_id = " + Q1 + " AND (" +
 		"EXISTS (SELECT 1 FROM campaigns c JOIN campaign_lists cl ON cl.campaign_id = c.id WHERE cl.list_id = " + Q1 + " " +
 		"AND c.type = 'regular' AND c.evergreen = false AND c.status = 'finished' AND c.started_at > q.created_at " +
-		"AND (c.attribs->>'lang' IS NULL OR c.attribs->>'lang' = COALESCE(NULLIF(LOWER(LEFT(subscribers.attribs->>'lang', 2)), ''), 'en'))) " +
+		"AND (c.attribs->>'lang' IS NULL OR c.attribs->>'lang' = COALESCE(NULLIF(LOWER(LEFT(qs.attribs->>'lang', 2)), ''), 'en'))) " +
 		"OR EXISTS (SELECT 1 FROM campaign_sends s JOIN campaigns c ON c.id = s.campaign_id JOIN campaign_lists cl ON cl.campaign_id = c.id " +
 		"WHERE cl.list_id = " + Q1 + " AND c.evergreen = true AND s.subscriber_id = q.subscriber_id AND s.sent_at IS NOT NULL AND s.sent_at > q.created_at)))"
-	decline := "subscribers.id IN (SELECT b.subscriber_id FROM subscriber_lists b WHERE b.list_id = " + L + " " +
+	decline := "subscribers.id IN (SELECT b.subscriber_id FROM subscriber_lists b JOIN subscribers bs ON bs.id = b.subscriber_id WHERE b.list_id = " + L + " " +
 		"AND b.status = 'unsubscribed' AND b.meta ? 'hold' AND EXISTS (SELECT 1 FROM subscriber_lists q " +
 		"WHERE q.subscriber_id = b.subscriber_id AND q.list_id IN (" + Q1 + ", " + Q2 + ") " +
-		"AND (q.status = 'unsubscribed' OR subscribers.status = 'blocklisted')))"
+		"AND (q.status = 'unsubscribed' OR bs.status = 'blocklisted')))"
 	archive := "subscribers.status <> 'blocklisted' AND subscribers.id IN (SELECT subscriber_id FROM subscriber_lists WHERE list_id = " + L + " " +
 		"AND status = 'unsubscribed' AND meta ? 'hold' AND meta->'hold'->>'reason' = 'never-engaged' AND NOT (meta->'hold' ? 'final_at') " +
 		"AND COALESCE(meta->'hold'->>'anchor_at', meta->'hold'->>'at')::timestamptz <= '2027-11-01T15:00:00Z'::timestamptz - INTERVAL '365 days')"
