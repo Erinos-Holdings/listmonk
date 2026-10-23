@@ -210,7 +210,7 @@
     "campaigns.evergreenDisabled": "Automations are disabled in Settings.",
     "campaigns.evergreenCollision": "Another automation ({name}) is already running on this list with the same delay. Cancel it first.",
     "campaigns.evergreenPauseToEdit": "This automation is running. Pause it to edit.",
-    "campaigns.evergreenNoPurchaseDelay": "An automation on a \"no purchase since joining\" list must send on join (0 days after joining). The list's own days already set when members come due.",
+    "campaigns.evergreenNoPurchaseDelay": "An automation on a \"no purchase since joining\" list must send on join (0 days after joining). The list's own days setting already decides when members come due.",
     "campaigns.noPurchaseListNotice": "This list fills automatically with people who have not purchased. Start this automation before the first member comes due, and never import into or hand-add subscribers to this list.",
     "campaigns.broadcastToTriggerWarning": "{lists} fills automatically from purchases or the no-purchase nudge, so its members are partway through a journey. Sending a one-off email to it is usually a mistake.",
     "campaigns.allLists": "All lists",
