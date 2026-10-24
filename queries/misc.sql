@@ -121,8 +121,8 @@ SELECT JSON_BUILD_OBJECT(
 -- subscriber) pair counts once, on the UTC day of its FIRST click on that campaign (a pair clicked
 -- before the window is not counted, NULL subscribers never) -- and FALSE when OFF (raw rows). The
 -- constant prunes the other branch at plan time.
--- sends = the per-day Send of the LATEST system_health ses document (written by the integrations
--- BrandHealth Lambda), summed over its brands rows -- every row when unscoped (unattributed
+-- sends = the per-day Send of the LATEST system_health ses document that carries a daily series
+-- (written by the integrations BrandHealth Lambda; a failed SES read writes none), summed over its brands rows -- every row when unscoped (unattributed
 -- included), else the rows whose brand is the brand tag of a list in $1 (unattributed never).
 -- Only the document's days inside the window, no zero fill (a stale document ends a day early).
 WITH camps AS (
@@ -169,7 +169,9 @@ clicks AS (
     FROM days LEFT JOIN click_days cd ON cd.d = days.d
 ),
 sesdoc AS (
-    SELECT doc FROM system_health WHERE kind = 'ses' ORDER BY day DESC LIMIT 1
+    SELECT doc FROM system_health
+    WHERE kind = 'ses' AND JSONB_PATH_EXISTS(doc, '$.brands[*].daily[*] ? (@.day.type() == "string")')
+    ORDER BY day DESC LIMIT 1
 ),
 scope_brands AS (
     SELECT DISTINCT SUBSTR(t, 7) AS brand FROM lists l, UNNEST(l.tags) AS t

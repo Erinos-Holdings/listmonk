@@ -301,6 +301,16 @@ func TestDashboardChartsDB(t *testing.T) {
 		t.Fatalf("fixture: alpha sends %s", baJSON(s))
 	}
 
+	// A newer document from a failed SES read (every row's daily null) is skipped: the latest
+	// document that carries a daily series is read (Stage 4 F1).
+	health("ses", -1, map[string]any{"v": 1, "kind": "ses", "brands": []map[string]any{
+		{"brand": "alpha", "sends": nil, "daily": nil},
+		{"brand": "unattributed", "sends": nil, "daily": nil},
+	}})
+	if s := charts(admin, "").Sends; len(s) != 30 || at(s, day(1)) != 101+301+401 {
+		t.Fatalf("failed-read document: sends %s", baJSON(s))
+	}
+
 	// No ses document at all: sends [] (and the clicks are unaffected).
 	h.db.MustExec(`DELETE FROM system_health WHERE kind = 'ses'`)
 	got := charts(admin, "")
