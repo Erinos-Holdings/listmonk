@@ -231,6 +231,25 @@ func (a *App) GetDashboardCounts(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+// GetDashboardBrandMatrix returns the Dashboard's Brand Matrix rows (fork, brand matrix,
+// integrations BRAND-MATRIX-SPEC D3/D7): one row per brand of the scope's lists, scoped exactly as
+// the counts and charts (dashboardScopeFor -- permitted ∩ list_id; blanket access with no list_id
+// is every list). Registered behind brands:get (handlers.go) on top of the authenticated dashboard
+// gate, because each row carries the brand's health document. The campaigns get_all argument does
+// not apply: a brand's campaigns are those on its lists.
+func (a *App) GetDashboardBrandMatrix(c echo.Context) error {
+	sc, err := a.dashboardScopeFor(c)
+	if err != nil {
+		return err
+	}
+
+	out, err := a.core.GetDashboardBrandMatrix(sc.listIDs, !sc.scoped)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
 // GetDashboardClients returns the Dashboard's per-email-client views and clicks (fork, client
 // stats, integrations CLIENT-STATS-SPEC D6). The scoped variant is selected exactly as in
 // GetDashboardCharts (dashboardListScope, GLOBAL-BRAND-SPEC D5): a list-scoped user, or any

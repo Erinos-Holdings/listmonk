@@ -390,7 +390,8 @@ func TestBrandAnalyticsDashboardCounts(t *testing.T) {
 	const gridA = `{"all":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1},"en":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1},"none":{"active":2,"blocked":1,"held":0,"pending":0,"total":4,"unsubscribed":1}}`
 	const gridZero = `{"all":{"active":0,"blocked":0,"held":0,"pending":0,"total":0,"unsubscribed":0}}`
 	// Revision 2 (R2): engagement carries complaints, a subset of bounces.
-	const noEngagement = `"engagement":{"bounces":0,"clicks":0,"complaints":0,"views":0}`
+	// BRAND-MATRIX-SPEC D8: and hard_bounces, an added field.
+	const noEngagement = `"engagement":{"bounces":0,"clicks":0,"complaints":0,"hard_bounces":0,"views":0}`
 
 	// Scoped on A: A's subscriptions (4, one blocklisted); A and A+B campaigns (draft included --
 	// the Dashboard counts statuses).

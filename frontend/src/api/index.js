@@ -183,6 +183,14 @@ export const getDashboardCountries = (params) => http.get(
   { params, loading: models.dashboard },
 );
 
+// Fork (brand matrix, integrations BRAND-MATRIX-SPEC D7) -- the Brand Matrix pane: {rows, scoped},
+// params.list_id as the counts. Returned verbatim (camelCase: false) so brandMatrix.mjs reads the
+// API's keys (hard_bounces, spam_rate).
+export const getDashboardBrandMatrix = (params) => http.get(
+  '/api/dashboard/brand-matrix',
+  { params, loading: models.dashboard, camelCase: false },
+);
+
 // Lists.
 export const getLists = (params) => http.get(
   '/api/lists',

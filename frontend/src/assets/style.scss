@@ -937,9 +937,8 @@ section.dashboard {
   }
 
   /* Fork (2026-10-24). The Subscribers and Messages sent lines as three columns: the rate and the
-  (count) right-aligned in tabular figures so their digits line up, the label left-aligned. A
-  count-only line keeps its parentheses, invisible (.pl-ghost), so its digits sit under the
-  others'. */
+  count right-aligned in tabular figures so their digits line up, the label left-aligned. No
+  parentheses (integrations BRAND-MATRIX-SPEC D9) -- the grid alone aligns the columns. */
   ul.pct-lines {
     display: grid;
     grid-template-columns: auto auto 1fr;
@@ -955,8 +954,21 @@ section.dashboard {
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
-    .pl-ghost {
-      visibility: hidden;
+  }
+
+  /* Fork (brand matrix, integrations BRAND-MATRIX-SPEC D6). The Brand Matrix table: tabular
+  figures, a rule before each section, the totals row in bold. */
+  .brand-matrix {
+    td, th {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .bm-section {
+      border-left: 1px solid $grey-lighter;
+    }
+    tr.bm-totals td {
+      font-weight: bold;
+      border-top: 2px solid $grey-lighter;
     }
   }
 

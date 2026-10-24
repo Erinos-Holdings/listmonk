@@ -20,6 +20,9 @@ type Queries struct {
 	// mat_dashboard_charts read, is retired), interpolated at boot with the clicks mode.
 	GetDashboardCountsScoped *sqlx.Stmt `query:"get-dashboard-counts-scoped"`
 	GetDashboardChartsScoped *sqlx.Stmt `query:"get-dashboard-charts-scoped"`
+	// Fork (brand matrix, integrations BRAND-MATRIX-SPEC D3) -- the Dashboard's Brand Matrix pane,
+	// interpolated at boot with the charts statement's clicks mode.
+	GetDashboardBrandMatrix *sqlx.Stmt `query:"get-dashboard-brand-matrix"`
 
 	// Fork (client stats, CLIENT-STATS-SPEC D6/D7) -- the Dashboard's live client panel.
 	GetDashboardClients       *sqlx.Stmt `query:"get-dashboard-clients"`

@@ -14,6 +14,12 @@
             data-cy="pane-overview" @input="onPaneChange">
             {{ $t('dashboard.panes.overview') }}
           </b-radio-button>
+          <!-- Fork (brand matrix, integrations BRAND-MATRIX-SPEC D1) -- the third pane, between
+               Overview and SES, behind the same brands:get gate (its rows carry health data). -->
+          <b-radio-button v-model="pane" native-value="matrix" type="is-primary"
+            data-cy="pane-matrix" @input="onPaneChange">
+            {{ $t('dashboard.panes.matrix') }}
+          </b-radio-button>
           <b-radio-button v-model="pane" native-value="ses" type="is-primary"
             data-cy="pane-ses" @input="onPaneChange">
             {{ $t('dashboard.panes.ses') }}
@@ -23,6 +29,58 @@
     </header>
 
     <dashboard-ses v-if="pane === 'ses'" />
+
+    <!-- Fork (brand matrix, integrations BRAND-MATRIX-SPEC D2-D7). One row per brand of the global
+         selection (narrowed by the navbar launch filter), the totals row pinned last; every rate,
+         sort and missing-value rule is brandMatrix.mjs. -->
+    <section v-else-if="pane === 'matrix'" class="brand-matrix relative" data-cy="brand-matrix">
+      <b-loading v-if="matrix.loading" active :is-full-page="false" />
+      <div class="is-flex is-align-items-center mb-3">
+        <span class="has-text-grey mr-2">{{ $t('dashboard.matrix.engagement') }}</span>
+        <b-field class="mb-0">
+          <b-radio-button v-model="matrix.mode" native-value="pct" size="is-small" type="is-primary"
+            data-cy="matrix-mode-pct" @input="onMatrixMode">
+            {{ $t('dashboard.matrix.pct') }}
+          </b-radio-button>
+          <b-radio-button v-model="matrix.mode" native-value="num" size="is-small" type="is-primary"
+            data-cy="matrix-mode-num" @input="onMatrixMode">
+            {{ $t('dashboard.matrix.num') }}
+          </b-radio-button>
+        </b-field>
+      </div>
+      <b-table ref="matrixTable" :data="matrixTableRows" hoverable narrowed :row-class="matrixRowClass"
+        backend-sorting :default-sort="[matrix.sort.field, matrix.sort.order]" @sort="onMatrixSort">
+        <b-table-column v-slot="props" field="brand" :label="$t('dashboard.matrix.brand')" sortable>
+          <span :data-cy="`matrix-brand-${props.row.brand || 'totals'}`">{{ props.row.label }}</span>
+        </b-table-column>
+        <b-table-column v-slot="props" field="sent" :label="$t('dashboard.matrix.sent')" numeric sortable
+          header-class="bm-section" cell-class="bm-section">
+          <span :title="$t('dashboard.matrix.sentHelp')">{{ matrixCell(props.row, 'sent') }}</span>
+        </b-table-column>
+        <b-table-column v-for="(c, i) in matrixSubColumns" :key="c.field" v-slot="props" :field="c.field"
+          :label="$t(c.label)" numeric sortable :header-class="i === 0 ? 'bm-section' : ''"
+          :cell-class="i === 0 ? 'bm-section' : ''">
+          {{ matrixCell(props.row, c.field) }}
+        </b-table-column>
+        <b-table-column v-for="(c, i) in matrixEngColumns" :key="c.field" v-slot="props" :field="c.field"
+          :label="$t(c.label)" numeric sortable :header-class="i === 0 ? 'bm-section' : ''"
+          :cell-class="i === 0 ? 'bm-section' : ''">
+          <span :title="c.help ? $t(c.help) : null">{{ matrixCell(props.row, c.field) }}</span>
+        </b-table-column>
+        <b-table-column v-slot="props" field="spam_rate" :label="$t('dashboard.matrix.spam')" numeric sortable
+          header-class="bm-section" cell-class="bm-section">
+          <span :title="$t('dashboard.matrix.spamHelp')">{{ props.row.totals ? '' : matrixCell(props.row, 'spam_rate') }}</span>
+        </b-table-column>
+        <b-table-column v-slot="props" field="status" :label="$t('dashboard.matrix.health')">
+          <health-chip v-if="props.row.status" :status="props.row.status"
+            :to="{ name: 'brand', params: { brand: props.row.brand } }" />
+        </b-table-column>
+        <template #empty v-if="!matrix.loading">
+          <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
+        </template>
+      </b-table>
+      <p class="is-size-7 has-text-grey mt-2" data-cy="matrix-note">{{ $t('dashboard.matrix.note') }}</p>
+    </section>
 
     <section v-else class="counts wrap">
       <div class="tile is-ancestor">
@@ -107,9 +165,10 @@
                 </button>
                 <div class="columns is-mobile">
                   <div class="column is-6">
+                    <!-- Fork (brand matrix, BRAND-MATRIX-SPEC D9) -- comma-separated, never k/m. -->
                     <p class="title">
                       <b-icon icon="account-multiple" />
-                      {{ $utils.niceNumber(counts.subscribers.total) }}
+                      {{ $utils.formatNumber(counts.subscribers.total || 0) }}
                     </p>
                     <p class="is-size-6 has-text-grey">
                       {{ $tc('globals.terms.subscriber', counts.subscribers.total) }}
@@ -125,8 +184,7 @@
                       <template v-if="!subsExpanded">
                         <li v-for="r in subsLineRows" :key="r.key" :data-cy="`subscribers-${r.key}`">
                           <span class="pl-pct">{{ r.parts.pct }}</span>
-                          <span class="pl-count"><span :class="{ 'pl-ghost': !r.parts.pct }">(</span>{{
-                            r.parts.count }}<span :class="{ 'pl-ghost': !r.parts.pct }">)</span></span>
+                          <span class="pl-count">{{ r.parts.count }}</span>
                           <span class="pl-label">{{ $t(r.label) }}</span>
                         </li>
                       </template>
@@ -136,8 +194,7 @@
                       never empty. -->
                       <li data-cy="subscribers-orphans">
                         <span class="pl-pct" />
-                        <span class="pl-count"><span class="pl-ghost">(</span>{{
-                          $utils.niceNumber(counts.subscribers.orphans) }}<span class="pl-ghost">)</span></span>
+                        <span class="pl-count">{{ $utils.formatNumber(counts.subscribers.orphans || 0) }}</span>
                         <span class="pl-label">{{ $t('dashboard.orphanSubs') }}</span>
                       </li>
                     </ul>
@@ -180,21 +237,20 @@
                   <div class="column is-6">
                     <p class="title">
                       <b-icon icon="email-outline" />
-                      {{ $utils.niceNumber(counts.messages) }}
+                      {{ $utils.formatNumber(counts.messages || 0) }}
                     </p>
                     <p class="is-size-6 has-text-grey">
                       {{ $t('dashboard.messagesSent') }}
                     </p>
                   </div>
                   <div class="column is-6">
-                    <!-- Fork (dashboard counts, R1/R2) -- rate-first over Messages sent; Complaints
-                    is a named subset of Bounces (every bounce row), its label saying so. -->
+                    <!-- Fork (dashboard counts, R1/R2; brand matrix, BRAND-MATRIX-SPEC D8) --
+                    rate-first over Messages sent: Views, Clicks, H. Bounces, Complaints. -->
                     <ul class="no has-text-grey pct-lines">
                       <li v-for="l in engagementParts" :key="l.key" :data-cy="`engagement-${l.key}`">
                         <span class="pl-pct">{{ l.parts.pct }}</span>
-                        <span class="pl-count"><span :class="{ 'pl-ghost': !l.parts.pct }">(</span>{{
-                          l.parts.count }}<span :class="{ 'pl-ghost': !l.parts.pct }">)</span></span>
-                        <span class="pl-label" :title="l.help ? $t(l.help) : null">{{ $t(l.label) }}</span>
+                        <span class="pl-count">{{ l.parts.count }}</span>
+                        <span class="pl-label">{{ $t(l.label) }}</span>
                       </li>
                     </ul>
                   </div>
@@ -310,10 +366,14 @@
 <script>
 import dayjs from 'dayjs';
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import Chart from '../components/Chart.vue';
 import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsClicksChart.mjs'; // eslint-disable-line import/extensions
 import DashboardSes from './DashboardSes.vue';
+import HealthChip from '../components/HealthChip.vue';
+import {
+  ENGAGEMENT_FIELDS, cellText, initialPane, loadState, resolveSort, saveState, sessionStore, shapeRows, tableRows,
+} from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
@@ -332,6 +392,7 @@ export default Vue.extend({
   components: {
     Chart,
     DashboardSes,
+    HealthChip,
   },
 
   // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4/D5).
@@ -341,8 +402,16 @@ export default Vue.extend({
     const canSes = this.$can('brands:get');
     return {
       canSes,
-      // Overview unless the user may see SES and last chose it.
-      pane: canSes && this.$utils.getPref('dashboard.sesPane') === true ? 'ses' : 'overview',
+      // Fork (brand matrix, BRAND-MATRIX-SPEC D1) -- the sticky dashboard.pane pref (the legacy
+      // dashboard.sesPane boolean read only while it is unset); Overview without brands:get.
+      pane: initialPane(canSes, this.$utils.getPref('dashboard.pane'), this.$utils.getPref('dashboard.sesPane')),
+      // Fork (brand matrix, D6/D7) -- the matrix's API rows, and its sort and %|# mode, per
+      // browser session (sessionStorage, never the localStorage pref helper).
+      matrix: {
+        apiRows: [],
+        loading: false,
+        ...loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
+      },
       // Fork (dashboard counts, DASHBOARD-COUNTS-SPEC D3) -- the Subscribers container's
       // language table, sticky per browser (the dashboard.sesPane pattern).
       subsExpanded: this.$utils.getPref('dashboard.subsExpanded') === true,
@@ -372,8 +441,56 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (brand matrix, D1/D7) -- the string pref (dashboard.sesPane is no longer written); the
+    // matrix is fetched on every activation, so a scope change made while it was hidden is read.
     onPaneChange() {
-      this.$utils.setPref('dashboard.sesPane', this.pane === 'ses');
+      this.$utils.setPref('dashboard.pane', this.pane);
+      if (this.pane === 'matrix') {
+        this.fetchMatrix(this.scopeParams());
+      }
+    },
+
+    scopeParams() {
+      return this.scopeListIds ? { list_id: this.scopeListIds } : {};
+    },
+
+    // Fork (brand matrix, D7) -- the matrix over the same scope as the counts.
+    fetchMatrix(params) {
+      this.matrix.loading = true;
+      this.$api.getDashboardBrandMatrix(params).then((data) => {
+        this.matrix.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
+      }).finally(() => {
+        this.matrix.loading = false;
+      });
+    },
+
+    saveMatrixState() {
+      saveState(sessionStore(window), { sort: this.matrix.sort, mode: this.matrix.mode });
+    },
+
+    onMatrixMode() {
+      this.saveMatrixState();
+    },
+
+    // D6 -- the Brands.vue onSort pattern: a click on a NEW column takes its default direction
+    // (brandMatrix.mjs::defaultOrder); Buefy's own first click is ascending, so its arrow is flipped
+    // when the default is desc. A repeat click is Buefy's own toggle.
+    onMatrixSort(field, direction) {
+      const next = resolveSort(this.matrix.sort, field, direction);
+      const { matrixTable } = this.$refs;
+      if (next.order !== direction && matrixTable && typeof matrixTable.isAsc === 'boolean') {
+        matrixTable.isAsc = next.order === 'asc';
+      }
+      this.matrix.sort = next;
+      this.saveMatrixState();
+    },
+
+    matrixCell(row, field) {
+      return cellText(row, field, this.matrix.mode, (n) => this.$utils.formatNumber(n));
+    },
+
+    matrixRowClass(row) {
+      return row.totals ? 'bm-totals' : '';
     },
 
     // Fork (dashboard counts, D3).
@@ -425,8 +542,7 @@ export default Vue.extend({
     },
 
     // A rate-first line as its two columns, for the aligned lists (2026-10-24): {pct, count} --
-    // pct '' on a plain count (null denominator, or 0), where the count's parentheses are drawn
-    // invisible so its digits still line up under the others'.
+    // pct '' on a plain count (null denominator, or 0). No parentheses (BRAND-MATRIX-SPEC D9).
     pctParts(count, denominator, fmt) {
       if (denominator === null) {
         return { pct: '', count: fmt(count || 0) };
@@ -435,10 +551,10 @@ export default Vue.extend({
       return { pct: c.pct || '', count: c.count };
     },
 
-    // The collapsed segment line: the all column.
+    // The collapsed segment line: the all column. Comma-separated, never k/m (D9).
     subsLineParts(seg) {
       const c = segmentCell({ key: 'all', row: this.subsAll }, seg);
-      return this.pctParts(c.count, c.denominator, (n) => this.$utils.niceNumber(n));
+      return this.pctParts(c.count, c.denominator, (n) => this.$utils.formatNumber(n));
     },
 
     // An expanded-table cell, over THAT column's total.
@@ -453,7 +569,12 @@ export default Vue.extend({
     fetchData() {
       this.isCountsLoading = true;
       this.isChartsLoading = true;
-      const params = this.scopeListIds ? { list_id: this.scopeListIds } : {};
+      const params = this.scopeParams();
+
+      // Fork (brand matrix, D7) -- refetched with the others only while its pane is active.
+      if (this.pane === 'matrix') {
+        this.fetchMatrix(params);
+      }
 
       this.$api.getDashboardCounts(params).then((data) => {
         this.counts = data;
@@ -565,7 +686,42 @@ export default Vue.extend({
     // The engagement lines with their aligned-column parts.
     engagementParts() {
       return this.engagementLines.map((l) => ({
-        ...l, parts: this.pctParts(l.count, l.denominator, (n) => this.$utils.niceNumber(n)),
+        ...l, parts: this.pctParts(l.count, l.denominator, (n) => this.$utils.formatNumber(n)),
+      }));
+    },
+
+    // Fork (brand matrix, D2/D4/D6) -- the launch value and the brands rows (display names); the
+    // module narrows, shapes, sorts and appends the totals row.
+    ...mapGetters(['launch']),
+
+    matrixTableRows() {
+      const rows = shapeRows(this.matrix.apiRows, { brands: this.brandRows, launch: this.launch });
+      return tableRows(rows, this.matrix.sort, this.matrix.mode, {
+        locale: (this.$i18n && this.$i18n.locale) || 'en',
+        totalsLabel: this.$t('dashboard.matrix.total'),
+      });
+    },
+
+    matrixSubColumns() {
+      return [
+        { field: 'total', label: 'dashboard.matrix.subscr' },
+        { field: 'active', label: 'dashboard.matrix.active' },
+        { field: 'held', label: 'dashboard.matrix.held' },
+        { field: 'unsubscribed', label: 'dashboard.matrix.unsub' },
+        { field: 'blocked', label: 'dashboard.matrix.blocked' },
+      ];
+    },
+
+    // D4 -- Blocks is a subset of H. Bounces; its header says so.
+    matrixEngColumns() {
+      const labels = {
+        clicks: 'dashboard.matrix.clicks',
+        hard_bounces: 'dashboard.matrix.hardBounces',
+        blocks: 'dashboard.matrix.blocks',
+        complaints: 'dashboard.matrix.complaints',
+      };
+      return ENGAGEMENT_FIELDS.map((f) => ({
+        field: f, label: labels[f], help: f === 'blocks' ? 'dashboard.matrix.blocksHelp' : null,
       }));
     },
 

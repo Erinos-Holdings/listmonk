@@ -104,19 +104,20 @@ test('segmentCell: an empty column has a 0 denominator, so the count stands alon
   assert.deepEqual(segmentCell(undefined, subscriberRows({})[1]), { count: 0, denominator: 0 });
 });
 
-// I11 + R2: Views, Clicks, Bounces, Complaints, in that order, every one over Messages sent.
-test('engagementLines: the R2 order, each over messages', () => {
+// I11 + R2, BRAND-MATRIX-SPEC D8: Views, Clicks, H. Bounces, Complaints, in that order, every one
+// over Messages sent; the every-row bounces field is not a line.
+test('engagementLines: the D8 order, each over messages', () => {
   const lines = engagementLines({
-    views: 19025, clicks: 1136, bounces: 265, complaints: 4,
+    views: 19025, clicks: 1136, bounces: 265, hardBounces: 200, complaints: 4,
   }, 40610);
-  assert.deepEqual(lines.map((l) => l.key), ['views', 'clicks', 'bounces', 'complaints']);
+  assert.deepEqual(lines.map((l) => l.key), ['views', 'clicks', 'hardBounces', 'complaints']);
   assert.deepEqual(lines.map((l) => l.label), [
-    'campaigns.views', 'campaigns.clicks', 'globals.terms.bounces', 'dashboard.complaintsLine',
+    'campaigns.views', 'campaigns.clicks', 'dashboard.hardBouncesLine', 'dashboard.complaintsLine',
   ]);
   lines.forEach((l) => assert.equal(l.denominator, 40610));
-  assert.deepEqual(lines.map((l) => l.count), [19025, 1136, 265, 4]);
-  assert.equal(lines[3].help, 'dashboard.complaintsHelp');
-  assert.equal(pctCount(lines[2].count, lines[2].denominator).pct, '0.7%');
+  assert.deepEqual(lines.map((l) => l.count), [19025, 1136, 200, 4]);
+  lines.forEach((l) => assert.equal(l.help, undefined));
+  assert.equal(pctCount(lines[2].count, lines[2].denominator).pct, '0.5%');
 });
 
 test('engagementLines: nothing sent or no payload yet -- zeros, counts alone', () => {

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -60,7 +61,9 @@ func TestBrandAnalyticsQueriesParse(t *testing.T) {
 		"campaigns.sql": {"query-analytics-campaigns"},
 		// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4) -- the Location panel's two.
 		"misc.sql": {"get-dashboard-counts-scoped", "get-dashboard-charts-scoped",
-			"get-dashboard-countries", "get-dashboard-countries-scoped"},
+			"get-dashboard-countries", "get-dashboard-countries-scoped",
+			// Fork (brand matrix, integrations BRAND-MATRIX-SPEC D3).
+			"get-dashboard-brand-matrix"},
 	} {
 		b, err := os.ReadFile(filepath.Join(root, "queries", file))
 		if err != nil {
@@ -85,7 +88,8 @@ func TestBrandAnalyticsQueriesParse(t *testing.T) {
 			}
 			// Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC I6) -- the charts query is
 			// interpolated at boot the same way (the clicks mode).
-			if (n == "get-dashboard-counts-scoped" || n == "get-dashboard-charts-scoped") && tags["raw"] == "true" {
+			if (n == "get-dashboard-counts-scoped" || n == "get-dashboard-charts-scoped" ||
+				n == "get-dashboard-brand-matrix") && tags["raw"] == "true" {
 				delete(tags, "raw")
 			}
 			if len(tags) != 0 {
@@ -178,6 +182,64 @@ func TestDashboardChartsQueryInterpolates(t *testing.T) {
 		s := fmt.Sprintf(got.Query, mode)
 		if strings.Contains(s, "%!") || strings.Contains(s, "%[") {
 			t.Errorf("interpolated with %q: verb error or leftover placeholder\n%s", mode, s)
+		}
+	}
+}
+
+// Fork (brand matrix, integrations BRAND-MATRIX-SPEC I2/I3) -- the matrix statement is interpolated
+// on boot with the charts statement's clicks mode. I3 (fork half): its business-day zone is ONE
+// literal and the SAME literal as the charts statement's (the integrations SES_DAILY_ZONE side is a
+// cross-repo prose pin). I2 (fork half): after interpolation the block predicate is the verbatim
+// output of the integrations lib/bounce-rules.ts classPredicate("hard","block") -- its '5.7.%'
+// pattern survives fmt.Sprintf only because the file writes it '5.7.%%'.
+func TestDashboardBrandMatrixQueryInterpolates(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "queries", "misc.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, err := goyesql.ParseBytes(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := q["get-dashboard-brand-matrix"]
+	if !ok || !strings.Contains(got.Query, "SELECT") {
+		t.Fatal("get-dashboard-brand-matrix missing or empty after parse")
+	}
+	if len(got.Tags) != 1 || got.Tags["raw"] != "true" {
+		t.Errorf("get-dashboard-brand-matrix tags %v, want only raw=true (a colon-bearing comment line?)", got.Tags)
+	}
+	// Every % is a placeholder or the escaped LIKE pattern's %%.
+	if n := strings.Count(got.Query, "%"); n != strings.Count(got.Query, "%[1]s")+2*strings.Count(got.Query, "%%") {
+		t.Errorf("query text carries %d percent signs beyond the %%[1]s placeholders and %%%% escapes", n)
+	}
+
+	// I3 -- the zone literal, once, and equal to the charts statement's.
+	zoneRe := regexp.MustCompile(`'([A-Za-z_]+/[A-Za-z_]+)'::TEXT AS tz`)
+	charts, ok := q["get-dashboard-charts-scoped"]
+	if !ok {
+		t.Fatal("get-dashboard-charts-scoped missing")
+	}
+	mz, cz := zoneRe.FindAllStringSubmatch(got.Query, -1), zoneRe.FindAllStringSubmatch(charts.Query, -1)
+	if len(mz) != 1 || len(cz) != 1 || mz[0][1] != cz[0][1] {
+		t.Errorf("zone literals: matrix %v, charts %v -- want exactly one each, equal", mz, cz)
+	}
+	if strings.Contains(got.Query, "'UTC'") {
+		t.Error("the matrix query buckets in UTC")
+	}
+
+	// I2 -- the classPredicate("hard","block") output, verbatim, in the prepared SQL.
+	const blockPred = `(COALESCE(b.meta->'bounce'->'bouncedRecipients'->0->>'status', '') LIKE '5.7.%') AND NOT (COALESCE(b.meta->'bounce'->>'bounceSubType', '') = 'Suppressed' OR COALESCE(b.meta->'bounce'->>'bounceSubType', '') = 'OnAccountSuppressionList')`
+	for _, mode := range []string{"TRUE", "FALSE"} {
+		s := fmt.Sprintf(got.Query, mode)
+		if strings.Contains(s, "%!") || strings.Contains(s, "%[") || strings.Contains(s, "%%") {
+			t.Errorf("interpolated with %q: verb error or leftover placeholder\n%s", mode, s)
+		}
+		if strings.Count(s, blockPred) != 1 {
+			t.Errorf("interpolated with %q: the block predicate is not the classPredicate output exactly once", mode)
 		}
 	}
 }

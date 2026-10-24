@@ -53,15 +53,16 @@ export function segmentCell(column, segment) {
 }
 
 // R1/R2. The Messages-sent lines in display order, every one over Messages sent (the Campaigns
-// list's rate over Sent, CAMPAIGN-RATES-SPEC D1). Bounces keeps get-campaign-stats' definition
-// (every bounce row); Complaints is a named subset beneath it, its label carrying help.
+// list's rate over Sent, CAMPAIGN-RATES-SPEC D1). Fork (brand matrix, integrations
+// BRAND-MATRIX-SPEC D8) -- the bounce line is H. Bounces (engagement.hard_bounces, camelCased by
+// the API client); the every-row bounces field is unchanged on the wire and no longer shown, so
+// Complaints is no longer a subset of a shown line and its label is plain.
 export function engagementLines(engagement, messages) {
   const e = engagement || {};
   return [
     { key: 'views', label: 'campaigns.views' },
     { key: 'clicks', label: 'campaigns.clicks' },
-    { key: 'bounces', label: 'globals.terms.bounces' },
-    // Stage 4 F2 -- the subset relation is in the label, not only the hover.
-    { key: 'complaints', label: 'dashboard.complaintsLine', help: 'dashboard.complaintsHelp' },
+    { key: 'hardBounces', label: 'dashboard.hardBouncesLine' },
+    { key: 'complaints', label: 'dashboard.complaintsLine' },
   ].map((l) => ({ ...l, count: e[l.key] || 0, denominator: messages || 0 }));
 }

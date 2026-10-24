@@ -69,6 +69,22 @@ func (c *Core) dashboardCharts(listIDs []int, allCampaigns, unscoped bool) (type
 	return out, nil
 }
 
+// GetDashboardBrandMatrix (fork, brand matrix, integrations BRAND-MATRIX-SPEC D3/D7) runs the one
+// matrix statement: listIDs is the scope (ignored when unscoped, which reads every list). Live.
+func (c *Core) GetDashboardBrandMatrix(listIDs []int, unscoped bool) (types.JSONText, error) {
+	if listIDs == nil {
+		listIDs = []int{}
+	}
+
+	var out types.JSONText
+	if err := c.q.GetDashboardBrandMatrix.Get(&out, pq.Array(listIDs), unscoped); err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard brand matrix", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
 // GetDashboardClients (fork, client stats, CLIENT-STATS-SPEC D6) returns views and clicks per
 // email-client token over the Dashboard window, over every campaign: the unscoped panel. Any scope
 // (a list-scoped user, the global brand's list_id) reads GetDashboardClientsScoped

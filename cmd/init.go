@@ -468,6 +468,9 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	// interpolated with the SAME statsSel: the two cannot disagree.
 	qMap["get-dashboard-counts-scoped"].Query = fmt.Sprintf(qMap["get-dashboard-counts-scoped"].Query, statsSel)
 	qMap["get-dashboard-charts-scoped"].Query = fmt.Sprintf(qMap["get-dashboard-charts-scoped"].Query, uniqueClicks)
+	// Fork (brand matrix, integrations BRAND-MATRIX-SPEC D3) -- the matrix counts clicks with the
+	// SAME mode constant as the charts statement (its '5.7.%%' LIKE pattern becomes '5.7.%' here).
+	qMap["get-dashboard-brand-matrix"].Query = fmt.Sprintf(qMap["get-dashboard-brand-matrix"].Query, uniqueClicks)
 
 	// Scan and prepare all queries.
 	var q models.Queries

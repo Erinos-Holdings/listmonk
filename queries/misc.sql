@@ -75,6 +75,13 @@ eb AS (
 ebc AS (
     SELECT COUNT(*) AS num FROM bounces
     WHERE campaign_id IN (SELECT id FROM camps) AND type = 'complaint'
+),
+-- Fork (brand matrix, integrations listmonk/BRAND-MATRIX-SPEC D8) -- H. Bounces, the hard-type
+-- bounce rows on C (all-time, as every Overview number). An ADDED field -- eb keeps every bounce
+-- row (hazard 96, one Bounces definition) and is no longer displayed on the Overview.
+ebh AS (
+    SELECT COUNT(*) AS num FROM bounces
+    WHERE campaign_id IN (SELECT id FROM camps) AND type = 'hard'
 )
 SELECT JSON_BUILD_OBJECT(
     'subscribers', JSON_BUILD_OBJECT(
@@ -104,7 +111,8 @@ SELECT JSON_BUILD_OBJECT(
         'views', (SELECT COALESCE(SUM(num), 0) FROM ev),
         'clicks', (SELECT COALESCE(SUM(num), 0) FROM ec),
         'bounces', (SELECT COALESCE(SUM(num), 0) FROM eb),
-        'complaints', (SELECT num FROM ebc)
+        'complaints', (SELECT num FROM ebc),
+        'hard_bounces', (SELECT num FROM ebh)
     ),
     'scoped', NOT $3::BOOLEAN
 ) AS data;
@@ -203,6 +211,157 @@ SELECT JSON_BUILD_OBJECT(
     'sends', COALESCE((SELECT * FROM sends), '[]'),
     'clicks', COALESCE((SELECT * FROM clicks), '[]'),
     'scoped', NOT $3::BOOLEAN
+) AS data;
+
+-- name: get-dashboard-brand-matrix
+-- raw: true
+-- Fork (brand matrix, integrations listmonk/BRAND-MATRIX-SPEC D3/D5/D7). The Dashboard's Brand
+-- Matrix pane, one row per brand (the lists' brand tag, list_brand_tag), live. $1 = the scope's
+-- list ids, $2 = unscoped (blanket list access, no list_id -- every list), as
+-- get-dashboard-counts-scoped's $1/$3. Only ACTIVE lists form a brand (the brand scope's effective
+-- list set is loaded active-only, so a single brand's row equals its All-brands row); an untagged
+-- list forms no row. Per brand
+--   subscribers = the subscriptions of the brand's PUBLIC lists per subscription_segment (the one
+--     segment definition), current state. total keeps the one definition (pending included).
+--   C = the brand's campaigns, any campaign_lists row on the brand's lists. A click or bounce row
+--     whose campaign_id is NULL (deleted campaign) is attributable to no brand and drops out.
+--   clicks, hard_bounces, blocks, complaints = over C and the 60 America/Denver calendar days
+--     ending yesterday there (get-dashboard-charts-scoped's window, DST-aware). The zone is the ONE
+--     literal in the zone CTE below and MUST equal get-dashboard-charts-scoped's (a fork test
+--     asserts it) and SES_DAILY_ZONE in the integrations lib/ses-health.ts (no test spans the repos).
+--     clicks follow the charts statement's mode constant (interpolated at boot, cmd/init.go) --
+--     TRUE = individual tracking, each (campaign, subscriber) pair once, when its FIRST click on
+--     that campaign is in the window, NULL subscribers never; FALSE = raw link_clicks rows.
+--   blocks = the hard bounces of the BLOCK class. The predicate is a byte-mirror of the OUTPUT of
+--     classPredicate("hard","block") in the integrations lib/bounce-rules.ts, whose BOUNCE_CLASSES
+--     is the canonical class map (append-only, classes never renamed -- no test spans the repos;
+--     that file names this site). Its output, verbatim
+--     (COALESCE(b.meta->'bounce'->'bouncedRecipients'->0->>'status', '') LIKE '5.7.%') AND NOT (COALESCE(b.meta->'bounce'->>'bounceSubType', '') = 'Suppressed' OR COALESCE(b.meta->'bounce'->>'bounceSubType', '') = 'OnAccountSuppressionList')
+--     In the statement below the LIKE pattern is written '5.7.%%' because this text goes through
+--     fmt.Sprintf at boot -- the prepared SQL carries '5.7.%' exactly (a fork test asserts it).
+--   sent = the brand row's daily sends summed over the same window, from the LATEST system_health
+--     ses document that carries a daily series (the charts statement's sesdoc), NULL when that
+--     document has no in-window day for the brand. unattributed is never a row.
+--   health = the brand's own LATEST brand_health row (no default-row fallback) -- status and
+--     inputs.spamRate.detail.value as spam_rate when it is a number; an empty object with no row.
+WITH lst AS (
+    SELECT id, type, optin, list_brand_tag(tags) AS brand FROM lists
+    WHERE ($2::BOOLEAN OR id = ANY($1::INT[])) AND status = 'active'
+        AND list_brand_tag(tags) IS NOT NULL AND list_brand_tag(tags) <> 'unattributed'
+),
+brands AS (
+    SELECT DISTINCT brand FROM lst
+),
+subs AS (
+    SELECT l.brand,
+        COUNT(*) FILTER (WHERE g.seg = 'active') AS active,
+        COUNT(*) FILTER (WHERE g.seg = 'held') AS held,
+        COUNT(*) FILTER (WHERE g.seg = 'unsubscribed') AS unsubscribed,
+        COUNT(*) FILTER (WHERE g.seg = 'blocked') AS blocked,
+        COUNT(*) AS total
+    FROM lst l
+    JOIN subscriber_lists sl ON (sl.list_id = l.id)
+    JOIN subscribers s ON (s.id = sl.subscriber_id)
+    CROSS JOIN LATERAL (SELECT subscription_segment(sl.status, sl.meta, s.status, l.optin) AS seg) g
+    WHERE l.type = 'public'
+    GROUP BY l.brand
+),
+bcamps AS (
+    SELECT DISTINCT l.brand, cl.campaign_id AS id FROM lst l JOIN campaign_lists cl ON (cl.list_id = l.id)
+),
+zone AS (
+    SELECT 'America/Denver'::TEXT AS tz
+),
+win AS (
+    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE - 1 AS d1 FROM zone
+),
+bounds AS (
+    SELECT d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win
+),
+raw_clicks AS (
+    SELECT bc.brand, COUNT(*) AS n FROM link_clicks lc
+    JOIN bcamps bc ON (bc.id = lc.campaign_id)
+    WHERE NOT %[1]s
+        AND lc.created_at >= (SELECT t0 FROM bounds) AND lc.created_at < (SELECT t1 FROM bounds)
+    GROUP BY bc.brand
+),
+first_pairs AS (
+    SELECT lc.campaign_id, lc.subscriber_id FROM link_clicks lc
+    WHERE %[1]s
+        AND lc.subscriber_id IS NOT NULL
+        AND lc.campaign_id IN (SELECT id FROM bcamps)
+        AND lc.created_at >= (SELECT t0 FROM bounds) AND lc.created_at < (SELECT t1 FROM bounds)
+    GROUP BY lc.campaign_id, lc.subscriber_id
+    HAVING NOT EXISTS (
+        SELECT 1 FROM link_clicks p
+        WHERE p.subscriber_id = lc.subscriber_id AND p.campaign_id = lc.campaign_id
+            AND p.created_at < (SELECT t0 FROM bounds)
+    )
+),
+pair_clicks AS (
+    SELECT bc.brand, COUNT(*) AS n FROM first_pairs fp JOIN bcamps bc ON (bc.id = fp.campaign_id) GROUP BY bc.brand
+),
+bnc AS (
+    SELECT bc.brand,
+        COUNT(*) FILTER (WHERE b.type = 'hard') AS hard_bounces,
+        COUNT(*) FILTER (WHERE b.type = 'hard'
+            AND (COALESCE(b.meta->'bounce'->'bouncedRecipients'->0->>'status', '') LIKE '5.7.%%') AND NOT (COALESCE(b.meta->'bounce'->>'bounceSubType', '') = 'Suppressed' OR COALESCE(b.meta->'bounce'->>'bounceSubType', '') = 'OnAccountSuppressionList')
+        ) AS blocks,
+        COUNT(*) FILTER (WHERE b.type = 'complaint') AS complaints
+    FROM bounces b
+    JOIN bcamps bc ON (bc.id = b.campaign_id)
+    WHERE b.created_at >= (SELECT t0 FROM bounds) AND b.created_at < (SELECT t1 FROM bounds)
+    GROUP BY bc.brand
+),
+sesdoc AS (
+    SELECT doc FROM system_health
+    WHERE kind = 'ses' AND JSONB_PATH_EXISTS(doc, '$.brands[*].daily[*] ? (@.day.type() == "string")')
+    ORDER BY day DESC LIMIT 1
+),
+ses_sent AS (
+    SELECT r->>'brand' AS brand, SUM((x->>'sends')::NUMERIC)::BIGINT AS n FROM sesdoc,
+        JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(doc->'brands') = 'array' THEN doc->'brands' ELSE '[]'::JSONB END) r,
+        JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(r->'daily') = 'array' THEN r->'daily' ELSE '[]'::JSONB END) x,
+        win
+    WHERE r->>'brand' <> 'unattributed'
+        AND x->>'day' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND JSONB_TYPEOF(x->'sends') = 'number'
+        AND (x->>'day')::DATE BETWEEN win.d0 AND win.d1
+    GROUP BY 1
+),
+bh AS (
+    SELECT DISTINCT ON (brand) brand, status, doc FROM brand_health ORDER BY brand, day DESC
+)
+SELECT JSON_BUILD_OBJECT(
+    'rows', COALESCE((
+        SELECT JSON_AGG(JSON_BUILD_OBJECT(
+            'brand', b.brand,
+            'subscribers', JSON_BUILD_OBJECT(
+                'total', COALESCE(s.total, 0),
+                'active', COALESCE(s.active, 0),
+                'held', COALESCE(s.held, 0),
+                'unsubscribed', COALESCE(s.unsubscribed, 0),
+                'blocked', COALESCE(s.blocked, 0)
+            ),
+            'sent', ss.n,
+            'clicks', COALESCE(rc.n, 0) + COALESCE(pc.n, 0),
+            'hard_bounces', COALESCE(bn.hard_bounces, 0),
+            'blocks', COALESCE(bn.blocks, 0),
+            'complaints', COALESCE(bn.complaints, 0),
+            'health', JSONB_STRIP_NULLS(JSONB_BUILD_OBJECT(
+                'status', bh.status,
+                'spam_rate', CASE WHEN JSONB_TYPEOF(bh.doc->'inputs'->'spamRate'->'detail'->'value') = 'number'
+                    THEN bh.doc->'inputs'->'spamRate'->'detail'->'value' END
+            ))
+        ) ORDER BY b.brand)
+        FROM brands b
+        LEFT JOIN subs s ON (s.brand = b.brand)
+        LEFT JOIN raw_clicks rc ON (rc.brand = b.brand)
+        LEFT JOIN pair_clicks pc ON (pc.brand = b.brand)
+        LEFT JOIN bnc bn ON (bn.brand = b.brand)
+        LEFT JOIN ses_sent ss ON (ss.brand = b.brand)
+        LEFT JOIN bh ON (bh.brand = b.brand)
+    ), '[]'),
+    'scoped', NOT $2::BOOLEAN
 ) AS data;
 
 -- name: get-dashboard-clients

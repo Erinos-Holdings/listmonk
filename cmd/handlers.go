@@ -118,6 +118,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/dashboard/clients", a.GetDashboardClients)
 		// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4) -- the Location panel, same gate.
 		g.GET("/api/dashboard/countries", a.GetDashboardCountries)
+		// Fork (brand matrix, integrations BRAND-MATRIX-SPEC D7, I4) -- the Brand Matrix pane: the
+		// dashboard's scoping plus brands:get, since every row carries the brand's health document.
+		g.GET("/api/dashboard/brand-matrix", pm(a.GetDashboardBrandMatrix, "brands:get"))
 
 		g.GET("/api/settings", pm(a.GetSettings, "settings:get"))
 		g.PUT("/api/settings", pm(a.UpdateSettings, "settings:manage"))
