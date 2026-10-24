@@ -72,23 +72,26 @@
               {{ $t('lists.campaignTypeJourney') }}
             </b-radio-button>
           </b-field>
-          <!-- JOURNEY-UX-SPEC A1.3: each selected radio's help is a bold "Sends ..." lead, then the
-          prose (triggerHelpKeys); Buefy's message prop is plain text, so the message slot. -->
+          <!-- JOURNEY-UX-SPEC A1.3: every radio's help is a bold "Sends ..." lead, then the prose
+          (triggerHelpKeys), rendered UNCONDITIONALLY under its own radio -- a G-H2 finding: help
+          gated on the selection disappeared when another radio was picked, and the conditional
+          message slot never rendered for the SKUs radio at all. Buefy's message prop is plain
+          text, so the message slot. -->
           <div v-if="listType === 'journey'" class="list-journey-pane" data-cy="list-journey-pane">
             <b-field>
               <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger" :disabled="locked">
                 {{ $t('lists.joinTriggerFirstOrder') }}
               </b-radio>
-              <template v-if="triggerOption === 'first_order'" #message>
-                <strong>{{ $t(triggerHelp.lead) }}</strong> {{ $t(triggerHelp.body) }}
+              <template #message>
+                <strong>{{ $t(helpFor('first_order').lead) }}</strong> {{ $t(helpFor('first_order').body) }}
               </template>
             </b-field>
             <b-field>
               <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="locked">
                 {{ $t('lists.joinTriggerSkus') }}
               </b-radio>
-              <template v-if="triggerOption === 'skus'" #message>
-                <strong>{{ $t(triggerHelp.lead) }}</strong> {{ $t(triggerHelp.body) }}
+              <template #message>
+                <strong>{{ $t(helpFor('skus').lead) }}</strong> {{ $t(helpFor('skus').body) }}
               </template>
             </b-field>
             <b-field v-if="triggerOption === 'skus'" :message="$t('lists.joinTriggerSkusHelp')">
@@ -101,14 +104,14 @@
                 data-cy="list-trigger-no-purchase">
                 {{ $t('lists.joinTriggerNoPurchase') }}
               </b-radio>
+              <template #message>
+                <strong>{{ $t(helpFor('no_purchase').lead) }}</strong> {{ $t(helpFor('no_purchase').body) }}
+              </template>
             </b-field>
             <b-field v-if="triggerOption === 'no_purchase'" :label="$t('lists.joinTriggerDays')"
               :type="daysText === '' || daysOk ? '' : 'is-danger'">
               <b-input v-model="daysText" type="number" min="1" max="365" step="1" name="join_trigger_days"
                 :disabled="locked" data-cy="list-trigger-days" />
-              <template #message>
-                <strong>{{ $t(triggerHelp.lead) }}</strong> {{ $t(triggerHelp.body) }}
-              </template>
             </b-field>
           </div>
           <!-- JOURNEY-UX-SPEC F8: in both selector states -- Broadcast lists host automations too. -->
@@ -121,7 +124,7 @@
 
         <!-- JOURNEY-UX-SPEC D10/D11: Transactional apart from the journey section; then Tags,
         Description; Type and Opt-in demoted (defaults private/single), side by side. -->
-        <hr />
+        <hr class="form-divider" />
         <b-field v-if="canTransactional" :message="$t('lists.transactionalHelp')">
           <b-checkbox v-model="transactional" name="transactional" :disabled="locked" data-cy="list-transactional">
             {{ $t('lists.transactional') }}
@@ -140,7 +143,7 @@
             :placeholder="$t('globals.fields.description')" :disabled="locked" />
         </b-field>
 
-        <hr />
+        <hr class="form-divider" />
         <div class="columns">
           <div class="column is-6">
             <b-field :label="$t('lists.type')" label-position="on-border" :message="$t('lists.typeHelp')">
@@ -249,6 +252,11 @@ export default Vue.extend({
     brandLabel,
     listTypeHelpKey,
 
+    // JOURNEY-UX-SPEC A1.3: a radio's own Sends lead and prose keys, selection-independent.
+    helpFor(option) {
+      return triggerHelpKeys(option) || { lead: '', body: '' };
+    },
+
     // The server refuses a reserved tag (lists.reservedTag); refuse it here first, with the same
     // message.
     beforeAddingTag(tag) {
@@ -343,12 +351,6 @@ export default Vue.extend({
     // lists:transactional.
     canTransactional() {
       return this.$can('lists:transactional');
-    },
-
-    // JOURNEY-UX-SPEC A1.3: the selected radio's Sends lead and prose (i18n keys). A missing
-    // option reads as empty keys; the template renders it only under its own radio.
-    triggerHelp() {
-      return triggerHelpKeys(this.triggerOption) || { lead: '', body: '' };
     },
 
     // NO-PURCHASE-STEPS-SPEC D7: the days field's inline state (the server is the control).

@@ -167,6 +167,13 @@ section {
     background-color: #efefef;
   }
 
+// JOURNEY-UX G-H2: a section divider that is actually visible on the white modal (the default
+// hr washed out next to the Transactional break on the list form).
+hr.form-divider {
+  background-color: #c6c6c6;
+  height: 1px;
+}
+
 .navbar-item.user {
   .navbar-link:not(.is-arrowless)::after {
     margin-top: -0.6rem;
