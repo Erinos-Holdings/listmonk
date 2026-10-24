@@ -9,16 +9,17 @@
 // never 0 -- before the morning SES read the Sends series ends a day before Clicks, and a 0 there
 // would read as "nothing was sent".
 //
-// Colors (dataviz validator, light surface; user-tuned 2026-10-24): the bar fill is a pale step of
-// the Dashboard blue (each bar carries a 1px border in the primary blue for its edge contrast); the
-// line is a deep burnt orange -- blue's complement, dark enough to read over a bar (3.8:1 against
-// the fill) and as axis text (5.9:1 on white; the blue is 6.5:1). The blue/orange pair passes CVD
-// and normal-vision separation. There is no legend: each axis's title and numbers wear its
-// series' color, so the axis IS the key.
+// Colors (dataviz validator, light surface; chosen by the user from a six-way comparison,
+// 2026-10-24, "E"): solid bars, no border, in a mid step of the Dashboard blue; the line a deep
+// burnt orange -- blue's complement, dark enough to read over a bar (3.5:1 against the fill; 3:1
+// is the floor for chart graphics) and as axis text (7.3:1 on white; the blue is 6.5:1). The
+// blue/orange pair passes CVD and normal-vision separation. There is no legend: each axis's title
+// and numbers wear its series' color, so the axis IS the key. Darkening the fill needs a darker
+// line to keep 3:1 -- re-measure both together.
 
 export const SENDS_COLOR = '#0055d4';
-export const SENDS_FILL = '#b7d3f6';
-export const CLICKS_COLOR = '#b33c00';
+export const SENDS_FILL = '#86b6ef';
+export const CLICKS_COLOR = '#9a3412';
 export const CLICKS_HEADROOM = 2;
 
 // sends, clicks: [{date: 'YYYY-MM-DD', count}] as GET /api/dashboard/charts returns them.
@@ -55,19 +56,25 @@ export function shapeSendsClicks(sends, clicks, { labelOf, sendsLabel, clicksLab
         yAxisID: 'y',
         order: 1,
         backgroundColor: SENDS_FILL,
-        borderColor: SENDS_COLOR,
-        borderWidth: 1,
+        borderWidth: 0,
         borderRadius: 2,
       },
     ],
   };
 }
 
-// The Clicks axis maximum: CLICKS_HEADROOM x the busiest click day, so the line peaks at half
-// height. undefined (chart.js picks) when there are no clicks.
+// The Clicks axis maximum: CLICKS_HEADROOM x the busiest click day, rounded UP to a multiple of
+// its leading power of ten (850 -> 900, 790 -> 800, 1,650 -> 2,000), so the top tick lands on the
+// axis's own step instead of an odd extra label; the line peaks at or below half height.
+// undefined (chart.js picks) when there are no clicks.
 export function clicksAxisMax(clicks) {
   const top = Math.max(0, ...(clicks || []).map((d) => d.count || 0));
-  return top > 0 ? top * CLICKS_HEADROOM : undefined;
+  if (top <= 0) {
+    return undefined;
+  }
+  const raw = top * CLICKS_HEADROOM;
+  const unit = 10 ** Math.floor(Math.log10(raw));
+  return Math.ceil(raw / unit) * unit;
 }
 
 // The chart.js options merged over the line defaults: no legend (each axis's title and numbers

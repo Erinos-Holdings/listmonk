@@ -72,42 +72,48 @@
               {{ $t('lists.campaignTypeJourney') }}
             </b-radio-button>
           </b-field>
-          <!-- JOURNEY-UX-SPEC A1.3: every radio's help is a bold "Sends ..." lead, then the prose
-          (triggerHelpKeys), rendered UNCONDITIONALLY under its own radio -- a G-H2 finding: help
-          gated on the selection disappeared when another radio was picked, and the conditional
-          message slot never rendered for the SKUs radio at all. Buefy's message prop is plain
-          text, so the message slot. -->
+          <!-- JOURNEY-UX-SPEC A1.3: a radio's help is a bold "Sends ..." lead, then the prose
+          (triggerHelpKeys), shown under that radio ONLY while it is selected, every time it is
+          (user, 2026-10-24). A plain v-if element, never Buefy's #message slot: b-field does not
+          re-read a slot that appears or disappears after mount, which is why the slot version
+          showed only the first time and never for SKUs (the G-H2 finding). -->
           <div v-if="listType === 'journey'" class="list-journey-pane" data-cy="list-journey-pane">
-            <b-field>
-              <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger" :disabled="locked">
-                {{ $t('lists.joinTriggerFirstOrder') }}
-              </b-radio>
-              <template #message>
+            <div class="trigger-option">
+              <b-field>
+                <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger" :disabled="locked">
+                  {{ $t('lists.joinTriggerFirstOrder') }}
+                </b-radio>
+              </b-field>
+              <p v-if="triggerOption === 'first_order'" class="help trigger-help" data-cy="trigger-help-first_order">
                 <strong>{{ $t(helpFor('first_order').lead) }}</strong> {{ $t(helpFor('first_order').body) }}
-              </template>
-            </b-field>
-            <b-field>
-              <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="locked">
-                {{ $t('lists.joinTriggerSkus') }}
-              </b-radio>
-              <template #message>
+              </p>
+            </div>
+            <div class="trigger-option">
+              <b-field>
+                <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="locked">
+                  {{ $t('lists.joinTriggerSkus') }}
+                </b-radio>
+              </b-field>
+              <p v-if="triggerOption === 'skus'" class="help trigger-help" data-cy="trigger-help-skus">
                 <strong>{{ $t(helpFor('skus').lead) }}</strong> {{ $t(helpFor('skus').body) }}
-              </template>
-            </b-field>
+              </p>
+            </div>
             <b-field v-if="triggerOption === 'skus'" :message="$t('lists.joinTriggerSkusHelp')">
               <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
                 data-cy="list-trigger-skus" />
             </b-field>
             <!-- NO-PURCHASE-STEPS-SPEC D7: a "still deciding" step -- {kind: no_purchase, days}. -->
-            <b-field>
-              <b-radio v-model="triggerOption" native-value="no_purchase" name="join_trigger" :disabled="locked"
-                data-cy="list-trigger-no-purchase">
-                {{ $t('lists.joinTriggerNoPurchase') }}
-              </b-radio>
-              <template #message>
+            <div class="trigger-option">
+              <b-field>
+                <b-radio v-model="triggerOption" native-value="no_purchase" name="join_trigger" :disabled="locked"
+                  data-cy="list-trigger-no-purchase">
+                  {{ $t('lists.joinTriggerNoPurchase') }}
+                </b-radio>
+              </b-field>
+              <p v-if="triggerOption === 'no_purchase'" class="help trigger-help" data-cy="trigger-help-no_purchase">
                 <strong>{{ $t(helpFor('no_purchase').lead) }}</strong> {{ $t(helpFor('no_purchase').body) }}
-              </template>
-            </b-field>
+              </p>
+            </div>
             <b-field v-if="triggerOption === 'no_purchase'" :label="$t('lists.joinTriggerDays')"
               :type="daysText === '' || daysOk ? '' : 'is-danger'">
               <b-input v-model="daysText" type="number" min="1" max="365" step="1" name="join_trigger_days"

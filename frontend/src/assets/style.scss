@@ -174,6 +174,20 @@ hr.form-divider {
   height: 1px;
 }
 
+// The list form's journey triggers: a radio and, while selected, its help (ListForm.vue). The
+// wrapper carries the field gap so the help sits tight under its radio.
+.list-journey-pane .trigger-option {
+  margin-bottom: 0.75rem;
+
+  .field {
+    margin-bottom: 0;
+  }
+  .trigger-help {
+    margin-top: 0.25rem;
+    padding-left: 1.75rem;
+  }
+}
+
 .navbar-item.user {
   .navbar-link:not(.is-arrowless)::after {
     margin-top: -0.6rem;
@@ -922,6 +936,30 @@ section.dashboard {
     margin-bottom: 0.5rem;
   }
 
+  /* Fork (2026-10-24). The Subscribers and Messages sent lines as three columns: the rate and the
+  (count) right-aligned in tabular figures so their digits line up, the label left-aligned. A
+  count-only line keeps its parentheses, invisible (.pl-ghost), so its digits sit under the
+  others'. */
+  ul.pct-lines {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: 0.4em;
+    align-items: baseline;
+
+    li {
+      display: contents;
+    }
+    .pl-pct, .pl-count {
+      font-weight: bold;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .pl-ghost {
+      visibility: hidden;
+    }
+  }
+
   .tile.notification {
     @extend .box;
     padding: 10px;
@@ -1112,11 +1150,17 @@ section.lists {
   }
 
   /* Fork (list grid). One line per send language under the "all" line, aligned across the six
-  columns by a fixed line height. */
+  columns by a fixed line height. Each line is a flex row: the language label (first column only)
+  pinned left by margin-right auto, the number right. Never a float -- a float a fraction of a
+  pixel taller than its 1.6rem line pushed the next line's label rightward (seen at random,
+  depending on font load and zoom). */
   td.grid-cell {
     white-space: nowrap;
 
     .grid-line {
+      display: flex;
+      justify-content: flex-end;
+      align-items: baseline;
       line-height: 1.6rem;
       height: 1.6rem;
 
@@ -1124,9 +1168,11 @@ section.lists {
         font-size: $size-7;
       }
     }
+    .grid-label-slot {
+      margin-right: auto;
+      padding-right: 0.5rem;
+    }
     .grid-label {
-      float: left;
-      margin-right: 0.5rem;
       font-weight: 600;
     }
     .grid-zero {

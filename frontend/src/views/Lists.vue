@@ -185,7 +185,7 @@
           <p v-for="line in visibleLines(props.row)" :key="line.key" :class="['grid-line', `lang-${line.key}`]"
             :data-cy="`grid-${col.key}-${line.key}`">
             <!-- The line's label sits in the first (Subscribers) column. -->
-            <template v-if="col.key === 'total' && line.key !== 'all'">
+            <span v-if="col.key === 'total' && line.key !== 'all'" class="grid-label-slot">
               <b-tooltip v-if="line.key === 'other'" :label="$t('lists.grid.otherHelp')" type="is-dark" multilined
                 :triggers="['hover', 'focus']">
                 <component :is="canViewSubs ? 'router-link' : 'span'" :to="gridLink(props.row, '', line.key)"
@@ -198,7 +198,7 @@
                 class="grid-label" :title="langTitle(line.key)">
                 {{ langCode(line.key) }}
               </component>
-            </template>
+            </span>
 
             <span v-if="!line.row[col.key]" class="grid-zero">0</span>
             <b-tooltip v-else-if="line.key === 'en' && line.none && line.none[col.key] > 0" type="is-dark"

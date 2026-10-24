@@ -117,14 +117,17 @@
                   </div>
 
                   <div class="column is-6">
-                    <ul class="no has-text-grey">
+                    <!-- Aligned columns (2026-10-24): rate, count, label -- see .pct-lines. -->
+                    <ul class="no has-text-grey pct-lines">
                       <!-- Fork (dashboard counts, DASHBOARD-COUNTS-SPEC R1) -- Held, Unsubscribed and
                       Blocklisted read rate-first over the public lists' total; Active and Pending
                       are plain counts (dashboardSubs.mjs::segmentCell decides). -->
                       <template v-if="!subsExpanded">
-                        <li v-for="r in subsRows" :key="r.key" :data-cy="`subscribers-${r.key}`">
-                          <label for="#">{{ subsLineText(r) }}</label>
-                          {{ $t(r.label) }}
+                        <li v-for="r in subsLineRows" :key="r.key" :data-cy="`subscribers-${r.key}`">
+                          <span class="pl-pct">{{ r.parts.pct }}</span>
+                          <span class="pl-count"><span :class="{ 'pl-ghost': !r.parts.pct }">(</span>{{
+                            r.parts.count }}<span :class="{ 'pl-ghost': !r.parts.pct }">)</span></span>
+                          <span class="pl-label">{{ $t(r.label) }}</span>
                         </li>
                       </template>
                       <!-- Fork (dashboard counts, R3) -- Orphans in every scope (0 under a scope by
@@ -132,8 +135,10 @@
                       orphan is on none) and when expanded (it has no language), so the column is
                       never empty. -->
                       <li data-cy="subscribers-orphans">
-                        <label for="#">{{ $utils.niceNumber(counts.subscribers.orphans) }}</label>
-                        {{ $t('dashboard.orphanSubs') }}
+                        <span class="pl-pct" />
+                        <span class="pl-count"><span class="pl-ghost">(</span>{{
+                          $utils.niceNumber(counts.subscribers.orphans) }}<span class="pl-ghost">)</span></span>
+                        <span class="pl-label">{{ $t('dashboard.orphanSubs') }}</span>
                       </li>
                     </ul>
                   </div><!-- subscriber breakdown -->
@@ -184,10 +189,12 @@
                   <div class="column is-6">
                     <!-- Fork (dashboard counts, R1/R2) -- rate-first over Messages sent; Complaints
                     is a named subset of Bounces (every bounce row), its label saying so. -->
-                    <ul class="no has-text-grey">
-                      <li v-for="l in engagementLines" :key="l.key" :data-cy="`engagement-${l.key}`">
-                        <label for="#">{{ pctText(l.count, l.denominator, (n) => $utils.niceNumber(n)) }}</label>
-                        <span :title="l.help ? $t(l.help) : null">{{ $t(l.label) }}</span>
+                    <ul class="no has-text-grey pct-lines">
+                      <li v-for="l in engagementParts" :key="l.key" :data-cy="`engagement-${l.key}`">
+                        <span class="pl-pct">{{ l.parts.pct }}</span>
+                        <span class="pl-count"><span :class="{ 'pl-ghost': !l.parts.pct }">(</span>{{
+                          l.parts.count }}<span :class="{ 'pl-ghost': !l.parts.pct }">)</span></span>
+                        <span class="pl-label" :title="l.help ? $t(l.help) : null">{{ $t(l.label) }}</span>
                       </li>
                     </ul>
                   </div>
@@ -417,10 +424,21 @@ export default Vue.extend({
       return c.pct ? `${c.pct} (${c.count})` : c.count;
     },
 
+    // A rate-first line as its two columns, for the aligned lists (2026-10-24): {pct, count} --
+    // pct '' on a plain count (null denominator, or 0), where the count's parentheses are drawn
+    // invisible so its digits still line up under the others'.
+    pctParts(count, denominator, fmt) {
+      if (denominator === null) {
+        return { pct: '', count: fmt(count || 0) };
+      }
+      const c = pctCount(count, denominator, fmt);
+      return { pct: c.pct || '', count: c.count };
+    },
+
     // The collapsed segment line: the all column.
-    subsLineText(seg) {
+    subsLineParts(seg) {
       const c = segmentCell({ key: 'all', row: this.subsAll }, seg);
-      return this.pctText(c.count, c.denominator, (n) => this.$utils.niceNumber(n));
+      return this.pctParts(c.count, c.denominator, (n) => this.$utils.niceNumber(n));
     },
 
     // An expanded-table cell, over THAT column's total.
@@ -534,11 +552,23 @@ export default Vue.extend({
       return subscriberRows(this.subsGrid);
     },
 
+    // The collapsed segment lines with their aligned-column parts.
+    subsLineRows() {
+      return this.subsRows.map((r) => ({ ...r, parts: this.subsLineParts(r) }));
+    },
+
     subsColumns() {
       return subscriberColumns(this.subsGrid, !!(this.serverConfig && this.serverConfig.lang_enabled));
     },
 
     // Fork (dashboard counts, R1/R2) -- Views, Clicks, Bounces, Complaints over Messages sent.
+    // The engagement lines with their aligned-column parts.
+    engagementParts() {
+      return this.engagementLines.map((l) => ({
+        ...l, parts: this.pctParts(l.count, l.denominator, (n) => this.$utils.niceNumber(n)),
+      }));
+    },
+
     engagementLines() {
       return engagementLines(this.counts.engagement, this.counts.messages);
     },

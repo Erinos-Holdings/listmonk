@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  shapeSendsClicks, sendsClicksOptions, clicksAxisMax, SENDS_COLOR, SENDS_FILL, CLICKS_COLOR, CLICKS_HEADROOM,
+  shapeSendsClicks, sendsClicksOptions, clicksAxisMax, SENDS_COLOR, SENDS_FILL, CLICKS_COLOR,
+  CLICKS_HEADROOM,
 } from './sendsClicksChart.mjs'; // eslint-disable-line import/extensions
 
 const opts = { labelOf: (d) => d.slice(5), sendsLabel: 'Sends', clicksLabel: 'Clicks' };
@@ -18,7 +19,7 @@ test('Sends are bars on y (left), Clicks a line on y1 (right), aligned by date, 
   assert.deepEqual(out.labels, ['10-21', '10-22']);
   const s = byLabel(out, 'Sends');
   const c = byLabel(out, 'Clicks');
-  assert.deepEqual([s.type, s.yAxisID, s.backgroundColor, s.borderColor], ['bar', 'y', SENDS_FILL, SENDS_COLOR]);
+  assert.deepEqual([s.type, s.yAxisID, s.backgroundColor, s.borderWidth], ['bar', 'y', SENDS_FILL, 0]);
   assert.deepEqual([c.type, c.yAxisID, c.borderColor], ['line', 'y1', CLICKS_COLOR]);
   assert.deepEqual(s.data, [8109, 10999]);
   assert.deepEqual(c.data, [207, 395]);
@@ -45,9 +46,14 @@ test('dates are sorted whatever the input order; both empty -> {}', () => {
   assert.deepEqual(shapeSendsClicks(null, undefined, opts), {});
 });
 
-test('the Clicks axis maximum is the headroom multiple of the busiest day (line peaks at half height); none without clicks', () => {
+test('the Clicks axis maximum is the headroom multiple of the busiest day, rounded up to a whole step; none without clicks', () => {
   assert.equal(CLICKS_HEADROOM, 2);
-  assert.equal(clicksAxisMax([{ count: 120 }, { count: 395 }, { count: 0 }]), 790);
+  assert.equal(clicksAxisMax([{ count: 120 }, { count: 395 }, { count: 0 }]), 800);
+  assert.equal(clicksAxisMax([{ count: 425 }]), 900); // the odd "850" label
+  assert.equal(clicksAxisMax([{ count: 825 }]), 2000);
+  assert.equal(clicksAxisMax([{ count: 32 }]), 70);
+  assert.equal(clicksAxisMax([{ count: 3 }]), 6);
+  assert.equal(clicksAxisMax([{ count: 500 }]), 1000);
   assert.equal(clicksAxisMax([{ count: 0 }]), undefined);
   assert.equal(clicksAxisMax([]), undefined);
   assert.equal(clicksAxisMax(null), undefined);
