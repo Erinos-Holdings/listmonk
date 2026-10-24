@@ -473,13 +473,18 @@ export default Vue.extend({
     },
 
     // D6 -- the Brands.vue onSort pattern: a click on a NEW column takes its default direction
-    // (brandMatrix.mjs::defaultOrder); Buefy's own first click is ascending, so its arrow is flipped
-    // when the default is desc. A repeat click is Buefy's own toggle.
+    // (brandMatrix.mjs::resolveSort), and Buefy's arrow (isAsc) is flipped with it. The override
+    // applies only while isAsc is a boolean the arrow reads; if a Buefy upgrade ever changes
+    // that, fall back to stock asc-first so the arrow and the data cannot disagree (stage 4 F3).
+    // A repeat click is Buefy's own toggle and passes through.
     onMatrixSort(field, direction) {
-      const next = resolveSort(this.matrix.sort, field, direction);
+      let next = { field, order: direction };
       const { matrixTable } = this.$refs;
-      if (next.order !== direction && matrixTable && typeof matrixTable.isAsc === 'boolean') {
-        matrixTable.isAsc = next.order === 'asc';
+      if (matrixTable && typeof matrixTable.isAsc === 'boolean') {
+        next = resolveSort(this.matrix.sort, field, direction);
+        if (next.order !== direction) {
+          matrixTable.isAsc = next.order === 'asc';
+        }
       }
       this.matrix.sort = next;
       this.saveMatrixState();
@@ -529,10 +534,10 @@ export default Vue.extend({
       });
     },
 
-    // Fork (dashboard counts, R1) -- a rate-first line: "39.5% (751)", or the count alone when
-    // the denominator is 0. A null denominator (Active, Pending) is a plain count. One number
-    // format per list (Stage 4 F3): fmt is niceNumber on the collapsed lines, as the other
-    // containers' lines, and formatNumber in the expanded table.
+    // Fork (dashboard counts, R1) -- a rate-first cell: "39.5% (751)", or the count alone when
+    // the denominator is 0. A null denominator (Active, Pending) is a plain count. Used only by
+    // the expanded table since BRAND-MATRIX D9; every number in these two containers is
+    // formatNumber (comma-separated, no k/m).
     pctText(count, denominator, fmt) {
       if (denominator === null) {
         return fmt(count || 0);
