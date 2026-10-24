@@ -114,13 +114,16 @@ SELECT JSON_BUILD_OBJECT(
 -- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7; dashboard sends, integrations
 -- DASHBOARD-SENDS-SPEC D2-D5). The ONE Dashboard charts query, live for every reader --
 -- mat_dashboard_charts is no longer read. $1/$2/$3 exactly as get-dashboard-counts-scoped ($1 = the
--- scope's list ids, $2 = campaigns get_all, $3 = unscoped). Both series cover the 30 UTC days
--- ending yesterday, every day bucketed in UTC (never the session time zone).
+-- scope's list ids, $2 = campaigns get_all, $3 = unscoped). Revision 2 (R1) -- both series cover
+-- the 60 Mountain (America/Denver) calendar days ending YESTERDAY there, every day bucketed in that
+-- zone (DST-aware, never a fixed offset, never the session time zone). The zone is the ONE literal
+-- in the zone CTE below and MUST equal SES_DAILY_ZONE in the integrations lib/ses-health.ts, which
+-- buckets the Sends series (R5; no test spans the repos).
 -- clicks = link_clicks of the campaigns C per day, zero-filled. The mode is interpolated at boot
 -- (cmd/init.go, beside statsSel) as TRUE when individual tracking is ON -- each (campaign,
--- subscriber) pair counts once, on the UTC day of its FIRST click on that campaign (a pair clicked
--- before the window is not counted, NULL subscribers never) -- and FALSE when OFF (raw rows). The
--- constant prunes the other branch at plan time.
+-- subscriber) pair counts once, on the Mountain day of its FIRST click on that campaign (a pair
+-- clicked before the window is not counted, NULL subscribers never) -- and FALSE when OFF (raw
+-- rows). The constant prunes the other branch at plan time.
 -- sends = the per-day Send of the LATEST system_health ses document that carries a daily series
 -- (written by the integrations BrandHealth Lambda; a failed SES read writes none), summed over its brands rows -- every row when unscoped (unattributed
 -- included), else the rows whose brand is the brand tag of a list in $1 (unattributed never).
@@ -131,23 +134,26 @@ WITH camps AS (
         SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
     )
 ),
+zone AS (
+    SELECT 'America/Denver'::TEXT AS tz
+),
 win AS (
-    SELECT (NOW() AT TIME ZONE 'UTC')::DATE - 30 AS d0, (NOW() AT TIME ZONE 'UTC')::DATE - 1 AS d1
+    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE - 1 AS d1 FROM zone
 ),
 bounds AS (
-    SELECT d0, d1, (d0::TIMESTAMP AT TIME ZONE 'UTC') AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE 'UTC') AS t1 FROM win
+    SELECT d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win
 ),
 days AS (
     SELECT GENERATE_SERIES(d0, d1, INTERVAL '1 day')::DATE AS d FROM win
 ),
 raw_clicks AS (
-    SELECT (lc.created_at AT TIME ZONE 'UTC')::DATE AS d FROM link_clicks lc
+    SELECT (lc.created_at AT TIME ZONE (SELECT tz FROM zone))::DATE AS d FROM link_clicks lc
     WHERE NOT %[1]s
         AND lc.campaign_id IN (SELECT id FROM camps)
         AND lc.created_at >= (SELECT t0 FROM bounds) AND lc.created_at < (SELECT t1 FROM bounds)
 ),
 pair_clicks AS (
-    SELECT (MIN(lc.created_at) AT TIME ZONE 'UTC')::DATE AS d FROM link_clicks lc
+    SELECT (MIN(lc.created_at) AT TIME ZONE (SELECT tz FROM zone))::DATE AS d FROM link_clicks lc
     WHERE %[1]s
         AND lc.subscriber_id IS NOT NULL
         AND lc.campaign_id IN (SELECT id FROM camps)

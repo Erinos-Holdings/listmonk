@@ -456,7 +456,7 @@
     "campaigns.unSchedule": "Unschedule",
     "campaigns.views": "Views",
     "dashboard.campaignViews": "Campaign views",
-    "dashboard.chartsNote": "Daily (UTC). Clicks through yesterday; Sends through the latest daily SES read (15:30 UTC). Live counts for a send: open the campaign.",
+    "dashboard.chartsNote": "Daily, Mountain time. Clicks through yesterday; Sends through the latest daily SES read (each morning). Live counts for a send: open the campaign.",
     "dashboard.clicks": "Clicks",
     "dashboard.clientsWindow": "The 31 days up to the latest view (views) and the latest click (clicks).",
     "dashboard.complaintsHelp": "Included in Bounces",

@@ -197,19 +197,22 @@
           </div>
           <div class="tile is-parent relative">
             <b-loading v-if="isChartsLoading" active :is-full-page="false" />
-            <!-- Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D6): SES sends per day
-                 (BrandHealth's ses document) and clicks counted as people under individual
-                 tracking, both over the 30 UTC days ending yesterday. -->
+            <!-- Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D6, revision 2 R4): SES
+                 sends per day (BrandHealth's ses document) and clicks counted as people under
+                 individual tracking, both over the 60 Mountain days ending yesterday -- stacked,
+                 each the tile's full width, Sends above Clicks, one caption under both. -->
             <article class="tile is-child notification charts">
               <div class="columns">
-                <div class="column is-6">
+                <div class="column is-12">
                   <h3 class="title is-size-6">
                     {{ $t('dashboard.sends') }}
                   </h3><br />
                   <chart type="line" v-if="sendsChart" :data="sendsChart" />
                 </div>
-                <div class="column is-6">
-                  <h3 class="title is-size-6 has-text-right">
+              </div>
+              <div class="columns">
+                <div class="column is-12">
+                  <h3 class="title is-size-6">
                     {{ $t('dashboard.clicks') }}
                   </h3><br />
                   <chart type="line" v-if="clicksChart" :data="clicksChart" />

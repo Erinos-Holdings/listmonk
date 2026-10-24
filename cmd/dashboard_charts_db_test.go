@@ -1,12 +1,13 @@
 package main
 
 // Fork (dashboard sends) -- integrations DASHBOARD-SENDS-SPEC I3 and I4 against a real database,
-// through the handler. I3: the Clicks series is link_clicks of the scope's campaigns C per UTC day
-// over [today-30, today-1], 30 zero-filled points; under individual tracking each (campaign,
-// subscriber) pair counts once on its first-click day (a pair first clicked before the window is not
-// counted, NULL subscribers never), raw rows when OFF -- each mode's statement prepared through
-// prepareQueries as cmd/init.go does at boot (TestDashboardCountsDB's pattern). The session time
-// zone is set far from UTC so a session-zone bucket would land boundary clicks on the wrong day. I4:
+// through the handler, as revision 2 (R-I4, R-I5) has them. I3/R-I4: the Clicks series is
+// link_clicks of the scope's campaigns C per America/Denver day over [today-60, today-1] (Denver
+// dates), 60 zero-filled points; under individual tracking each (campaign, subscriber) pair counts
+// once on its first-click day (a pair first clicked before the window is not counted, NULL
+// subscribers never), raw rows when OFF -- each mode's statement prepared through prepareQueries as
+// cmd/init.go does at boot (TestDashboardCountsDB's pattern). The session time zone is set far from
+// both UTC and Denver so a session-zone bucket would land boundary clicks on the wrong day. I4/R-I5:
 // the Sends series is the latest ses system_health document's brands[].daily summed per day --
 // every row unscoped (unattributed included), only the scope lists' brand-tag rows scoped, never
 // unattributed, [] for a scope with no branded list or with no ses document; days outside the
@@ -48,18 +49,26 @@ func TestDashboardChartsDB(t *testing.T) {
 		t.Fatalf("session time zone %q (%v), want Pacific/Kiritimati", tz, err)
 	}
 
-	var todayS string
-	if err := h.db.Get(&todayS, `SELECT TO_CHAR((NOW() AT TIME ZONE 'UTC')::DATE, 'YYYY-MM-DD')`); err != nil {
-		t.Fatal(err)
-	}
-	today, err := time.Parse("2006-01-02", todayS)
+	den, err := time.LoadLocation("America/Denver")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// dayAt is UTC midnight of today-n plus the clock offset.
-	dayAt := func(n int, clock time.Duration) time.Time { return today.AddDate(0, 0, -n).Add(clock) }
-	day := func(n int) string { return today.AddDate(0, 0, -n).Format("2006-01-02") }
-	t0, t1 := dayAt(30, 0), dayAt(0, 0)
+	var todayS string
+	if err := h.db.Get(&todayS, `SELECT TO_CHAR((NOW() AT TIME ZONE 'America/Denver')::DATE, 'YYYY-MM-DD')`); err != nil {
+		t.Fatal(err)
+	}
+	today, err := time.ParseInLocation("2006-01-02", todayS, den)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ty, tm, td := today.Date()
+	// start is Denver midnight of today-n (DST-aware); dayAt adds a wall-clock offset that never
+	// crosses a DST change; endOf is the last 30 s of Denver day today-n.
+	start := func(n int) time.Time { return time.Date(ty, tm, td-n, 0, 0, 0, 0, den) }
+	dayAt := func(n int, clock time.Duration) time.Time { return start(n).Add(clock) }
+	endOf := func(n int) time.Time { return start(n - 1).Add(-30 * time.Second) }
+	day := func(n int) string { return start(n).Format("2006-01-02") }
+	t0, t1 := start(60), start(0)
 
 	// Lists: alpha (two lists, one brand), bravo, a list tagged with the unattributed key, and a list
 	// with no brand.
@@ -98,19 +107,21 @@ func TestDashboardChartsDB(t *testing.T) {
 		}
 	}
 	noon := 12 * time.Hour
-	click(cA, s1, dayAt(5, noon), 3)                         // a repeat clicker: one pair, three rows
-	click(cA, s1, dayAt(3, noon), 1)                         // the same pair later: never a second first click
-	click(cA, s2, dayAt(35, noon), 1)                        // first click before the window...
-	click(cA, s2, dayAt(10, noon), 1)                        // ...so its in-window click is not a first click
-	click(cA, 0, dayAt(5, noon), 2)                          // NULL subscriber: raw rows only
-	click(cA, s3, dayAt(30, 30*time.Second), 1)              // the window's first moment (in)
-	click(cB, s1, dayAt(5, noon), 1)                         // the same subscriber on another campaign: its own pair
-	click(cB, s3, dayAt(31, 24*time.Hour-30*time.Second), 1) // the last moment before the window (out)
-	click(cB, s3, dayAt(1, 24*time.Hour-30*time.Second), 1)  // the window's last moment (in; local next day)
-	click(cB, s2, dayAt(0, 30*time.Second), 1)               // today (out)
-	click(cNone, s1, dayAt(2, noon), 1)                      // a campaign on no list
+	click(cA, s1, dayAt(5, noon), 3)            // a repeat clicker: one pair, three rows
+	click(cA, s1, dayAt(3, noon), 1)            // the same pair later: never a second first click
+	click(cA, s2, dayAt(65, noon), 1)           // first click before the window...
+	click(cA, s2, dayAt(10, noon), 1)           // ...so its in-window click is not a first click
+	click(cA, 0, dayAt(5, noon), 2)             // NULL subscriber: raw rows only
+	click(cA, s3, dayAt(60, 30*time.Second), 1) // day -60's first moment (in)
+	click(cB, s1, dayAt(5, noon), 1)            // the same subscriber on another campaign: its own pair
+	click(cB, s3, endOf(61), 1)                 // day -61's last moment (out)
+	click(cB, s3, endOf(1), 1)                  // Denver-yesterday's last moment (in; UTC and the session say today+)
+	click(cB, s2, dayAt(0, 30*time.Second), 1)  // Denver-today (out)
+	click(cNone, s1, dayAt(2, noon), 1)         // a campaign on no list
+	// 05:30Z on the UTC date of day -4 is the evening of Denver day -5 (UTC-6/-7).
+	click(cNone, s2, time.Date(ty, tm, td-4, 5, 30, 0, 0, time.UTC), 1)
 
-	// wantClicks is the reference count over C in a mode, as 30 zero-filled points.
+	// wantClicks is the reference count over C in a mode, as 60 zero-filled Denver days.
 	wantClicks := func(camps []int, unique bool) []chartPoint {
 		inC := map[int]bool{}
 		for _, c := range camps {
@@ -131,18 +142,18 @@ func TestDashboardChartsDB(t *testing.T) {
 			}
 			for _, f := range first {
 				if in(f) {
-					per[f.UTC().Format("2006-01-02")]++
+					per[f.In(den).Format("2006-01-02")]++
 				}
 			}
 		} else {
 			for _, r := range rows {
 				if inC[r.camp] && in(r.at) {
-					per[r.at.UTC().Format("2006-01-02")]++
+					per[r.at.In(den).Format("2006-01-02")]++
 				}
 			}
 		}
 		out := []chartPoint{}
-		for n := 30; n >= 1; n-- {
+		for n := 60; n >= 1; n-- {
 			out = append(out, chartPoint{day(n), per[day(n)]})
 		}
 		return out
@@ -155,8 +166,8 @@ func TestDashboardChartsDB(t *testing.T) {
 		Sends int    `json:"sends"`
 	}
 	daily := func(base int) []sesDay {
-		out := []sesDay{{day(31), 9000}}
-		for n := 30; n >= 1; n-- {
+		out := []sesDay{{day(61), 9000}}
+		for n := 60; n >= 1; n-- {
 			out = append(out, sesDay{day(n), base + n})
 		}
 		return append(out, sesDay{day(0), 9000})
@@ -197,7 +208,7 @@ func TestDashboardChartsDB(t *testing.T) {
 			}
 		}
 		out := []chartPoint{}
-		for n := 30; n >= 1; n-- {
+		for n := 60; n >= 1; n-- {
 			if c, ok := per[day(n)]; ok {
 				out = append(out, chartPoint{day(n), c})
 			}
@@ -277,27 +288,29 @@ func TestDashboardChartsDB(t *testing.T) {
 		t.Fatalf("no point for %s in %s", d, baJSON(pts))
 		return 0
 	}
-	if len(on.Clicks) != 30 || on.Clicks[0].Date != day(30) || on.Clicks[29].Date != day(1) {
+	if len(on.Clicks) != 60 || on.Clicks[0].Date != day(60) || on.Clicks[59].Date != day(1) {
 		t.Fatalf("fixture: clicks window %s", baJSON(on.Clicks))
 	}
-	// ON: s1 on cA and on cB at day 5 (2 pairs), s3 at day 30 and day 1, s1 on cNone at day 2;
-	// s2 on cA (first click before the window) and the NULL rows not at all.
-	if at(on.Clicks, day(5)) != 2 || at(on.Clicks, day(3)) != 0 || at(on.Clicks, day(10)) != 0 ||
-		at(on.Clicks, day(30)) != 1 || at(on.Clicks, day(1)) != 0 || at(on.Clicks, day(2)) != 1 {
+	// ON: s1 on cA and on cB and s2 on cNone (05:30Z, the previous Denver day) at day 5 (3 pairs),
+	// s3 at day 60, s1 on cNone at day 2; s2 on cA (first click before the window), s3 on cB (first
+	// click day 61) and the NULL rows not at all.
+	if at(on.Clicks, day(5)) != 3 || at(on.Clicks, day(4)) != 0 || at(on.Clicks, day(3)) != 0 || at(on.Clicks, day(10)) != 0 ||
+		at(on.Clicks, day(60)) != 1 || at(on.Clicks, day(1)) != 0 || at(on.Clicks, day(2)) != 1 {
 		t.Fatalf("fixture: unique clicks %s", baJSON(on.Clicks))
 	}
-	// s3 on cB first clicked day 31 (out), so its day-1 click is no first click under ON, but a
-	// raw row under OFF -- and in a UTC+14 session bucket it would be today.
-	if at(off.Clicks, day(5)) != 6 || at(off.Clicks, day(3)) != 1 || at(off.Clicks, day(10)) != 1 ||
-		at(off.Clicks, day(30)) != 1 || at(off.Clicks, day(1)) != 1 || at(off.Clicks, day(2)) != 1 {
+	// OFF: day 5 = 3 + 2 NULL + 1 + the 05:30Z row; s3's day-1 click is a raw row in Denver-yesterday
+	// (UTC and the UTC+14 session would put it on a later day).
+	if at(off.Clicks, day(5)) != 7 || at(off.Clicks, day(4)) != 0 || at(off.Clicks, day(3)) != 1 || at(off.Clicks, day(10)) != 1 ||
+		at(off.Clicks, day(60)) != 1 || at(off.Clicks, day(1)) != 1 || at(off.Clicks, day(2)) != 1 {
 		t.Fatalf("fixture: raw clicks %s", baJSON(off.Clicks))
 	}
 	un := results[true]["no list_id"].Sends
-	// bravo's daily is only days 28..22: day 25 carries it, day 1 does not.
-	if len(un) != 30 || at(un, day(1)) != 101+301+401 || at(un, day(25)) != 125+225+325+425 || at(un, day(30)) != 130+330+430 {
+	// R-I5: days -61 and 0 are dropped; bravo's daily is only days 58..52: day 55 carries it, day 1
+	// does not.
+	if len(un) != 60 || at(un, day(1)) != 101+301+401 || at(un, day(55)) != 155+255+355+455 || at(un, day(60)) != 160+360+460 {
 		t.Fatalf("fixture: unscoped sends %s", baJSON(un))
 	}
-	if s := results[true]["list_id = alpha"].Sends; len(s) != 30 || at(s, day(1)) != 101 {
+	if s := results[true]["list_id = alpha"].Sends; len(s) != 60 || at(s, day(1)) != 101 {
 		t.Fatalf("fixture: alpha sends %s", baJSON(s))
 	}
 
@@ -307,14 +320,14 @@ func TestDashboardChartsDB(t *testing.T) {
 		{"brand": "alpha", "sends": nil, "daily": nil},
 		{"brand": "unattributed", "sends": nil, "daily": nil},
 	}})
-	if s := charts(admin, "").Sends; len(s) != 30 || at(s, day(1)) != 101+301+401 {
+	if s := charts(admin, "").Sends; len(s) != 60 || at(s, day(1)) != 101+301+401 {
 		t.Fatalf("failed-read document: sends %s", baJSON(s))
 	}
 
 	// No ses document at all: sends [] (and the clicks are unaffected).
 	h.db.MustExec(`DELETE FROM system_health WHERE kind = 'ses'`)
 	got := charts(admin, "")
-	if got.Sends == nil || len(got.Sends) != 0 || len(got.Clicks) != 30 {
+	if got.Sends == nil || len(got.Sends) != 0 || len(got.Clicks) != 60 {
 		t.Fatalf("no ses document: %s", baJSON(got))
 	}
 	ko.Set("privacy.individual_tracking", true)

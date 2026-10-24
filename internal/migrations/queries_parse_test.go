@@ -165,6 +165,15 @@ func TestDashboardChartsQueryInterpolates(t *testing.T) {
 	if strings.Contains(got.Query, "mat_dashboard_charts") {
 		t.Error("the charts query reads mat_dashboard_charts")
 	}
+	// Revision 2 (R5) -- the business-day zone is ONE literal in the statement, and it must equal
+	// the integrations repo's SES_DAILY_ZONE (lib/ses-health.ts), which buckets the Sends series.
+	// No test spans the repos; each side pins its own literal.
+	if n := strings.Count(got.Query, "'America/Denver'"); n != 1 {
+		t.Errorf("the charts query carries the 'America/Denver' literal %d times, want exactly 1", n)
+	}
+	if strings.Contains(got.Query, "'UTC'") {
+		t.Error("the charts query still buckets in UTC")
+	}
 	for _, mode := range []string{"TRUE", "FALSE"} {
 		s := fmt.Sprintf(got.Query, mode)
 		if strings.Contains(s, "%!") || strings.Contains(s, "%[") {
