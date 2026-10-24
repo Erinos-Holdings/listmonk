@@ -497,6 +497,7 @@
     "dashboard.ses.thresholds": "review {warn} · pause {issues}",
     "dashboard.ses.title": "Amazon SES",
     "dashboard.sends": "Sends",
+    "dashboard.sendsAndClicks": "Sends and clicks",
     "dashboard.subsCollapse": "Hide languages",
     "dashboard.subsExpand": "Show languages",
     "dashboard.subsTotal": "Total",

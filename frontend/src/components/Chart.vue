@@ -199,6 +199,10 @@ export default {
     data: { type: Object, default: () => { } },
     type: { type: String, default: 'line' },
     onClick: { type: Function, default: () => { } },
+    // Fork (dashboard sends, the dual-axis Sends + Clicks chart) -- per-instance options merged
+    // over the type's defaults, key by key at the top level (a host passing `scales` supplies the
+    // whole object), and `plugins` one level deeper so the default tooltip styling survives.
+    options: { type: Object, default: null },
   },
 
   mounted() {
@@ -222,7 +226,8 @@ export default {
     // `options` by reference, so with two bar charts on one page the last to mount used to
     // overwrite the other's onClick (the Links click-through died, or a Shop Link bar opened a
     // Links URL).
-    const conf = { ...def, options: { ...def.options }, data: this.$props.data };
+    this.def = def;
+    const conf = { ...def, options: this.mergedOptions(), data: this.$props.data };
     // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D8) -- the end-of-bar labels, per
     // instance.
     if (def === DEFAULT_BAR) {
@@ -244,6 +249,26 @@ export default {
         this.chart.data = d;
         this.chart.update();
       }
+    },
+
+    // Fork (dashboard sends) -- a host's options can follow its data (the Sends + Clicks chart's
+    // Clicks axis max), so a change is handed to chart.js like a data change.
+    options() {
+      if (this.chart) {
+        this.chart.options = this.mergedOptions();
+        if (this.$props.onClick) {
+          this.chart.options.onClick = this.$props.onClick;
+        }
+        this.chart.update();
+      }
+    },
+  },
+
+  methods: {
+    // The type's defaults with the host's `options` over them (`plugins` merged one level deeper).
+    mergedOptions() {
+      const extra = this.$props.options || {};
+      return { ...this.def.options, ...extra, plugins: { ...this.def.options.plugins, ...(extra.plugins || {}) } };
     },
   },
 

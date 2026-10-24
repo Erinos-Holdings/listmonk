@@ -197,25 +197,19 @@
           </div>
           <div class="tile is-parent relative">
             <b-loading v-if="isChartsLoading" active :is-full-page="false" />
-            <!-- Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D6, revision 2 R4): SES
-                 sends per day (BrandHealth's ses document) and clicks counted as people under
-                 individual tracking, both over the 60 Mountain days ending yesterday -- stacked,
-                 each the tile's full width, Sends above Clicks, one caption under both. -->
+            <!-- Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D6, revision 2 R4, and the
+                 2026-10-24 follow-up): SES sends per day (BrandHealth's ses document) and clicks
+                 counted as people under individual tracking, both over the 60 Mountain days ending
+                 yesterday -- ONE full-width chart, Sends on the left axis, Clicks on the right in a
+                 second color (sendsClicksChart.mjs), one caption under it. -->
             <article class="tile is-child notification charts">
               <div class="columns">
                 <div class="column is-12">
                   <h3 class="title is-size-6">
-                    {{ $t('dashboard.sends') }}
-                  </h3><br />
-                  <chart type="line" v-if="sendsChart" :data="sendsChart" />
-                </div>
-              </div>
-              <div class="columns">
-                <div class="column is-12">
-                  <h3 class="title is-size-6">
-                    {{ $t('dashboard.clicks') }}
-                  </h3><br />
-                  <chart type="line" v-if="clicksChart" :data="clicksChart" />
+                    {{ $t('dashboard.sendsAndClicks') }}
+                  </h3>
+                  <chart type="line" v-if="sendsClicksChart" :data="sendsClicksChart" :options="sendsClicksOptions"
+                    data-cy="sends-clicks-chart" />
                 </div>
               </div>
               <p class="is-size-7 has-text-grey" data-cy="charts-note">{{ $t('dashboard.chartsNote') }}</p>
@@ -310,8 +304,8 @@
 import dayjs from 'dayjs';
 import Vue from 'vue';
 import { mapState } from 'vuex';
-import { colors } from '../constants';
 import Chart from '../components/Chart.vue';
+import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsClicksChart.mjs'; // eslint-disable-line import/extensions
 import DashboardSes from './DashboardSes.vue';
 import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
@@ -347,8 +341,8 @@ export default Vue.extend({
       subsExpanded: this.$utils.getPref('dashboard.subsExpanded') === true,
       isChartsLoading: true,
       isCountsLoading: true,
-      sendsChart: null,
-      clicksChart: null,
+      sendsClicksChart: null,
+      clicksMax: undefined,
       counts: {
         lists: {},
         subscribers: {},
@@ -450,8 +444,8 @@ export default Vue.extend({
 
       this.$api.getDashboardCharts(params).then((data) => {
         this.isChartsLoading = false;
-        this.sendsChart = this.makeChart(data.sends);
-        this.clicksChart = this.makeChart(data.clicks);
+        this.sendsClicksChart = this.makeSendsClicks(data);
+        this.clicksMax = clicksAxisMax(data.clicks);
       });
 
       this.fetchClients(params);
@@ -506,27 +500,26 @@ export default Vue.extend({
       return ids.length ? this.$t('analytics.clientsRoster', { ids: ids.join(', ') }) : '';
     },
 
-    makeChart(data) {
-      if (data.length === 0) {
-        return {};
-      }
-      return {
-        labels: data.map((d) => dayjs(d.date).format('DD MMM')),
-        datasets: [
-          {
-            data: [...data.map((d) => d.count)],
-            borderColor: colors.primary,
-            borderWidth: 2,
-            pointHoverBorderWidth: 5,
-            pointBorderWidth: 0.5,
-          },
-        ],
-      };
+    // The one Sends + Clicks chart (sendsClicksChart.mjs aligns the two by date).
+    makeSendsClicks(data) {
+      return shapeSendsClicks(data.sends, data.clicks, {
+        labelOf: (d) => dayjs(d).format('DD MMM'),
+        sendsLabel: this.$t('dashboard.sends'),
+        clicksLabel: this.$t('dashboard.clicks'),
+      });
     },
   },
 
   computed: {
     ...mapState(['settings', 'serverConfig']),
+
+    // The Sends + Clicks chart's axes, legend and tooltip (sendsClicksChart.mjs); the Clicks axis
+    // max follows the fetched data (the chart re-reads options on change).
+    sendsClicksOptions() {
+      return sendsClicksOptions({
+        sendsLabel: this.$t('dashboard.sends'), clicksLabel: this.$t('dashboard.clicks'), clicksMax: this.clicksMax,
+      });
+    },
 
     // Fork (dashboard counts, D2/D3/D6) -- the API's subscribers.grid; the module decides the lines.
     subsGrid() {
