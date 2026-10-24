@@ -5,7 +5,7 @@
 //
 // The rows come from GET /api/dashboard/brand-matrix verbatim (camelCase: false) -- counts only:
 // { brand, subscribers: {total, active, held, unsubscribed, blocked}, sent, clicks, hard_bounces,
-//   blocks, complaints, health: {status, spam_rate} }. Every rate is computed here, over the one
+//   blocks, complaints, health: {status, spam_rate, spam_status, spam_flagged} }. Every rate is computed here, over the one
 // windowed denominator `sent` (D4); the server never returns a rate.
 import { brandLabelOf, matchesLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
@@ -43,6 +43,10 @@ export function shapeRow(r, brands) {
     label: brandLabelOf(r.brand, brands),
     sent: numOrNull(r.sent),
     spam_rate: numOrNull(h.spam_rate),
+    // GP-SPAM-VISIBILITY-SPEC D2/D3: the stored spamRate status ('' when absent) and the stored
+    // compliance flag (true only when the server says exactly true).
+    spam_status: typeof h.spam_status === 'string' ? h.spam_status : '',
+    spam_flagged: h.spam_flagged === true,
     status: typeof h.status === 'string' ? h.status : '',
     totals: false,
   };
@@ -77,7 +81,7 @@ export function totalsRow(rows, label = 'All brands') {
     return null;
   }
   const out = {
-    brand: '', label, sent: null, spam_rate: null, status: '', totals: true,
+    brand: '', label, sent: null, spam_rate: null, spam_status: '', spam_flagged: false, status: '', totals: true,
   };
   [...SUBSCRIBER_FIELDS, ...ENGAGEMENT_FIELDS].forEach((k) => {
     out[k] = r.reduce((t, x) => t + num(x[k]), 0);
@@ -132,6 +136,28 @@ export function cellText(row, field, mode, fmt = (n) => String(n)) {
     return `${(v * 100).toFixed(RATE_DIGITS)}%`;
   }
   return fmt(v);
+}
+
+// GP-SPAM-VISIBILITY-SPEC D3: the GP Spam % cell's presentation, chosen from the STORED status
+// (the fork holds no threshold). issues → the danger text color, warn → the dark warning text color
+// (never yellow text); ok/unknown/absent → default. When the stored compliance verdict flags
+// user-reported spam but the status is not warn/issues, the cell gets a dotted underline and the
+// flagged tooltip -- while the color shows the problem, the color wins and the tooltip is the
+// plain one. The totals row carries no spam signal. Returns { cls, style, tooltip } (tooltip is an
+// i18n key); Dashboard.vue binds them and decides nothing.
+export const SPAM_HELP = 'dashboard.matrix.spamHelp';
+export const SPAM_FLAGGED_HELP = 'dashboard.matrix.spamFlaggedHelp';
+const SPAM_STATUS_CLASS = Object.freeze({ issues: 'has-text-danger', warn: 'has-text-warning-dark' });
+
+export function spamCell(row) {
+  const status = row && !row.totals && typeof row.spam_status === 'string' ? row.spam_status : '';
+  const cls = Object.prototype.hasOwnProperty.call(SPAM_STATUS_CLASS, status) ? SPAM_STATUS_CLASS[status] : '';
+  const quietFlag = !!(row && !row.totals && row.spam_flagged === true) && cls === '';
+  return {
+    cls,
+    style: quietFlag ? 'text-decoration: underline dotted;' : '',
+    tooltip: quietFlag ? SPAM_FLAGGED_HELP : SPAM_HELP,
+  };
 }
 
 // D6: the first-click direction of a column -- brand ascending, every other descending.

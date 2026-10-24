@@ -69,7 +69,10 @@
         </b-table-column>
         <b-table-column v-slot="props" field="spam_rate" :label="$t('dashboard.matrix.spam')" numeric sortable
           header-class="bm-section" cell-class="bm-section">
-          <span :title="$t('dashboard.matrix.spamHelp')">{{ props.row.totals ? '' : matrixCell(props.row, 'spam_rate') }}</span>
+          <!-- GP-SPAM-VISIBILITY-SPEC D3: class, style and tooltip come from brandMatrix.mjs::spamCell. -->
+          <span :class="spamCell(props.row).cls" :style="spamCell(props.row).style || null"
+            :title="$t(spamCell(props.row).tooltip)" :data-cy="`matrix-spam-${props.row.brand || 'totals'}`">
+            {{ props.row.totals ? '' : matrixCell(props.row, 'spam_rate') }}</span>
         </b-table-column>
         <b-table-column v-slot="props" field="status" :label="$t('dashboard.matrix.health')">
           <health-chip v-if="props.row.status" :status="props.row.status"
@@ -372,7 +375,7 @@ import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsCli
 import DashboardSes from './DashboardSes.vue';
 import HealthChip from '../components/HealthChip.vue';
 import {
-  ENGAGEMENT_FIELDS, cellText, initialPane, loadState, resolveSort, saveState, sessionStore, shapeRows, tableRows,
+  ENGAGEMENT_FIELDS, cellText, initialPane, loadState, resolveSort, saveState, sessionStore, shapeRows, spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
@@ -492,6 +495,10 @@ export default Vue.extend({
 
     matrixCell(row, field) {
       return cellText(row, field, this.matrix.mode, (n) => this.$utils.formatNumber(n));
+    },
+
+    spamCell(row) {
+      return spamCell(row);
     },
 
     matrixRowClass(row) {

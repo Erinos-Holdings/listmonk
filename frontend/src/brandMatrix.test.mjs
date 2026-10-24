@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_STATE, STORAGE_KEY, cellText, defaultOrder, displayValue, initialPane, loadState, rateOf, resolveSort,
-  saveState, sessionStore, shapeRows, sortRows, tableRows, totalsRow,
+  SPAM_FLAGGED_HELP, SPAM_HELP, saveState, sessionStore, shapeRows, sortRows, spamCell, tableRows, totalsRow,
 } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
 const api = [
@@ -211,4 +211,56 @@ test('I7: state round-trips through a working store; garbage reads as defaults',
   assert.deepEqual(loadState(store), DEFAULT_STATE);
   m.set(STORAGE_KEY, JSON.stringify({ sort: { field: 'evil', order: 'sideways' }, mode: 'x' }));
   assert.deepEqual(loadState(store), DEFAULT_STATE);
+});
+
+// GP-SPAM-VISIBILITY-SPEC I3: the GP Spam % cell's class/tooltip from the STORED status and flag.
+test('I3: spamCell colors by the stored spam_status; a quiet flag gets the dotted tooltip; color wins', () => {
+  const row = (health) => shapeRows([{ brand: 'b', subscribers: {}, health }])[0];
+  const plain = { cls: '', style: '', tooltip: SPAM_HELP };
+  const quiet = { cls: '', style: 'text-decoration: underline dotted;', tooltip: SPAM_FLAGGED_HELP };
+
+  assert.equal(SPAM_HELP, 'dashboard.matrix.spamHelp');
+  assert.equal(SPAM_FLAGGED_HELP, 'dashboard.matrix.spamFlaggedHelp');
+
+  // Color by status alone.
+  assert.deepEqual(spamCell(row({ spam_status: 'issues', spam_rate: 0.015 })), { ...plain, cls: 'has-text-danger' });
+  assert.deepEqual(spamCell(row({ spam_status: 'warn', spam_rate: 0.002 })), { ...plain, cls: 'has-text-warning-dark' });
+  assert.deepEqual(spamCell(row({ spam_status: 'ok', spam_rate: 0 })), plain);
+  assert.deepEqual(spamCell(row({ spam_status: 'unknown' })), plain);
+  assert.deepEqual(spamCell(row({})), plain);
+  assert.deepEqual(spamCell(row({ spam_status: 'bogus' })), plain);
+  // The color keys off the stored status, never the value (no threshold in the fork).
+  assert.deepEqual(spamCell(row({ spam_status: 'ok', spam_rate: 0.5 })), plain);
+
+  // Flagged but quiet (ok / unknown / absent status): dotted underline + the flagged tooltip.
+  assert.deepEqual(spamCell(row({ spam_status: 'ok', spam_flagged: true, spam_rate: 0 })), quiet);
+  assert.deepEqual(spamCell(row({ spam_status: 'unknown', spam_flagged: true })), quiet);
+  assert.deepEqual(spamCell(row({ spam_flagged: true })), quiet);
+
+  // Flagged while warn/issues: the color wins, no tooltip duplication.
+  assert.deepEqual(spamCell(row({ spam_status: 'issues', spam_flagged: true })), { ...plain, cls: 'has-text-danger' });
+  assert.deepEqual(spamCell(row({ spam_status: 'warn', spam_flagged: true })), { ...plain, cls: 'has-text-warning-dark' });
+
+  // Only a literal true flags.
+  assert.deepEqual(spamCell(row({ spam_status: 'ok', spam_flagged: 'true' })), plain);
+
+  // The totals row carries no spam signal; a missing row is plain.
+  const t = totalsRow([row({ spam_status: 'issues', spam_flagged: true }), row({ spam_flagged: true })]);
+  assert.equal(t.spam_status, '');
+  assert.equal(t.spam_flagged, false);
+  assert.deepEqual(spamCell(t), plain);
+  assert.deepEqual(spamCell({ totals: true, spam_status: 'issues', spam_flagged: true }), plain);
+  assert.deepEqual(spamCell(undefined), plain);
+});
+
+test('I3: shapeRows carries spam_status and spam_flagged; sorting is untouched', () => {
+  const rows = shapeRows([
+    { brand: 'a', subscribers: {}, health: { spam_rate: 0.01, spam_status: 'issues', spam_flagged: true } },
+    { brand: 'b', subscribers: {}, health: { spam_rate: 0.02, spam_status: 'ok' } },
+  ]);
+  assert.equal(rows[0].spam_status, 'issues');
+  assert.equal(rows[0].spam_flagged, true);
+  assert.equal(rows[1].spam_flagged, false);
+  // Still by the numeric value: b (0.02) before a (0.01), whatever the status.
+  assert.deepEqual(order(sortRows(rows, { field: 'spam_rate', order: 'desc' }, 'pct')), ['b', 'a']);
 });

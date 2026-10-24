@@ -12,7 +12,9 @@ package main
 // tracking modes (each statement prepared through prepareQueries as cmd/init.go does at boot),
 // hard bounces / the block class (the classPredicate("hard","block") mirror, I2's fork half) /
 // complaints in the window, sent from the latest ses document's in-window daily rows, and the
-// brand's own latest brand_health row (status, spamRate.detail.value) with no default fallback.
+// brand's own latest brand_health row (status, spamRate.detail.value) with no default fallback;
+// GP-SPAM-VISIBILITY-SPEC I2: that row's spamRate.status and the NEEDS_WORK USER_REPORTED_SPAM_RATE
+// compliance flag projected verbatim (spam_status, spam_flagged), absent when not stored.
 // I4: GET /api/dashboard/brand-matrix is refused (403) without brands:get.
 
 import (
@@ -39,8 +41,10 @@ type matrixSubs struct {
 }
 
 type matrixHealth struct {
-	Status   string   `json:"status,omitempty"`
-	SpamRate *float64 `json:"spam_rate,omitempty"`
+	Status      string   `json:"status,omitempty"`
+	SpamRate    *float64 `json:"spam_rate,omitempty"`
+	SpamStatus  string   `json:"spam_status,omitempty"`
+	SpamFlagged *bool    `json:"spam_flagged,omitempty"`
 }
 
 type matrixRow struct {
@@ -235,22 +239,41 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 
 	// brand_health: alpha's older row must lose to its newest; bravo's newest carries no spam value;
 	// a default-sender row for another brand must never reach delta (no default fallback).
-	brandHealth := func(brand string, n int, status string, isDefault bool, spam any) {
-		b, _ := json.Marshal(map[string]any{"brand": brand, "status": status,
-			"inputs": map[string]any{"spamRate": map[string]any{"status": status, "detail": map[string]any{"value": spam}}}})
+	// GP-SPAM-VISIBILITY-SPEC I2: spam_status is inputs.spamRate.status verbatim (here deliberately
+	// different from the row status, so a projection of the wrong field fails), absent when the doc
+	// lacks it; spam_flagged is true only for a NEEDS_WORK USER_REPORTED_SPAM_RATE compliance row
+	// (bravo's newest carries each half on a different row -- no match), absent otherwise, and only
+	// the latest doc counts (bravo's older row is flagged).
+	type cfgRow struct {
+		Requirement string `json:"requirement"`
+		Status      string `json:"status"`
+	}
+	flaggedRows := []cfgRow{{"USER_REPORTED_SPAM_RATE", "NEEDS_WORK"}, {"DMARC_POLICY", "COMPLIANT"}}
+	brandHealth := func(brand string, n int, status string, isDefault bool, spam any, spamStatus string, cfg []cfgRow) {
+		sr := map[string]any{"detail": map[string]any{"value": spam}}
+		if spamStatus != "" {
+			sr["status"] = spamStatus
+		}
+		inputs := map[string]any{"spamRate": sr}
+		if cfg != nil {
+			inputs["config"] = map[string]any{"status": "warn", "detail": map[string]any{"rows": cfg}}
+		}
+		b, _ := json.Marshal(map[string]any{"brand": brand, "status": status, "inputs": inputs})
 		h.db.MustExec(`INSERT INTO brand_health (brand, day, status, is_default, doc) VALUES ($1, $2::DATE, $3, $4, $5::JSONB)`,
 			brand, day(n), status, isDefault, string(b))
 	}
-	brandHealth("alpha", 3, "warn", false, 0.5)
-	brandHealth("alpha", 1, "ok", false, 0.0012)
-	brandHealth("bravo", 1, "unknown", false, nil)
-	brandHealth("curated", 1, "issues", true, 0.9)
+	brandHealth("alpha", 3, "warn", false, 0.5, "warn", nil)
+	brandHealth("alpha", 1, "ok", false, 0.0012, "issues", flaggedRows)
+	brandHealth("bravo", 3, "issues", false, 0.9, "issues", flaggedRows)
+	brandHealth("bravo", 1, "unknown", false, nil, "", []cfgRow{{"USER_REPORTED_SPAM_RATE", "COMPLIANT"}, {"SPF", "NEEDS_WORK"}})
+	brandHealth("curated", 1, "issues", true, 0.9, "issues", flaggedRows)
 
 	spam := 0.0012
+	flagged := true
 	alpha := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "alpha", Subscribers: matrixSubs{Total: 4, Active: 1, Held: 1, Unsubscribed: 1, Blocked: 1},
 			Sent: &alphaSent, Clicks: wantClicks[tracking]["alpha"], HardBounces: 5, Blocks: 1, Complaints: 1,
-			Health: matrixHealth{Status: "ok", SpamRate: &spam}}
+			Health: matrixHealth{Status: "ok", SpamRate: &spam, SpamStatus: "issues", SpamFlagged: &flagged}}
 	}
 	bravo := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "bravo", Subscribers: matrixSubs{Total: 2, Active: 1},

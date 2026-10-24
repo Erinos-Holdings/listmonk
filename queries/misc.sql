@@ -244,6 +244,10 @@ SELECT JSON_BUILD_OBJECT(
 --     document has no in-window day for the brand. unattributed is never a row.
 --   health = the brand's own LATEST brand_health row (no default-row fallback) -- status and
 --     inputs.spamRate.detail.value as spam_rate when it is a number; an empty object with no row.
+--     GP-SPAM-VISIBILITY-SPEC D2 -- spam_status = inputs.spamRate.status verbatim (absent when the
+--     doc lacks it), spam_flagged = TRUE when the stored compliance rows carry a NEEDS_WORK
+--     USER_REPORTED_SPAM_RATE requirement, absent otherwise. Both are stored fields projected,
+--     never a rule computed here (no threshold in the fork).
 WITH lst AS (
     SELECT id, type, optin, list_brand_tag(tags) AS brand FROM lists
     WHERE ($2::BOOLEAN OR id = ANY($1::INT[])) AND status = 'active'
@@ -350,7 +354,10 @@ SELECT JSON_BUILD_OBJECT(
             'health', JSONB_STRIP_NULLS(JSONB_BUILD_OBJECT(
                 'status', bh.status,
                 'spam_rate', CASE WHEN JSONB_TYPEOF(bh.doc->'inputs'->'spamRate'->'detail'->'value') = 'number'
-                    THEN bh.doc->'inputs'->'spamRate'->'detail'->'value' END
+                    THEN bh.doc->'inputs'->'spamRate'->'detail'->'value' END,
+                'spam_status', bh.doc->'inputs'->'spamRate'->>'status',
+                'spam_flagged', CASE WHEN JSONB_PATH_EXISTS(bh.doc, '$.inputs.config.detail.rows[*] ? (@.requirement == "USER_REPORTED_SPAM_RATE" && @.status == "NEEDS_WORK")')
+                    THEN TRUE END
             ))
         ) ORDER BY b.brand)
         FROM brands b
