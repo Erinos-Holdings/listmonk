@@ -429,6 +429,11 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 		// clicks count the way the analytics page does: each subscriber once when ON, raw rows
 		// when OFF. Bounces are always raw (D3).
 		statsSel = "campaign_id"
+
+		// Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D4) -- the Dashboard Clicks
+		// chart counts people with the same switch: TRUE counts each (campaign, subscriber) once on
+		// its first-click day, FALSE raw rows (hazard 96, one definition).
+		uniqueClicks = "FALSE"
 	)
 	if ko.Bool("privacy.individual_tracking") {
 		countQuery = "get-campaign-analytics-unique-counts"
@@ -436,6 +441,7 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 		countrySel = "DISTINCT (subscriber_id, campaign_id)"
 		countryFilter = "AND subscriber_id IS NOT NULL"
 		statsSel = "DISTINCT subscriber_id"
+		uniqueClicks = "TRUE"
 	}
 
 	// These don't exist in the SQL file but are in the queries struct to be prepared.
@@ -461,6 +467,7 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	// engagement (views, clicks) is get-campaign-stats summed over the scope's campaigns, so it is
 	// interpolated with the SAME statsSel: the two cannot disagree.
 	qMap["get-dashboard-counts-scoped"].Query = fmt.Sprintf(qMap["get-dashboard-counts-scoped"].Query, statsSel)
+	qMap["get-dashboard-charts-scoped"].Query = fmt.Sprintf(qMap["get-dashboard-charts-scoped"].Query, uniqueClicks)
 
 	// Scan and prepare all queries.
 	var q models.Queries

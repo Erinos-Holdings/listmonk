@@ -83,7 +83,9 @@ func TestBrandAnalyticsQueriesParse(t *testing.T) {
 			for k, v := range got.Tags {
 				tags[k] = v
 			}
-			if n == "get-dashboard-counts-scoped" && tags["raw"] == "true" {
+			// Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC I6) -- the charts query is
+			// interpolated at boot the same way (the clicks mode).
+			if (n == "get-dashboard-counts-scoped" || n == "get-dashboard-charts-scoped") && tags["raw"] == "true" {
 				delete(tags, "raw")
 			}
 			if len(tags) != 0 {
@@ -127,6 +129,46 @@ func TestShopLinkCountsQueryInterpolates(t *testing.T) {
 		}
 		if !strings.Contains(s, "COUNT("+sel+")") {
 			t.Errorf("interpolated with %q: counted expression not in place\n%s", sel, s)
+		}
+	}
+}
+
+// Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC I6) -- the charts query is interpolated
+// on boot with the clicks mode (TRUE/FALSE, cmd/init.go), so like the shop-link counts its text may
+// carry no bare % beyond the placeholder, and its only tag is raw.
+func TestDashboardChartsQueryInterpolates(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "queries", "misc.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, err := goyesql.ParseBytes(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := q["get-dashboard-charts"]; ok {
+		t.Error("get-dashboard-charts (the mat_dashboard_charts read) is retired and must not be shipped")
+	}
+	got, ok := q["get-dashboard-charts-scoped"]
+	if !ok || !strings.Contains(got.Query, "SELECT") {
+		t.Fatal("get-dashboard-charts-scoped missing or empty after parse")
+	}
+	if len(got.Tags) != 1 || got.Tags["raw"] != "true" {
+		t.Errorf("get-dashboard-charts-scoped tags %v, want only raw=true (a colon-bearing comment line?)", got.Tags)
+	}
+	if n := strings.Count(got.Query, "%"); n != strings.Count(got.Query, "%[1]s") {
+		t.Errorf("query text carries %d percent signs beyond the %%[1]s placeholders", n)
+	}
+	if strings.Contains(got.Query, "mat_dashboard_charts") {
+		t.Error("the charts query reads mat_dashboard_charts")
+	}
+	for _, mode := range []string{"TRUE", "FALSE"} {
+		s := fmt.Sprintf(got.Query, mode)
+		if strings.Contains(s, "%!") || strings.Contains(s, "%[") {
+			t.Errorf("interpolated with %q: verb error or leftover placeholder\n%s", mode, s)
 		}
 	}
 }

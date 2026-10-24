@@ -1,6 +1,3 @@
--- name: get-dashboard-charts
-SELECT data FROM mat_dashboard_charts;
-
 -- name: get-dashboard-counts-scoped
 -- raw: true
 -- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7; dashboard counts, integrations
@@ -113,44 +110,91 @@ SELECT JSON_BUILD_OBJECT(
 ) AS data;
 
 -- name: get-dashboard-charts-scoped
--- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7). Views and clicks per day of the campaigns C
--- ($1/$2 as get-dashboard-counts-scoped). Per table, the window ends on the day of the latest
--- event of C, by MAX(created_at) over the campaign_id index (never ORDER BY id DESC LIMIT 1,
--- which walks the whole table backward), with mat_dashboard_charts' exact bounds (31 days).
+-- raw: true
+-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7; dashboard sends, integrations
+-- DASHBOARD-SENDS-SPEC D2-D5). The ONE Dashboard charts query, live for every reader --
+-- mat_dashboard_charts is no longer read. $1/$2/$3 exactly as get-dashboard-counts-scoped ($1 = the
+-- scope's list ids, $2 = campaigns get_all, $3 = unscoped). Both series cover the 30 UTC days
+-- ending yesterday, every day bucketed in UTC (never the session time zone).
+-- clicks = link_clicks of the campaigns C per day, zero-filled. The mode is interpolated at boot
+-- (cmd/init.go, beside statsSel) as TRUE when individual tracking is ON -- each (campaign,
+-- subscriber) pair counts once, on the UTC day of its FIRST click on that campaign (a pair clicked
+-- before the window is not counted, NULL subscribers never) -- and FALSE when OFF (raw rows). The
+-- constant prunes the other branch at plan time.
+-- sends = the per-day Send of the LATEST system_health ses document (written by the integrations
+-- BrandHealth Lambda), summed over its brands rows -- every row when unscoped (unattributed
+-- included), else the rows whose brand is the brand tag of a list in $1 (unattributed never).
+-- Only the document's days inside the window, no zero fill (a stale document ends a day early).
 WITH camps AS (
     SELECT c.id FROM campaigns c
     WHERE $2::BOOLEAN OR EXISTS (
         SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
     )
 ),
-clicks AS (
-    SELECT JSON_AGG(ROW_TO_JSON(r)) FROM (
-        WITH d AS (
-            SELECT MAX(created_at)::DATE AS to_date FROM link_clicks WHERE campaign_id IN (SELECT id FROM camps)
-        )
-        SELECT COUNT(*) AS count, created_at::DATE AS date FROM link_clicks
-            WHERE campaign_id IN (SELECT id FROM camps)
-            AND created_at >= (SELECT to_date FROM d) - INTERVAL '30 DAY'
-            AND created_at < (SELECT to_date FROM d) + INTERVAL '1 day'
-            GROUP BY date ORDER BY date
-    ) r
+win AS (
+    SELECT (NOW() AT TIME ZONE 'UTC')::DATE - 30 AS d0, (NOW() AT TIME ZONE 'UTC')::DATE - 1 AS d1
 ),
-views AS (
-    SELECT JSON_AGG(ROW_TO_JSON(r)) FROM (
-        WITH d AS (
-            SELECT MAX(created_at)::DATE AS to_date FROM campaign_views WHERE campaign_id IN (SELECT id FROM camps)
-        )
-        SELECT COUNT(*) AS count, created_at::DATE AS date FROM campaign_views
-            WHERE campaign_id IN (SELECT id FROM camps)
-            AND created_at >= (SELECT to_date FROM d) - INTERVAL '30 DAY'
-            AND created_at < (SELECT to_date FROM d) + INTERVAL '1 day'
-            GROUP BY date ORDER BY date
-    ) r
+bounds AS (
+    SELECT d0, d1, (d0::TIMESTAMP AT TIME ZONE 'UTC') AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE 'UTC') AS t1 FROM win
+),
+days AS (
+    SELECT GENERATE_SERIES(d0, d1, INTERVAL '1 day')::DATE AS d FROM win
+),
+raw_clicks AS (
+    SELECT (lc.created_at AT TIME ZONE 'UTC')::DATE AS d FROM link_clicks lc
+    WHERE NOT %[1]s
+        AND lc.campaign_id IN (SELECT id FROM camps)
+        AND lc.created_at >= (SELECT t0 FROM bounds) AND lc.created_at < (SELECT t1 FROM bounds)
+),
+pair_clicks AS (
+    SELECT (MIN(lc.created_at) AT TIME ZONE 'UTC')::DATE AS d FROM link_clicks lc
+    WHERE %[1]s
+        AND lc.subscriber_id IS NOT NULL
+        AND lc.campaign_id IN (SELECT id FROM camps)
+        AND lc.created_at >= (SELECT t0 FROM bounds) AND lc.created_at < (SELECT t1 FROM bounds)
+    GROUP BY lc.campaign_id, lc.subscriber_id
+    HAVING NOT EXISTS (
+        SELECT 1 FROM link_clicks p
+        WHERE p.subscriber_id = lc.subscriber_id AND p.campaign_id = lc.campaign_id
+            AND p.created_at < (SELECT t0 FROM bounds)
+    )
+),
+click_days AS (
+    SELECT d, COUNT(*) AS n FROM (
+        SELECT d FROM raw_clicks UNION ALL SELECT d FROM pair_clicks
+    ) x GROUP BY d
+),
+clicks AS (
+    SELECT JSON_AGG(JSON_BUILD_OBJECT('date', days.d, 'count', COALESCE(cd.n, 0)) ORDER BY days.d)
+    FROM days LEFT JOIN click_days cd ON cd.d = days.d
+),
+sesdoc AS (
+    SELECT doc FROM system_health WHERE kind = 'ses' ORDER BY day DESC LIMIT 1
+),
+scope_brands AS (
+    SELECT DISTINCT SUBSTR(t, 7) AS brand FROM lists l, UNNEST(l.tags) AS t
+    WHERE l.id = ANY($1::INT[]) AND LEFT(t, 6) = 'brand:'
+),
+ses_rows AS (
+    SELECT r FROM sesdoc,
+        JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(doc->'brands') = 'array' THEN doc->'brands' ELSE '[]'::JSONB END) r
+    WHERE $3::BOOLEAN
+        OR (r->>'brand' <> 'unattributed' AND r->>'brand' IN (SELECT brand FROM scope_brands))
+),
+send_days AS (
+    SELECT (x->>'day')::DATE AS d, SUM((x->>'sends')::NUMERIC)::BIGINT AS n FROM ses_rows,
+        JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(r->'daily') = 'array' THEN r->'daily' ELSE '[]'::JSONB END) x
+    WHERE x->>'day' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND JSONB_TYPEOF(x->'sends') = 'number'
+    GROUP BY 1
+),
+sends AS (
+    SELECT JSON_AGG(JSON_BUILD_OBJECT('date', sd.d, 'count', sd.n) ORDER BY sd.d)
+    FROM send_days sd, win WHERE sd.d BETWEEN win.d0 AND win.d1
 )
 SELECT JSON_BUILD_OBJECT(
-    'link_clicks', COALESCE((SELECT * FROM clicks), '[]'),
-    'campaign_views', COALESCE((SELECT * FROM views), '[]'),
-    'scoped', TRUE
+    'sends', COALESCE((SELECT * FROM sends), '[]'),
+    'clicks', COALESCE((SELECT * FROM clicks), '[]'),
+    'scoped', NOT $3::BOOLEAN
 ) AS data;
 
 -- name: get-dashboard-clients
@@ -158,9 +202,10 @@ SELECT JSON_BUILD_OBJECT(
 -- main Dashboard's client panel over every campaign, live (no materialized view). Any scope (a
 -- list-scoped user, the global brand's list_id) reads get-dashboard-clients-scoped instead
 -- (GLOBAL-BRAND-SPEC D5, which retired the panel's own brand parameter). Per table, the window is
--- get-dashboard-charts-scoped's rule exactly (31 days ending on the day of the latest event of
--- those campaigns, by MAX(created_at) over the campaign_id index). Raw rows, as the Dashboard charts
--- count. Unknown client (NULL) is reported as the empty string.
+-- the charts' former rule, kept here (31 days ending on the day of the latest event of those
+-- campaigns, by MAX(created_at) over the campaign_id index; the charts themselves moved to a UTC
+-- window ending yesterday in DASHBOARD-SENDS-SPEC). Raw rows. Unknown client (NULL) is reported as
+-- the empty string.
 WITH camps AS (
     SELECT c.id FROM campaigns c
 ),

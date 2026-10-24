@@ -10,16 +10,11 @@ import (
 )
 
 // GetDashboardCharts returns chart data points to render on the dashboard.
+// Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D2) -- the unscoped read is the one live
+// charts query over every campaign and every brand's sends (unscoped = true). mat_dashboard_charts
+// is no longer read, so it is no longer refreshed here (RefreshMatViews still refreshes it).
 func (c *Core) GetDashboardCharts() (types.JSONText, error) {
-	_ = c.refreshCache(matDashboardCharts, false)
-
-	var out types.JSONText
-	if err := c.q.GetDashboardCharts.Get(&out); err != nil {
-		return nil, echo.NewHTTPError(http.StatusInternalServerError,
-			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard charts", "error", pqErrMsg(err)))
-	}
-
-	return out, nil
+	return c.dashboardCharts([]int{}, true, true)
 }
 
 // GetDashboardCounts returns stats counts to show on the dashboard.
@@ -56,12 +51,17 @@ func (c *Core) dashboardCounts(listIDs []int, allCampaigns, unscoped bool) (type
 // GetDashboardChartsScoped (fork, brand analytics, BRAND-ANALYTICS-SPEC D7) is the chart
 // counterpart of GetDashboardCountsScoped. Live, no refreshCache.
 func (c *Core) GetDashboardChartsScoped(listIDs []int, allCampaigns bool) (types.JSONText, error) {
+	return c.dashboardCharts(listIDs, allCampaigns, false)
+}
+
+// dashboardCharts (fork, DASHBOARD-SENDS-SPEC D2) runs the one charts statement for both paths.
+func (c *Core) dashboardCharts(listIDs []int, allCampaigns, unscoped bool) (types.JSONText, error) {
 	if listIDs == nil {
 		listIDs = []int{}
 	}
 
 	var out types.JSONText
-	if err := c.q.GetDashboardChartsScoped.Get(&out, pq.Array(listIDs), allCampaigns); err != nil {
+	if err := c.q.GetDashboardChartsScoped.Get(&out, pq.Array(listIDs), allCampaigns, unscoped); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard charts", "error", pqErrMsg(err)))
 	}

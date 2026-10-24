@@ -4,10 +4,9 @@ package main
 // through the handlers: the Campaign Analytics picker (GET /api/analytics/campaigns) is scoped by
 // the ANY-list rule and gated on campaigns:get_analytics through the same a.auth.Perm wrapper
 // handlers.go uses; the analytics endpoint stays all-or-nothing over several ids; the Dashboard
-// counts and charts are live and scoped for list-scoped users, the charts byte-for-byte the
-// materialized view for everyone else (the counts are one live query for both since
-// DASHBOARD-COUNTS-SPEC D5), and null-free. Shares newLinkHarness (LISTMONK_TEST_PG opt-in; see
-// link_redirect_db_test.go).
+// counts and charts are live and scoped for list-scoped users (each is one live query for both
+// paths since DASHBOARD-COUNTS-SPEC D5 and DASHBOARD-SENDS-SPEC D2), and null-free. Shares
+// newLinkHarness (LISTMONK_TEST_PG opt-in; see link_redirect_db_test.go).
 
 import (
 	"encoding/json"
@@ -457,54 +456,51 @@ func TestBrandAnalyticsDashboardCharts(t *testing.T) {
 	var link int
 	h.db.Get(&link, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), 'https://ch.test') RETURNING id`)
 
-	// day d at noon, in the session's time zone (the queries' ::DATE uses the same zone).
-	view := func(camp int, day string, n int) {
+	// Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D2/D3) -- the charts are a UTC window
+	// of 30 days ending yesterday, for every reader; the counting itself is TestDashboardChartsDB.
+	// Here only the scope: clicks of C (A and A+B) count, another brand's campaign never does.
+	// Each click by its own subscriber, so it counts once in either tracking mode.
+	nSub := 0
+	click := func(camp, daysAgo, n int) {
 		for i := 0; i < n; i++ {
-			h.db.MustExec(`INSERT INTO campaign_views (campaign_id, created_at) VALUES ($1, ($2::DATE + TIME '12:00')::TIMESTAMP)`, camp, day)
+			nSub++
+			sub := h.baSub(fmt.Sprintf("charts%d@x", nSub), "enabled", nil)
+			h.db.MustExec(`INSERT INTO link_clicks (campaign_id, subscriber_id, link_id, created_at)
+				VALUES ($1, $2, $3, ((NOW() AT TIME ZONE 'UTC')::DATE - $4::INT + TIME '12:00') AT TIME ZONE 'UTC')`, camp, sub, link, daysAgo)
 		}
 	}
-	click := func(camp int, day string, n int) {
-		for i := 0; i < n; i++ {
-			h.db.MustExec(`INSERT INTO link_clicks (campaign_id, link_id, created_at) VALUES ($1, $2, ($3::DATE + TIME '12:00')::TIMESTAMP)`, camp, link, day)
-		}
-	}
+	click(f.campA, 3, 1)
+	click(f.campAB, 3, 2)
+	click(f.campB, 3, 5)
 
-	// Views of C (A and A+B): latest 2026-06-30 -> window 2026-05-31 .. 2026-06-30 (31 days); day
-	// 32 (2026-05-30) is out. Clicks anchor independently on 2026-06-15.
-	view(f.campA, "2026-06-30", 1)
-	view(f.campAB, "2026-06-30", 2)
-	view(f.campA, "2026-06-10", 1)
-	view(f.campAB, "2026-05-31", 1)
-	view(f.campA, "2026-05-30", 4)
-	click(f.campA, "2026-06-15", 1)
-	click(f.campAB, "2026-05-16", 2)
-	click(f.campA, "2026-05-15", 3)
-	// Another brand's campaign: events after C's latest (and inserted last, so the highest ids)
-	// must neither count nor move the anchor; so must an older event with a higher id.
-	view(f.campB, "2026-07-20", 5)
-	click(f.campB, "2026-07-20", 5)
-	view(f.campB, "2026-06-01", 1)
+	sumCounts := func(v any) (int, int) {
+		pts, _ := v.([]any)
+		sum := 0
+		for _, p := range pts {
+			sum += int(p.(map[string]any)["count"].(float64))
+		}
+		return sum, len(pts)
+	}
 
 	charts := h.app.GetDashboardCharts
 	onA := dashJSON(t, baUser([]string{auth.PermCampaignsGetAnalytics}, f.listA), "charts", charts)
-	want := `{"campaign_views":[{"count":1,"date":"2026-05-31"},{"count":1,"date":"2026-06-10"},{"count":3,"date":"2026-06-30"}],"link_clicks":[{"count":2,"date":"2026-05-16"},{"count":1,"date":"2026-06-15"}],"scoped":true}`
-	if got := baJSON(onA); got != want {
-		t.Fatalf("scoped charts on A\n got  %s\n want %s", got, want)
+	if s, n := sumCounts(onA["clicks"]); s != 3 || n != 30 || onA["scoped"] != true {
+		t.Fatalf("scoped charts on A: clicks %d over %d points: %s", s, n, baJSON(onA))
+	}
+	if _, ok := onA["campaign_views"]; ok {
+		t.Fatal("charts still carry campaign_views")
 	}
 
-	// I6 charts: no permitted list -> empty arrays, never null, never global.
+	// I6 charts: no permitted list -> empty sends and zero clicks, never null, never global.
 	none := dashJSON(t, baUser([]string{auth.PermCampaignsGetAnalytics}), "charts", charts)
-	if got, want := baJSON(none), `{"campaign_views":[],"link_clicks":[],"scoped":true}`; got != want {
-		t.Fatalf("no lists charts\n got  %s\n want %s", got, want)
+	if s, n := sumCounts(none["clicks"]); s != 0 || n != 30 || none["scoped"] != true || baJSON(none["sends"]) != "[]" {
+		t.Fatalf("no lists charts: %s", baJSON(none))
 	}
 
-	// Unscoped: exactly the materialized view, no scoped key.
+	// Unscoped: every campaign, scoped false.
 	got := dashJSON(t, baUser([]string{auth.PermListGetAll}), "charts", charts)
-	if want := matView(t, h, "mat_dashboard_charts"); !reflect.DeepEqual(got, want) {
-		t.Fatalf("unscoped charts\n got  %s\n want %s", baJSON(got), baJSON(want))
-	}
-	if _, ok := got["scoped"]; ok {
-		t.Fatal("unscoped charts carry a scoped key")
+	if s, _ := sumCounts(got["clicks"]); s != 8 || got["scoped"] != false {
+		t.Fatalf("unscoped charts: %s", baJSON(got))
 	}
 }
 

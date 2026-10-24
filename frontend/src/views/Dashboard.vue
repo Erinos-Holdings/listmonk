@@ -197,21 +197,25 @@
           </div>
           <div class="tile is-parent relative">
             <b-loading v-if="isChartsLoading" active :is-full-page="false" />
+            <!-- Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D6): SES sends per day
+                 (BrandHealth's ses document) and clicks counted as people under individual
+                 tracking, both over the 30 UTC days ending yesterday. -->
             <article class="tile is-child notification charts">
               <div class="columns">
                 <div class="column is-6">
                   <h3 class="title is-size-6">
-                    {{ $t('dashboard.campaignViews') }}
+                    {{ $t('dashboard.sends') }}
                   </h3><br />
-                  <chart type="line" v-if="campaignViews" :data="campaignViews" />
+                  <chart type="line" v-if="sendsChart" :data="sendsChart" />
                 </div>
                 <div class="column is-6">
                   <h3 class="title is-size-6 has-text-right">
-                    {{ $t('dashboard.linkClicks') }}
+                    {{ $t('dashboard.clicks') }}
                   </h3><br />
-                  <chart type="line" v-if="campaignClicks" :data="campaignClicks" />
+                  <chart type="line" v-if="clicksChart" :data="clicksChart" />
                 </div>
               </div>
+              <p class="is-size-7 has-text-grey" data-cy="charts-note">{{ $t('dashboard.chartsNote') }}</p>
             </article>
           </div>
 
@@ -340,8 +344,8 @@ export default Vue.extend({
       subsExpanded: this.$utils.getPref('dashboard.subsExpanded') === true,
       isChartsLoading: true,
       isCountsLoading: true,
-      campaignViews: null,
-      campaignClicks: null,
+      sendsChart: null,
+      clicksChart: null,
       counts: {
         lists: {},
         subscribers: {},
@@ -443,8 +447,8 @@ export default Vue.extend({
 
       this.$api.getDashboardCharts(params).then((data) => {
         this.isChartsLoading = false;
-        this.campaignViews = this.makeChart(data.campaignViews);
-        this.campaignClicks = this.makeChart(data.linkClicks);
+        this.sendsChart = this.makeChart(data.sends);
+        this.clicksChart = this.makeChart(data.clicks);
       });
 
       this.fetchClients(params);

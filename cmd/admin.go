@@ -124,7 +124,8 @@ func (a *App) GetServerConfig(c echo.Context) error {
 }
 
 // dashboardScope (fork, global brand, integrations GLOBAL-BRAND-SPEC D5) is the Dashboard's read
-// decision: scoped=false is the materialized views (blanket list access, no list_id); scoped=true
+// decision: scoped=false is the unscoped read (blanket list access, no list_id -- the counts and
+// charts are live statements run unscoped, the client and Location panels their unscoped queries); scoped=true
 // is the live scoped queries over listIDs, with allCampaigns their campaigns get_all argument.
 type dashboardScope struct {
 	scoped       bool
@@ -180,7 +181,8 @@ func (a *App) dashboardScopeFor(c echo.Context) (dashboardScope, error) {
 func (a *App) GetDashboardCharts(c echo.Context) error {
 	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7; global brand, GLOBAL-BRAND-SPEC D5) -- a
 	// list-scoped user, or any list_id, reads live, scoped charts; blanket list access with no
-	// list_id keeps the materialized view unchanged.
+	// list_id reads the same live statement unscoped (integrations DASHBOARD-SENDS-SPEC D2 -- no
+	// longer mat_dashboard_charts).
 	sc, err := a.dashboardScopeFor(c)
 	if err != nil {
 		return err
