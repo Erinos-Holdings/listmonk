@@ -9,13 +9,16 @@
 // never 0 -- before the morning SES read the Sends series ends a day before Clicks, and a 0 there
 // would read as "nothing was sent".
 //
-// Colors (dataviz validator, light surface): the bar fill is a pale step of the Dashboard blue
-// (below 3:1 on white, so each bar carries a 1px border in the primary blue, which passes) and the
-// line is the categorical slot-2 orange; the pair passes CVD and normal-vision separation.
+// Colors (dataviz validator, light surface; user-tuned 2026-10-24): the bar fill is a pale step of
+// the Dashboard blue (each bar carries a 1px border in the primary blue for its edge contrast); the
+// line is a deep burnt orange -- blue's complement, dark enough to read over a bar (3.8:1 against
+// the fill) and as axis text (5.9:1 on white; the blue is 6.5:1). The blue/orange pair passes CVD
+// and normal-vision separation. There is no legend: each axis's title and numbers wear its
+// series' color, so the axis IS the key.
 
 export const SENDS_COLOR = '#0055d4';
-export const SENDS_FILL = '#6da7ec';
-export const CLICKS_COLOR = '#eb6834';
+export const SENDS_FILL = '#b7d3f6';
+export const CLICKS_COLOR = '#b33c00';
 export const CLICKS_HEADROOM = 2;
 
 // sends, clicks: [{date: 'YYYY-MM-DD', count}] as GET /api/dashboard/charts returns them.
@@ -67,30 +70,28 @@ export function clicksAxisMax(clicks) {
   return top > 0 ? top * CLICKS_HEADROOM : undefined;
 }
 
-// The chart.js options merged over the line defaults: a legend (two series), one tooltip listing
-// both values for the hovered day, Sends on the left axis and Clicks on the right. Axis text stays
-// in ink (the titles name the series; the legend swatches carry the color).
+// The chart.js options merged over the line defaults: no legend (each axis's title and numbers
+// wear its series' color), one tooltip listing both values for the hovered day, Sends on the left
+// axis and Clicks on the right.
 export function sendsClicksOptions({ sendsLabel, clicksLabel, clicksMax }) {
-  const axis = (position, title, extra) => ({
+  const axis = (position, title, color, extra) => ({
     position,
     beginAtZero: true,
-    title: { display: true, text: title },
+    title: { display: true, text: title, color },
     grid: { display: false },
-    ticks: { precision: 0 },
+    ticks: { precision: 0, color },
     ...extra,
   });
   return {
     interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: {
-        display: true, position: 'top', align: 'start', labels: { boxWidth: 12, boxHeight: 8 },
-      },
+      legend: { display: false },
     },
     scales: {
       // offset: a line-type chart does not pad the category axis, which would halve the end bars.
       x: { grid: { display: false }, offset: true },
-      y: axis('left', sendsLabel, {}),
-      y1: axis('right', clicksLabel, clicksMax === undefined ? {} : { max: clicksMax }),
+      y: axis('left', sendsLabel, SENDS_COLOR, {}),
+      y1: axis('right', clicksLabel, CLICKS_COLOR, clicksMax === undefined ? {} : { max: clicksMax }),
     },
   };
 }

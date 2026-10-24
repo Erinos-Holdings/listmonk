@@ -53,7 +53,7 @@ test('the Clicks axis maximum is the headroom multiple of the busiest day (line 
   assert.equal(clicksAxisMax(null), undefined);
 });
 
-test('options: Sends axis left, Clicks axis right with its max, titled; legend shown; index tooltip', () => {
+test('options: Sends axis left, Clicks axis right with its max, titled; no legend; each axis in its series color; index tooltip', () => {
   const o = sendsClicksOptions({ sendsLabel: 'Sends', clicksLabel: 'Clicks', clicksMax: 790 });
   assert.equal(o.scales.y.position, 'left');
   assert.equal(o.scales.y1.position, 'right');
@@ -61,7 +61,9 @@ test('options: Sends axis left, Clicks axis right with its max, titled; legend s
   assert.equal(o.scales.y.max, undefined);
   assert.equal(o.scales.y.title.text, 'Sends');
   assert.equal(o.scales.y1.title.text, 'Clicks');
-  assert.equal(o.plugins.legend.display, true);
+  assert.equal(o.plugins.legend.display, false);
+  assert.deepEqual([o.scales.y.title.color, o.scales.y.ticks.color], [SENDS_COLOR, SENDS_COLOR]);
+  assert.deepEqual([o.scales.y1.title.color, o.scales.y1.ticks.color], [CLICKS_COLOR, CLICKS_COLOR]);
   assert.equal(o.interaction.mode, 'index');
   assert.equal(o.scales.x.offset, true);
   assert.equal(sendsClicksOptions({ sendsLabel: 'S', clicksLabel: 'C' }).scales.y1.max, undefined);
