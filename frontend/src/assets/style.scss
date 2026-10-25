@@ -1018,6 +1018,17 @@ section.dashboard {
       font-variant-numeric: tabular-nums;
       vertical-align: middle;
     }
+    /* DASHBOARDS-POLISH-SPEC D3: the table takes only the width its content needs (shrink-to-fit,
+    never the viewport) with the side padding roughly halved from Bulma's is-narrow 0.5em --
+    readable, not cramped. The group headers stay centered over their colspans; the circle and
+    glyph cells stay centered (has-text-centered). */
+    table.bu-table {
+      width: auto;
+      td, th {
+        padding-left: 0.25em;
+        padding-right: 0.25em;
+      }
+    }
     th.bm-sort {
       cursor: pointer;
       user-select: none;
@@ -1099,12 +1110,17 @@ section.dashboard {
     }
   }
 
-  /* Fork (BRAND-USAGE-V2-SPEC D7b) -- the Subscribers + Messages sent container's PERMANENT width:
-  its widest state, the expanded segment x send-language table (a label column, All and up to the
-  six GRID_LANGS columns of comma-separated counts, the %|# toggle in its corner) plus the tile and
-  table padding -- so expanding/collapsing Subscribers never changes the width. The column beside
-  it takes the rest. Side-by-side tiles only (desktop and up); stacked tiles stay full width. */
-  $dashboard-subs-width: 760px;
+  /* Fork (BRAND-USAGE-V2-SPEC D7b; DASHBOARDS-POLISH-SPEC D4) -- the Subscribers + Messages sent
+  container's PERMANENT width, sized to its widest POSSIBLE state: the expanded segment x
+  send-language table in # mode with ALL SIX gridLines.mjs GRID_LANGS columns present (label
+  column + All + six language columns of comma-separated counts, the %|# toggle in its corner) --
+  not today's five, since a sixth language appears by data growth -- with the tightened .subs-grid
+  cell padding below (2px 6px), plus the table's side margins and the tile padding. So
+  expanding/collapsing Subscribers never changes the width, and the column beside it (Lists /
+  Campaigns) gets the rest without wrapping. Basis: ~7 x 67px count columns + ~107px label column
+  + 60px table margins + ~44px tile padding ≈ 680px (G5 confirms on live data). Side-by-side tiles
+  only (desktop and up); stacked tiles stay full width. */
+  $dashboard-subs-width: 680px;
   @media screen and (min-width: $desktop) {
     .tile.is-parent.dash-subs-col {
       flex: 0 0 $dashboard-subs-width;
@@ -1188,8 +1204,9 @@ section.dashboard {
     width: auto;
     background: transparent;
 
+    // DASHBOARDS-POLISH-SPEC D4: tightened side padding ($dashboard-subs-width is sized to it).
     th, td {
-      padding: 2px 10px;
+      padding: 2px 6px;
       border: 0;
     }
     th {

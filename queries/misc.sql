@@ -247,7 +247,14 @@ SELECT JSON_BUILD_OBJECT(
 --     GP-SPAM-VISIBILITY-SPEC D2 -- spam_status = inputs.spamRate.status verbatim (absent when the
 --     doc lacks it), spam_flagged = TRUE when the stored compliance rows carry a NEEDS_WORK
 --     USER_REPORTED_SPAM_RATE requirement, absent otherwise. Both are stored fields projected,
---     never a rule computed here (no threshold in the fork).
+--     never a rule computed here. The fork holds no threshold or floor VALUE; a mechanical
+--     comparison of a displayed rate against values stored on the row is rendering
+--     (DASHBOARDS-POLISH-SPEC D1, which narrows the stores-and-renders invariant).
+--   thresholds = DASHBOARDS-POLISH-SPEC D1/I2 -- the same latest brand_health doc's `thresholds`
+--     object (the Matrix engagement warn values and volume floors), verbatim (doc -> 'thresholds');
+--     the key is ABSENT when the doc lacks it (or there is no doc), so the row colors nothing. The
+--     values live in the integrations lib/brand-health.ts MATRIX_THRESHOLDS (no test spans the
+--     repos); the Dashboard's brandMatrix.mjs compares the displayed rate against them.
 --   usage = BRAND-USAGE-SPEC D2/I1 -- the same latest brand_health doc's `usage` object, verbatim
 --     (doc -> 'usage'); the key is ABSENT when the doc lacks it (or there is no doc). Every usage
 --     rule and threshold lives in the integrations lib/brand-usage.ts, which names this site; the
@@ -365,6 +372,7 @@ SELECT JSON_BUILD_OBJECT(
                     THEN TRUE END
             ))
         ) || CASE WHEN bh.doc ? 'usage' THEN JSONB_BUILD_OBJECT('usage', bh.doc->'usage') ELSE '{}'::JSONB END
+          || CASE WHEN bh.doc ? 'thresholds' THEN JSONB_BUILD_OBJECT('thresholds', bh.doc->'thresholds') ELSE '{}'::JSONB END
         ORDER BY b.brand)
         FROM brands b
         LEFT JOIN subs s ON (s.brand = b.brand)

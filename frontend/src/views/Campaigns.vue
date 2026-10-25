@@ -395,9 +395,12 @@ export default Vue.extend({
   mixins: [brandScopeMixin],
 
   data() {
-    // Fork (brand usage, integrations BRAND-USAGE-V2-SPEC D4/I8) -- the Dashboard's Brand Usage
-    // links land here with ?list_id=<id>&evergreen=true. Applied to the query state only: never
-    // written to the sticky campaigns.scopeAutomations pref (a link must not flip it).
+    // Fork (brand usage, integrations BRAND-USAGE-V2-SPEC D4/I8; DASHBOARDS-POLISH-SPEC D2/I3) --
+    // the Dashboard's Brand Usage links land here with ?list_id=<id>&evergreen=true (welcome /
+    // trigger cells), ?evergreen=true (Journeys) or ?list_id=<master>&evergreen=false (broadcast
+    // cells). Exactly "true" forces Automations and exactly "false" forces Broadcasts for this
+    // visit; anything else keeps the pref. Applied to the query state only: never written to the
+    // sticky campaigns.scopeAutomations pref (a link must not flip it).
     const fromRoute = campaignsRouteQuery(
       this.$route && this.$route.query,
       this.$utils.getPref('campaigns.scopeAutomations') === true,
@@ -412,7 +415,7 @@ export default Vue.extend({
         order: 'desc',
         // Fork (evergreen) -- false = Broadcasts (default), true = Automations.
         // Sticky across refresh/navigation via the shared localStorage pref (a route query's
-        // evergreen=true selects Automations for this visit only).
+        // evergreen=true / evergreen=false selects Automations / Broadcasts for this visit only).
         evergreen: fromRoute.evergreen,
         // Fork (list filter) -- null = all lists (no param sent). In-page state only; a route
         // query's list_id preselects it.

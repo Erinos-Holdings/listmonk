@@ -18,6 +18,8 @@ package main
 // I4: GET /api/dashboard/brand-matrix is refused (403) without brands:get.
 // BRAND-USAGE-SPEC I1: the brand's latest doc's `usage` comes back on its row equal to the stored
 // value (after the transport's JSON compaction); a doc without it, or no doc, yields no usage key.
+// DASHBOARDS-POLISH-SPEC I2: likewise the latest doc's `thresholds` (the Matrix engagement warn
+// values and floors) verbatim; a doc without it, or no doc, yields no thresholds key.
 
 import (
 	"bytes"
@@ -61,6 +63,8 @@ type matrixRow struct {
 	Health      matrixHealth `json:"health"`
 	// BRAND-USAGE-SPEC I1 -- the stored doc's usage verbatim; nil when the key is absent.
 	Usage json.RawMessage `json:"usage,omitempty"`
+	// DASHBOARDS-POLISH-SPEC I2 -- the stored doc's thresholds verbatim; nil when the key is absent.
+	Thresholds json.RawMessage `json:"thresholds,omitempty"`
 }
 
 type matrixResp struct {
@@ -297,13 +301,35 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	}
 	wantUsage := json.RawMessage(compact.Bytes())
 
+	// DASHBOARDS-POLISH-SPEC I2: alpha's newest doc carries a thresholds object (fractional numbers,
+	// nested objects) and its older doc a different one -- only the newest is projected, verbatim;
+	// bravo's newest carries none (its older one does) and delta has no doc, so neither row has a
+	// thresholds key (the fork colors nothing for them).
+	thresholdsNew := `{"clicks": {"warnBelow": 0.01, "minSent": 200}, "hardBounces": {"warn": 0.02, "minSent": 200},
+		"complaints": {"warn": 0.001, "minSent": 1000, "minCount": 2}}`
+	setThresholds := func(brand string, n int, th string) {
+		h.db.MustExec(`UPDATE brand_health SET doc = doc || JSONB_BUILD_OBJECT('thresholds', $3::JSONB) WHERE brand = $1 AND day = $2::DATE`, brand, day(n), th)
+	}
+	setThresholds("alpha", 1, thresholdsNew)
+	setThresholds("alpha", 3, `{"clicks": {"warnBelow": 0.5, "minSent": 1}}`)
+	setThresholds("bravo", 3, `{"clicks": {"warnBelow": 0.5, "minSent": 1}}`)
+	var storedThresholds string
+	if err := h.db.Get(&storedThresholds, `SELECT (doc->'thresholds')::TEXT FROM brand_health WHERE brand = 'alpha' AND day = $1::DATE`, day(1)); err != nil {
+		t.Fatal(err)
+	}
+	var compactTh bytes.Buffer // a fresh buffer: wantUsage aliases compact's bytes
+	if err := json.Compact(&compactTh, []byte(storedThresholds)); err != nil {
+		t.Fatal(err)
+	}
+	wantThresholds := json.RawMessage(compactTh.Bytes())
+
 	spam := 0.0012
 	flagged := true
 	alpha := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "alpha", Subscribers: matrixSubs{Total: 4, Active: 1, Held: 1, Unsubscribed: 1, Blocked: 1},
 			Sent: &alphaSent, Clicks: wantClicks[tracking]["alpha"], HardBounces: 5, Blocks: 1, Complaints: 1,
 			Health: matrixHealth{Status: "ok", SpamRate: &spam, SpamStatus: "issues", SpamFlagged: &flagged},
-			Usage:  wantUsage}
+			Usage:  wantUsage, Thresholds: wantThresholds}
 	}
 	bravo := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "bravo", Subscribers: matrixSubs{Total: 2, Active: 1},

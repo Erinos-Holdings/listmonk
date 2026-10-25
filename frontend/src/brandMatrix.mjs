@@ -5,8 +5,10 @@
 //
 // The rows come from GET /api/dashboard/brand-matrix verbatim (camelCase: false) -- counts only:
 // { brand, subscribers: {total, active, held, unsubscribed, blocked}, sent, clicks, hard_bounces,
-//   blocks, complaints, health: {status, spam_rate, spam_status, spam_flagged} }. Every rate is computed here, over the one
-// windowed denominator `sent` (D4); the server never returns a rate.
+//   blocks, complaints, health: {status, spam_rate, spam_status, spam_flagged}, thresholds? }. Every rate is computed
+// here, over the one windowed denominator `sent` (D4); the server never returns a rate.
+// `thresholds` (DASHBOARDS-POLISH-SPEC D1) is the stored engagement-threshold object, absent on
+// older documents; see engagementCell.
 import { brandLabelOf, matchesLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 // D4: the Engagement section's columns -- each a count over `sent`.
@@ -32,6 +34,31 @@ export const RATE_DIGITS = 2;
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+// DASHBOARDS-POLISH-SPEC D1: thresholdsOf is the stored engagement-thresholds object when it is
+// one, else null (see engagementCell).
+export function thresholdsOf(v) {
+  return isObj(v) ? v : null;
+}
+
+// DASHBOARDS-POLISH-SPEC D1 (stage 2 F2): firstThresholds is the thresholds object of the FIRST row
+// in brand order that carries one -- the totals row's source (the values are global constants, so
+// any carrier is equivalent); null when no row carries one (the totals row then colors nothing).
+export function firstThresholds(rows) {
+  const carriers = (Array.isArray(rows) ? rows : []).filter((x) => x && thresholdsOf(x.thresholds));
+  if (!carriers.length) {
+    return null;
+  }
+  const brandOf = (x) => (typeof x.brand === 'string' ? x.brand : '');
+  carriers.sort((a, b) => {
+    if (brandOf(a) === brandOf(b)) {
+      return 0;
+    }
+    return brandOf(a) < brandOf(b) ? -1 : 1;
+  });
+  return carriers[0].thresholds;
+}
 
 // shapeRow flattens one API row: { brand, label, total..blocked, sent (null when absent), the four
 // numerators, spam_rate (null when absent), status ('' when the brand has no health document) }.
@@ -48,6 +75,9 @@ export function shapeRow(r, brands) {
     spam_status: typeof h.spam_status === 'string' ? h.spam_status : '',
     spam_flagged: h.spam_flagged === true,
     status: typeof h.status === 'string' ? h.status : '',
+    // DASHBOARDS-POLISH-SPEC D1: the stored engagement thresholds object, verbatim (null when the
+    // brand's latest document carries none -- the row then colors nothing).
+    thresholds: thresholdsOf(r.thresholds),
     totals: false,
   };
   SUBSCRIBER_FIELDS.forEach((k) => { out[k] = num(s[k]); });
@@ -81,7 +111,15 @@ export function totalsRow(rows, label = 'All brands') {
     return null;
   }
   const out = {
-    brand: '', label, sent: null, spam_rate: null, spam_status: '', spam_flagged: false, status: '', totals: true,
+    brand: '',
+    label,
+    sent: null,
+    spam_rate: null,
+    spam_status: '',
+    spam_flagged: false,
+    status: '',
+    thresholds: firstThresholds(r),
+    totals: true,
   };
   [...SUBSCRIBER_FIELDS, ...ENGAGEMENT_FIELDS].forEach((k) => {
     out[k] = r.reduce((t, x) => t + num(x[k]), 0);
@@ -158,6 +196,68 @@ export function spamCell(row) {
     style: quietFlag ? 'text-decoration: underline dotted;' : '',
     tooltip: quietFlag ? SPAM_FLAGGED_HELP : SPAM_HELP,
   };
+}
+
+// DASHBOARDS-POLISH-SPEC D1/I2: the Engagement rate coloring. The fork holds no threshold or floor
+// VALUE -- every number compared against comes from the `thresholds` object the integrations
+// BrandHealth Lambda stored on the brand's document (lib/brand-health.ts MATRIX_THRESHOLDS),
+// projected verbatim by get-dashboard-brand-matrix; comparing the displayed rate against it is
+// rendering. One red tier (the GP Spam % issues class); Blocks has no threshold; % mode only.
+//   clicks       red when rate <  clicks.warnBelow,  only at sent >= clicks.minSent
+//   hard_bounces red when rate >= hardBounces.warn,  only at sent >= hardBounces.minSent
+//   complaints   red when rate >= complaints.warn,   only at sent >= complaints.minSent
+//                                                     OR complaints >= complaints.minCount
+// The rate compared is the DISPLAYED one (rounded to RATE_DIGITS of a percent, as cellText shows
+// it), so a figure never reads on the other side of its header's target.
+// (thresholdsOf / firstThresholds sit above shapeRow, which reads them.)
+export const THRESHOLD_KEYS = Object.freeze({ clicks: 'clicks', hard_bounces: 'hardBounces', complaints: 'complaints' });
+export const BREACH_CLASS = 'has-text-danger';
+
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+// breachesThreshold is the pure comparison: the stored thresholds object, an engagement field, the
+// displayed rate (a fraction) and the row's counts ({ sent, complaints }). A missing object, an
+// unknown field, a malformed entry, a non-number rate or an unmet floor is false.
+export function breachesThreshold(thresholds, field, rate, counts = {}) {
+  const key = Object.prototype.hasOwnProperty.call(THRESHOLD_KEYS, field) ? THRESHOLD_KEYS[field] : null;
+  const t = key && thresholdsOf(thresholds) ? thresholds[key] : null;
+  if (!isObj(t) || !isNum(rate) || !isNum(t.minSent)) {
+    return false;
+  }
+  const sent = isNum(counts.sent) ? counts.sent : 0;
+  let floorMet = sent >= t.minSent;
+  if (field === 'complaints' && isNum(t.minCount) && isNum(counts.complaints) && counts.complaints >= t.minCount) {
+    floorMet = true;
+  }
+  if (!floorMet) {
+    return false;
+  }
+  if (field === 'clicks') {
+    return isNum(t.warnBelow) && rate < t.warnBelow;
+  }
+  return isNum(t.warn) && rate >= t.warn;
+}
+
+// displayedRate is the rate as cellText shows it -- rounded to RATE_DIGITS decimals of a percent --
+// as a fraction; null when there is no rate.
+export function displayedRate(row, field) {
+  const r = rateOf(row, field);
+  if (r === null) {
+    return null;
+  }
+  const scale = 10 ** RATE_DIGITS;
+  return Math.round(Number((r * 100).toFixed(RATE_DIGITS)) * scale) / (100 * scale);
+}
+
+// engagementCell is an Engagement cell's presentation: { cls } -- BREACH_CLASS when the displayed
+// rate crosses the row's stored threshold with its floor met, in % mode only; '' otherwise. The
+// totals row reads the thresholds totalsRow copied from its first carrier.
+export function engagementCell(row, field, mode = DEFAULT_STATE.mode) {
+  if (!row || mode !== 'pct') {
+    return { cls: '' };
+  }
+  const hit = breachesThreshold(row.thresholds, field, displayedRate(row, field), { sent: row.sent, complaints: row.complaints });
+  return { cls: hit ? BREACH_CLASS : '' };
 }
 
 // D6: the first-click direction of a column -- brand ascending, every other descending.

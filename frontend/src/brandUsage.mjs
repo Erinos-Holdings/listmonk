@@ -194,14 +194,29 @@ export function circleWords(counts, t = (k) => k) {
   return parts.length ? parts.join(', ') : t('dashboard.usage.circleNone');
 }
 
+const posInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
+
 // V2 D4: a stoplight cell's link query -- the Campaigns page with the list preselected AND the
 // Automations scope (welcome/trigger campaigns are evergreens). Welcome links its master list; a
-// 1st purchase / No purchase cell links only when the family has exactly ONE row (with a list);
-// Journeys and the booleans never link. null = no link.
+// 1st purchase / No purchase cell links only when the family has exactly ONE row (with a list).
+// DASHBOARDS-POLISH-SPEC D2/I4: the Cadence and Last broadcast cells link the Campaigns page with
+// the brand's MASTER list (the welcome family's stored listId) preselected and the Broadcasts scope
+// forced ({ list_id, evergreen: 'false' }); the Journeys circles link the Automations scope with NO
+// list ({ evergreen: 'true' } -- the brand's evergreens span several lists). A ZMA-dimmed cell, a
+// '—' / blank cell (no stored value) and the booleans never link. null = no link.
 export function cellLink(row, field) {
   const u = row && row.usage;
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
+  }
+  if (field === 'journeys') {
+    return storedCounts(u, field) ? { evergreen: 'true' } : null;
+  }
+  if (field === 'cadence' || field === 'lastBroadcast') {
+    const b = isObj(u.broadcasts) ? u.broadcasts : {};
+    const shown = field === 'cadence' ? numOrNull(b.cadenceDays) !== null : (b.state === 'none' || numOrNull(b.daysSince) !== null);
+    const master = isObj(u.welcome) ? u.welcome.listId : null;
+    return shown && posInt(master) ? { list_id: String(master), evergreen: 'false' } : null;
   }
   let listId = null;
   if (field === 'welcome') {
@@ -210,10 +225,20 @@ export function cellLink(row, field) {
     const rows = isObj(u[field]) && Array.isArray(u[field].rows) ? u[field].rows : [];
     listId = rows.length === 1 ? rows[0].listId : null;
   }
-  if (!(typeof listId === 'number' && Number.isInteger(listId) && listId > 0)) {
+  if (!posInt(listId)) {
     return null;
   }
   return { list_id: String(listId), evergreen: 'true' };
+}
+
+// DASHBOARDS-POLISH-SPEC D2: the note a linked broadcast cell's tooltip carries -- the link filters
+// the brand's MASTER list only (broadcasts on its other lists exist, but the Campaigns page has no
+// multi-list filter). '' for every other cell, and for an unlinked one.
+export function linkTip(row, field, t = (k) => k) {
+  if ((field === 'cadence' || field === 'lastBroadcast') && cellLink(row, field)) {
+    return t('dashboard.usage.broadcastLinkHelp');
+  }
+  return '';
 }
 
 // cell is one column's presentation for a row: { text, cls, tooltip, circles } -- tooltip a plain

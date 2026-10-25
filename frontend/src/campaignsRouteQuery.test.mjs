@@ -25,9 +25,25 @@ test('I8: evergreen=true selects Automations; otherwise the sticky pref stands',
   assert.equal(campaignsRouteQuery({}, true).evergreen, true);
   assert.equal(campaignsRouteQuery({ evergreen: '1' }, false).evergreen, false);
   assert.equal(campaignsRouteQuery({ evergreen: 'TRUE' }, false).evergreen, false);
-  // Only an exact "true" overrides; anything else leaves the pref (a link never turns it off).
-  assert.equal(campaignsRouteQuery({ evergreen: 'false' }, true).evergreen, true);
   assert.deepEqual(campaignsRouteQuery({ list_id: '7', evergreen: 'true' }, false), { listID: 7, evergreen: true });
+});
+
+// DASHBOARDS-POLISH-SPEC I3 (supersedes V2's "only exactly true overrides").
+test('I3: evergreen=false forces Broadcasts; "true" Automations; anything else keeps the pref', () => {
+  assert.equal(campaignsRouteQuery({ evergreen: 'false' }, true).evergreen, false);
+  assert.equal(campaignsRouteQuery({ evergreen: 'false' }, false).evergreen, false);
+  assert.equal(campaignsRouteQuery({ evergreen: 'true' }, true).evergreen, true);
+  ['FALSE', '0', 'no', '', ' false'].forEach((v) => {
+    assert.equal(campaignsRouteQuery({ evergreen: v }, true).evergreen, true, v);
+    assert.equal(campaignsRouteQuery({ evergreen: v }, false).evergreen, false, v);
+  });
+  assert.equal(campaignsRouteQuery({ evergreen: ['false', 'true'] }, true).evergreen, false);
+  assert.deepEqual(campaignsRouteQuery({ list_id: '9', evergreen: 'false' }, true), { listID: 9, evergreen: false });
+  // The parse never writes the pref: the same pref in gives the pref back with no override.
+  const q = Object.freeze({ evergreen: 'false' });
+  campaignsRouteQuery(q, true);
+  assert.equal(campaignsRouteQuery({}, true).evergreen, true);
+  assert.deepEqual(q, { evergreen: 'false' });
 });
 
 test('I8: the parse writes nothing -- it is a pure function of its inputs', () => {

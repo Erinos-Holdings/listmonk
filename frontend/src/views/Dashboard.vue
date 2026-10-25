@@ -108,7 +108,10 @@
                   :style="spamCell(row).style || null" :title="$t(spamCell(row).tooltip)"
                   :data-cy="`matrix-spam-${row.brand || 'totals'}`">
                   {{ row.totals ? '' : matrixCell(row, 'spam_rate') }}</span>
-                <span v-else :title="c.help ? $t(c.help) : null">{{ matrixCell(row, c.field) }}</span>
+                <!-- DASHBOARDS-POLISH-SPEC D1: red when the displayed rate crosses the row's STORED
+                     threshold (brandMatrix.mjs::engagementCell decides; % mode only). -->
+                <span v-else :class="engagementCell(row, c.field).cls || null" :title="c.help ? $t(c.help) : null"
+                  :data-cy="`matrix-${c.field}-${row.brand || 'totals'}`">{{ matrixCell(row, c.field) }}</span>
               </td>
               <td v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right" :class="bmTd(c.field)">
                 {{ matrixCell(row, c.field) }}
@@ -135,7 +138,7 @@
     <section v-else-if="pane === 'usage'" class="brand-usage relative" data-cy="brand-usage">
       <b-loading v-if="matrix.loading" active :is-full-page="false" />
       <div class="table-container">
-        <table class="table is-fullwidth is-hoverable is-narrow bu-table" data-cy="usage-table">
+        <table class="table is-hoverable is-narrow bu-table" data-cy="usage-table">
           <thead>
             <tr class="bu-groups">
               <th colspan="2" />
@@ -174,7 +177,8 @@
               <td v-for="c in usageColumns" :key="c.field" class="has-text-centered"
                 :class="[buTd(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]">
                 <!-- V2 D3/D4: one circle per state, the stored count inside; the link is per CELL
-                     (Campaigns, the list preselected, the Automations scope). -->
+                     (Campaigns, the list preselected, the Automations scope; Journeys -- POLISH D2 --
+                     the Automations scope with no list). -->
                 <component v-if="usageCell(row, c.field).circles.length" :is="usageLink(row, c.field) ? 'router-link' : 'span'"
                   :to="usageLink(row, c.field) ? { name: 'campaigns', query: usageLink(row, c.field) } : null"
                   class="bu-circles" :data-cy="`usage-${c.field}-${row.brand}`">
@@ -182,9 +186,14 @@
                     :class="['bu-circle', `bu-${ci.color}`]" :title="usageCell(row, c.field).tooltip"
                     :aria-label="usageCell(row, c.field).tooltip">{{ ci.n }}</span>
                 </component>
-                <span v-else :class="usageCell(row, c.field).cls" :title="usageCell(row, c.field).tooltip || null"
+                <!-- DASHBOARDS-POLISH-SPEC D2: the Cadence / Last broadcast text links the master
+                     list in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links. -->
+                <component v-else :is="usageLink(row, c.field) ? 'router-link' : 'span'"
+                  :to="usageLink(row, c.field) ? { name: 'campaigns', query: usageLink(row, c.field) } : null"
+                  :class="usageCell(row, c.field).cls" :title="usageTitle(row, c.field)"
                   :data-cy="`usage-${c.field}-${row.brand}`">
-                  {{ usageCell(row, c.field).text }}</span>
+                  <span>{{ usageCell(row, c.field).text }}</span>
+                </component>
               </td>
             </tr>
             <tr v-if="!matrix.loading && !usageTableRows.length">
@@ -512,10 +521,12 @@ import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsCli
 import DashboardSes from './DashboardSes.vue';
 import HealthChip from '../components/HealthChip.vue';
 import {
-  ENGAGEMENT_FIELDS, cellText, clickSort, initialPane, loadState, saveState, sessionStore, shapeRows, spamCell, tableRows,
+  ENGAGEMENT_FIELDS, cellText, clickSort, engagementCell, initialPane, loadState, saveState, sessionStore, shapeRows,
+  spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   SECTIONS as USAGE_SECTIONS, cell as usageCellOf, cellLink as usageCellLink, clickSort as usageClickSort, latestAsOf,
+  linkTip as usageLinkTip,
   loadState as loadUsageState, mountainRunTime, saveState as saveUsageState, shapeRows as shapeUsageRows,
   sortRows as sortUsageRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
@@ -615,9 +626,17 @@ export default Vue.extend({
       return usageCellOf(row, field, (k, p) => this.$t(k, p));
     },
 
-    // V2 D4 -- the cell's Campaigns query ({ list_id, evergreen: 'true' }), or null.
+    // V2 D4; DASHBOARDS-POLISH-SPEC D2 -- the cell's Campaigns query ({ list_id, evergreen } or,
+    // for Journeys, { evergreen: 'true' }), or null.
     usageLink(row, field) {
       return usageCellLink(row, field);
+    },
+
+    // DASHBOARDS-POLISH-SPEC D2 -- a text cell's tooltip: the cell's own, then (a linked broadcast
+    // cell) the master-list note; null when both are empty.
+    usageTitle(row, field) {
+      const parts = [this.usageCell(row, field).tooltip, usageLinkTip(row, field, (k, p) => this.$t(k, p))];
+      return parts.filter(Boolean).join('\n') || null;
     },
 
     // The sorted column's emphasis and arrow (the matrix's bm* helpers over the usage sort).
@@ -715,6 +734,11 @@ export default Vue.extend({
 
     spamCell(row) {
       return spamCell(row);
+    },
+
+    // DASHBOARDS-POLISH-SPEC D1 -- the engagement cell's red class, from the stored thresholds.
+    engagementCell(row, field) {
+      return engagementCell(row, field, this.matrix.mode);
     },
 
     matrixRowClass(row) {
@@ -976,11 +1000,18 @@ export default Vue.extend({
         blocks: 'dashboard.matrix.blocks',
         complaints: 'dashboard.matrix.complaints',
       };
+      // DASHBOARDS-POLISH-SPEC D1 -- every Engagement header carries its target hover (the
+      // literals restated in i18n name their homes: lib/brand-health.ts MATRIX_THRESHOLDS /
+      // SPAM_RATE_*, lib/ses-health.ts SES_BRAND_THRESHOLDS).
+      const helps = {
+        clicks: 'dashboard.matrix.clicksHelp',
+        hard_bounces: 'dashboard.matrix.hardBouncesHelp',
+        blocks: 'dashboard.matrix.blocksHelp',
+        complaints: 'dashboard.matrix.complaintsHelp',
+      };
       return [
-        ...ENGAGEMENT_FIELDS.map((f) => ({
-          field: f, label: labels[f], help: f === 'blocks' ? 'dashboard.matrix.blocksHelp' : null,
-        })),
-        { field: 'spam_rate', label: 'dashboard.matrix.spam', help: null },
+        ...ENGAGEMENT_FIELDS.map((f) => ({ field: f, label: labels[f], help: helps[f] })),
+        { field: 'spam_rate', label: 'dashboard.matrix.spam', help: 'dashboard.matrix.gpSpamHelp' },
       ];
     },
 

@@ -2,9 +2,11 @@
 // (node --test src/*.test.mjs). No dependency: Node's built-in runner.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   DEFAULT_STATE, STORAGE_KEY, cellText, clickSort, defaultOrder, displayValue, initialPane, loadState, rateOf,
   SPAM_FLAGGED_HELP, SPAM_HELP, saveState, sessionStore, shapeRows, sortRows, spamCell, tableRows, totalsRow,
+  BREACH_CLASS, breachesThreshold, displayedRate, engagementCell, firstThresholds,
 } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
 const api = [
@@ -264,4 +266,127 @@ test('I3: shapeRows carries spam_status and spam_flagged; sorting is untouched',
   assert.equal(rows[1].spam_flagged, false);
   // Still by the numeric value: b (0.02) before a (0.01), whatever the status.
   assert.deepEqual(order(sortRows(rows, { field: 'spam_rate', order: 'desc' }, 'pct')), ['b', 'a']);
+});
+
+// DASHBOARDS-POLISH-SPEC I2: the engagement coloring reads ONLY the stored thresholds and floors.
+// The fixture values are deliberately NOT production's, so a hard-coded number in the fork fails.
+const TH = Object.freeze({
+  clicks: { warnBelow: 0.05, minSent: 500 },
+  hardBounces: { warn: 0.03, minSent: 400 },
+  complaints: { warn: 0.004, minSent: 2000, minCount: 3 },
+});
+const mrow = (o) => shapeRows([{
+  brand: 'b', subscribers: {}, clicks: 0, hard_bounces: 0, blocks: 0, complaints: 0, health: {}, ...o,
+}])[0];
+
+test('I2: breachesThreshold compares the displayed rate against the stored values; floors gate it', () => {
+  // clicks: below warnBelow is red, at/above is not; only at sent >= minSent.
+  assert.equal(breachesThreshold(TH, 'clicks', 0.049, { sent: 500 }), true);
+  assert.equal(breachesThreshold(TH, 'clicks', 0.05, { sent: 500 }), false);
+  assert.equal(breachesThreshold(TH, 'clicks', 0.049, { sent: 499 }), false);
+  // hard bounces: at/above warn is red; floor minSent.
+  assert.equal(breachesThreshold(TH, 'hard_bounces', 0.03, { sent: 400 }), true);
+  assert.equal(breachesThreshold(TH, 'hard_bounces', 0.029, { sent: 400 }), false);
+  assert.equal(breachesThreshold(TH, 'hard_bounces', 0.5, { sent: 399 }), false);
+  // complaints: floor is sent >= minSent OR complaints >= minCount.
+  assert.equal(breachesThreshold(TH, 'complaints', 0.004, { sent: 2000, complaints: 8 }), true);
+  assert.equal(breachesThreshold(TH, 'complaints', 0.01, { sent: 300, complaints: 3 }), true);
+  assert.equal(breachesThreshold(TH, 'complaints', 0.01, { sent: 300, complaints: 2 }), false);
+  assert.equal(breachesThreshold(TH, 'complaints', 0.0039, { sent: 5000, complaints: 19 }), false);
+  // Blocks (and anything else) has no threshold.
+  assert.equal(breachesThreshold(TH, 'blocks', 0.9, { sent: 100000 }), false);
+  assert.equal(breachesThreshold({ ...TH, blocks: { warn: 0, minSent: 0 } }, 'blocks', 0.9, { sent: 100000 }), false);
+  // No object, a malformed entry, a non-number rate: nothing.
+  assert.equal(breachesThreshold(null, 'clicks', 0, { sent: 100000 }), false);
+  assert.equal(breachesThreshold(undefined, 'hard_bounces', 1, { sent: 100000 }), false);
+  assert.equal(breachesThreshold({ clicks: { warnBelow: '0.05', minSent: 500 } }, 'clicks', 0, { sent: 1000 }), false);
+  assert.equal(breachesThreshold({ clicks: { warnBelow: 0.05 } }, 'clicks', 0, { sent: 1000 }), false);
+  assert.equal(breachesThreshold(TH, 'clicks', null, { sent: 1000 }), false);
+});
+
+test('I2: engagementCell -- stored values only, % mode only, no thresholds colors nothing', () => {
+  const red = { cls: BREACH_CLASS };
+  const plain = { cls: '' };
+  assert.equal(BREACH_CLASS, 'has-text-danger'); // the GP Spam % issues treatment
+  const r = mrow({
+    sent: 1000, clicks: 10, hard_bounces: 40, blocks: 30, complaints: 5, thresholds: TH,
+  });
+  assert.deepEqual(engagementCell(r, 'clicks', 'pct'), red); // 1% < 5%
+  assert.deepEqual(engagementCell(r, 'hard_bounces', 'pct'), red); // 4% >= 3%
+  assert.deepEqual(engagementCell(r, 'complaints', 'pct'), red); // 0.5% >= 0.4%, 5 >= minCount
+  assert.deepEqual(engagementCell(r, 'blocks', 'pct'), plain);
+  // Count (#) mode never colors.
+  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => assert.deepEqual(engagementCell(r, f, 'num'), plain));
+  // A row without thresholds (an older document) colors nothing.
+  const old = mrow({
+    sent: 1000, clicks: 0, hard_bounces: 900, complaints: 900,
+  });
+  assert.equal(old.thresholds, null);
+  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => assert.deepEqual(engagementCell(old, f, 'pct'), plain));
+  // A non-object thresholds value is no thresholds.
+  assert.equal(mrow({ thresholds: [1] }).thresholds, null);
+  assert.equal(mrow({ thresholds: 'x' }).thresholds, null);
+  // Below-floor rates color nothing; no sends (no rate) color nothing.
+  const small = mrow({
+    sent: 300, clicks: 0, hard_bounces: 200, complaints: 1, thresholds: TH,
+  });
+  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => assert.deepEqual(engagementCell(small, f, 'pct'), plain));
+  const none = mrow({
+    sent: null, clicks: 0, hard_bounces: 5, complaints: 5, thresholds: TH,
+  });
+  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => assert.deepEqual(engagementCell(none, f, 'pct'), plain));
+  // A healthy brand is uncolored.
+  const clean = mrow({
+    sent: 10000, clicks: 900, hard_bounces: 10, complaints: 1, thresholds: TH,
+  });
+  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => assert.deepEqual(engagementCell(clean, f, 'pct'), plain));
+  assert.deepEqual(engagementCell(undefined, 'clicks', 'pct'), plain);
+});
+
+test('I2: the compared rate is the DISPLAYED one (rounded as cellText shows it)', () => {
+  // 499.8 / 10000 = 4.998% displays 5.00% -- not below a 5% target.
+  const edge = mrow({ sent: 10000, clicks: 499.8, thresholds: TH });
+  assert.equal(cellText(edge, 'clicks', 'pct'), '5.00%');
+  assert.equal(displayedRate(edge, 'clicks'), 0.05);
+  assert.deepEqual(engagementCell(edge, 'clicks', 'pct'), { cls: '' });
+  // 39.96 / 10000 = 0.3996% displays 0.40% -- at the 0.4% complaint target.
+  const c = mrow({ sent: 10000, complaints: 39.96, thresholds: TH });
+  assert.equal(cellText(c, 'complaints', 'pct'), '0.40%');
+  assert.deepEqual(engagementCell(c, 'complaints', 'pct'), { cls: BREACH_CLASS });
+  assert.equal(displayedRate(mrow({ sent: null }), 'clicks'), null);
+});
+
+test('I2: the totals row colors from the FIRST row (brand order) carrying thresholds; none → nothing', () => {
+  const other = { ...TH, clicks: { warnBelow: 0.5, minSent: 1 } }; // a different carrier's values
+  const ar = (brand, sent, o) => ({
+    brand, subscribers: {}, sent, ...o,
+  });
+  const rows = shapeRows([
+    ar('zeta', 1000, { clicks: 10, thresholds: other }),
+    ar('alpha', 1000, { clicks: 30 }), // no thresholds (an older doc)
+    ar('mid', 1000, { clicks: 20, thresholds: TH }),
+  ]);
+  assert.equal(firstThresholds(rows), rows[2].thresholds); // 'mid' is the first carrier by brand
+  const t = totalsRow(rows);
+  assert.equal(t.thresholds, rows[2].thresholds);
+  // 60 / 3000 = 2% < TH's 5%, 3000 >= TH's 500-send floor -> red.
+  assert.deepEqual(engagementCell(t, 'clicks', 'pct'), { cls: BREACH_CLASS });
+  // The two orders below differ only in which carrier is first by brand; 400 summed sends at 0.5%
+  // is red under `other` (floor 1, below 50%) and uncolored under TH (floor 500 unmet).
+  const t2 = totalsRow(shapeRows([ar('b', 200, { clicks: 1, thresholds: TH }), ar('a', 200, { clicks: 1, thresholds: other })]));
+  assert.deepEqual(engagementCell(t2, 'clicks', 'pct'), { cls: BREACH_CLASS });
+  const t3 = totalsRow(shapeRows([ar('a', 200, { clicks: 1, thresholds: TH }), ar('b', 200, { clicks: 1, thresholds: other })]));
+  assert.deepEqual(engagementCell(t3, 'clicks', 'pct'), { cls: '' });
+  // No row carries thresholds -> the totals row colors nothing.
+  const bare = totalsRow(shapeRows([ar('a', 1000, { clicks: 0, hard_bounces: 900 }), ar('b', 1000, { clicks: 0, hard_bounces: 900 })]));
+  assert.equal(bare.thresholds, null);
+  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => assert.deepEqual(engagementCell(bare, f, 'pct'), { cls: '' }));
+  assert.equal(firstThresholds(undefined), null);
+});
+
+test('I2: the fork source carries no numeric threshold literal (code lines of brandMatrix.mjs)', () => {
+  const src = readFileSync(new URL('./brandMatrix.mjs', import.meta.url), 'utf8');
+  const code = src.split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+  assert.equal(/\b0\.\d+/.test(code), false, 'a fractional literal in brandMatrix.mjs code');
+  assert.equal(/\b(200|1000)\b/.test(code), false, 'a floor-like literal in brandMatrix.mjs code');
 });

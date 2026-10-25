@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   CIRCLE_FIELDS, DEFAULT_STATE, MISSING, SCORE_PARTS, SECTIONS, SORT_FIELDS, STORAGE_KEY, boolCell, broadcastTip, cell,
   cellLink, circlesOf, circleWords, clickSort, defaultOrder, latestAsOf, loadState, mountainRunTime, saveState,
-  scoreTip, shapeRows, sortRows, sortValue, storedCounts, triggerTip,
+  scoreTip, shapeRows, sortRows, sortValue, storedCounts, triggerTip, linkTip,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -219,8 +219,8 @@ test('V2 D4: links per cell -- Welcome its master list, a trigger family only wi
   const [ruze] = shapeRows(api);
   assert.deepEqual(cellLink(ruze, 'welcome'), { list_id: '7', evergreen: 'true' });
   assert.equal(cellLink(ruze, 'purchase'), null); // no rows
-  assert.equal(cellLink(ruze, 'journeys'), null);
   assert.equal(cellLink(ruze, 'sunset'), null);
+  assert.equal(cellLink(ruze, 'attribution'), null);
   assert.equal(cellLink(ruze, 'score'), null);
   const one = shapeRows([{
     brand: 'x',
@@ -243,6 +243,72 @@ test('V2 D4: links per cell -- Welcome its master list, a trigger family only wi
   // A ZMA row's dimmed Welcome does not link; no usage, no link.
   assert.equal(cellLink(shapeRows(api).find((r) => r.brand === 'oldzma'), 'welcome'), null);
   assert.equal(cellLink(shapeRows(api).find((r) => r.brand === 'nodoc'), 'welcome'), null);
+});
+
+// DASHBOARDS-POLISH-SPEC I4: the broadcast cells and the Journeys circles.
+test('I4: broadcast cells link the MASTER list in the Broadcasts scope; Journeys the Automations scope, no list', () => {
+  const [ruze, tg, lux] = shapeRows(api);
+  const bcast = { list_id: '7', evergreen: 'false' };
+  assert.deepEqual(cellLink(ruze, 'cadence'), bcast);
+  assert.deepEqual(cellLink(ruze, 'lastBroadcast'), bcast);
+  assert.deepEqual(cellLink(ruze, 'journeys'), { evergreen: 'true' });
+  assert.equal(Object.prototype.hasOwnProperty.call(cellLink(ruze, 'journeys'), 'list_id'), false);
+  // "never" is a shown value and links; a '—' cadence does not.
+  assert.equal(cell(tg, 'lastBroadcast', t).text, 'dashboard.usage.never');
+  assert.deepEqual(cellLink(tg, 'lastBroadcast'), bcast);
+  assert.equal(cell(tg, 'cadence', t).text, MISSING);
+  assert.equal(cellLink(tg, 'cadence'), null);
+  assert.equal(cell(lux, 'cadence', t).text, MISSING);
+  assert.equal(cellLink(lux, 'cadence'), null);
+  assert.deepEqual(cellLink(lux, 'lastBroadcast'), bcast);
+  // A blank Last broadcast (no stored daysSince, not "never") does not link.
+  const blank = shapeRows([{
+    brand: 'b',
+    usage: usage({
+      broadcasts: {
+        lastAt: null, windowCount: 0, cadenceDays: 5, daysSince: null, ratio: null, state: 'ok',
+      },
+    }),
+  }])[0];
+  assert.equal(cell(blank, 'lastBroadcast', t).text, '');
+  assert.equal(cellLink(blank, 'lastBroadcast'), null);
+  assert.deepEqual(cellLink(blank, 'cadence'), { list_id: '7', evergreen: 'false' });
+  // No master list -> the broadcast cells do not link (Journeys still does).
+  const noMaster = shapeRows([{
+    brand: 'n',
+    usage: usage({
+      welcome: {
+        state: 'none', listId: null, campaigns: [], counts: { green: 0, amber: 0 },
+      },
+    }),
+  }])[0];
+  assert.equal(cellLink(noMaster, 'cadence'), null);
+  assert.equal(cellLink(noMaster, 'lastBroadcast'), null);
+  assert.deepEqual(cellLink(noMaster, 'journeys'), { evergreen: 'true' });
+  // ZMA-dimmed cells ('—') never link.
+  const zma = shapeRows(api).find((r) => r.brand === 'oldzma');
+  ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => {
+    assert.equal(cell(zma, f, t).text, MISSING, f);
+    assert.equal(cellLink(zma, f), null, f);
+  });
+  // Journeys without stored counts ('—', a pre-V2 doc) does not link; no usage, no link.
+  const old = shapeRows([{ brand: 'o', usage: usage({ journeys: { running: 1 } }) }])[0];
+  assert.equal(cell(old, 'journeys', t).text, MISSING);
+  assert.equal(cellLink(old, 'journeys'), null);
+  const nodoc = shapeRows(api).find((r) => r.brand === 'nodoc');
+  ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => assert.equal(cellLink(nodoc, f), null, f));
+  // The Welcome / trigger links are unchanged (Automations, their own list).
+  assert.deepEqual(cellLink(ruze, 'welcome'), { list_id: '7', evergreen: 'true' });
+});
+
+test('I4: a linked broadcast cell carries the master-list note; nothing else does', () => {
+  const [ruze, tg] = shapeRows(api);
+  assert.equal(linkTip(ruze, 'cadence', t), 'dashboard.usage.broadcastLinkHelp');
+  assert.equal(linkTip(ruze, 'lastBroadcast', t), 'dashboard.usage.broadcastLinkHelp');
+  assert.equal(linkTip(tg, 'cadence', t), ''); // '—', unlinked
+  assert.equal(linkTip(ruze, 'journeys', t), '');
+  assert.equal(linkTip(ruze, 'welcome', t), '');
+  assert.equal(linkTip(shapeRows(api).find((r) => r.brand === 'oldzma'), 'lastBroadcast', t), '');
 });
 
 test('D7: cells -- Nd ago, never, ~Nd, —, Last broadcast colored on the TEXT; booleans ✓/✗', () => {
