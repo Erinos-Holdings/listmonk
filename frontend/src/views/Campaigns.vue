@@ -30,10 +30,17 @@
                  switching resets the page and the bulk selection (bulk delete is scoped too).
                  Disabled while a fetch is in flight so two quick clicks cannot leave the table
                  showing one kind while the pill (and a bulk delete) is on the other. -->
-            <!-- DASHBOARDS-POLISH3-SPEC D3 -- Broadcasts | Automations | All; the pill's value is the
+            <!-- DASHBOARDS-POLISH3-SPEC D3 -- All | Broadcasts | Automations; the pill's value is the
                  scope KIND string (campaignsRouteQuery.mjs evergreenOfKind/kindOfEvergreen), All =
                  evergreen null = no evergreen param. -->
             <b-field class="segmented">
+              <!-- G5: All first (the Launched/Unlaunched toggle's All-first order); a fresh session
+                   still defaults to Broadcasts (campaignsRouteQuery.mjs::scopeKindPref). -->
+              <b-radio-button v-model="scopeKind" native-value="all" type="is-primary"
+                :disabled="loading.campaigns"
+                data-cy="scope-all" @input="onScopeChange">
+                {{ $t('campaigns.typeAll') }}
+              </b-radio-button>
               <b-radio-button v-model="scopeKind" native-value="broadcasts" type="is-primary"
                 :disabled="loading.campaigns"
                 data-cy="scope-broadcasts" @input="onScopeChange">
@@ -43,11 +50,6 @@
                 :disabled="loading.campaigns"
                 data-cy="scope-automations" @input="onScopeChange">
                 {{ $t('campaigns.typeAutomations') }}
-              </b-radio-button>
-              <b-radio-button v-model="scopeKind" native-value="all" type="is-primary"
-                :disabled="loading.campaigns"
-                data-cy="scope-all" @input="onScopeChange">
-                {{ $t('campaigns.typeAll') }}
               </b-radio-button>
             </b-field>
           </div>

@@ -56,8 +56,10 @@ export function skippedLangOf(field) {
 // standing for its leaves under one label (No purchase over 3d | 7d | 15d; the new Languages
 // section's Skipped over FR ES DE IT, between Journeys and Configurations); `fields` is the flat
 // leaf list.
-const group = (key, label, help, fields) => Object.freeze({
-  group: key, label, help, fields,
+// `small` (G5): the label takes the small header font (Skipped subscribers is long); otherwise it
+// matches the single-row headers' size (No purchase).
+const group = (key, label, help, fields, small = false) => Object.freeze({
+  group: key, label, help, fields, small,
 });
 const section = (key, label, items) => Object.freeze({
   key, label, items: Object.freeze(items), fields: Object.freeze(items.flatMap((i) => (typeof i === 'string' ? [i] : i.fields))),
@@ -69,7 +71,7 @@ export const SECTIONS = Object.freeze([
     group('noPurchase', 'dashboard.usage.noPurchase', 'dashboard.usage.noPurchaseHelp', NO_PURCHASE_FIELDS),
   ]),
   section('languages', 'dashboard.usage.sectionLanguages', [
-    group('skipped', 'dashboard.usage.skipped', 'dashboard.usage.skippedHelp', SKIPPED_FIELDS),
+    group('skipped', 'dashboard.usage.skipped', 'dashboard.usage.skippedHelp', SKIPPED_FIELDS, true),
   ]),
   section('configurations', 'dashboard.usage.sectionConfigurations', ['attribution', 'sunset']),
 ]);
@@ -96,7 +98,7 @@ export function headerLayout(sections = SECTIONS) {
         return;
       }
       row2.push({
-        kind: 'group', key: it.group, label: it.label, help: it.help, span: it.fields.length, band, first: i === 0,
+        kind: 'group', key: it.group, label: it.label, help: it.help, span: it.fields.length, band, first: i === 0, small: it.small,
       });
       it.fields.forEach((f, fi) => row3.push({
         kind: 'leaf', field: f, band, first: i === 0 && fi === 0, groupStart: fi === 0,
@@ -448,7 +450,7 @@ export function linkTip(row, field, t = (k) => k) {
 // shows '—' in Score/Welcome/Journeys/Last broadcast/Cadence.
 //
 // POLISH3 D5: a Skipped leaf renders from the row's live `skipped` whether or not the row has
-// usage -- a red count (linked) when > 0, a plain 0 otherwise (covered or no window activity), '—'
+// usage -- a red count (linked) when > 0, a green ✓ at 0 (G5; covered or no window activity), '—'
 // on a ZMA-dimmed row (or a malformed entry). D4: a No purchase leaf -- the circle(s) of the step(s)
 // at exactly that day (green running, amber idle/invalid), a red 0 when none; '—' for the whole
 // sub-group on a pre-`days` doc.
@@ -471,8 +473,10 @@ export function cell(row, field, t = (k) => k) {
         text: String(s.count), cls: RED, tooltip: t('dashboard.usage.skippedCell', { n: s.count, lists: s.lists.join(', ') }), circles: [],
       };
     }
+    // G5: 0 renders the Configurations-style green ✓ (covered OR no window activity -- the tooltip
+    // still tells the two apart); the sort key stays the count 0.
     return {
-      text: '0', cls: '', tooltip: t('dashboard.usage.skippedZero'), circles: [],
+      text: boolCell(true).glyph, cls: boolCell(true).cls, tooltip: t('dashboard.usage.skippedZero'), circles: [],
     };
   }
   const u = row && row.usage;

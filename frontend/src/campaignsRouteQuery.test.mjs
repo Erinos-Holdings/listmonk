@@ -206,6 +206,17 @@ test('POLISH3 I3: campaigns.scopeKind is read; the legacy boolean only while it 
   assert.equal(scopeKindPref(true, null), 'broadcasts');
 });
 
+// G5 feedback: a NEW browser session -- no scopeKind pref, no legacy pref (utils.getPref returns
+// null for both, including when localStorage throws), no route override -- lands on Broadcasts,
+// never All, although All is now the pill's FIRST button.
+test('POLISH3 G5: a fresh session defaults to Broadcasts (evergreen false), not All', () => {
+  assert.equal(scopeKindPref(null, null), 'broadcasts');
+  const fresh = campaignsRouteQuery({}, evergreenOfKind(scopeKindPref(null, null)));
+  assert.equal(fresh.evergreen, false);
+  assert.equal(kindOfEvergreen(fresh.evergreen), 'broadcasts');
+  assert.deepEqual(kindStatusParams({ evergreen: fresh.evergreen, routeStatus: routeStatusOf({}) }), { evergreen: false });
+});
+
 test('POLISH3 I3: kind <-> evergreen -- All is null', () => {
   assert.equal(evergreenOfKind('broadcasts'), false);
   assert.equal(evergreenOfKind('automations'), true);

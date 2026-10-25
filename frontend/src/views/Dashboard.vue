@@ -151,20 +151,21 @@
                  two lower header rows; a sub-group (No purchase, Skipped) puts its label over its
                  leaves (3d | 7d | 15d; FR ES DE IT). -->
             <tr>
-              <th rowspan="2" class="has-text-right" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"
+              <th rowspan="2" class="bu-head" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"
                 :aria-sort="buAria('score')" @click="onUsageSort('score')">
                 {{ $t('dashboard.usage.score') }}<span class="bm-arrow">{{ buArrow('score') }}</span>
               </th>
-              <th rowspan="2" :class="buTh('brand')" :aria-sort="buAria('brand')" @click="onUsageSort('brand')">
+              <th rowspan="2" class="bu-head" :class="buTh('brand')" :aria-sort="buAria('brand')" @click="onUsageSort('brand')">
                 {{ $t('dashboard.matrix.brand') }}<span class="bm-arrow">{{ buArrow('brand') }}</span>
               </th>
               <template v-for="c in usageHeader.row2">
                 <th v-if="c.kind === 'group'" :key="`g-${c.key}`" :colspan="c.span"
-                  class="has-text-centered bu-subgroup" :class="[`bu-band-${c.band}`, { 'bu-start': c.first }]"
+                  class="has-text-centered bu-head bu-subgroup"
+                  :class="[`bu-band-${c.band}`, { 'bu-start': c.first, 'bu-small': c.small }]"
                   :title="$t(c.help)" :data-cy="`usage-group-${c.key}`">
                   {{ $t(c.label) }}
                 </th>
-                <th v-else :key="c.field" rowspan="2" class="has-text-centered"
+                <th v-else :key="c.field" rowspan="2" class="has-text-centered bu-head"
                   :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]" :title="$t(usageMeta(c.field).help)"
                   :aria-sort="buAria(c.field)" @click="onUsageSort(c.field)">
                   {{ usageLabel(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
@@ -172,7 +173,7 @@
               </template>
             </tr>
             <tr>
-              <th v-for="c in usageHeader.row3" :key="c.field" class="has-text-centered"
+              <th v-for="c in usageHeader.row3" :key="c.field" class="has-text-centered bu-small"
                 :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.groupStart }]"
                 :title="$t(usageMeta(c.field).help)" :aria-sort="buAria(c.field)" @click="onUsageSort(c.field)"
                 :data-cy="`usage-head-${c.field}`">

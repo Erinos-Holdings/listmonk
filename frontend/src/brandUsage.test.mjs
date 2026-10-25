@@ -119,8 +119,9 @@ test('V2 D2 / POLISH3 D4-D5: columns -- Score, Brand, then Broadcasts / Journeys
   assert.deepEqual(h.row2.map((c) => (c.kind === 'group' ? `[${c.key}:${c.span}]` : c.field)), [
     'cadence', 'lastBroadcast', 'journeys', 'welcome', 'purchase', '[noPurchase:3]', '[skipped:4]', 'attribution', 'sunset',
   ]);
-  assert.deepEqual(h.row2.filter((c) => c.kind === 'group').map((c) => [c.label, c.band, c.first]), [
-    ['dashboard.usage.noPurchase', 'white', false], ['dashboard.usage.skipped', 'grey', true],
+  // G5: No purchase takes the single-row headers' font size, Skipped subscribers the small one.
+  assert.deepEqual(h.row2.filter((c) => c.kind === 'group').map((c) => [c.label, c.band, c.first, c.small]), [
+    ['dashboard.usage.noPurchase', 'white', false, false], ['dashboard.usage.skipped', 'grey', true, true],
   ]);
   assert.deepEqual(h.row3.map((c) => [c.field, c.first, c.groupStart]), [
     ['noPurchase:3', false, true], ['noPurchase:7', false, false], ['noPurchase:15', false, false],
@@ -631,8 +632,10 @@ test('POLISH3 D5: Skipped -- red linked count > 0, plain 0 otherwise, — on ZMA
   assert.deepEqual(cellLink(ruze, 'skipped:fr'), { list_id: ['7', '12'], evergreen: 'all' });
   assert.deepEqual(cellLink(ruze, 'skipped:es'), { list_id: ['12'], evergreen: 'all' });
   assert.equal(linkTip(ruze, 'skipped:fr', t), 'dashboard.usage.skippedLinkHelp');
-  // 0 -> plain, unlinked (covered or no activity -- the tooltip owns the wording).
-  assert.deepEqual([cell(ruze, 'skipped:de', t).text, cell(ruze, 'skipped:de', t).cls], ['0', '']);
+  // 0 -> the green ✓ (G5 feedback, replacing the plain '0'), unlinked (covered or no activity --
+  // the tooltip owns the wording).
+  assert.deepEqual([cell(ruze, 'skipped:de', t).text, cell(ruze, 'skipped:de', t).cls], ['✓', 'has-text-success']);
+  assert.equal(sortValue(ruze, 'skipped:de'), 0); // the sort key stays the count
   assert.equal(cell(ruze, 'skipped:de', t).tooltip, 'dashboard.usage.skippedZero');
   assert.equal(cellLink(ruze, 'skipped:de'), null);
   assert.equal(linkTip(ruze, 'skipped:de', t), '');
@@ -640,7 +643,7 @@ test('POLISH3 D5: Skipped -- red linked count > 0, plain 0 otherwise, — on ZMA
   assert.equal(nousage.usage, null);
   assert.deepEqual([cell(nousage, 'skipped:de', t).text, cell(nousage, 'skipped:de', t).cls], ['5', 'has-text-danger']);
   assert.deepEqual(cellLink(nousage, 'skipped:de'), { list_id: ['21'], evergreen: 'all' });
-  assert.equal(cell(nousage, 'skipped:fr', t).text, '0');
+  assert.equal(cell(nousage, 'skipped:fr', t).text, '✓'); // G5: was '0'
   assert.equal(cell(nousage, 'welcome', t).text, '');
   // ZMA dimming (keyed off usage.channel): '—', unlinked, sorts last.
   assert.equal(cell(zma, 'skipped:fr', t).text, MISSING);
