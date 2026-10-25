@@ -259,7 +259,9 @@ test('V2 D4: links per cell -- Welcome its master list, a trigger family only wi
       },
     }),
   }])[0];
-  assert.deepEqual(cellLink(one, 'noPurchase'), { list_id: '12', evergreen: 'true' });
+  // (The plain 'noPurchase' column's link retired with the 3d/7d/15d leaves — POLISH3 stage 4 F2;
+  // the leaf link rule is pinned in the D4 tests.)
+  assert.equal(cellLink(one, 'noPurchase'), null);
   assert.equal(cellLink(one, 'purchase'), null); // several rows = several lists
   const noList = shapeRows([{
     brand: 'y',

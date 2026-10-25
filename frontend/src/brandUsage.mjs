@@ -240,7 +240,9 @@ const npClean = (r) => !(typeof r.error === 'string' && r.error) && r.listId !==
 
 // POLISH3 D4 (stage 2 F5): the sub-group's ⚠ badges -- one per stored step row with NO parseable
 // `days` (the lib stores null), carrying the row's parser error. Rendered after the LAST leaf's
-// circles; [] on every other field, a pre-`days` doc, a ZMA-dimmed or usage-less row.
+// circles; [] on every other field, a pre-`days` doc, or a usage-less row. (NOT ZMA-guarded:
+// the No purchase leaves are not in ZMA_DIMMED — a ZMA row with step rows is unreachable today
+// because PurchaseTriggerSync writes steps for listmonk-channel brands only; POLISH3 stage 4 F1.)
 export function cellBadges(row, field, t = (k) => k) {
   if (field !== NO_PURCHASE_FIELDS[NO_PURCHASE_FIELDS.length - 1]) {
     return [];
@@ -415,7 +417,8 @@ export function cellLink(row, field) {
   let listId = null;
   if (field === 'welcome') {
     listId = isObj(u.welcome) ? u.welcome.listId : null;
-  } else if (field === 'purchase' || field === 'noPurchase') {
+  } else if (field === 'purchase') {
+    // (The plain 'noPurchase' column retired with the 3d/7d/15d leaves — POLISH3 stage 4 F2.)
     const rows = isObj(u[field]) && Array.isArray(u[field].rows) ? u[field].rows : [];
     listId = rows.length === 1 ? rows[0].listId : null;
   }
@@ -513,8 +516,8 @@ export function cell(row, field, t = (k) => k) {
     }
     case 'journeys':
     case 'welcome':
-    case 'purchase':
-    case 'noPurchase': {
+    case 'purchase': {
+      // (Plain 'noPurchase' retired for the 3d/7d/15d leaves — POLISH3 stage 4 F2.)
       const counts = storedCounts(u, field);
       if (!counts) {
         return {
@@ -669,8 +672,8 @@ export function sortValue(row, field) {
     case 'score':
       return numOrNull(isObj(u.score) ? u.score.total : null);
     case 'welcome':
-    case 'purchase':
-    case 'noPurchase': {
+    case 'purchase': {
+      // (Plain 'noPurchase' retired for the 3d/7d/15d leaves — POLISH3 stage 4 F2.)
       const s = isObj(u[field]) ? u[field].state : undefined;
       return Object.prototype.hasOwnProperty.call(BADNESS, s) ? BADNESS[s] : null;
     }
