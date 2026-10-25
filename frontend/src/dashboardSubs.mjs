@@ -52,6 +52,54 @@ export function segmentCell(column, segment) {
   };
 }
 
+// Fork (brand usage, integrations BRAND-USAGE-V2-SPEC D7/I5). The expanded segment x
+// send-language table's %|# toggle (the Brand Matrix's mechanics): per browser SESSION under
+// sessionStorage key dashboard.overview { mode }, default pct.
+export const OVERVIEW_MODES = Object.freeze(['pct', 'num']);
+export const OVERVIEW_DEFAULT = Object.freeze({ mode: 'pct' });
+export const OVERVIEW_STORAGE_KEY = 'dashboard.overview';
+
+// D7/I5: an expanded-table cell's text in the mode. The mode governs only RATE-BEARING cells:
+// a plain segment (Active, Pending -- null denominator) and a 0-denominator cell are the count in
+// both modes. pct shows the rate alone, num the count -- no parentheses in either. fmt formats
+// counts (the Vue passes $utils.formatNumber: comma-separated). The Total row is a plain count
+// and never comes through here.
+export function subsCellText(column, segment, mode = OVERVIEW_DEFAULT.mode, fmt = (n) => String(n)) {
+  const c = segmentCell(column, segment);
+  if (c.denominator === null || mode === 'num') {
+    return fmt(c.count);
+  }
+  const p = pctCount(c.count, c.denominator, fmt);
+  return p.pct || p.count;
+}
+
+export function normalizeOverviewState(s) {
+  return { mode: s && OVERVIEW_MODES.includes(s.mode) ? s.mode : OVERVIEW_DEFAULT.mode };
+}
+
+// I5: a missing store, a throwing accessor or bad JSON is the default, never an error.
+export function loadOverviewState(store) {
+  try {
+    const raw = store ? store.getItem(OVERVIEW_STORAGE_KEY) : null;
+    return normalizeOverviewState(raw ? JSON.parse(raw) : null);
+  } catch {
+    return normalizeOverviewState(null);
+  }
+}
+
+// A failing store is ignored. Returns whether it wrote.
+export function saveOverviewState(store, state) {
+  try {
+    if (!store) {
+      return false;
+    }
+    store.setItem(OVERVIEW_STORAGE_KEY, JSON.stringify(normalizeOverviewState(state)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // R1/R2. The Messages-sent lines in display order, every one over Messages sent (the Campaigns
 // list's rate over Sent, CAMPAIGN-RATES-SPEC D1). Fork (brand matrix, integrations
 // BRAND-MATRIX-SPEC D8) -- the bounce line is H. Bounces (engagement.hard_bounces, camelCased by

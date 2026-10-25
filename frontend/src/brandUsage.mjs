@@ -1,24 +1,36 @@
-// Fork (brand usage, integrations listmonk/BRAND-USAGE-SPEC D2/D7). The pure half of the
-// Dashboard's Brand Usage pane: row shaping (display name, launch filter -- the Brand Matrix's
-// rows, off the SAME fetch), glyph and cell mapping, the sort comparators and the per-session
+// Fork (brand usage, integrations listmonk/BRAND-USAGE-SPEC D2/D7; BRAND-USAGE-V2-SPEC D1-D5). The
+// pure half of the Dashboard's Brand Usage pane: row shaping (display name, launch filter -- the
+// Brand Matrix's rows, off the SAME fetch), the column/section layout, the cell mapping (Score
+// text + breakdown, the stoplight circles, ✓/✗ booleans, Last broadcast and Cadence), the circle
+// links, the Mountain-time note, the sort (clickSort -- the matrix's pattern) and the per-session
 // persistence wrapper. No Vue, no DOM; tested by brandUsage.test.mjs (yarn test).
 //
 // Each GET /api/dashboard/brand-matrix row may carry `usage` -- the brand's latest brand_health
 // doc's stored object, projected verbatim. Every usage rule and threshold (the journey states, the
-// broadcast cadence and its ok/due/stale verdict) is computed by the integrations
-// lib/brand-usage.ts; this module only maps stored states to glyphs and colors (I1).
+// broadcast cadence and its ok/due/stale verdict, the per-state circle counts and the Score with
+// its weights -- integrations lib/brand-usage.ts SCORE_WEIGHTS) is computed by the integrations
+// lib/brand-usage.ts; this module only maps stored values to text, circles and colors (v1 I1,
+// V2 I1/I3). It renders `score.parts` verbatim and computes no weight.
 import { brandLabelOf, matchesLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { healthDocs } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
-// Every sortable column, in display order.
-export const SORT_FIELDS = Object.freeze([
-  'brand', 'welcome', 'purchase', 'noPurchase', 'sunset', 'attribution', 'journeys', 'lastBroadcast', 'cadence',
+// V2 D2: the columns, left to right -- Score and Brand ungrouped, then the three sections.
+export const SECTIONS = Object.freeze([
+  Object.freeze({ key: 'broadcasts', label: 'dashboard.usage.sectionBroadcasts', fields: Object.freeze(['cadence', 'lastBroadcast']) }),
+  Object.freeze({ key: 'journeys', label: 'dashboard.usage.sectionJourneys', fields: Object.freeze(['journeys', 'welcome', 'purchase', 'noPurchase']) }),
+  Object.freeze({ key: 'configurations', label: 'dashboard.usage.sectionConfigurations', fields: Object.freeze(['attribution', 'sunset']) }),
 ]);
 
-// D7: the default sort is Last broadcast, worst first (never broadcast, then the longest silence).
-export const DEFAULT_STATE = Object.freeze({ sort: Object.freeze({ field: 'lastBroadcast', order: 'desc' }) });
+// Every sortable column, in display order.
+export const SORT_FIELDS = Object.freeze(['score', 'brand', ...SECTIONS.flatMap((s) => s.fields)]);
 
-// D7: the sessionStorage key of { sort: {field, order} }.
+// The stoplight columns (V2 D3) -- one circle per state.
+export const CIRCLE_FIELDS = Object.freeze(['journeys', 'welcome', 'purchase', 'noPurchase']);
+
+// V2 D2: a fresh session sorts by Score, descending (best first); a stored session sort wins.
+export const DEFAULT_STATE = Object.freeze({ sort: Object.freeze({ field: 'score', order: 'desc' }) });
+
+// D7: the sessionStorage key of { sort: {field, order} } (unchanged in V2).
 export const STORAGE_KEY = 'dashboard.usage';
 
 export const MISSING = '—';
@@ -27,40 +39,39 @@ const OK = 'has-text-success';
 const AMBER = 'has-text-warning-dark';
 const RED = 'has-text-danger';
 
-// D7: S (active/idle/none) and E (running/idle/none) glyphs -- ✓ green, ⚠ amber, ✗ red.
-const STATE_CELL = Object.freeze({
-  active: Object.freeze({ glyph: '✓', cls: OK }),
-  running: Object.freeze({ glyph: '✓', cls: OK }),
-  idle: Object.freeze({ glyph: '⚠', cls: AMBER }),
-  none: Object.freeze({ glyph: '✗', cls: RED }),
-});
+// V2 D1/F5: the Score breakdown's display order -- a FIXED list, because jsonb returns the stored
+// `parts` keys lexicographically. Rendering order only; every number comes from `parts`.
+export const SCORE_PARTS = Object.freeze([
+  Object.freeze({ key: 'broadcasts', label: 'dashboard.usage.partBroadcasts' }),
+  Object.freeze({ key: 'welcome', label: 'dashboard.usage.partWelcome' }),
+  Object.freeze({ key: 'purchase', label: 'dashboard.usage.partPurchase' }),
+  Object.freeze({ key: 'noPurchase', label: 'dashboard.usage.partNoPurchase' }),
+  Object.freeze({ key: 'attribution', label: 'dashboard.usage.partAttribution' }),
+  Object.freeze({ key: 'sunset', label: 'dashboard.usage.partSunset' }),
+]);
 
-const BLANK = Object.freeze({ glyph: '', cls: '' });
-const DIMMED = Object.freeze({ glyph: MISSING, cls: '' });
-
-// stateCell maps a stored S/E state to { glyph, cls }; anything else is blank.
-export function stateCell(state) {
-  return Object.prototype.hasOwnProperty.call(STATE_CELL, state) ? STATE_CELL[state] : BLANK;
-}
+const BLANK_CELL = Object.freeze({ text: '', cls: '', tooltip: '' });
 
 // boolCell: ✓ green / ✗ red (the header tooltip says "not in use", not "error"); non-boolean blank.
 export function boolCell(v) {
   if (v === true) {
-    return STATE_CELL.active;
+    return { glyph: '✓', cls: OK };
   }
   if (v === false) {
-    return STATE_CELL.none;
+    return { glyph: '✗', cls: RED };
   }
-  return BLANK;
+  return { glyph: '', cls: '' };
 }
 
-// D7: the Last broadcast cell's color by the stored broadcasts.state.
+// D7: the Last broadcast cell's TEXT color by the stored broadcasts.state (V2 D3: colored
+// backgrounds belong to the circles alone).
 const BROADCAST_CLASS = Object.freeze({
   ok: OK, due: AMBER, stale: RED, none: RED,
 });
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const countOrNull = (v) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null);
 
 // shapeRow flattens one API row: { brand, label, usage (the stored object, or null), zma }.
 export function shapeRow(r, brands) {
@@ -81,8 +92,9 @@ export function shapeRows(apiRows, { brands = [], launch = 'all' } = {}) {
   return rows.filter((r) => matchesLaunch(r.brand, launch, docs)).map((r) => shapeRow(r, brands));
 }
 
-// The columns a ZMA row does not score (its sends live in ZMA -- a red would be false, I6).
-const ZMA_DIMMED = Object.freeze(['welcome', 'journeys', 'lastBroadcast', 'cadence']);
+// The columns a ZMA row does not score (its sends live in ZMA -- a red would be false, v1 I6),
+// plus the Score (V2 D1: a ZMA row's score is null).
+const ZMA_DIMMED = Object.freeze(['score', 'welcome', 'journeys', 'lastBroadcast', 'cadence']);
 
 // The welcome tooltip: the master list's evergreen campaigns ("#id status"), or none.
 export function welcomeTip(w, t = (k) => k) {
@@ -93,8 +105,8 @@ export function welcomeTip(w, t = (k) => k) {
   return camps.map((c) => `#${c.id} ${c.status}`).join(', ');
 }
 
-// D7: the ⚠ tooltip -- each trigger row's slug with its parser error, or its list and that list's
-// evergreen state when not running. Rows in the stored order, one per line.
+// D7: the trigger-family tooltip -- each stored row's slug with its parser error, or its list and
+// that list's evergreen state. Rows in the stored order, one per line.
 export function triggerTip(p, t = (k) => k) {
   const rows = Array.isArray(p && p.rows) ? p.rows : [];
   return rows.map((r) => {
@@ -119,65 +131,170 @@ export function broadcastTip(b, t = (k) => k) {
   });
 }
 
-// cell is one column's presentation for a row: { text, cls, tooltip } where tooltip is a plain
-// string (t formats it -- the Vue passes (k, p) => this.$t(k, p)). A row without usage is blank
-// (D7); a ZMA row shows '—' in Welcome/Journeys/Last broadcast/Cadence.
+// V2 D1: the Score breakdown -- "Broadcasts 40/40 · Welcome 5/15 · …", every number the stored
+// part's points/max verbatim, in SCORE_PARTS' fixed order. A part the doc lacks is skipped.
+export function scoreTip(score, t = (k) => k) {
+  const parts = isObj(score && score.parts) ? score.parts : {};
+  return SCORE_PARTS.filter((p) => isObj(parts[p.key]))
+    .map((p) => `${t(p.label)} ${parts[p.key].points}/${parts[p.key].max}`)
+    .join(' · ');
+}
+
+// V2 D3: the stored per-state numbers of a stoplight column -- { green, amber } from the family's
+// stored `counts` (Welcome, 1st purchase, No purchase) or Journeys' stored { running, idle }; null
+// when the doc does not carry them (a doc written before V2). The fork classifies nothing.
+export function storedCounts(usage, field) {
+  if (!isObj(usage)) {
+    return null;
+  }
+  let green = null;
+  let amber = null;
+  if (field === 'journeys') {
+    const j = isObj(usage.journeys) ? usage.journeys : {};
+    green = countOrNull(j.running);
+    amber = countOrNull(j.idle);
+  } else if (field === 'welcome' || field === 'purchase' || field === 'noPurchase') {
+    const c = isObj(usage[field]) && isObj(usage[field].counts) ? usage[field].counts : {};
+    green = countOrNull(c.green);
+    amber = countOrNull(c.amber);
+  }
+  return green === null || amber === null ? null : { green, amber };
+}
+
+// V2 D3/I3: the circles of one stoplight cell -- ONE circle per state, the stored count inside:
+// green (running/active) and amber (configured but idle), each omitted at 0; a single red circle
+// showing 0 when both are 0. Returns [{ color, n }].
+export function circlesOf(counts) {
+  if (!counts) {
+    return [];
+  }
+  const out = [];
+  if (counts.green > 0) {
+    out.push({ color: 'green', n: counts.green });
+  }
+  if (counts.amber > 0) {
+    out.push({ color: 'amber', n: counts.amber });
+  }
+  return out.length ? out : [{ color: 'red', n: 0 }];
+}
+
+// V2 D3/I3: the words every circle of the cell carries -- color is never the only carrier:
+// "1 running, 2 not running", or "none in use".
+export function circleWords(counts, t = (k) => k) {
+  if (!counts) {
+    return '';
+  }
+  const parts = [];
+  if (counts.green > 0) {
+    parts.push(t('dashboard.usage.circleRunning', { n: counts.green }));
+  }
+  if (counts.amber > 0) {
+    parts.push(t('dashboard.usage.circleIdle', { n: counts.amber }));
+  }
+  return parts.length ? parts.join(', ') : t('dashboard.usage.circleNone');
+}
+
+// V2 D4: a stoplight cell's link query -- the Campaigns page with the list preselected AND the
+// Automations scope (welcome/trigger campaigns are evergreens). Welcome links its master list; a
+// 1st purchase / No purchase cell links only when the family has exactly ONE row (with a list);
+// Journeys and the booleans never link. null = no link.
+export function cellLink(row, field) {
+  const u = row && row.usage;
+  if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
+    return null;
+  }
+  let listId = null;
+  if (field === 'welcome') {
+    listId = isObj(u.welcome) ? u.welcome.listId : null;
+  } else if (field === 'purchase' || field === 'noPurchase') {
+    const rows = isObj(u[field]) && Array.isArray(u[field].rows) ? u[field].rows : [];
+    listId = rows.length === 1 ? rows[0].listId : null;
+  }
+  if (!(typeof listId === 'number' && Number.isInteger(listId) && listId > 0)) {
+    return null;
+  }
+  return { list_id: String(listId), evergreen: 'true' };
+}
+
+// cell is one column's presentation for a row: { text, cls, tooltip, circles } -- tooltip a plain
+// string (t formats it -- the Vue passes (k, p) => this.$t(k, p)); circles (stoplight columns
+// only) [{ color, n }], each to carry `tooltip`. A row without usage is blank (v1 D7); a ZMA row
+// shows '—' in Score/Welcome/Journeys/Last broadcast/Cadence.
 export function cell(row, field, t = (k) => k) {
   const u = row && row.usage;
   if (!u) {
-    return { text: '', cls: '', tooltip: '' };
+    return { ...BLANK_CELL, circles: [] };
   }
   if (row.zma && ZMA_DIMMED.includes(field)) {
-    return { text: DIMMED.glyph, cls: '', tooltip: t('dashboard.usage.zmaHelp') };
+    return {
+      text: MISSING, cls: '', tooltip: t('dashboard.usage.zmaHelp'), circles: [],
+    };
   }
   switch (field) {
-    case 'welcome': {
-      const w = isObj(u.welcome) ? u.welcome : {};
-      const c = stateCell(w.state);
-      return { text: c.glyph, cls: c.cls, tooltip: welcomeTip(w, t) };
+    case 'score': {
+      const total = numOrNull(isObj(u.score) ? u.score.total : null);
+      if (total === null) {
+        return {
+          text: MISSING, cls: '', tooltip: t('dashboard.usage.scoreMissing'), circles: [],
+        };
+      }
+      return {
+        text: String(total), cls: '', tooltip: scoreTip(u.score, t), circles: [],
+      };
     }
+    case 'journeys':
+    case 'welcome':
     case 'purchase':
     case 'noPurchase': {
-      const p = isObj(u[field]) ? u[field] : {};
-      const c = stateCell(p.state);
-      return { text: c.glyph, cls: c.cls, tooltip: triggerTip(p, t) };
+      const counts = storedCounts(u, field);
+      if (!counts) {
+        return {
+          text: MISSING, cls: '', tooltip: t('dashboard.usage.countsMissing'), circles: [],
+        };
+      }
+      let detail = '';
+      if (field === 'welcome') {
+        detail = welcomeTip(isObj(u.welcome) ? u.welcome : {}, t);
+      } else if (field !== 'journeys') {
+        detail = triggerTip(isObj(u[field]) ? u[field] : {}, t);
+      }
+      const words = circleWords(counts, t);
+      return {
+        text: '', cls: '', tooltip: detail ? `${words}\n${detail}` : words, circles: circlesOf(counts),
+      };
     }
     case 'sunset':
     case 'attribution': {
       const c = boolCell(u[field]);
-      return { text: c.glyph, cls: c.cls, tooltip: '' };
-    }
-    case 'journeys': {
-      const j = isObj(u.journeys) ? u.journeys : {};
-      const running = numOrNull(j.running);
-      if (running === null) {
-        return { text: '', cls: '', tooltip: '' };
-      }
       return {
-        text: t('dashboard.usage.running', { n: running }),
-        cls: '',
-        tooltip: t('dashboard.usage.idleCount', { n: numOrNull(j.idle) ?? 0 }),
+        text: c.glyph, cls: c.cls, tooltip: '', circles: [],
       };
     }
     case 'lastBroadcast': {
       const b = isObj(u.broadcasts) ? u.broadcasts : {};
       const cls = Object.prototype.hasOwnProperty.call(BROADCAST_CLASS, b.state) ? BROADCAST_CLASS[b.state] : '';
       if (b.state === 'none') {
-        return { text: t('dashboard.usage.never'), cls, tooltip: broadcastTip(b, t) };
+        return {
+          text: t('dashboard.usage.never'), cls, tooltip: broadcastTip(b, t), circles: [],
+        };
       }
       const since = numOrNull(b.daysSince);
       if (since === null) {
-        return { text: '', cls: '', tooltip: '' };
+        return { ...BLANK_CELL, circles: [] };
       }
-      return { text: t('dashboard.usage.daysAgo', { n: Math.floor(since) }), cls, tooltip: broadcastTip(b, t) };
+      return {
+        text: t('dashboard.usage.daysAgo', { n: Math.floor(since) }), cls, tooltip: broadcastTip(b, t), circles: [],
+      };
     }
     case 'cadence': {
       const b = isObj(u.broadcasts) ? u.broadcasts : {};
       const c = numOrNull(b.cadenceDays);
-      return { text: c === null ? MISSING : t('dashboard.usage.cadenceDays', { n: Math.round(c) }), cls: '', tooltip: '' };
+      return {
+        text: c === null ? MISSING : t('dashboard.usage.cadenceDays', { n: Math.round(c) }), cls: '', tooltip: '', circles: [],
+      };
     }
     default:
-      return { text: '', cls: '', tooltip: '' };
+      return { ...BLANK_CELL, circles: [] };
   }
 }
 
@@ -194,32 +311,63 @@ export function latestAsOf(rows) {
   return best;
 }
 
-// The default direction of a column on its first click: brand ascending, every other descending.
+// V2 D5/I4: the run's time as Mountain time, DST-correct. RUN_TIME_UTC mirrors the BrandHealth
+// Lambda's daily schedule (integrations cdk/ BrandHealth rule, 15:30 UTC -- a comment there names
+// this constant; no test spans the repos). Formatted through Intl with the America/Denver zone,
+// never a hardcoded offset (8:30 AM MST in winter, 9:30 AM MDT in summer). null when asOf is not
+// a YYYY-MM-DD day or Intl refuses.
+export const RUN_TIME_UTC = '15:30:00Z';
+export const MOUNTAIN_ZONE = 'America/Denver';
+
+export function mountainRunTime(asOf, locale = 'en-US') {
+  if (typeof asOf !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
+    return null;
+  }
+  const d = new Date(`${asOf}T${RUN_TIME_UTC}`);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      timeZone: MOUNTAIN_ZONE,
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    }).format(d);
+  } catch {
+    return null;
+  }
+}
+
+// The default direction of a column on its first click: Brand ascending; Score and the date
+// column descending (best score / longest silence first); the stoplight and boolean columns
+// descending too -- their sort keys are v1's BADNESS, so descending is worst first (stage 2 F8).
 export function defaultOrder(field) {
   return field === 'brand' ? 'asc' : 'desc';
 }
 
-// onSortClick -- the Lists.vue/Brands.vue onSort pattern (BRAND-MATRIX stage 4 F3) as pure logic.
-// Buefy (no default-sort-direction) emits 'asc' on a click that CHANGES the column; a repeat click
-// is Buefy's own toggle. On a fresh column the order is defaultOrder(field), and `flipArrow` tells
-// the Vue to set the table's isAsc to false so the arrow matches (Brand stays asc). A repeat
-// click passes Buefy's direction through. Returns { sort: {field, order}, flipArrow }.
-export function onSortClick(current, field, direction) {
+// V2 D2: clickSort is the sort after a header click (the pane owns its own header -- the Brand
+// Matrix's brandMatrix.mjs::clickSort pattern; no Buefy direction in play). A click on a NEW
+// column takes that column's default direction; a click on the current column toggles it; an
+// unsortable field leaves the sort unchanged.
+export function clickSort(current, field) {
   const cur = current || DEFAULT_STATE.sort;
   if (!SORT_FIELDS.includes(field)) {
-    return { sort: { ...cur }, flipArrow: false };
+    return { ...cur };
   }
-  if (field !== cur.field) {
-    const order = defaultOrder(field);
-    return { sort: { field, order }, flipArrow: order === 'desc' && direction === 'asc' };
+  if (cur.field !== field) {
+    return { field, order: defaultOrder(field) };
   }
-  return { sort: { field, order: direction === 'asc' ? 'asc' : 'desc' }, flipArrow: false };
+  return { field, order: cur.order === 'asc' ? 'desc' : 'asc' };
 }
 
-// Sort keys: states and booleans as BADNESS (higher = worse, so desc is worst first, like the
-// default); journeys by running count; cadence by days; Last broadcast by daysSince with a
-// never-broadcast row above every number. null = missing (no usage, a ZMA-dimmed column, an
-// unrecognized value) -- ranks last in BOTH orders.
+// Sort keys: the Score by its stored total; states and booleans as BADNESS (higher = worse, so desc
+// is worst first -- v1's comparators exactly); journeys by running count; cadence by days; Last
+// broadcast by daysSince with a never-broadcast row above every number. null = missing (no usage,
+// no stored score, a ZMA-dimmed column, an unrecognized value) -- ranks last in BOTH orders.
 const BADNESS = Object.freeze({ active: 0, idle: 1, none: 2 });
 
 export function sortValue(row, field) {
@@ -228,6 +376,8 @@ export function sortValue(row, field) {
     return null;
   }
   switch (field) {
+    case 'score':
+      return numOrNull(isObj(u.score) ? u.score.total : null);
     case 'welcome':
     case 'purchase':
     case 'noPurchase': {
@@ -256,7 +406,8 @@ export function sortValue(row, field) {
   }
 }
 
-// I7: sortRows -- the requested column and direction; missing last in both orders; ties by name.
+// I7 / V2 I2: sortRows -- the requested column and direction; missing last in both orders; ties
+// by name.
 export function sortRows(rows, sort = DEFAULT_STATE.sort, locale = 'en') {
   const field = SORT_FIELDS.includes(sort && sort.field) ? sort.field : DEFAULT_STATE.sort.field;
   const dir = sort && sort.order === 'asc' ? 1 : -1;

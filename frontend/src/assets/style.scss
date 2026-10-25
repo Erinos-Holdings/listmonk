@@ -1006,15 +1006,114 @@ section.dashboard {
     }
   }
 
-  /* Fork (brand usage, integrations BRAND-USAGE-SPEC D7) -- the Brand Usage pane: a ZMA brand's row
-  is dimmed (its sends live in ZMA, so it is not scored here). */
+  /* Fork (brand usage, integrations BRAND-USAGE-SPEC D7; BRAND-USAGE-V2-SPEC D2/D3) -- the Brand
+  Usage pane. A ZMA brand's row is dimmed (its sends live in ZMA, so it is not scored here). The
+  structure is NEUTRAL (user-approved 2026-10-25): alternating white / grey section bands, each
+  group-header cell one step darker, thin vertical rules where a section opens, the sorted column a
+  slightly deeper neutral wash -- the stoplight circles are the table's only chroma. The Brand
+  Matrix keeps its hued tints. */
   .brand-usage {
     td, th {
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      vertical-align: middle;
+    }
+    th.bm-sort {
+      cursor: pointer;
+      user-select: none;
+    }
+    .bm-arrow {
+      display: inline-block;
+      min-width: 1em;
+      padding-left: 2px;
+      color: $grey;
+    }
+    tr.bu-groups th {
+      border-bottom-width: 1px;
+      &.bu-group {
+        text-align: center;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+    }
+    th.bu-band-grey, td.bu-band-grey {
+      background-color: #f6f7f8;
+    }
+    thead th.bu-band-grey {
+      background-color: #eceef0;
+    }
+    thead th.bu-band-white {
+      background-color: #f6f7f8;
+    }
+    th.bu-start, td.bu-start {
+      border-left: 1px solid #dbdee2;
+    }
+    th.bu-sorted, td.bu-sorted {
+      background-image: linear-gradient(rgba(54, 54, 54, 0.06), rgba(54, 54, 54, 0.06));
     }
     tr.bu-zma td {
       opacity: 0.55;
     }
+    .bu-circles {
+      display: inline-flex;
+      gap: 3px;
+      align-items: center;
+    }
+    a.bu-circles:hover .bu-circle {
+      filter: brightness(0.92);
+    }
+    .bu-legend .bu-circle {
+      margin-left: 0.5em;
+      vertical-align: middle;
+    }
+  }
+  /* V2 D3: one circle per state, the stored count inside; a 1px same-hue ring keeps each crisp on
+  white and grey bands alike. Amber carries dark text for contrast. */
+  .bu-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.45rem;
+    height: 1.45rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 0.75rem;
+    font-weight: bold;
+    line-height: 1;
+    &.bu-green {
+      background-color: #43a047;
+      border-color: #2e7d32;
+      color: #fff;
+    }
+    &.bu-amber {
+      background-color: #f6c344;
+      border-color: #c79a1e;
+      color: #3d2e00;
+    }
+    &.bu-red {
+      background-color: #e53935;
+      border-color: #c62828;
+      color: #fff;
+    }
+  }
+
+  /* Fork (BRAND-USAGE-V2-SPEC D7b) -- the Subscribers + Messages sent container's PERMANENT width:
+  its widest state, the expanded segment x send-language table (a label column, All and up to the
+  six GRID_LANGS columns of comma-separated counts, the %|# toggle in its corner) plus the tile and
+  table padding -- so expanding/collapsing Subscribers never changes the width. The column beside
+  it takes the rest. Side-by-side tiles only (desktop and up); stacked tiles stay full width. */
+  $dashboard-subs-width: 760px;
+  @media screen and (min-width: $desktop) {
+    .tile.is-parent.dash-subs-col {
+      flex: 0 0 $dashboard-subs-width;
+      max-width: $dashboard-subs-width;
+    }
+  }
+  .subs-grid th.subs-mode {
+    padding-left: 0;
+    vertical-align: middle;
   }
 
   .tile.notification {

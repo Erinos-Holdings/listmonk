@@ -1,26 +1,40 @@
-// Fork (brand usage, integrations listmonk/BRAND-USAGE-SPEC I6/I7, D2/D7). Run: yarn test
-// (node --test src/*.test.mjs). No dependency: Node's built-in runner.
+// Fork (brand usage, integrations listmonk/BRAND-USAGE-SPEC I6/I7, D2/D7; BRAND-USAGE-V2-SPEC
+// I1-I4, I7). Run: yarn test (node --test src/*.test.mjs). No dependency: Node's built-in runner.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_STATE, MISSING, STORAGE_KEY, boolCell, broadcastTip, cell, loadState, saveState, shapeRows, sortRows,
-  defaultOrder, latestAsOf, onSortClick, sortValue, stateCell, triggerTip,
+  CIRCLE_FIELDS, DEFAULT_STATE, MISSING, SCORE_PARTS, SECTIONS, SORT_FIELDS, STORAGE_KEY, boolCell, broadcastTip, cell,
+  cellLink, circlesOf, circleWords, clickSort, defaultOrder, latestAsOf, loadState, mountainRunTime, saveState,
+  scoreTip, shapeRows, sortRows, sortValue, storedCounts, triggerTip,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
 const t = (k, p) => (p ? `${k}${JSON.stringify(p)}` : k);
 
+const parts = (b, w, p, n, a, s) => ({
+  broadcasts: { points: b, max: 40 },
+  welcome: { points: w, max: 15 },
+  purchase: { points: p, max: 15 },
+  noPurchase: { points: n, max: 10 },
+  attribution: { points: a, max: 10 },
+  sunset: { points: s, max: 10 },
+});
+const score = (total, p) => ({ total, parts: p });
+
 const usage = (over = {}) => ({
   channel: 'listmonk',
-  welcome: { state: 'active', listId: 7, campaigns: [{ id: 3, status: 'running' }] },
-  purchase: { state: 'none', rows: [] },
-  noPurchase: { state: 'none', rows: [] },
+  welcome: {
+    state: 'active', listId: 7, campaigns: [{ id: 3, status: 'running' }], counts: { green: 1, amber: 0 },
+  },
+  purchase: { state: 'none', rows: [], counts: { green: 0, amber: 0 } },
+  noPurchase: { state: 'none', rows: [], counts: { green: 0, amber: 0 } },
   sunset: true,
   attribution: false,
   journeys: { running: 2, idle: 1 },
   broadcasts: {
     lastAt: '2026-10-20T12:00:00.000Z', windowCount: 4, cadenceDays: 12.4, daysSince: 4.6, ratio: 0.37, state: 'ok',
   },
+  score: score(65, parts(40, 15, 0, 0, 0, 10)),
   ...over,
 });
 
@@ -33,6 +47,7 @@ const api = [
       broadcasts: {
         lastAt: null, windowCount: 0, cadenceDays: null, daysSince: null, ratio: null, state: 'none',
       },
+      score: score(25, parts(0, 15, 0, 0, 0, 10)),
     }),
   },
   {
@@ -42,6 +57,7 @@ const api = [
       broadcasts: {
         lastAt: '2026-08-01T00:00:00.000Z', windowCount: 1, cadenceDays: null, daysSince: 84.6, ratio: 2.82, state: 'stale',
       },
+      score: score(35, parts(10, 15, 0, 0, 0, 10)),
     }),
   },
   {
@@ -49,12 +65,15 @@ const api = [
     health: { status: 'ok' },
     usage: usage({
       channel: 'zma',
-      welcome: { state: 'none', listId: 9, campaigns: [] },
-      purchase: { state: 'idle', rows: [{ slug: 'oldzma-first-order', listId: null, evergreen: 'none' }] },
+      welcome: {
+        state: 'none', listId: 9, campaigns: [], counts: { green: 0, amber: 0 },
+      },
+      purchase: { state: 'idle', rows: [{ slug: 'oldzma-first-order', listId: null, evergreen: 'none' }], counts: { green: 0, amber: 1 } },
       journeys: { running: 0, idle: 0 },
       broadcasts: {
         lastAt: null, windowCount: 0, cadenceDays: null, daysSince: null, ratio: null, state: 'none',
       },
+      score: null,
     }),
   },
   { brand: 'nodoc' }, // no health document, no usage (pre-deploy or unmapped)
@@ -78,37 +97,94 @@ test('D2: rows are the Brand Matrix rows -- the launch filter over the rows\' ow
   assert.equal(shapeRows(api).find((x) => x.brand === 'nodoc').usage, null);
 });
 
-test('I7: glyph mapping -- ✓ green active/running, ⚠ amber idle, ✗ red none; booleans ✓/✗; unknown blank', () => {
-  assert.deepEqual(stateCell('active'), { glyph: '✓', cls: 'has-text-success' });
-  assert.deepEqual(stateCell('running'), { glyph: '✓', cls: 'has-text-success' });
-  assert.deepEqual(stateCell('idle'), { glyph: '⚠', cls: 'has-text-warning-dark' });
-  assert.deepEqual(stateCell('none'), { glyph: '✗', cls: 'has-text-danger' });
-  assert.deepEqual(stateCell('bogus'), { glyph: '', cls: '' });
-  assert.deepEqual(boolCell(true), { glyph: '✓', cls: 'has-text-success' });
-  assert.deepEqual(boolCell(false), { glyph: '✗', cls: 'has-text-danger' });
-  assert.deepEqual(boolCell(undefined), { glyph: '', cls: '' });
+test('V2 D2: columns -- Score, Brand, then Broadcasts / Journeys / Configurations sections', () => {
+  assert.deepEqual(SECTIONS.map((s) => [s.key, s.fields]), [
+    ['broadcasts', ['cadence', 'lastBroadcast']],
+    ['journeys', ['journeys', 'welcome', 'purchase', 'noPurchase']],
+    ['configurations', ['attribution', 'sunset']],
+  ]);
+  assert.deepEqual(SORT_FIELDS, ['score', 'brand', 'cadence', 'lastBroadcast', 'journeys', 'welcome', 'purchase', 'noPurchase', 'attribution', 'sunset']);
+  assert.deepEqual(CIRCLE_FIELDS, ['journeys', 'welcome', 'purchase', 'noPurchase']);
 });
 
-test('D7: cells -- journeys n running (idle in tooltip), Nd ago, never, ~Nd, —', () => {
-  const [ruze, tg, lux] = shapeRows(api);
-  assert.equal(cell(ruze, 'journeys', t).text, 'dashboard.usage.running{"n":2}');
-  assert.equal(cell(ruze, 'journeys', t).tooltip, 'dashboard.usage.idleCount{"n":1}');
-  assert.deepEqual(
-    [cell(ruze, 'lastBroadcast', t).text, cell(ruze, 'lastBroadcast', t).cls],
-    ['dashboard.usage.daysAgo{"n":4}', 'has-text-success'],
+test('V2 D1 / I1: the Score cell -- the stored total, the breakdown from parts verbatim in the FIXED order', () => {
+  const [ruze] = shapeRows(api);
+  const c = cell(ruze, 'score', t);
+  assert.equal(c.text, '65');
+  assert.deepEqual(SCORE_PARTS.map((p) => p.key), ['broadcasts', 'welcome', 'purchase', 'noPurchase', 'attribution', 'sunset']);
+  assert.equal(
+    c.tooltip,
+    'dashboard.usage.partBroadcasts 40/40 · dashboard.usage.partWelcome 15/15 · dashboard.usage.partPurchase 0/15 · '
+      + 'dashboard.usage.partNoPurchase 0/10 · dashboard.usage.partAttribution 0/10 · dashboard.usage.partSunset 10/10',
   );
-  assert.equal(cell(ruze, 'cadence', t).text, 'dashboard.usage.cadenceDays{"n":12}');
-  assert.deepEqual([cell(tg, 'lastBroadcast', t).text, cell(tg, 'lastBroadcast', t).cls], ['dashboard.usage.never', 'has-text-danger']);
-  assert.equal(cell(tg, 'cadence', t).text, MISSING);
-  assert.equal(cell(lux, 'lastBroadcast', t).cls, 'has-text-danger');
-  const due = shapeRows([{ brand: 'x', usage: usage({ broadcasts: { ...usage().broadcasts, state: 'due' } }) }])[0];
-  assert.equal(cell(due, 'lastBroadcast', t).cls, 'has-text-warning-dark');
-  assert.equal(cell(ruze, 'sunset', t).text, '✓');
-  assert.equal(cell(ruze, 'attribution', t).cls, 'has-text-danger');
-  assert.equal(cell(ruze, 'welcome', t).tooltip, '#3 running');
+  // jsonb returns keys lexicographically -- the display order is ours, not the object's.
+  const lexi = {
+    attribution: { points: 1, max: 10 },
+    broadcasts: { points: 2, max: 40 },
+    noPurchase: { points: 3, max: 10 },
+    purchase: { points: 4, max: 15 },
+    sunset: { points: 5, max: 10 },
+    welcome: { points: 6, max: 15 },
+  };
+  const id = (k) => k;
+  assert.equal(scoreTip({ total: 21, parts: lexi }, id), [
+    'dashboard.usage.partBroadcasts 2/40', 'dashboard.usage.partWelcome 6/15', 'dashboard.usage.partPurchase 4/15',
+    'dashboard.usage.partNoPurchase 3/10', 'dashboard.usage.partAttribution 1/10', 'dashboard.usage.partSunset 5/10',
+  ].join(' · '));
+  // The numbers are rendered verbatim -- the fork computes no weight (a stored 7/99 shows as 7/99).
+  assert.equal(scoreTip({ total: 7, parts: { welcome: { points: 7, max: 99 } } }, id), 'dashboard.usage.partWelcome 7/99');
+  // ZMA: null score -> '—' (the ZMA help); a pre-V2 doc without score -> '—' (scored next run).
+  const zma = shapeRows(api).find((r) => r.brand === 'oldzma');
+  assert.deepEqual([cell(zma, 'score', t).text, cell(zma, 'score', t).tooltip], [MISSING, 'dashboard.usage.zmaHelp']);
+  const old = shapeRows([{ brand: 'old', usage: usage({ score: undefined }) }])[0];
+  assert.deepEqual([cell(old, 'score', t).text, cell(old, 'score', t).tooltip], [MISSING, 'dashboard.usage.scoreMissing']);
 });
 
-test('D7: the ⚠ tooltip lists each row with its error or its not-running list', () => {
+test('V2 D3 / I3: circles -- one per state from the STORED numbers, green/amber omitted at 0, red 0 when both are 0', () => {
+  assert.deepEqual(circlesOf({ green: 1, amber: 2 }), [{ color: 'green', n: 1 }, { color: 'amber', n: 2 }]);
+  assert.deepEqual(circlesOf({ green: 3, amber: 0 }), [{ color: 'green', n: 3 }]);
+  assert.deepEqual(circlesOf({ green: 0, amber: 2 }), [{ color: 'amber', n: 2 }]);
+  assert.deepEqual(circlesOf({ green: 0, amber: 0 }), [{ color: 'red', n: 0 }]);
+  assert.deepEqual(circlesOf(null), []);
+  // The numbers are the stored ones: Journeys from journeys.{running, idle}, the rest from counts.
+  const u = usage({
+    welcome: {
+      state: 'idle', listId: 7, campaigns: [], counts: { green: 4, amber: 5 },
+    },
+    purchase: { state: 'idle', rows: [], counts: { green: 1, amber: 2 } },
+  });
+  assert.deepEqual(storedCounts(u, 'journeys'), { green: 2, amber: 1 });
+  // The state is NOT consulted: idle with a stored green 4 renders 4 green (lib owns the predicate).
+  assert.deepEqual(storedCounts(u, 'welcome'), { green: 4, amber: 5 });
+  assert.deepEqual(storedCounts(u, 'purchase'), { green: 1, amber: 2 });
+  assert.deepEqual(storedCounts(u, 'noPurchase'), { green: 0, amber: 0 });
+  assert.equal(storedCounts(u, 'sunset'), null);
+  // A doc written before V2 (no counts) renders '—', never a derived circle.
+  const old = shapeRows([{ brand: 'o', usage: usage({ welcome: { state: 'active', listId: 7, campaigns: [] } }) }])[0];
+  assert.deepEqual([cell(old, 'welcome', t).text, cell(old, 'welcome', t).circles], [MISSING, []]);
+  assert.equal(storedCounts(usage({ journeys: { running: 1 } }), 'journeys'), null);
+});
+
+test('V2 I3: every circle carries a words tooltip; red is the digit 0', () => {
+  assert.equal(circleWords({ green: 1, amber: 2 }, t), 'dashboard.usage.circleRunning{"n":1}, dashboard.usage.circleIdle{"n":2}');
+  assert.equal(circleWords({ green: 0, amber: 0 }, t), 'dashboard.usage.circleNone');
+  const [ruze] = shapeRows(api);
+  const j = cell(ruze, 'journeys', t);
+  assert.deepEqual(j.circles, [{ color: 'green', n: 2 }, { color: 'amber', n: 1 }]);
+  assert.equal(j.tooltip, 'dashboard.usage.circleRunning{"n":2}, dashboard.usage.circleIdle{"n":1}');
+  // Welcome: the words, then the stored campaigns.
+  assert.equal(cell(ruze, 'welcome', t).tooltip, 'dashboard.usage.circleRunning{"n":1}\n#3 running');
+  const p = cell(ruze, 'purchase', t);
+  assert.deepEqual(p.circles, [{ color: 'red', n: 0 }]);
+  assert.equal(p.tooltip, 'dashboard.usage.circleNone');
+  CIRCLE_FIELDS.forEach((f) => {
+    const c = cell(ruze, f, t);
+    assert.ok(c.tooltip.length > 0, f);
+    c.circles.filter((x) => x.color === 'red').forEach((x) => assert.equal(x.n, 0, f));
+  });
+});
+
+test('D7: the trigger tooltip lists each stored row with its error or its list', () => {
   const tip = triggerTip({
     state: 'idle',
     rows: [
@@ -121,17 +197,83 @@ test('D7: the ⚠ tooltip lists each row with its error or its not-running list'
   }, t);
   assert.equal(tip, 'a: trigger is missing\nb: dashboard.usage.noList\nc: dashboard.usage.listEvergreen{"list":5,"state":"idle"}');
   assert.equal(broadcastTip({ cadenceDays: null, ratio: 2.8216, windowCount: 1 }, t), 'dashboard.usage.broadcastHelp{"cadence":"—","ratio":"2.82","count":1}');
+  const row = shapeRows([{
+    brand: 'x',
+    usage: usage({
+      purchase: {
+        state: 'idle',
+        rows: [{ slug: 'x-first-order', listId: 4, evergreen: 'running' }, { slug: 'x-skus', listId: 5, evergreen: 'idle' }],
+        counts: { green: 1, amber: 1 },
+      },
+    }),
+  }])[0];
+  assert.equal(
+    cell(row, 'purchase', t).tooltip,
+    'dashboard.usage.circleRunning{"n":1}, dashboard.usage.circleIdle{"n":1}\n'
+      + 'x-first-order: dashboard.usage.listEvergreen{"list":4,"state":"running"}\n'
+      + 'x-skus: dashboard.usage.listEvergreen{"list":5,"state":"idle"}',
+  );
+});
+
+test('V2 D4: links per cell -- Welcome its master list, a trigger family only with exactly one row; Automations scope', () => {
+  const [ruze] = shapeRows(api);
+  assert.deepEqual(cellLink(ruze, 'welcome'), { list_id: '7', evergreen: 'true' });
+  assert.equal(cellLink(ruze, 'purchase'), null); // no rows
+  assert.equal(cellLink(ruze, 'journeys'), null);
+  assert.equal(cellLink(ruze, 'sunset'), null);
+  assert.equal(cellLink(ruze, 'score'), null);
+  const one = shapeRows([{
+    brand: 'x',
+    usage: usage({
+      noPurchase: { state: 'active', rows: [{ slug: 'x-no-purchase-12', listId: 12, evergreen: 'running' }], counts: { green: 1, amber: 0 } },
+      purchase: {
+        state: 'idle',
+        rows: [{ slug: 'a', listId: 4, evergreen: 'running' }, { slug: 'b', listId: 5, evergreen: 'idle' }],
+        counts: { green: 1, amber: 1 },
+      },
+    }),
+  }])[0];
+  assert.deepEqual(cellLink(one, 'noPurchase'), { list_id: '12', evergreen: 'true' });
+  assert.equal(cellLink(one, 'purchase'), null); // several rows = several lists
+  const noList = shapeRows([{
+    brand: 'y',
+    usage: usage({ purchase: { state: 'idle', rows: [{ slug: 'a', listId: null, evergreen: 'none' }], counts: { green: 0, amber: 1 } } }),
+  }])[0];
+  assert.equal(cellLink(noList, 'purchase'), null);
+  // A ZMA row's dimmed Welcome does not link; no usage, no link.
+  assert.equal(cellLink(shapeRows(api).find((r) => r.brand === 'oldzma'), 'welcome'), null);
+  assert.equal(cellLink(shapeRows(api).find((r) => r.brand === 'nodoc'), 'welcome'), null);
+});
+
+test('D7: cells -- Nd ago, never, ~Nd, —, Last broadcast colored on the TEXT; booleans ✓/✗', () => {
+  const [ruze, tg, lux] = shapeRows(api);
+  assert.deepEqual(
+    [cell(ruze, 'lastBroadcast', t).text, cell(ruze, 'lastBroadcast', t).cls],
+    ['dashboard.usage.daysAgo{"n":4}', 'has-text-success'],
+  );
+  assert.equal(cell(ruze, 'cadence', t).text, 'dashboard.usage.cadenceDays{"n":12}');
+  assert.deepEqual([cell(tg, 'lastBroadcast', t).text, cell(tg, 'lastBroadcast', t).cls], ['dashboard.usage.never', 'has-text-danger']);
+  assert.equal(cell(tg, 'cadence', t).text, MISSING);
+  assert.equal(cell(lux, 'lastBroadcast', t).cls, 'has-text-danger');
+  const due = shapeRows([{ brand: 'x', usage: usage({ broadcasts: { ...usage().broadcasts, state: 'due' } }) }])[0];
+  assert.equal(cell(due, 'lastBroadcast', t).cls, 'has-text-warning-dark');
+  assert.equal(cell(ruze, 'sunset', t).text, '✓');
+  assert.equal(cell(ruze, 'attribution', t).cls, 'has-text-danger');
+  assert.deepEqual(boolCell(true), { glyph: '✓', cls: 'has-text-success' });
+  assert.deepEqual(boolCell(false), { glyph: '✗', cls: 'has-text-danger' });
+  assert.deepEqual(boolCell(undefined), { glyph: '', cls: '' });
 });
 
 test('I6: a ZMA row never renders a red broadcast or welcome cell; registry facts still render', () => {
   const zma = shapeRows(api).find((r) => r.brand === 'oldzma');
-  ['welcome', 'journeys', 'lastBroadcast', 'cadence'].forEach((f) => {
+  ['score', 'welcome', 'journeys', 'lastBroadcast', 'cadence'].forEach((f) => {
     const c = cell(zma, f, t);
     assert.equal(c.text, MISSING, f);
     assert.notEqual(c.cls, 'has-text-danger', f);
     assert.equal(c.cls, '', f);
+    assert.deepEqual(c.circles, [], f);
   });
-  assert.equal(cell(zma, 'purchase', t).text, '⚠');
+  assert.deepEqual(cell(zma, 'purchase', t).circles, [{ color: 'amber', n: 1 }]);
   assert.equal(cell(zma, 'sunset', t).text, '✓');
 });
 
@@ -147,48 +289,76 @@ test('D1: the note date is the newest asOf among the rendered rows; none carries
   assert.equal(latestAsOf([]), null);
 });
 
+test('V2 D5 / I4: the run time in Mountain time via Intl America/Denver -- 8:30 MST in winter, 9:30 MDT in summer', () => {
+  const winter = mountainRunTime('2026-01-15');
+  const summer = mountainRunTime('2026-07-15');
+  assert.match(winter, /Jan 15, 2026/);
+  assert.match(winter, /8:30\s?AM/u);
+  assert.match(winter, /MST/);
+  assert.match(summer, /Jul 15, 2026/);
+  assert.match(summer, /9:30\s?AM/u);
+  assert.match(summer, /MDT/);
+  assert.equal(mountainRunTime('garbage'), null);
+  assert.equal(mountainRunTime(null), null);
+});
+
 test('D7: a row without usage renders blanks', () => {
   const nodoc = shapeRows(api).find((r) => r.brand === 'nodoc');
-  ['welcome', 'purchase', 'noPurchase', 'sunset', 'attribution', 'journeys', 'lastBroadcast', 'cadence'].forEach((f) => {
-    assert.deepEqual(cell(nodoc, f, t), { text: '', cls: '', tooltip: '' }, f);
+  SORT_FIELDS.filter((f) => f !== 'brand').forEach((f) => {
+    assert.deepEqual(cell(nodoc, f, t), {
+      text: '', cls: '', tooltip: '', circles: [],
+    }, f);
   });
 });
 
-test('I7: default sort -- Last broadcast worst first: never, then daysSince descending; missing last', () => {
-  assert.deepEqual(DEFAULT_STATE.sort, { field: 'lastBroadcast', order: 'desc' });
+test('V2 I2: a fresh session sorts by Score descending; missing score last in BOTH orders', () => {
+  assert.deepEqual(DEFAULT_STATE.sort, { field: 'score', order: 'desc' });
   const rows = shapeRows(api);
-  // oldzma is ZMA (dimmed: missing) and nodoc has no usage -- both last, by name.
-  assert.deepEqual(sortRows(rows).map((r) => r.brand), ['thirstygirl', 'lux', 'ruze', 'nodoc', 'oldzma']);
-  // Ascending flips the numbers but keeps missing last.
-  assert.deepEqual(sortRows(rows, { field: 'lastBroadcast', order: 'asc' }).map((r) => r.brand), ['ruze', 'lux', 'thirstygirl', 'nodoc', 'oldzma']);
-  assert.deepEqual(sortRows(rows, { field: 'brand', order: 'asc' }).map((r) => r.brand), ['lux', 'nodoc', 'oldzma', 'ruze', 'thirstygirl']);
+  // oldzma is ZMA (null score) and nodoc has no usage -- both last, by name.
+  assert.deepEqual(sortRows(rows).map((r) => r.brand), ['ruze', 'lux', 'thirstygirl', 'nodoc', 'oldzma']);
+  assert.deepEqual(sortRows(rows, { field: 'score', order: 'asc' }).map((r) => r.brand), ['thirstygirl', 'lux', 'ruze', 'nodoc', 'oldzma']);
+  // A pre-V2 doc (usage, no score) ranks with the missing.
+  const withOld = [...rows, ...shapeRows([{ brand: 'aaold', usage: usage({ score: undefined }) }])];
+  assert.deepEqual(sortRows(withOld).map((r) => r.brand).slice(-3), ['aaold', 'nodoc', 'oldzma']);
+  assert.equal(sortValue(rows[0], 'score'), 65);
+  assert.equal(sortValue(rows[3], 'score'), null);
   // An unknown sort field falls back to the default.
   assert.deepEqual(sortRows(rows, { field: 'bogus', order: 'desc' }).map((r) => r.brand), sortRows(rows).map((r) => r.brand));
-  // Every column sorts; states by badness (desc = worst first).
+});
+
+test('I7: the v1 comparators stand -- Last broadcast worst first; states and booleans by badness', () => {
+  const rows = shapeRows(api);
+  assert.deepEqual(sortRows(rows, { field: 'lastBroadcast', order: 'desc' }).map((r) => r.brand), ['thirstygirl', 'lux', 'ruze', 'nodoc', 'oldzma']);
+  assert.deepEqual(sortRows(rows, { field: 'lastBroadcast', order: 'asc' }).map((r) => r.brand), ['ruze', 'lux', 'thirstygirl', 'nodoc', 'oldzma']);
+  assert.deepEqual(sortRows(rows, { field: 'brand', order: 'asc' }).map((r) => r.brand), ['lux', 'nodoc', 'oldzma', 'ruze', 'thirstygirl']);
   assert.equal(sortValue(rows[0], 'welcome'), 0);
   assert.equal(sortValue(rows[3], 'purchase'), 1);
   assert.equal(sortValue(rows[3], 'welcome'), null);
+  assert.equal(sortValue(rows[0], 'attribution'), 1);
+  assert.equal(sortValue(rows[0], 'sunset'), 0);
+  assert.equal(sortValue(rows[0], 'journeys'), 2);
 });
 
-test('D7 / stage 4 F1: header clicks -- first click on Brand asc, on any other column desc; repeat flips', () => {
+test('V2 D2 / I2: header clicks (clickSort) -- first click Score desc, Brand asc, every other desc; repeat flips', () => {
   assert.equal(defaultOrder('brand'), 'asc');
+  assert.equal(defaultOrder('score'), 'desc');
   const start = { field: 'lastBroadcast', order: 'desc' };
-  // Buefy emits 'asc' on a click that changes the column.
-  assert.deepEqual(onSortClick(start, 'brand', 'asc'), { sort: { field: 'brand', order: 'asc' }, flipArrow: false });
+  assert.deepEqual(clickSort(start, 'brand'), { field: 'brand', order: 'asc' });
+  assert.deepEqual(clickSort(start, 'score'), { field: 'score', order: 'desc' });
   ['welcome', 'purchase', 'noPurchase', 'sunset', 'attribution', 'journeys', 'cadence'].forEach((f) => {
-    assert.deepEqual(onSortClick(start, f, 'asc'), { sort: { field: f, order: 'desc' }, flipArrow: true }, f);
+    assert.deepEqual(clickSort(start, f), { field: f, order: 'desc' }, f);
   });
-  const brandStart = { field: 'brand', order: 'asc' };
-  assert.deepEqual(onSortClick(brandStart, 'lastBroadcast', 'asc'), { sort: { field: 'lastBroadcast', order: 'desc' }, flipArrow: true });
-  // A repeat click is Buefy's toggle, passed through.
-  assert.deepEqual(onSortClick(start, 'lastBroadcast', 'asc'), { sort: { field: 'lastBroadcast', order: 'asc' }, flipArrow: false });
-  assert.deepEqual(onSortClick({ field: 'lastBroadcast', order: 'asc' }, 'lastBroadcast', 'desc'), { sort: { field: 'lastBroadcast', order: 'desc' }, flipArrow: false });
-  assert.deepEqual(onSortClick(brandStart, 'brand', 'desc'), { sort: { field: 'brand', order: 'desc' }, flipArrow: false });
-  // An unsortable field leaves the sort unchanged.
-  assert.deepEqual(onSortClick(start, 'bogus', 'asc'), { sort: start, flipArrow: false });
+  assert.deepEqual(clickSort({ field: 'brand', order: 'asc' }, 'lastBroadcast'), { field: 'lastBroadcast', order: 'desc' });
+  // A repeat click toggles.
+  assert.deepEqual(clickSort(start, 'lastBroadcast'), { field: 'lastBroadcast', order: 'asc' });
+  assert.deepEqual(clickSort({ field: 'score', order: 'desc' }, 'score'), { field: 'score', order: 'asc' });
+  assert.deepEqual(clickSort({ field: 'brand', order: 'asc' }, 'brand'), { field: 'brand', order: 'desc' });
+  // An unsortable field leaves the sort unchanged; no current sort is the default.
+  assert.deepEqual(clickSort(start, 'bogus'), start);
+  assert.deepEqual(clickSort(null, 'score'), { field: 'score', order: 'asc' });
 });
 
-test('I7: session persistence -- a throwing sessionStorage yields the defaults and still renders', () => {
+test('I7 / V2 I2: session persistence -- a stored sort wins; a throwing sessionStorage yields the defaults and still renders', () => {
   const throwingWindow = {};
   Object.defineProperty(throwingWindow, 'sessionStorage', { get() { throw new Error('SecurityError'); } });
   const store = sessionStore(throwingWindow);
@@ -204,14 +374,16 @@ test('I7: session persistence -- a throwing sessionStorage yields the defaults a
   assert.equal(saveState(bad, {}), false);
   assert.deepEqual(loadState({ getItem: () => '{not json' }), { sort: { ...DEFAULT_STATE.sort } });
   // Rendering is unaffected by the storage failure.
-  assert.equal(sortRows(shapeRows(api), loadState(store).sort)[0].brand, 'thirstygirl');
+  assert.equal(sortRows(shapeRows(api), loadState(store).sort)[0].brand, 'ruze');
 
-  // A working store round-trips under the pane's own key.
+  // A working store round-trips under the pane's own key, and the stored sort wins.
   const mem = new Map();
   const ok = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v) };
   assert.equal(saveState(ok, { sort: { field: 'cadence', order: 'asc' } }), true);
   assert.ok(mem.has(STORAGE_KEY));
   assert.equal(STORAGE_KEY, 'dashboard.usage');
   assert.deepEqual(loadState(ok), { sort: { field: 'cadence', order: 'asc' } });
+  // A v1 session's stored sort (lastBroadcast) still loads -- it wins over the new default.
+  assert.deepEqual(loadState({ getItem: () => JSON.stringify({ sort: { field: 'lastBroadcast', order: 'desc' } }) }), { sort: { field: 'lastBroadcast', order: 'desc' } });
   assert.deepEqual(loadState({ getItem: () => JSON.stringify({ sort: { field: 'nope', order: 'up' } }) }), { sort: { ...DEFAULT_STATE.sort } });
 });

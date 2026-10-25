@@ -373,6 +373,7 @@ import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-lin
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
+import { campaignsRouteQuery } from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
@@ -394,6 +395,13 @@ export default Vue.extend({
   mixins: [brandScopeMixin],
 
   data() {
+    // Fork (brand usage, integrations BRAND-USAGE-V2-SPEC D4/I8) -- the Dashboard's Brand Usage
+    // links land here with ?list_id=<id>&evergreen=true. Applied to the query state only: never
+    // written to the sticky campaigns.scopeAutomations pref (a link must not flip it).
+    const fromRoute = campaignsRouteQuery(
+      this.$route && this.$route.query,
+      this.$utils.getPref('campaigns.scopeAutomations') === true,
+    );
     return {
       previewItem: null,
       rateFields: RATE_FIELDS,
@@ -403,10 +411,12 @@ export default Vue.extend({
         orderBy: 'created_at',
         order: 'desc',
         // Fork (evergreen) -- false = Broadcasts (default), true = Automations.
-        // Sticky across refresh/navigation via the shared localStorage pref.
-        evergreen: this.$utils.getPref('campaigns.scopeAutomations') === true,
-        // Fork (list filter) -- null = all lists (no param sent). In-page state only.
-        listID: null,
+        // Sticky across refresh/navigation via the shared localStorage pref (a route query's
+        // evergreen=true selects Automations for this visit only).
+        evergreen: fromRoute.evergreen,
+        // Fork (list filter) -- null = all lists (no param sent). In-page state only; a route
+        // query's list_id preselects it.
+        listID: fromRoute.listID,
       },
       pollID: null,
       campaignStatsData: {},

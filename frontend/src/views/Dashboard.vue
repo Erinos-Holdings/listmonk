@@ -125,110 +125,98 @@
       <p class="is-size-7 has-text-grey mt-2" data-cy="matrix-note">{{ $t('dashboard.matrix.note') }}</p>
     </section>
 
-    <!-- Fork (brand usage, integrations BRAND-USAGE-SPEC D2/D7). The Brand Matrix's rows (same
-         fetch, scope and launch filter), each brand's stored usage object rendered as glyphs; every
-         state and threshold was computed by the integrations BrandHealth Lambda, and every glyph,
-         cell and sort rule is brandUsage.mjs. -->
+    <!-- Fork (brand usage, integrations BRAND-USAGE-SPEC D2/D7; BRAND-USAGE-V2-SPEC D1-D5). The
+         Brand Matrix's rows (same fetch, scope and launch filter), each brand's stored usage object
+         rendered: the Score, then the Broadcasts / Journeys / Configurations sections. Every state,
+         count, threshold and weight was computed by the integrations BrandHealth Lambda; every cell,
+         circle, link and sort rule is brandUsage.mjs. V2 D2: the matrix's hand-rolled table pattern
+         (group header row, sorted-column emphasis) with neutral-grey section bands -- the
+         stoplight circles are the table's only chroma. -->
     <section v-else-if="pane === 'usage'" class="brand-usage relative" data-cy="brand-usage">
-      <b-table :data="usageTableRows" :loading="matrix.loading" hoverable narrowed
-        :row-class="(row) => (row.zma ? 'bu-zma' : '')"
-        ref="usageTable" backend-sorting :default-sort="[usage.sort.field, usage.sort.order]"
-        @sort="onUsageSort" data-cy="usage-table">
-        <b-table-column v-slot="props" field="brand" :label="$t('dashboard.matrix.brand')" sortable>
-          <span :data-cy="`usage-brand-${props.row.brand}`">{{ props.row.label }}</span>
-          <b-tag v-if="props.row.zma" size="is-small" class="ml-1" :title="$t('dashboard.usage.zmaHelp')">
-            {{ $t('dashboard.usage.zma') }}
-          </b-tag>
-        </b-table-column>
-        <b-table-column v-for="c in usageColumns" :key="c.field" :field="c.field"
-          :label="$t(c.label)" sortable centered>
-          <template #header="{ column }">
-            <span :title="$t(c.help)">{{ column.label }}</span>
-          </template>
-          <template #default="props">
-            <span :class="usageCell(props.row, c.field).cls" :title="usageCell(props.row, c.field).tooltip || null"
-              :data-cy="`usage-${c.field}-${props.row.brand}`">
-              {{ usageCell(props.row, c.field).text }}
-            </span>
-          </template>
-        </b-table-column>
-        <template #empty v-if="!matrix.loading">
-          <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
-        </template>
-      </b-table>
-      <p class="is-size-7 has-text-grey mt-2" data-cy="usage-note">
-        {{ usageAsOf ? $t('dashboard.usage.noteAsOf', { date: usageAsOf }) : $t('dashboard.usage.computed') }}
-        {{ $t('dashboard.usage.note') }}
+      <b-loading v-if="matrix.loading" active :is-full-page="false" />
+      <div class="table-container">
+        <table class="table is-fullwidth is-hoverable is-narrow bu-table" data-cy="usage-table">
+          <thead>
+            <tr class="bu-groups">
+              <th colspan="2" />
+              <th v-for="s in usageSections" :key="s.key" :colspan="s.fields.length"
+                :class="['bu-group', 'bu-start', `bu-band-${s.band}`]">
+                {{ $t(s.label) }}
+              </th>
+            </tr>
+            <tr>
+              <th class="has-text-right" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"
+                :aria-sort="buAria('score')" @click="onUsageSort('score')">
+                {{ $t('dashboard.usage.score') }}<span class="bm-arrow">{{ buArrow('score') }}</span>
+              </th>
+              <th :class="buTh('brand')" :aria-sort="buAria('brand')" @click="onUsageSort('brand')">
+                {{ $t('dashboard.matrix.brand') }}<span class="bm-arrow">{{ buArrow('brand') }}</span>
+              </th>
+              <th v-for="c in usageColumns" :key="c.field" class="has-text-centered"
+                :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]" :title="$t(c.help)"
+                :aria-sort="buAria(c.field)" @click="onUsageSort(c.field)">
+                {{ $t(c.label) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in usageTableRows" :key="row.brand" :class="{ 'bu-zma': row.zma }">
+              <td class="has-text-right bu-score" :class="buTd('score')">
+                <span :title="usageCell(row, 'score').tooltip || null" :data-cy="`usage-score-${row.brand}`">
+                  {{ usageCell(row, 'score').text }}</span>
+              </td>
+              <td :class="buTd('brand')">
+                <span :data-cy="`usage-brand-${row.brand}`">{{ row.label }}</span>
+                <b-tag v-if="row.zma" size="is-small" class="ml-1" :title="$t('dashboard.usage.zmaHelp')">
+                  {{ $t('dashboard.usage.zma') }}
+                </b-tag>
+              </td>
+              <td v-for="c in usageColumns" :key="c.field" class="has-text-centered"
+                :class="[buTd(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]">
+                <!-- V2 D3/D4: one circle per state, the stored count inside; the link is per CELL
+                     (Campaigns, the list preselected, the Automations scope). -->
+                <component v-if="usageCell(row, c.field).circles.length" :is="usageLink(row, c.field) ? 'router-link' : 'span'"
+                  :to="usageLink(row, c.field) ? { name: 'campaigns', query: usageLink(row, c.field) } : null"
+                  class="bu-circles" :data-cy="`usage-${c.field}-${row.brand}`">
+                  <span v-for="ci in usageCell(row, c.field).circles" :key="ci.color"
+                    :class="['bu-circle', `bu-${ci.color}`]" :title="usageCell(row, c.field).tooltip"
+                    :aria-label="usageCell(row, c.field).tooltip">{{ ci.n }}</span>
+                </component>
+                <span v-else :class="usageCell(row, c.field).cls" :title="usageCell(row, c.field).tooltip || null"
+                  :data-cy="`usage-${c.field}-${row.brand}`">
+                  {{ usageCell(row, c.field).text }}</span>
+              </td>
+            </tr>
+            <tr v-if="!matrix.loading && !usageTableRows.length">
+              <td :colspan="2 + usageColumns.length">
+                <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- V2 D5: the stoplight key, then the ZMA line and the as-of line (Mountain time). -->
+      <p class="is-size-7 has-text-grey mt-2 bu-legend" data-cy="usage-legend">
+        <span class="bu-circle bu-green">1</span> {{ $t('dashboard.usage.legendRunning') }}
+        <span class="bu-circle bu-amber">1</span> {{ $t('dashboard.usage.legendIdle') }}
+        <span class="bu-circle bu-red">0</span> {{ $t('dashboard.usage.legendNone') }}
+        · {{ $t('dashboard.usage.legendConfig') }}
+      </p>
+      <p class="is-size-7 has-text-grey" data-cy="usage-zma-note">{{ $t('dashboard.usage.note') }}</p>
+      <p class="is-size-7 has-text-grey" data-cy="usage-note">
+        {{ usageRunTime ? $t('dashboard.usage.noteAsOf', { date: usageRunTime }) : $t('dashboard.usage.computed') }}
       </p>
     </section>
 
     <section v-else class="counts wrap">
       <div class="tile is-ancestor">
         <div class="tile is-vertical is-12">
+          <!-- Fork (BRAND-USAGE-V2-SPEC D6/D7b) -- Subscribers + Messages sent on the LEFT, in a
+               container of fixed width (its widest state, so expanding Subscribers never moves
+               it); Lists and Campaigns merged into ONE container on the right, a separator
+               between them. The four blocks' content is unchanged. -->
           <div class="tile">
-            <div class="tile is-parent is-vertical relative">
-              <b-loading v-if="isCountsLoading" active :is-full-page="false" />
-              <article class="tile is-child notification" data-cy="lists">
-                <div class="columns is-mobile">
-                  <div class="column is-6">
-                    <p class="title">
-                      <b-icon icon="format-list-bulleted-square" />
-                      {{ $utils.niceNumber(counts.lists.total) }}
-                    </p>
-                    <p class="is-size-6 has-text-grey">
-                      {{ $tc('globals.terms.list', counts.lists.total) }}
-                    </p>
-                  </div>
-                  <div class="column is-6">
-                    <ul class="no has-text-grey">
-                      <li>
-                        <label for="#">{{ $utils.niceNumber(counts.lists.public) }}</label>
-                        {{ $t('lists.types.public') }}
-                      </li>
-                      <li>
-                        <label for="#">{{ $utils.niceNumber(counts.lists.private) }}</label>
-                        {{ $t('lists.types.private') }}
-                      </li>
-                      <li>
-                        <label for="#">{{ $utils.niceNumber(counts.lists.optinSingle) }}</label>
-                        {{ $t('lists.optins.single') }}
-                      </li>
-                      <li>
-                        <label for="#">{{ $utils.niceNumber(counts.lists.optinDouble) }}</label>
-                        {{ $t('lists.optins.double') }}
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </article><!-- lists -->
-
-              <article class="tile is-child notification" data-cy="campaigns">
-                <div class="columns is-mobile">
-                  <div class="column is-6">
-                    <p class="title">
-                      <b-icon icon="rocket-launch-outline" />
-                      {{ $utils.niceNumber(counts.campaigns.total) }}
-                    </p>
-                    <p class="is-size-6 has-text-grey">
-                      {{ $tc('globals.terms.campaign', counts.campaigns.total) }}
-                    </p>
-                  </div>
-                  <div class="column is-6">
-                    <ul class="no has-text-grey">
-                      <li v-for="(num, status) in counts.campaigns.byStatus" :key="status">
-                        <label for="#" :data-cy="`campaigns-${status}`">{{ num }}</label>
-                        {{ $t(`campaigns.status.${status}`) }}
-                        <span v-if="status === 'running'" class="spinner is-tiny">
-                          <b-loading :is-full-page="false" active />
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </article><!-- campaigns -->
-            </div><!-- block -->
-
-            <div class="tile is-parent relative">
+            <div class="tile is-parent relative dash-subs-col">
               <b-loading v-if="isCountsLoading" active :is-full-page="false" />
               <article class="tile is-child notification" data-cy="subscribers">
                 <!-- Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D1-D3, D7). The
@@ -283,7 +271,20 @@
                 <table v-if="subsExpanded" class="table is-narrow subs-grid" data-cy="subscribers-grid">
                   <thead>
                     <tr>
-                      <th />
+                      <!-- Fork (BRAND-USAGE-V2-SPEC D7) -- the matrix's %|# toggle, per session; it
+                           governs only the rate-bearing cells (dashboardSubs.mjs::subsCellText). -->
+                      <th class="subs-mode">
+                        <b-field class="mb-0">
+                          <b-radio-button v-model="overview.mode" native-value="pct" size="is-small" type="is-primary"
+                            data-cy="subs-mode-pct" @input="onOverviewMode">
+                            {{ $t('dashboard.matrix.pct') }}
+                          </b-radio-button>
+                          <b-radio-button v-model="overview.mode" native-value="num" size="is-small" type="is-primary"
+                            data-cy="subs-mode-num" @input="onOverviewMode">
+                            {{ $t('dashboard.matrix.num') }}
+                          </b-radio-button>
+                        </b-field>
+                      </th>
                       <th v-for="col in subsColumns" :key="col.key" class="has-text-right"
                         :data-cy="`subscribers-col-${col.key}`" :title="subsColTitle(col.key)">
                         {{ subsColLabel(col.key) }}
@@ -291,7 +292,8 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <!-- Fork (dashboard counts, R1) -- each rate cell over THAT column's total. -->
+                    <!-- Fork (dashboard counts, R1) -- each rate cell over THAT column's total; V2 D7:
+                         % the rate alone, # the comma-separated count, no parentheses. -->
                     <tr v-for="r in subsRows" :key="r.key">
                       <td class="has-text-grey">{{ $t(r.label) }}</td>
                       <td v-for="col in subsColumns" :key="col.key" class="has-text-right"
@@ -336,6 +338,66 @@
                   </div>
                 </div>
               </article><!-- subscribers -->
+            </div>
+
+            <div class="tile is-parent relative">
+              <b-loading v-if="isCountsLoading" active :is-full-page="false" />
+              <article class="tile is-child notification" data-cy="lists-campaigns">
+                <div class="columns is-mobile" data-cy="lists">
+                  <div class="column is-6">
+                    <p class="title">
+                      <b-icon icon="format-list-bulleted-square" />
+                      {{ $utils.niceNumber(counts.lists.total) }}
+                    </p>
+                    <p class="is-size-6 has-text-grey">
+                      {{ $tc('globals.terms.list', counts.lists.total) }}
+                    </p>
+                  </div>
+                  <div class="column is-6">
+                    <ul class="no has-text-grey">
+                      <li>
+                        <label for="#">{{ $utils.niceNumber(counts.lists.public) }}</label>
+                        {{ $t('lists.types.public') }}
+                      </li>
+                      <li>
+                        <label for="#">{{ $utils.niceNumber(counts.lists.private) }}</label>
+                        {{ $t('lists.types.private') }}
+                      </li>
+                      <li>
+                        <label for="#">{{ $utils.niceNumber(counts.lists.optinSingle) }}</label>
+                        {{ $t('lists.optins.single') }}
+                      </li>
+                      <li>
+                        <label for="#">{{ $utils.niceNumber(counts.lists.optinDouble) }}</label>
+                        {{ $t('lists.optins.double') }}
+                      </li>
+                    </ul>
+                  </div>
+                </div><!-- lists -->
+                <hr />
+                <div class="columns is-mobile" data-cy="campaigns">
+                  <div class="column is-6">
+                    <p class="title">
+                      <b-icon icon="rocket-launch-outline" />
+                      {{ $utils.niceNumber(counts.campaigns.total) }}
+                    </p>
+                    <p class="is-size-6 has-text-grey">
+                      {{ $tc('globals.terms.campaign', counts.campaigns.total) }}
+                    </p>
+                  </div>
+                  <div class="column is-6">
+                    <ul class="no has-text-grey">
+                      <li v-for="(num, status) in counts.campaigns.byStatus" :key="status">
+                        <label for="#" :data-cy="`campaigns-${status}`">{{ num }}</label>
+                        {{ $t(`campaigns.status.${status}`) }}
+                        <span v-if="status === 'running'" class="spinner is-tiny">
+                          <b-loading :is-full-page="false" active />
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                </div><!-- campaigns -->
+              </article><!-- lists + campaigns -->
             </div>
           </div>
           <div class="tile is-parent relative">
@@ -394,8 +456,8 @@
             </article>
           </div>
 
-          <!-- Fork (client stats, integrations CLIENT-STATS-SPEC D6/D9): views, clicks and combined
-               per email client over the charts' window. Its own brand picker is gone (integrations
+          <!-- Fork (client stats, integrations CLIENT-STATS-SPEC D6/D9): views and clicks (Combined
+               dropped here by BRAND-USAGE-V2-SPEC D8) per email client over the charts' window. Its own brand picker is gone (integrations
                GLOBAL-BRAND-SPEC D5): the global brand selector is the one filter, sent with the
                counts and charts. -->
           <div class="tile is-parent relative">
@@ -419,10 +481,8 @@
                   {{ $utils.formatNumber(props.row.clicks) }}
                   <span v-if="clientShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ clientShare(props.row.clicks, 'clicks') }})</span>
                 </b-table-column>
-                <b-table-column v-slot="props" field="combined" :label="$t('analytics.clientsCombined')" numeric sortable>
-                  {{ $utils.formatNumber(props.row.combined) }}
-                  <span v-if="clientShare(props.row.combined, 'combined')" class="is-size-7 has-text-grey">({{ clientShare(props.row.combined, 'combined') }})</span>
-                </b-table-column>
+                <!-- BRAND-USAGE-V2-SPEC D8: no Combined column on the Dashboard (Campaign Analytics
+                     keeps its own). -->
                 <template #empty v-if="!clients.loading">
                   <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
                 </template>
@@ -455,7 +515,8 @@ import {
   ENGAGEMENT_FIELDS, cellText, clickSort, initialPane, loadState, saveState, sessionStore, shapeRows, spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  cell as usageCellOf, latestAsOf, loadState as loadUsageState, onSortClick, saveState as saveUsageState, shapeRows as shapeUsageRows,
+  SECTIONS as USAGE_SECTIONS, cell as usageCellOf, cellLink as usageCellLink, clickSort as usageClickSort, latestAsOf,
+  loadState as loadUsageState, mountainRunTime, saveState as saveUsageState, shapeRows as shapeUsageRows,
   sortRows as sortUsageRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
@@ -467,7 +528,8 @@ import {
   DEFAULT_SORT as COUNTRY_DEFAULT_SORT, shapeCountryRows, sortCountryRows,
 } from '../countryRows.mjs'; // eslint-disable-line import/extensions
 import {
-  engagementLines, pctCount, segmentCell, subscriberColumns, subscriberRows,
+  engagementLines, loadOverviewState, pctCount, saveOverviewState, segmentCell, subsCellText, subscriberColumns,
+  subscriberRows,
 } from '../dashboardSubs.mjs'; // eslint-disable-line import/extensions
 import { isSendPlus, sendLangCode } from '../langs';
 import brandScopeMixin from '../brandScopeMixin';
@@ -497,8 +559,12 @@ export default Vue.extend({
         ...loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
       },
       // Fork (brand usage, BRAND-USAGE-SPEC D7) -- the usage pane's sort, per browser session
-      // (sessionStorage key dashboard.usage); its rows are matrix.apiRows.
+      // (sessionStorage key dashboard.usage; V2 D2: a fresh session is Score descending); its rows
+      // are matrix.apiRows.
       usage: loadUsageState(sessionStore(typeof window !== 'undefined' ? window : null)),
+      // Fork (BRAND-USAGE-V2-SPEC D7) -- the expanded Subscribers table's %|# mode, per browser
+      // session (sessionStorage key dashboard.overview).
+      overview: loadOverviewState(sessionStore(typeof window !== 'undefined' ? window : null)),
       // Fork (dashboard counts, DASHBOARD-COUNTS-SPEC D3) -- the Subscribers container's
       // language table, sticky per browser (the dashboard.sesPane pattern).
       subsExpanded: this.$utils.getPref('dashboard.subsExpanded') === true,
@@ -537,26 +603,53 @@ export default Vue.extend({
       }
     },
 
-    // Fork (brand usage, D7) -- a header click is brandUsage.mjs::onSortClick (the Brands.vue onSort
-    // isAsc guard): a fresh column takes its default direction (Brand asc, every other desc) and
-    // the arrow is flipped to match; a repeat click is Buefy's own toggle. If isAsc is ever not a
-    // boolean (a Buefy upgrade), Buefy's direction stands so the arrow and the data cannot disagree.
-    onUsageSort(field, direction) {
-      const { usageTable: table } = this.$refs;
-      const next = onSortClick(this.usage.sort, field, direction);
-      if (next.flipArrow) {
-        if (table && typeof table.isAsc === 'boolean') {
-          table.isAsc = false;
-        } else {
-          next.sort = { field, order: direction };
-        }
-      }
-      this.usage.sort = next.sort;
+    // Fork (brand usage, V2 D2) -- the pane owns its own header (the matrix's pattern), so a header
+    // click is brandUsage.mjs::clickSort, nothing else: a NEW column takes its default direction
+    // (Brand asc, every other desc), a repeat click toggles.
+    onUsageSort(field) {
+      this.usage.sort = usageClickSort(this.usage.sort, field);
       saveUsageState(sessionStore(window), { sort: this.usage.sort });
     },
 
     usageCell(row, field) {
       return usageCellOf(row, field, (k, p) => this.$t(k, p));
+    },
+
+    // V2 D4 -- the cell's Campaigns query ({ list_id, evergreen: 'true' }), or null.
+    usageLink(row, field) {
+      return usageCellLink(row, field);
+    },
+
+    // The sorted column's emphasis and arrow (the matrix's bm* helpers over the usage sort).
+    buSorted(field) {
+      return this.usage.sort.field === field;
+    },
+
+    buTh(field) {
+      return ['bm-sort', { 'bu-sorted': this.buSorted(field) }];
+    },
+
+    buTd(field) {
+      return { 'bu-sorted': this.buSorted(field) };
+    },
+
+    buArrow(field) {
+      if (!this.buSorted(field)) {
+        return '';
+      }
+      return this.usage.sort.order === 'asc' ? '↑' : '↓';
+    },
+
+    buAria(field) {
+      if (!this.buSorted(field)) {
+        return null;
+      }
+      return this.usage.sort.order === 'asc' ? 'ascending' : 'descending';
+    },
+
+    // V2 D7 -- the expanded Subscribers table's %|# mode, per session.
+    onOverviewMode() {
+      saveOverviewState(sessionStore(window), { mode: this.overview.mode });
     },
 
     scopeParams() {
@@ -664,18 +757,6 @@ export default Vue.extend({
       });
     },
 
-    // Fork (dashboard counts, R1) -- a rate-first cell: "39.5% (751)", or the count alone when
-    // the denominator is 0. A null denominator (Active, Pending) is a plain count. Used only by
-    // the expanded table since BRAND-MATRIX D9; every number in these two containers is
-    // formatNumber (comma-separated, no k/m).
-    pctText(count, denominator, fmt) {
-      if (denominator === null) {
-        return fmt(count || 0);
-      }
-      const c = pctCount(count, denominator, fmt);
-      return c.pct ? `${c.pct} (${c.count})` : c.count;
-    },
-
     // A rate-first line as its two columns, for the aligned lists (2026-10-24): {pct, count} --
     // pct '' on a plain count (null denominator, or 0). No parentheses (BRAND-MATRIX-SPEC D9).
     pctParts(count, denominator, fmt) {
@@ -692,10 +773,10 @@ export default Vue.extend({
       return this.pctParts(c.count, c.denominator, (n) => this.$utils.formatNumber(n));
     },
 
-    // An expanded-table cell, over THAT column's total.
+    // An expanded-table cell, over THAT column's total, in the session's %|# mode (V2 D7:
+    // dashboardSubs.mjs::subsCellText -- the mode governs rate-bearing cells only).
     subsCellText(col, seg) {
-      const c = segmentCell(col, seg);
-      return this.pctText(c.count, c.denominator, (n) => this.$utils.formatNumber(n));
+      return subsCellText(col, seg, this.overview.mode, (n) => this.$utils.formatNumber(n));
     },
 
     // Fork (global brand, D4/D5) -- the reads together (counts, charts, clients and -- DASHBOARD-
@@ -849,17 +930,31 @@ export default Vue.extend({
       return latestAsOf(this.usageTableRows);
     },
 
+    // V2 D5 -- that day's run time in Mountain time (Intl, America/Denver), null without a day.
+    usageRunTime() {
+      return mountainRunTime(this.usageAsOf);
+    },
+
+    // V2 D2 -- the sections (brandUsage.mjs SECTIONS) with their alternating band: grey, white, grey.
+    usageSections() {
+      return USAGE_SECTIONS.map((s, i) => ({ ...s, band: i % 2 === 0 ? 'grey' : 'white' }));
+    },
+
+    // The section columns in display order, each with its band and whether it opens its section.
     usageColumns() {
-      return [
-        { field: 'welcome', label: 'dashboard.usage.welcome', help: 'dashboard.usage.welcomeHelp' },
-        { field: 'purchase', label: 'dashboard.usage.purchase', help: 'dashboard.usage.purchaseHelp' },
-        { field: 'noPurchase', label: 'dashboard.usage.noPurchase', help: 'dashboard.usage.noPurchaseHelp' },
-        { field: 'sunset', label: 'dashboard.usage.sunset', help: 'dashboard.usage.sunsetHelp' },
-        { field: 'attribution', label: 'dashboard.usage.attribution', help: 'dashboard.usage.attributionHelp' },
-        { field: 'journeys', label: 'dashboard.usage.journeys', help: 'dashboard.usage.journeysHelp' },
-        { field: 'lastBroadcast', label: 'dashboard.usage.lastBroadcast', help: 'dashboard.usage.lastBroadcastHelp' },
-        { field: 'cadence', label: 'dashboard.usage.cadence', help: 'dashboard.usage.cadenceHelp' },
-      ];
+      const meta = {
+        cadence: { label: 'dashboard.usage.cadence', help: 'dashboard.usage.cadenceHelp' },
+        lastBroadcast: { label: 'dashboard.usage.lastBroadcast', help: 'dashboard.usage.lastBroadcastHelp' },
+        journeys: { label: 'dashboard.usage.journeys', help: 'dashboard.usage.journeysHelp' },
+        welcome: { label: 'dashboard.usage.welcome', help: 'dashboard.usage.welcomeHelp' },
+        purchase: { label: 'dashboard.usage.purchase', help: 'dashboard.usage.purchaseHelp' },
+        noPurchase: { label: 'dashboard.usage.noPurchase', help: 'dashboard.usage.noPurchaseHelp' },
+        attribution: { label: 'dashboard.usage.attribution', help: 'dashboard.usage.attributionHelp' },
+        sunset: { label: 'dashboard.usage.sunset', help: 'dashboard.usage.sunsetHelp' },
+      };
+      return this.usageSections.flatMap((s) => s.fields.map((f, i) => ({
+        field: f, ...meta[f], band: s.band, first: i === 0,
+      })));
     },
 
     matrixSubColumns() {

@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  engagementLines, pctCount, segmentCell, subscriberColumns, subscriberRows,
+  OVERVIEW_DEFAULT, OVERVIEW_STORAGE_KEY, engagementLines, loadOverviewState, pctCount, saveOverviewState, segmentCell,
+  subsCellText, subscriberColumns, subscriberRows,
 } from './dashboardSubs.mjs'; // eslint-disable-line import/extensions
 import { gridLines } from './gridLines.mjs'; // eslint-disable-line import/extensions
 
@@ -118,6 +119,41 @@ test('engagementLines: the D8 order, each over messages', () => {
   assert.deepEqual(lines.map((l) => l.count), [19025, 1136, 200, 4]);
   lines.forEach((l) => assert.equal(l.help, undefined));
   assert.equal(pctCount(lines[2].count, lines[2].denominator).pct, '0.5%');
+});
+
+// BRAND-USAGE-V2-SPEC D7/I5: the expanded table's %|# toggle (session-scoped, default pct).
+test('V2 I5: subsCellText -- pct the rate alone, num the comma count, no parentheses; plain and 0-denominator cells identical in both', () => {
+  const fmt = (n) => n.toLocaleString('en-US');
+  const col = { key: 'en', row: cell({ active: 1500, held: 751, total: 1900 }) };
+  const [active, held] = subscriberRows({});
+  assert.equal(subsCellText(col, held, 'pct', fmt), '39.5%');
+  assert.equal(subsCellText(col, held, 'num', fmt), '751');
+  assert.equal(subsCellText(col, active, 'pct', fmt), '1,500');
+  assert.equal(subsCellText(col, active, 'num', fmt), '1,500');
+  const empty = { key: 'fr', row: cell({}) };
+  assert.equal(subsCellText(empty, held, 'pct', fmt), '0');
+  assert.equal(subsCellText(empty, held, 'num', fmt), '0');
+  const big = { key: 'all', row: cell({ held: 12345, total: 100000 }) };
+  assert.equal(subsCellText(big, held, 'num', fmt), '12,345');
+  [subsCellText(col, held, 'pct', fmt), subsCellText(col, held, 'num', fmt)].forEach((s) => assert.ok(!/[()]/.test(s), s));
+  assert.equal(subsCellText(col, held, undefined, fmt), '39.5%'); // default pct
+});
+
+test('V2 I5: overview state -- default pct; a throwing or missing sessionStorage is the default and never throws', () => {
+  assert.deepEqual(OVERVIEW_DEFAULT, { mode: 'pct' });
+  assert.equal(OVERVIEW_STORAGE_KEY, 'dashboard.overview');
+  assert.deepEqual(loadOverviewState(null), { mode: 'pct' });
+  const bad = { getItem() { throw new Error('x'); }, setItem() { throw new Error('x'); } };
+  assert.deepEqual(loadOverviewState(bad), { mode: 'pct' });
+  assert.equal(saveOverviewState(bad, { mode: 'num' }), false);
+  assert.equal(saveOverviewState(null, { mode: 'num' }), false);
+  assert.deepEqual(loadOverviewState({ getItem: () => '{nope' }), { mode: 'pct' });
+  assert.deepEqual(loadOverviewState({ getItem: () => JSON.stringify({ mode: 'pie' }) }), { mode: 'pct' });
+  const mem = new Map();
+  const ok = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v) };
+  assert.equal(saveOverviewState(ok, { mode: 'num' }), true);
+  assert.deepEqual(JSON.parse(mem.get('dashboard.overview')), { mode: 'num' });
+  assert.deepEqual(loadOverviewState(ok), { mode: 'num' });
 });
 
 test('engagementLines: nothing sent or no payload yet -- zeros, counts alone', () => {

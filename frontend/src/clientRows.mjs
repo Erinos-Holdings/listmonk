@@ -90,6 +90,8 @@ export function shapeClientRows(rows, { locale = 'en', unknownLabel = 'Unknown' 
       name: unknown ? unknownLabel : clientLabel(client),
       views,
       clicks,
+      // Rendered by Campaign Analytics only: the Dashboard's clients panel no longer shows a
+      // Combined column (integrations BRAND-USAGE-V2-SPEC D8). Kept -- Analytics renders it.
       combined: views + clicks,
       unknown,
       other: client === OTHER,
