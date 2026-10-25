@@ -1132,6 +1132,16 @@ section.dashboard {
     vertical-align: middle;
   }
 
+  /* DASHBOARDS-POLISH2-SPEC D3 (amends POLISH D4) -- the right (Lists / Campaigns) container's
+  inner split, the first lever (stage 2 F6): its columns are 5/7 in the template (the left
+  container keeps 6/6), which nudges the data column left toward the left container's right
+  padding and title-to-data padding, and no line wraps ("0 Double opt-in", "9 Running" with its
+  spinner). $dashboard-subs-width is untouched -- amend it only by re-measuring its six-GRID_LANGS
+  basis above if this split cannot deliver (G5 judges the outcome). */
+  .dash-lc > .column:last-child li {
+    white-space: nowrap;
+  }
+
   .tile.notification {
     @extend .box;
     padding: 10px;

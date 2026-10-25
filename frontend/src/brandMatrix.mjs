@@ -209,6 +209,11 @@ export function spamCell(row) {
 //                                                     OR complaints >= complaints.minCount
 // The rate compared is the DISPLAYED one (rounded to RATE_DIGITS of a percent, as cellText shows
 // it), so a figure never reads on the other side of its header's target.
+// The floors: for clicks and hard bounces they mirror the SES classify-or-stay-silent floors, so
+// the matrix never flags what the Brands page reads ok/unknown. Complaints deliberately BREAK that
+// property (integrations DASHBOARDS-POLISH2-SPEC D1, user decision 2026-10-25: the stored
+// complaints.minCount is 1, so any complaint at a rate >= warn colors). The values -- and that
+// decision -- live in lib/brand-health.ts; this helper only applies whatever floor is stored.
 // (thresholdsOf / firstThresholds sit above shapeRow, which reads them.)
 export const THRESHOLD_KEYS = Object.freeze({ clicks: 'clicks', hard_bounces: 'hardBounces', complaints: 'complaints' });
 export const BREACH_CLASS = 'has-text-danger';

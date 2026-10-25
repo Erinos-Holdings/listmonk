@@ -177,8 +177,8 @@
               <td v-for="c in usageColumns" :key="c.field" class="has-text-centered"
                 :class="[buTd(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]">
                 <!-- V2 D3/D4: one circle per state, the stored count inside; the link is per CELL
-                     (Campaigns, the list preselected, the Automations scope; Journeys -- POLISH D2 --
-                     the Automations scope with no list). -->
+                     (Campaigns, the list preselected, the Automations scope; Journeys -- POLISH2 D2 --
+                     the Automations scope filtered to the brand's lists). -->
                 <component v-if="usageCell(row, c.field).circles.length" :is="usageLink(row, c.field) ? 'router-link' : 'span'"
                   :to="usageLink(row, c.field) ? { name: 'campaigns', query: usageLink(row, c.field) } : null"
                   class="bu-circles" :data-cy="`usage-${c.field}-${row.brand}`">
@@ -186,8 +186,8 @@
                     :class="['bu-circle', `bu-${ci.color}`]" :title="usageCell(row, c.field).tooltip"
                     :aria-label="usageCell(row, c.field).tooltip">{{ ci.n }}</span>
                 </component>
-                <!-- DASHBOARDS-POLISH-SPEC D2: the Cadence / Last broadcast text links the master
-                     list in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links. -->
+                <!-- DASHBOARDS-POLISH2-SPEC D2: the Cadence / Last broadcast text links the brand's
+                     lists in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links. -->
                 <component v-else :is="usageLink(row, c.field) ? 'router-link' : 'span'"
                   :to="usageLink(row, c.field) ? { name: 'campaigns', query: usageLink(row, c.field) } : null"
                   :class="usageCell(row, c.field).cls" :title="usageTitle(row, c.field)"
@@ -352,8 +352,11 @@
             <div class="tile is-parent relative">
               <b-loading v-if="isCountsLoading" active :is-full-page="false" />
               <article class="tile is-child notification" data-cy="lists-campaigns">
-                <div class="columns is-mobile" data-cy="lists">
-                  <div class="column is-6">
+                <!-- DASHBOARDS-POLISH2-SPEC D3 -- the right container's split is 5/7 (not 6/6):
+                     its data column moves left and gains the room its lines need; .dash-lc in
+                     style.scss keeps every line on one row. -->
+                <div class="columns is-mobile dash-lc" data-cy="lists">
+                  <div class="column is-5">
                     <p class="title">
                       <b-icon icon="format-list-bulleted-square" />
                       {{ $utils.niceNumber(counts.lists.total) }}
@@ -362,7 +365,7 @@
                       {{ $tc('globals.terms.list', counts.lists.total) }}
                     </p>
                   </div>
-                  <div class="column is-6">
+                  <div class="column is-7">
                     <ul class="no has-text-grey">
                       <li>
                         <label for="#">{{ $utils.niceNumber(counts.lists.public) }}</label>
@@ -384,8 +387,8 @@
                   </div>
                 </div><!-- lists -->
                 <hr />
-                <div class="columns is-mobile" data-cy="campaigns">
-                  <div class="column is-6">
+                <div class="columns is-mobile dash-lc" data-cy="campaigns">
+                  <div class="column is-5">
                     <p class="title">
                       <b-icon icon="rocket-launch-outline" />
                       {{ $utils.niceNumber(counts.campaigns.total) }}
@@ -394,7 +397,7 @@
                       {{ $tc('globals.terms.campaign', counts.campaigns.total) }}
                     </p>
                   </div>
-                  <div class="column is-6">
+                  <div class="column is-7">
                     <ul class="no has-text-grey">
                       <li v-for="(num, status) in counts.campaigns.byStatus" :key="status">
                         <label for="#" :data-cy="`campaigns-${status}`">{{ num }}</label>
@@ -626,14 +629,14 @@ export default Vue.extend({
       return usageCellOf(row, field, (k, p) => this.$t(k, p));
     },
 
-    // V2 D4; DASHBOARDS-POLISH-SPEC D2 -- the cell's Campaigns query ({ list_id, evergreen } or,
-    // for Journeys, { evergreen: 'true' }), or null.
+    // V2 D4; DASHBOARDS-POLISH2-SPEC D2 -- the cell's Campaigns query ({ list_id, evergreen }: one
+    // list for welcome/trigger, the brand's list set for Journeys and the broadcast cells), or null.
     usageLink(row, field) {
       return usageCellLink(row, field);
     },
 
     // DASHBOARDS-POLISH-SPEC D2 -- a text cell's tooltip: the cell's own, then (a linked broadcast
-    // cell) the master-list note; null when both are empty.
+    // cell) the brand-broadcasts link note; null when both are empty.
     usageTitle(row, field) {
       const parts = [this.usageCell(row, field).tooltip, usageLinkTip(row, field, (k, p) => this.$t(k, p))];
       return parts.filter(Boolean).join('\n') || null;
@@ -944,8 +947,12 @@ export default Vue.extend({
     },
 
     // Fork (brand usage, D2/D7) -- the matrix rows (same launch filter and display names), sorted.
+    // DASHBOARDS-POLISH2-SPEC D2 -- the lists store (active, permitted lists) gives each row its
+    // brand list-id set, the Journeys / broadcast link filter.
     usageTableRows() {
-      const rows = shapeUsageRows(this.matrix.apiRows, { brands: this.brandRows, launch: this.launch });
+      const rows = shapeUsageRows(this.matrix.apiRows, {
+        brands: this.brandRows, launch: this.launch, lists: this.$store.state.lists,
+      });
       return sortUsageRows(rows, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en');
     },
 

@@ -47,10 +47,16 @@
             <!-- Fork (list filter) -- server-side list_id filter on GET /api/campaigns.
                  Single-select (the API param is repeatable); "All lists" sends no param.
                  Deliberately NOT sticky, unlike the scope pill. Its options are the global brand's
-                 lists (integrations GLOBAL-BRAND-SPEC D7); "All lists" then sends the scope. -->
+                 lists (integrations GLOBAL-BRAND-SPEC D7); "All lists" then sends the scope.
+                 DASHBOARDS-POLISH2-SPEC D2: a Dashboard link carrying SEVERAL list ids is the route
+                 list scope, shown as the disabled "n linked lists" option; picking any real list
+                 (or All lists) clears it (campaignsRouteQuery.mjs::selectList). -->
             <b-field>
-              <b-select v-model="queryParams.listID" :disabled="loading.campaigns" @input="onListChange"
+              <b-select v-model="listSelect" :disabled="loading.campaigns"
                 name="list_id" data-cy="filter-list">
+                <option v-if="queryParams.routeListIDs" :value="routeScopeOption" disabled data-cy="filter-list-route">
+                  {{ $tc('campaigns.linkedLists', queryParams.routeListIDs.length, { num: queryParams.routeListIDs.length }) }}
+                </option>
                 <option :value="null">{{ $t('campaigns.allLists') }}</option>
                 <option v-for="l in filterLists" :key="l.id" :value="l.id">{{ l.name }}</option>
               </b-select>
@@ -81,8 +87,10 @@
                  by-query bulk delete carries only query + evergreen, never list_id, so
                  offering it under a list filter would delete campaigns the page is not
                  showing. Page-level checkboxes stay available. The same holds under a global
-                 brand (GLOBAL-BRAND-SPEC D7), whose scope is a list_id too. -->
-            <span v-if="!bulk.all && campaigns.total > campaigns.perPage && queryParams.listID === null && !scopeListIds">
+                 brand (GLOBAL-BRAND-SPEC D7), whose scope is a list_id too, and under a
+                 Dashboard link's route list scope (DASHBOARDS-POLISH2-SPEC D2) --
+                 campaignsRouteQuery.mjs::canSelectAll. -->
+            <span v-if="selectAllOffered">
               &mdash;
               <a href="#" @click.prevent="onSelectAll" data-cy="select-all-campaigns">
                 {{ $tc('globals.messages.selectAll', campaigns.total, { num: campaigns.total }) }}
@@ -373,7 +381,9 @@ import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-lin
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
-import { campaignsRouteQuery } from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
+import {
+  ROUTE_SCOPE_OPTION, afterBrandChange, campaignsRouteQuery, canSelectAll, listParam, listSelectValue, selectList,
+} from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
@@ -395,12 +405,14 @@ export default Vue.extend({
   mixins: [brandScopeMixin],
 
   data() {
-    // Fork (brand usage, integrations BRAND-USAGE-V2-SPEC D4/I8; DASHBOARDS-POLISH-SPEC D2/I3) --
-    // the Dashboard's Brand Usage links land here with ?list_id=<id>&evergreen=true (welcome /
-    // trigger cells), ?evergreen=true (Journeys) or ?list_id=<master>&evergreen=false (broadcast
-    // cells). Exactly "true" forces Automations and exactly "false" forces Broadcasts for this
-    // visit; anything else keeps the pref. Applied to the query state only: never written to the
-    // sticky campaigns.scopeAutomations pref (a link must not flip it).
+    // Fork (brand usage, integrations BRAND-USAGE-V2-SPEC D4/I8; DASHBOARDS-POLISH-SPEC D2/I3;
+    // DASHBOARDS-POLISH2-SPEC D2/I2) -- the Dashboard's Brand Usage links land here with
+    // ?list_id=<id>&evergreen=true (welcome / trigger cells), or with the brand's active list ids
+    // as a repeated list_id and evergreen=true (Journeys) / evergreen=false (broadcast cells).
+    // One id preselects the list; several are the route list scope (routeListIDs). Exactly "true"
+    // forces Automations and exactly "false" forces Broadcasts for this visit; anything else keeps
+    // the pref. Applied to the query state only: never written to the sticky
+    // campaigns.scopeAutomations pref (a link must not flip it), nor to any other pref.
     const fromRoute = campaignsRouteQuery(
       this.$route && this.$route.query,
       this.$utils.getPref('campaigns.scopeAutomations') === true,
@@ -418,9 +430,14 @@ export default Vue.extend({
         // evergreen=true / evergreen=false selects Automations / Broadcasts for this visit only).
         evergreen: fromRoute.evergreen,
         // Fork (list filter) -- null = all lists (no param sent). In-page state only; a route
-        // query's list_id preselects it.
+        // query's single list_id preselects it.
         listID: fromRoute.listID,
+        // DASHBOARDS-POLISH2-SPEC D2 -- the route list scope (a link's several list ids), or
+        // null. In-page state only, never a pref; cleared by any real list selection and by any
+        // brand-selector change (campaignsRouteQuery.mjs).
+        routeListIDs: fromRoute.routeListIDs,
       },
+      routeScopeOption: ROUTE_SCOPE_OPTION,
       pollID: null,
       campaignStatsData: {},
 
@@ -586,11 +603,15 @@ export default Vue.extend({
 
       // Fork (list filter) -- "All lists" sends no param at all. Fork (global brand,
       // GLOBAL-BRAND-SPEC D7) -- under a brand "All lists" sends the brand's list ids; a chosen
-      // list (inside the scope by construction) sends that one id.
-      if (this.queryParams.listID !== null) {
-        params.list_id = this.queryParams.listID;
-      } else if (this.scopeListIds) {
-        params.list_id = this.scopeListIds;
+      // list (inside the scope by construction) sends that one id. DASHBOARDS-POLISH2-SPEC D2 --
+      // a route list scope takes the chosen list's slot (it beats the brand scope).
+      const listID = listParam({
+        listID: this.queryParams.listID,
+        routeListIDs: this.queryParams.routeListIDs,
+        scopeListIds: this.scopeListIds,
+      });
+      if (listID !== undefined) {
+        params.list_id = listID;
       }
 
       this.$api.getCampaigns(params);
@@ -808,19 +829,48 @@ export default Vue.extend({
     filterLists() {
       return filterByIds(this.lists, this.scopeListIds);
     },
+
+    // DASHBOARDS-POLISH2-SPEC D2 -- the Lists select's value: the route-scope placeholder while a
+    // link's list set is active, else the single filter. Picking any real list (or All lists)
+    // clears the route scope, then the list-change hygiene and refetch run.
+    listSelect: {
+      get() {
+        return listSelectValue(this.queryParams);
+      },
+      set(v) {
+        const next = selectList(this.queryParams, v);
+        this.queryParams.listID = next.listID;
+        this.queryParams.routeListIDs = next.routeListIDs;
+        this.onListChange();
+      },
+    },
+
+    // Stage 2 F1 -- "select all N" (the by-query bulk delete) only on an unnarrowed query.
+    selectAllOffered() {
+      return canSelectAll({
+        bulkAll: this.bulk.all,
+        total: this.campaigns.total,
+        perPage: this.campaigns.perPage,
+        listID: this.queryParams.listID,
+        routeListIDs: this.queryParams.routeListIDs,
+        scopeListIds: this.scopeListIds,
+      });
+    },
   },
 
   watch: {
     // Fork (global brand, D4) -- reset the in-page list filter to "All lists" when the chosen
     // list is outside the new scope, then fetch through refreshCampaigns (the poll's path).
+    // DASHBOARDS-POLISH2-SPEC D2 (stage 2 F2) -- ANY selector change also clears the route list
+    // scope (campaignsRouteQuery.mjs::afterBrandChange). The pending transitions are the initial
+    // resolution of the stored selection, not a user change, and leave it in place.
     brandKey(now, before) {
       if (before === 'pending' || now === 'pending') {
         return;
       }
-      if (this.queryParams.listID !== null && this.scopeListIds
-        && !this.scopeListIds.includes(this.queryParams.listID)) {
-        this.queryParams.listID = null;
-      }
+      const next = afterBrandChange(this.queryParams, this.scopeListIds);
+      this.queryParams.listID = next.listID;
+      this.queryParams.routeListIDs = next.routeListIDs;
       this.queryParams.page = 1;
       this.bulk.checked = [];
       this.bulk.all = false;

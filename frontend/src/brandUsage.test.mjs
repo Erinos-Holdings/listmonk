@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   CIRCLE_FIELDS, DEFAULT_STATE, MISSING, SCORE_PARTS, SECTIONS, SORT_FIELDS, STORAGE_KEY, boolCell, broadcastTip, cell,
   cellLink, circlesOf, circleWords, clickSort, defaultOrder, latestAsOf, loadState, mountainRunTime, saveState,
-  scoreTip, shapeRows, sortRows, sortValue, storedCounts, triggerTip, linkTip,
+  scoreTip, shapeRows, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -245,64 +245,96 @@ test('V2 D4: links per cell -- Welcome its master list, a trigger family only wi
   assert.equal(cellLink(shapeRows(api).find((r) => r.brand === 'nodoc'), 'welcome'), null);
 });
 
-// DASHBOARDS-POLISH-SPEC I4: the broadcast cells and the Journeys circles.
-test('I4: broadcast cells link the MASTER list in the Broadcasts scope; Journeys the Automations scope, no list', () => {
-  const [ruze, tg, lux] = shapeRows(api);
-  const bcast = { list_id: '7', evergreen: 'false' };
+// DASHBOARDS-POLISH2-SPEC I3 (supersedes POLISH I4's master-list / no-list landings): the
+// Journeys circles and the broadcast cells link the BRAND's active lists.
+const lists = [
+  { id: 12, brand: 'ruze', status: 'active' },
+  { id: 7, brand: 'ruze', status: 'active' },
+  { id: 3, brand: 'ruze' },
+  { id: 30, brand: 'ruze', status: 'archived' },
+  { id: 20, brand: 'thirstygirl', status: 'active' },
+  { id: 21, brand: 'lux', status: 'active' },
+  { id: 9, brand: 'oldzma', status: 'active' },
+  { id: 5, brand: 'other', status: 'active' },
+  { id: 6, brand: '', status: 'active' },
+];
+
+test('I3: the brand list set -- the brand\'s active lists, ascending; store shapes; none -> []', () => {
+  assert.deepEqual(brandListIds(lists, 'ruze'), [3, 7, 12]); // numeric, not lexicographic; archived out
+  assert.deepEqual(brandListIds({ results: lists }, 'lux'), [21]);
+  assert.deepEqual(brandListIds(lists, 'nobody'), []);
+  assert.deepEqual(brandListIds(lists, ''), []); // a brandless list never joins a brand's set
+  assert.deepEqual(brandListIds(undefined, 'ruze'), []);
+  assert.deepEqual(shapeRows(api, { lists }).map((r) => [r.brand, r.listIds]), [
+    ['ruze', [3, 7, 12]], ['thirstygirl', [20]], ['lux', [21]], ['oldzma', [9]], ['nodoc', []],
+  ]);
+  // No lists given (the store not loaded) -> every set empty.
+  assert.deepEqual(shapeRows(api)[0].listIds, []);
+});
+
+test('I3: broadcast cells link the brand set in the Broadcasts scope; Journeys the brand set in Automations', () => {
+  const [ruze, tg, lux] = shapeRows(api, { lists });
+  const set = ['3', '7', '12'];
+  const bcast = { evergreen: 'false', list_id: set };
   assert.deepEqual(cellLink(ruze, 'cadence'), bcast);
   assert.deepEqual(cellLink(ruze, 'lastBroadcast'), bcast);
-  assert.deepEqual(cellLink(ruze, 'journeys'), { evergreen: 'true' });
-  assert.equal(Object.prototype.hasOwnProperty.call(cellLink(ruze, 'journeys'), 'list_id'), false);
-  // "never" is a shown value and links; a '—' cadence does not.
-  assert.equal(cell(tg, 'lastBroadcast', t).text, 'dashboard.usage.never');
-  assert.deepEqual(cellLink(tg, 'lastBroadcast'), bcast);
-  assert.equal(cell(tg, 'cadence', t).text, MISSING);
+  assert.deepEqual(cellLink(ruze, 'journeys'), { evergreen: 'true', list_id: set });
+  // A one-list brand links its one list (the Campaigns page reads it as the single filter).
+  assert.equal(cell(tg, 'lastBroadcast', t).text, 'dashboard.usage.never'); // "never" is shown and links
+  assert.deepEqual(cellLink(tg, 'lastBroadcast'), { evergreen: 'false', list_id: ['20'] });
+  assert.equal(cell(tg, 'cadence', t).text, MISSING); // a '—' cadence does not
   assert.equal(cellLink(tg, 'cadence'), null);
   assert.equal(cell(lux, 'cadence', t).text, MISSING);
   assert.equal(cellLink(lux, 'cadence'), null);
-  assert.deepEqual(cellLink(lux, 'lastBroadcast'), bcast);
+  assert.deepEqual(cellLink(lux, 'lastBroadcast'), { evergreen: 'false', list_id: ['21'] });
+  assert.deepEqual(cellLink(lux, 'journeys'), { evergreen: 'true', list_id: ['21'] });
   // A blank Last broadcast (no stored daysSince, not "never") does not link.
   const blank = shapeRows([{
-    brand: 'b',
+    brand: 'ruze',
     usage: usage({
       broadcasts: {
         lastAt: null, windowCount: 0, cadenceDays: 5, daysSince: null, ratio: null, state: 'ok',
       },
     }),
-  }])[0];
+  }], { lists })[0];
   assert.equal(cell(blank, 'lastBroadcast', t).text, '');
   assert.equal(cellLink(blank, 'lastBroadcast'), null);
-  assert.deepEqual(cellLink(blank, 'cadence'), { list_id: '7', evergreen: 'false' });
-  // No master list -> the broadcast cells do not link (Journeys still does).
+  assert.deepEqual(cellLink(blank, 'cadence'), bcast);
+  // The master list no longer gates the broadcast link -- the brand set does.
   const noMaster = shapeRows([{
-    brand: 'n',
+    brand: 'ruze',
     usage: usage({
       welcome: {
         state: 'none', listId: null, campaigns: [], counts: { green: 0, amber: 0 },
       },
     }),
-  }])[0];
-  assert.equal(cellLink(noMaster, 'cadence'), null);
-  assert.equal(cellLink(noMaster, 'lastBroadcast'), null);
-  assert.deepEqual(cellLink(noMaster, 'journeys'), { evergreen: 'true' });
-  // ZMA-dimmed cells ('—') never link.
-  const zma = shapeRows(api).find((r) => r.brand === 'oldzma');
+  }], { lists })[0];
+  assert.deepEqual(cellLink(noMaster, 'cadence'), bcast);
+  assert.deepEqual(cellLink(noMaster, 'journeys'), { evergreen: 'true', list_id: set });
+  // An EMPTY set -> no link on any of the three (the brand has no active list in the store).
+  const noLists = shapeRows([{ brand: 'nolists', usage: usage() }], { lists })[0];
+  ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => assert.equal(cellLink(noLists, f), null, f));
+  const unloaded = shapeRows(api)[0]; // ruze, shaped before the lists store loaded
+  ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => assert.equal(cellLink(unloaded, f), null, f));
+  // ZMA-dimmed cells ('—') never link, even with lists.
+  const zma = shapeRows(api, { lists }).find((r) => r.brand === 'oldzma');
   ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => {
     assert.equal(cell(zma, f, t).text, MISSING, f);
     assert.equal(cellLink(zma, f), null, f);
   });
   // Journeys without stored counts ('—', a pre-V2 doc) does not link; no usage, no link.
-  const old = shapeRows([{ brand: 'o', usage: usage({ journeys: { running: 1 } }) }])[0];
+  const old = shapeRows([{ brand: 'ruze', usage: usage({ journeys: { running: 1 } }) }], { lists })[0];
   assert.equal(cell(old, 'journeys', t).text, MISSING);
   assert.equal(cellLink(old, 'journeys'), null);
-  const nodoc = shapeRows(api).find((r) => r.brand === 'nodoc');
+  const nodoc = shapeRows([{ brand: 'ruze' }], { lists })[0];
   ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => assert.equal(cellLink(nodoc, f), null, f));
-  // The Welcome / trigger links are unchanged (Automations, their own list).
+  // The Welcome / trigger links are unchanged (Automations, their own single list).
   assert.deepEqual(cellLink(ruze, 'welcome'), { list_id: '7', evergreen: 'true' });
+  assert.equal(cellLink(ruze, 'purchase'), null);
 });
 
-test('I4: a linked broadcast cell carries the master-list note; nothing else does', () => {
-  const [ruze, tg] = shapeRows(api);
+test('I3: a linked broadcast cell carries the brand-broadcasts note; nothing else does', () => {
+  const [ruze, tg] = shapeRows(api, { lists });
   assert.equal(linkTip(ruze, 'cadence', t), 'dashboard.usage.broadcastLinkHelp');
   assert.equal(linkTip(ruze, 'lastBroadcast', t), 'dashboard.usage.broadcastLinkHelp');
   assert.equal(linkTip(tg, 'cadence', t), ''); // '—', unlinked

@@ -11,7 +11,11 @@
 // its weights -- integrations lib/brand-usage.ts SCORE_WEIGHTS) is computed by the integrations
 // lib/brand-usage.ts; this module only maps stored values to text, circles and colors (v1 I1,
 // V2 I1/I3). It renders `score.parts` verbatim and computes no weight.
-import { brandLabelOf, matchesLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
+//
+// DASHBOARDS-POLISH2-SPEC D2: the Journeys and broadcast links filter to the BRAND's active lists --
+// a list-id set built here from the lists store the Dashboard already holds (fork-owned list data
+// rendered, not a health rule).
+import { brandLabelOf, matchesLaunch, storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { healthDocs } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
 // V2 D2: the columns, left to right -- Score and Brand ungrouped, then the three sections.
@@ -73,23 +77,39 @@ const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const countOrNull = (v) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null);
 
-// shapeRow flattens one API row: { brand, label, usage (the stored object, or null), zma }.
-export function shapeRow(r, brands) {
+// DASHBOARDS-POLISH2-SPEC D2: the brand's ACTIVE list ids, ascending -- the lists store rows (array
+// or { results }; GET /api/lists?status=active, already permission-filtered) whose brand is the
+// row's; an archived row, were one ever present, is left out. [] when none.
+export function brandListIds(lists, brand) {
+  if (typeof brand !== 'string' || brand === '') {
+    return [];
+  }
+  return storeLists(lists)
+    .filter((l) => l && l.brand === brand && l.status !== 'archived' && Number.isInteger(l.id) && l.id > 0)
+    .map((l) => l.id)
+    .sort((a, b) => a - b);
+}
+
+// shapeRow flattens one API row: { brand, label, usage (the stored object, or null), zma, listIds
+// (the brand's active list ids, ascending -- the Journeys/broadcast link set) }.
+export function shapeRow(r, brands, lists = []) {
   const usage = isObj(r && r.usage) ? r.usage : null;
   return {
     brand: r.brand,
     label: brandLabelOf(r.brand, brands),
     usage,
     zma: !!usage && usage.channel === 'zma',
+    listIds: brandListIds(lists, r.brand),
   };
 }
 
 // D2: the Brand Matrix's rows exactly -- the API rows narrowed by the launch filter over the rows'
-// own health documents, then flattened. The server has already applied the brand scope.
-export function shapeRows(apiRows, { brands = [], launch = 'all' } = {}) {
+// own health documents, then flattened. The server has already applied the brand scope. `lists`
+// is the lists store (POLISH2 D2's link set).
+export function shapeRows(apiRows, { brands = [], launch = 'all', lists = [] } = {}) {
   const rows = (Array.isArray(apiRows) ? apiRows : []).filter((r) => r && typeof r.brand === 'string' && r.brand !== '');
   const docs = healthDocs(rows);
-  return rows.filter((r) => matchesLaunch(r.brand, launch, docs)).map((r) => shapeRow(r, brands));
+  return rows.filter((r) => matchesLaunch(r.brand, launch, docs)).map((r) => shapeRow(r, brands, lists));
 }
 
 // The columns a ZMA row does not score (its sends live in ZMA -- a red would be false, v1 I6),
@@ -199,24 +219,28 @@ const posInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
 // V2 D4: a stoplight cell's link query -- the Campaigns page with the list preselected AND the
 // Automations scope (welcome/trigger campaigns are evergreens). Welcome links its master list; a
 // 1st purchase / No purchase cell links only when the family has exactly ONE row (with a list).
-// DASHBOARDS-POLISH-SPEC D2/I4: the Cadence and Last broadcast cells link the Campaigns page with
-// the brand's MASTER list (the welcome family's stored listId) preselected and the Broadcasts scope
-// forced ({ list_id, evergreen: 'false' }); the Journeys circles link the Automations scope with NO
-// list ({ evergreen: 'true' } -- the brand's evergreens span several lists). A ZMA-dimmed cell, a
-// '—' / blank cell (no stored value) and the booleans never link. null = no link.
+// DASHBOARDS-POLISH2-SPEC D2/I3 (superseding POLISH D2's master-list / no-list landings): the
+// Journeys circles link the Automations scope and the Cadence / Last broadcast cells the
+// Broadcasts scope, both filtered to the BRAND's active lists -- { evergreen, list_id: [ids] }, the
+// row's listIds as strings, ascending (a repeated list_id: the Campaigns page's route list scope,
+// or its single filter when the brand has one list). An empty set does not link. A ZMA-dimmed
+// cell, a '—' / blank cell (no stored value) and the booleans never link. null = no link.
 export function cellLink(row, field) {
   const u = row && row.usage;
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
   }
-  if (field === 'journeys') {
-    return storedCounts(u, field) ? { evergreen: 'true' } : null;
-  }
-  if (field === 'cadence' || field === 'lastBroadcast') {
+  if (field === 'journeys' || field === 'cadence' || field === 'lastBroadcast') {
+    const ids = (Array.isArray(row.listIds) ? row.listIds : []).filter(posInt);
+    if (!ids.length) {
+      return null;
+    }
+    if (field === 'journeys') {
+      return storedCounts(u, field) ? { evergreen: 'true', list_id: ids.map(String) } : null;
+    }
     const b = isObj(u.broadcasts) ? u.broadcasts : {};
     const shown = field === 'cadence' ? numOrNull(b.cadenceDays) !== null : (b.state === 'none' || numOrNull(b.daysSince) !== null);
-    const master = isObj(u.welcome) ? u.welcome.listId : null;
-    return shown && posInt(master) ? { list_id: String(master), evergreen: 'false' } : null;
+    return shown ? { evergreen: 'false', list_id: ids.map(String) } : null;
   }
   let listId = null;
   if (field === 'welcome') {
@@ -231,9 +255,9 @@ export function cellLink(row, field) {
   return { list_id: String(listId), evergreen: 'true' };
 }
 
-// DASHBOARDS-POLISH-SPEC D2: the note a linked broadcast cell's tooltip carries -- the link filters
-// the brand's MASTER list only (broadcasts on its other lists exist, but the Campaigns page has no
-// multi-list filter). '' for every other cell, and for an unlinked one.
+// DASHBOARDS-POLISH-SPEC D2; POLISH2-SPEC D2 (stage 2 F3): the note a linked broadcast cell's
+// tooltip carries -- the link opens the brand's broadcasts (every one of the brand's active lists).
+// '' for every other cell, and for an unlinked one.
 export function linkTip(row, field, t = (k) => k) {
   if ((field === 'cadence' || field === 'lastBroadcast') && cellLink(row, field)) {
     return t('dashboard.usage.broadcastLinkHelp');
