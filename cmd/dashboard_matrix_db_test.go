@@ -20,6 +20,8 @@ package main
 // value (after the transport's JSON compaction); a doc without it, or no doc, yields no usage key.
 // DASHBOARDS-POLISH-SPEC I2: likewise the latest doc's `thresholds` (the Matrix engagement warn
 // values and floors) verbatim; a doc without it, or no doc, yields no thresholds key.
+// DASHBOARDS-POLISH3-SPEC I5/I6: every row carries skipped ({count, lists} per fr/es/de/it, {0, []}
+// when nothing skips); TestDashboardSkippedLangsDB pins the per-list coverage rule.
 
 import (
 	"bytes"
@@ -65,6 +67,18 @@ type matrixRow struct {
 	Usage json.RawMessage `json:"usage,omitempty"`
 	// DASHBOARDS-POLISH-SPEC I2 -- the stored doc's thresholds verbatim; nil when the key is absent.
 	Thresholds json.RawMessage `json:"thresholds,omitempty"`
+	// DASHBOARDS-POLISH3-SPEC I6 -- every row carries skipped, each language {count, lists}.
+	Skipped map[string]skippedEntry `json:"skipped"`
+}
+
+type skippedEntry struct {
+	Count int   `json:"count"`
+	Lists []int `json:"lists"`
+}
+
+// zeroSkipped is I6's nothing-skips shape: every language {0, []}.
+func zeroSkipped() map[string]skippedEntry {
+	return map[string]skippedEntry{"fr": {0, []int{}}, "es": {0, []int{}}, "de": {0, []int{}}, "it": {0, []int{}}}
 }
 
 type matrixResp struct {
@@ -329,14 +343,16 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 		return matrixRow{Brand: "alpha", Subscribers: matrixSubs{Total: 4, Active: 1, Held: 1, Unsubscribed: 1, Blocked: 1},
 			Sent: &alphaSent, Clicks: wantClicks[tracking]["alpha"], HardBounces: 5, Blocks: 1, Complaints: 1,
 			Health: matrixHealth{Status: "ok", SpamRate: &spam, SpamStatus: "issues", SpamFlagged: &flagged},
-			Usage:  wantUsage, Thresholds: wantThresholds}
+			Usage:  wantUsage, Thresholds: wantThresholds, Skipped: zeroSkipped()}
 	}
+	// POLISH3 I6 -- these fixtures' campaigns start Denver-today (outside the window), so nothing
+	// skips: every row still carries skipped, each language {0, []}.
 	bravo := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "bravo", Subscribers: matrixSubs{Total: 2, Active: 1},
 			Sent: &bravoSent, Clicks: wantClicks[tracking]["bravo"], HardBounces: 1, Blocks: 1,
-			Health: matrixHealth{Status: "unknown"}}
+			Health: matrixHealth{Status: "unknown"}, Skipped: zeroSkipped()}
 	}
-	delta := matrixRow{Brand: "delta"}
+	delta := matrixRow{Brand: "delta", Skipped: zeroSkipped()}
 
 	matrix := func(u auth.User, q string) matrixResp {
 		t.Helper()
@@ -444,6 +460,202 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	got := matrix(admin, "")
 	if len(got.Rows) != 3 || got.Rows[0].Sent != nil || got.Rows[1].Sent != nil || got.Rows[0].Clicks != wantClicks[false]["alpha"] {
 		t.Fatalf("no ses document: %s", baJSON(got))
+	}
+	ko.Set("privacy.individual_tracking", true)
+}
+
+// TestDashboardSkippedLangsDB is DASHBOARDS-POLISH3-SPEC I5/I6 against a real database, through the
+// matrix handler (get-dashboard-skipped-langs merged per row). Each brand isolates one branch of the
+// rule (stage 2 F4's fixture list): a list is L-skipping when, in the 60 Denver days ending
+// yesterday, it had an activity with a SPECIFIC language other than L and none with L or no
+// language; activity = a finished non-evergreen with started_at in the window and sent > 0, or a
+// running evergreen. The count is DISTINCT active (subscription_segment) subscribers whose
+// subscriber_lang is L on the brand's ACTIVE L-skipping lists; lists = those lists, ascending.
+func TestDashboardSkippedLangsDB(t *testing.T) {
+	h := newLinkHarness(t)
+
+	den, err := time.LoadLocation("America/Denver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var todayS string
+	if err := h.db.Get(&todayS, `SELECT TO_CHAR((NOW() AT TIME ZONE 'America/Denver')::DATE, 'YYYY-MM-DD')`); err != nil {
+		t.Fatal(err)
+	}
+	today, err := time.ParseInLocation("2006-01-02", todayS, den)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ty, tm, td := today.Date()
+	start := func(n int) time.Time { return time.Date(ty, tm, td-n, 0, 0, 0, 0, den) }
+	at := func(n int) string { return start(n).Add(12 * time.Hour).Format(time.RFC3339) }
+	inWin := at(5)
+
+	list := func(name, brand string) int {
+		id := h.baList(name, "public", "single")
+		h.db.MustExec(`UPDATE lists SET tags = ARRAY['brand:' || $2]::VARCHAR[] WHERE id = $1`, id, brand)
+		return id
+	}
+	// camp: a regular campaign with a language ("" = none), the evergreen flag and a started_at
+	// ("" = NULL), on lists.
+	camp := func(name, status string, sent int, lang string, evergreen bool, started string, lists ...int) int {
+		id := h.baCamp(name, status, sent, lists...)
+		attribs := `{}`
+		if lang != "" {
+			attribs = fmt.Sprintf(`{"lang": %q}`, lang)
+		}
+		h.db.MustExec(`UPDATE campaigns SET attribs = $2::JSONB, evergreen = $3, started_at = NULLIF($4, '')::TIMESTAMPTZ WHERE id = $1`,
+			id, attribs, evergreen, started)
+		return id
+	}
+	n := 0
+	// sub: a subscriber with a language ("" = none) on lists with the given subscription statuses.
+	sub := func(lang, status string, lists map[int]string) int {
+		n++
+		id := h.baSub(fmt.Sprintf("s%d@skip", n), status, lists)
+		if lang != "" {
+			h.db.MustExec(`UPDATE subscribers SET attribs = JSONB_BUILD_OBJECT('lang', $2::TEXT) WHERE id = $1`, id, lang)
+		}
+		return id
+	}
+	ok := "confirmed"
+
+	// enonly -- an EN finished in-window broadcast, FR actives, no FR campaign: counts. The
+	// segment and language definitions: an unsubscribed, a HELD and a blocklisted FR subscriber are
+	// not active; a pt (other) and a no-language subscriber are never counted; "FR-ca" is fr
+	// (subscriber_lang). An ES active counts under ES (the EN anchor skips every non-EN language).
+	// An ARCHIVED list of the brand with in-window EN activity and an FR active contributes nothing.
+	l1 := list("enonly", "enonly")
+	l1arc := list("enonly old", "enonly")
+	h.db.MustExec(`UPDATE lists SET status = 'archived' WHERE id = $1`, l1arc)
+	camp("enonly EN", "finished", 10, "en", false, inWin, l1)
+	camp("enonly old EN", "finished", 10, "en", false, inWin, l1arc)
+	sub("fr", "enabled", map[int]string{l1: ok})
+	sub("FR-ca", "enabled", map[int]string{l1: ok})
+	sub("fr", "enabled", map[int]string{l1: "unsubscribed"})
+	held := sub("fr", "enabled", map[int]string{l1: "unsubscribed"})
+	h.db.MustExec(`UPDATE subscriber_lists SET meta = '{"hold": {"reason": "sunset"}}' WHERE subscriber_id = $1`, held)
+	sub("fr", "blocklisted", map[int]string{l1: ok})
+	sub("pt", "enabled", map[int]string{l1: ok})
+	sub("", "enabled", map[int]string{l1: ok})
+	sub("en", "enabled", map[int]string{l1: ok})
+	sub("es", "enabled", map[int]string{l1: ok})
+	sub("fr", "enabled", map[int]string{l1arc: ok})
+
+	// frcovered -- the same plus an FR RUNNING evergreen: FR covered; ES still skipped (EN and FR
+	// are both anchors for ES).
+	l2 := list("frcovered", "frcovered")
+	camp("frcovered EN", "finished", 10, "en", false, inWin, l2)
+	camp("frcovered FR welcome", "running", 3, "fr", true, at(90), l2)
+	sub("fr", "enabled", map[int]string{l2: ok})
+	sub("es", "enabled", map[int]string{l2: ok})
+
+	// nolang -- the same plus a LANGUAGE-LESS running evergreen: it targets everyone, so it covers
+	// every language (stage 2 F1).
+	l3 := list("nolang", "nolang")
+	camp("nolang EN", "finished", 10, "en", false, inWin, l3)
+	camp("nolang everyone welcome", "running", 3, "", true, at(90), l3)
+	sub("fr", "enabled", map[int]string{l3: ok})
+	sub("es", "enabled", map[int]string{l3: ok})
+
+	// enevergreen -- an EN RUNNING evergreen as the only anchor: counts.
+	l4 := list("enevergreen", "enevergreen")
+	camp("enevergreen EN welcome", "running", 3, "en", true, at(90), l4)
+	sub("fr", "enabled", map[int]string{l4: ok})
+
+	// fronly -- FR-only activity: ES actives counted (the generalized anchor), FR covered.
+	l5 := list("fronly", "fronly")
+	camp("fronly FR", "finished", 10, "fr", false, inWin, l5)
+	sub("fr", "enabled", map[int]string{l5: ok})
+	sub("es", "enabled", map[int]string{l5: ok})
+
+	// outwin -- EN broadcasts only before the window and on Denver-today: no activity.
+	l6 := list("outwin", "outwin")
+	camp("outwin EN old", "finished", 10, "en", false, at(65), l6)
+	camp("outwin EN today", "finished", 10, "en", false, at(0), l6)
+	sub("fr", "enabled", map[int]string{l6: ok})
+
+	// sentzero -- an in-window EN broadcast that sent nothing: no activity.
+	l7 := list("sentzero", "sentzero")
+	camp("sentzero EN", "finished", 0, "en", false, inWin, l7)
+	sub("fr", "enabled", map[int]string{l7: ok})
+
+	// draft -- a draft EN campaign (even with a started_at and a sent count): no activity; nor a
+	// paused EN evergreen (only RUNNING evergreens are activity).
+	l8 := list("draft", "draft")
+	camp("draft EN", "draft", 5, "en", false, inWin, l8)
+	camp("draft EN paused welcome", "paused", 5, "en", true, at(90), l8)
+	sub("fr", "enabled", map[int]string{l8: ok})
+
+	// twolists -- one FR subscriber on TWO skipping lists counts once; a second only on one.
+	l9a := list("twolists a", "twolists")
+	l9b := list("twolists b", "twolists")
+	camp("twolists EN", "finished", 10, "en", false, inWin, l9a, l9b)
+	sub("fr", "enabled", map[int]string{l9a: ok, l9b: ok})
+	sub("fr", "enabled", map[int]string{l9b: ok})
+
+	with := func(over map[string]skippedEntry) map[string]skippedEntry {
+		s := zeroSkipped()
+		for k, v := range over {
+			s[k] = v
+		}
+		return s
+	}
+	want := map[string]map[string]skippedEntry{
+		"enonly":      with(map[string]skippedEntry{"fr": {2, []int{l1}}, "es": {1, []int{l1}}}),
+		"frcovered":   with(map[string]skippedEntry{"es": {1, []int{l2}}}),
+		"nolang":      zeroSkipped(),
+		"enevergreen": with(map[string]skippedEntry{"fr": {1, []int{l4}}}),
+		"fronly":      with(map[string]skippedEntry{"es": {1, []int{l5}}}),
+		"outwin":      zeroSkipped(),
+		"sentzero":    zeroSkipped(),
+		"draft":       zeroSkipped(),
+		"twolists":    with(map[string]skippedEntry{"fr": {2, []int{l9a, l9b}}}),
+	}
+
+	skippedOf := func(q string) map[string]map[string]skippedEntry {
+		t.Helper()
+		admin := baUser([]string{auth.PermListGetAll, auth.PermCampaignsGetAll, auth.PermCampaignsGet, "brands:get"})
+		code, body := baCall(t, admin, "/api/dashboard/brand-matrix"+q, h.app.GetDashboardBrandMatrix)
+		if code != http.StatusOK {
+			t.Fatalf("matrix %q: %d %s", q, code, body)
+		}
+		var resp struct {
+			Data struct {
+				Rows []struct {
+					Brand   string                  `json:"brand"`
+					Skipped map[string]skippedEntry `json:"skipped"`
+				} `json:"rows"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("matrix %q: %s: %v", q, body, err)
+		}
+		out := map[string]map[string]skippedEntry{}
+		for _, r := range resp.Data.Rows {
+			if r.Skipped == nil {
+				t.Fatalf("matrix %q: row %q carries no skipped (I6)", q, r.Brand)
+			}
+			out[r.Brand] = r.Skipped
+		}
+		return out
+	}
+
+	for _, tracking := range []bool{true, false} {
+		ko.Set("privacy.individual_tracking", tracking)
+		q := prepareQueries(loadQueryMap(t), h.db, ko)
+		h.app.core = core.New(&core.Opt{Queries: q, DB: h.db, I18n: h.app.i18n, Log: h.app.log}, &core.Hooks{})
+
+		if got := skippedOf(""); !reflect.DeepEqual(got, want) {
+			t.Fatalf("tracking=%v unscoped skipped\n got  %s\n want %s", tracking, baJSON(got), baJSON(want))
+		}
+	}
+
+	// The scope narrows the lists the rule reads: list_id = twolists a alone -> only the subscriber
+	// on it counts, and only that list is returned.
+	got := skippedOf(fmt.Sprintf("?list_id=%d", l9a))
+	if w := map[string]map[string]skippedEntry{"twolists": with(map[string]skippedEntry{"fr": {1, []int{l9a}}})}; !reflect.DeepEqual(got, w) {
+		t.Fatalf("scoped to %d: %s, want %s", l9a, baJSON(got), baJSON(w))
 	}
 	ko.Set("privacy.individual_tracking", true)
 }

@@ -18,18 +18,118 @@
 import { brandLabelOf, matchesLaunch, storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { healthDocs } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
-// V2 D2: the columns, left to right -- Score and Brand ungrouped, then the three sections.
+// DASHBOARDS-POLISH3-SPEC D4: the No purchase sub-group's standard step delays, one leaf column
+// each. PROVISIONAL -- a presentation constant for the demo, pending the user's 2026-10-26
+// Marketing meeting that sets the standard (the list UI will later forbid off-standard steps). A
+// step whose stored `days` is not in this list is deliberately NOT shown (recorded limitation).
+export const STANDARD_NO_PURCHASE_DAYS = Object.freeze([3, 7, 15]);
+
+// DASHBOARDS-POLISH3-SPEC D5: the Languages section's Skipped leaves (the fork's I18N languages,
+// English excluded by design -- the section is international transparency).
+export const SKIPPED_LANGS = Object.freeze(['fr', 'es', 'de', 'it']);
+
+const NP_PREFIX = 'noPurchase:';
+const SK_PREFIX = 'skipped:';
+export const NO_PURCHASE_FIELDS = Object.freeze(STANDARD_NO_PURCHASE_DAYS.map((n) => `${NP_PREFIX}${n}`));
+export const SKIPPED_FIELDS = Object.freeze(SKIPPED_LANGS.map((l) => `${SK_PREFIX}${l}`));
+
+// The day of a No purchase leaf field ('noPurchase:7' -> 7), the language of a Skipped leaf
+// ('skipped:fr' -> 'fr'); null for any other field.
+export function npDaysOf(field) {
+  if (typeof field !== 'string' || !field.startsWith(NP_PREFIX)) {
+    return null;
+  }
+  const n = Number(field.slice(NP_PREFIX.length));
+  return STANDARD_NO_PURCHASE_DAYS.includes(n) ? n : null;
+}
+
+export function skippedLangOf(field) {
+  if (typeof field !== 'string' || !field.startsWith(SK_PREFIX)) {
+    return null;
+  }
+  const l = field.slice(SK_PREFIX.length);
+  return SKIPPED_LANGS.includes(l) ? l : null;
+}
+
+// V2 D2: the columns, left to right -- Score and Brand ungrouped, then the sections. POLISH3 D4/D5:
+// a section's `items` are its leaf fields in order, a SUB-GROUP ({ group, label, help, fields })
+// standing for its leaves under one label (No purchase over 3d | 7d | 15d; the new Languages
+// section's Skipped over FR ES DE IT, between Journeys and Configurations); `fields` is the flat
+// leaf list.
+const group = (key, label, help, fields) => Object.freeze({
+  group: key, label, help, fields,
+});
+const section = (key, label, items) => Object.freeze({
+  key, label, items: Object.freeze(items), fields: Object.freeze(items.flatMap((i) => (typeof i === 'string' ? [i] : i.fields))),
+});
 export const SECTIONS = Object.freeze([
-  Object.freeze({ key: 'broadcasts', label: 'dashboard.usage.sectionBroadcasts', fields: Object.freeze(['cadence', 'lastBroadcast']) }),
-  Object.freeze({ key: 'journeys', label: 'dashboard.usage.sectionJourneys', fields: Object.freeze(['journeys', 'welcome', 'purchase', 'noPurchase']) }),
-  Object.freeze({ key: 'configurations', label: 'dashboard.usage.sectionConfigurations', fields: Object.freeze(['attribution', 'sunset']) }),
+  section('broadcasts', 'dashboard.usage.sectionBroadcasts', ['cadence', 'lastBroadcast']),
+  section('journeys', 'dashboard.usage.sectionJourneys', [
+    'journeys', 'welcome', 'purchase',
+    group('noPurchase', 'dashboard.usage.noPurchase', 'dashboard.usage.noPurchaseHelp', NO_PURCHASE_FIELDS),
+  ]),
+  section('languages', 'dashboard.usage.sectionLanguages', [
+    group('skipped', 'dashboard.usage.skipped', 'dashboard.usage.skippedHelp', SKIPPED_FIELDS),
+  ]),
+  section('configurations', 'dashboard.usage.sectionConfigurations', ['attribution', 'sunset']),
 ]);
 
 // Every sortable column, in display order.
 export const SORT_FIELDS = Object.freeze(['score', 'brand', ...SECTIONS.flatMap((s) => s.fields)]);
 
-// The stoplight columns (V2 D3) -- one circle per state.
-export const CIRCLE_FIELDS = Object.freeze(['journeys', 'welcome', 'purchase', 'noPurchase']);
+// The stoplight columns (V2 D3) -- one circle per state. POLISH3 D4: the No purchase leaves.
+export const CIRCLE_FIELDS = Object.freeze(['journeys', 'welcome', 'purchase', ...NO_PURCHASE_FIELDS]);
+
+// POLISH3 D4/D5: the header layout over SECTIONS (the band alternates grey/white by section). Row
+// 2 holds every plain leaf (rowspan 2) and every sub-group label (colspan = its leaves); row 3
+// the sub-group leaves. `first` marks the cell opening its section (the band's left rule).
+export function headerLayout(sections = SECTIONS) {
+  const row2 = [];
+  const row3 = [];
+  sections.forEach((s, si) => {
+    const band = si % 2 === 0 ? 'grey' : 'white';
+    s.items.forEach((it, i) => {
+      if (typeof it === 'string') {
+        row2.push({
+          kind: 'leaf', field: it, band, first: i === 0,
+        });
+        return;
+      }
+      row2.push({
+        kind: 'group', key: it.group, label: it.label, help: it.help, span: it.fields.length, band, first: i === 0,
+      });
+      it.fields.forEach((f, fi) => row3.push({
+        kind: 'leaf', field: f, band, first: i === 0 && fi === 0, groupStart: fi === 0,
+      }));
+    });
+  });
+  return { row2, row3 };
+}
+
+// The leaf columns' header label and hover, in display order of every field: label is an i18n key
+// with params (the No purchase leaves "3d"; the Skipped leaves the uppercase language code, a
+// language-neutral literal).
+const COLUMN_META = Object.freeze({
+  cadence: { label: 'dashboard.usage.cadence', help: 'dashboard.usage.cadenceHelp' },
+  lastBroadcast: { label: 'dashboard.usage.lastBroadcast', help: 'dashboard.usage.lastBroadcastHelp' },
+  journeys: { label: 'dashboard.usage.journeys', help: 'dashboard.usage.journeysHelp' },
+  welcome: { label: 'dashboard.usage.welcome', help: 'dashboard.usage.welcomeHelp' },
+  purchase: { label: 'dashboard.usage.purchase', help: 'dashboard.usage.purchaseHelp' },
+  attribution: { label: 'dashboard.usage.attribution', help: 'dashboard.usage.attributionHelp' },
+  sunset: { label: 'dashboard.usage.sunset', help: 'dashboard.usage.sunsetHelp' },
+});
+
+export function columnMeta(field) {
+  const n = npDaysOf(field);
+  if (n !== null) {
+    return { label: 'dashboard.usage.npDays', params: { n }, help: 'dashboard.usage.noPurchaseHelp' };
+  }
+  const l = skippedLangOf(field);
+  if (l !== null) {
+    return { text: l.toUpperCase(), help: 'dashboard.usage.skippedHelp' };
+  }
+  return COLUMN_META[field] ? { ...COLUMN_META[field] } : { label: field, help: '' };
+}
 
 // V2 D2: a fresh session sorts by Score, descending (best first); a stored session sort wins.
 export const DEFAULT_STATE = Object.freeze({ sort: Object.freeze({ field: 'score', order: 'desc' }) });
@@ -91,7 +191,8 @@ export function brandListIds(lists, brand) {
 }
 
 // shapeRow flattens one API row: { brand, label, usage (the stored object, or null), zma, listIds
-// (the brand's active list ids, ascending -- the Journeys/broadcast link set) }.
+// (the brand's active list ids, ascending -- the Journeys/broadcast link set), skipped (POLISH3
+// D5: the matrix endpoint's live per-language skipped object, or null) }.
 export function shapeRow(r, brands, lists = []) {
   const usage = isObj(r && r.usage) ? r.usage : null;
   return {
@@ -100,7 +201,58 @@ export function shapeRow(r, brands, lists = []) {
     usage,
     zma: !!usage && usage.channel === 'zma',
     listIds: brandListIds(lists, r.brand),
+    skipped: isObj(r && r.skipped) ? r.skipped : null,
   };
+}
+
+// POLISH3 D5: one language's stored skipped entry -- { count, lists } with a non-negative integer
+// count and the positive-integer list ids; null when the row does not carry a well-formed one.
+export function skippedOf(row, lang) {
+  const s = row && isObj(row.skipped) ? row.skipped[lang] : null;
+  if (!isObj(s) || !(typeof s.count === 'number' && Number.isInteger(s.count) && s.count >= 0)) {
+    return null;
+  }
+  const ids = Array.isArray(s.lists) ? s.lists.filter((id) => typeof id === 'number' && Number.isInteger(id) && id > 0) : [];
+  return { count: s.count, lists: ids };
+}
+
+// POLISH3 D4: the No purchase sub-group's stored rows -- null when the doc does not carry the
+// family (a doc written before V2), or when it is a PRE-`days` doc (any row without a `days` key:
+// written before this release) -- the whole sub-group then renders '—', never a false red 0.
+function npRows(u) {
+  const np = isObj(u && u.noPurchase) ? u.noPurchase : null;
+  if (!np || !Array.isArray(np.rows)) {
+    return null;
+  }
+  const rows = np.rows.filter(isObj);
+  if (rows.some((r) => !Object.prototype.hasOwnProperty.call(r, 'days'))) {
+    return null;
+  }
+  return rows;
+}
+
+// The step rows of leaf N: exactly `days === N` (an off-standard day matches no leaf).
+const npRowsAt = (rows, n) => rows.filter((r) => r.days === n);
+
+// A step row is green when the lib's stored facts say clean -- no error, a list, its evergreen
+// running (the stored `evergreen` state, mapped, never re-derived); amber otherwise.
+const npClean = (r) => !(typeof r.error === 'string' && r.error) && r.listId !== null && r.listId !== undefined && r.evergreen === 'running';
+
+// POLISH3 D4 (stage 2 F5): the sub-group's ⚠ badges -- one per stored step row with NO parseable
+// `days` (the lib stores null), carrying the row's parser error. Rendered after the LAST leaf's
+// circles; [] on every other field, a pre-`days` doc, a ZMA-dimmed or usage-less row.
+export function cellBadges(row, field, t = (k) => k) {
+  if (field !== NO_PURCHASE_FIELDS[NO_PURCHASE_FIELDS.length - 1]) {
+    return [];
+  }
+  const rows = npRows(row && row.usage);
+  if (!rows) {
+    return [];
+  }
+  return rows.filter((r) => !(typeof r.days === 'number' && Number.isInteger(r.days) && r.days > 0)).map((r) => ({
+    glyph: '⚠',
+    tooltip: t('dashboard.usage.npInvalid', { slug: String(r.slug), error: typeof r.error === 'string' && r.error ? r.error : t('dashboard.usage.npNoDays') }),
+  }));
 }
 
 // D2: the Brand Matrix's rows exactly -- the API rows narrowed by the launch filter over the rows'
@@ -225,10 +377,28 @@ const posInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
 // row's listIds as strings, ascending (a repeated list_id: the Campaigns page's route list scope,
 // or its single filter when the brand has one list). An empty set does not link. A ZMA-dimmed
 // cell, a '—' / blank cell (no stored value) and the booleans never link. null = no link.
+//
+// DASHBOARDS-POLISH3-SPEC D2: the Cadence / Last broadcast links also carry status=finished (the
+// cadence counts finished broadcasts; the landing must not include drafts). D4: a No purchase leaf
+// links its step's list when exactly ONE step sits at that day (the one-row rule). D5: a Skipped
+// leaf with a count > 0 links { list_id: that language's skipping lists, evergreen: 'all' } (both
+// kinds -- the finished broadcasts and the running evergreens); it renders from the row's live
+// `skipped`, INDEPENDENT of usage, and never links on a ZMA-dimmed row or at 0.
 export function cellLink(row, field) {
+  const lang = skippedLangOf(field);
+  if (lang !== null) {
+    const s = row && !row.zma ? skippedOf(row, lang) : null;
+    return s && s.count > 0 && s.lists.length ? { list_id: s.lists.map(String), evergreen: 'all' } : null;
+  }
   const u = row && row.usage;
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
+  }
+  const n = npDaysOf(field);
+  if (n !== null) {
+    const rows = npRows(u);
+    const at = rows ? npRowsAt(rows, n) : [];
+    return at.length === 1 && posInt(at[0].listId) ? { list_id: String(at[0].listId), evergreen: 'true' } : null;
   }
   if (field === 'journeys' || field === 'cadence' || field === 'lastBroadcast') {
     const ids = (Array.isArray(row.listIds) ? row.listIds : []).filter(posInt);
@@ -240,7 +410,7 @@ export function cellLink(row, field) {
     }
     const b = isObj(u.broadcasts) ? u.broadcasts : {};
     const shown = field === 'cadence' ? numOrNull(b.cadenceDays) !== null : (b.state === 'none' || numOrNull(b.daysSince) !== null);
-    return shown ? { evergreen: 'false', list_id: ids.map(String) } : null;
+    return shown ? { evergreen: 'false', status: 'finished', list_id: ids.map(String) } : null;
   }
   let listId = null;
   if (field === 'welcome') {
@@ -256,11 +426,15 @@ export function cellLink(row, field) {
 }
 
 // DASHBOARDS-POLISH-SPEC D2; POLISH2-SPEC D2 (stage 2 F3): the note a linked broadcast cell's
-// tooltip carries -- the link opens the brand's broadcasts (every one of the brand's active lists).
-// '' for every other cell, and for an unlinked one.
+// tooltip carries -- the link opens the brand's FINISHED broadcasts (POLISH3 D2; every one of the
+// brand's active lists). POLISH3 D5: a linked Skipped cell notes its landing (those lists'
+// campaigns of all ages, both kinds). '' for every other cell, and for an unlinked one.
 export function linkTip(row, field, t = (k) => k) {
   if ((field === 'cadence' || field === 'lastBroadcast') && cellLink(row, field)) {
     return t('dashboard.usage.broadcastLinkHelp');
+  }
+  if (skippedLangOf(field) !== null && cellLink(row, field)) {
+    return t('dashboard.usage.skippedLinkHelp');
   }
   return '';
 }
@@ -269,7 +443,35 @@ export function linkTip(row, field, t = (k) => k) {
 // string (t formats it -- the Vue passes (k, p) => this.$t(k, p)); circles (stoplight columns
 // only) [{ color, n }], each to carry `tooltip`. A row without usage is blank (v1 D7); a ZMA row
 // shows '—' in Score/Welcome/Journeys/Last broadcast/Cadence.
+//
+// POLISH3 D5: a Skipped leaf renders from the row's live `skipped` whether or not the row has
+// usage -- a red count (linked) when > 0, a plain 0 otherwise (covered or no window activity), '—'
+// on a ZMA-dimmed row (or a malformed entry). D4: a No purchase leaf -- the circle(s) of the step(s)
+// at exactly that day (green running, amber idle/invalid), a red 0 when none; '—' for the whole
+// sub-group on a pre-`days` doc.
 export function cell(row, field, t = (k) => k) {
+  const lang = skippedLangOf(field);
+  if (lang !== null) {
+    if (row && row.zma) {
+      return {
+        text: MISSING, cls: '', tooltip: t('dashboard.usage.zmaHelp'), circles: [],
+      };
+    }
+    const s = skippedOf(row, lang);
+    if (!s) {
+      return {
+        text: MISSING, cls: '', tooltip: '', circles: [],
+      };
+    }
+    if (s.count > 0) {
+      return {
+        text: String(s.count), cls: RED, tooltip: t('dashboard.usage.skippedCell', { n: s.count, lists: s.lists.join(', ') }), circles: [],
+      };
+    }
+    return {
+      text: '0', cls: '', tooltip: t('dashboard.usage.skippedZero'), circles: [],
+    };
+  }
   const u = row && row.usage;
   if (!u) {
     return { ...BLANK_CELL, circles: [] };
@@ -277,6 +479,24 @@ export function cell(row, field, t = (k) => k) {
   if (row.zma && ZMA_DIMMED.includes(field)) {
     return {
       text: MISSING, cls: '', tooltip: t('dashboard.usage.zmaHelp'), circles: [],
+    };
+  }
+  const n = npDaysOf(field);
+  if (n !== null) {
+    const rows = npRows(u);
+    if (!rows) {
+      const detail = triggerTip(isObj(u.noPurchase) ? u.noPurchase : {}, t);
+      const missing = t('dashboard.usage.countsMissing');
+      return {
+        text: MISSING, cls: '', tooltip: detail ? `${missing}\n${detail}` : missing, circles: [],
+      };
+    }
+    const at = npRowsAt(rows, n);
+    const counts = { green: at.filter(npClean).length, amber: at.filter((r) => !npClean(r)).length };
+    const words = circleWords(counts, t);
+    const detail = triggerTip({ rows: at }, t);
+    return {
+      text: '', cls: '', tooltip: detail ? `${words}\n${detail}` : words, circles: circlesOf(counts),
     };
   }
   switch (field) {
@@ -419,10 +639,31 @@ export function clickSort(current, field) {
 // no stored score, a ZMA-dimmed column, an unrecognized value) -- ranks last in BOTH orders.
 const BADNESS = Object.freeze({ active: 0, idle: 1, none: 2 });
 
+//
+// POLISH3 D4: a No purchase leaf by badness (green 0, any amber 1, absent red 2; '—' null). D5: a
+// Skipped leaf by its count (desc = most skipped first); ZMA '—' or a missing entry null -- it
+// does not need usage.
 export function sortValue(row, field) {
+  const lang = skippedLangOf(field);
+  if (lang !== null) {
+    const s = row && !row.zma ? skippedOf(row, lang) : null;
+    return s ? s.count : null;
+  }
   const u = row && row.usage;
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
+  }
+  const n = npDaysOf(field);
+  if (n !== null) {
+    const rows = npRows(u);
+    if (!rows) {
+      return null;
+    }
+    const at = npRowsAt(rows, n);
+    if (!at.length) {
+      return 2;
+    }
+    return at.every(npClean) ? 0 : 1;
   }
   switch (field) {
     case 'score':

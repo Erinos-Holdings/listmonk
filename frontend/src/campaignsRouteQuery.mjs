@@ -23,6 +23,18 @@
 // Applied to the page's query state ONLY: nothing here writes the sticky
 // `campaigns.scopeAutomations` pref (or any pref) -- a link must not flip the user's standing
 // preference.
+//
+// DASHBOARDS-POLISH3-SPEC D2/D3 (I2/I3):
+// - The scope pill is Broadcasts | Automations | All. The page's internal representation is
+//   `evergreen`: false (Broadcasts), true (Automations), null (All -- the param is OMITTED, so the
+//   server returns both kinds). The sticky pref is the string `campaigns.scopeKind`
+//   (broadcasts|automations|all); the legacy boolean `campaigns.scopeAutomations` is read only
+//   while scopeKind is unset and is never written again (the dashboard.pane precedent). The route
+//   `evergreen` override gains exactly "all" (All for that load), never written to a pref.
+// - A route `status` (one value of the campaign status enum; anything else ignored) is the ROUTE
+//   STATUS SCOPE: sent as GET /api/campaigns `status`, shown as a dismissible chip beside the
+//   pill, cleared by the chip's dismissal and by any real list, brand-selector or scope-pill
+//   interaction, never written to a pref, and -- a fourth narrowing -- it suppresses "select all".
 
 // A repeated query param arrives as an array; the first element is the one read (evergreen).
 const first = (v) => (Array.isArray(v) ? v[0] : v);
@@ -38,7 +50,8 @@ export const ROUTE_SCOPE_OPTION = 'route-scope';
 // the valid list_id values (one or repeated; garbage dropped, duplicates collapsed, order kept) --
 // exactly one is listID (routeListIDs null), two or more are routeListIDs (listID null), none is
 // neither ("All lists"); evergreen true when the query says exactly "true", false when exactly
-// "false", else the sticky pref (`prefEvergreen`).
+// "false", null (All) when exactly "all" (POLISH3 D3), else the sticky pref (`prefEvergreen`: true,
+// false or null -- evergreenOfKind(scopeKindPref(...)); anything else reads as false).
 export function campaignsRouteQuery(query, prefEvergreen = false) {
   const q = query && typeof query === 'object' ? query : {};
   const raw = Array.isArray(q.list_id) ? q.list_id : [q.list_id];
@@ -50,11 +63,13 @@ export function campaignsRouteQuery(query, prefEvergreen = false) {
     }
   });
   const rawEvergreen = first(q.evergreen);
-  let evergreen = prefEvergreen === true;
+  let evergreen = prefEvergreen === null ? null : prefEvergreen === true;
   if (rawEvergreen === 'true') {
     evergreen = true;
   } else if (rawEvergreen === 'false') {
     evergreen = false;
+  } else if (rawEvergreen === 'all') {
+    evergreen = null;
   }
   return {
     listID: ids.length === 1 ? ids[0] : null,
@@ -111,11 +126,118 @@ export function afterBrandChange(state, scopeListIds) {
 }
 
 // canSelectAll guards the "select all N" whole-query affordance: offered only when the page shows
-// MORE than one page of an UNNARROWED query -- never under the single filter, the route list scope
-// or the brand-selector scope, since the by-query bulk delete carries only query + evergreen.
+// MORE than one page of an UNNARROWED query -- never under the single filter, the route list scope,
+// the brand-selector scope or (POLISH3 D2) the route status scope, since the by-query bulk delete
+// carries only query + evergreen.
 export function canSelectAll({
-  bulkAll = false, total = 0, perPage = 0, listID = null, routeListIDs = null, scopeListIds = null,
+  bulkAll = false, total = 0, perPage = 0, listID = null, routeListIDs = null, scopeListIds = null, routeStatus = null,
 } = {}) {
   return !bulkAll && total > perPage && (listID === null || listID === undefined)
-    && !hasRouteScope(routeListIDs) && !scopeListIds;
+    && !hasRouteScope(routeListIDs) && !scopeListIds && !routeStatus;
+}
+
+// ---------------------------------------------------------------------------------------------
+// DASHBOARDS-POLISH3-SPEC D2 -- the route status scope
+// ---------------------------------------------------------------------------------------------
+
+// The campaign status enum (models/campaigns.go CampaignStatus*): the only values a route `status`
+// may carry.
+export const CAMPAIGN_STATUSES = Object.freeze(['draft', 'scheduled', 'running', 'paused', 'finished', 'cancelled']);
+
+// routeStatusOf is the route status scope from $route.query: exactly one enum value (a repeated
+// param reads its first element, like evergreen), else null (ignored).
+export function routeStatusOf(query) {
+  const q = query && typeof query === 'object' ? query : {};
+  const v = first(q.status);
+  return typeof v === 'string' && CAMPAIGN_STATUSES.includes(v) ? v : null;
+}
+
+// The interactions that clear the route status scope: the chip's dismissal, a real Lists-select
+// pick (or All lists), any brand-selector change, and the scope pill.
+export const STATUS_CLEARING = Object.freeze(['dismiss', 'list', 'brand', 'scope']);
+
+// routeStatusAfter is the route status scope after an interaction: cleared (null) by a clearing
+// one, else unchanged (paging, sorting, a search keep it).
+export function routeStatusAfter(current, interaction) {
+  if (STATUS_CLEARING.includes(interaction)) {
+    return null;
+  }
+  return CAMPAIGN_STATUSES.includes(current) ? current : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// DASHBOARDS-POLISH3-SPEC D3 -- the All pill and its pref
+// ---------------------------------------------------------------------------------------------
+
+export const SCOPE_KINDS = Object.freeze(['broadcasts', 'automations', 'all']);
+export const SCOPE_KIND_PREF = 'campaigns.scopeKind';
+export const LEGACY_SCOPE_PREF = 'campaigns.scopeAutomations';
+
+// scopeKindPref is the standing scope kind: the string pref when valid, else the legacy boolean
+// (true -> automations) -- read only while the string pref is unset -- else broadcasts.
+export function scopeKindPref(kindPref, legacyAutomations) {
+  if (SCOPE_KINDS.includes(kindPref)) {
+    return kindPref;
+  }
+  return legacyAutomations === true ? 'automations' : 'broadcasts';
+}
+
+// evergreenOfKind / kindOfEvergreen map the pill's kind to the page's evergreen state and back:
+// broadcasts false, automations true, all null.
+export function evergreenOfKind(kind) {
+  if (kind === 'automations') {
+    return true;
+  }
+  if (kind === 'all') {
+    return null;
+  }
+  return false;
+}
+
+export function kindOfEvergreen(evergreen) {
+  if (evergreen === true) {
+    return 'automations';
+  }
+  if (evergreen === null) {
+    return 'all';
+  }
+  return 'broadcasts';
+}
+
+// kindStatusParams is the GET /api/campaigns kind/status params for the page state: evergreen sent
+// as a boolean unless All (null -> omitted), status sent only under the route status scope.
+export function kindStatusParams({ evergreen = false, routeStatus = null } = {}) {
+  const p = {};
+  if (evergreen === true || evergreen === false) {
+    p.evergreen = evergreen;
+  }
+  if (CAMPAIGN_STATUSES.includes(routeStatus)) {
+    p.status = routeStatus;
+  }
+  return p;
+}
+
+// The three boolean consumers of `evergreen`, pinned (stage 2 F2):
+// - the by-query bulk delete carries evergreen only when it is a boolean (All omits it, so the
+//   whole-query delete matches exactly the both-kinds view on screen);
+export function deleteEvergreenParam(evergreen) {
+  return evergreen === true || evergreen === false ? { evergreen } : {};
+}
+
+// - the running-campaign progress poll runs whenever broadcasts are displayed (All included);
+export function pollsStats(evergreen) {
+  return evergreen !== true;
+}
+
+// - New pre-enables the evergreen toggle only from Automations.
+export function preEnablesEvergreen(evergreen) {
+  return evergreen === true;
+}
+
+// displayedRunning is whether the poll has anything on screen to follow: a displayed running
+// BROADCAST. A running evergreen never finishes, so counting it under All would keep a 1/sec poll
+// alive forever (the reason Automations is never polled); in Broadcasts no evergreen is displayed,
+// so this equals the old "any displayed row running" rule there.
+export function displayedRunning(rows) {
+  return (Array.isArray(rows) ? rows : []).some((c) => c && c.status === 'running' && !c.evergreen);
 }

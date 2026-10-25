@@ -30,18 +30,36 @@
                  switching resets the page and the bulk selection (bulk delete is scoped too).
                  Disabled while a fetch is in flight so two quick clicks cannot leave the table
                  showing one kind while the pill (and a bulk delete) is on the other. -->
+            <!-- DASHBOARDS-POLISH3-SPEC D3 -- Broadcasts | Automations | All; the pill's value is the
+                 scope KIND string (campaignsRouteQuery.mjs evergreenOfKind/kindOfEvergreen), All =
+                 evergreen null = no evergreen param. -->
             <b-field class="segmented">
-              <b-radio-button v-model="queryParams.evergreen" :native-value="false" type="is-primary"
+              <b-radio-button v-model="scopeKind" native-value="broadcasts" type="is-primary"
                 :disabled="loading.campaigns"
                 data-cy="scope-broadcasts" @input="onScopeChange">
                 {{ $t('campaigns.typeBroadcasts') }}
               </b-radio-button>
-              <b-radio-button v-model="queryParams.evergreen" :native-value="true" type="is-primary"
+              <b-radio-button v-model="scopeKind" native-value="automations" type="is-primary"
                 :disabled="loading.campaigns"
                 data-cy="scope-automations" @input="onScopeChange">
                 {{ $t('campaigns.typeAutomations') }}
               </b-radio-button>
+              <b-radio-button v-model="scopeKind" native-value="all" type="is-primary"
+                :disabled="loading.campaigns"
+                data-cy="scope-all" @input="onScopeChange">
+                {{ $t('campaigns.typeAll') }}
+              </b-radio-button>
             </b-field>
+          </div>
+          <!-- DASHBOARDS-POLISH3-SPEC D2 -- the route status scope's chip (a Dashboard broadcast
+               link's status=finished): dismissal, a real list pick, a brand-selector change or the
+               scope pill clears it (campaignsRouteQuery.mjs::routeStatusAfter). -->
+          <div v-if="queryParams.routeStatus" class="column is-narrow">
+            <b-tag type="is-primary" size="is-medium" closable
+              :title="$t('campaigns.statusScopeHelp')" data-cy="route-status"
+              @close="onDismissStatus">
+              {{ $t('campaigns.statusScope', { status: $t(`campaigns.status.${queryParams.routeStatus}`) }) }}
+            </b-tag>
           </div>
           <div class="column is-narrow">
             <!-- Fork (list filter) -- server-side list_id filter on GET /api/campaigns.
@@ -382,7 +400,9 @@ import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-l
 import { filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
 import {
-  ROUTE_SCOPE_OPTION, afterBrandChange, campaignsRouteQuery, canSelectAll, listParam, listSelectValue, selectList,
+  LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KIND_PREF, afterBrandChange, campaignsRouteQuery, canSelectAll,
+  deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen, kindStatusParams, listParam,
+  listSelectValue, pollsStats, preEnablesEvergreen, routeStatusAfter, routeStatusOf, scopeKindPref, selectList,
 } from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -413,9 +433,13 @@ export default Vue.extend({
     // forces Automations and exactly "false" forces Broadcasts for this visit; anything else keeps
     // the pref. Applied to the query state only: never written to the sticky
     // campaigns.scopeAutomations pref (a link must not flip it), nor to any other pref.
+    // DASHBOARDS-POLISH3-SPEC D3 -- the standing kind is the string pref campaigns.scopeKind (the
+    // legacy boolean read only while it is unset, never written again); a route evergreen=all
+    // forces All (evergreen null) for this visit. D2 -- a route status (enum-validated) is the
+    // route status scope, in-page state only.
     const fromRoute = campaignsRouteQuery(
       this.$route && this.$route.query,
-      this.$utils.getPref('campaigns.scopeAutomations') === true,
+      evergreenOfKind(scopeKindPref(this.$utils.getPref(SCOPE_KIND_PREF), this.$utils.getPref(LEGACY_SCOPE_PREF))),
     );
     return {
       previewItem: null,
@@ -425,10 +449,13 @@ export default Vue.extend({
         query: '',
         orderBy: 'created_at',
         order: 'desc',
-        // Fork (evergreen) -- false = Broadcasts (default), true = Automations.
-        // Sticky across refresh/navigation via the shared localStorage pref (a route query's
-        // evergreen=true / evergreen=false selects Automations / Broadcasts for this visit only).
+        // Fork (evergreen) -- false = Broadcasts (default), true = Automations, null = All
+        // (POLISH3 D3). Sticky across refresh/navigation via the shared localStorage pref (a route
+        // query's evergreen=true / false / all selects Automations / Broadcasts / All for this
+        // visit only).
         evergreen: fromRoute.evergreen,
+        // DASHBOARDS-POLISH3-SPEC D2 -- the route status scope (one campaign status, or null).
+        routeStatus: routeStatusOf(this.$route && this.$route.query),
         // Fork (list filter) -- null = all lists (no param sent). In-page state only; a route
         // query's single list_id preselects it.
         listID: fromRoute.listID,
@@ -564,12 +591,22 @@ export default Vue.extend({
 
     // Fork (evergreen) -- the scope pill. Resets the page and clears any bulk
     // selection (a stale selection would carry rows of the other kind), then refetches.
+    // DASHBOARDS-POLISH3-SPEC D3 -- writes the string pref campaigns.scopeKind (the legacy
+    // boolean is never written again); D2 -- a scope change clears the route status scope.
     onScopeChange() {
-      this.$utils.setPref('campaigns.scopeAutomations', this.queryParams.evergreen);
+      this.$utils.setPref(SCOPE_KIND_PREF, kindOfEvergreen(this.queryParams.evergreen));
+      this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'scope');
       this.queryParams.page = 1;
       this.bulk.checked = [];
       this.bulk.all = false;
       this.refreshCampaigns();
+    },
+
+    // DASHBOARDS-POLISH3-SPEC D2 -- the status chip's dismissal: the scope clears, the list-change
+    // hygiene and refetch run. Never a pref.
+    onDismissStatus() {
+      this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'dismiss');
+      this.onListChange();
     },
 
     // Fork (list filter) -- same selection hygiene as the scope pill: a stale selection
@@ -597,7 +634,8 @@ export default Vue.extend({
         query: this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' '),
         order_by: this.queryParams.orderBy,
         order: this.queryParams.order,
-        evergreen: this.queryParams.evergreen,
+        // POLISH3 D2/D3 -- evergreen omitted under All; status only under the route status scope.
+        ...kindStatusParams(this.queryParams),
         no_body: true,
       };
 
@@ -636,7 +674,9 @@ export default Vue.extend({
       // indefinitely by design, so polling it is an unbounded 1/sec request stream for
       // a counter nobody watches live. The Automations tab shows the state as of the
       // last fetch: switching to the tab, refreshing, or acting on a campaign refetches.
-      if (this.queryParams.evergreen) {
+      // POLISH3 D3 (stage 2 F2) -- the poll runs whenever broadcasts are displayed: Broadcasts
+      // and All (campaignsRouteQuery.mjs::pollsStats).
+      if (!pollsStats(this.queryParams.evergreen)) {
         return;
       }
 
@@ -682,9 +722,10 @@ export default Vue.extend({
           // finish, so an empty-response condition is never met while an automation is
           // live. The Broadcasts tab filters evergreens out server-side, so once the
           // refetch above lands the finished status, no displayed row is running and the
-          // poll ends -- on an idle tab, after a single request.
-          const displayedRunning = (this.campaigns.results || []).some((c) => c.status === 'running');
-          if (!displayedRunning) {
+          // poll ends -- on an idle tab, after a single request. POLISH3 D3: under All the
+          // displayed running EVERGREENS are not followed (they never finish), so the same rule
+          // ends the poll there too (campaignsRouteQuery.mjs::displayedRunning).
+          if (!displayedRunning(this.campaigns.results)) {
             clearInterval(this.pollID);
           }
         }, () => {
@@ -785,8 +826,9 @@ export default Vue.extend({
           // 'All' is selected, delete by query.
           params.query = this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' ');
           params.all = this.bulk.all;
-          // Fork (evergreen) -- scope the by-query delete to the kind shown on the page.
-          params.evergreen = this.queryParams.evergreen;
+          // Fork (evergreen) -- scope the by-query delete to the kind shown on the page; POLISH3
+          // D3: All omits the param, matching exactly the both-kinds view on screen.
+          Object.assign(params, deleteEvergreenParam(this.queryParams.evergreen));
         }
 
         this.$api.deleteCampaigns(params)
@@ -815,10 +857,22 @@ export default Vue.extend({
     // toggle on the create form (Campaign.vue reads the query param).
     newCampaignRoute() {
       const r = { name: 'campaign', params: { id: 'new' } };
-      if (this.queryParams.evergreen) {
+      // POLISH3 D3 -- only from Automations (never from All).
+      if (preEnablesEvergreen(this.queryParams.evergreen)) {
         r.query = { evergreen: '1' };
       }
       return r;
+    },
+
+    // DASHBOARDS-POLISH3-SPEC D3 -- the pill's value: the kind string over queryParams.evergreen
+    // (false / true / null). The setter runs before onScopeChange (v-model's callback first).
+    scopeKind: {
+      get() {
+        return kindOfEvergreen(this.queryParams.evergreen);
+      },
+      set(v) {
+        this.queryParams.evergreen = evergreenOfKind(v);
+      },
     },
 
     numSelectedCampaigns() {
@@ -841,6 +895,11 @@ export default Vue.extend({
         const next = selectList(this.queryParams, v);
         this.queryParams.listID = next.listID;
         this.queryParams.routeListIDs = next.routeListIDs;
+        // POLISH3 D2 -- a real list pick (or All lists) clears the route status scope; the
+        // disabled placeholder, were it ever emitted, changes nothing.
+        if (v !== ROUTE_SCOPE_OPTION) {
+          this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'list');
+        }
         this.onListChange();
       },
     },
@@ -854,6 +913,7 @@ export default Vue.extend({
         listID: this.queryParams.listID,
         routeListIDs: this.queryParams.routeListIDs,
         scopeListIds: this.scopeListIds,
+        routeStatus: this.queryParams.routeStatus,
       });
     },
   },
@@ -871,6 +931,8 @@ export default Vue.extend({
       const next = afterBrandChange(this.queryParams, this.scopeListIds);
       this.queryParams.listID = next.listID;
       this.queryParams.routeListIDs = next.routeListIDs;
+      // POLISH3 D2 -- any selector change also clears the route status scope.
+      this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'brand');
       this.queryParams.page = 1;
       this.bulk.checked = [];
       this.bulk.all = false;

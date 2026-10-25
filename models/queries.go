@@ -23,6 +23,9 @@ type Queries struct {
 	// Fork (brand matrix, integrations BRAND-MATRIX-SPEC D3) -- the Dashboard's Brand Matrix pane,
 	// interpolated at boot with the charts statement's clicks mode.
 	GetDashboardBrandMatrix *sqlx.Stmt `query:"get-dashboard-brand-matrix"`
+	// Fork (integrations DASHBOARDS-POLISH3-SPEC D5) -- the Brand Usage pane's Languages / Skipped
+	// counts, merged onto the matrix rows (core.GetDashboardBrandMatrix).
+	GetDashboardSkippedLangs *sqlx.Stmt `query:"get-dashboard-skipped-langs"`
 
 	// Fork (client stats, CLIENT-STATS-SPEC D6/D7) -- the Dashboard's live client panel.
 	GetDashboardClients       *sqlx.Stmt `query:"get-dashboard-clients"`

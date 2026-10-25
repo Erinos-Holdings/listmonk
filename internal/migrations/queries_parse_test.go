@@ -63,7 +63,9 @@ func TestBrandAnalyticsQueriesParse(t *testing.T) {
 		"misc.sql": {"get-dashboard-counts-scoped", "get-dashboard-charts-scoped",
 			"get-dashboard-countries", "get-dashboard-countries-scoped",
 			// Fork (brand matrix, integrations BRAND-MATRIX-SPEC D3).
-			"get-dashboard-brand-matrix"},
+			"get-dashboard-brand-matrix",
+			// Fork (integrations DASHBOARDS-POLISH3-SPEC D5).
+			"get-dashboard-skipped-langs"},
 	} {
 		b, err := os.ReadFile(filepath.Join(root, "queries", file))
 		if err != nil {
@@ -89,7 +91,7 @@ func TestBrandAnalyticsQueriesParse(t *testing.T) {
 			// Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC I6) -- the charts query is
 			// interpolated at boot the same way (the clicks mode).
 			if (n == "get-dashboard-counts-scoped" || n == "get-dashboard-charts-scoped" ||
-				n == "get-dashboard-brand-matrix") && tags["raw"] == "true" {
+				n == "get-dashboard-brand-matrix" || n == "get-dashboard-skipped-langs") && tags["raw"] == "true" {
 				delete(tags, "raw")
 			}
 			if len(tags) != 0 {
@@ -229,6 +231,33 @@ func TestDashboardBrandMatrixQueryInterpolates(t *testing.T) {
 	}
 	if strings.Contains(got.Query, "'UTC'") {
 		t.Error("the matrix query buckets in UTC")
+	}
+
+	// DASHBOARDS-POLISH3-SPEC I5 -- the skipped-language statement shares the window: its zone
+	// literal is ONE and the SAME as the charts and matrix statements'. It is not interpolated, so
+	// it carries no percent sign at all, and its only tag is raw.
+	sk, ok := q["get-dashboard-skipped-langs"]
+	if !ok || !strings.Contains(sk.Query, "SELECT") {
+		t.Fatal("get-dashboard-skipped-langs missing or empty after parse")
+	}
+	if len(sk.Tags) != 1 || sk.Tags["raw"] != "true" {
+		t.Errorf("get-dashboard-skipped-langs tags %v, want only raw=true (a colon-bearing comment line?)", sk.Tags)
+	}
+	sz := zoneRe.FindAllStringSubmatch(sk.Query, -1)
+	if len(sz) != 1 || len(cz) != 1 || len(mz) != 1 || sz[0][1] != cz[0][1] || sz[0][1] != mz[0][1] {
+		t.Errorf("zone literals: skipped %v, charts %v, matrix %v -- want exactly one each, equal", sz, cz, mz)
+	}
+	if strings.Contains(sk.Query, "'UTC'") {
+		t.Error("the skipped-language query buckets in UTC")
+	}
+	if strings.Contains(sk.Query, "%") {
+		t.Error("the skipped-language query carries a percent sign")
+	}
+	// The one segment and language definitions, never a hand-rolled status join (I5).
+	for _, fn := range []string{"subscription_segment(", "subscriber_lang("} {
+		if !strings.Contains(sk.Query, fn) {
+			t.Errorf("the skipped-language query does not use %s", fn)
+		}
 	}
 
 	// I2 -- the classPredicate("hard","block") output, verbatim, in the prepared SQL.

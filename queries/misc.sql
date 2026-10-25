@@ -385,6 +385,79 @@ SELECT JSON_BUILD_OBJECT(
     'scoped', NOT $2::BOOLEAN
 ) AS data;
 
+-- name: get-dashboard-skipped-langs
+-- raw: true
+-- Fork (integrations listmonk/DASHBOARDS-POLISH3-SPEC D5/I5). The Brand Usage pane's Languages /
+-- Skipped counts, live (no Lambda) -- per brand and per language L in fr, es, de, it, how many
+-- ACTIVE subscribers in language L sit on a brand list whose window campaigns all skipped L.
+-- $1/$2 exactly as get-dashboard-brand-matrix ($1 = the scope's list ids, $2 = unscoped); the
+-- matrix endpoint merges the rows onto its own (internal/core/dashboard.go MergeSkippedLangs).
+--   lists = the brand's ACTIVE lists (any type; an archived list contributes nothing), branded as
+--     the matrix's rows are (list_brand_tag, unattributed never).
+--   activity on a list = a REGULAR campaign on it that is either a FINISHED non-evergreen with
+--     started_at in the window and sent above zero, or a currently RUNNING evergreen. Window = the
+--     60 America/Denver calendar days ending yesterday there -- the charts and matrix window; the
+--     zone is the ONE literal in the zone CTE below and MUST equal theirs (a fork test asserts it).
+--   a campaign's language (attribs.lang, a closed set) decides its role for L -- exactly L, or NO
+--     language (it targets everyone -- models.Campaign.Lang), COVERS L; a SPECIFIC language other
+--     than L is an ANCHOR. A list is L-skipping when it has an anchor and no cover for L.
+--   count = DISTINCT subscribers whose subscriber_lang (the one language partition) is L and whose
+--     subscription_segment (the one segment definition) is active, on ANY of the brand's
+--     L-skipping lists -- one subscriber counts once however many lists or campaigns missed them.
+--     other and none languages are never counted.
+--   lists = the L-skipping lists holding at least one counted subscriber, ascending (the pane's
+--     link set) -- so a language with count 0 has no lists. Only (brand, lang) pairs with a
+--     counted subscriber are returned; the endpoint fills the rest with count 0 and no lists.
+-- No percent sign anywhere in this text (the house rule for raw statements).
+WITH lst AS (
+    SELECT id, optin, list_brand_tag(tags) AS brand FROM lists
+    WHERE ($2::BOOLEAN OR id = ANY($1::INT[])) AND status = 'active'
+        AND list_brand_tag(tags) IS NOT NULL AND list_brand_tag(tags) <> 'unattributed'
+),
+zone AS (
+    SELECT 'America/Denver'::TEXT AS tz
+),
+win AS (
+    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE - 1 AS d1 FROM zone
+),
+bounds AS (
+    SELECT d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win
+),
+acts AS (
+    SELECT DISTINCT cl.list_id, NULLIF(c.attribs->>'lang', '') AS lang
+    FROM campaigns c
+    JOIN campaign_lists cl ON (cl.campaign_id = c.id)
+    WHERE cl.list_id IN (SELECT id FROM lst)
+        AND c.type = 'regular'
+        AND (
+            (c.evergreen = FALSE AND c.status = 'finished' AND c.sent > 0
+                AND c.started_at >= (SELECT t0 FROM bounds) AND c.started_at < (SELECT t1 FROM bounds))
+            OR (c.evergreen = TRUE AND c.status = 'running')
+        )
+),
+langs AS (
+    SELECT UNNEST(ARRAY['fr', 'es', 'de', 'it']::TEXT[]) AS lang
+),
+skipping AS (
+    SELECT l.brand, l.id AS list_id, l.optin, g.lang FROM lst l CROSS JOIN langs g
+    WHERE EXISTS (SELECT 1 FROM acts a WHERE a.list_id = l.id AND a.lang IS NOT NULL AND a.lang <> g.lang)
+        AND NOT EXISTS (SELECT 1 FROM acts a WHERE a.list_id = l.id AND (a.lang IS NULL OR a.lang = g.lang))
+),
+hits AS (
+    SELECT sk.brand, sk.lang, sk.list_id, sl.subscriber_id
+    FROM skipping sk
+    JOIN subscriber_lists sl ON (sl.list_id = sk.list_id)
+    JOIN subscribers s ON (s.id = sl.subscriber_id)
+    WHERE subscription_segment(sl.status, sl.meta, s.status, sk.optin) = 'active'
+        AND subscriber_lang(s.attribs) = sk.lang
+),
+agg AS (
+    SELECT brand, lang, COUNT(DISTINCT subscriber_id) AS n, ARRAY_AGG(DISTINCT list_id ORDER BY list_id) AS lists
+    FROM hits GROUP BY brand, lang
+)
+SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('brand', brand, 'lang', lang, 'count', n, 'lists', lists) ORDER BY brand, lang), '[]') AS data
+FROM agg;
+
 -- name: get-dashboard-clients
 -- Fork (client stats, CLIENT-STATS-SPEC D6). Views and clicks per email-client token for the
 -- main Dashboard's client panel over every campaign, live (no materialized view). Any scope (a

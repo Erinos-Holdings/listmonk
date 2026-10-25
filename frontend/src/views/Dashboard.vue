@@ -109,7 +109,7 @@
                   :data-cy="`matrix-spam-${row.brand || 'totals'}`">
                   {{ row.totals ? '' : matrixCell(row, 'spam_rate') }}</span>
                 <!-- DASHBOARDS-POLISH-SPEC D1: red when the displayed rate crosses the row's STORED
-                     threshold (brandMatrix.mjs::engagementCell decides; % mode only). -->
+                     threshold (brandMatrix.mjs::engagementCell decides; POLISH3 D1: both modes). -->
                 <span v-else :class="engagementCell(row, c.field).cls || null" :title="c.help ? $t(c.help) : null"
                   :data-cy="`matrix-${c.field}-${row.brand || 'totals'}`">{{ matrixCell(row, c.field) }}</span>
               </td>
@@ -147,18 +147,36 @@
                 {{ $t(s.label) }}
               </th>
             </tr>
+            <!-- DASHBOARDS-POLISH3-SPEC D4/D5 -- brandUsage.mjs::headerLayout: plain leaves span the
+                 two lower header rows; a sub-group (No purchase, Skipped) puts its label over its
+                 leaves (3d | 7d | 15d; FR ES DE IT). -->
             <tr>
-              <th class="has-text-right" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"
+              <th rowspan="2" class="has-text-right" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"
                 :aria-sort="buAria('score')" @click="onUsageSort('score')">
                 {{ $t('dashboard.usage.score') }}<span class="bm-arrow">{{ buArrow('score') }}</span>
               </th>
-              <th :class="buTh('brand')" :aria-sort="buAria('brand')" @click="onUsageSort('brand')">
+              <th rowspan="2" :class="buTh('brand')" :aria-sort="buAria('brand')" @click="onUsageSort('brand')">
                 {{ $t('dashboard.matrix.brand') }}<span class="bm-arrow">{{ buArrow('brand') }}</span>
               </th>
-              <th v-for="c in usageColumns" :key="c.field" class="has-text-centered"
-                :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]" :title="$t(c.help)"
-                :aria-sort="buAria(c.field)" @click="onUsageSort(c.field)">
-                {{ $t(c.label) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
+              <template v-for="c in usageHeader.row2">
+                <th v-if="c.kind === 'group'" :key="`g-${c.key}`" :colspan="c.span"
+                  class="has-text-centered bu-subgroup" :class="[`bu-band-${c.band}`, { 'bu-start': c.first }]"
+                  :title="$t(c.help)" :data-cy="`usage-group-${c.key}`">
+                  {{ $t(c.label) }}
+                </th>
+                <th v-else :key="c.field" rowspan="2" class="has-text-centered"
+                  :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]" :title="$t(usageMeta(c.field).help)"
+                  :aria-sort="buAria(c.field)" @click="onUsageSort(c.field)">
+                  {{ usageLabel(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
+                </th>
+              </template>
+            </tr>
+            <tr>
+              <th v-for="c in usageHeader.row3" :key="c.field" class="has-text-centered"
+                :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.groupStart }]"
+                :title="$t(usageMeta(c.field).help)" :aria-sort="buAria(c.field)" @click="onUsageSort(c.field)"
+                :data-cy="`usage-head-${c.field}`">
+                {{ usageLabel(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
               </th>
             </tr>
           </thead>
@@ -187,13 +205,21 @@
                     :aria-label="usageCell(row, c.field).tooltip">{{ ci.n }}</span>
                 </component>
                 <!-- DASHBOARDS-POLISH2-SPEC D2: the Cadence / Last broadcast text links the brand's
-                     lists in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links. -->
+                     lists in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links.
+                     POLISH3 D2/D5: the broadcast links carry status=finished; a Skipped count > 0
+                     is red and links its skipping lists in the All scope. -->
                 <component v-else :is="usageLink(row, c.field) ? 'router-link' : 'span'"
                   :to="usageLink(row, c.field) ? { name: 'campaigns', query: usageLink(row, c.field) } : null"
                   :class="usageCell(row, c.field).cls" :title="usageTitle(row, c.field)"
                   :data-cy="`usage-${c.field}-${row.brand}`">
                   <span>{{ usageCell(row, c.field).text }}</span>
                 </component>
+                <!-- DASHBOARDS-POLISH3-SPEC D4 (stage 2 F5) -- one amber ⚠ per No purchase step
+                     with no parseable days, after the sub-group's last leaf; its parser error in
+                     the tooltip (brandUsage.mjs::cellBadges). -->
+                <span v-for="(b, bi) in usageBadges(row, c.field)" :key="`w-${bi}`"
+                  class="bu-warn has-text-warning-dark ml-1" :title="b.tooltip" :aria-label="b.tooltip"
+                  :data-cy="`usage-npwarn-${row.brand}`">{{ b.glyph }}</span>
               </td>
             </tr>
             <tr v-if="!matrix.loading && !usageTableRows.length">
@@ -528,7 +554,8 @@ import {
   spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  SECTIONS as USAGE_SECTIONS, cell as usageCellOf, cellLink as usageCellLink, clickSort as usageClickSort, latestAsOf,
+  SECTIONS as USAGE_SECTIONS, cell as usageCellOf, cellBadges as usageCellBadges, cellLink as usageCellLink,
+  clickSort as usageClickSort, columnMeta as usageColumnMeta, headerLayout as usageHeaderLayout, latestAsOf,
   linkTip as usageLinkTip,
   loadState as loadUsageState, mountainRunTime, saveState as saveUsageState, shapeRows as shapeUsageRows,
   sortRows as sortUsageRows,
@@ -627,6 +654,22 @@ export default Vue.extend({
 
     usageCell(row, field) {
       return usageCellOf(row, field, (k, p) => this.$t(k, p));
+    },
+
+    // DASHBOARDS-POLISH3-SPEC D4 -- the No purchase sub-group's ⚠ badges (last leaf only).
+    usageBadges(row, field) {
+      return usageCellBadges(row, field, (k, p) => this.$t(k, p));
+    },
+
+    // A leaf column's header label and hover (brandUsage.mjs::columnMeta): an i18n key with params,
+    // or a literal (the Skipped language codes).
+    usageMeta(field) {
+      return usageColumnMeta(field);
+    },
+
+    usageLabel(field) {
+      const m = usageColumnMeta(field);
+      return m.text !== undefined ? m.text : this.$t(m.label, m.params);
     },
 
     // V2 D4; DASHBOARDS-POLISH2-SPEC D2 -- the cell's Campaigns query ({ list_id, evergreen }: one
@@ -971,21 +1014,17 @@ export default Vue.extend({
       return USAGE_SECTIONS.map((s, i) => ({ ...s, band: i % 2 === 0 ? 'grey' : 'white' }));
     },
 
-    // The section columns in display order, each with its band and whether it opens its section.
+    // The section leaf columns in display order, each with its band and whether it opens its
+    // section (POLISH3 D4/D5: the sub-group leaves included -- labels come from usageMeta).
     usageColumns() {
-      const meta = {
-        cadence: { label: 'dashboard.usage.cadence', help: 'dashboard.usage.cadenceHelp' },
-        lastBroadcast: { label: 'dashboard.usage.lastBroadcast', help: 'dashboard.usage.lastBroadcastHelp' },
-        journeys: { label: 'dashboard.usage.journeys', help: 'dashboard.usage.journeysHelp' },
-        welcome: { label: 'dashboard.usage.welcome', help: 'dashboard.usage.welcomeHelp' },
-        purchase: { label: 'dashboard.usage.purchase', help: 'dashboard.usage.purchaseHelp' },
-        noPurchase: { label: 'dashboard.usage.noPurchase', help: 'dashboard.usage.noPurchaseHelp' },
-        attribution: { label: 'dashboard.usage.attribution', help: 'dashboard.usage.attributionHelp' },
-        sunset: { label: 'dashboard.usage.sunset', help: 'dashboard.usage.sunsetHelp' },
-      };
       return this.usageSections.flatMap((s) => s.fields.map((f, i) => ({
-        field: f, ...meta[f], band: s.band, first: i === 0,
+        field: f, band: s.band, first: i === 0,
       })));
+    },
+
+    // POLISH3 D4/D5 -- the two lower header rows (brandUsage.mjs::headerLayout).
+    usageHeader() {
+      return usageHeaderLayout();
     },
 
     matrixSubColumns() {

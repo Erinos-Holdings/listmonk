@@ -304,7 +304,7 @@ test('I2: breachesThreshold compares the displayed rate against the stored value
   assert.equal(breachesThreshold(TH, 'clicks', null, { sent: 1000 }), false);
 });
 
-test('I2: engagementCell -- stored values only, % mode only, no thresholds colors nothing', () => {
+test('I2 / POLISH3 I1: engagementCell -- stored values only, both modes alike, no thresholds colors nothing', () => {
   const red = { cls: BREACH_CLASS };
   const plain = { cls: '' };
   assert.equal(BREACH_CLASS, 'has-text-danger'); // the GP Spam % issues treatment
@@ -315,8 +315,11 @@ test('I2: engagementCell -- stored values only, % mode only, no thresholds color
   assert.deepEqual(engagementCell(r, 'hard_bounces', 'pct'), red); // 4% >= 3%
   assert.deepEqual(engagementCell(r, 'complaints', 'pct'), red); // 0.5% >= 0.4%, 5 >= minCount
   assert.deepEqual(engagementCell(r, 'blocks', 'pct'), plain);
-  // Count (#) mode never colors.
-  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => assert.deepEqual(engagementCell(r, f, 'num'), plain));
+  // DASHBOARDS-POLISH3-SPEC I1 (replacing POLISH I2's "Count (#) mode never colors"): the breach is
+  // rate-based and identical in both modes -- same inputs, both cells colored (or both plain).
+  ['clicks', 'hard_bounces', 'complaints', 'blocks'].forEach((f) => assert.deepEqual(engagementCell(r, f, 'num'), engagementCell(r, f, 'pct')));
+  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => assert.deepEqual(engagementCell(r, f, 'num'), red));
+  assert.deepEqual(engagementCell(r, 'blocks', 'num'), plain);
   // A row without thresholds (an older document) colors nothing.
   const old = mrow({
     sent: 1000, clicks: 0, hard_bounces: 900, complaints: 900,

@@ -1060,8 +1060,26 @@ section.dashboard {
     th.bu-start, td.bu-start {
       border-left: 1px solid #dbdee2;
     }
-    th.bu-sorted, td.bu-sorted {
-      background-image: linear-gradient(rgba(54, 54, 54, 0.06), rgba(54, 54, 54, 0.06));
+    /* DASHBOARDS-POLISH3-SPEC D7 (user, 2026-10-25): the sorted column reads unmistakably at a
+    glance -- still NEUTRAL, the wash roughly doubled (0.06 -> 0.12) and the sorted header cell a
+    step darker (0.18). The one value pair; the Brand Matrix's bm-sorted is untouched. */
+    td.bu-sorted {
+      background-image: linear-gradient(rgba(54, 54, 54, 0.12), rgba(54, 54, 54, 0.12));
+    }
+    th.bu-sorted {
+      background-image: linear-gradient(rgba(54, 54, 54, 0.18), rgba(54, 54, 54, 0.18));
+    }
+    /* POLISH3 D4/D5: a sub-group label (No purchase, Skipped) over its leaves. */
+    th.bu-subgroup {
+      font-size: 0.8rem;
+      border-bottom-width: 1px;
+    }
+    th.bu-substart {
+      border-left: 1px solid #dbdee2;
+    }
+    .bu-warn {
+      cursor: help;
+      font-weight: bold;
     }
     tr.bu-zma td {
       opacity: 0.55;

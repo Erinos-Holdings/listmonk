@@ -2,7 +2,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ROUTE_SCOPE_OPTION, afterBrandChange, campaignsRouteQuery, canSelectAll, listParam, listSelectValue, selectList,
+  CAMPAIGN_STATUSES, LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KINDS, SCOPE_KIND_PREF, afterBrandChange,
+  campaignsRouteQuery, canSelectAll, deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen,
+  kindStatusParams, listParam, listSelectValue, pollsStats, preEnablesEvergreen, routeStatusAfter, routeStatusOf,
+  scopeKindPref, selectList,
 } from './campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 
 test('I8: a numeric list_id string selects the list; garbage is ignored', () => {
@@ -125,4 +128,130 @@ test('I2 (stage 2 F1): "select all N" is never offered under the route scope, th
   // After the route scope clears, the affordance comes back.
   const cleared = selectList({ listID: null, routeListIDs: [3, 9] }, null);
   assert.equal(canSelectAll({ ...base, ...cleared }), true);
+});
+
+// ---------------------------------------------------------------------------------------------
+// DASHBOARDS-POLISH3-SPEC I2 -- the route status scope
+// ---------------------------------------------------------------------------------------------
+
+test('POLISH3 I2: route status -- exactly one enum value, anything else ignored', () => {
+  assert.deepEqual(CAMPAIGN_STATUSES, ['draft', 'scheduled', 'running', 'paused', 'finished', 'cancelled']);
+  CAMPAIGN_STATUSES.forEach((s) => assert.equal(routeStatusOf({ status: s }), s));
+  ['', 'FINISHED', 'done', 'finished ', 'canceled', 'all', 1, null].forEach((v) => assert.equal(routeStatusOf({ status: v }), null, String(v)));
+  assert.equal(routeStatusOf({}), null);
+  assert.equal(routeStatusOf(null), null);
+  // A repeated param reads its first element (the evergreen rule).
+  assert.equal(routeStatusOf({ status: ['finished', 'draft'] }), 'finished');
+  assert.equal(routeStatusOf({ status: ['nope', 'draft'] }), null);
+  // The rest of the route read is untouched by a status.
+  assert.deepEqual(
+    campaignsRouteQuery({ list_id: ['3', '9'], evergreen: 'false', status: 'finished' }, true),
+    { listID: null, routeListIDs: [3, 9], evergreen: false },
+  );
+});
+
+test('POLISH3 I2: the status scope narrows the fetch; All omits evergreen', () => {
+  assert.deepEqual(kindStatusParams({ evergreen: false, routeStatus: 'finished' }), { evergreen: false, status: 'finished' });
+  assert.deepEqual(kindStatusParams({ evergreen: true, routeStatus: null }), { evergreen: true });
+  assert.deepEqual(kindStatusParams({ evergreen: null, routeStatus: null }), {});
+  assert.deepEqual(kindStatusParams({ evergreen: null, routeStatus: 'draft' }), { status: 'draft' });
+  assert.deepEqual(kindStatusParams({ evergreen: false, routeStatus: 'bogus' }), { evergreen: false });
+  assert.deepEqual(kindStatusParams(), { evergreen: false });
+});
+
+test('POLISH3 I2: dismissal and every list/selector/scope interaction clear the status scope; others keep it', () => {
+  ['dismiss', 'list', 'brand', 'scope'].forEach((i) => assert.equal(routeStatusAfter('finished', i), null, i));
+  ['page', 'sort', 'search', undefined].forEach((i) => assert.equal(routeStatusAfter('finished', i), 'finished', String(i)));
+  assert.equal(routeStatusAfter(null, 'page'), null);
+  assert.equal(routeStatusAfter('bogus', 'page'), null);
+});
+
+test('POLISH3 I2: "select all N" is never offered under the route status scope', () => {
+  const base = {
+    bulkAll: false, total: 100, perPage: 20, listID: null, routeListIDs: null, scopeListIds: null, routeStatus: null,
+  };
+  assert.equal(canSelectAll(base), true);
+  assert.equal(canSelectAll({ ...base, routeStatus: 'finished' }), false);
+  assert.equal(canSelectAll({ ...base, routeStatus: routeStatusAfter('finished', 'dismiss') }), true);
+});
+
+test('POLISH3 I2/I3: the status and kind helpers write nothing -- no pref, no input mutation', () => {
+  const q = Object.freeze({ status: 'finished', evergreen: 'all' });
+  routeStatusOf(q);
+  campaignsRouteQuery(q, false);
+  assert.deepEqual(q, { status: 'finished', evergreen: 'all' });
+  const s = Object.freeze({ evergreen: null, routeStatus: 'finished' });
+  kindStatusParams(s);
+  assert.deepEqual(s, { evergreen: null, routeStatus: 'finished' });
+});
+
+// ---------------------------------------------------------------------------------------------
+// DASHBOARDS-POLISH3-SPEC I3 -- the All pill and the pref migration
+// ---------------------------------------------------------------------------------------------
+
+test('POLISH3 I3: campaigns.scopeKind is read; the legacy boolean only while it is unset', () => {
+  assert.equal(SCOPE_KIND_PREF, 'campaigns.scopeKind');
+  assert.equal(LEGACY_SCOPE_PREF, 'campaigns.scopeAutomations');
+  assert.deepEqual(SCOPE_KINDS, ['broadcasts', 'automations', 'all']);
+  SCOPE_KINDS.forEach((k) => {
+    assert.equal(scopeKindPref(k, true), k);
+    assert.equal(scopeKindPref(k, false), k);
+    assert.equal(scopeKindPref(k, null), k);
+  });
+  // Unset (or garbage) string pref -> the legacy boolean decides.
+  assert.equal(scopeKindPref(null, true), 'automations');
+  assert.equal(scopeKindPref(null, false), 'broadcasts');
+  assert.equal(scopeKindPref(null, null), 'broadcasts');
+  assert.equal(scopeKindPref('ALL', true), 'automations');
+  assert.equal(scopeKindPref(true, null), 'broadcasts');
+});
+
+test('POLISH3 I3: kind <-> evergreen -- All is null', () => {
+  assert.equal(evergreenOfKind('broadcasts'), false);
+  assert.equal(evergreenOfKind('automations'), true);
+  assert.equal(evergreenOfKind('all'), null);
+  assert.equal(evergreenOfKind('bogus'), false);
+  assert.equal(kindOfEvergreen(false), 'broadcasts');
+  assert.equal(kindOfEvergreen(true), 'automations');
+  assert.equal(kindOfEvergreen(null), 'all');
+  SCOPE_KINDS.forEach((k) => assert.equal(kindOfEvergreen(evergreenOfKind(k)), k));
+});
+
+test('POLISH3 I3: route evergreen all/true/false override the pref for the load; anything else keeps it', () => {
+  [true, false, null].forEach((pref) => {
+    assert.equal(campaignsRouteQuery({ evergreen: 'all' }, pref).evergreen, null);
+    assert.equal(campaignsRouteQuery({ evergreen: 'true' }, pref).evergreen, true);
+    assert.equal(campaignsRouteQuery({ evergreen: 'false' }, pref).evergreen, false);
+    ['ALL', 'All', '', 'both'].forEach((v) => assert.equal(campaignsRouteQuery({ evergreen: v }, pref).evergreen, pref, v));
+    assert.equal(campaignsRouteQuery({}, pref).evergreen, pref);
+  });
+  // The pref read through the migration: a standing All pref is null.
+  assert.equal(campaignsRouteQuery({}, evergreenOfKind(scopeKindPref('all', true))).evergreen, null);
+  assert.deepEqual(
+    campaignsRouteQuery({ list_id: ['4', '8'], evergreen: 'all' }, false),
+    { listID: null, routeListIDs: [4, 8], evergreen: null },
+  );
+});
+
+test('POLISH3 D3 (stage 2 F2): the three boolean consumers of evergreen are pinned', () => {
+  // By-query delete: omits evergreen under All.
+  assert.deepEqual(deleteEvergreenParam(null), {});
+  assert.deepEqual(deleteEvergreenParam(false), { evergreen: false });
+  assert.deepEqual(deleteEvergreenParam(true), { evergreen: true });
+  // Progress polling: whenever broadcasts are displayed (All included).
+  assert.equal(pollsStats(false), true);
+  assert.equal(pollsStats(null), true);
+  assert.equal(pollsStats(true), false);
+  // New pre-enables the evergreen toggle only from Automations.
+  assert.equal(preEnablesEvergreen(true), true);
+  assert.equal(preEnablesEvergreen(false), false);
+  assert.equal(preEnablesEvergreen(null), false);
+});
+
+test('POLISH3 D3: the poll follows displayed running BROADCASTS only (a running evergreen never ends it under All)', () => {
+  assert.equal(displayedRunning([{ status: 'running', evergreen: false }]), true);
+  assert.equal(displayedRunning([{ status: 'running', evergreen: true }]), false);
+  assert.equal(displayedRunning([{ status: 'running', evergreen: true }, { status: 'running' }]), true);
+  assert.equal(displayedRunning([{ status: 'finished', evergreen: false }]), false);
+  assert.equal(displayedRunning(null), false);
 });

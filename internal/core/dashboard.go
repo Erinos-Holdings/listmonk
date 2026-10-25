@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/jmoiron/sqlx/types"
@@ -71,6 +72,8 @@ func (c *Core) dashboardCharts(listIDs []int, allCampaigns, unscoped bool) (type
 
 // GetDashboardBrandMatrix (fork, brand matrix, integrations BRAND-MATRIX-SPEC D3/D7) runs the one
 // matrix statement: listIDs is the scope (ignored when unscoped, which reads every list). Live.
+// DASHBOARDS-POLISH3-SPEC D5/I6 -- the skipped-language statement runs over the SAME scope and its
+// counts are merged onto every row as `skipped` (MergeSkippedLangs).
 func (c *Core) GetDashboardBrandMatrix(listIDs []int, unscoped bool) (types.JSONText, error) {
 	if listIDs == nil {
 		listIDs = []int{}
@@ -82,7 +85,102 @@ func (c *Core) GetDashboardBrandMatrix(listIDs []int, unscoped bool) (types.JSON
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard brand matrix", "error", pqErrMsg(err)))
 	}
 
-	return out, nil
+	var skipped types.JSONText
+	if err := c.q.GetDashboardSkippedLangs.Get(&skipped, pq.Array(listIDs), unscoped); err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard skipped languages", "error", pqErrMsg(err)))
+	}
+
+	merged, err := MergeSkippedLangs(out, skipped)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard brand matrix", "error", err.Error()))
+	}
+	return merged, nil
+}
+
+// SkippedLangs (fork, integrations DASHBOARDS-POLISH3-SPEC D5) are the languages the Brand Usage
+// pane's Skipped leaves show, in order -- English excluded by design (international transparency).
+var SkippedLangs = []string{"fr", "es", "de", "it"}
+
+// SkippedLang is one language's skipped entry on a matrix row.
+type SkippedLang struct {
+	Count int   `json:"count"`
+	Lists []int `json:"lists"`
+}
+
+// MergeSkippedLangs (DASHBOARDS-POLISH3-SPEC D5/I6) puts `skipped` on EVERY matrix row: each of
+// SkippedLangs as {count, lists}, {0, []} when the skipped statement returned nothing for that
+// (brand, lang). The row's other keys pass through verbatim (json.RawMessage); the document's other
+// top-level keys (scoped) too.
+func MergeSkippedLangs(matrix, skipped types.JSONText) (types.JSONText, error) {
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(matrix, &doc); err != nil {
+		return nil, err
+	}
+	var rows []map[string]json.RawMessage
+	if raw, ok := doc["rows"]; ok && len(raw) > 0 {
+		if err := json.Unmarshal(raw, &rows); err != nil {
+			return nil, err
+		}
+	}
+
+	var found []struct {
+		Brand string `json:"brand"`
+		Lang  string `json:"lang"`
+		Count int    `json:"count"`
+		Lists []int  `json:"lists"`
+	}
+	if len(skipped) > 0 {
+		if err := json.Unmarshal(skipped, &found); err != nil {
+			return nil, err
+		}
+	}
+	byBrand := map[string]map[string]SkippedLang{}
+	for _, f := range found {
+		if byBrand[f.Brand] == nil {
+			byBrand[f.Brand] = map[string]SkippedLang{}
+		}
+		lists := f.Lists
+		if lists == nil {
+			lists = []int{}
+		}
+		byBrand[f.Brand][f.Lang] = SkippedLang{Count: f.Count, Lists: lists}
+	}
+
+	for _, row := range rows {
+		var brand string
+		if raw, ok := row["brand"]; ok {
+			_ = json.Unmarshal(raw, &brand)
+		}
+		out := make(map[string]SkippedLang, len(SkippedLangs))
+		for _, l := range SkippedLangs {
+			s, ok := byBrand[brand][l]
+			if !ok {
+				s = SkippedLang{Count: 0, Lists: []int{}}
+			}
+			out[l] = s
+		}
+		b, err := json.Marshal(out)
+		if err != nil {
+			return nil, err
+		}
+		row["skipped"] = b
+	}
+
+	if rows == nil {
+		rows = []map[string]json.RawMessage{}
+	}
+	rb, err := json.Marshal(rows)
+	if err != nil {
+		return nil, err
+	}
+	doc["rows"] = rb
+	b, err := json.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	return types.JSONText(b), nil
 }
 
 // GetDashboardClients (fork, client stats, CLIENT-STATS-SPEC D6) returns views and clicks per

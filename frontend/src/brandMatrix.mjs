@@ -255,10 +255,13 @@ export function displayedRate(row, field) {
 }
 
 // engagementCell is an Engagement cell's presentation: { cls } -- BREACH_CLASS when the displayed
-// rate crosses the row's stored threshold with its floor met, in % mode only; '' otherwise. The
-// totals row reads the thresholds totalsRow copied from its first carrier.
+// rate crosses the row's stored threshold with its floor met; '' otherwise. The totals row reads
+// the thresholds totalsRow copied from its first carrier. DASHBOARDS-POLISH3-SPEC D1 (replacing
+// POLISH D1's "% mode only"): the breach is a ROW property decided from the rate in BOTH modes --
+// the mode only picks which figure (rate or count) wears it, so `mode` no longer changes the result.
+// eslint-disable-next-line no-unused-vars
 export function engagementCell(row, field, mode = DEFAULT_STATE.mode) {
-  if (!row || mode !== 'pct') {
+  if (!row) {
     return { cls: '' };
   }
   const hit = breachesThreshold(row.thresholds, field, displayedRate(row, field), { sent: row.sent, complaints: row.complaints });
