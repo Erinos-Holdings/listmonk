@@ -132,7 +132,7 @@
     <section v-else-if="pane === 'usage'" class="brand-usage relative" data-cy="brand-usage">
       <b-table :data="usageTableRows" :loading="matrix.loading" hoverable narrowed
         :row-class="(row) => (row.zma ? 'bu-zma' : '')"
-        backend-sorting :default-sort="[usage.sort.field, usage.sort.order]" default-sort-direction="desc"
+        ref="usageTable" backend-sorting :default-sort="[usage.sort.field, usage.sort.order]"
         @sort="onUsageSort" data-cy="usage-table">
         <b-table-column v-slot="props" field="brand" :label="$t('dashboard.matrix.brand')" sortable>
           <span :data-cy="`usage-brand-${props.row.brand}`">{{ props.row.label }}</span>
@@ -455,7 +455,7 @@ import {
   ENGAGEMENT_FIELDS, cellText, clickSort, initialPane, loadState, saveState, sessionStore, shapeRows, spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  cell as usageCellOf, latestAsOf, loadState as loadUsageState, saveState as saveUsageState, shapeRows as shapeUsageRows,
+  cell as usageCellOf, latestAsOf, loadState as loadUsageState, onSortClick, saveState as saveUsageState, shapeRows as shapeUsageRows,
   sortRows as sortUsageRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
@@ -537,9 +537,21 @@ export default Vue.extend({
       }
     },
 
-    // Fork (brand usage, D7) -- a header click is brandUsage.mjs's sort; persisted per session.
-    onUsageSort(field, order) {
-      this.usage.sort = { field, order };
+    // Fork (brand usage, D7) -- a header click is brandUsage.mjs::onSortClick (the Brands.vue onSort
+    // isAsc guard): a fresh column takes its default direction (Brand asc, every other desc) and
+    // the arrow is flipped to match; a repeat click is Buefy's own toggle. If isAsc is ever not a
+    // boolean (a Buefy upgrade), Buefy's direction stands so the arrow and the data cannot disagree.
+    onUsageSort(field, direction) {
+      const { usageTable: table } = this.$refs;
+      const next = onSortClick(this.usage.sort, field, direction);
+      if (next.flipArrow) {
+        if (table && typeof table.isAsc === 'boolean') {
+          table.isAsc = false;
+        } else {
+          next.sort = { field, order: direction };
+        }
+      }
+      this.usage.sort = next.sort;
       saveUsageState(sessionStore(window), { sort: this.usage.sort });
     },
 

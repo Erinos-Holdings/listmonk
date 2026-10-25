@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_STATE, MISSING, STORAGE_KEY, boolCell, broadcastTip, cell, loadState, saveState, shapeRows, sortRows,
-  latestAsOf, sortValue, stateCell, triggerTip,
+  defaultOrder, latestAsOf, onSortClick, sortValue, stateCell, triggerTip,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -168,6 +168,24 @@ test('I7: default sort -- Last broadcast worst first: never, then daysSince desc
   assert.equal(sortValue(rows[0], 'welcome'), 0);
   assert.equal(sortValue(rows[3], 'purchase'), 1);
   assert.equal(sortValue(rows[3], 'welcome'), null);
+});
+
+test('D7 / stage 4 F1: header clicks -- first click on Brand asc, on any other column desc; repeat flips', () => {
+  assert.equal(defaultOrder('brand'), 'asc');
+  const start = { field: 'lastBroadcast', order: 'desc' };
+  // Buefy emits 'asc' on a click that changes the column.
+  assert.deepEqual(onSortClick(start, 'brand', 'asc'), { sort: { field: 'brand', order: 'asc' }, flipArrow: false });
+  ['welcome', 'purchase', 'noPurchase', 'sunset', 'attribution', 'journeys', 'cadence'].forEach((f) => {
+    assert.deepEqual(onSortClick(start, f, 'asc'), { sort: { field: f, order: 'desc' }, flipArrow: true }, f);
+  });
+  const brandStart = { field: 'brand', order: 'asc' };
+  assert.deepEqual(onSortClick(brandStart, 'lastBroadcast', 'asc'), { sort: { field: 'lastBroadcast', order: 'desc' }, flipArrow: true });
+  // A repeat click is Buefy's toggle, passed through.
+  assert.deepEqual(onSortClick(start, 'lastBroadcast', 'asc'), { sort: { field: 'lastBroadcast', order: 'asc' }, flipArrow: false });
+  assert.deepEqual(onSortClick({ field: 'lastBroadcast', order: 'asc' }, 'lastBroadcast', 'desc'), { sort: { field: 'lastBroadcast', order: 'desc' }, flipArrow: false });
+  assert.deepEqual(onSortClick(brandStart, 'brand', 'desc'), { sort: { field: 'brand', order: 'desc' }, flipArrow: false });
+  // An unsortable field leaves the sort unchanged.
+  assert.deepEqual(onSortClick(start, 'bogus', 'asc'), { sort: start, flipArrow: false });
 });
 
 test('I7: session persistence -- a throwing sessionStorage yields the defaults and still renders', () => {

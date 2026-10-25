@@ -199,6 +199,23 @@ export function defaultOrder(field) {
   return field === 'brand' ? 'asc' : 'desc';
 }
 
+// onSortClick -- the Lists.vue/Brands.vue onSort pattern (BRAND-MATRIX stage 4 F3) as pure logic.
+// Buefy (no default-sort-direction) emits 'asc' on a click that CHANGES the column; a repeat click
+// is Buefy's own toggle. On a fresh column the order is defaultOrder(field), and `flipArrow` tells
+// the Vue to set the table's isAsc to false so the arrow matches (Brand stays asc). A repeat
+// click passes Buefy's direction through. Returns { sort: {field, order}, flipArrow }.
+export function onSortClick(current, field, direction) {
+  const cur = current || DEFAULT_STATE.sort;
+  if (!SORT_FIELDS.includes(field)) {
+    return { sort: { ...cur }, flipArrow: false };
+  }
+  if (field !== cur.field) {
+    const order = defaultOrder(field);
+    return { sort: { field, order }, flipArrow: order === 'desc' && direction === 'asc' };
+  }
+  return { sort: { field, order: direction === 'asc' ? 'asc' : 'desc' }, flipArrow: false };
+}
+
 // Sort keys: states and booleans as BADNESS (higher = worse, so desc is worst first, like the
 // default); journeys by running count; cadence by days; Last broadcast by daysSince with a
 // never-broadcast row above every number. null = missing (no usage, a ZMA-dimmed column, an
