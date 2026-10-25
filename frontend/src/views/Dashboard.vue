@@ -48,40 +48,74 @@
           </b-radio-button>
         </b-field>
       </div>
-      <b-table ref="matrixTable" :data="matrixTableRows" hoverable narrowed :row-class="matrixRowClass"
-        backend-sorting :default-sort="[matrix.sort.field, matrix.sort.order]" @sort="onMatrixSort">
-        <b-table-column v-slot="props" field="brand" :label="$t('dashboard.matrix.brand')" sortable>
-          <span :data-cy="`matrix-brand-${props.row.brand || 'totals'}`">{{ props.row.label }}</span>
-        </b-table-column>
-        <b-table-column v-slot="props" field="sent" :label="$t('dashboard.matrix.sent')" numeric sortable
-          header-class="bm-section" cell-class="bm-section">
-          <span :title="$t('dashboard.matrix.sentHelp')">{{ matrixCell(props.row, 'sent') }}</span>
-        </b-table-column>
-        <b-table-column v-for="(c, i) in matrixSubColumns" :key="c.field" v-slot="props" :field="c.field"
-          :label="$t(c.label)" numeric sortable :header-class="i === 0 ? 'bm-section' : ''"
-          :cell-class="i === 0 ? 'bm-section' : ''">
-          {{ matrixCell(props.row, c.field) }}
-        </b-table-column>
-        <b-table-column v-for="(c, i) in matrixEngColumns" :key="c.field" v-slot="props" :field="c.field"
-          :label="$t(c.label)" numeric sortable :header-class="i === 0 ? 'bm-section' : ''"
-          :cell-class="i === 0 ? 'bm-section' : ''">
-          <span :title="c.help ? $t(c.help) : null">{{ matrixCell(props.row, c.field) }}</span>
-        </b-table-column>
-        <b-table-column v-slot="props" field="spam_rate" :label="$t('dashboard.matrix.spam')" numeric sortable
-          header-class="bm-section" cell-class="bm-section">
-          <!-- GP-SPAM-VISIBILITY-SPEC D3: class, style and tooltip come from brandMatrix.mjs::spamCell. -->
-          <span :class="spamCell(props.row).cls" :style="spamCell(props.row).style || null"
-            :title="$t(spamCell(props.row).tooltip)" :data-cy="`matrix-spam-${props.row.brand || 'totals'}`">
-            {{ props.row.totals ? '' : matrixCell(props.row, 'spam_rate') }}</span>
-        </b-table-column>
-        <b-table-column v-slot="props" field="status" :label="$t('dashboard.matrix.health')">
-          <health-chip v-if="props.row.status" :status="props.row.status"
-            :to="{ name: 'brand', params: { brand: props.row.brand } }" />
-        </b-table-column>
-        <template #empty v-if="!matrix.loading">
-          <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
-        </template>
-      </b-table>
+      <!-- 2026-10-24 layout pass (user ask): a hand-rolled table so the spreadsheet-style group
+           headers exist (Buefy's b-table has no grouped header row) -- Health far left, then
+           Brand and Messages Sent, the Engagement section (incl. GP Spam %) before Subscribers,
+           each section tinted, the sorted column emphasized. Sorting is clickSort; the spam
+           cell's class/style/tooltip stay brandMatrix.mjs::spamCell (GP-SPAM-VISIBILITY D3). -->
+      <div class="table-container">
+        <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="matrix-table">
+          <thead>
+            <tr class="bm-groups">
+              <th colspan="3" />
+              <th :colspan="matrixEngCells.length" class="bm-eng bm-group">
+                {{ $t('dashboard.matrix.engagement') }}
+              </th>
+              <th :colspan="matrixSubColumns.length" class="bm-subs bm-group">
+                {{ $tc('globals.terms.subscriber', 2) }}
+              </th>
+            </tr>
+            <tr>
+              <th>{{ $t('dashboard.matrix.health') }}</th>
+              <th :class="bmTh('brand')" :aria-sort="bmAria('brand')" @click="onMatrixSort('brand')">
+                {{ $t('dashboard.matrix.brand') }}<span class="bm-arrow">{{ bmArrow('brand') }}</span>
+              </th>
+              <th class="has-text-right" :class="bmTh('sent')" :title="$t('dashboard.matrix.sentHelp')"
+                :aria-sort="bmAria('sent')" @click="onMatrixSort('sent')">
+                {{ $t('dashboard.matrix.sent') }}<span class="bm-arrow">{{ bmArrow('sent') }}</span>
+              </th>
+              <th v-for="c in matrixEngCells" :key="c.field" class="bm-eng has-text-right"
+                :class="bmTh(c.field)" :title="c.help ? $t(c.help) : null"
+                :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
+                {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
+              </th>
+              <th v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right"
+                :class="bmTh(c.field)" :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
+                {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in matrixTableRows" :key="row.brand || 'totals'" :class="matrixRowClass(row)">
+              <td class="bm-health">
+                <health-chip v-if="row.status" :status="row.status"
+                  :to="{ name: 'brand', params: { brand: row.brand } }" />
+              </td>
+              <td :class="bmTd('brand')">
+                <span :data-cy="`matrix-brand-${row.brand || 'totals'}`">{{ row.label }}</span>
+              </td>
+              <td class="has-text-right" :class="bmTd('sent')">
+                <span :title="$t('dashboard.matrix.sentHelp')">{{ matrixCell(row, 'sent') }}</span>
+              </td>
+              <td v-for="c in matrixEngCells" :key="c.field" class="bm-eng has-text-right" :class="bmTd(c.field)">
+                <span v-if="c.field === 'spam_rate'" :class="spamCell(row).cls"
+                  :style="spamCell(row).style || null" :title="$t(spamCell(row).tooltip)"
+                  :data-cy="`matrix-spam-${row.brand || 'totals'}`">
+                  {{ row.totals ? '' : matrixCell(row, 'spam_rate') }}</span>
+                <span v-else :title="c.help ? $t(c.help) : null">{{ matrixCell(row, c.field) }}</span>
+              </td>
+              <td v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right" :class="bmTd(c.field)">
+                {{ matrixCell(row, c.field) }}
+              </td>
+            </tr>
+            <tr v-if="!matrix.loading && !matrixTableRows.length">
+              <td :colspan="3 + matrixEngCells.length + matrixSubColumns.length">
+                <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <p class="is-size-7 has-text-grey mt-2" data-cy="matrix-note">{{ $t('dashboard.matrix.note') }}</p>
     </section>
 
@@ -375,7 +409,7 @@ import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsCli
 import DashboardSes from './DashboardSes.vue';
 import HealthChip from '../components/HealthChip.vue';
 import {
-  ENGAGEMENT_FIELDS, cellText, initialPane, loadState, resolveSort, saveState, sessionStore, shapeRows, spamCell, tableRows,
+  ENGAGEMENT_FIELDS, cellText, clickSort, initialPane, loadState, saveState, sessionStore, shapeRows, spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
@@ -475,22 +509,39 @@ export default Vue.extend({
       this.saveMatrixState();
     },
 
-    // D6 -- the Brands.vue onSort pattern: a click on a NEW column takes its default direction
-    // (brandMatrix.mjs::resolveSort), and Buefy's arrow (isAsc) is flipped with it. The override
-    // applies only while isAsc is a boolean the arrow reads; if a Buefy upgrade ever changes
-    // that, fall back to stock asc-first so the arrow and the data cannot disagree (stage 4 F3).
-    // A repeat click is Buefy's own toggle and passes through.
-    onMatrixSort(field, direction) {
-      let next = { field, order: direction };
-      const { matrixTable } = this.$refs;
-      if (matrixTable && typeof matrixTable.isAsc === 'boolean') {
-        next = resolveSort(this.matrix.sort, field, direction);
-        if (next.order !== direction) {
-          matrixTable.isAsc = next.order === 'asc';
-        }
-      }
-      this.matrix.sort = next;
+    // D6 -- the matrix table owns its own header (2026-10-24 layout pass), so a header click is
+    // brandMatrix.mjs::clickSort, nothing else: a NEW column takes its default direction, a
+    // repeat click toggles.
+    onMatrixSort(field) {
+      this.matrix.sort = clickSort(this.matrix.sort, field);
       this.saveMatrixState();
+    },
+
+    // The sorted column's emphasis and arrow (user ask 2026-10-24).
+    bmSorted(field) {
+      return this.matrix.sort.field === field;
+    },
+
+    bmTh(field) {
+      return ['bm-sort', { 'bm-sorted': this.bmSorted(field) }];
+    },
+
+    bmTd(field) {
+      return { 'bm-sorted': this.bmSorted(field) };
+    },
+
+    bmArrow(field) {
+      if (!this.bmSorted(field)) {
+        return '';
+      }
+      return this.matrix.sort.order === 'asc' ? '↑' : '↓';
+    },
+
+    bmAria(field) {
+      if (!this.bmSorted(field)) {
+        return null;
+      }
+      return this.matrix.sort.order === 'asc' ? 'ascending' : 'descending';
     },
 
     matrixCell(row, field) {
@@ -724,17 +775,21 @@ export default Vue.extend({
       ];
     },
 
-    // D4 -- Blocks is a subset of H. Bounces; its header says so.
-    matrixEngColumns() {
+    // D4 -- Blocks is a subset of H. Bounces; its header says so. The Engagement section's cells
+    // in column order, GP Spam % included (2026-10-24 layout pass).
+    matrixEngCells() {
       const labels = {
         clicks: 'dashboard.matrix.clicks',
         hard_bounces: 'dashboard.matrix.hardBounces',
         blocks: 'dashboard.matrix.blocks',
         complaints: 'dashboard.matrix.complaints',
       };
-      return ENGAGEMENT_FIELDS.map((f) => ({
-        field: f, label: labels[f], help: f === 'blocks' ? 'dashboard.matrix.blocksHelp' : null,
-      }));
+      return [
+        ...ENGAGEMENT_FIELDS.map((f) => ({
+          field: f, label: labels[f], help: f === 'blocks' ? 'dashboard.matrix.blocksHelp' : null,
+        })),
+        { field: 'spam_rate', label: 'dashboard.matrix.spam', help: null },
+      ];
     },
 
     engagementLines() {

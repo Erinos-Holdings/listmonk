@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_STATE, STORAGE_KEY, cellText, defaultOrder, displayValue, initialPane, loadState, rateOf, resolveSort,
+  DEFAULT_STATE, STORAGE_KEY, cellText, clickSort, defaultOrder, displayValue, initialPane, loadState, rateOf,
   SPAM_FLAGGED_HELP, SPAM_HELP, saveState, sessionStore, shapeRows, sortRows, spamCell, tableRows, totalsRow,
 } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -145,14 +145,15 @@ test('I8: default first-click directions -- brand ascending, every other column 
   assert.equal(defaultOrder('brand'), 'asc');
   ['total', 'active', 'held', 'unsubscribed', 'blocked', 'sent', 'clicks', 'hard_bounces', 'blocks',
     'complaints', 'spam_rate'].forEach((f) => assert.equal(defaultOrder(f), 'desc', f));
-  // A NEW column takes its default whatever Buefy's first-click direction says.
-  assert.deepEqual(resolveSort({ field: 'clicks', order: 'desc' }, 'held', 'asc'), { field: 'held', order: 'desc' });
-  assert.deepEqual(resolveSort({ field: 'clicks', order: 'desc' }, 'brand', 'asc'), { field: 'brand', order: 'asc' });
-  // The current column toggles with Buefy.
-  assert.deepEqual(resolveSort({ field: 'held', order: 'desc' }, 'held', 'asc'), { field: 'held', order: 'asc' });
-  assert.deepEqual(resolveSort({ field: 'held', order: 'asc' }, 'held', 'desc'), { field: 'held', order: 'desc' });
-  // An unknown field keeps the current sort.
-  assert.deepEqual(resolveSort({ field: 'held', order: 'asc' }, 'nope', 'desc'), { field: 'held', order: 'asc' });
+  // A NEW column takes its default direction.
+  assert.deepEqual(clickSort({ field: 'clicks', order: 'desc' }, 'held'), { field: 'held', order: 'desc' });
+  assert.deepEqual(clickSort({ field: 'clicks', order: 'desc' }, 'brand'), { field: 'brand', order: 'asc' });
+  // A repeat click on the current column toggles it, both ways.
+  assert.deepEqual(clickSort({ field: 'held', order: 'desc' }, 'held'), { field: 'held', order: 'asc' });
+  assert.deepEqual(clickSort({ field: 'held', order: 'asc' }, 'held'), { field: 'held', order: 'desc' });
+  // An unknown/unsortable field keeps the current sort.
+  assert.deepEqual(clickSort({ field: 'held', order: 'asc' }, 'nope'), { field: 'held', order: 'asc' });
+  assert.deepEqual(clickSort(null, 'nope'), DEFAULT_STATE.sort);
 });
 
 test('I8: the initial sort is Clicks descending in pct mode', () => {

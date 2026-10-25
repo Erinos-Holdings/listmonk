@@ -165,17 +165,19 @@ export function defaultOrder(field) {
   return field === 'brand' ? 'asc' : 'desc';
 }
 
-// D6: resolveSort is the sort after a header click. A click on a NEW column takes that column's
-// default direction (Buefy's own first click is ascending, so the Vue flips its arrow when this
-// says desc); a click on the current column takes Buefy's toggled direction.
-export function resolveSort(current, field, clicked) {
+// D6: clickSort is the sort after a header click (the matrix table owns its own header since the
+// 2026-10-24 layout pass -- no Buefy direction in play). A click on a NEW column takes that
+// column's default direction; a click on the current column toggles it; an unsortable field
+// leaves the sort unchanged.
+export function clickSort(current, field) {
+  const cur = current || DEFAULT_STATE.sort;
   if (!SORT_FIELDS.includes(field)) {
-    return { ...(current || DEFAULT_STATE.sort) };
+    return { ...cur };
   }
-  if (!current || current.field !== field) {
+  if (cur.field !== field) {
     return { field, order: defaultOrder(field) };
   }
-  return { field, order: clicked === 'asc' ? 'asc' : 'desc' };
+  return { field, order: cur.order === 'asc' ? 'desc' : 'asc' };
 }
 
 // D6/I6: sortRows sorts by the displayed quantity in the given mode. A missing value (null) ranks

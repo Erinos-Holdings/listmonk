@@ -956,15 +956,49 @@ section.dashboard {
     }
   }
 
-  /* Fork (brand matrix, integrations BRAND-MATRIX-SPEC D6). The Brand Matrix table: tabular
-  figures, a rule before each section, the totals row in bold. */
+  /* Fork (brand matrix, integrations BRAND-MATRIX-SPEC D6; 2026-10-24 layout pass). The Brand
+  Matrix table: tabular figures; the spreadsheet-style group header row; a subtle tint per
+  section (Engagement warm -- it is the pane's point -- Subscribers cool); the sorted column a
+  shade stronger via a translucent overlay, so it composes with either tint; the totals row in
+  bold. */
   .brand-matrix {
     td, th {
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
-    .bm-section {
-      border-left: 1px solid $grey-lighter;
+    th.bm-sort {
+      cursor: pointer;
+      user-select: none;
+    }
+    .bm-arrow {
+      display: inline-block;
+      min-width: 1em;
+      padding-left: 2px;
+      color: $grey;
+    }
+    tr.bm-groups th {
+      border-bottom-width: 1px;
+      &.bm-group {
+        text-align: center;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+    }
+    th.bm-eng, td.bm-eng {
+      background-color: rgba(255, 184, 77, 0.09);
+    }
+    th.bm-subs, td.bm-subs {
+      background-color: rgba(72, 95, 199, 0.06);
+    }
+    thead th.bm-eng {
+      background-color: rgba(255, 184, 77, 0.16);
+    }
+    thead th.bm-subs {
+      background-color: rgba(72, 95, 199, 0.11);
+    }
+    th.bm-sorted, td.bm-sorted {
+      background-image: linear-gradient(rgba(54, 54, 54, 0.07), rgba(54, 54, 54, 0.07));
     }
     tr.bm-totals td {
       font-weight: bold;
