@@ -91,6 +91,16 @@ func TestValidateBrandHealthRows(t *testing.T) {
 	if err := validateBrandHealthRows([]json.RawMessage{withNew, withoutSources}); err != nil {
 		t.Fatalf("additive BRANDS-UX fields refused: %v", err)
 	}
+
+	// Integrations BRAND-USAGE-SPEC I8: the optional `usage` object is one more unknown field the
+	// required-field whitelist lets through (the integrations side may deploy first).
+	withUsage := healthRow(func(m map[string]any) {
+		m["usage"] = map[string]any{"channel": "listmonk", "welcome": map[string]any{"state": "active", "listId": 7, "campaigns": []any{}},
+			"broadcasts": map[string]any{"lastAt": nil, "windowCount": 0, "cadenceDays": nil, "daysSince": nil, "ratio": nil, "state": "none"}}
+	})
+	if err := validateBrandHealthRows([]json.RawMessage{withUsage}); err != nil {
+		t.Fatalf("a row carrying usage refused: %v", err)
+	}
 }
 
 func TestParseBrandHealthDays(t *testing.T) {

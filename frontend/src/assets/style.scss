@@ -1006,6 +1006,17 @@ section.dashboard {
     }
   }
 
+  /* Fork (brand usage, integrations BRAND-USAGE-SPEC D7) -- the Brand Usage pane: a ZMA brand's row
+  is dimmed (its sends live in ZMA, so it is not scored here). */
+  .brand-usage {
+    td, th {
+      white-space: nowrap;
+    }
+    tr.bu-zma td {
+      opacity: 0.55;
+    }
+  }
+
   .tile.notification {
     @extend .box;
     padding: 10px;

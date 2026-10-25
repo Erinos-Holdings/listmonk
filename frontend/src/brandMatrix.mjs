@@ -221,8 +221,8 @@ export function normalizeState(s) {
 
 // D1: the Dashboard panes. Without brands:get only the Overview exists. The sticky pref is the
 // string dashboard.pane; the legacy boolean dashboard.sesPane is read only while dashboard.pane is
-// unset (true = ses).
-export const PANES = Object.freeze(['overview', 'matrix', 'ses']);
+// unset (true = ses). BRAND-USAGE-SPEC D2: `usage` (the Brand Usage pane) sits between matrix and ses.
+export const PANES = Object.freeze(['overview', 'matrix', 'usage', 'ses']);
 
 export function initialPane(canSes, storedPane, legacySesPane) {
   if (!canSes) {

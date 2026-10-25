@@ -16,8 +16,11 @@ package main
 // GP-SPAM-VISIBILITY-SPEC I2: that row's spamRate.status and the NEEDS_WORK USER_REPORTED_SPAM_RATE
 // compliance flag projected verbatim (spam_status, spam_flagged), absent when not stored.
 // I4: GET /api/dashboard/brand-matrix is refused (403) without brands:get.
+// BRAND-USAGE-SPEC I1: the brand's latest doc's `usage` comes back on its row equal to the stored
+// value (after the transport's JSON compaction); a doc without it, or no doc, yields no usage key.
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -56,6 +59,8 @@ type matrixRow struct {
 	Blocks      int          `json:"blocks"`
 	Complaints  int          `json:"complaints"`
 	Health      matrixHealth `json:"health"`
+	// BRAND-USAGE-SPEC I1 -- the stored doc's usage verbatim; nil when the key is absent.
+	Usage json.RawMessage `json:"usage,omitempty"`
 }
 
 type matrixResp struct {
@@ -268,12 +273,37 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	brandHealth("bravo", 1, "unknown", false, nil, "", []cfgRow{{"USER_REPORTED_SPAM_RATE", "COMPLIANT"}, {"SPF", "NEEDS_WORK"}})
 	brandHealth("curated", 1, "issues", true, 0.9, "issues", flaggedRows)
 
+	// BRAND-USAGE-SPEC I1: alpha's newest doc carries a usage object (nulls, nested arrays,
+	// fractional numbers, a non-ASCII string) and its older doc a different one -- only the newest
+	// is projected, verbatim; bravo's newest carries none (its older one does) and delta has no doc,
+	// so neither row has a usage key.
+	usageNew := `{"channel": "listmonk", "welcome": {"state": "active", "listId": 7, "campaigns": [{"id": 3, "status": "running"}]},
+		"purchase": {"state": "idle", "rows": [{"slug": "alpha-first-order", "listId": null, "error": "trigger is missing — “x”", "evergreen": "none"}]},
+		"noPurchase": {"state": "none", "rows": []}, "sunset": true, "attribution": false, "journeys": {"running": 1, "idle": 0},
+		"broadcasts": {"lastAt": "2026-10-20T12:00:00.000Z", "windowCount": 4, "cadenceDays": 12.5, "daysSince": 4.1458333333, "ratio": 0.33166666666, "state": "ok"}}`
+	setUsage := func(brand string, n int, usage string) {
+		h.db.MustExec(`UPDATE brand_health SET doc = doc || JSONB_BUILD_OBJECT('usage', $3::JSONB) WHERE brand = $1 AND day = $2::DATE`, brand, day(n), usage)
+	}
+	setUsage("alpha", 1, usageNew)
+	setUsage("alpha", 3, `{"channel": "zma"}`)
+	setUsage("bravo", 3, `{"channel": "zma"}`)
+	var storedUsage string
+	if err := h.db.Get(&storedUsage, `SELECT (doc->'usage')::TEXT FROM brand_health WHERE brand = 'alpha' AND day = $1::DATE`, day(1)); err != nil {
+		t.Fatal(err)
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, []byte(storedUsage)); err != nil {
+		t.Fatal(err)
+	}
+	wantUsage := json.RawMessage(compact.Bytes())
+
 	spam := 0.0012
 	flagged := true
 	alpha := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "alpha", Subscribers: matrixSubs{Total: 4, Active: 1, Held: 1, Unsubscribed: 1, Blocked: 1},
 			Sent: &alphaSent, Clicks: wantClicks[tracking]["alpha"], HardBounces: 5, Blocks: 1, Complaints: 1,
-			Health: matrixHealth{Status: "ok", SpamRate: &spam, SpamStatus: "issues", SpamFlagged: &flagged}}
+			Health: matrixHealth{Status: "ok", SpamRate: &spam, SpamStatus: "issues", SpamFlagged: &flagged},
+			Usage:  wantUsage}
 	}
 	bravo := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "bravo", Subscribers: matrixSubs{Total: 2, Active: 1},

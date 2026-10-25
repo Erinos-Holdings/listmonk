@@ -20,6 +20,12 @@
             data-cy="pane-matrix" @input="onPaneChange">
             {{ $t('dashboard.panes.matrix') }}
           </b-radio-button>
+          <!-- Fork (brand usage, integrations BRAND-USAGE-SPEC D2) -- the fourth pane, between Brand
+               Matrix and SES, behind the same brands:get gate; it renders off the matrix fetch. -->
+          <b-radio-button v-model="pane" native-value="usage" type="is-primary"
+            data-cy="pane-usage" @input="onPaneChange">
+            {{ $t('dashboard.panes.usage') }}
+          </b-radio-button>
           <b-radio-button v-model="pane" native-value="ses" type="is-primary"
             data-cy="pane-ses" @input="onPaneChange">
             {{ $t('dashboard.panes.ses') }}
@@ -117,6 +123,43 @@
         </table>
       </div>
       <p class="is-size-7 has-text-grey mt-2" data-cy="matrix-note">{{ $t('dashboard.matrix.note') }}</p>
+    </section>
+
+    <!-- Fork (brand usage, integrations BRAND-USAGE-SPEC D2/D7). The Brand Matrix's rows (same
+         fetch, scope and launch filter), each brand's stored usage object rendered as glyphs; every
+         state and threshold was computed by the integrations BrandHealth Lambda, and every glyph,
+         cell and sort rule is brandUsage.mjs. -->
+    <section v-else-if="pane === 'usage'" class="brand-usage relative" data-cy="brand-usage">
+      <b-table :data="usageTableRows" :loading="matrix.loading" hoverable narrowed
+        :row-class="(row) => (row.zma ? 'bu-zma' : '')"
+        backend-sorting :default-sort="[usage.sort.field, usage.sort.order]" default-sort-direction="desc"
+        @sort="onUsageSort" data-cy="usage-table">
+        <b-table-column v-slot="props" field="brand" :label="$t('dashboard.matrix.brand')" sortable>
+          <span :data-cy="`usage-brand-${props.row.brand}`">{{ props.row.label }}</span>
+          <b-tag v-if="props.row.zma" size="is-small" class="ml-1" :title="$t('dashboard.usage.zmaHelp')">
+            {{ $t('dashboard.usage.zma') }}
+          </b-tag>
+        </b-table-column>
+        <b-table-column v-for="c in usageColumns" :key="c.field" :field="c.field"
+          :label="$t(c.label)" sortable centered>
+          <template #header="{ column }">
+            <span :title="$t(c.help)">{{ column.label }}</span>
+          </template>
+          <template #default="props">
+            <span :class="usageCell(props.row, c.field).cls" :title="usageCell(props.row, c.field).tooltip || null"
+              :data-cy="`usage-${c.field}-${props.row.brand}`">
+              {{ usageCell(props.row, c.field).text }}
+            </span>
+          </template>
+        </b-table-column>
+        <template #empty v-if="!matrix.loading">
+          <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
+        </template>
+      </b-table>
+      <p class="is-size-7 has-text-grey mt-2" data-cy="usage-note">
+        {{ usageAsOf ? $t('dashboard.usage.noteAsOf', { date: usageAsOf }) : $t('dashboard.usage.computed') }}
+        {{ $t('dashboard.usage.note') }}
+      </p>
     </section>
 
     <section v-else class="counts wrap">
@@ -412,6 +455,10 @@ import {
   ENGAGEMENT_FIELDS, cellText, clickSort, initialPane, loadState, saveState, sessionStore, shapeRows, spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
+  cell as usageCellOf, latestAsOf, loadState as loadUsageState, saveState as saveUsageState, shapeRows as shapeUsageRows,
+  sortRows as sortUsageRows,
+} from '../brandUsage.mjs'; // eslint-disable-line import/extensions
+import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
@@ -449,6 +496,9 @@ export default Vue.extend({
         loading: false,
         ...loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
       },
+      // Fork (brand usage, BRAND-USAGE-SPEC D7) -- the usage pane's sort, per browser session
+      // (sessionStorage key dashboard.usage); its rows are matrix.apiRows.
+      usage: loadUsageState(sessionStore(typeof window !== 'undefined' ? window : null)),
       // Fork (dashboard counts, DASHBOARD-COUNTS-SPEC D3) -- the Subscribers container's
       // language table, sticky per browser (the dashboard.sesPane pattern).
       subsExpanded: this.$utils.getPref('dashboard.subsExpanded') === true,
@@ -482,9 +532,19 @@ export default Vue.extend({
     // matrix is fetched on every activation, so a scope change made while it was hidden is read.
     onPaneChange() {
       this.$utils.setPref('dashboard.pane', this.pane);
-      if (this.pane === 'matrix') {
+      if (this.pane === 'matrix' || this.pane === 'usage') {
         this.fetchMatrix(this.scopeParams());
       }
+    },
+
+    // Fork (brand usage, D7) -- a header click is brandUsage.mjs's sort; persisted per session.
+    onUsageSort(field, order) {
+      this.usage.sort = { field, order };
+      saveUsageState(sessionStore(window), { sort: this.usage.sort });
+    },
+
+    usageCell(row, field) {
+      return usageCellOf(row, field, (k, p) => this.$t(k, p));
     },
 
     scopeParams() {
@@ -634,8 +694,9 @@ export default Vue.extend({
       this.isChartsLoading = true;
       const params = this.scopeParams();
 
-      // Fork (brand matrix, D7) -- refetched with the others only while its pane is active.
-      if (this.pane === 'matrix') {
+      // Fork (brand matrix, D7) -- refetched with the others only while its pane (or the brand
+      // usage pane, which renders off the same fetch -- BRAND-USAGE-SPEC D2) is active.
+      if (this.pane === 'matrix' || this.pane === 'usage') {
         this.fetchMatrix(params);
       }
 
@@ -763,6 +824,30 @@ export default Vue.extend({
         locale: (this.$i18n && this.$i18n.locale) || 'en',
         totalsLabel: this.$t('dashboard.matrix.total'),
       });
+    },
+
+    // Fork (brand usage, D2/D7) -- the matrix rows (same launch filter and display names), sorted.
+    usageTableRows() {
+      const rows = shapeUsageRows(this.matrix.apiRows, { brands: this.brandRows, launch: this.launch });
+      return sortUsageRows(rows, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en');
+    },
+
+    // D1 -- the note's "as of" day: the newest stored asOf among the rendered rows (null = none).
+    usageAsOf() {
+      return latestAsOf(this.usageTableRows);
+    },
+
+    usageColumns() {
+      return [
+        { field: 'welcome', label: 'dashboard.usage.welcome', help: 'dashboard.usage.welcomeHelp' },
+        { field: 'purchase', label: 'dashboard.usage.purchase', help: 'dashboard.usage.purchaseHelp' },
+        { field: 'noPurchase', label: 'dashboard.usage.noPurchase', help: 'dashboard.usage.noPurchaseHelp' },
+        { field: 'sunset', label: 'dashboard.usage.sunset', help: 'dashboard.usage.sunsetHelp' },
+        { field: 'attribution', label: 'dashboard.usage.attribution', help: 'dashboard.usage.attributionHelp' },
+        { field: 'journeys', label: 'dashboard.usage.journeys', help: 'dashboard.usage.journeysHelp' },
+        { field: 'lastBroadcast', label: 'dashboard.usage.lastBroadcast', help: 'dashboard.usage.lastBroadcastHelp' },
+        { field: 'cadence', label: 'dashboard.usage.cadence', help: 'dashboard.usage.cadenceHelp' },
+      ];
     },
 
     matrixSubColumns() {

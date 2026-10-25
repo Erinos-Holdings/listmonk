@@ -248,6 +248,11 @@ SELECT JSON_BUILD_OBJECT(
 --     doc lacks it), spam_flagged = TRUE when the stored compliance rows carry a NEEDS_WORK
 --     USER_REPORTED_SPAM_RATE requirement, absent otherwise. Both are stored fields projected,
 --     never a rule computed here (no threshold in the fork).
+--   usage = BRAND-USAGE-SPEC D2/I1 -- the same latest brand_health doc's `usage` object, verbatim
+--     (doc -> 'usage'); the key is ABSENT when the doc lacks it (or there is no doc). Every usage
+--     rule and threshold lives in the integrations lib/brand-usage.ts, which names this site; the
+--     fork computes none (no test spans the repos). The row object is built as JSONB so the key can
+--     be omitted -- its consumers read it by key, never by order.
 WITH lst AS (
     SELECT id, type, optin, list_brand_tag(tags) AS brand FROM lists
     WHERE ($2::BOOLEAN OR id = ANY($1::INT[])) AND status = 'active'
@@ -337,7 +342,7 @@ bh AS (
 )
 SELECT JSON_BUILD_OBJECT(
     'rows', COALESCE((
-        SELECT JSON_AGG(JSON_BUILD_OBJECT(
+        SELECT JSON_AGG(JSONB_BUILD_OBJECT(
             'brand', b.brand,
             'subscribers', JSON_BUILD_OBJECT(
                 'total', COALESCE(s.total, 0),
@@ -359,7 +364,8 @@ SELECT JSON_BUILD_OBJECT(
                 'spam_flagged', CASE WHEN JSONB_PATH_EXISTS(bh.doc, '$.inputs.config.detail.rows[*] ? (@.requirement == "USER_REPORTED_SPAM_RATE" && @.status == "NEEDS_WORK")')
                     THEN TRUE END
             ))
-        ) ORDER BY b.brand)
+        ) || CASE WHEN bh.doc ? 'usage' THEN JSONB_BUILD_OBJECT('usage', bh.doc->'usage') ELSE '{}'::JSONB END
+        ORDER BY b.brand)
         FROM brands b
         LEFT JOIN subs s ON (s.brand = b.brand)
         LEFT JOIN raw_clicks rc ON (rc.brand = b.brand)
