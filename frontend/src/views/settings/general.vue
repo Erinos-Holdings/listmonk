@@ -54,6 +54,20 @@
         password-reveal :maxlength="200" data-cy="review-secret" />
     </b-field>
 
+    <!-- Fork (on-demand brand-health refresh, BRANDHEALTH-REFRESH-SPEC D1) -- the go-live: both
+         keys in one save (an app reload). Empty hides the SES pane's Recompute now. -->
+    <h2 class="is-size-5 mt-5 mb-4">{{ $t('settings.general.healthRefreshTitle') }}</h2>
+    <b-field :label="$t('settings.general.healthRefreshURL')" label-position="on-border"
+      :message="$t('settings.general.healthRefreshURLHelp')">
+      <b-input v-model="data['app.health_refresh_url']" name="app.health_refresh_url"
+        placeholder="https://…lambda-url.us-west-2.on.aws/" :maxlength="300" data-cy="health-refresh-url" />
+    </b-field>
+    <b-field :label="$t('settings.general.healthRefreshSecret')" label-position="on-border"
+      :message="$t('settings.general.healthRefreshSecretHelp')">
+      <b-input v-model="data['app.health_refresh_hmac_secret']" name="app.health_refresh_hmac_secret" type="password"
+        password-reveal :maxlength="200" data-cy="health-refresh-secret" />
+    </b-field>
+
     <hr />
 
     <div>

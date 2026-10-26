@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/knadh/listmonk/internal/core"
 	"github.com/labstack/echo/v4"
 )
 
@@ -92,6 +93,46 @@ func (a *App) PutSystemHealth(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, okResp{map[string]int64{"rows": n}})
+}
+
+// Fork (on-demand brand-health refresh, integrations BRANDHEALTH-REFRESH-SPEC D1-D3). The SES
+// pane's "Recompute now" asks the BrandHealth Lambda to re-run its daily computation now. Live
+// only while BOTH app.health_refresh_url and app.health_refresh_hmac_secret are set (read live
+// from koanf -- the go-live switch is a settings save + app reload); the SPA learns only the
+// boolean (serverConfig.health_refresh_enabled), never the URL or secret.
+
+// healthRefreshHTTPClient overrides the 8 s client (tests only); nil = core's default.
+var healthRefreshHTTPClient *http.Client
+
+func healthRefreshConfig() core.HealthRefreshConfig {
+	return core.HealthRefreshConfig{
+		URL:    ko.String("app.health_refresh_url"),
+		Secret: ko.String("app.health_refresh_hmac_secret"),
+		Client: healthRefreshHTTPClient,
+	}
+}
+
+// healthRefreshEnabled reports whether the integration is configured.
+func healthRefreshEnabled() bool {
+	cfg := healthRefreshConfig()
+	return cfg.URL != "" && cfg.Secret != ""
+}
+
+// RefreshSystemHealth (POST /api/system/health/refresh, brands:manage -- deliberately not
+// settings:manage, whose writes are step-up gated: a refresh is not a settings write). Not
+// configured -> 400. Otherwise one signed POST: 202 -> 200 {started: true}; 429 (the Lambda's one
+// concurrency slot is busy) -> 200 {started: false, busy: true}; anything else or a timeout ->
+// 502 with a terse message, the reason logged, never returned.
+func (a *App) RefreshSystemHealth(c echo.Context) error {
+	if !healthRefreshEnabled() {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("dashboard.ses.refreshNotConfigured"))
+	}
+	res, err := core.RequestHealthRefresh(healthRefreshConfig())
+	if err != nil {
+		a.log.Printf("brand-health refresh not accepted: %v", err)
+		return echo.NewHTTPError(http.StatusBadGateway, a.i18n.T("dashboard.ses.refreshUnavailable"))
+	}
+	return c.JSON(http.StatusOK, okResp{res})
 }
 
 // GetSystemHealthHistory returns one kind's documents, newest first. ?days=N (default 30, max

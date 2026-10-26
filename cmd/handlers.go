@@ -241,6 +241,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// whoever may read Brands may read the system rows; the brand-health writer writes them.
 		g.GET("/api/system/health/:kind", pm(a.GetSystemHealthHistory, "brands:get"))
 		g.PUT("/api/system/health", pm(a.PutSystemHealth, "brands:manage"))
+		// Fork (on-demand brand-health refresh) -- BRANDHEALTH-REFRESH-SPEC D2 (system_health.go).
+		// brands:manage, not settings:manage (a refresh is not a settings write; no step-up).
+		g.POST("/api/system/health/refresh", pm(a.RefreshSystemHealth, "brands:manage"))
 
 		g.GET("/api/media", pm(a.GetAllMedia, "media:get"))
 		// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. Registered before /api/media/:id for the

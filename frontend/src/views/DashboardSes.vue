@@ -7,7 +7,19 @@
   <section class="dashboard-ses">
     <b-loading v-if="loading.systemHealth" active :is-full-page="false" />
 
-    <p v-if="!doc && !loading.systemHealth" class="has-text-grey" data-cy="ses-empty">{{ $t('dashboard.ses.empty') }}</p>
+    <p v-if="!doc && !loading.systemHealth" class="has-text-grey" data-cy="ses-empty">
+      {{ $t('dashboard.ses.empty') }}
+      <!-- Fork (BRANDHEALTH-REFRESH-SPEC D3) -- with no ses document yet the first one to appear is the advance. -->
+      <template v-if="showRefresh">
+        <b-tooltip :label="$t('dashboard.ses.refreshTip')" type="is-dark" multilined>
+          <b-button size="is-small" class="ml-2" :disabled="refreshActive" :loading="refreshState === 'starting'"
+            data-cy="ses-refresh" @click="recompute">
+            {{ $t('dashboard.ses.refresh') }}
+          </b-button>
+        </b-tooltip>
+        <span v-if="refreshMessage" class="is-size-7 ml-2" data-cy="ses-refresh-state">{{ refreshMessage }}</span>
+      </template>
+    </p>
 
     <template v-if="doc">
       <!-- Headline: overall + enforcement -->
@@ -20,8 +32,21 @@
               </h2>
               <p class="is-size-7 has-text-grey">
                 <template v-if="doc.account">{{ doc.account.region }} · {{ doc.account.configurationSet }} · </template>
-                {{ $t('dashboard.ses.asOf', { date: doc.day }) }}
-                <template v-if="doc.computedAt"> · {{ $t('dashboard.ses.computedAt', { date: doc.computedAt }) }}</template>
+                <b-tooltip :label="$t('dashboard.ses.asOfTip')" type="is-dark" multilined data-cy="ses-as-of">
+                  {{ $t('dashboard.ses.asOf', { date: doc.day }) }}
+                  <template v-if="doc.computedAt"> · {{ $t('dashboard.ses.computedAt', { date: doc.computedAt }) }}</template>
+                </b-tooltip>
+                <!-- Fork (BRANDHEALTH-REFRESH-SPEC D3) -- brands:manage + configured only; the
+                navbar Refresh stays the cheap stored-document re-read. -->
+                <template v-if="showRefresh">
+                  <b-tooltip :label="$t('dashboard.ses.refreshTip')" type="is-dark" multilined>
+                    <b-button size="is-small" class="ml-2" :disabled="refreshActive" :loading="refreshState === 'starting'"
+                      data-cy="ses-refresh" @click="recompute">
+                      {{ $t('dashboard.ses.refresh') }}
+                    </b-button>
+                  </b-tooltip>
+                  <span v-if="refreshMessage" class="ml-2" data-cy="ses-refresh-state">{{ refreshMessage }}</span>
+                </template>
               </p>
             </div>
           </div>
@@ -132,6 +157,9 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
 import BlocklistComposition from '../components/BlocklistComposition.vue';
+import {
+  STATE_MESSAGE, baselineOf, canRefresh, createRefresh, isActive,
+} from '../healthRefresh.mjs'; // eslint-disable-line import/extensions
 
 const RATE_KEYS = ['accountRates', 'listmonkRates'];
 const RATES = [
@@ -147,11 +175,25 @@ export default Vue.extend({
       doc: null,
       rateKeys: RATE_KEYS,
       rates: RATES,
+      refreshState: 'idle',
     };
   },
 
   computed: {
-    ...mapState(['loading']),
+    ...mapState(['loading', 'serverConfig']),
+
+    showRefresh() {
+      return canRefresh(this.serverConfig, (p) => this.$can(p));
+    },
+
+    refreshActive() {
+      return isActive(this.refreshState);
+    },
+
+    refreshMessage() {
+      const key = STATE_MESSAGE[this.refreshState];
+      return key ? this.$t(key) : '';
+    },
 
     quotaWidth() {
       const q = this.doc && this.doc.quota;
@@ -231,14 +273,30 @@ export default Vue.extend({
         this.doc = Array.isArray(data) && data.length ? data[0] : null;
       });
     },
+
+    // BRANDHEALTH-REFRESH-SPEC D3: POST, then poll the stored doc's computedAt (healthRefresh.mjs).
+    recompute() {
+      this.refresher.begin(baselineOf(this.doc));
+    },
   },
 
   created() {
     this.$root.$on('page.refresh', this.fetchData);
+    this.refresher = createRefresh({
+      start: () => this.$api.refreshSystemHealth(),
+      read: () => this.$api.getSystemHealthQuiet('ses', 30).then((data) => (Array.isArray(data) && data.length ? data[0] : null)),
+      onState: (state, doc) => {
+        this.refreshState = state;
+        if (state === 'done' && doc) {
+          this.doc = doc;
+        }
+      },
+    });
   },
 
   destroyed() {
     this.$root.$off('page.refresh', this.fetchData);
+    this.refresher.stop();
   },
 
   mounted() {

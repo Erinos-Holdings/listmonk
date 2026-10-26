@@ -31,6 +31,12 @@ type Settings struct {
 	ReviewURL        string `json:"app.review_url"`
 	ReviewHMACSecret string `json:"app.review_hmac_secret"`
 
+	// Fork (on-demand brand-health refresh, BRANDHEALTH-REFRESH-SPEC D1). The SES pane's
+	// "Recompute now" is live only while both are set; the HMAC secret signs the POST to the
+	// BrandHealth Function URL (masked on GET, resolved on PUT -- cmd/settings.go's three sites).
+	HealthRefreshURL        string `json:"app.health_refresh_url"`
+	HealthRefreshHMACSecret string `json:"app.health_refresh_hmac_secret"`
+
 	AppBatchSize             int    `json:"app.batch_size"`
 	AppConcurrency           int    `json:"app.concurrency"`
 	AppMaxSendErrors         int    `json:"app.max_send_errors"`

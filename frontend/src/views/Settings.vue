@@ -156,6 +156,13 @@ export default Vue.extend({
         hasDummy = 'review signing secret';
       }
 
+      // Fork (BRANDHEALTH-REFRESH-SPEC D1): the brand-health refresh secret, the same treatment.
+      if (this.isDummy(form['app.health_refresh_hmac_secret'])) {
+        form['app.health_refresh_hmac_secret'] = '';
+      } else if (this.hasDummy(form['app.health_refresh_hmac_secret'])) {
+        hasDummy = 'brand health refresh signing secret';
+      }
+
       if (this.isDummy(form['bounce.sendgrid_key'])) {
         form['bounce.sendgrid_key'] = '';
       } else if (this.hasDummy(form['bounce.sendgrid_key'])) {

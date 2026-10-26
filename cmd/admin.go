@@ -53,6 +53,10 @@ type serverConfig struct {
 	// Fork (campaign review, CAMPAIGN-INSPECT-SPEC D12) -- app.review_url is set: the SPA shows
 	// Inspect and the gated Start; false keeps the pre-release Start button.
 	ReviewEnabled bool `json:"review_enabled"`
+	// Fork (on-demand brand-health refresh, BRANDHEALTH-REFRESH-SPEC D3) -- app.health_refresh_url
+	// and its secret are set: the SES pane shows "Recompute now" to brands:manage holders. Only
+	// the boolean -- never the URL or the secret.
+	HealthRefreshEnabled bool `json:"health_refresh_enabled"`
 }
 
 // GetServerConfig returns general server config.
@@ -78,6 +82,7 @@ func (a *App) GetServerConfig(c echo.Context) error {
 		},
 	}
 	out.PublicSubscription.Enabled = a.cfg.EnablePublicSubPage
+	out.HealthRefreshEnabled = healthRefreshEnabled()
 	for i := range a.importPresets {
 		out.ImportPresets = append(out.ImportPresets, a.importPresets[i].Info())
 	}

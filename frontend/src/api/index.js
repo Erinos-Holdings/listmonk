@@ -245,6 +245,11 @@ export const getSystemHealth = async (kind, days) => http.get(
   { params: { days }, loading: models.systemHealth, camelCase: false },
 );
 
+// Fork (on-demand brand-health refresh, integrations BRANDHEALTH-REFRESH-SPEC D2/D3) -- asks the
+// BrandHealth Lambda to recompute now. {started: true} or {started: false, busy: true}; a 400
+// (not configured) or 502 (not accepted) toasts the server's message.
+export const refreshSystemHealth = async () => http.post('/api/system/health/refresh', {}, {});
+
 // Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D9) -- the ses documents for
 // the Campaigns page's tier thresholds: quiet (no toast, no loading flag) because a failed or
 // forbidden read (brands:get) is fail-dark -- the columns simply stay uncolored.

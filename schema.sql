@@ -384,6 +384,8 @@ INSERT INTO settings (key, value) VALUES
     ('app.utm_params', '{"utm_source":"listmonk","utm_medium":"email","utm_campaign":"{{ .Campaign.Name }}","utm_content":"{{ .Campaign.ID }}"}'),
     ('app.review_url', '""'),
     ('app.review_hmac_secret', '""'),
+    ('app.health_refresh_url', '""'),
+    ('app.health_refresh_hmac_secret', '""'),
     ('app.notify_emails', '[]'),
     ('app.lang', '"en"'),
     ('privacy.individual_tracking', 'false'),
