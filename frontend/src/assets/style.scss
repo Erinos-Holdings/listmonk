@@ -1069,11 +1069,12 @@ section.dashboard {
     th.bu-sorted {
       background-image: linear-gradient(rgba(54, 54, 54, 0.18), rgba(54, 54, 54, 0.18));
     }
-    /* POLISH3 D4/D5 + G5 feedback: every header is centered over its column(s). The single-row
-    headers (rowspan 2) and the sub-group labels (No purchase, Skipped subscribers) sit on the SAME
-    line -- the top of the second header row -- with the leaves (3d 7d 15d, FR ES DE IT) beneath.
-    No purchase keeps the header font size; Skipped subscribers (long) and the leaf row use the
-    small font (bu-small). */
+    /* POLISH3 D4/D5 + G5 feedback (two rounds): every header is centered over its column(s). The
+    single-row headers (rowspan 2) and BOTH sub-group labels (No purchase, Skipped subscribers)
+    share the header font size on the same line -- the top of the second header row -- with the
+    leaves (3d 7d 15d, FR ES DE IT) beneath in the small font. The leaf headers' sort arrow is
+    absolutely positioned: its reserved 1em inline width pushed two-character labels visibly left
+    of center (G5 round 2). */
     thead th {
       text-align: center;
     }
@@ -1085,6 +1086,13 @@ section.dashboard {
     }
     th.bu-small {
       font-size: 0.8rem;
+      position: relative;
+      .bm-arrow {
+        position: absolute;
+        min-width: 0;
+        padding-left: 0;
+        margin-left: 2px;
+      }
     }
     th.bu-substart {
       border-left: 1px solid #dbdee2;

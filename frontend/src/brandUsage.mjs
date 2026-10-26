@@ -71,7 +71,8 @@ export const SECTIONS = Object.freeze([
     group('noPurchase', 'dashboard.usage.noPurchase', 'dashboard.usage.noPurchaseHelp', NO_PURCHASE_FIELDS),
   ]),
   section('languages', 'dashboard.usage.sectionLanguages', [
-    group('skipped', 'dashboard.usage.skipped', 'dashboard.usage.skippedHelp', SKIPPED_FIELDS, true),
+    // G5 round 2: Skipped subscribers shares the header font size with No purchase (small: false).
+    group('skipped', 'dashboard.usage.skipped', 'dashboard.usage.skippedHelp', SKIPPED_FIELDS),
   ]),
   section('configurations', 'dashboard.usage.sectionConfigurations', ['attribution', 'sunset']),
 ]);

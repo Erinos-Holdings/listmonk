@@ -119,9 +119,10 @@ test('V2 D2 / POLISH3 D4-D5: columns -- Score, Brand, then Broadcasts / Journeys
   assert.deepEqual(h.row2.map((c) => (c.kind === 'group' ? `[${c.key}:${c.span}]` : c.field)), [
     'cadence', 'lastBroadcast', 'journeys', 'welcome', 'purchase', '[noPurchase:3]', '[skipped:4]', 'attribution', 'sunset',
   ]);
-  // G5: No purchase takes the single-row headers' font size, Skipped subscribers the small one.
+  // G5 round 2: BOTH group labels take the single-row headers' font size (small: false); only the
+  // leaf row (row3) renders small.
   assert.deepEqual(h.row2.filter((c) => c.kind === 'group').map((c) => [c.label, c.band, c.first, c.small]), [
-    ['dashboard.usage.noPurchase', 'white', false, false], ['dashboard.usage.skipped', 'grey', true, true],
+    ['dashboard.usage.noPurchase', 'white', false, false], ['dashboard.usage.skipped', 'grey', true, false],
   ]);
   assert.deepEqual(h.row3.map((c) => [c.field, c.first, c.groupStart]), [
     ['noPurchase:3', false, true], ['noPurchase:7', false, false], ['noPurchase:15', false, false],
