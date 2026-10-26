@@ -100,6 +100,10 @@
         </div>
       </div>
 
+      <!-- Fork (integrations BLOCKLIST-COMPOSITION-SPEC D5) -- the account-wide blocklist
+      composition, the document's `composition` verbatim; nothing when the field is absent. -->
+      <blocklist-composition :composition="doc.composition || null" scope="account" />
+
       <!-- Recommended actions -->
       <div v-if="doc.actions && doc.actions.length" class="box">
         <h3 class="title is-6">{{ $t('dashboard.ses.actions') }}</h3>
@@ -127,6 +131,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
+import BlocklistComposition from '../components/BlocklistComposition.vue';
 
 const RATE_KEYS = ['accountRates', 'listmonkRates'];
 const RATES = [
@@ -135,7 +140,7 @@ const RATES = [
 ];
 
 export default Vue.extend({
-  components: { HealthChip },
+  components: { HealthChip, BlocklistComposition },
 
   data() {
     return {

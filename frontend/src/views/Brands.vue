@@ -360,6 +360,11 @@
             </template>
           </div>
 
+          <!-- Fork (integrations BLOCKLIST-COMPOSITION-SPEC D5) -- this brand's blocklist
+          composition (the document's `composition`, scoped to its lists by the Lambda); the SES
+          pane's card, same labels. Nothing when the field is absent. -->
+          <blocklist-composition :composition="current.composition || null" scope="brand" />
+
           <!-- Registry facts + lists. The facts table omits the document fields that are links or
           marks, not facts (explicit key list, BRANDS-UX-SPEC D9/review M3). -->
           <div class="box">
@@ -390,6 +395,7 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
+import BlocklistComposition from '../components/BlocklistComposition.vue';
 import {
   compareDay, compareStatus, compareText, sortRows,
 } from '../health-sort';
@@ -463,7 +469,7 @@ const ValueTag = {
 
 export default Vue.extend({
   components: {
-    HealthChip, SourceLine, DetailCols, ValueTag, BrandContextNotice,
+    HealthChip, SourceLine, DetailCols, ValueTag, BrandContextNotice, BlocklistComposition,
   },
 
   data() {
