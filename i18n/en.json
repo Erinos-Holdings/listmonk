@@ -506,7 +506,6 @@
     "dashboard.panes.usage": "Brand Usage",
     "dashboard.ses.accountRates": "Account-wide reputation",
     "dashboard.ses.actions": "Recommended actions",
-    "dashboard.ses.alarms": "Alarms",
     "dashboard.ses.asOf": "as of {date}",
     "dashboard.ses.bounceRate": "Bounce rate",
     "dashboard.ses.brandsLink": "Per-brand health is on the Brands page",
