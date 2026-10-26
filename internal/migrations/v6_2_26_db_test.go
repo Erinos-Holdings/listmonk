@@ -82,10 +82,16 @@ func TestCampaignSendHoursMigration_V6_2_26(t *testing.T) {
 	h.db.MustExec(`UPDATE campaigns SET status = 'finished', sent = 30, started_at = NULL WHERE id = $1`, noStart)
 	h.db.MustExec(`UPDATE campaigns SET status = 'finished', sent = 0, started_at = '2026-10-04 09:10:00+00' WHERE id = $1`, zero)
 	h.db.MustExec(`UPDATE campaigns SET status = 'running', sent = 3, started_at = '2026-10-01 00:00:00+00' WHERE id = $1`, ever)
+	// Stage 4 F4 -- an evergreen flipped to regular and finished: its old campaign_sends marks must
+	// NOT also be backfilled (its whole sent already lands at started_at by the broadcast rule).
+	flip := h.campaign("flipped", false, 0, h.listA)
+	h.db.MustExec(`UPDATE campaigns SET status = 'finished', sent = 40, started_at = '2026-10-06 12:20:00+00' WHERE id = $1`, flip)
 	s1, s2, s3, s4 := h.subscriber("a@x"), h.subscriber("b@x"), h.subscriber("c@x"), h.subscriber("d@x")
 	h.db.MustExec(`INSERT INTO campaign_sends (campaign_id, subscriber_id, sent_at) VALUES
 		($1, $2, '2026-10-05 10:05:00+00'), ($1, $3, '2026-10-05 10:50:00+00'), ($1, $4, '2026-10-05 11:10:00+00'), ($1, $5, NULL)`,
 		ever, s1, s2, s3, s4)
+	h.db.MustExec(`INSERT INTO campaign_sends (campaign_id, subscriber_id, sent_at) VALUES
+		($1, $2, '2026-10-04 09:05:00+00'), ($1, $3, '2026-10-05 14:30:00+00')`, flip, s1, s2)
 
 	var buf bytes.Buffer
 	lo := log.New(&buf, "", 0)
@@ -100,6 +106,7 @@ func TestCampaignSendHoursMigration_V6_2_26(t *testing.T) {
 		noStart: {},
 		zero:    {},
 		ever:    {"2026-10-05T10:00:00Z=2", "2026-10-05T11:00:00Z=1"},
+		flip:    {"2026-10-06T12:00:00Z=40"},
 	}
 	check := func(when string) {
 		for id, w := range want {

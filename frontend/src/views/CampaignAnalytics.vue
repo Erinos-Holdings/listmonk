@@ -496,7 +496,9 @@ export default Vue.extend({
         out[c.id] = c;
         return out;
       }, {});
-      const campIDs = Object.keys(camps);
+      // Stage 4 F2 -- the ring iterates the campaigns in the picker's order, the order the lines and
+      // bars take chartColors[n] in (Object.keys would sort the ids and mismatch the colors).
+      const campIDs = campaigns.map((c) => String(c.id));
       const overlay = shapeSendOverlay({
         campaigns: campaigns.map((c) => ({ id: c.id, name: c.name })),
         metric: data,

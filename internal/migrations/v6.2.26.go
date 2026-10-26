@@ -19,7 +19,9 @@ import (
 // nothing), and every insert is ON CONFLICT DO NOTHING besides:
 //   - D3 broadcasts: a finished/cancelled non-evergreen campaign with sent > 0 and a started_at gets
 //     one row, its whole sent at its started_at hour (exact for single-day broadcasts);
-//   - D3 evergreens: campaign_sends' marked rows grouped by hour (exact history);
+//   - D3 evergreens: campaign_sends' marked rows grouped by hour (exact history), for campaigns
+//     that are evergreen NOW -- a flipped evergreen->regular campaign is counted by the broadcast
+//     rule alone (Stage 4 F4);
 //   - D4 the Younique winback seed: campaign 217's five tranche hours (sum 46,272), guarded by
 //     id = 217 AND sent = 46272 AND status = 'paused' -- a miss writes nothing and is logged; the
 //     catch-up is re-running the five inserts by hand (runbook).
@@ -112,6 +114,9 @@ const sendHoursBackfillEvergreens = `
 INSERT INTO campaign_send_hours (campaign_id, hour, n)
 SELECT campaign_id, DATE_TRUNC('hour', sent_at, 'UTC'), COUNT(*) FROM campaign_sends
 WHERE sent_at IS NOT NULL
+    -- Stage 4 F4: currently-evergreen campaigns only. An evergreen flipped to regular is counted by
+    -- the broadcast rule alone (its whole sent at started_at), never twice.
+    AND campaign_id IN (SELECT id FROM campaigns WHERE evergreen)
 GROUP BY 1, 2
 ON CONFLICT (campaign_id, hour) DO NOTHING`
 
