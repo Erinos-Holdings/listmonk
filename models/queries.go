@@ -115,6 +115,9 @@ type Queries struct {
 	GetCampaignClickCounts     *sqlx.Stmt `query:"get-campaign-click-counts"`
 	GetCampaignLinkCounts      *sqlx.Stmt `query:"get-campaign-link-counts"`
 	GetCampaignBounceCounts    *sqlx.Stmt `query:"get-campaign-bounce-counts"`
+	// Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5) -- sends per bucket from
+	// campaign_send_hours (no boot-time interpolation).
+	GetCampaignSendCounts *sqlx.Stmt `query:"get-campaign-send-counts"`
 	DeleteCampaignViews        *sqlx.Stmt `query:"delete-campaign-views"`
 	DeleteCampaignLinkClicks   *sqlx.Stmt `query:"delete-campaign-link-clicks"`
 	ExportCampaignViews        *sqlx.Stmt `query:"export-campaign-views"`

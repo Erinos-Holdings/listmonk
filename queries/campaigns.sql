@@ -197,8 +197,14 @@ clicks AS (
     WHERE campaign_id = ANY($1)
     GROUP BY campaign_id
 ),
+-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D8) -- hard_bounces and
+-- complaints are the raw rows of those two types, in both modes, beside the UNCHANGED combined
+-- bounces (a new number is a new field).
 bounces AS (
-    SELECT campaign_id, COUNT(campaign_id) as num FROM bounces
+    SELECT campaign_id, COUNT(campaign_id) as num,
+        COUNT(campaign_id) FILTER (WHERE type = 'hard') AS hard,
+        COUNT(campaign_id) FILTER (WHERE type = 'complaint') AS complaint
+    FROM bounces
     WHERE campaign_id = ANY($1)
     GROUP BY campaign_id
 )
@@ -206,6 +212,8 @@ SELECT id as campaign_id,
     COALESCE(v.num, 0) AS views,
     COALESCE(c.num, 0) AS clicks,
     COALESCE(b.num, 0) AS bounces,
+    COALESCE(b.hard, 0) AS hard_bounces,
+    COALESCE(b.complaint, 0) AS complaints,
     COALESCE(l.lists, '[]') AS lists,
     COALESCE(m.media, '[]') AS media
 FROM (SELECT id FROM UNNEST($1) AS id) x
@@ -305,6 +313,16 @@ updateCounts AS (
     UPDATE campaigns
     SET sent = sent + uc.sent_count
     FROM uc WHERE campaigns.id = uc.campaign_id
+    RETURNING campaigns.id, campaigns.evergreen, uc.sent_count
+),
+sendHours AS (
+    -- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D2) -- the tick flush's
+    -- delta lands in the current UTC hour, in this same statement. Broadcasts only -- an evergreen's
+    -- sends are counted by mark-evergreen-sent, one per delivery, so they never count twice.
+    INSERT INTO campaign_send_hours (campaign_id, hour, n)
+    SELECT id, DATE_TRUNC('hour', NOW(), 'UTC'), sent_count FROM updateCounts
+    WHERE sent_count > 0 AND NOT evergreen
+    ON CONFLICT (campaign_id, hour) DO UPDATE SET n = campaign_send_hours.n + EXCLUDED.n
 ),
 u AS (
     -- For each campaign, update the to_send count and set the max_subscriber_id.
@@ -323,12 +341,19 @@ u AS (
 SELECT camps.*, campMedia.media_id FROM camps LEFT JOIN campMedia ON (campMedia.campaign_id = camps.id);
 
 -- name: get-campaign-analytics-unique-counts
+-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5) -- buckets are Mountain
+-- (America/Denver, DST-aware) wall-clock. The bucket is a NAIVE timestamp carrying Mountain time,
+-- which the API serializes without an offset and the page shows verbatim -- never convert it back
+-- to timestamptz. The zone is the ONE literal in the intval CTE and must equal the Dashboard
+-- statements' (a fork test asserts it).
 WITH intval AS (
     -- For intervals < a week, aggregate counts hourly, otherwise daily.
-    SELECT CASE WHEN (EXTRACT (EPOCH FROM ($3::TIMESTAMP - $2::TIMESTAMP)) / 86400) >= 7 THEN 'day' ELSE 'hour' END
+    SELECT CASE WHEN (EXTRACT (EPOCH FROM ($3::TIMESTAMP - $2::TIMESTAMP)) / 86400) >= 7 THEN 'day' ELSE 'hour' END AS iv,
+        'America/Denver'::TEXT AS tz
 ),
 uniqIDs AS (
-    SELECT DISTINCT ON(subscriber_id, campaign_id) subscriber_id, campaign_id, DATE_TRUNC((SELECT * FROM intval), created_at) AS "timestamp"
+    SELECT DISTINCT ON(subscriber_id, campaign_id) subscriber_id, campaign_id,
+        DATE_TRUNC((SELECT iv FROM intval), created_at AT TIME ZONE (SELECT tz FROM intval)) AS "timestamp"
     FROM %s
     WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3
     ORDER BY subscriber_id, campaign_id, "timestamp"
@@ -352,23 +377,48 @@ SELECT campaign_lists.list_name FROM campaign_lists
 
 -- name: get-campaign-analytics-counts
 -- raw: true
+-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5) -- Mountain wall-clock
+-- buckets, the unique counts' rule (a naive timestamp, never converted back to timestamptz).
 WITH intval AS (
     -- For intervals < a week, aggregate counts hourly, otherwise daily.
-    SELECT CASE WHEN (EXTRACT (EPOCH FROM ($3::TIMESTAMP - $2::TIMESTAMP)) / 86400) >= 7 THEN 'day' ELSE 'hour' END
+    SELECT CASE WHEN (EXTRACT (EPOCH FROM ($3::TIMESTAMP - $2::TIMESTAMP)) / 86400) >= 7 THEN 'day' ELSE 'hour' END AS iv,
+        'America/Denver'::TEXT AS tz
 )
-SELECT campaign_id, COUNT(*) AS "count", DATE_TRUNC((SELECT * FROM intval), created_at) AS "timestamp"
+SELECT campaign_id, COUNT(*) AS "count", DATE_TRUNC((SELECT iv FROM intval), created_at AT TIME ZONE (SELECT tz FROM intval)) AS "timestamp"
     FROM %s
     WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3
     GROUP BY campaign_id, "timestamp" ORDER BY "timestamp" ASC;
 
 -- name: get-campaign-bounce-counts
+-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5/D6) -- Mountain wall-clock
+-- buckets (the analytics counts' rule), and $4 narrows to one bounce type (hard, soft or
+-- complaint) for the analytics page's three type charts. An empty $4 counts every type, so the
+-- three typed series sum to the untyped one. Raw rows under every privacy setting.
 WITH intval AS (
     -- For intervals < a week, aggregate counts hourly, otherwise daily.
-    SELECT CASE WHEN (EXTRACT (EPOCH FROM ($3::TIMESTAMP - $2::TIMESTAMP)) / 86400) >= 7 THEN 'day' ELSE 'hour' END
+    SELECT CASE WHEN (EXTRACT (EPOCH FROM ($3::TIMESTAMP - $2::TIMESTAMP)) / 86400) >= 7 THEN 'day' ELSE 'hour' END AS iv,
+        'America/Denver'::TEXT AS tz
 )
-SELECT campaign_id, COUNT(*) AS "count", DATE_TRUNC((SELECT * FROM intval), created_at) AS "timestamp"
+SELECT campaign_id, COUNT(*) AS "count", DATE_TRUNC((SELECT iv FROM intval), created_at AT TIME ZONE (SELECT tz FROM intval)) AS "timestamp"
     FROM bounces
     WHERE campaign_id=ANY($1) AND created_at >= $2 AND created_at <= $3
+        AND ($4::TEXT = '' OR type::TEXT = $4::TEXT)
+    GROUP BY campaign_id, "timestamp" ORDER BY "timestamp" ASC;
+
+-- name: get-campaign-send-counts
+-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5) -- the selected campaigns'
+-- sends per bucket from campaign_send_hours, for the analytics charts' send bars. Same intval rule
+-- and Mountain wall-clock buckets as the analytics counts, so a send bar and a metric point land on
+-- the same Mountain hour or day. At the DST fall-back the two repeated hours merge into one bucket
+-- (accepted, one hour a year).
+WITH intval AS (
+    -- For intervals < a week, aggregate counts hourly, otherwise daily.
+    SELECT CASE WHEN (EXTRACT (EPOCH FROM ($3::TIMESTAMP - $2::TIMESTAMP)) / 86400) >= 7 THEN 'day' ELSE 'hour' END AS iv,
+        'America/Denver'::TEXT AS tz
+)
+SELECT campaign_id, SUM(n) AS "count", DATE_TRUNC((SELECT iv FROM intval), hour AT TIME ZONE (SELECT tz FROM intval)) AS "timestamp"
+    FROM campaign_send_hours
+    WHERE campaign_id=ANY($1) AND hour >= $2 AND hour <= $3
     GROUP BY campaign_id, "timestamp" ORDER BY "timestamp" ASC;
 
 -- name: get-campaign-country-counts
@@ -811,12 +861,22 @@ INSERT INTO campaign_lists (campaign_id, list_id, list_name)
     ON CONFLICT (campaign_id, list_id) DO UPDATE SET list_name = EXCLUDED.list_name;
 
 -- name: update-campaign-counts
-UPDATE campaigns SET
-    to_send=(CASE WHEN $2 != 0 THEN $2 ELSE to_send END),
-    sent=sent+$3,
-    last_subscriber_id=(CASE WHEN $4 > 0 THEN $4 ELSE last_subscriber_id END),
-    updated_at=NOW()
-WHERE id=$1;
+-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D2) -- the pipe cleanup's
+-- residual (what was sent since the last tick flush) lands in the current UTC hour in the same
+-- statement; nothing for a zero residual or an evergreen (mark-evergreen-sent counts those).
+WITH u AS (
+    UPDATE campaigns SET
+        to_send=(CASE WHEN $2 != 0 THEN $2 ELSE to_send END),
+        sent=sent+$3,
+        last_subscriber_id=(CASE WHEN $4 > 0 THEN $4 ELSE last_subscriber_id END),
+        updated_at=NOW()
+    WHERE id=$1
+    RETURNING id, evergreen
+)
+INSERT INTO campaign_send_hours (campaign_id, hour, n)
+SELECT id, DATE_TRUNC('hour', NOW(), 'UTC'), $3::INT FROM u
+WHERE $3::INT > 0 AND NOT evergreen
+ON CONFLICT (campaign_id, hour) DO UPDATE SET n = campaign_send_hours.n + EXCLUDED.n;
 
 -- name: record-send-failure
 -- Fork (send retry, SEND-RETRY-SPEC D5) -- one row per recipient a campaign could not

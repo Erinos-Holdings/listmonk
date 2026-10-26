@@ -123,6 +123,10 @@ type CampaignMeta struct {
 	Views      int `db:"views" json:"views"`
 	Clicks     int `db:"clicks" json:"clicks"`
 	Bounces    int `db:"bounces" json:"bounces"`
+	// Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D8) -- the raw bounce rows of
+	// type hard and complaint (the Campaigns page's H. Bounces / Complaints); Bounces stays combined.
+	HardBounces int `db:"hard_bounces" json:"hard_bounces"`
+	Complaints  int `db:"complaints" json:"complaints"`
 
 	// This is a list of {list_id, name} pairs unlike Subscriber.Lists[]
 	// because lists can be deleted after a campaign is finished, resulting
@@ -208,6 +212,8 @@ func (camps Campaigns) LoadStats(stmt *sqlx.Stmt) error {
 			camps[i].Views = c.Views
 			camps[i].Clicks = c.Clicks
 			camps[i].Bounces = c.Bounces
+			camps[i].HardBounces = c.HardBounces
+			camps[i].Complaints = c.Complaints
 			camps[i].Media = c.Media
 		}
 	}

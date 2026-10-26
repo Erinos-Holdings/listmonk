@@ -272,3 +272,78 @@ func TestDashboardBrandMatrixQueryInterpolates(t *testing.T) {
 		}
 	}
 }
+
+// Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5) -- the Campaign Analytics
+// statements bucket in Mountain wall-clock: each carries its zone as ONE literal, the SAME literal as
+// the Dashboard charts statement's (and so the integrations SES_DAILY_ZONE -- a cross-repo prose
+// pin), converts with AT TIME ZONE (the naive-timestamp output contract), never buckets in UTC, and
+// survives the boot-time interpolation of the %s table name where it has one.
+func TestCampaignAnalyticsZoneAgreement(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	qs := goyesql.Queries{}
+	for _, f := range []string{"campaigns.sql", "misc.sql"} {
+		b, err := os.ReadFile(filepath.Join(root, "queries", f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		q, err := goyesql.ParseBytes(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k, v := range q {
+			qs[k] = v
+		}
+	}
+	zoneRe := regexp.MustCompile(`'([A-Za-z_]+/[A-Za-z_]+)'::TEXT AS tz`)
+	charts, ok := qs["get-dashboard-charts-scoped"]
+	if !ok {
+		t.Fatal("get-dashboard-charts-scoped missing")
+	}
+	cz := zoneRe.FindAllStringSubmatch(charts.Query, -1)
+	if len(cz) != 1 {
+		t.Fatalf("charts zone literals %v, want exactly one", cz)
+	}
+	for name, interpolated := range map[string]bool{
+		"get-campaign-analytics-counts":        true,
+		"get-campaign-analytics-unique-counts": true,
+		"get-campaign-bounce-counts":           false,
+		"get-campaign-send-counts":             false,
+	} {
+		q, ok := qs[name]
+		if !ok || !strings.Contains(q.Query, "SELECT") {
+			t.Errorf("%s missing or empty after parse", name)
+			continue
+		}
+		// Only the raw tag (or none) -- a colon-bearing comment line would add one.
+		for k := range q.Tags {
+			if k != "raw" && k != "name" {
+				t.Errorf("%s carries a stray tag %q (a colon-bearing comment line?)", name, k)
+			}
+		}
+		z := zoneRe.FindAllStringSubmatch(q.Query, -1)
+		if len(z) != 1 || z[0][1] != cz[0][1] {
+			t.Errorf("%s zone literals %v, charts %v -- want exactly one each, equal", name, z, cz)
+		}
+		if strings.Count(q.Query, "'"+cz[0][1]+"'") != 1 {
+			t.Errorf("%s names the zone more than once", name)
+		}
+		if !strings.Contains(q.Query, "AT TIME ZONE (SELECT tz FROM intval)") {
+			t.Errorf("%s does not bucket through AT TIME ZONE", name)
+		}
+		if strings.Contains(q.Query, "'UTC'") {
+			t.Errorf("%s buckets in UTC", name)
+		}
+		s := q.Query
+		if interpolated {
+			s = fmt.Sprintf(q.Query, "campaign_views")
+		} else if strings.Contains(s, "%") {
+			t.Errorf("%s carries a percent sign but is not interpolated", name)
+		}
+		if strings.Contains(s, "%!") || strings.Contains(s, "%s") {
+			t.Errorf("%s: verb error or leftover placeholder after interpolation", name)
+		}
+	}
+}

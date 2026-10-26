@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"regexp"
@@ -104,6 +105,43 @@ type CampaignAnalyticsCount struct {
 	CampaignID int       `db:"campaign_id" json:"campaign_id"`
 	Count      int       `db:"count" json:"count"`
 	Timestamp  time.Time `db:"timestamp" json:"timestamp"`
+}
+
+// AnalyticsBucketLayout is the wire form of a CampaignAnalyticsCount bucket: wall-clock digits with
+// NO offset (fork, campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5).
+const AnalyticsBucketLayout = "2006-01-02T15:04:05"
+
+// MarshalJSON (fork, CAMPAIGN-SEND-SERIES-SPEC D5) -- the analytics statements bucket in Mountain
+// wall-clock (`... AT TIME ZONE 'America/Denver'`, a NAIVE timestamp). The driver hands a naive
+// timestamp back as a zero-offset time.Time, which the default encoder would write with a "Z" --
+// a browser would then shift it to its own zone. So the bucket is written as its digits alone,
+// without an offset, and the page shows it verbatim (Mountain in every browser). Never emit an
+// offset here and never convert the column back to timestamptz.
+func (c CampaignAnalyticsCount) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`{"campaign_id":%d,"count":%d,"timestamp":"%s"}`,
+		c.CampaignID, c.Count, c.Timestamp.Format(AnalyticsBucketLayout))), nil
+}
+
+// UnmarshalJSON is MarshalJSON's inverse (a Go reader of the API, the handler tests): the
+// offset-less bucket parses as wall-clock digits (in UTC, carrying no zone meaning); an RFC 3339
+// value is still accepted.
+func (c *CampaignAnalyticsCount) UnmarshalJSON(b []byte) error {
+	var raw struct {
+		CampaignID int    `json:"campaign_id"`
+		Count      int    `json:"count"`
+		Timestamp  string `json:"timestamp"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	ts, err := time.Parse(AnalyticsBucketLayout, raw.Timestamp)
+	if err != nil {
+		if ts, err = time.Parse(time.RFC3339Nano, raw.Timestamp); err != nil {
+			return err
+		}
+	}
+	c.CampaignID, c.Count, c.Timestamp = raw.CampaignID, raw.Count, ts
+	return nil
 }
 
 type CampaignAnalyticsLink struct {

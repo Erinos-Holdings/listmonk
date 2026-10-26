@@ -67,14 +67,21 @@ export function shapeSendsClicks(sends, clicks, { labelOf, sendsLabel, clicksLab
 // its leading power of ten (850 -> 900, 790 -> 800, 1,650 -> 2,000), so the top tick lands on the
 // axis's own step instead of an odd extra label; the line peaks at or below half height.
 // undefined (chart.js picks) when there are no clicks.
-export function clicksAxisMax(clicks) {
-  const top = Math.max(0, ...(clicks || []).map((d) => d.count || 0));
+//
+// The headroom rule itself is headroomAxisMax over plain numbers (CAMPAIGN-SEND-SERIES-SPEC D7
+// generalizes it to the Campaign Analytics metric axis); non-numbers count as 0.
+export function headroomAxisMax(values) {
+  const top = Math.max(0, ...(values || []).map((v) => (Number.isFinite(v) ? v : 0)));
   if (top <= 0) {
     return undefined;
   }
   const raw = top * CLICKS_HEADROOM;
   const unit = 10 ** Math.floor(Math.log10(raw));
   return Math.ceil(raw / unit) * unit;
+}
+
+export function clicksAxisMax(clicks) {
+  return headroomAxisMax((clicks || []).map((d) => d.count));
 }
 
 // The chart.js options merged over the line defaults: no legend (each axis's title and numbers

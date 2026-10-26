@@ -245,6 +245,14 @@ export const getSystemHealth = async (kind, days) => http.get(
   { params: { days }, loading: models.systemHealth, camelCase: false },
 );
 
+// Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D9) -- the ses documents for
+// the Campaigns page's tier thresholds: quiet (no toast, no loading flag) because a failed or
+// forbidden read (brands:get) is fail-dark -- the columns simply stay uncolored.
+export const getSystemHealthQuiet = async (kind, days) => http.get(
+  `/api/system/health/${encodeURIComponent(kind)}`,
+  { params: { days }, camelCase: false, disableToast: true },
+);
+
 export const getList = async (id) => http.get(
   `/api/lists/${id}`,
   { loading: models.list },
@@ -524,6 +532,29 @@ export const getCampaignClickCounts = async (params) => http.get(
 
 export const getCampaignBounceCounts = async (params) => http.get(
   '/api/campaigns/analytics/bounces',
+  { params, loading: models.campaigns },
+);
+
+// Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5/D6) -- the sends per bucket
+// and the three bounce-type series, [{campaignId, count, timestamp}] with the timestamp a naive
+// Mountain wall-clock string (shown verbatim, never converted).
+export const getCampaignSendCounts = async (params) => http.get(
+  '/api/campaigns/analytics/sends',
+  { params, loading: models.campaigns },
+);
+
+export const getCampaignHardBounceCounts = async (params) => http.get(
+  '/api/campaigns/analytics/hard_bounces',
+  { params, loading: models.campaigns },
+);
+
+export const getCampaignSoftBounceCounts = async (params) => http.get(
+  '/api/campaigns/analytics/soft_bounces',
+  { params, loading: models.campaigns },
+);
+
+export const getCampaignComplaintCounts = async (params) => http.get(
+  '/api/campaigns/analytics/complaints',
   { params, loading: models.campaigns },
 );
 

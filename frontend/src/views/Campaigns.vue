@@ -240,13 +240,17 @@
           <!-- Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5-D7) -- Views, Clicks and Bounces
                show the rate over Sent (props.row.sent, the same fetch as the counts) with the
                count in grey; with nothing sent the count stands alone and there is no hover. -->
+          <!-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D8/D9) -- H. Bounces
+               and Complaints replace the combined Bounces: both link to the Bounces page for the
+               campaign, and their rate text takes the stored tier color (campaignTiers.mjs; none
+               without thresholds). -->
           <p v-for="f in rateFields" :key="f.field" :set="cell = rateOf(props.row, f)">
             <label for="#">{{ $t(f.label) }}</label>
             <span :title="rateTip(props.row)">
-              <router-link v-if="f.field === 'bounces'"
-                :to="{ name: 'bounces', query: { campaign_id: props.row.id } }">
+              <router-link v-if="f.bouncesLink"
+                :to="{ name: 'bounces', query: { campaign_id: props.row.id } }" :data-cy="`stat-${f.field}`">
                 <template v-if="cell.pct">
-                  {{ cell.pct }}
+                  <span :class="tierClassOf(props.row, f)">{{ cell.pct }}</span>
                   <span class="is-size-7 has-text-grey">({{ cell.count }})</span>
                 </template>
                 <template v-else>{{ cell.count }}</template>
@@ -399,6 +403,7 @@ import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus, sendLangCode } from '../langs';
 import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
+import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
 import { filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
 import {
@@ -410,10 +415,18 @@ import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
 // Sent / To send. Bounces keep two decimals (the Dashboard's bounce digits).
+// Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D8/D9/D10) -- H. Bounces (raw
+// type 'hard') and Complaints replace the combined Bounces, each with its tier key in the stored
+// campaignThresholds.
 const RATE_FIELDS = [
   { field: 'views', label: 'campaigns.views', digits: 1 },
   { field: 'clicks', label: 'campaigns.clicks', digits: 1 },
-  { field: 'bounces', label: 'globals.terms.bounces', digits: 2 },
+  {
+    field: 'hardBounces', label: 'campaigns.hardBounces', digits: 2, tier: 'hardBounce', bouncesLink: true,
+  },
+  {
+    field: 'complaints', label: 'campaigns.complaints', digits: 2, tier: 'complaint', bouncesLink: true,
+  },
 ];
 
 export default Vue.extend({
@@ -469,6 +482,9 @@ export default Vue.extend({
       routeScopeOption: ROUTE_SCOPE_OPTION,
       pollID: null,
       campaignStatsData: {},
+      // Fork (campaign send series, D9) -- the stored tier thresholds from the ses document; null =
+      // no coloring (absent, malformed, failed or forbidden read).
+      campaignThresholds: null,
 
       // Table bulk row selection states.
       bulk: {
@@ -528,6 +544,25 @@ export default Vue.extend({
     // { pct, count }, the rate over the row's own sent (null with nothing sent).
     rateOf(c, f) {
       return rateCell(c[f.field], c.sent, f.digits, (n) => this.$utils.formatNumber(n));
+    },
+
+    // Fork (campaign send series, D9) -- the tier class of a tiered cell's rate text ('' = today's
+    // styling).
+    tierClassOf(c, f) {
+      return f.tier ? tierClass(tierOf(c[f.field], c.sent, f.tier, this.campaignThresholds, f.digits)) : '';
+    },
+
+    // D9 -- the thresholds, read once, quietly: a reader without brands:get (the endpoint's
+    // permission) is not asked, and any failure leaves the columns uncolored.
+    fetchCampaignThresholds() {
+      if (!this.$can('brands:get')) {
+        return;
+      }
+      this.$api.getSystemHealthQuiet('ses', 7).then((docs) => {
+        this.campaignThresholds = thresholdsFromDocs(docs);
+      }).catch(() => {
+        this.campaignThresholds = null;
+      });
     },
 
     // D7 -- the hover names the denominator and the counting mode; none when there is no rate.
@@ -949,6 +984,8 @@ export default Vue.extend({
   mounted() {
     // Fork (global brand, D3) -- the first scoped fetch waits for the lists (I13).
     this.afterListsLoaded(() => this.refreshCampaigns());
+    // Fork (campaign send series, D9) -- the H. Bounces / Complaints tier thresholds.
+    this.fetchCampaignThresholds();
   },
 
   destroyed() {

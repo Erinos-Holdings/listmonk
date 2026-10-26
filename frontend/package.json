@@ -16,6 +16,8 @@
     "test:clients": "node --test src/clientRows.test.mjs src/clientRoster.test.mjs",
     "test:access": "node --test src/accessPolicy.test.mjs",
     "test:rates": "node --test src/campaignRates.test.mjs",
+    "test:send-overlay": "node --test src/sendOverlay.test.mjs src/sendsClicksChart.test.mjs",
+    "test:campaign-tiers": "node --test src/campaignTiers.test.mjs",
     "test:webauthn": "node --test src/webauthnCodec.test.mjs",
     "test:review-navigate": "node --test src/reviewNavigate.test.mjs",
     "test:review-checklist": "node --test src/reviewChecklist.test.mjs",

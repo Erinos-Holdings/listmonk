@@ -840,3 +840,16 @@ CREATE TABLE IF NOT EXISTS campaign_shop_link_recipients (
     kind             TEXT NOT NULL,
     PRIMARY KEY (campaign_id, subscriber_id, brand)
 );
+
+-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D1) -- how many messages each
+-- campaign sent per UTC hour (hour is always a DATE_TRUNC('hour', ...) value). Broadcasts are written
+-- by the manager's sent-count statements (next-campaigns' updateCounts, update-campaign-counts),
+-- evergreens by mark-evergreen-sent, each exactly once. Mirrored in internal/migrations/v6.2.26.go
+-- (the CREATE only; the DROP is schema.sql's).
+DROP TABLE IF EXISTS campaign_send_hours CASCADE;
+CREATE TABLE IF NOT EXISTS campaign_send_hours (
+    campaign_id      INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    hour             TIMESTAMP WITH TIME ZONE NOT NULL,
+    n                INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, hour)
+);

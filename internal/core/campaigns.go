@@ -592,16 +592,35 @@ func (c *Core) GetRunningCampaignStats() ([]models.CampaignStats, error) {
 	return out, nil
 }
 
+// analyticsBounceTypes (fork, CAMPAIGN-SEND-SERIES-SPEC D6) maps an analytics type to the
+// get-campaign-bounce-counts type filter ($4); "" counts every type.
+var analyticsBounceTypes = map[string]string{
+	"bounces":      "",
+	"hard_bounces": "hard",
+	"soft_bounces": "soft",
+	"complaints":   "complaint",
+}
+
 func (c *Core) GetCampaignAnalyticsCounts(campIDs []int, typ, fromDate, toDate string) ([]models.CampaignAnalyticsCount, error) {
 	// Pick campaign view counts or click counts.
-	var stmt *sqlx.Stmt
+	// Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5/D6) -- sends per bucket,
+	// and the bounce series per type (the analytics page's three type charts); "bounces" stays the
+	// combined series.
+	var (
+		stmt       *sqlx.Stmt
+		bounceType *string
+	)
 	switch typ {
 	case "views":
 		stmt = c.q.GetCampaignViewCounts
 	case "clicks":
 		stmt = c.q.GetCampaignClickCounts
-	case "bounces":
+	case "sends":
+		stmt = c.q.GetCampaignSendCounts
+	case "bounces", "hard_bounces", "soft_bounces", "complaints":
 		stmt = c.q.GetCampaignBounceCounts
+		t := analyticsBounceTypes[typ]
+		bounceType = &t
 	default:
 		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("globals.messages.invalidData"))
 	}
@@ -610,8 +629,13 @@ func (c *Core) GetCampaignAnalyticsCounts(campIDs []int, typ, fromDate, toDate s
 		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("analytics.invalidDates"))
 	}
 
+	args := []any{pq.Array(campIDs), fromDate, toDate}
+	if bounceType != nil {
+		args = append(args, *bounceType)
+	}
+
 	out := []models.CampaignAnalyticsCount{}
-	if err := stmt.Select(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
+	if err := stmt.Select(&out, args...); err != nil {
 		c.log.Printf("error fetching campaign %s: %v", typ, err)
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))

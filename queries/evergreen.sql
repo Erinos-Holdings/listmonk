@@ -127,8 +127,20 @@ LIMIT 1;
 -- retries before that point does NOT mark the claim (it is recorded in
 -- campaign_send_failures instead, I8) -- the claim ages out after an hour and the
 -- subscriber is welcomed late rather than never; the error threshold handles outages.
-UPDATE campaign_sends SET sent_at = NOW()
-WHERE campaign_id = $1 AND subscriber_id = $2 AND sent_at IS NULL;
+-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D2) -- the delivery counts 1 in
+-- the current UTC hour of campaign_send_hours, in the same statement, ONLY when the mark matched a
+-- claim (the CTE's RETURNING). A repeat or no-op mark writes nothing. This is the ONLY counter of
+-- evergreen sends (the manager's delta paths skip evergreens). campaign_sends has no unique key, so
+-- an aged-out claim and its re-claim can both match one mark -- the GROUP BY keeps that ONE
+-- delivery at 1 (and keeps ON CONFLICT from touching a row twice, which would abort the mark).
+WITH m AS (
+    UPDATE campaign_sends SET sent_at = NOW()
+    WHERE campaign_id = $1 AND subscriber_id = $2 AND sent_at IS NULL
+    RETURNING campaign_id
+)
+INSERT INTO campaign_send_hours (campaign_id, hour, n)
+SELECT campaign_id, DATE_TRUNC('hour', NOW(), 'UTC'), 1 FROM m GROUP BY campaign_id
+ON CONFLICT (campaign_id, hour) DO UPDATE SET n = campaign_send_hours.n + EXCLUDED.n;
 
 -- name: release-evergreen-claim
 -- The worker dropped the queued message unattempted (pipe stopped by pause/cancel).

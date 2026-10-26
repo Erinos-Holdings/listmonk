@@ -65,14 +65,13 @@
             <b-loading v-if="v.loading" :active="v.loading" :is-full-page="false" />
             <!-- Fork (campaign rates) -- the total as a rate over the selection's Sent, count in grey,
                  the campaigns list's shape; the count alone when nothing was sent. -->
-            <!-- Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- the Bounces count is
-                 followed by its non-zero types ("4: 3 hard, 1 soft"); the plain count until the
-                 split loads or when every type is zero. -->
-            <h4 v-if="v.type !== 'bar'">
+            <!-- Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D7) -- the combined
+                 Bounces chart and its split are replaced by the Hard Bounces, Soft Bounces and
+                 Complaints charts; each header is its own series summed over the window, over Sent. -->
+            <h4 v-if="v.type !== 'bar'" :data-cy="`${k}-total`">
               {{ v.name }}
               <template v-if="!v.loading && totalCells[k].pct">{{ totalCells[k].pct }}</template>
-              <span class="has-text-grey-light" :data-cy="k === 'bounces' ? 'bounces-total' : null">({{ totalCells[k].count }}<template
-                  v-if="k === 'bounces' && !v.loading && bounceSplit">: {{ bounceSplit }}</template>)</span>
+              <span class="has-text-grey-light">({{ totalCells[k].count }})</span>
             </h4>
             <!-- Fork (shop-link header total, 2026-10-19) -- Links too: its clicks over Sent, count in grey. -->
             <h4 v-else-if="k !== 'shopLinks'">
@@ -111,7 +110,7 @@
                  versus per-link clickers. -->
             <p v-if="k === 'clicks'" class="is-size-7 has-text-grey" data-cy="clicks-hint">{{ $t('analytics.clicksHint') }}</p>
             <!-- Fork (bounce types, integrations BOUNCE-TYPES-SPEC D4) -- the Bounces hint. -->
-            <p v-if="k === 'bounces'" class="is-size-7 has-text-grey" data-cy="bounces-hint">{{ $t('analytics.bouncesHint') }}</p>
+            <p v-if="k === 'hardBounces'" class="is-size-7 has-text-grey" data-cy="bounces-hint">{{ $t('analytics.bouncesHint') }}</p>
             <p v-if="k === 'links'" class="is-size-7 has-text-grey" data-cy="links-hint">{{ $t('analytics.linksHint') }}</p>
             <!-- Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- the hint under the title. -->
             <p v-if="k === 'shopLinks'" class="is-size-7 has-text-grey" data-cy="shop-links-hint">{{ $t('analytics.shopLinksHint') }}</p>
@@ -124,11 +123,15 @@
                 {{ $t('analytics.shopLinksPartial') }}
               </p>
             </template>
+            <!-- Fork (campaign send series, D7) -- the line charts carry their send-overlay options
+                 (sends on the left axis, the metric on the right); the bar charts none. -->
             <chart :type="v.type" v-if="!v.loading && !(k === 'shopLinks' && shopLinksView === 'rate' && shopLinksNoSnapshot)"
-              :data="v.data" :on-click="v.onClick" />
+              :data="v.data" :options="v.options || null" :on-click="v.onClick" />
           </div>
+          <!-- Fork (campaign send series, D7) -- Views and Clicks keep their ring; the three bounce-type
+               charts have none. -->
           <div class="column is-2 donut-container">
-            <chart type="donut" v-if="!v.loading" :data="v.donutData" />
+            <chart type="donut" v-if="!v.loading && !v.noDonut" :data="v.donutData" />
           </div>
         </div>
       </div>
@@ -207,7 +210,7 @@ import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
-import { bounceSplitText } from '../bounceTypes.mjs'; // eslint-disable-line import/extensions
+import { metricAxisMax, sendOverlayOptions, shapeSendOverlay } from '../sendOverlay.mjs'; // eslint-disable-line import/extensions
 import { aggregateShopLinkRate, shapeShopLinkBars, totalShopLinkClicks } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -218,8 +221,10 @@ import BrandContextNotice from '../components/BrandContextNotice.vue';
 // clicks (every kind, the sum getData keeps in counts.shopLinks) over the selection's Sent.
 // EVERY chart in `charts` needs an entry here AND in `counts` -- the header template reads
 // totalCells[k] for each one, and a missing key is an undefined cell at render.
+// Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D7) -- the three bounce-type
+// charts replace bounces, two decimals each.
 const RATE_DIGITS = {
-  views: 1, clicks: 1, bounces: 2, links: 1, shopLinks: 1,
+  views: 1, clicks: 1, hardBounces: 2, softBounces: 2, complaints: 2, links: 1, shopLinks: 1,
 };
 
 // The view's end-of-day convention for To: today 23:59.
@@ -260,7 +265,9 @@ export default Vue.extend({
       counts: {
         views: 0,
         clicks: 0,
-        bounces: 0,
+        hardBounces: 0,
+        softBounces: 0,
+        complaints: 0,
         links: 0,
         // Fork (shop-link attribution, SHOP-LINK-ATTRIBUTION-SPEC D5).
         shopLinks: 0,
@@ -278,11 +285,16 @@ export default Vue.extend({
       // total (headers, Location) and per id (the ring). Set at fetch time, so editing the picker
       // before the next search does not move the denominators under the numbers.
       sent: { total: 0, byId: {} },
+      // Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D7) -- the five line
+      // charts carry the selection's sends as translucent bars (overlay: true; one sends fetch per
+      // search, shared). Views and Clicks keep their ring; the bounce-type charts have none.
       charts: {
         views: {
           name: this.$t('campaigns.views'),
           type: 'line',
           data: null,
+          options: null,
+          overlay: true,
           fn: this.$api.getCampaignViewCounts,
           chartFn: this.makeCharts,
           loading: false,
@@ -292,18 +304,46 @@ export default Vue.extend({
           name: this.$t('campaigns.clicks'),
           type: 'line',
           data: null,
+          options: null,
+          overlay: true,
           fn: this.$api.getCampaignClickCounts,
           chartFn: this.makeCharts,
           loading: false,
         },
 
-        bounces: {
-          name: this.$t('globals.terms.bounces'),
+        hardBounces: {
+          name: this.$t('analytics.hardBounces'),
           type: 'line',
           data: null,
-          fn: this.$api.getCampaignBounceCounts,
+          options: null,
+          overlay: true,
+          noDonut: true,
+          fn: this.$api.getCampaignHardBounceCounts,
           chartFn: this.makeCharts,
-          donutColor: chartColorRed,
+          loading: false,
+        },
+
+        softBounces: {
+          name: this.$t('analytics.softBounces'),
+          type: 'line',
+          data: null,
+          options: null,
+          overlay: true,
+          noDonut: true,
+          fn: this.$api.getCampaignSoftBounceCounts,
+          chartFn: this.makeCharts,
+          loading: false,
+        },
+
+        complaints: {
+          name: this.$t('analytics.complaints'),
+          type: 'line',
+          data: null,
+          options: null,
+          overlay: true,
+          noDonut: true,
+          fn: this.$api.getCampaignComplaintCounts,
+          chartFn: this.makeCharts,
           loading: false,
         },
 
@@ -344,10 +384,6 @@ export default Vue.extend({
         fetched: false,
         sort: { ...CLIENT_DEFAULT_SORT },
       },
-
-      // Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- the raw rows of the Bounces
-      // header's split ([{ type, count }]); empty until the split loads.
-      bounceTypes: [],
 
       form: {
         campaigns: [],
@@ -449,7 +485,10 @@ export default Vue.extend({
       };
     },
 
-    makeCharts(typ, campaigns, data) {
+    // Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D7) -- the metric as one
+    // line per campaign on the right axis and that campaign's sends as translucent bars on the left,
+    // in the same color (sendOverlay.mjs owns the shaping; buckets are Mountain, shown verbatim).
+    makeCharts(typ, campaigns, data, sends) {
       // Make a campaign id => camp lookup map to group incoming
       // data by campaigns.
       const camps = campaigns.reduce((obj, c) => {
@@ -458,20 +497,22 @@ export default Vue.extend({
         return out;
       }, {});
       const campIDs = Object.keys(camps);
-      // datasets[] array for line chart.
-      const lines = campIDs.map((id, n) => {
-        const cId = parseInt(id, 10);
-        const points = data.filter((item) => item.campaignId === cId);
-
-        return {
-          label: camps[id].name,
-          data: points.map((item) => ({ x: this.formatDateTime(item.timestamp), y: item.count })),
-          borderColor: chartColors[n % chartColors.length],
-          borderWidth: 2,
-          pointHoverBorderWidth: 5,
-          pointBorderWidth: 0.5,
-        };
+      const overlay = shapeSendOverlay({
+        campaigns: campaigns.map((c) => ({ id: c.id, name: c.name })),
+        metric: data,
+        sends,
+        palette: chartColors,
+        sendsLabel: (name) => this.$t('analytics.sendsOf', { name }),
       });
+      const options = sendOverlayOptions({
+        sendsTitle: this.$t('campaigns.sent'),
+        metricTitle: this.charts[typ].name,
+        metricMax: metricAxisMax(data),
+      });
+
+      if (this.charts[typ].noDonut) {
+        return { points: overlay, donut: null, options };
+      }
 
       // Donut.
       const labels = [];
@@ -491,7 +532,7 @@ export default Vue.extend({
           data: points, backgroundColor: chartColors, borderWidth: 6, rates,
         }],
       };
-      return { points: { datasets: lines }, donut };
+      return { points: overlay, donut, options };
     },
 
     onSubmit() {
@@ -548,22 +589,38 @@ export default Vue.extend({
       return rateCell(n, this.countryTotals[field], 1).pct;
     },
 
-    getData(typ, camps) {
+    // Fork (campaign send series, D7) -- an overlay chart waits for the search's one sends fetch
+    // (sends, a promise of the rows; a failed sends fetch is no bars, never a failed chart).
+    getData(typ, camps, sends) {
       this.charts[typ].loading = true;
       // Call the HTTP API.
-      this.charts[typ].fn({
+      const metric = this.charts[typ].fn({
         id: camps.map((c) => c.id),
         from: this.form.from,
         to: this.form.to,
-      }).then((data) => {
+      });
+      const overlay = this.charts[typ].overlay ? sends : Promise.resolve([]);
+      Promise.all([metric, overlay]).then(([data, sendRows]) => {
         // Set the total count.
         this.counts[typ] = data.reduce((sum, d) => sum + d.count, 0);
 
-        const { points, donut } = this.charts[typ].chartFn(typ, camps, data);
+        const { points, donut, options } = this.charts[typ].chartFn(typ, camps, data, sendRows);
         this.charts[typ].data = points;
         this.charts[typ].donutData = donut;
+        if (options) {
+          this.charts[typ].options = options;
+        }
         this.charts[typ].loading = false;
       });
+    },
+
+    // The selection's sends per bucket for the overlay charts, fetched once per search.
+    getSends(camps) {
+      return this.$api.getCampaignSendCounts({
+        id: camps.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((rows) => (Array.isArray(rows) ? rows : [])).catch(() => []);
     },
 
     // Fork (location stats) -- fetched alongside the charts, for the same campaigns and range.
@@ -608,20 +665,6 @@ export default Vue.extend({
 
     onClientSort(field, order) {
       this.clients.sort = { field, order };
-    },
-
-    // Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- the Bounces header's split, fetched
-    // beside the charts for the same campaigns and range (the getCountries shape). Cleared first so
-    // a new selection never shows the previous one's split; a failed fetch leaves the plain count.
-    getBounceTypes(camps) {
-      this.bounceTypes = [];
-      this.$api.getCampaignBounceTypeCounts({
-        id: camps.map((c) => c.id),
-        from: this.form.from,
-        to: this.form.to,
-      }).then((data) => {
-        this.bounceTypes = Array.isArray(data) ? data : [];
-      }).catch(() => {});
     },
 
     // A client's share of the column's own total (Unknown included), as countryShare.
@@ -697,17 +740,6 @@ export default Vue.extend({
     totalCells() {
       const fmt = this.$utils.formatNumber.bind(this.$utils);
       return Object.fromEntries(Object.keys(RATE_DIGITS).map((k) => [k, rateCell(this.counts[k], this.sent.total, RATE_DIGITS[k], fmt)]));
-    },
-
-    // Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- "3 hard, 1 soft" after the Bounces
-    // count, or "" (the plain count) when the split has not loaded or every type is zero.
-    bounceSplit() {
-      const fmt = this.$utils.formatNumber.bind(this.$utils);
-      return bounceSplitText(this.bounceTypes, {
-        hard: this.$t('analytics.bounceHard'),
-        soft: this.$t('analytics.bounceSoft'),
-        complaint: this.$t('analytics.bounceComplaint'),
-      }, fmt);
     },
 
     // Fork (shop-link header total, 2026-10-19) -- the Shop Link Attribution header's cell: in
@@ -835,21 +867,22 @@ export default Vue.extend({
 
           this.setSent(this.form.campaigns);
 
-          // Fetch count for each analytics type (views, counts, bounces);
+          // Fork (campaign send series, D7) -- the sends, once, shared by the overlay charts.
+          const sends = this.getSends(this.form.campaigns);
+
+          // Fetch count for each analytics type (views, clicks, the bounce types, links);
           Object.keys(this.charts).forEach((k) => {
             this.charts[k].data = null;
             this.charts[k].donutData = null;
 
             // Fetch views, clicks, bounces for every campaign.
-            this.getData(k, this.form.campaigns);
+            this.getData(k, this.form.campaigns, sends);
           });
 
           // Fork (location stats) -- the Location table.
           this.getCountries(this.form.campaigns);
           // Fork (client stats) -- the Email clients table.
           this.getClients(this.form.campaigns);
-          // Fork (bounce types, integrations BOUNCE-TYPES-SPEC D3) -- the Bounces header's split.
-          this.getBounceTypes(this.form.campaigns);
         });
       });
     }

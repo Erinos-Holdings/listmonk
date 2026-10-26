@@ -95,6 +95,8 @@ var migList = []migFunc{
 	{"v6.2.24", migrations.V6_2_24},
 	// Fork migration (erinos): shop-link frozen -- the campaign_shop_link_recipients per-recipient kind snapshot (SHOP-LINK-FROZEN-SPEC) — see internal/migrations/v6.2.25.go.
 	{"v6.2.25", migrations.V6_2_25},
+	// Fork migration (erinos): campaign send series -- the campaign_send_hours table, backfilled from finished/cancelled broadcasts, campaign_sends and the campaign 217 winback seed (CAMPAIGN-SEND-SERIES-SPEC) — see internal/migrations/v6.2.26.go.
+	{"v6.2.26", migrations.V6_2_26},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files
