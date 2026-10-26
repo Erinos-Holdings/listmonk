@@ -169,7 +169,7 @@ test('I8: the initial sort is Clicks descending in pct mode', () => {
   assert.deepEqual(loadState(null), { sort: { field: 'clicks', order: 'desc' }, mode: 'pct' });
 });
 
-test('Views: funnel order before Clicks, sortable, mode-following, no threshold ever', () => {
+test('Views: funnel order before Clicks, sortable, mode-following, warnBelow threshold with its own floor', () => {
   // Column order flows from ENGAGEMENT_FIELDS; the default sort stays Clicks (asserted above).
   assert.deepEqual([...ENGAGEMENT_FIELDS], ['views', 'clicks', 'hard_bounces', 'blocks', 'complaints']);
   const rows = shapeRows(api, { brands }).slice(0, 2);
@@ -178,12 +178,27 @@ test('Views: funnel order before Clicks, sortable, mode-following, no threshold 
   assert.equal(cellText(rows[0], 'views', 'pct'), '12.00%');
   assert.equal(cellText(rows[0], 'views', 'num'), '1200');
   assert.deepEqual(clickSort({ field: 'clicks', order: 'desc' }, 'views'), { field: 'views', order: 'desc' });
-  // Context, not a verdict: no stored threshold applies to views, whatever a doc carries.
-  assert.equal(breachesThreshold({ views: { warn: 0, minSent: 0 } }, 'views', 0.9, { sent: 100000 }), false);
+  // Views color like clicks -- below the stored warnBelow, only at sent >= the stored minSent
+  // (user decision 2026-10-26; the values live in lib/brand-health.ts, deliberately not these).
+  const VTH = { views: { warnBelow: 0.5, minSent: 7 } };
+  assert.equal(breachesThreshold(VTH, 'views', 0.4, { sent: 7 }), true);
+  assert.equal(breachesThreshold(VTH, 'views', 0.5, { sent: 7 }), false);
+  assert.equal(breachesThreshold(VTH, 'views', 0.4, { sent: 6 }), false);
+  // A warn-shaped entry (no warnBelow) never colors views.
+  assert.equal(breachesThreshold({ views: { warn: 0.1, minSent: 1 } }, 'views', 0.9, { sent: 100 }), false);
   const r = shapeRows([{
-    brand: 'b', subscribers: {}, sent: 1000, views: 900, clicks: 0, hard_bounces: 0, blocks: 0, complaints: 0, health: {}, thresholds: { views: { warn: 0.1, minSent: 1 } },
+    brand: 'b', subscribers: {}, sent: 10, views: 1, clicks: 0, hard_bounces: 0, blocks: 0, complaints: 0, health: {}, thresholds: VTH,
   }])[0];
-  assert.deepEqual(engagementCell(r, 'views', 'pct'), { cls: '' });
+  assert.deepEqual(engagementCell(r, 'views', 'pct'), { cls: BREACH_CLASS }); // 10% < 50% at the floor
+  const clean = shapeRows([{
+    brand: 'b', subscribers: {}, sent: 10, views: 6, clicks: 0, hard_bounces: 0, blocks: 0, complaints: 0, health: {}, thresholds: VTH,
+  }])[0];
+  assert.deepEqual(engagementCell(clean, 'views', 'pct'), { cls: '' }); // 60% >= 50%
+  // A row whose thresholds lack a views entry (an older document) colors nothing.
+  const old = shapeRows([{
+    brand: 'b', subscribers: {}, sent: 1000, views: 0, clicks: 0, hard_bounces: 0, blocks: 0, complaints: 0, health: {}, thresholds: { clicks: { warnBelow: 0.5, minSent: 1 } },
+  }])[0];
+  assert.deepEqual(engagementCell(old, 'views', 'pct'), { cls: '' });
 });
 
 test('I8: an engagement column sorts by the displayed quantity -- rate in pct, count in num', () => {

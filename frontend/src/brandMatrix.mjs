@@ -12,9 +12,9 @@
 import { brandLabelOf, matchesLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 // D4: the Engagement section's columns -- each a count over `sent`. Views sits before Clicks
-// (funnel order: Sent -> Views -> Clicks) and has deliberately NO threshold (no THRESHOLD_KEYS
-// entry): Apple MPP auto-opens inflate it, so it is context to compare across brands, never a
-// verdict (the footnote carries the caveat). The default sort stays Clicks.
+// (funnel order: Sent -> Views -> Clicks); its stored threshold is a warnBelow like clicks'
+// (user decision 2026-10-26 -- a relative cross-brand signal; the Apple-MPP inflation caveat
+// stays in the footnote). The default sort stays Clicks.
 export const ENGAGEMENT_FIELDS = Object.freeze(['views', 'clicks', 'hard_bounces', 'blocks', 'complaints']);
 
 // The subscriber columns -- always counts, never governed by the mode.
@@ -206,6 +206,7 @@ export function spamCell(row) {
 // BrandHealth Lambda stored on the brand's document (lib/brand-health.ts MATRIX_THRESHOLDS),
 // projected verbatim by get-dashboard-brand-matrix; comparing the displayed rate against it is
 // rendering. One red tier (the GP Spam % issues class); Blocks has no threshold; % mode only.
+//   views        red when rate <  views.warnBelow,   only at sent >= views.minSent
 //   clicks       red when rate <  clicks.warnBelow,  only at sent >= clicks.minSent
 //   hard_bounces red when rate >= hardBounces.warn,  only at sent >= hardBounces.minSent
 //   complaints   red when rate >= complaints.warn,   only at sent >= complaints.minSent
@@ -215,10 +216,14 @@ export function spamCell(row) {
 // The floors: for clicks and hard bounces they mirror the SES classify-or-stay-silent floors, so
 // the matrix never flags what the Brands page reads ok/unknown. Complaints deliberately BREAK that
 // property (integrations DASHBOARDS-POLISH2-SPEC D1, user decision 2026-10-25: the stored
-// complaints.minCount is 1, so any complaint at a rate >= warn colors). The values -- and that
-// decision -- live in lib/brand-health.ts; this helper only applies whatever floor is stored.
+// complaints.minCount is 1, so any complaint at a rate >= warn colors), and so do views (user
+// decision 2026-10-26: a 10-send floor, far below the 200-send SES floors, so tiny brands color).
+// The values -- and those decisions -- live in lib/brand-health.ts; this helper only applies
+// whatever floor is stored.
 // (thresholdsOf / firstThresholds sit above shapeRow, which reads them.)
-export const THRESHOLD_KEYS = Object.freeze({ clicks: 'clicks', hard_bounces: 'hardBounces', complaints: 'complaints' });
+export const THRESHOLD_KEYS = Object.freeze({
+  views: 'views', clicks: 'clicks', hard_bounces: 'hardBounces', complaints: 'complaints',
+});
 export const BREACH_CLASS = 'has-text-danger';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -240,7 +245,7 @@ export function breachesThreshold(thresholds, field, rate, counts = {}) {
   if (!floorMet) {
     return false;
   }
-  if (field === 'clicks') {
+  if (field === 'clicks' || field === 'views') {
     return isNum(t.warnBelow) && rate < t.warnBelow;
   }
   return isNum(t.warn) && rate >= t.warn;

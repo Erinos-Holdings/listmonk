@@ -1062,7 +1062,6 @@ export default Vue.extend({
       // literals restated in i18n name their homes: lib/brand-health.ts MATRIX_THRESHOLDS /
       // SPAM_RATE_*, lib/ses-health.ts SES_BRAND_THRESHOLDS).
       const helps = {
-        // Views has no target or threshold -- its hover carries the MPP inflation caveat only.
         views: 'dashboard.matrix.viewsHelp',
         clicks: 'dashboard.matrix.clicksHelp',
         hard_bounces: 'dashboard.matrix.hardBouncesHelp',

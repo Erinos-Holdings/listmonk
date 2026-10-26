@@ -533,7 +533,7 @@
     "dashboard.matrix.total": "All brands",
     "dashboard.matrix.unsub": "Unsub",
     "dashboard.matrix.views": "Views",
-    "dashboard.matrix.viewsHelp": "Inflated by auto-opens (Apple MPP) — compare across brands, don't read as absolute; no target",
+    "dashboard.matrix.viewsHelp": "target ≥ 20% of sends (shown from 10 sends)",
     "dashboard.messagesSent": "Messages sent",
     "dashboard.orphanSubs": "Orphans",
     "dashboard.panes.matrix": "Brand Matrix",

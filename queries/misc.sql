@@ -233,8 +233,9 @@ SELECT JSON_BUILD_OBJECT(
 --     cmd/init.go) -- TRUE = individual tracking, each (campaign, subscriber) pair once, when its
 --     FIRST view/click on that campaign is in the window, NULL subscribers never; FALSE = raw
 --     campaign_views / link_clicks rows. views byte-follow the clicks CTEs on campaign_views
---     (hazard 96's one definition, windowed as clicks are) and carry no threshold -- Apple MPP
---     auto-opens inflate them, so they are context, never a verdict (the pane's footnote says so).
+--     (hazard 96's one definition, windowed as clicks are); Apple MPP auto-opens inflate them
+--     (the pane's footnote says so), so their stored threshold reads as a relative cross-brand
+--     signal, never an absolute one.
 --   blocks = the hard bounces of the BLOCK class. The predicate is a byte-mirror of the OUTPUT of
 --     classPredicate("hard","block") in the integrations lib/bounce-rules.ts, whose BOUNCE_CLASSES
 --     is the canonical class map (append-only, classes never renamed -- no test spans the repos;
