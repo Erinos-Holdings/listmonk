@@ -34,7 +34,7 @@
                 <template v-if="doc.account">{{ doc.account.region }} · {{ doc.account.configurationSet }} · </template>
                 <b-tooltip :label="$t('dashboard.ses.asOfTip')" type="is-dark" multilined data-cy="ses-as-of">
                   {{ $t('dashboard.ses.asOf', { date: doc.day }) }}
-                  <template v-if="doc.computedAt"> · {{ $t('dashboard.ses.computedAt', { date: doc.computedAt }) }}</template>
+                  <template v-if="doc.computedAt"> · {{ $t('dashboard.ses.computedAt', { date: formatMountain(doc.computedAt) }) }}</template>
                 </b-tooltip>
                 <!-- Fork (BRANDHEALTH-REFRESH-SPEC D3) -- brands:manage + configured only; the
                 navbar Refresh stays the cheap stored-document re-read. -->
@@ -157,6 +157,7 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
 import BlocklistComposition from '../components/BlocklistComposition.vue';
+import { formatMountain } from '../mountainTime.mjs'; // eslint-disable-line import/extensions
 import {
   STATE_MESSAGE, baselineOf, canRefresh, createRefresh, isActive,
 } from '../healthRefresh.mjs'; // eslint-disable-line import/extensions
@@ -205,6 +206,7 @@ export default Vue.extend({
   },
 
   methods: {
+    formatMountain,
     sub(k) {
       return (this.doc && this.doc[k]) || { status: 'unknown' };
     },
