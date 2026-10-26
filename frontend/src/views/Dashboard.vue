@@ -1052,6 +1052,7 @@ export default Vue.extend({
     // in column order, GP Spam % included (2026-10-24 layout pass).
     matrixEngCells() {
       const labels = {
+        views: 'dashboard.matrix.views',
         clicks: 'dashboard.matrix.clicks',
         hard_bounces: 'dashboard.matrix.hardBounces',
         blocks: 'dashboard.matrix.blocks',
@@ -1061,6 +1062,8 @@ export default Vue.extend({
       // literals restated in i18n name their homes: lib/brand-health.ts MATRIX_THRESHOLDS /
       // SPAM_RATE_*, lib/ses-health.ts SES_BRAND_THRESHOLDS).
       const helps = {
+        // Views has no target or threshold -- its hover carries the MPP inflation caveat only.
+        views: 'dashboard.matrix.viewsHelp',
         clicks: 'dashboard.matrix.clicksHelp',
         hard_bounces: 'dashboard.matrix.hardBouncesHelp',
         blocks: 'dashboard.matrix.blocksHelp',

@@ -58,6 +58,7 @@ type matrixRow struct {
 	Brand       string       `json:"brand"`
 	Subscribers matrixSubs   `json:"subscribers"`
 	Sent        *int         `json:"sent"`
+	Views       int          `json:"views"`
 	Clicks      int          `json:"clicks"`
 	HardBounces int          `json:"hard_bounces"`
 	Blocks      int          `json:"blocks"`
@@ -192,6 +193,32 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	wantClicks := map[bool]map[string]int{
 		true:  {"alpha": 2, "bravo": 1},
 		false: {"alpha": 7, "bravo": 1},
+	}
+
+	// Views mirror the clicks fixture on campaign_views (same window, pair and NULL-subscriber
+	// rules), plus one extra pair (sHeld) so views != clicks in both modes -- a statement counting
+	// the wrong table fails.
+	view := func(camp, sub int, at time.Time, times int) {
+		for i := 0; i < times; i++ {
+			h.db.MustExec(`INSERT INTO campaign_views (campaign_id, subscriber_id, created_at) VALUES ($1, NULLIF($2, 0), $3::TIMESTAMPTZ)`,
+				camp, sub, at.Format(time.RFC3339))
+		}
+	}
+	view(cA, s1, dayAt(5, noon), 3)     // one pair, three rows
+	view(cA, s2, dayAt(65, noon), 1)    // first view before the window...
+	view(cA, s2, dayAt(10, noon), 1)    // ...so this in-window row is no first view
+	view(cA, 0, dayAt(5, noon), 2)      // NULL subscriber: raw rows only
+	view(cA, sHeld, dayAt(6, noon), 1)  // the extra pair
+	view(cPriv, s1, dayAt(2, noon), 1)  // the private derivative's campaign is the brand's
+	view(cArc, s3, dayAt(3, noon), 1)   // an archived list forms no brand
+	view(cB, s3, dayAt(0, noon), 1)     // Denver-today (out)...
+	view(cB, s3, endOf(1), 1)           // ...but yesterday's last moment is in, and the first view
+	view(cB, s1, endOf(61), 1)          // day -61 (out)
+	view(cNone, s1, dayAt(5, noon), 1)  // a campaign on no list
+	view(cN, s1, dayAt(5, noon), 1)     // a campaign on an untagged list
+	wantViews := map[bool]map[string]int{
+		true:  {"alpha": 3, "bravo": 1},
+		false: {"alpha": 8, "bravo": 1},
 	}
 
 	// Bounces. meta carries the SES shape the block predicate reads.
@@ -341,7 +368,7 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	flagged := true
 	alpha := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "alpha", Subscribers: matrixSubs{Total: 4, Active: 1, Held: 1, Unsubscribed: 1, Blocked: 1},
-			Sent: &alphaSent, Clicks: wantClicks[tracking]["alpha"], HardBounces: 5, Blocks: 1, Complaints: 1,
+			Sent: &alphaSent, Views: wantViews[tracking]["alpha"], Clicks: wantClicks[tracking]["alpha"], HardBounces: 5, Blocks: 1, Complaints: 1,
 			Health: matrixHealth{Status: "ok", SpamRate: &spam, SpamStatus: "issues", SpamFlagged: &flagged},
 			Usage:  wantUsage, Thresholds: wantThresholds, Skipped: zeroSkipped()}
 	}
@@ -349,7 +376,7 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	// skips: every row still carries skipped, each language {0, []}.
 	bravo := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "bravo", Subscribers: matrixSubs{Total: 2, Active: 1},
-			Sent: &bravoSent, Clicks: wantClicks[tracking]["bravo"], HardBounces: 1, Blocks: 1,
+			Sent: &bravoSent, Views: wantViews[tracking]["bravo"], Clicks: wantClicks[tracking]["bravo"], HardBounces: 1, Blocks: 1,
 			Health: matrixHealth{Status: "unknown"}, Skipped: zeroSkipped()}
 	}
 	delta := matrixRow{Brand: "delta", Skipped: zeroSkipped()}
@@ -449,9 +476,14 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 		}
 	}
 
-	// The fixture means something: the two modes differ, and pending counts in bravo's total.
+	// The fixture means something: the two modes differ (views and clicks, and against each other,
+	// so a swapped table or constant fails), and pending counts in bravo's total.
 	if wantClicks[true]["alpha"] == wantClicks[false]["alpha"] || bravo(true).Subscribers.Total == bravo(true).Subscribers.Active {
 		t.Fatal("fixture: modes or pending not exercised")
+	}
+	if wantViews[true]["alpha"] == wantViews[false]["alpha"] ||
+		wantViews[true]["alpha"] == wantClicks[true]["alpha"] || wantViews[false]["alpha"] == wantClicks[false]["alpha"] {
+		t.Fatal("fixture: views modes not exercised or views indistinct from clicks")
 	}
 	_ = sPend
 

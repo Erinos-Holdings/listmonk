@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  DEFAULT_STATE, STORAGE_KEY, cellText, clickSort, defaultOrder, displayValue, initialPane, loadState, rateOf,
+  DEFAULT_STATE, ENGAGEMENT_FIELDS, STORAGE_KEY, cellText, clickSort, defaultOrder, displayValue, initialPane, loadState, rateOf,
   SPAM_FLAGGED_HELP, SPAM_HELP, saveState, sessionStore, shapeRows, sortRows, spamCell, tableRows, totalsRow,
   BREACH_CLASS, breachesThreshold, displayedRate, engagementCell, firstThresholds,
 } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
@@ -16,6 +16,7 @@ const api = [
       total: 1000, active: 800, held: 100, unsubscribed: 60, blocked: 40,
     },
     sent: 10000,
+    views: 1200,
     clicks: 300,
     hard_bounces: 50,
     blocks: 10,
@@ -28,6 +29,7 @@ const api = [
       total: 200, active: 150, held: 20, unsubscribed: 20, blocked: 10,
     },
     sent: 1000,
+    views: 200, // 20% -- the highest view rate, but not the highest count
     clicks: 60, // 6% -- the highest rate, but not the highest count
     hard_bounces: 5,
     blocks: 0,
@@ -40,6 +42,7 @@ const api = [
       total: 50, active: 50, held: 0, unsubscribed: 0, blocked: 0,
     },
     sent: null, // no SES row in the window
+    views: 20,
     clicks: 9,
     hard_bounces: 0,
     blocks: 0,
@@ -52,6 +55,7 @@ const api = [
       total: 0, active: 0, held: 0, unsubscribed: 0, blocked: 0,
     },
     sent: 0,
+    views: 0,
     clicks: 0,
     hard_bounces: 0,
     blocks: 0,
@@ -94,6 +98,8 @@ test('I5: totals are summed numerators over summed sends, never an average of ra
   assert.equal(t.unsubscribed, 80);
   assert.equal(t.blocked, 50);
   assert.equal(t.sent, 11000);
+  assert.equal(t.views, 1420);
+  assert.equal(rateOf(t, 'views'), 1420 / 11000);
   assert.equal(t.clicks, 369);
   assert.equal(rateOf(t, 'clicks'), 369 / 11000);
   // The average of the two rates (3% and 6%) would be 4.5%.
@@ -120,7 +126,7 @@ test('I6: a missing denominator renders a dash and ranks last in both orders', (
   const rows = shapeRows(api, { brands });
   const joy = rows.find((r) => r.brand === 'joybelle');
   const delta = rows.find((r) => r.brand === 'delta');
-  ['clicks', 'hard_bounces', 'blocks', 'complaints'].forEach((f) => {
+  ['views', 'clicks', 'hard_bounces', 'blocks', 'complaints'].forEach((f) => {
     assert.equal(rateOf(joy, f), null);
     assert.equal(rateOf(delta, f), null);
     assert.equal(cellText(joy, f, 'pct'), '—');
@@ -145,7 +151,7 @@ test('I6: a missing denominator renders a dash and ranks last in both orders', (
 // I8
 test('I8: default first-click directions -- brand ascending, every other column descending', () => {
   assert.equal(defaultOrder('brand'), 'asc');
-  ['total', 'active', 'held', 'unsubscribed', 'blocked', 'sent', 'clicks', 'hard_bounces', 'blocks',
+  ['total', 'active', 'held', 'unsubscribed', 'blocked', 'sent', 'views', 'clicks', 'hard_bounces', 'blocks',
     'complaints', 'spam_rate'].forEach((f) => assert.equal(defaultOrder(f), 'desc', f));
   // A NEW column takes its default direction.
   assert.deepEqual(clickSort({ field: 'clicks', order: 'desc' }, 'held'), { field: 'held', order: 'desc' });
@@ -161,6 +167,23 @@ test('I8: default first-click directions -- brand ascending, every other column 
 test('I8: the initial sort is Clicks descending in pct mode', () => {
   assert.deepEqual(DEFAULT_STATE, { sort: { field: 'clicks', order: 'desc' }, mode: 'pct' });
   assert.deepEqual(loadState(null), { sort: { field: 'clicks', order: 'desc' }, mode: 'pct' });
+});
+
+test('Views: funnel order before Clicks, sortable, mode-following, no threshold ever', () => {
+  // Column order flows from ENGAGEMENT_FIELDS; the default sort stays Clicks (asserted above).
+  assert.deepEqual([...ENGAGEMENT_FIELDS], ['views', 'clicks', 'hard_bounces', 'blocks', 'complaints']);
+  const rows = shapeRows(api, { brands }).slice(0, 2);
+  assert.deepEqual(order(sortRows(rows, { field: 'views', order: 'desc' }, 'pct')), ['thirstygirl', 'ruze']);
+  assert.deepEqual(order(sortRows(rows, { field: 'views', order: 'desc' }, 'num')), ['ruze', 'thirstygirl']);
+  assert.equal(cellText(rows[0], 'views', 'pct'), '12.00%');
+  assert.equal(cellText(rows[0], 'views', 'num'), '1200');
+  assert.deepEqual(clickSort({ field: 'clicks', order: 'desc' }, 'views'), { field: 'views', order: 'desc' });
+  // Context, not a verdict: no stored threshold applies to views, whatever a doc carries.
+  assert.equal(breachesThreshold({ views: { warn: 0, minSent: 0 } }, 'views', 0.9, { sent: 100000 }), false);
+  const r = shapeRows([{
+    brand: 'b', subscribers: {}, sent: 1000, views: 900, clicks: 0, hard_bounces: 0, blocks: 0, complaints: 0, health: {}, thresholds: { views: { warn: 0.1, minSent: 1 } },
+  }])[0];
+  assert.deepEqual(engagementCell(r, 'views', 'pct'), { cls: '' });
 });
 
 test('I8: an engagement column sorts by the displayed quantity -- rate in pct, count in num', () => {

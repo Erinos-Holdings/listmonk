@@ -225,13 +225,16 @@ SELECT JSON_BUILD_OBJECT(
 --     segment definition), current state. total keeps the one definition (pending included).
 --   C = the brand's campaigns, any campaign_lists row on the brand's lists. A click or bounce row
 --     whose campaign_id is NULL (deleted campaign) is attributable to no brand and drops out.
---   clicks, hard_bounces, blocks, complaints = over C and the 60 America/Denver calendar days
---     ending yesterday there (get-dashboard-charts-scoped's window, DST-aware). The zone is the ONE
---     literal in the zone CTE below and MUST equal get-dashboard-charts-scoped's (a fork test
+--   views, clicks, hard_bounces, blocks, complaints = over C and the 60 America/Denver calendar
+--     days ending yesterday there (get-dashboard-charts-scoped's window, DST-aware). The zone is the
+--     ONE literal in the zone CTE below and MUST equal get-dashboard-charts-scoped's (a fork test
 --     asserts it) and SES_DAILY_ZONE in the integrations lib/ses-health.ts (no test spans the repos).
---     clicks follow the charts statement's mode constant (interpolated at boot, cmd/init.go) --
---     TRUE = individual tracking, each (campaign, subscriber) pair once, when its FIRST click on
---     that campaign is in the window, NULL subscribers never; FALSE = raw link_clicks rows.
+--     views and clicks follow the charts statement's mode constant (interpolated at boot,
+--     cmd/init.go) -- TRUE = individual tracking, each (campaign, subscriber) pair once, when its
+--     FIRST view/click on that campaign is in the window, NULL subscribers never; FALSE = raw
+--     campaign_views / link_clicks rows. views byte-follow the clicks CTEs on campaign_views
+--     (hazard 96's one definition, windowed as clicks are) and carry no threshold -- Apple MPP
+--     auto-opens inflate them, so they are context, never a verdict (the pane's footnote says so).
 --   blocks = the hard bounces of the BLOCK class. The predicate is a byte-mirror of the OUTPUT of
 --     classPredicate("hard","block") in the integrations lib/bounce-rules.ts, whose BOUNCE_CLASSES
 --     is the canonical class map (append-only, classes never renamed -- no test spans the repos;
@@ -293,6 +296,29 @@ win AS (
 ),
 bounds AS (
     SELECT d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win
+),
+raw_views AS (
+    SELECT bc.brand, COUNT(*) AS n FROM campaign_views cv
+    JOIN bcamps bc ON (bc.id = cv.campaign_id)
+    WHERE NOT %[1]s
+        AND cv.created_at >= (SELECT t0 FROM bounds) AND cv.created_at < (SELECT t1 FROM bounds)
+    GROUP BY bc.brand
+),
+first_view_pairs AS (
+    SELECT cv.campaign_id, cv.subscriber_id FROM campaign_views cv
+    WHERE %[1]s
+        AND cv.subscriber_id IS NOT NULL
+        AND cv.campaign_id IN (SELECT id FROM bcamps)
+        AND cv.created_at >= (SELECT t0 FROM bounds) AND cv.created_at < (SELECT t1 FROM bounds)
+    GROUP BY cv.campaign_id, cv.subscriber_id
+    HAVING NOT EXISTS (
+        SELECT 1 FROM campaign_views p
+        WHERE p.subscriber_id = cv.subscriber_id AND p.campaign_id = cv.campaign_id
+            AND p.created_at < (SELECT t0 FROM bounds)
+    )
+),
+pair_views AS (
+    SELECT bc.brand, COUNT(*) AS n FROM first_view_pairs fv JOIN bcamps bc ON (bc.id = fv.campaign_id) GROUP BY bc.brand
 ),
 raw_clicks AS (
     SELECT bc.brand, COUNT(*) AS n FROM link_clicks lc
@@ -359,6 +385,7 @@ SELECT JSON_BUILD_OBJECT(
                 'blocked', COALESCE(s.blocked, 0)
             ),
             'sent', ss.n,
+            'views', COALESCE(rv.n, 0) + COALESCE(pv.n, 0),
             'clicks', COALESCE(rc.n, 0) + COALESCE(pc.n, 0),
             'hard_bounces', COALESCE(bn.hard_bounces, 0),
             'blocks', COALESCE(bn.blocks, 0),
@@ -376,6 +403,8 @@ SELECT JSON_BUILD_OBJECT(
         ORDER BY b.brand)
         FROM brands b
         LEFT JOIN subs s ON (s.brand = b.brand)
+        LEFT JOIN raw_views rv ON (rv.brand = b.brand)
+        LEFT JOIN pair_views pv ON (pv.brand = b.brand)
         LEFT JOIN raw_clicks rc ON (rc.brand = b.brand)
         LEFT JOIN pair_clicks pc ON (pc.brand = b.brand)
         LEFT JOIN bnc bn ON (bn.brand = b.brand)

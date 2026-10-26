@@ -4,15 +4,18 @@
 // per-session persistence wrapper. No Vue, no DOM; tested by brandMatrix.test.mjs (yarn test).
 //
 // The rows come from GET /api/dashboard/brand-matrix verbatim (camelCase: false) -- counts only:
-// { brand, subscribers: {total, active, held, unsubscribed, blocked}, sent, clicks, hard_bounces,
-//   blocks, complaints, health: {status, spam_rate, spam_status, spam_flagged}, thresholds? }. Every rate is computed
+// { brand, subscribers: {total, active, held, unsubscribed, blocked}, sent, views, clicks,
+//   hard_bounces, blocks, complaints, health: {status, spam_rate, spam_status, spam_flagged}, thresholds? }. Every rate is computed
 // here, over the one windowed denominator `sent` (D4); the server never returns a rate.
 // `thresholds` (DASHBOARDS-POLISH-SPEC D1) is the stored engagement-threshold object, absent on
 // older documents; see engagementCell.
 import { brandLabelOf, matchesLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
-// D4: the Engagement section's columns -- each a count over `sent`.
-export const ENGAGEMENT_FIELDS = Object.freeze(['clicks', 'hard_bounces', 'blocks', 'complaints']);
+// D4: the Engagement section's columns -- each a count over `sent`. Views sits before Clicks
+// (funnel order: Sent -> Views -> Clicks) and has deliberately NO threshold (no THRESHOLD_KEYS
+// entry): Apple MPP auto-opens inflate it, so it is context to compare across brands, never a
+// verdict (the footnote carries the caveat). The default sort stays Clicks.
+export const ENGAGEMENT_FIELDS = Object.freeze(['views', 'clicks', 'hard_bounces', 'blocks', 'complaints']);
 
 // The subscriber columns -- always counts, never governed by the mode.
 export const SUBSCRIBER_FIELDS = Object.freeze(['total', 'active', 'held', 'unsubscribed', 'blocked']);
