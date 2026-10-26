@@ -981,18 +981,6 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{out})
 	}
 
-	// Fork (bounce types, integrations BOUNCE-TYPES-SPEC D2) -- bounces per type for the Bounces
-	// header's split, the clients pattern: after the permission loop and date validation,
-	// inheriting both.
-	if typ == "bounce_types" {
-		out, err := a.core.GetCampaignAnalyticsBounceTypes(ids, from, to)
-		if err != nil {
-			return err
-		}
-
-		return c.JSON(http.StatusOK, okResp{out})
-	}
-
 	// Campaign link stats.
 	if typ == "links" {
 		out, err := a.core.GetCampaignAnalyticsLinks(ids, typ, from, to)

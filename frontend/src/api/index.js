@@ -582,13 +582,6 @@ export const getCampaignClientCounts = async (params) => http.get(
   { params, loading: models.campaigns },
 );
 
-// Fork (bounce types, integrations BOUNCE-TYPES-SPEC D2/D3) -- bounces per type for the Bounces
-// header's split.
-export const getCampaignBounceTypeCounts = async (params) => http.get(
-  '/api/campaigns/analytics/bounce_types',
-  { params, loading: models.campaigns },
-);
-
 export const convertCampaignContent = async (data) => http.post(
   `/api/campaigns/${data.id}/content`,
   data,

@@ -86,7 +86,8 @@
                 {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
               </th>
               <th v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right"
-                :class="bmTh(c.field)" :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
+                :class="bmTh(c.field)" :title="c.help ? $t(c.help) : null"
+                :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
                 {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
               </th>
             </tr>
@@ -286,7 +287,8 @@
                       Blocklisted read rate-first over the public lists' total; Active and Pending
                       are plain counts (dashboardSubs.mjs::segmentCell decides). -->
                       <template v-if="!subsExpanded">
-                        <li v-for="r in subsLineRows" :key="r.key" :data-cy="`subscribers-${r.key}`">
+                        <li v-for="r in subsLineRows" :key="r.key" :data-cy="`subscribers-${r.key}`"
+                          :title="subsSegTitle(r.key)">
                           <span class="pl-pct">{{ r.parts.pct }}</span>
                           <span class="pl-count">{{ r.parts.count }}</span>
                           <span class="pl-label">{{ $t(r.label) }}</span>
@@ -331,7 +333,7 @@
                     <!-- Fork (dashboard counts, R1) -- each rate cell over THAT column's total; V2 D7:
                          % the rate alone, # the comma-separated count, no parentheses. -->
                     <tr v-for="r in subsRows" :key="r.key">
-                      <td class="has-text-grey">{{ $t(r.label) }}</td>
+                      <td class="has-text-grey" :title="subsSegTitle(r.key)">{{ $t(r.label) }}</td>
                       <td v-for="col in subsColumns" :key="col.key" class="has-text-right"
                         :data-cy="`subscribers-${r.key}-${col.key}`" :title="subsCellTitle(col, r.key)">
                         {{ subsCellText(col, r) }}
@@ -810,6 +812,12 @@ export default Vue.extend({
       return sendLangCode(key);
     },
 
+    // DELIVERABILITY-CONSISTENCY-SPEC D2 -- the blocklisted segment's hover names its scope (the
+    // Brand Matrix and Lists grid count the same status over other scopes).
+    subsSegTitle(key) {
+      return key === 'blocked' ? this.$t('dashboard.blocklistedHelp') : null;
+    },
+
     subsColTitle(key) {
       if (key === 'other') {
         return this.$t('lists.grid.otherHelp');
@@ -1034,7 +1042,9 @@ export default Vue.extend({
         { field: 'active', label: 'dashboard.matrix.active' },
         { field: 'held', label: 'dashboard.matrix.held' },
         { field: 'unsubscribed', label: 'dashboard.matrix.unsub' },
-        { field: 'blocked', label: 'dashboard.matrix.blocked' },
+        // DELIVERABILITY-CONSISTENCY-SPEC D1/D2 -- "Blocklisted" (status), never "Blocked" (the
+        // 5.7.x bounce class); the hover names the scope.
+        { field: 'blocked', label: 'dashboard.matrix.blocked', help: 'dashboard.matrix.blockedHelp' },
       ];
     },
 

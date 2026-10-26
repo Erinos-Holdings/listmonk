@@ -183,14 +183,6 @@ type CampaignAnalyticsClient struct {
 	Clicks int    `db:"clicks" json:"clicks"`
 }
 
-// CampaignAnalyticsBounceType is one row of the Bounces header's per-type split (fork, bounce
-// types, integrations BOUNCE-TYPES-SPEC D2): Type is the bounce_type (hard, soft or complaint),
-// Count the raw bounce rows of that type, the way the Bounces line counts.
-type CampaignAnalyticsBounceType struct {
-	Type  string `db:"type" json:"type"`
-	Count int    `db:"count" json:"count"`
-}
-
 // DashboardClients is the Dashboard's client panel (fork, client stats, CLIENT-STATS-SPEC D6): the
 // rows, and Scoped -- true when they cover a scope (a list-scoped user's permitted lists, or the
 // global brand's list_id, GLOBAL-BRAND-SPEC D5) rather than every campaign.

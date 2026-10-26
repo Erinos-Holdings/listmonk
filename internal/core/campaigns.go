@@ -697,20 +697,6 @@ func (c *Core) GetCampaignAnalyticsClients(campIDs []int, fromDate, toDate strin
 	return out, nil
 }
 
-// GetCampaignAnalyticsBounceTypes returns the bounces per type (hard, soft, complaint, in that
-// order; a type with none absent) for the given campaign IDs (fork, bounce types, integrations
-// BOUNCE-TYPES-SPEC D2). The dates are validated by the caller.
-func (c *Core) GetCampaignAnalyticsBounceTypes(campIDs []int, fromDate, toDate string) ([]models.CampaignAnalyticsBounceType, error) {
-	out := []models.CampaignAnalyticsBounceType{}
-	if err := c.q.GetCampaignBounceTypeCounts.Select(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
-		c.log.Printf("error fetching campaign bounce types: %v", err)
-		return nil, echo.NewHTTPError(http.StatusInternalServerError,
-			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
-	}
-
-	return out, nil
-}
-
 // RegisterCampaignView registers a subscriber's view on a campaign.
 // Fork (location stats) -- country is the normalized CloudFront-Viewer-Country code, "" for unknown.
 // Fork (client stats) -- client is the classified User-Agent token, "" for unknown; never the raw UA.

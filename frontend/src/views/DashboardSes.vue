@@ -1,8 +1,8 @@
 <template>
   <!-- Fork (system health, integrations SES-HEALTH-SPEC D5/D7). DISPOSABLE Vue (upstream deletes
   this SPA at v7). Renders the newest `ses` document the integrations BrandHealth Lambda writes
-  (GET /api/system/health/ses) and computes nothing: every status, threshold, scope string and
-  per-brand row is the document's. The only arithmetic is display formatting (percentages and
+  (GET /api/system/health/ses) and computes nothing: every status, threshold and scope string is
+  the document's; account-aggregate only (DELIVERABILITY-CONSISTENCY-SPEC D3). The only arithmetic is display formatting (percentages and
   bar widths scaled to the document's own thresholds). -->
   <section class="dashboard-ses">
     <b-loading v-if="loading.systemHealth" active :is-full-page="false" />
@@ -114,90 +114,25 @@
         <ul><li v-for="(e, i) in doc.errors" :key="i">{{ e }}</li></ul>
       </div>
 
-      <!-- Per-brand table (a copy of the same run's per-brand SES inputs) -->
-      <div class="box">
-        <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D9) -- the rows follow the navbar
-        launch filter; this pane's own hide toggle is retired into it. -->
-        <div class="level mb-3">
-          <div class="level-left">
-            <h3 class="title is-6">{{ $t('dashboard.ses.brands') }}</h3>
-          </div>
-        </div>
-        <!-- BRANDS-UX-SPEC D3: backend-sorting -- the view owns {field, order} and sorts its own
-        rows through health-sort.mjs; first click on any non-Brand column is descending (worst /
-        largest first); the tiebreak is always Brand A-Z. -->
-        <b-table ref="table" :data="visibleRows" hoverable data-cy="ses-brands"
-          backend-sorting :default-sort="[sort.field, sort.order]" @sort="onSort">
-          <b-table-column v-slot="props" field="name" :label="$t('dashboard.ses.brand')" sortable>
-            <router-link v-if="linkable(props.row)" :to="{ name: 'brand', params: { brand: props.row.brand } }">
-              {{ props.row.displayName || props.row.brand }}
-            </router-link>
-            <span v-else>{{ props.row.displayName || props.row.brand }}</span>
-          </b-table-column>
-          <b-table-column v-slot="props" field="status" :label="$t('dashboard.ses.health')" sortable>
-            <health-chip :status="props.row.status" />
-          </b-table-column>
-          <b-table-column v-slot="props" field="sends" :label="$t('dashboard.ses.sends')" numeric sortable>
-            {{ num(props.row.sends) }}
-          </b-table-column>
-          <b-table-column v-slot="props" field="deliveries" :label="$t('dashboard.ses.deliveries')" numeric sortable>
-            {{ num(props.row.deliveries) }}
-          </b-table-column>
-          <!-- Bounces / Complaints: the RATE is the value (it is what SES judges and what the
-          column sorts on); the count rides in grey. Under the volume floor there is no rate, so
-          the count stands alone and the row sorts last. Hover: the rule, from the row's own
-          thresholds/floors (rows written before they were carried show no tooltip). -->
-          <b-table-column v-slot="props" field="bounceRate" :label="$t('dashboard.ses.bounces')" numeric sortable>
-            <b-tooltip :label="rateTip(props.row, 'bounce')" :active="!!rateTip(props.row, 'bounce')" type="is-dark" multilined append-to-body>
-              <template v-if="typeof props.row.bounceRate === 'number'">
-                {{ pct(props.row.bounceRate, 2) }}
-                <span class="is-size-7 has-text-grey">({{ num(props.row.bounces) }})</span>
-              </template>
-              <template v-else>{{ num(props.row.bounces) }}</template>
-            </b-tooltip>
-          </b-table-column>
-          <b-table-column v-slot="props" field="complaintRate" :label="$t('dashboard.ses.complaints')" numeric sortable>
-            <b-tooltip :label="rateTip(props.row, 'complaint')" :active="!!rateTip(props.row, 'complaint')" type="is-dark" multilined append-to-body>
-              <template v-if="typeof props.row.complaintRate === 'number'">
-                {{ pct(props.row.complaintRate, 3) }}
-                <span class="is-size-7 has-text-grey">({{ num(props.row.complaints) }})</span>
-              </template>
-              <template v-else>{{ num(props.row.complaints) }}</template>
-            </b-tooltip>
-          </b-table-column>
-          <b-table-column v-slot="props" field="alarms" :label="$t('dashboard.ses.alarms')" sortable>
-            <span v-if="props.row.alarms && (props.row.alarms.complaints || props.row.alarms.bounces)" class="is-size-7">
-              {{ props.row.alarms.complaints || '—' }} / {{ props.row.alarms.bounces || '—' }}
-            </span>
-            <span v-else class="is-size-7 has-text-grey">{{ props.row.alarms ? $t('dashboard.ses.noAlarm') : '—' }}</span>
-          </b-table-column>
-        </b-table>
-      </div>
+      <!-- Fork (integrations DELIVERABILITY-CONSISTENCY-SPEC D3) -- this pane is account-aggregate
+      only; the per-brand table it carried is retired, the Brands page being the per-brand home. -->
+      <p class="is-size-7 has-text-grey" data-cy="ses-brands-link">
+        <router-link :to="{ name: 'brands' }">{{ $t('dashboard.ses.brandsLink') }}</router-link>
+      </p>
     </template>
   </section>
 </template>
 
 <script>
 import Vue from 'vue';
-import { mapGetters, mapState } from 'vuex';
+import { mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
-import {
-  compareAlarms, compareNumber, compareStatus, sortRows,
-} from '../health-sort';
-import { filterRowsByLaunch } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 const RATE_KEYS = ['accountRates', 'listmonkRates'];
 const RATES = [
   { key: 'bounceRate', kind: 'bounce', digits: 2 },
   { key: 'complaintRate', kind: 'complaint', digits: 3 },
 ];
-// The per-brand row with no brand document behind it (the `brand=unattributed` SES tag value);
-// it has no Brands page to link to. A display rule, not a threshold.
-const UNLINKED = ['unattributed'];
-// BRANDS-UX-SPEC D3: the Brand column (field 'name') is the only ascending-first column.
-const ASC_FIRST_FIELDS = ['name'];
-const NUMERIC_FIELDS = ['sends', 'deliveries', 'bounceRate', 'complaintRate'];
-const nameOf = (row) => row.displayName || row.brand || '';
 
 export default Vue.extend({
   components: { HealthChip },
@@ -207,34 +142,11 @@ export default Vue.extend({
       doc: null,
       rateKeys: RATE_KEYS,
       rates: RATES,
-      // BRANDS-UX-SPEC D3/M6: the view owns the sort; a re-fetch (page.refresh) never resets it.
-      sort: { field: 'name', order: 'asc' },
     };
   },
 
   computed: {
     ...mapState(['loading']),
-    // Fork (launch filter, LAUNCH-FILTER-SPEC D9) -- the navbar filter's value and the store's
-    // brand health documents.
-    ...mapGetters(['launch', 'brandHealth']),
-
-    brandRows() {
-      return (this.doc && Array.isArray(this.doc.brands)) ? this.doc.brands : [];
-    },
-
-    // D9: a row's launch state is its BRAND's document, not the SES row's own status; a row with
-    // no document (unattributed) is launched.
-    visibleRows() {
-      const rows = filterRowsByLaunch(this.brandRows, this.launch, (r) => r.brand, this.brandHealth);
-      const comparators = {
-        status: (a, b, o) => compareStatus(a.status, b.status, o),
-        alarms: (a, b, o) => compareAlarms(a.alarms, b.alarms, o),
-      };
-      NUMERIC_FIELDS.forEach((f) => {
-        comparators[f] = (a, b, o) => compareNumber(a[f], b[f], o);
-      });
-      return sortRows(rows, this.sort.field, this.sort.order, nameOf, comparators);
-    },
 
     quotaWidth() {
       const q = this.doc && this.doc.quota;
@@ -307,39 +219,6 @@ export default Vue.extend({
 
     num(v) {
       return typeof v === 'number' ? this.$utils.niceNumber(v) : '—';
-    },
-
-    // The rule behind a rate cell, from the ROW's thresholds and floors (the brand lines the
-    // Lambda classified against); '' when the row carries none.
-    rateTip(row, kind) {
-      const t = row && row.thresholds && row.thresholds[kind];
-      const f = (row && row.floors) || {};
-      if (!t || typeof t.warn !== 'number' || typeof t.issues !== 'number') {
-        return '';
-      }
-      const warn = this.pct(t.warn, 1);
-      const issues = this.pct(t.issues, 1);
-      return kind === 'bounce'
-        ? this.$t('brands.tips.bounceRate', { floor: f.bounceSends || '—', warn, issues })
-        : this.$t('brands.tips.complaintRate', {
-          floorDeliveries: f.complaintDeliveries || '—', floorCount: f.complaintCount || '—', warn, issues,
-        });
-    },
-
-    // The Lists.vue onSort pattern (BRANDS-UX-SPEC D3); see Brands.vue onSort.
-    onSort(field, direction) {
-      let order = direction;
-      const { table } = this.$refs;
-      if (!ASC_FIRST_FIELDS.includes(field) && field !== this.sort.field && direction === 'asc'
-        && table && typeof table.isAsc === 'boolean') {
-        table.isAsc = false;
-        order = 'desc';
-      }
-      this.sort = { field, order };
-    },
-
-    linkable(row) {
-      return !!row.brand && !UNLINKED.includes(row.brand);
     },
 
     fetchData() {
