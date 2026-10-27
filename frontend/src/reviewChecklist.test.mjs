@@ -393,6 +393,12 @@ test('A1-I4: no live message -- a running job is "checked"; from a report, faile
   }).label, `${K}altsChecked`);
   assert.equal(r(null), null);
   assert.equal(step({ live: null, report: null }), null);
+  // A locked campaign (sent, scheduled… or a render sheet): done, never "Inspect again", even with unfixed alts.
+  const locked = r({
+    items: [], approved: 1, modified: 0, generated: 0, unfixed: 1, thisInspect: 0, locked: true,
+  });
+  assert.equal(locked.label, `${K}altsLocked`);
+  assert.equal(locked.state, 'done');
 });
 
 test('A1-I4: the step is first in the list; alone before the job exists', () => {

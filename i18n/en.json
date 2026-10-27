@@ -400,6 +400,7 @@
     "campaigns.review.checklist.altsRunning": "Generating alt tags",
     "campaigns.review.checklist.altsDone": "{n} alt tags generated",
     "campaigns.review.checklist.altsChecked": "Alt tags checked",
+    "campaigns.review.checklist.altsLocked": "Alt tags left as they are: this campaign can't be edited",
     "campaigns.review.checklist.altsFailed": "Alt tags could not be generated",
     "campaigns.review.checklist.altsStillNeed": "{n} image(s) still need one; Inspect again",
     "campaigns.review.sectionAltTags": "Alt tags",

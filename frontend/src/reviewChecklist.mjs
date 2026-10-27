@@ -174,6 +174,8 @@ export function altsStep({
   if (running) return done(0);
   const alts = report && report.alts && typeof report.alts === 'object' ? report.alts : null;
   if (!alts) return null;
+  // A campaign generation does not touch (sent, scheduled… or a render sheet): no "Inspect again".
+  if (alts.locked === true) return row('done', tr('altsLocked'));
   const unfixed = nonNeg(alts.unfixed);
   if (unfixed > 0) return warn(unfixed);
   return done(nonNeg(alts.thisInspect));
