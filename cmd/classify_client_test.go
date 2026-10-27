@@ -199,10 +199,14 @@ func TestClassifyClient(t *testing.T) {
 // TestClassifyClientTotal throws random byte strings (and random fragments of real signatures) at
 // the classifier: it must never panic and must return a vocabulary token or "".
 func TestClassifyClientTotal(t *testing.T) {
-	// The fragment list covers every rule family, the vocabulary extension's included (review J1
-	// observation): the declared-robot signatures and the "(compatible;" / contact-URL shapes
-	// isBareRemainder inspects.
-	frags := []string{"(KHTML, like Gecko)", "Mobile/", "AppleWebKit/", "iPhone", "Macintosh", "Outlook", "Android", " ", "\x00", "\xff", "Mozilla/", "Safari", "/", "curl/", "(compatible", ";", "+http://", "@", "facebookexternalhit", "crawler"}
+	// The fragment list covers every rule family, the vocabulary extension's included: the
+	// declared-robot signatures and the "(compatible;" / contact-URL shapes isBareRemainder
+	// inspects. It REACHES that predicate rather than exercising it heavily -- a random byte is
+	// outside 0x20..0x7e 63% of the time, so most multi-piece UAs are rejected by the junk gate
+	// first (Stage 4b review L1 counted the branches). "mail" is a letters-only fragment, so the
+	// with-space-and-bare branch is at least reachable; both directions of the narrowing are
+	// pinned by the table rows above, and this loop is here for totality, not for coverage.
+	frags := []string{"(KHTML, like Gecko)", "Mobile/", "AppleWebKit/", "iPhone", "Macintosh", "Outlook", "Android", " ", "\x00", "\xff", "Mozilla/", "Safari", "/", "curl/", "(compatible", ";", "+http://", "@", "facebookexternalhit", "crawler", "mail"}
 	r := rand.New(rand.NewSource(1))
 	for i := 0; i < 20000; i++ {
 		var b strings.Builder
