@@ -11,7 +11,9 @@
 
 import { campaignPayload } from './officialSweep.mjs'; // eslint-disable-line import/extensions
 
-export const FIX_KINDS = Object.freeze(['subject.trim', 'preheader.trim', 'link.collapseScheme', 'alt.stripPrefix']);
+// ALT-TEXT-SPEC D4/D7: the fifth kind `alt.set` writes a proposed alt (or the slice rule's blank).
+// Must agree with integrations lib/campaign-review/report.ts FIX_KINDS; ships BEFORE the Lambda (D8).
+export const FIX_KINDS = Object.freeze(['subject.trim', 'preheader.trim', 'link.collapseScheme', 'alt.stripPrefix', 'alt.set']);
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -76,9 +78,26 @@ function replaceAttrInNthTag(html, name, n, attr, from, to) {
   return html.slice(0, t.start) + tag + html.slice(t.end);
 }
 
+// ALT-TEXT-SPEC D7: an undecided alt on the n-th <img> -- the tag must carry NO alt attribute;
+// one is inserted (entity-escaped) before the closing `>` (or `/>`).
+function insertAltInNthImg(html, n, to) {
+  const t = nthTag(html, 'img', n);
+  if (!t || /\salt\s*=/i.test(t.tag)) {
+    return null;
+  }
+  const close = /\s*\/?>$/.exec(t.tag);
+  const tag = `${t.tag.slice(0, close.index)} alt="${escapeAttr(to)}"${t.tag.slice(close.index)}`;
+  return html.slice(0, t.start) + tag + html.slice(t.end);
+}
+
+// ALT-TEXT-SPEC D7: the same alt is attached to several findings on one image (D4); a fix with the
+// same kind, target and `to` as one already applied counts as applied (dispositions record `fixed`).
+const sameFix = (a, b) => a.kind === b.kind && a.block === b.block && a.index === b.index && a.to === b.to;
+
 // Apply one fix to the working copy. Returns a skip reason, or null when applied.
 function applyOne(c, docRef, fix) {
   if (!fix || !FIX_KINDS.includes(fix.kind)) {
+    // A Lambda shipped before this fork emits kinds the window cannot apply (ALT-TEXT-SPEC D8).
     return 'unknown kind';
   }
   if (typeof fix.from !== 'string' || typeof fix.to !== 'string') {
@@ -114,6 +133,18 @@ function applyOne(c, docRef, fix) {
       return 'the block no longer exists';
     }
     const p = b.data.props || {};
+    if (fix.kind === 'alt.set') {
+      // ALT-TEXT-SPEC D7: the `from` guard, or (undecided) no alt at all; a blank `to` is legitimate.
+      const current = fix.undecided ? (p.alt === undefined || p.alt === null) : p.alt === fix.from;
+      if (b.type !== 'Image' || !current) {
+        return 'the alt text changed since the inspection';
+      }
+      p.alt = fix.to;
+      b.data.props = p;
+      // eslint-disable-next-line no-param-reassign
+      docRef.changed = true;
+      return null;
+    }
     if (fix.kind === 'alt.stripPrefix') {
       if (b.type !== 'Image' || p.alt !== fix.from) {
         return 'the alt text changed since the inspection';
@@ -141,9 +172,14 @@ function applyOne(c, docRef, fix) {
   }
 
   if (Number.isInteger(fix.index)) {
-    const next = fix.kind === 'alt.stripPrefix'
-      ? replaceAttrInNthTag(c.body || '', 'img', fix.index, 'alt', fix.from, fix.to)
-      : replaceAttrInNthTag(c.body || '', 'a', fix.index, 'href', fix.from, fix.to);
+    let next;
+    if (fix.kind === 'alt.set' && fix.undecided) {
+      next = insertAltInNthImg(c.body || '', fix.index, fix.to);
+    } else if (fix.kind === 'alt.stripPrefix' || fix.kind === 'alt.set') {
+      next = replaceAttrInNthTag(c.body || '', 'img', fix.index, 'alt', fix.from, fix.to);
+    } else {
+      next = replaceAttrInNthTag(c.body || '', 'a', fix.index, 'href', fix.from, fix.to);
+    }
     if (next === null) {
       return 'the body changed since the inspection';
     }
@@ -163,6 +199,10 @@ export function applyFixes(campaign, fixes) {
   const applied = [];
   const skipped = [];
   (fixes || []).forEach((fix) => {
+    if (fix && applied.some((a) => sameFix(a, fix))) {
+      applied.push(fix);
+      return;
+    }
     const why = applyOne(c, docRef, fix);
     if (why) {
       skipped.push({ fix, reason: why });
