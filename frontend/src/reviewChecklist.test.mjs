@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  STAGES, auxSections, checklist, earlyEntries, isContextConcern, openEntries, sectionCounts, sectionOf,
+  STAGES, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isContextConcern, openEntries, sectionCounts, sectionOf, withAltsStep,
 } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 
 const t = (k, p) => (p ? `${k} ${JSON.stringify(p)}` : k);
@@ -327,4 +327,138 @@ test('the window: a proposal box with Copy in both card templates; the context l
   const passed = /data-cy="section-passed"([\s\S]*?)<\/b-collapse>/.exec(tpl)[1];
   assert.match(passed, /<b-tag type="is-success">\{\{ passed\.length \}\}<\/b-tag>/);
   assert.match(passed, /<b-icon v-if="i\.tier === 'A'" icon="creation" size="is-small"/);
+});
+
+// ------------------------------------------------------------------ integrations ALT-AUTOGEN-SPEC A1
+
+const live = (phase, extra = {}) => ({
+  token: 'r#1', run: 'r', seq: 1, phase, alts: [], skipped: 0, rejected: 0, baseJob: 'job-old', ...extra,
+});
+const withAlts = (jobId, alts) => ({ ...REPORT, jobId, ...(alts ? { alts } : {}) });
+const step = (args) => altsStep({ running: false, t, ...args });
+// One report.alts item (A1.3): `block:<id>`, `<id>.jpg`.
+const altItem = (id, category, alt, from) => ({
+  key: `block:${id}`,
+  file: `${id}.jpg`,
+  category,
+  alt,
+  ...(from !== undefined ? { from } : {}),
+});
+
+test('A1-I4: a newer live run supersedes a shown older report, until a report of a later job is shown', () => {
+  const old = withAlts('job-old', {
+    items: [], approved: 3, modified: 0, generated: 0, unfixed: 2, thisInspect: 0,
+  });
+  // The run began while job-old's report was shown: the live message drives the step.
+  assert.deepEqual(step({ live: live('generating'), report: old, reportJob: 'job-old' }), {
+    key: 'alts', state: 'current', checked: false, spinner: true, label: `${K}altsRunning`,
+  });
+  assert.equal(step({ live: live('done', { alts: ['a', 'b'] }), report: old, reportJob: 'job-old' }).label, `${K}altsDone {"n":2}`);
+  // No report shown (the generation save changed the hash; the new job runs): still the live run.
+  const running = step({
+    live: live('done', { alts: ['a'] }), report: null, reportJob: null, running: true,
+  });
+  assert.equal(running.label, `${K}altsDone {"n":1}`);
+  // The new job's report arrives: the report decides (rule 3).
+  const fresh = withAlts('job-new', {
+    items: [], approved: 4, modified: 1, generated: 0, unfixed: 0, thisInspect: 1,
+  });
+  assert.equal(step({ live: live('done', { alts: [] }), report: fresh, reportJob: 'job-new' }).label, `${K}altsDone {"n":1}`);
+  // A run whose base was not known yet (the window had not loaded): the live run applies.
+  assert.equal(step({ live: live('generating', { baseJob: undefined }), report: fresh, reportJob: 'job-new' }).state, 'current');
+});
+
+test('A1-I4: live phases -- done with 0 is "checked", a done with rejected > 0 and a failed are the warning state', () => {
+  assert.equal(step({ live: live('done'), report: null }).label, `${K}altsChecked`);
+  const rej = step({ live: live('done', { alts: ['a'], rejected: 2 }), report: null });
+  assert.equal(rej.state, 'warn');
+  assert.equal(rej.checked, false);
+  assert.equal(rej.label, `${K}altsFailed · ${K}altsStillNeed {"n":2}`);
+  assert.deepEqual(step({ live: live('failed'), report: null }), {
+    key: 'alts', state: 'warn', checked: false, spinner: false, label: `${K}altsFailed`,
+  });
+});
+
+test('A1-I4: no live message -- a running job is "checked"; from a report, failed iff unfixed > 0, else N = thisInspect; no step without alts', () => {
+  assert.equal(step({ live: null, report: null, running: true }).label, `${K}altsChecked`);
+  const r = (alts) => step({ live: null, report: withAlts('j', alts), reportJob: 'j' });
+  assert.equal(r({
+    items: [], approved: 1, modified: 0, generated: 0, unfixed: 1, thisInspect: 0,
+  }).label, `${K}altsFailed · ${K}altsStillNeed {"n":1}`);
+  assert.equal(r({
+    items: [], approved: 1, modified: 1, generated: 2, unfixed: 0, thisInspect: 3,
+  }).label, `${K}altsDone {"n":3}`);
+  assert.equal(r({
+    items: [], approved: 1, modified: 0, generated: 0, unfixed: 0, thisInspect: 0,
+  }).label, `${K}altsChecked`);
+  assert.equal(r(null), null);
+  assert.equal(step({ live: null, report: null }), null);
+});
+
+test('A1-I4: the step is first in the list; alone before the job exists', () => {
+  const rows = checklist({ progress: { stage: 'reading' }, report: null, t });
+  const s = step({ live: live('generating'), report: null });
+  assert.deepEqual(withAltsStep(s, rows).map((x) => x.key), ['alts', ...STAGES]);
+  assert.deepEqual(withAltsStep(s, []).map((x) => x.key), ['alts']);
+  assert.deepEqual(withAltsStep(null, rows).map((x) => x.key), STAGES);
+});
+
+test('A1-I5: auxLayout puts alts directly before passed; none without alts', () => {
+  const aux = [{ key: 'structure', status: 'fail' }, { key: 'context', status: 'warn' }, { key: 'provenance', status: 'ok' }];
+  assert.deepEqual(auxLayout(aux, true).map((s) => s.key), ['structure', 'context', 'alts', 'passed', 'provenance']);
+  assert.deepEqual(auxLayout(aux, false).map((s) => s.key), ['structure', 'context', 'passed', 'provenance']);
+  assert.deepEqual(auxLayout([], true).map((s) => s.key), ['alts', 'passed']);
+});
+
+test('A1-I5: the section -- total = approved + modified + generated, groups in order, empty omitted, absent without alts, the blank new alt worded the same in both groups', () => {
+  const tt = (k) => k;
+  const report = withAlts('j', {
+    items: [
+      altItem('g', 'generated', ''),
+      altItem('a', 'approved', 'Shop'),
+      altItem('u', 'unfixed', 'photo'),
+      altItem('m', 'modified', '', 'photo'),
+      altItem('n', 'modified', 'New words', ''),
+      altItem('d', 'approved', ''),
+    ],
+    approved: 2,
+    modified: 2,
+    generated: 1,
+    unfixed: 1,
+    thisInspect: 0,
+  });
+  const s = altsSection(report, tt);
+  assert.equal(s.total, 5);
+  assert.deepEqual(s.groups.map((g) => [g.key, g.count]), [['approved', 2], ['modified', 2], ['generated', 1]]);
+  const blankNew = 'campaigns.review.altTags.blankNew';
+  assert.equal(s.groups[1].rows[0].alt, blankNew);
+  assert.equal(s.groups[2].rows[0].alt, blankNew);
+  assert.deepEqual(s.groups[1].rows[1], {
+    key: 'block:n', file: 'n.jpg', alt: 'New words', from: 'campaigns.review.altTags.blank',
+  });
+  assert.equal(s.groups[0].rows[1].alt, 'campaigns.review.altTags.blank');
+  assert.equal(s.groups[1].rows[0].from, 'photo');
+  // Empty groups omitted.
+  const onlyApproved = altsSection(withAlts('j', {
+    items: [altItem('a', 'approved', 'Shop')], approved: 1, modified: 0, generated: 0, unfixed: 0, thisInspect: 0,
+  }), tt);
+  assert.deepEqual(onlyApproved.groups.map((g) => g.key), ['approved']);
+  // Absent: no alts, or no images in scope.
+  assert.equal(altsSection(withAlts('j', null), tt), null);
+  assert.equal(altsSection(withAlts('j', {
+    items: [], approved: 0, modified: 0, generated: 0, unfixed: 0, thisInspect: 0,
+  }), tt), null);
+  assert.equal(altsSection(null, tt), null);
+});
+
+test('A1: the window -- the alt step lives inside review-checklist (no row above it); the Alt tags section is built like Passed', () => {
+  const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
+  assert.doesNotMatch(tpl, /review-alts/);
+  assert.match(src, /withAltsStep\(this\.altsStepRow, rows\)/);
+  assert.match(src, /auxLayout\(aux, !!this\.altTags\)/);
+  const alts = /data-cy="section-alts"([\s\S]*?)<\/b-collapse>/.exec(tpl)[1];
+  assert.match(alts, /class="expand-btn"/);
+  assert.match(alts, /<b-tag type="is-success">\{\{ altTags\.total \}\}<\/b-tag>/);
+  assert.match(tpl, /<b-collapse v-if="s\.key === 'alts'" :key="s\.key" :open="false" class="review-section"/);
 });

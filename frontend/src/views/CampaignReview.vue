@@ -24,37 +24,16 @@
       </div>
     </header>
 
-    <!-- integrations ALT-AUTOGEN-SPEC D9: the alt-generation step the campaign page runs before the
-         inspection (altGenerate.mjs) -- informational, above the checklist, replaced by the next click. -->
-    <div v-if="altsView" class="review-alts" data-cy="review-alts">
-      <b-collapse v-if="altsView.items.length" :open="false" class="review-alts-collapse">
-        <template #trigger="props">
-          <p class="is-clickable">
-            <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
-            {{ $t(altsView.title[0], altsView.title[1]) }}
-            <span v-for="(n, i) in altsView.notes" :key="`alts-note-${i}`" class="has-text-grey ml-2">· {{ $t(n[0], n[1]) }}</span>
-          </p>
-        </template>
-        <ul class="is-size-7 review-alts-list">
-          <li v-for="(a, i) in altsView.items" :key="`alt-${i}`">
-            <span v-if="a.blank" class="has-text-grey">{{ $t('campaigns.review.alts.blank') }}</span>
-            <span v-else>{{ a.text }}</span>
-          </li>
-        </ul>
-      </b-collapse>
-      <p v-else>
-        <span v-if="altsView.spinner" class="checklist-spinner mr-2" aria-hidden="true" />
-        {{ $t(altsView.title[0], altsView.title[1]) }}
-        <span v-for="(n, i) in altsView.notes" :key="`alts-note-${i}`" class="has-text-grey ml-2">· {{ $t(n[0], n[1]) }}</span>
-      </p>
-    </div>
-
     <!-- integrations REVIEW-NAVIGATION-SPEC §4.6: the live checklist, pinned above the sections
-         while the review runs and after it completes (reviewChecklist.mjs). -->
+         while the review runs and after it completes (reviewChecklist.mjs). ALT-AUTOGEN-SPEC A1.1:
+         its FIRST row is the alt step (altsStep) -- the generation the campaign page runs before the
+         inspection; before the job exists it is the only row. -->
     <ul v-if="checklistRows.length" class="review-checklist" data-cy="review-checklist">
       <li v-for="r in checklistRows" :key="r.key" :class="`is-${r.state}`" :data-cy="`checklist-${r.key}`">
-        <!-- A done row: the green check circle; otherwise an empty grey circle (circle before and after). -->
+        <!-- A done row: the green check circle; the alt step's warning state: the warning sign;
+             otherwise an empty grey circle (circle before and after). -->
         <b-icon v-if="r.checked" icon="check-circle-outline" size="is-small" class="has-text-success" />
+        <b-icon v-else-if="r.state === 'warn'" icon="warning-empty" size="is-small" class="has-text-warning-dark" />
         <span v-else class="checklist-circle" aria-hidden="true" />
         <span>{{ r.label }}</span>
         <span v-if="r.spinner" class="checklist-spinner" aria-hidden="true" />
@@ -192,7 +171,28 @@
            sections: fail, then warn, then the ok group -- Passed first, then the ok sections. A
            section with a concern opens by default; the pill only draws the eye. -->
       <template v-for="s in auxLayout">
-        <b-collapse v-if="s.key === 'passed'" :key="s.key" :open="false" class="review-section" data-cy="section-passed">
+        <!-- ALT-AUTOGEN-SPEC A1.2: the "Alt tags" section, built like Passed and placed directly before
+             it (reviewChecklist.mjs auxLayout / altsSection): Approved, Modified (old → new), Generated. -->
+        <b-collapse v-if="s.key === 'alts'" :key="s.key" :open="false" class="review-section" data-cy="section-alts">
+          <template #trigger="props">
+            <h5 class="title is-5 is-clickable aux-head">
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              {{ $t('campaigns.review.sectionAltTags') }} <b-tag type="is-success">{{ altTags.total }}</b-tag>
+            </h5>
+          </template>
+          <div v-for="g in altTags.groups" :key="g.key" class="alt-group" :data-cy="`alts-${g.key}`">
+            <p class="alt-group-head">{{ $t(`campaigns.review.altTags.${g.key}`) }} <b-tag type="is-success" size="is-small">{{ g.count }}</b-tag></p>
+            <ul class="alt-tags-list is-size-7">
+              <li v-for="a in g.rows" :key="a.key">
+                <strong>{{ a.file }}</strong> —
+                <template v-if="g.key === 'modified'">{{ a.from }} → {{ a.alt }}</template>
+                <template v-else>{{ a.alt }}</template>
+              </li>
+            </ul>
+          </div>
+        </b-collapse>
+
+        <b-collapse v-else-if="s.key === 'passed'" :key="s.key" :open="false" class="review-section" data-cy="section-passed">
           <template #trigger="props">
             <h5 class="title is-5 is-clickable aux-head">
               <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
@@ -412,12 +412,12 @@ import { mapState } from 'vuex';
 import {
   applyFixes, compileCampaignBody, dispositionsAfterFixes, loadFrameBuilder, reviewPayload,
 } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
-import { acceptAlts, altsRowState, altsRowView } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
+import { acceptAlts, altsRowState } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
 import {
   buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 import {
-  auxSections, checklist, earlyEntries, isContextItem, sectionCounts, sectionOf,
+  altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isContextItem, sectionCounts, sectionOf, withAltsStep,
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { contextKeys, contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
@@ -439,7 +439,8 @@ export default Vue.extend({
       pollID: null,
       briefOpen: false,
       brief: '',
-      // integrations ALT-AUTOGEN-SPEC D9: the alt-generation row (altGenerate.mjs altsRowState).
+      // integrations ALT-AUTOGEN-SPEC A1.1: the live generation state (altGenerate.mjs altsRowState)
+      // that drives the checklist's alt step (reviewChecklist.mjs altsStep).
       altsRow: null,
     };
   },
@@ -525,22 +526,31 @@ export default Vue.extend({
       return (this.row && this.row.progress) || null;
     },
 
-    // ALT-AUTOGEN-SPEC D9: what the generation row shows (informational; a missed message hides nothing).
-    altsView() {
-      return altsRowView(this.altsRow);
+    // ALT-AUTOGEN-SPEC A1.1: the checklist's first row (informational; a missed message hides nothing).
+    altsStepRow() {
+      return altsStep({
+        live: this.altsRow,
+        report: this.report,
+        reportJob: this.report ? this.report.jobId : null,
+        running: this.isRunning,
+        t: (k, p) => this.$t(k, p),
+      });
     },
 
     checklistRows() {
-      if (!this.checklistPhase) {
-        return [];
-      }
-      return checklist({
+      const rows = this.checklistPhase ? checklist({
         progress: this.checklistProgress,
         report: this.report,
         phase: this.checklistPhase,
         sectionsOf: sectionCounts,
         t: (k, p) => this.$t(k, p),
-      });
+      }) : [];
+      return withAltsStep(this.altsStepRow, rows);
+    },
+
+    // ALT-AUTOGEN-SPEC A1.2: the "Alt tags" section (null without report.alts or images in scope).
+    altTags() {
+      return altsSection(this.report, (k, p) => this.$t(k, p));
     },
 
     // §4.6: the D items of a running review, read-only, in the same sections.
@@ -607,12 +617,11 @@ export default Vue.extend({
     },
 
     // Context, Structure, Provenance with their pills (reviewChecklist.mjs auxSections), ordered
-    // fail, warn, ok -- with Passed placed first in the ok group.
+    // fail, warn, ok -- with Passed placed first in the ok group and the "Alt tags" section directly
+    // before it (A1.2, reviewChecklist.mjs auxLayout).
     auxLayout() {
       const aux = auxSections({ report: this.report, structure: this.structure, t: (k, p) => this.$t(k, p) });
-      const notOk = aux.filter((s) => s.status !== 'ok');
-      const ok = aux.filter((s) => s.status === 'ok');
-      return [...notOk, { key: 'passed' }, ...ok];
+      return auxLayout(aux, !!this.altTags);
     },
 
     // Buttons by the SERVER profile's permission (never a role name).
@@ -648,7 +657,12 @@ export default Vue.extend({
   methods: {
     load() {
       return this.$api.getCampaignReview(this.id, true).then((d) => {
+        const first = !this.state;
         this.state = d;
+        // A1.1: a run whose first message came before the first load takes the report shown now.
+        if (first && this.altsRow && this.altsRow.baseJob === undefined) {
+          this.altsRow = { ...this.altsRow, baseJob: this.report ? this.report.jobId : null };
+        }
         this.schedulePoll();
       }).catch(() => this.schedulePoll());
     },
@@ -805,12 +819,17 @@ export default Vue.extend({
         this.currentOpener = ev.source;
         return;
       }
-      // ALT-AUTOGEN-SPEC D9: the campaign page's generation row -- from this window's opener only,
-      // de-duplicated by token (the page re-posts each message on the opener schedule).
+      // ALT-AUTOGEN-SPEC D9 / A1.1: the campaign page's generation messages -- from this window's
+      // opener only, de-duplicated by token (the page re-posts each message on the opener schedule).
+      // A new run records the shown report's job (undefined until the review state has loaded).
       if (acceptAlts({
         origin: ev.origin, ourOrigin: origin, source: ev.source, opener: this.openerWindow(), data: ev.data, campaignId: this.id,
       })) {
-        this.altsRow = altsRowState(this.altsRow, ev.data);
+        let base;
+        if (this.state) {
+          base = this.report ? this.report.jobId : null;
+        }
+        this.altsRow = altsRowState(this.altsRow, ev.data, base);
         return;
       }
       const { nav } = this;
@@ -1240,13 +1259,13 @@ export default Vue.extend({
   gap: 0.5rem;
   justify-content: flex-end;
 }
-.review-alts {
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
+/* ALT-AUTOGEN-SPEC A1.2: the "Alt tags" section's groups (Approved, Modified, Generated). */
+.alt-group + .alt-group {
+  margin-top: 0.5rem;
 }
-.review-alts-list {
-  margin: 0.25rem 0 0 1.75rem;
-  list-style: disc;
+.alt-group-head {
+  font-weight: bold;
+  font-size: 0.875rem;
 }
 .builder-frame {
   position: absolute;

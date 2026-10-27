@@ -6,8 +6,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  generateAndApply, generatedMap, acceptAlts, altsRowState, altsRowView, altsMessage, MSG_ALTS,
+  generateAndApply, generatedMap, acceptAlts, altsRowState, altsMessage, MSG_ALTS,
 } from './altGenerate.mjs'; // eslint-disable-line import/extensions
+import { altsStep } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { reviewPayload } from './reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { CAMPAIGN_UPDATE_KEYS } from './officialSweep.mjs'; // eslint-disable-line import/extensions
 import { OPENER_POST_SCHEDULE_MS } from './reviewNavigate.mjs'; // eslint-disable-line import/extensions
@@ -36,6 +37,9 @@ const fixA = {
 const fixStale = {
   kind: 'alt.set', block: 'b', from: 'Not the current alt', to: 'X', src: 'https://e/b.jpg',
 };
+// The Lambda's answer time (ALT-AUTOGEN-SPEC A1.4).
+const AT = '2026-10-27T18:00:00.000Z';
+const t = (k, p) => (p ? `${k}${JSON.stringify(p)}` : k);
 
 function harness(over = {}) {
   const calls = [];
@@ -44,7 +48,7 @@ function harness(over = {}) {
     generateAlts: async (id) => {
       calls.push(['generateAlts', id]);
       return {
-        status: 'ok', fixes: [fixA, fixStale], keep: { 'block:k': { src: 'k.jpg', alt: 'Kept' } }, rejected: 1,
+        status: 'ok', fixes: [fixA, fixStale], keep: { 'block:k': { src: 'k.jpg', alt: 'Kept' } }, rejected: 1, at: AT,
       };
     },
     getCampaignRaw: async (id) => {
@@ -77,9 +81,10 @@ test('I9: the phases in order; the PUT is reviewPayload with alt_generated = kee
   assert.deepEqual(Object.keys(put), [...CAMPAIGN_UPDATE_KEYS]);
   assert.equal(put.body, '<p>new</p>');
   // keep + the applied fix; the skipped (stale `from`) fix records nothing; the stored map is replaced by keep.
+  // A1.4: the new entry carries the answer's `at`, and no `from` (the image was undecided).
   assert.deepEqual(put.attribs.alt_generated, {
     'block:k': { src: 'k.jpg', alt: 'Kept' },
-    'block:a': { src: 'https://e/a.jpg', alt: 'Shop the drop' },
+    'block:a': { src: 'https://e/a.jpg', alt: 'Shop the drop', at: AT },
   });
   assert.equal(put.attribs.lang, 'en');
   assert.equal(JSON.parse(put.body_source).a.data.props.alt, 'Shop the drop');
@@ -108,7 +113,11 @@ test('I9: no fixes -> done with no save; rejected > 0 is not "none needed"', asy
   await generateAndApply(none.deps);
   assert.deepEqual(none.notes[1], { phase: 'done', alts: [], rejected: 0 });
   assert.equal(none.calls.some((c) => c[0] === 'getCampaignRaw' || c[0] === 'updateCampaign'), false);
-  assert.deepEqual(altsRowView(altsRowState(null, altsMessage(7, 'r', 2, none.notes[1]))).title, ['campaigns.review.alts.none', {}]);
+  const step = (m) => altsStep({
+    live: altsRowState(null, altsMessage(7, 'r', 2, m), null), report: null, reportJob: null, running: false, t,
+  });
+  assert.equal(step(none.notes[1]).state, 'done');
+  assert.equal(step(none.notes[1]).label, 'campaigns.review.checklist.altsChecked');
 
   const rejAnswer = {
     status: 'ok', fixes: [], keep: {}, rejected: 2,
@@ -116,7 +125,9 @@ test('I9: no fixes -> done with no save; rejected > 0 is not "none needed"', asy
   const rej = harness({ api: { generateAlts: async () => rejAnswer } });
   await generateAndApply(rej.deps);
   assert.deepEqual(rej.notes[1], { phase: 'done', alts: [], rejected: 2 });
-  assert.deepEqual(altsRowView(altsRowState(null, altsMessage(7, 'r', 2, rej.notes[1]))).title, ['campaigns.review.alts.rejected', { n: 2 }]);
+  // A1.1: a `done` with rejected > 0 is the warning state with the note, never "checked".
+  assert.equal(step(rej.notes[1]).state, 'warn');
+  assert.match(step(rej.notes[1]).label, /altsStillNeed\{"n":2\}/);
 });
 
 test('I9: nothing applied -> done with skipped, no save', async () => {
@@ -164,6 +175,43 @@ test('generatedMap: keep + applied alt.set entries only, keyed block:/index:', (
   assert.deepEqual(generatedMap(null, []), {});
 });
 
+test('A1-I2: generatedMap writes from (omitted when undecided) and the answer\'s at (never the browser clock) on new entries', () => {
+  const realNow = Date.now;
+  Date.now = () => 0; // a browser clock that must never reach the map
+  try {
+    const kept = {
+      src: 's', alt: 'K', from: 'old', at: '2026-10-01T00:00:00.000Z',
+    };
+    const out = generatedMap({ 'block:k': kept }, [
+      {
+        kind: 'alt.set', block: 'u', from: '', to: 'New', undecided: true, src: 'u.jpg',
+      },
+      {
+        kind: 'alt.set', block: 'e', from: '', to: 'Was blank', src: 'e.jpg',
+      },
+      {
+        kind: 'alt.set', index: 1, from: 'photo', to: 'Shop', src: 'one.jpg',
+      },
+    ], AT);
+    assert.deepEqual(out, {
+      'block:k': kept,
+      'block:u': { src: 'u.jpg', alt: 'New', at: AT },
+      'block:e': {
+        src: 'e.jpg', alt: 'Was blank', from: '', at: AT,
+      },
+      'index:1': {
+        src: 'one.jpg', alt: 'Shop', from: 'photo', at: AT,
+      },
+    });
+    // An answer without `at` (an older Lambda): no `at` at all.
+    assert.deepEqual(generatedMap({}, [{
+      kind: 'alt.set', block: 'a', from: 'x', to: 'y', src: 'a.jpg',
+    }]), { 'block:a': { src: 'a.jpg', alt: 'y', from: 'x' } });
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test('I11: the window accepts only a same-origin lm-review:alts for its campaign from its opener', () => {
   const opener = { name: 'opener' };
   const data = altsMessage(7, 'run1', 1, { phase: 'generating' });
@@ -198,19 +246,29 @@ test('I11: de-duplicates by token; a late re-post of an earlier phase never over
   assert.equal(next.phase, 'generating');
 });
 
-test('I11: the three phases render', () => {
-  const view = (m) => altsRowView(altsRowState(null, altsMessage(7, 'r', 1, m)));
-  assert.deepEqual(view({ phase: 'generating' }), {
-    spinner: true, title: ['campaigns.review.alts.generating', {}], notes: [], items: [],
+test('I11 / A1.1: the three phases render as the checklist\'s alt step', () => {
+  const step = (m) => altsStep({
+    live: altsRowState(null, altsMessage(7, 'r', 1, m), null), report: null, reportJob: null, running: false, t,
   });
-  assert.deepEqual(view({ phase: 'failed' }).title, ['campaigns.review.alts.failed', {}]);
-  const done = view({
-    phase: 'done', alts: [{ to: 'Shop the drop', block: 'a' }, { to: '', block: 's2' }], skipped: 1, rejected: 2,
+  assert.deepEqual(step({ phase: 'generating' }), {
+    key: 'alts', state: 'current', checked: false, spinner: true, label: 'campaigns.review.checklist.altsRunning',
   });
-  assert.deepEqual(done.title, ['campaigns.review.alts.generated', { n: 2 }]);
-  assert.deepEqual(done.notes, [['campaigns.review.alts.skipped', { n: 1 }], ['campaigns.review.alts.rejected', { n: 2 }]]);
-  assert.deepEqual(done.items, [{ blank: false, text: 'Shop the drop' }, { blank: true, text: '' }]);
-  assert.equal(altsRowView(null), null);
+  assert.equal(step({ phase: 'failed' }).state, 'warn');
+  assert.equal(step({ phase: 'failed' }).label, 'campaigns.review.checklist.altsFailed');
+  const done = step({ phase: 'done', alts: [{ to: 'Shop the drop', block: 'a' }, { to: '', block: 's2' }], skipped: 1 });
+  assert.equal(done.state, 'done');
+  assert.equal(done.checked, true);
+  assert.equal(done.label, 'campaigns.review.checklist.altsDone{"n":2}');
+});
+
+test('A1.1: the live state records the shown report\'s job at the run\'s first message and keeps it for the run', () => {
+  const s1 = altsRowState(null, altsMessage(7, 'r1', 1, { phase: 'generating' }), 'job-a');
+  assert.equal(s1.baseJob, 'job-a');
+  const s2 = altsRowState(s1, altsMessage(7, 'r1', 2, { phase: 'done', alts: [] }), 'job-b');
+  assert.equal(s2.baseJob, 'job-a');
+  const s3 = altsRowState(s2, altsMessage(7, 'r2', 1, { phase: 'generating' }), 'job-b');
+  assert.equal(s3.baseJob, 'job-b');
+  assert.equal(altsRowState(null, altsMessage(7, 'r', 1, { phase: 'generating' })).baseJob, undefined);
 });
 
 test('D9: the alts row shares the opener re-post schedule (one constant)', () => {

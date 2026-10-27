@@ -135,6 +135,93 @@ export function checklist({
   });
 }
 
+// ------------------------------------------------------------------ the alt step (integrations
+// ALT-AUTOGEN-SPEC A1.1) -- the checklist's FIRST row, inside the same container, styled like the
+// others: `current` (spinner), `done` (check) or `warn` (the warning state). Four rules, in order
+// (A1-S2-5):
+//   1. A live message (altGenerate.mjs altsRowState) from a run started after the shown report's job
+//      supersedes that report, until a report of a later job is shown: `generating` -> running;
+//      `done` -> done, N = applied ("N alt tags generated", or "Alt tags checked" when 0), or the
+//      warning state with the note when `rejected > 0`; `failed` -> the warning state.
+//   2. No live message, while a job runs: done, "Alt tags checked" (a job cannot start before its
+//      generation returns).
+//   3. From a report with `alts`: the warning state iff `alts.unfixed > 0` (with the note), else done
+//      with N = `alts.thisInspect`.
+//   4. From a report without `alts` (an older one): no step (null).
+// `live.baseJob` is the shown report's job id when the run began (null: none; undefined: not known
+// yet -- the live run applies). `t(key, params)` is i18n.
+const nonNeg = (n) => (Number.isInteger(n) && n > 0 ? n : 0);
+
+export function altsStep({
+  live, report, reportJob, running, t,
+}) {
+  const tr = (k, p) => t(`campaigns.review.checklist.${k}`, p);
+  const row = (state, label) => ({
+    key: 'alts', state, checked: state === 'done', spinner: state === 'current', label,
+  });
+  const done = (n) => row('done', n > 0 ? tr('altsDone', { n }) : tr('altsChecked'));
+  const warn = (n) => row('warn', n > 0 ? `${tr('altsFailed')} · ${tr('altsStillNeed', { n })}` : tr('altsFailed'));
+
+  const shownJob = report ? (reportJob ?? null) : null;
+  const superseded = !!live && !!report && live.baseJob !== undefined && shownJob !== live.baseJob;
+  if (live && !superseded) {
+    if (live.phase === 'generating') return row('current', tr('altsRunning'));
+    if (live.phase === 'failed') return warn(0);
+    const rejected = nonNeg(live.rejected);
+    if (rejected > 0) return warn(rejected);
+    return done(Array.isArray(live.alts) ? live.alts.length : 0);
+  }
+  if (running) return done(0);
+  const alts = report && report.alts && typeof report.alts === 'object' ? report.alts : null;
+  if (!alts) return null;
+  const unfixed = nonNeg(alts.unfixed);
+  if (unfixed > 0) return warn(unfixed);
+  return done(nonNeg(alts.thisInspect));
+}
+
+// A1.1: the alt step first, then the other rows ("before the job exists, the list shows the alt step alone").
+export function withAltsStep(step, rows) {
+  return step ? [step, ...(rows || [])] : (rows || []);
+}
+
+// ------------------------------------------------------------------ the "Alt tags" section (A1.2)
+// From `report.alts` only: absent (null) without it, and when the campaign has no images in scope.
+// The total is approved + modified + generated (unfixed is never a group); the groups in the order
+// Approved, Modified, Generated, each with its count, an empty group omitted. A blank NEW alt
+// (Modified or Generated) reads `t('…altTags.blankNew')` in both groups (A1-S2-7); any other blank
+// (an approved alt, a replaced one) reads `…altTags.blank`.
+export const ALT_GROUPS = ['approved', 'modified', 'generated'];
+
+export function altsSection(report, t) {
+  const alts = report && report.alts && typeof report.alts === 'object' ? report.alts : null;
+  const items = alts && Array.isArray(alts.items) ? alts.items.filter((i) => i && ALT_GROUPS.includes(i.category)) : [];
+  if (!alts || !items.length) return null;
+  const tr = (k) => t(`campaigns.review.altTags.${k}`);
+  const shown = (s, isNew) => {
+    if (typeof s === 'string' && s.trim() !== '') return s;
+    return isNew ? tr('blankNew') : tr('blank');
+  };
+  const groups = ALT_GROUPS.map((key) => ({
+    key,
+    rows: items.filter((i) => i.category === key).map((i) => ({
+      key: i.key,
+      file: String(i.file || ''),
+      alt: shown(i.alt, key !== 'approved'),
+      ...(key === 'modified' ? { from: shown(i.from, false) } : {}),
+    })),
+  })).filter((g) => g.rows.length).map((g) => ({ ...g, count: g.rows.length }));
+  return { total: groups.reduce((n, g) => n + g.count, 0), groups };
+}
+
+// A1.2 (A1-S2-10): the aux sections' order -- the finding-carrying (fail, warn) sections, then the
+// "Alt tags" section when the report has one, directly before Passed, then the ok sections.
+export function auxLayout(aux, hasAlts) {
+  const list = Array.isArray(aux) ? aux : [];
+  const notOk = list.filter((s) => s.status !== 'ok');
+  const ok = list.filter((s) => s.status === 'ok');
+  return [...notOk, ...(hasAlts ? [{ key: 'alts' }] : []), { key: 'passed' }, ...ok];
+}
+
 // The read-only early findings: from the `screenshots` stage on, while the review runs, the D items
 // in progress.items by section. Every entry is `decidable: false` -- no button renders and nothing
 // can be staged against it. The report replaces them when it arrives (phase `complete` -> none).

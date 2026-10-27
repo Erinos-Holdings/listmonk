@@ -6,10 +6,12 @@
 //                     the existing alt.set path (reviewFixes.mjs applyFixes -> recompile ->
 //                     reviewPayload PUT), record them in attribs.alt_generated. EVERY return path
 //                     lets the caller start the inspection: generation never stops one.
-//   generatedMap      keep + one entry per APPLIED fix (a skipped fix records nothing).
+//   generatedMap      keep + one entry per APPLIED fix (a skipped fix records nothing); each new
+//                     entry carries `from` (omitted when undecided) and the Lambda's `at` (A1.4).
 //   acceptAlts /      the Inspect window's half: which `lm-review:alts` messages it takes (same
-//   altsRowState /    origin, from its opener, for its campaign), de-duplicated by token, and what
-//   altsRowView       the row above the checklist shows.
+//   altsRowState      origin, from its opener, for its campaign) and the live state, de-duplicated
+//                     by token. What the window shows is the checklist's first step
+//                     (reviewChecklist.mjs altsStep, ALT-AUTOGEN-SPEC A1.1).
 //
 // Message (same origin only, posted on reviewNavigate.mjs OPENER_POST_SCHEDULE_MS):
 //   campaign page -> Inspect window  {type: 'lm-review:alts', campaignId, phase, alts?, skipped?, rejected?, token}
@@ -23,12 +25,20 @@ export const ALT_PHASES = Object.freeze(['generating', 'done', 'failed']);
 
 const keyOf = (f) => (f.block ? `block:${f.block}` : `index:${f.index}`);
 
-// D4: the map the generation save writes -- the Lambda's `keep` plus one {src, alt} per applied fix.
-export function generatedMap(keep, applied) {
+// D4 / A1.4: the map the generation save writes -- the Lambda's `keep` plus one
+// {src, alt, from?, at?} per applied fix. `from` is the replaced alt (omitted when the image had none,
+// the fix's `undecided`); `at` is the Lambda's answer time, the same value on every new entry -- never
+// this browser's clock (A1-S2-3). An answer without `at` (an older Lambda) writes no `at`.
+export function generatedMap(keep, applied, at) {
   const out = { ...((keep && typeof keep === 'object' && !Array.isArray(keep)) ? keep : {}) };
   (applied || []).forEach((f) => {
     if (f && f.kind === 'alt.set' && (f.block || Number.isInteger(f.index))) {
-      out[keyOf(f)] = { src: String(f.src || ''), alt: f.to };
+      out[keyOf(f)] = {
+        src: String(f.src || ''),
+        alt: f.to,
+        ...(!f.undecided && typeof f.from === 'string' ? { from: f.from } : {}),
+        ...(typeof at === 'string' && at !== '' ? { at } : {}),
+      };
     }
   });
   return out;
@@ -97,7 +107,7 @@ export async function generateAndApply({
       return failed();
     }
   }
-  campaign.attribs = { ...(campaign.attribs || {}), alt_generated: generatedMap(res.keep, applied) };
+  campaign.attribs = { ...(campaign.attribs || {}), alt_generated: generatedMap(res.keep, applied, res.at) };
   try {
     await api.updateCampaign(id, reviewPayload(campaign, body));
   } catch (e) {
@@ -142,51 +152,26 @@ export function acceptAlts({
 const runOf = (token) => token.slice(0, token.lastIndexOf('#'));
 const seqOf = (token) => Number(token.slice(token.lastIndexOf('#') + 1));
 
-// The row's state after an accepted message: a token already seen, or an earlier phase of the same
-// run, changes nothing; a new run replaces the row.
-export function altsRowState(state, data) {
+// The live state after an accepted message: a token already seen, or an earlier phase of the same
+// run, changes nothing; a new run replaces the state. `baseJob` (A1.1 rule 1) is the job id of the
+// report the window shows when the run's first message arrives (null with no report; undefined while
+// the window has not loaded its review state yet -- the window fills it on its first load). The run
+// drives the checklist's alt step until a report of a later job is shown (reviewChecklist.mjs altsStep).
+export function altsRowState(state, data, baseJob) {
   if (state && state.token === data.token) return state;
-  if (state && state.run === runOf(data.token) && seqOf(data.token) <= state.seq) return state;
+  const run = runOf(data.token);
+  if (state && state.run === run && seqOf(data.token) <= state.seq) return state;
   const strs = (Array.isArray(data.alts) ? data.alts : [])
     .filter((a) => a && typeof a.to === 'string')
     .map((a) => a.to);
   return {
     token: data.token,
-    run: runOf(data.token),
+    run,
     seq: seqOf(data.token),
     phase: data.phase,
     alts: strs,
     skipped: Number.isInteger(data.skipped) ? data.skipped : 0,
     rejected: Number.isInteger(data.rejected) ? data.rejected : 0,
-  };
-}
-
-// What the row shows: { spinner, title: [i18nKey, params], notes: [[key, params]...], items }.
-// A blank alt (a slice) shows as the `blank` key's text.
-export function altsRowView(state) {
-  if (!state) return null;
-  if (state.phase === 'generating') {
-    return {
-      spinner: true, title: ['campaigns.review.alts.generating', {}], notes: [], items: [],
-    };
-  }
-  if (state.phase === 'failed') {
-    return {
-      spinner: false, title: ['campaigns.review.alts.failed', {}], notes: [], items: [],
-    };
-  }
-  const n = state.alts.length;
-  const notes = [];
-  if (state.skipped > 0) notes.push(['campaigns.review.alts.skipped', { n: state.skipped }]);
-  if (state.rejected > 0) notes.push(['campaigns.review.alts.rejected', { n: state.rejected }]);
-  let title;
-  if (n > 0) title = ['campaigns.review.alts.generated', { n }];
-  else if (notes.length) title = notes.shift();
-  else title = ['campaigns.review.alts.none', {}];
-  return {
-    spinner: false,
-    title,
-    notes,
-    items: state.alts.map((to) => (to === '' ? { blank: true, text: '' } : { blank: false, text: to })),
+    baseJob: state && state.run === run ? state.baseJob : baseJob,
   };
 }
