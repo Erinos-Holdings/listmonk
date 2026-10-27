@@ -57,6 +57,11 @@ export const OTHER = 'other';
 //              `unfurler` hit does imply a person SHARED the link).
 //
 // `other`, `bare-mozilla` and Unknown (client '') claim NO tier -- see UNTIERED_TOKENS.
+//
+// This map is the tier's one home, but the i18n string `analytics.clientsTierHint` RESTATES
+// tier membership in prose for the reader (it names Apple Mail's conservative tiering and what
+// "No tier claimed" covers). Nothing ties them, so a re-tier here -- H6's `apple-mail` decision
+// above all -- must edit that hint in the same change (review L2).
 export const CLIENT_TIERS = Object.freeze({
   'outlook-windows': 'client',
   'outlook-mac': 'client',

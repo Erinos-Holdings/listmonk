@@ -806,7 +806,32 @@ var (
 		"applewebkit", "gecko", "chrome", "crios", "safari", "firefox", "fxios", "trident",
 		"edge", "edg/", "opera", "presto", "webkit", "msie",
 	}
+
+	// clientNotBareTokens -- what may NOT appear past a bare UA's first space (isBareRemainder).
+	// A product/version slash, a contact URL or a ";"-separated product name all mean the UA
+	// volunteered something, so it is not bare.
+	clientNotBareTokens = []string{"/", "http", "@", ";"}
 )
+
+// isBareRemainder reports whether a lower-cased UA volunteers no SECOND product after its
+// leading "mozilla[/x.y]" token (CLIENT-VOCABULARY-SPEC D2, narrowed at Stage 4, review M1).
+// Everything past the first space must carry none of "/", "http", "@" or ";": a self-declaring
+// robot writes its product, version and contact URL there -- "Mozilla/5.0 (compatible;
+// MJ12bot/v1.4.8; http://mj12bot.com/)" volunteers plenty and is the opposite of bare, yet it
+// carries no platform and no engine token, so without this it would land in the one bucket whose
+// whole job is to test the Apple hypothesis. "Mozilla", "Mozilla/5.0" and "Mozilla/5.0
+// (compatible)" stay bare; the declared-robot tail goes to "other", which is honest and keeps
+// the extension signal firing.
+//
+// strings.Cut is used rather than an index + slice: no computed bounds, so this cannot panic
+// (J1 -- classifyClient runs inside LinkRedirect, which serves real recipients).
+func isBareRemainder(s string) bool {
+	_, rest, ok := strings.Cut(s, " ")
+	if !ok {
+		return true
+	}
+	return !containsAny(rest, clientNotBareTokens)
+}
 
 // containsAny reports whether s contains any of subs (plain substring tests, no regex).
 func containsAny(s string, subs []string) bool {
@@ -906,10 +931,11 @@ func classifyClient(ua string) string {
 		return clientWebviewIOS
 
 	// bare-mozilla: the UA BEGINS with "mozilla" and volunteers nothing further -- no platform and
-	// no engine/browser token. An evidence-named bucket, NOT an actor: the leading hypothesis is
-	// Apple's privacy relay, but a bare "Mozilla/5.0" is also a common script and scanner default,
-	// so apple-mail is deliberately NOT widened to swallow it (D4.3).
-	case strings.HasPrefix(s, "mozilla") &&
+	// no engine/browser token, and nothing past the first space that names a second product. An
+	// evidence-named bucket, NOT an actor: the leading hypothesis is Apple's privacy relay, but a
+	// bare "Mozilla/5.0" is also a common script and scanner default, so apple-mail is
+	// deliberately NOT widened to swallow it (D4.3).
+	case strings.HasPrefix(s, "mozilla") && isBareRemainder(s) &&
 		!containsAny(s, clientBarePlatformTokens) && !containsAny(s, clientBareEngineTokens):
 		return clientBareMozilla
 	}

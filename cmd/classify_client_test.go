@@ -143,13 +143,21 @@ func TestClassifyClient(t *testing.T) {
 		{"Mozilla/5.0\x00 (Windows NT 10.0)", ""},
 		{"\xff\xfe\xfd", ""},
 		{"Mozilla/5.0 (Ünïcode)", ""},
+
+		// Review M1: a self-declaring "(compatible; <Bot>/<v>; +URL)" crawler carries no platform
+		// and no engine token, but it is the OPPOSITE of bare -- it must not contaminate the one
+		// bucket that tests the Apple hypothesis (isBareRemainder).
+		{"Mozilla/5.0 (compatible; MJ12bot/v1.4.8; http://mj12bot.com/)", clientOther},
+		{"Mozilla/5.0 zgrab/0.x", clientOther},
+		{"Mozilla/5.0 (compatible; MailChimp)", clientOther},
+		{"Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)", clientOther},
 		{"12345 / ; ()", ""},
 		{"Mozilla/5.0 (Macintosh) AppleWebKit/605 (KHTML, like Gecko)\n", clientAppleMail},
 	}
 	// Every row is its own regression pin: integrations CLIENT-VOCABULARY-SPEC J3/J5 -- apart from
-	// the spec's exhaustive changed-row list (curl, python-requests, bingbot -> automation; the
-	// FBAN and Instagram rows -> webview-ios; the Macintosh Mobile/ row unchanged), every
-	// pre-existing row keeps the token it asserted before the vocabulary grew.
+	// the spec's exhaustive changed-row list (exactly five: curl, python-requests and bingbot ->
+	// automation; the FBAN and Instagram rows -> webview-ios; the Macintosh Mobile/ row
+	// unchanged), every pre-existing row keeps the token it asserted before the vocabulary grew.
 	for _, c := range cases {
 		got := classifyClient(c.ua)
 		if got != c.want {
@@ -191,7 +199,10 @@ func TestClassifyClient(t *testing.T) {
 // TestClassifyClientTotal throws random byte strings (and random fragments of real signatures) at
 // the classifier: it must never panic and must return a vocabulary token or "".
 func TestClassifyClientTotal(t *testing.T) {
-	frags := []string{"(KHTML, like Gecko)", "Mobile/", "AppleWebKit/", "iPhone", "Macintosh", "Outlook", "Android", " ", "\x00", "\xff", "Mozilla/", "Safari", "/"}
+	// The fragment list covers every rule family, the vocabulary extension's included (review J1
+	// observation): the declared-robot signatures and the "(compatible;" / contact-URL shapes
+	// isBareRemainder inspects.
+	frags := []string{"(KHTML, like Gecko)", "Mobile/", "AppleWebKit/", "iPhone", "Macintosh", "Outlook", "Android", " ", "\x00", "\xff", "Mozilla/", "Safari", "/", "curl/", "(compatible", ";", "+http://", "@", "facebookexternalhit", "crawler"}
 	r := rand.New(rand.NewSource(1))
 	for i := 0; i < 20000; i++ {
 		var b strings.Builder
@@ -215,10 +226,12 @@ func TestClassifyClientTotal(t *testing.T) {
 			}
 		}()
 	}
-	// A very long UA. It is "Mozilla/5.0 " repeated, so it volunteers no platform and no engine
-	// token: bare-mozilla since integrations CLIENT-VOCABULARY-SPEC D2 (it was `other` before).
-	if got := classifyClient(strings.Repeat("Mozilla/5.0 ", 100000)); got != clientBareMozilla {
-		t.Fatalf("long UA = %q, want bare-mozilla", got)
+	// A very long UA. "Mozilla/5.0 " repeated volunteers no platform and no engine token, but its
+	// remainder past the first space carries a "/", so it is not bare: `other`, as before the
+	// vocabulary grew (integrations CLIENT-VOCABULARY-SPEC D2, narrowed at Stage 4 by review M1 --
+	// the Stage 3 ratification that made this row bare-mozilla is reverted with it).
+	if got := classifyClient(strings.Repeat("Mozilla/5.0 ", 100000)); got != clientOther {
+		t.Fatalf("long UA = %q, want other", got)
 	}
 	// A megabyte of a single repeated platform token still terminates and stays in vocabulary.
 	if got := classifyClient(strings.Repeat("x", 1<<20)); got != clientOther {
