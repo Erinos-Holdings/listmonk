@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes,
+  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes, compileCampaignBody,
 } from './reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { campaignPayload, CAMPAIGN_UPDATE_KEYS } from './officialSweep.mjs'; // eslint-disable-line import/extensions
 
@@ -83,20 +83,24 @@ test('I13: link.collapseScheme on a Button, a Text block (href and markdown) and
   assert.deepEqual(d.root, doc.root);
 });
 
-test('I13: alt.stripPrefix on an Image block; a stale `from` is skipped, never forced', () => {
+test('I13: alt.set on an Image block; a stale `from` is skipped, never forced; alt.stripPrefix is retired (unknown kind)', () => {
   const { campaign, applied, skipped } = applyFixes(visual(), [
     {
-      kind: 'alt.stripPrefix', block: 'img', from: 'image of the pouch', to: 'The pouch',
+      kind: 'alt.set', block: 'img', from: 'image of the pouch', to: 'The pouch',
     },
     {
-      kind: 'alt.stripPrefix', block: 'img', from: 'image of something else', to: 'X',
+      kind: 'alt.set', block: 'img', from: 'image of something else', to: 'X',
     },
     {
       kind: 'link.collapseScheme', block: 'nope', from: 'a', to: 'b',
     },
+    {
+      kind: 'alt.stripPrefix', block: 'img', from: 'The pouch', to: 'Pouch',
+    },
   ]);
   assert.equal(applied.length, 1);
-  assert.equal(skipped.length, 2);
+  assert.equal(skipped.length, 3);
+  assert.equal(skipped[2].reason, 'unknown kind');
   assert.equal(JSON.parse(campaign.body_source).img.data.props.alt, 'The pouch');
 });
 
@@ -107,7 +111,7 @@ test('I13: non-visual fixes target the n-th <a>/<img> of the stored body only', 
       kind: 'link.collapseScheme', index: 1, from: 'https://https://ok.com/b', to: 'https://ok.com/b',
     },
     {
-      kind: 'alt.stripPrefix', index: 0, from: 'photo de la plage', to: 'La plage',
+      kind: 'alt.set', index: 0, from: 'photo de la plage', to: 'La plage',
     },
   ]);
   assert.equal(applied.length, 2);
@@ -127,8 +131,9 @@ test('I13: unknown kinds are skipped and nothing changes', () => {
   assert.equal(skipped.length, 2);
   assert.equal(skipped[0].reason, 'unknown kind');
   assert.deepEqual(campaign, before);
-  // Must agree with integrations lib/campaign-review/report.ts FIX_KINDS (ALT-TEXT-SPEC §8).
-  assert.deepEqual(FIX_KINDS, ['subject.trim', 'preheader.trim', 'link.collapseScheme', 'alt.stripPrefix', 'alt.set']);
+  // integrations ALT-AUTOGEN-SPEC I8: every report.ts FIX_KINDS entry is here; alt.stripPrefix is retired,
+  // alt.set stays (the generation's apply).
+  assert.deepEqual(FIX_KINDS, ['subject.trim', 'preheader.trim', 'link.collapseScheme', 'alt.set']);
 });
 
 // ALT-TEXT-SPEC I8: alt.set on an Image block and on the n-th <img>; identical fixes apply once.
@@ -278,7 +283,7 @@ test('Stage 4 finding 11: a non-visual fix edits the n-th opening tag over the R
 test('Stage 4 finding 6: only applied fixes are recorded as fixed; skipped ones become fixme; others pass through', () => {
   const f1 = { kind: 'subject.trim', from: '  Sale ', to: 'Sale' };
   const f2 = {
-    kind: 'alt.stripPrefix', block: 'img', from: 'stale', to: 'X',
+    kind: 'alt.set', block: 'img', from: 'stale', to: 'X',
   };
   const staged = [
     {
@@ -294,4 +299,32 @@ test('Stage 4 finding 6: only applied fixes are recorded as fixed; skipped ones 
   assert.deepEqual(dispositionsAfterFixes(staged, applied).map((d) => [d.key, d.action]), [
     ['D1.4#a', 'fixed'], ['D3.3b#b', 'fixme'], ['D2.3#c', 'accept'], ['D1.1#d', 'fixme'],
   ]);
+});
+
+// integrations ALT-AUTOGEN-SPEC D5 step 6: the one recompile both the window and the campaign page call.
+test('compileCampaignBody: the Official_ visual templates are the refs, the context is deriveContext, no builder throws', () => {
+  const seen = [];
+  const em = {
+    compileDocument: (d, ctx, refs) => {
+      seen.push({ d, ctx, refs });
+      return '<p>compiled</p>';
+    },
+  };
+  const templates = [
+    {
+      id: 1, name: 'Official_Footer_EN', type: 'campaign_visual', body_source: '{}',
+    },
+    {
+      id: 2, name: 'Ruze promo', type: 'campaign_visual', body_source: '{}',
+    },
+    {
+      id: 3, name: 'Official_Footer_FR', type: 'campaign', body_source: '{}',
+    },
+  ];
+  const lists = [{ id: 15, tags: ['brand:ruze'] }];
+  assert.equal(compileCampaignBody(em, visual(), templates, lists), '<p>compiled</p>');
+  assert.deepEqual(seen[0].refs, [{ id: 1, name: 'Official_Footer_EN', body_source: '{}' }]);
+  assert.equal(seen[0].ctx.lang, 'en');
+  assert.deepEqual(seen[0].d, doc);
+  assert.throws(() => compileCampaignBody(null, visual(), templates, lists), /builder unavailable/);
 });

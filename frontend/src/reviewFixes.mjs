@@ -9,11 +9,13 @@
 // `from` no longer matches (the author edited it since the inspection) is SKIPPED, never forced.
 // Nothing outside the named target changes. Nothing else auto-fixes in this release.
 
-import { campaignPayload } from './officialSweep.mjs'; // eslint-disable-line import/extensions
+import { campaignPayload, deriveContext, isOfficialName } from './officialSweep.mjs'; // eslint-disable-line import/extensions
 
-// ALT-TEXT-SPEC D4/D7: the fifth kind `alt.set` writes a proposed alt (or the slice rule's blank).
-// Must agree with integrations lib/campaign-review/report.ts FIX_KINDS; ships BEFORE the Lambda (D8).
-export const FIX_KINDS = Object.freeze(['subject.trim', 'preheader.trim', 'link.collapseScheme', 'alt.stripPrefix', 'alt.set']);
+// ALT-TEXT-SPEC D7: `alt.set` writes an alt (or the slice rule's blank). Since integrations
+// ALT-AUTOGEN-SPEC D8 no report finding carries an alt fix: `alt.stripPrefix` is retired and
+// `alt.set` is applied only by Inspect's generation (altGenerate.mjs). The agreement rule: every
+// integrations lib/campaign-review/report.ts FIX_KINDS entry is in this list.
+export const FIX_KINDS = Object.freeze(['subject.trim', 'preheader.trim', 'link.collapseScheme', 'alt.set']);
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -145,15 +147,6 @@ function applyOne(c, docRef, fix) {
       docRef.changed = true;
       return null;
     }
-    if (fix.kind === 'alt.stripPrefix') {
-      if (b.type !== 'Image' || p.alt !== fix.from) {
-        return 'the alt text changed since the inspection';
-      }
-      p.alt = fix.to;
-      // eslint-disable-next-line no-param-reassign
-      docRef.changed = true;
-      return null;
-    }
     // link.collapseScheme
     if (b.type === 'Button' && p.url === fix.from) {
       p.url = fix.to;
@@ -175,7 +168,7 @@ function applyOne(c, docRef, fix) {
     let next;
     if (fix.kind === 'alt.set' && fix.undecided) {
       next = insertAltInNthImg(c.body || '', fix.index, fix.to);
-    } else if (fix.kind === 'alt.stripPrefix' || fix.kind === 'alt.set') {
+    } else if (fix.kind === 'alt.set') {
       next = replaceAttrInNthTag(c.body || '', 'img', fix.index, 'alt', fix.from, fix.to);
     } else {
       next = replaceAttrInNthTag(c.body || '', 'a', fix.index, 'href', fix.from, fix.to);
@@ -222,6 +215,42 @@ export function applyFixes(campaign, fixes) {
 // imported, never copied, so the two cannot drift.
 export function reviewPayload(campaign, body) {
   return campaignPayload(campaign, body);
+}
+
+// integrations ALT-AUTOGEN-SPEC D5 step 6: THE recompile of a raw campaign after a fix -- the
+// window's applyStagedFixes and the campaign page's alt generation both call it (never a copy).
+// `em` is the builder UMD (EmailBuilder), `templates` the raw (snake_case) template rows (the
+// `Official_` ones are the footer refs), `lists` the lists store (deriveContext's brand). Throws when
+// the builder has no compileDocument.
+export function compileCampaignBody(em, campaign, templates, lists) {
+  if (!em || typeof em.compileDocument !== 'function') {
+    throw new Error('builder unavailable');
+  }
+  const refs = (Array.isArray(templates) ? templates : [])
+    .filter((t) => t.type === 'campaign_visual' && isOfficialName(t.name))
+    .map((t) => ({ id: t.id, name: t.name, body_source: t.body_source }));
+  const ctx = deriveContext(campaign, lists || []);
+  return em.compileDocument(JSON.parse(campaign.body_source), { lang: ctx.lang, brand: ctx.brand }, refs);
+}
+
+// The builder UMD loaded into a hidden same-origin <iframe> (its own window, so its globals never
+// touch the page's): resolves EmailBuilder. Shared by the window and the campaign page.
+export function loadFrameBuilder(frame, cacheBust) {
+  const win = frame && frame.contentWindow;
+  if (win && win.EmailBuilder) {
+    return Promise.resolve(win.EmailBuilder);
+  }
+  return new Promise((resolve, reject) => {
+    if (!frame || !frame.contentDocument) {
+      reject(new Error('no builder frame'));
+      return;
+    }
+    const script = frame.contentDocument.createElement('script');
+    script.src = `/admin/static/email-builder/email-builder.umd.js?v=${cacheBust}`;
+    script.onload = () => (frame.contentWindow.EmailBuilder ? resolve(frame.contentWindow.EmailBuilder) : reject(new Error('no EmailBuilder')));
+    script.onerror = reject;
+    frame.contentDocument.head.appendChild(script);
+  });
 }
 
 // Stage 4 finding 6: the dispositions to record AFTER the fixes ran. A "Fix for me" whose fix was

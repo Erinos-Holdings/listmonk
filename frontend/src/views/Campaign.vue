@@ -56,7 +56,7 @@
             </b-field>
             <!-- Fork (campaign review, D12) -- Inspect saves first, exactly as Start does. -->
             <b-field v-if="reviewEnabled && canManage" expanded>
-              <b-button expanded @click="inspectCampaign" :loading="loading.campaigns" type="is-primary"
+              <b-button expanded @click="inspectCampaign" :loading="loading.campaigns || inspecting" type="is-primary"
                 :disabled="isBrandBlocked" icon-left="creation" data-cy="btn-inspect"
                 :title="$t('campaigns.review.inspectHelp')">
                 {{ $t('campaigns.review.inspect') }}
@@ -596,6 +596,11 @@
     <campaign-preview v-if="isPreviewingArchive" @close="onToggleArchivePreview" type="campaign" :id="data.id"
       :archive-meta="form.archiveMetaStr" :title="data.title" :content-type="data.contentType"
       :template-id="form.archiveTemplateId" is-post is-archive />
+
+    <!-- Fork (campaign review) -- integrations ALT-AUTOGEN-SPEC D5 step 6: the builder UMD for the
+         alt generation's recompile, in its own hidden frame (the Inspect window's pattern). -->
+    <iframe ref="builderFrame" title="builder" aria-hidden="true"
+      style="position: absolute; width: 0; height: 0; border: 0; visibility: hidden;" />
   </section>
 </template>
 
@@ -613,8 +618,10 @@ import {
 } from '../langs';
 import { audienceBox, hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import {
-  SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, openerMessage, openerReachable, selectFromQuery,
+  OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, selectFromQuery,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
+import { altsMessage, generateAndApply } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
+import { compileCampaignBody, loadFrameBuilder } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
@@ -655,6 +662,8 @@ const DATA_OBJECT_PATH = 'M4 7v2c0 .55-.45 1-1 1H2v4h1c.55 0 1 .45 1 1v2c0 1.65 
 // Fork: the account's local zone for the Send-later helper text. MDT/MST is resolved by Intl
 // per date, so DST never needs a code change.
 const DISPLAY_TIME_ZONE = 'America/Denver';
+// The alt generation's builder load (ALT-AUTOGEN-SPEC D5 step 6): one cache-bust per page load.
+const BUILDER_CACHE_BUST = Date.now();
 
 // Fork: a scheduled send always fires on the minute — the picker hands back the wall-clock
 // seconds of the click. Every reader of the picked date (save payload, draft dirty-check)
@@ -765,6 +774,9 @@ export default Vue.extend({
       reviewState: null,
       reviewWindow: null,
       reviewPollID: null,
+      // integrations ALT-AUTOGEN-SPEC D1: the Inspect button stays loading until the review has started
+      // (save -> generate alts -> save -> start).
+      inspecting: false,
 
       // Fork (review navigation, integrations REVIEW-NAVIGATION-SPEC §4.5) -- a valid `?select=`
       // read ONCE at mount (never re-read from $route.query: history.replaceState does not clear
@@ -1981,7 +1993,13 @@ export default Vue.extend({
     // can land on the outgoing document: it is re-posted over the next few seconds, while the
     // window loads. Same origin only.
     postReviewOpener(win, campaignId = this.data.id) {
-      const msg = openerMessage(campaignId);
+      this.postToReviewWindow(win, openerMessage(campaignId));
+    },
+
+    // One message to the Inspect window on the shared re-post schedule (OPENER_POST_SCHEDULE_MS --
+    // the opener handshake and ALT-AUTOGEN-SPEC D9's alts row). Same origin only; a closed or
+    // navigated window is simply skipped.
+    postToReviewWindow(win, msg) {
       const post = () => {
         try {
           if (win && !win.closed) {
@@ -1991,7 +2009,33 @@ export default Vue.extend({
           // The window navigated elsewhere; nothing to tell.
         }
       };
-      [0, 300, 1000, 2500, 5000].forEach((ms) => setTimeout(post, ms));
+      OPENER_POST_SCHEDULE_MS.forEach((ms) => setTimeout(post, ms));
+    },
+
+    // integrations ALT-AUTOGEN-SPEC D5 step 6: the generation's recompile -- the same function the
+    // Inspect window's applyStagedFixes uses (reviewFixes.mjs compileCampaignBody), with the
+    // builder in this page's hidden frame.
+    async compileForAlts(campaign) {
+      const em = await loadFrameBuilder(this.$refs.builderFrame, BUILDER_CACHE_BUST);
+      const [tpls, lists] = await Promise.all([
+        this.$api.getTemplatesRaw(),
+        (this.lists && this.lists.results && this.lists.results.length) ? Promise.resolve(this.lists.results) : this.$api.getLists({ minimal: true, per_page: 'all' }).then((l) => l.results || l),
+      ]);
+      return compileCampaignBody(em, campaign, tpls, lists || []);
+    },
+
+    // ALT-AUTOGEN-SPEC D6: after a generation save, re-read the campaign AND remount the editor (it
+    // reads its source once: a form.content assignment alone would leave the builder on the old
+    // document and its next input would overwrite the alts -- the draft-restore precedent in
+    // applyDraft). Only when nothing was edited during the generation; otherwise the user's copy is
+    // kept and a toast says so (a later Save is caught by the hash gate as "edited since").
+    async reloadAfterAlts() {
+      if (this.isUnsaved()) {
+        this.$utils.toast(this.$t('campaigns.review.alts.reloadToSee'), 'is-warning');
+        return;
+      }
+      await this.getCampaign(this.data.id);
+      this.editorKey += 1;
     },
 
     // Fork (review navigation) -- §4.5: select a block the Inspect window referenced. The content
@@ -2052,11 +2096,14 @@ export default Vue.extend({
     },
 
     // Fork (campaign review, D12). Open (or focus) the checklist window FIRST -- inside the click,
-    // so no pop-up blocker intervenes -- then save exactly as Start does and start the inspection.
-    // The window polls and shows the running job.
-    inspectCampaign() {
-      const { href } = this.$router.resolve({ name: 'campaignReview', params: { id: this.data.id } });
-      const win = window.open(href, `lm-review-${this.data.id}`);
+    // so no pop-up blocker intervenes -- then save exactly as Start does, generate the alt text
+    // (integrations ALT-AUTOGEN-SPEC D1/D5: altGenerate.mjs, applied and saved before the hash is
+    // taken), and start the inspection ONCE. The window shows the generation row (D9) and polls the job.
+    // Generation never stops the inspection; a blocked pop-up still gets both.
+    async inspectCampaign() {
+      const { id } = this.data;
+      const { href } = this.$router.resolve({ name: 'campaignReview', params: { id } });
+      const win = window.open(href, `lm-review-${id}`);
       if (!win) {
         this.$utils.toast(this.$t('campaigns.review.windowBlocked'), 'is-danger');
       } else {
@@ -2064,20 +2111,43 @@ export default Vue.extend({
         win.focus();
         this.postReviewOpener(win);
       }
-      this.updateCampaign(null, true)
-        .then(
-          () => this.$api.startCampaignReview(this.data.id).then(() => this.loadReview(), () => this.loadReview()),
-          () => {
-            // Stage 4 finding 7: the save failed, so nothing was inspected -- never leave the window
-            // showing the previous inspection as if it were this one.
-            this.$utils.toast(this.$t('campaigns.review.saveFailed'), 'is-danger');
-            if (win && !win.closed) {
-              win.close();
-            }
-            this.reviewWindow = null;
+      this.inspecting = true;
+      try {
+        try {
+          await this.updateCampaign(null, true);
+        } catch (e) {
+          // Stage 4 finding 7: the save failed, so nothing was inspected -- never leave the window
+          // showing the previous inspection as if it were this one.
+          this.$utils.toast(this.$t('campaigns.review.saveFailed'), 'is-danger');
+          if (win && !win.closed) {
+            win.close();
+          }
+          this.reviewWindow = null;
+          return;
+        }
+        const run = newToken();
+        let seq = 0;
+        const gen = await generateAndApply({
+          id,
+          api: {
+            generateAlts: (cid) => this.$api.generateAlts(cid),
+            getCampaignRaw: (cid) => this.$api.getCampaignRaw(cid),
+            updateCampaign: (cid, payload) => this.$api.updateCampaign(cid, payload),
           },
-        )
-        .finally(() => this.syncReviewPoll());
+          compile: (c) => this.compileForAlts(c),
+          notify: (m) => {
+            seq += 1;
+            this.postToReviewWindow(win, altsMessage(id, run, seq, m));
+          },
+        });
+        if (gen.saved) {
+          await this.reloadAfterAlts().catch(() => {});
+        }
+        await this.$api.startCampaignReview(id).then(() => this.loadReview(), () => this.loadReview());
+      } finally {
+        this.inspecting = false;
+        this.syncReviewPoll();
+      }
     },
 
     // Starts or schedule a campaign.

@@ -177,6 +177,65 @@ func postReviewJob(cfg ReviewConfig, body []byte) error {
 	return nil
 }
 
+// AltsTimeout is the alt generation's client timeout (integrations ALT-AUTOGEN-SPEC D2): under
+// CloudFront's default 30 s origin timeout in front of the admin UI; the Lambda budgets 18 s from
+// its own handler entry, leaving the rest for a cold start.
+const AltsTimeout = 28 * time.Second
+
+// maxAltsResponseBytes caps the Lambda's answer read (a real one is a few KB of fixes and a map).
+const maxAltsResponseBytes = 1 << 20
+
+var altsClient = &http.Client{Timeout: AltsTimeout}
+
+// ErrReviewNotConfigured is RequestAlts' answer while app.review_url is empty.
+var ErrReviewNotConfigured = errors.New("campaign review is not configured")
+
+// RequestAlts POSTs the signed `{mode: "alts", campaignId}` to the review Lambda (review.Sign, exactly
+// as postReviewJob signs a job) and returns its JSON verbatim on a 200. Anything else -- a non-200,
+// a transport error or a timeout, a body that is not JSON -- is an error. Nothing is stored (D2).
+// cfg.Client overrides the 28 s client (tests).
+func RequestAlts(cfg ReviewConfig, campaignID int) (json.RawMessage, error) {
+	if cfg.URL == "" {
+		return nil, ErrReviewNotConfigured
+	}
+	now := time.Now
+	if cfg.Now != nil {
+		now = cfg.Now
+	}
+	client := altsClient
+	if cfg.Client != nil {
+		client = cfg.Client
+	}
+	body, _ := json.Marshal(struct {
+		Mode       string `json:"mode"`
+		CampaignID int    `json:"campaignId"`
+	}{"alts", campaignID})
+	ts := now().Unix()
+	req, err := http.NewRequest(http.MethodPost, cfg.URL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Review-Timestamp", strconv.FormatInt(ts, 10))
+	req.Header.Set("X-Review-Signature", review.Sign(cfg.Secret, ts, body))
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	out, err := io.ReadAll(io.LimitReader(resp.Body, maxAltsResponseBytes))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if !json.Valid(out) {
+		return nil, errors.New("the review service answered no JSON")
+	}
+	return json.RawMessage(out), nil
+}
+
 // GetLatestReview returns the newest row (nil when none) with the 6-minute expiry applied on read,
 // the disposition log, and the fork's verdict over that row.
 func (c *Core) GetLatestReview(cm models.Campaign) (ReviewState, error) {

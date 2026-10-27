@@ -21,6 +21,10 @@ export const MSG_SELECT = 'lm-review:select';
 export const MSG_ACK = 'lm-review:ack';
 
 export const ACK_TIMEOUT_MS = 1500;
+// The campaign page's re-post schedule for a message to the Inspect window (window.open navigates the
+// window, so a message posted at once can land on the outgoing document): the opener handshake and
+// the alt-generation row (integrations ALT-AUTOGEN-SPEC D9) share it -- ONE constant.
+export const OPENER_POST_SCHEDULE_MS = Object.freeze([0, 300, 1000, 2500, 5000]);
 // App.vue's cap on the second reply (covers a discard dialog left open); the Inspect window's
 // own cap is RESULT_TIMEOUT_MS + 1000, so the receiver's `unknown` arrives first.
 export const RESULT_TIMEOUT_MS = 20000;

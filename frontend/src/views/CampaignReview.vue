@@ -24,6 +24,31 @@
       </div>
     </header>
 
+    <!-- integrations ALT-AUTOGEN-SPEC D9: the alt-generation step the campaign page runs before the
+         inspection (altGenerate.mjs) -- informational, above the checklist, replaced by the next click. -->
+    <div v-if="altsView" class="review-alts" data-cy="review-alts">
+      <b-collapse v-if="altsView.items.length" :open="false" class="review-alts-collapse">
+        <template #trigger="props">
+          <p class="is-clickable">
+            <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+            {{ $t(altsView.title[0], altsView.title[1]) }}
+            <span v-for="(n, i) in altsView.notes" :key="`alts-note-${i}`" class="has-text-grey ml-2">· {{ $t(n[0], n[1]) }}</span>
+          </p>
+        </template>
+        <ul class="is-size-7 review-alts-list">
+          <li v-for="(a, i) in altsView.items" :key="`alt-${i}`">
+            <span v-if="a.blank" class="has-text-grey">{{ $t('campaigns.review.alts.blank') }}</span>
+            <span v-else>{{ a.text }}</span>
+          </li>
+        </ul>
+      </b-collapse>
+      <p v-else>
+        <span v-if="altsView.spinner" class="checklist-spinner mr-2" aria-hidden="true" />
+        {{ $t(altsView.title[0], altsView.title[1]) }}
+        <span v-for="(n, i) in altsView.notes" :key="`alts-note-${i}`" class="has-text-grey ml-2">· {{ $t(n[0], n[1]) }}</span>
+      </p>
+    </div>
+
     <!-- integrations REVIEW-NAVIGATION-SPEC §4.6: the live checklist, pinned above the sections
          while the review runs and after it completes (reviewChecklist.mjs). -->
     <ul v-if="checklistRows.length" class="review-checklist" data-cy="review-checklist">
@@ -384,8 +409,10 @@
 <script>
 import Vue from 'vue';
 import { mapState } from 'vuex';
-import { applyFixes, reviewPayload, dispositionsAfterFixes } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
-import { deriveContext, isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
+import {
+  applyFixes, compileCampaignBody, dispositionsAfterFixes, loadFrameBuilder, reviewPayload,
+} from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
+import { acceptAlts, altsRowState, altsRowView } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
 import {
   buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
@@ -412,6 +439,8 @@ export default Vue.extend({
       pollID: null,
       briefOpen: false,
       brief: '',
+      // integrations ALT-AUTOGEN-SPEC D9: the alt-generation row (altGenerate.mjs altsRowState).
+      altsRow: null,
     };
   },
 
@@ -494,6 +523,11 @@ export default Vue.extend({
         return this.row && this.row.status === 'complete' ? (this.row.progress || null) : null;
       }
       return (this.row && this.row.progress) || null;
+    },
+
+    // ALT-AUTOGEN-SPEC D9: what the generation row shows (informational; a missed message hides nothing).
+    altsView() {
+      return altsRowView(this.altsRow);
     },
 
     checklistRows() {
@@ -771,6 +805,14 @@ export default Vue.extend({
         this.currentOpener = ev.source;
         return;
       }
+      // ALT-AUTOGEN-SPEC D9: the campaign page's generation row -- from this window's opener only,
+      // de-duplicated by token (the page re-posts each message on the opener schedule).
+      if (acceptAlts({
+        origin: ev.origin, ourOrigin: origin, source: ev.source, opener: this.openerWindow(), data: ev.data, campaignId: this.id,
+      })) {
+        this.altsRow = altsRowState(this.altsRow, ev.data);
+        return;
+      }
       const { nav } = this;
       if (!nav) {
         return;
@@ -802,18 +844,7 @@ export default Vue.extend({
 
     // The builder UMD in this window's own frame, for compileDocument (the sweep's compile).
     loadBuilder() {
-      const frame = this.$refs.builderFrame;
-      const win = frame && frame.contentWindow;
-      if (win && win.EmailBuilder) {
-        return Promise.resolve(win.EmailBuilder);
-      }
-      return new Promise((resolve, reject) => {
-        const script = frame.contentDocument.createElement('script');
-        script.src = `/admin/static/email-builder/email-builder.umd.js?v=${BUILDER_CACHE_BUST}`;
-        script.onload = () => (frame.contentWindow.EmailBuilder ? resolve(frame.contentWindow.EmailBuilder) : reject(new Error('no EmailBuilder')));
-        script.onerror = reject;
-        frame.contentDocument.head.appendChild(script);
-      });
+      return loadFrameBuilder(this.$refs.builderFrame, BUILDER_CACHE_BUST);
     },
 
     // Apply the staged fixes to the SAVED campaign, recompile a visual body, PUT it. Returns the fix
@@ -845,11 +876,8 @@ export default Vue.extend({
           this.$api.getTemplatesRaw(),
           (this.lists && this.lists.results && this.lists.results.length) ? Promise.resolve(this.lists.results) : this.$api.getLists({ minimal: true, per_page: 'all' }).then((l) => l.results || l),
         ]);
-        const refs = (Array.isArray(tpls) ? tpls : [])
-          .filter((t) => t.type === 'campaign_visual' && isOfficialName(t.name))
-          .map((t) => ({ id: t.id, name: t.name, body_source: t.body_source }));
-        const ctx = deriveContext(campaign, lists || []);
-        body = em.compileDocument(JSON.parse(campaign.body_source), { lang: ctx.lang, brand: ctx.brand }, refs);
+        // ALT-AUTOGEN-SPEC D5 step 6: the one compile, shared with the campaign page's alt generation.
+        body = compileCampaignBody(em, campaign, tpls, lists || []);
       }
       await this.$api.updateCampaign(this.id, reviewPayload(campaign, body));
       this.$utils.toast(this.$t('campaigns.review.fixesApplied', { n: applied.length }));
@@ -1211,6 +1239,14 @@ export default Vue.extend({
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+}
+.review-alts {
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+.review-alts-list {
+  margin: 0.25rem 0 0 1.75rem;
+  list-style: disc;
 }
 .builder-frame {
   position: absolute;

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -54,6 +55,27 @@ func (a *App) StartCampaignReview(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, okResp{row})
+}
+
+// GenerateCampaignAlts (POST /api/campaigns/:id/alts) -- integrations ALT-AUTOGEN-SPEC D2: the
+// campaign page's alt generation before an inspection. The browser never holds the HMAC secret, so
+// the fork signs `{mode: "alts", campaignId}` for the review Lambda and relays its 200 as
+// {data: <the Lambda's JSON>}. Same permission as starting a review. 503 while the gate is off;
+// anything else from the Lambda is a 502. Nothing is stored here: the page applies and saves.
+func (a *App) GenerateCampaignAlts(c echo.Context) error {
+	id := getID(c)
+	if err := a.checkCampaignPerm(auth.PermTypeManage, id, c); err != nil {
+		return err
+	}
+	out, err := core.RequestAlts(reviewConfig(), id)
+	if errors.Is(err, core.ErrReviewNotConfigured) {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, a.i18n.T("campaigns.reviewNotConfigured"))
+	}
+	if err != nil {
+		a.log.Printf("campaign %d: alt generation failed: %v", id, err)
+		return echo.NewHTTPError(http.StatusBadGateway, a.i18n.T("campaigns.altsUnavailable"))
+	}
+	return c.JSON(http.StatusOK, okResp{out})
 }
 
 // GetCampaignReviewLatest (GET /api/campaigns/:id/reviews/latest) -- the window's and the campaign

@@ -495,6 +495,15 @@ export const startCampaignReview = async (id) => http.post(
   { loading: models.reviews, camelCase: false },
 );
 
+// integrations ALT-AUTOGEN-SPEC D2: the signed alt generation through the fork (the review Lambda's
+// `{mode: "alts"}`); the Lambda's JSON verbatim. Quiet: a failure is the window's "could not be
+// generated" row, never a toast, and never stops the inspection.
+export const generateAlts = async (id) => http.post(
+  `/api/campaigns/${id}/alts`,
+  {},
+  { camelCase: false, disableToast: true },
+);
+
 export const getCampaignReview = async (id, quiet = false) => http.get(
   `/api/campaigns/${id}/reviews/latest`,
   quiet ? { camelCase: false, disableToast: true } : { loading: models.reviews, camelCase: false },

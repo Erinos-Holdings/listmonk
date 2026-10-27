@@ -194,6 +194,8 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/campaigns/render-canary", pm(a.GetRenderCanary, "campaigns:review"))
 		g.GET("/api/campaigns/structure-verifications/:fingerprint", pm(a.GetStructureVerification, "campaigns:get_all", "campaigns:get"))
 		g.POST("/api/campaigns/:id/reviews", pm(hasID(a.StartCampaignReview), "campaigns:manage_all", "campaigns:manage"))
+		// integrations ALT-AUTOGEN-SPEC D2: the alt generation Inspect runs before the inspection.
+		g.POST("/api/campaigns/:id/alts", pm(hasID(a.GenerateCampaignAlts), "campaigns:manage_all", "campaigns:manage"))
 		g.GET("/api/campaigns/:id/reviews/latest", pm(hasID(a.GetCampaignReviewLatest), "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/:id/reviews/previous", pm(hasID(a.GetCampaignReviewPrevious), "campaigns:review"))
 		g.POST("/api/campaigns/:id/reviews/dispositions", pm(hasID(a.PostReviewDispositions), "campaigns:manage_all", "campaigns:manage"))
