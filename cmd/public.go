@@ -751,8 +751,72 @@ const (
 	clientBrowserWindows = "browser-windows"
 	clientBrowserMac     = "browser-mac"
 	clientBrowserLinux   = "browser-linux"
-	clientOther          = "other"
+	// Fork (client vocabulary, integrations CLIENT-VOCABULARY-SPEC D2) -- the structural and
+	// declared sub-buckets that stop "other" swallowing the view data. Each names the EVIDENCE
+	// that matched it, never an actor we inferred.
+	clientWebviewIOS  = "webview-ios"
+	clientBareMozilla = "bare-mozilla"
+	clientAutomation  = "automation"
+	clientUnfurler    = "unfurler"
+	clientOther       = "other"
 )
+
+// Fork (client vocabulary, CLIENT-VOCABULARY-SPEC D2/D3/D6) -- the substring lists of the two
+// DECLARED buckets. Matching is plain case-insensitive substring containment on the lower-cased
+// UA; the lists are implementation detail owned by this file and its test table, while the TOKEN
+// SET is the contract (CLIENT-STATS-SPEC D2).
+//
+// D5's collision rule admits a substring only if it cannot plausibly occur inside a real client's
+// UA. Deliberately ABSENT, each for a recorded reason: "okhttp" and "java/" (generic HTTP-library
+// defaults a native mail app emits -- they stay in "other"), "bingpreview" (attested only by
+// third-party directories; it stays in browser-windows until Microsoft attests a string), bare
+// "bot", "php", "ruby", "+http" and "whatsapp". "go-http-client" IS here: no consumer mail client
+// is written in Go, so it has no plausible mail-app path. "spider"/"crawler" are kept as bare
+// generic words -- the conventional self-declaration terms, with no real-world client UA in the
+// test table containing either (the regression pin fails if that ever stops being true).
+var (
+	// clientUnfurlerSigs -- documented link-preview robots (a person shared the link; no person
+	// read the mail).
+	clientUnfurlerSigs = []string{
+		"facebookexternalhit", "slackbot", "linkedinbot", "twitterbot", "telegrambot",
+		"discordbot", "skypeuripreview", "redditbot", "pinterestbot", "embedly", "iframely",
+	}
+
+	// clientAutomationSigs -- self-declaring HTTP clients, libraries, headless browsers and
+	// crawlers, plus (D6) the declared mail-security scanner strings: there is deliberately NO
+	// "scanner" token, because that class spoofs mainstream browser UAs and a bucket reading
+	// ~0.0% forever would be read as "no scanner inflation" -- a confident wrong answer.
+	clientAutomationSigs = []string{
+		"curl/", "wget", "python-requests", "python-urllib", "go-http-client",
+		"apache-httpclient", "axios/", "node-fetch", "libwww-perl", "guzzle", "httpie",
+		"postmanruntime", "headlesschrome",
+		"bingbot", "googlebot", "yandexbot", "baiduspider", "duckduckbot", "applebot",
+		"ahrefsbot", "semrushbot", "petalbot", "spider", "crawler",
+		"proofpoint", "mimecast", "barracuda", "ironport", "messagelabs",
+	}
+
+	// clientBarePlatformTokens / clientBareEngineTokens -- what a UA must volunteer NOTHING of to
+	// be "bare". Every browser rule above needs one of the platform tokens, so bare-mozilla can
+	// only ever take traffic from "other" (D4.2).
+	clientBarePlatformTokens = []string{
+		"windows", "macintosh", "mac os", "iphone", "ipad", "ipod", "android", "linux",
+		"x11", "cros",
+	}
+	clientBareEngineTokens = []string{
+		"applewebkit", "gecko", "chrome", "crios", "safari", "firefox", "fxios", "trident",
+		"edge", "edg/", "opera", "presto", "webkit", "msie",
+	}
+)
+
+// containsAny reports whether s contains any of subs (plain substring tests, no regex).
+func containsAny(s string, subs []string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
 
 // viewerClient returns the classified client token of the request, or "" (stored as NULL).
 func viewerClient(c echo.Context) string {
@@ -763,9 +827,13 @@ func viewerClient(c echo.Context) string {
 // empty or junk value. It is total: plain substring tests over the bytes, no regex, no indexing
 // that can go out of range, so no input panics. Ordered first-match rules: image proxies, then
 // named mail clients (incl. the Outlook mobile apps, before the browser rows since the Android
-// app's UA contains "Android"), then Apple Mail's terminal WebKit signature, then browsers by
-// platform, then "other" for any UA seen but not classified (its growth is the signal to extend
-// this table). Matching is case-insensitive.
+// app's UA contains "Android"), then the DECLARED robots (unfurler, automation -- before the
+// browser rows, or a headless Chrome on Windows or an Android-shaped bot would be absorbed into
+// browser-* and stay invisible, CLIENT-VOCABULARY-SPEC D4.1), then Apple Mail's terminal WebKit
+// signature, then browsers by platform, then the STRUCTURAL residue buckets (webview-ios,
+// bare-mozilla -- after the browser rows, so each can only take traffic from "other", D4.2), then
+// "other" for any UA seen but not classified (its growth is the signal to extend this table).
+// Matching is case-insensitive.
 func classifyClient(ua string) string {
 	ua = strings.TrimSpace(ua)
 	if ua == "" {
@@ -806,6 +874,13 @@ func classifyClient(ua string) string {
 		return clientThunderbird
 	case has("outlook-ios"), has("outlook-android"):
 		return clientOutlookMobile
+
+	// Declared non-interactive software (D4.1 -- before the browser rows).
+	case containsAny(s, clientUnfurlerSigs):
+		return clientUnfurler
+	case containsAny(s, clientAutomationSigs):
+		return clientAutomation
+
 	case isAppleMailUA(s):
 		return clientAppleMail
 
@@ -820,6 +895,23 @@ func classifyClient(ua string) string {
 		return clientBrowserMac
 	case (has("x11") || has("linux")) && has("mozilla/"):
 		return clientBrowserLinux
+
+	// Structural residue (D2/D4.2 -- after the browser rows; each takes only from "other").
+	//
+	// webview-ios: a person inside an app's embedded browser. The platform set is iPhone/iPad/iPod
+	// ONLY and deliberately excludes "macintosh": a macOS generic-WebKit fetch labelled "In-app
+	// browser (iOS)" would be a lie, so it stays "other".
+	case (has("iphone") || has("ipad") || has("ipod")) && has("applewebkit") &&
+		!has("safari") && !has("crios"):
+		return clientWebviewIOS
+
+	// bare-mozilla: the UA BEGINS with "mozilla" and volunteers nothing further -- no platform and
+	// no engine/browser token. An evidence-named bucket, NOT an actor: the leading hypothesis is
+	// Apple's privacy relay, but a bare "Mozilla/5.0" is also a common script and scanner default,
+	// so apple-mail is deliberately NOT widened to swallow it (D4.3).
+	case strings.HasPrefix(s, "mozilla") &&
+		!containsAny(s, clientBarePlatformTokens) && !containsAny(s, clientBareEngineTokens):
+		return clientBareMozilla
 	}
 	return clientOther
 }

@@ -17,7 +17,11 @@ var clientVocabulary = map[string]bool{
 	clientGmailProxy: true, clientYahoo: true, clientOutlookWindows: true, clientOutlookMac: true,
 	clientThunderbird: true, clientOutlookMobile: true, clientAppleMail: true, clientBrowserIOS: true,
 	clientBrowserAndroid: true, clientBrowserWindows: true, clientBrowserMac: true,
-	clientBrowserLinux: true, clientOther: true,
+	clientBrowserLinux: true,
+	// integrations CLIENT-VOCABULARY-SPEC D2 -- the four appended tokens.
+	clientUnfurler: true, clientAutomation: true, clientWebviewIOS: true,
+	clientBareMozilla: true,
+	clientOther:       true,
 }
 
 func TestClassifyClient(t *testing.T) {
@@ -48,8 +52,10 @@ func TestClassifyClient(t *testing.T) {
 		// Review F1: NOT apple-mail -- a further product token means a browser or an in-app WebView.
 		{"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/127.0 Mobile/15E148 Safari/605.1.15", clientBrowserIOS},
 		{"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1 DuckDuckGo/7", clientBrowserIOS},
-		{"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21F90 [FBAN/FBIOS;FBAV/470.0.0.43.109;FBBV/612345678;FBDV/iPhone15,2;FBMD/iPhone;FBSN/iOS;FBSV/17.5;FBSS/3;FBCR/;FBID/phone;FBLC/en_US;FBOP/80]", clientOther},
-		{"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21F90 Instagram 340.0.0.22.109 (iPhone15,2; iOS 17_5; en_US; en; scale=3.00; 1179x2556; 621234567)", clientOther},
+		// CLIENT-VOCABULARY-SPEC D2/J4: these two were the recorded `other` gap and are now named
+		// webview-ios (iPhone + AppleWebKit, no Safari/CriOS token).
+		{"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21F90 [FBAN/FBIOS;FBAV/470.0.0.43.109;FBBV/612345678;FBDV/iPhone15,2;FBMD/iPhone;FBSN/iOS;FBSV/17.5;FBSS/3;FBCR/;FBID/phone;FBLC/en_US;FBOP/80]", clientWebviewIOS},
+		{"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21F90 Instagram 340.0.0.22.109 (iPhone15,2; iOS 17_5; en_US; en; scale=3.00; 1179x2556; 621234567)", clientWebviewIOS},
 
 		// Browsers by platform.
 		{"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", clientBrowserIOS},
@@ -64,15 +70,71 @@ func TestClassifyClient(t *testing.T) {
 		{"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", clientBrowserLinux},
 		{"Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0", clientBrowserLinux},
 
-		// Seen but not classified.
-		{"curl/8.5.0", clientOther},
-		{"python-requests/2.32.3", clientOther},
-		{"Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)", clientOther},
+		// --- integrations CLIENT-VOCABULARY-SPEC ---
+
+		// Declared automation (D2/D3). The first three were `other` before this vocabulary.
+		{"curl/8.5.0", clientAutomation},
+		{"python-requests/2.32.3", clientAutomation},
+		{"Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)", clientAutomation},
+		{"Wget/1.21.4", clientAutomation},
+		{"Go-http-client/2.0", clientAutomation},
+		{"PostmanRuntime/7.39.0", clientAutomation},
+		{"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", clientAutomation},
+		{"Mozilla/5.0 (compatible; SemrushBot/7~bl; +http://www.semrush.com/bot.html)", clientAutomation},
+		{"Some-Scanner/1.0 (proofpoint)", clientAutomation},
+		// J2 order pin: a declared robot carrying a platform token resolves to automation, NOT
+		// browser-* (D4.1 -- these were browser-windows / browser-android / browser-mac before).
+		{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/126.0.0.0 Safari/537.36", clientAutomation},
+		{"Mozilla/5.0 (Linux; Android 7.0;) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; PetalBot;+https://webmaster.petalsearch.com/site/petalbot)", clientAutomation},
+		{"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)", clientAutomation},
+		{"Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)", clientAutomation},
+
+		// Declared link-preview robots (D2), matched BEFORE automation and before the browsers.
+		{"facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)", clientUnfurler},
+		{"Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)", clientUnfurler},
+		{"Mozilla/5.0 (compatible; LinkedInBot/1.0; +http://www.linkedin.com)", clientUnfurler},
+		{"Twitterbot/1.0", clientUnfurler},
+		{"TelegramBot (like TwitterBot)", clientUnfurler},
+		{"Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)", clientUnfurler},
+		{"SkypeUriPreview Preview/0.5", clientUnfurler},
+		{"Mozilla/5.0 (compatible; redditbot/1.0; +http://www.reddit.com/feedback)", clientUnfurler},
+		{"Pinterest/0.2 (+http://www.pinterest.com/bot.html; pinterestbot)", clientUnfurler},
+		{"Embedly/0.1", clientUnfurler},
+		{"Iframely/1.3.1", clientUnfurler},
+		// J2 order pin: an unfurler wearing a Windows browser UA is still an unfurler.
+		{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 facebookexternalhit/1.1", clientUnfurler},
+
+		// In-app browser on iOS (D2/J4): AppleWebKit on an iPhone/iPad/iPod with no Safari/CriOS.
+		{"Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [LinkedInApp]", clientWebviewIOS},
+		// M1: a Mac generic-WebKit UA with a trailing product token is NOT an iOS WebView.
 		{"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/", clientOther},
+		{"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) MyMacApp/1.0", clientOther},
+
+		// Bare Mozilla (D2/J3): begins with "mozilla", volunteers no platform and no engine token.
+		{"Mozilla/5.0", clientBareMozilla},
+		{"Mozilla", clientBareMozilla},
+		{"Mozilla/5.0 (compatible)", clientBareMozilla},
+		// L1: NOT bare-mozilla -- MSIE is volunteered, and the second does not begin with Mozilla.
+		{"Mozilla/4.0 (compatible; MSIE 6.0)", clientOther},
+		{"MailSniper/1.0 Mozilla", clientOther},
+
+		// D5/D3's REJECTED signatures, pinned so a later edit cannot quietly admit them: a generic
+		// HTTP-library default is not a declaration of automation (a native mail app loading images
+		// outside a WebView sends exactly these, and `machine` would report real opens as
+		// machines), `BingPreview` is attested only by third-party directories so it stays in the
+		// declared browser-windows soft edge, and `whatsapp` conflates a preview robot with a
+		// person reading inside an in-app browser.
+		{"okhttp/4.12.0", clientOther},
+		{"Java/17.0.2", clientOther},
+		{"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/534+ (KHTML, like Gecko) BingPreview/1.0b", clientBrowserWindows},
+		{"Dalvik/2.1.0 (Linux; U; Android 14; SM-S918B Build/UP1A)", clientBrowserAndroid},
+		{"WhatsApp/2.23.20.0 A", clientOther},
 
 		// Case-insensitive.
 		{"googleimageproxy", clientGmailProxy},
 		{"OUTLOOK-IOS/1.0", clientOutlookMobile},
+		{"MOZILLA/5.0", clientBareMozilla},
+		{"CURL/8.5.0", clientAutomation},
 
 		// Empty and junk -> "" (stored NULL), never a panic.
 		{"", ""},
@@ -84,6 +146,10 @@ func TestClassifyClient(t *testing.T) {
 		{"12345 / ; ()", ""},
 		{"Mozilla/5.0 (Macintosh) AppleWebKit/605 (KHTML, like Gecko)\n", clientAppleMail},
 	}
+	// Every row is its own regression pin: integrations CLIENT-VOCABULARY-SPEC J3/J5 -- apart from
+	// the spec's exhaustive changed-row list (curl, python-requests, bingbot -> automation; the
+	// FBAN and Instagram rows -> webview-ios; the Macintosh Mobile/ row unchanged), every
+	// pre-existing row keeps the token it asserted before the vocabulary grew.
 	for _, c := range cases {
 		got := classifyClient(c.ua)
 		if got != c.want {
@@ -91,6 +157,22 @@ func TestClassifyClient(t *testing.T) {
 		}
 		if got != "" && !clientVocabulary[got] {
 			t.Errorf("classifyClient(%q) = %q, not a vocabulary token", c.ua, got)
+		}
+	}
+
+	// J5 / D5's collision rule, asserted directly: no substring of the two DECLARED lists occurs
+	// inside any UA in this table that is not itself a declared robot. This fails the moment a new
+	// signature is added that could swallow a real client's traffic.
+	for _, c := range cases {
+		if c.want == clientAutomation || c.want == clientUnfurler {
+			continue
+		}
+		s := strings.ToLower(strings.TrimSpace(c.ua))
+		if containsAny(s, clientAutomationSigs) {
+			t.Errorf("D5 collision: automation signature matches non-robot UA %q (want %q)", c.ua, c.want)
+		}
+		if containsAny(s, clientUnfurlerSigs) {
+			t.Errorf("D5 collision: unfurler signature matches non-robot UA %q (want %q)", c.ua, c.want)
 		}
 	}
 
@@ -133,8 +215,13 @@ func TestClassifyClientTotal(t *testing.T) {
 			}
 		}()
 	}
-	// A very long UA.
-	if got := classifyClient(strings.Repeat("Mozilla/5.0 ", 100000)); got != clientOther {
-		t.Fatalf("long UA = %q, want other", got)
+	// A very long UA. It is "Mozilla/5.0 " repeated, so it volunteers no platform and no engine
+	// token: bare-mozilla since integrations CLIENT-VOCABULARY-SPEC D2 (it was `other` before).
+	if got := classifyClient(strings.Repeat("Mozilla/5.0 ", 100000)); got != clientBareMozilla {
+		t.Fatalf("long UA = %q, want bare-mozilla", got)
+	}
+	// A megabyte of a single repeated platform token still terminates and stays in vocabulary.
+	if got := classifyClient(strings.Repeat("x", 1<<20)); got != clientOther {
+		t.Fatalf("1MB UA = %q, want other", got)
 	}
 }

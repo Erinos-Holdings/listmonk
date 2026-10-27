@@ -528,7 +528,28 @@
                   <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
                 </template>
               </b-table>
+              <!-- Fork (client vocabulary, integrations CLIENT-VOCABULARY-SPEC D8): the three
+                   trust-tier subtotals plus the untiered remainder, as footer rows beneath the
+                   table, over Views and Clicks (this panel has no Combined column at all).
+                   Rendered separately and NEVER summed into one figure. -->
+              <table v-if="clients.rows.length" class="table is-narrow is-fullwidth client-tiers">
+                <thead>
+                  <tr>
+                    <th>{{ $t('analytics.clientsTier') }}</th>
+                    <th class="has-text-right">{{ $t('campaigns.views') }}</th>
+                    <th class="has-text-right">{{ $t('campaigns.clicks') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="t in clientTierRows" :key="t.key">
+                    <td>{{ t.name }}</td>
+                    <td class="has-text-right">{{ $utils.formatNumber(t.views) }}</td>
+                    <td class="has-text-right">{{ $utils.formatNumber(t.clicks) }}</td>
+                  </tr>
+                </tbody>
+              </table>
               <p class="is-size-7 has-text-grey mt-2">{{ $t('dashboard.clientsWindow') }} {{ $t('analytics.clientsHint') }}</p>
+              <p v-if="clients.rows.length" class="is-size-7 has-text-grey mt-2">{{ $t('analytics.clientsTierHint') }}</p>
             </article>
           </div>
         </div>
@@ -564,7 +585,8 @@ import {
   sortRows as sortUsageRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
-  DEFAULT_SORT as CLIENT_DEFAULT_SORT, clientTotals, shapeClientRows, sortClientRows,
+  DEFAULT_SORT as CLIENT_DEFAULT_SORT, TIER_ROWS, clientTierSubtotals, clientTotals,
+  shapeClientRows, sortClientRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
 import { rateCell } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
@@ -1098,6 +1120,15 @@ export default Vue.extend({
     clientTableRows() {
       const { field, order } = this.clients.sort;
       return sortClientRows(this.clients.rows, field, order, (this.$i18n && this.$i18n.locale) || 'en');
+    },
+
+    // Fork (client vocabulary, D8) -- the tier footer rows. The tier map and this row order are
+    // clientRows.mjs's (the tier's single home); this only labels and formats them.
+    clientTierRows() {
+      const sub = clientTierSubtotals(this.clients.rows);
+      return TIER_ROWS.map(({ key, i18n }) => ({
+        key, name: this.$t(i18n), views: sub[key].views, clicks: sub[key].clicks,
+      }));
     },
   },
 

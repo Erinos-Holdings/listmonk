@@ -25,3 +25,14 @@ test('I7 the mapping carries the spec D8 examples, no id twice, and rosterFor co
   copy.push('x');
   assert.equal(rosterFor('outlook-mac').length, 2);
 });
+
+// integrations CLIENT-VOCABULARY-SPEC J11: the four appended tokens get NO roster entry. Nothing
+// in the Inspect roster renders a declared robot, a bare-UA fetch, or an in-app WebView, and an
+// invented id would be a tooltip that lies.
+test('J11 the vocabulary-extension tokens have no roster entry', () => {
+  ['automation', 'unfurler', 'bare-mozilla', 'webview-ios'].forEach((t) => {
+    assert.ok(CLIENT_TOKENS.includes(t), `${t} should be a vocabulary token`);
+    assert.equal(Object.prototype.hasOwnProperty.call(CLIENT_ROSTER, t), false, `${t} should have no roster entry`);
+    assert.deepEqual(rosterFor(t), []);
+  });
+});

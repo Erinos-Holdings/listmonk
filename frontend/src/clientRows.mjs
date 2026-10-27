@@ -21,12 +21,18 @@ export const CLIENT_LABELS = Object.freeze({
   'outlook-mac': 'Outlook (Mac)',
   thunderbird: 'Thunderbird',
   'outlook-mobile': 'Outlook app (iOS/Android)',
+  // Fork (client vocabulary, integrations CLIENT-VOCABULARY-SPEC D2) -- the declared robots are
+  // matched before the browser rows, the structural residue buckets after them.
+  unfurler: 'Link preview (chat/social)',
+  automation: 'Automated fetch (declared)',
   'apple-mail': 'Apple Mail (incl. privacy proxy)',
   'browser-ios': 'Browser (iOS)',
   'browser-android': 'Browser (Android)',
   'browser-windows': 'Browser (Windows)',
   'browser-mac': 'Browser (macOS)',
   'browser-linux': 'Browser (Linux)',
+  'webview-ios': 'In-app browser (iOS)',
+  'bare-mozilla': 'Unnamed client (bare Mozilla)',
   other: 'Other',
 });
 
@@ -34,6 +40,67 @@ export const CLIENT_LABELS = Object.freeze({
 export const CLIENT_TOKENS = Object.freeze(Object.keys(CLIENT_LABELS));
 
 export const OTHER = 'other';
+
+// Fork (client vocabulary, integrations CLIENT-VOCABULARY-SPEC D8) -- the TRUST TIER. Grouping,
+// not judgement: a property of the token in the same class as its display label, and this is its
+// ONE home, so consumers read one definition instead of each re-deriving it.
+//
+//   client  -- the fetch declares software a person uses. A CEILING on human opens, not a count
+//              of them: corporate scanners prefetch with spoofed mainstream-browser UAs, so some
+//              of this is machine traffic that no User-Agent work can separate out.
+//   proxy   -- a provider intermediary fetched for a real mailbox: a real inbox exists, the open
+//              timing is unreliable. `apple-mail` is tiered here CONSERVATIVELY, not concluded:
+//              Mail Privacy Protection and a real on-device open cannot be told apart by UA, and
+//              `proxy` is true under either reading where `client` would assert a person opened
+//              it. Re-tiering it is a post-release decision (spec H6).
+//   machine -- declared non-interactive software. No person is implied by the fetch itself (an
+//              `unfurler` hit does imply a person SHARED the link).
+//
+// `other`, `bare-mozilla` and Unknown (client '') claim NO tier -- see UNTIERED_TOKENS.
+export const CLIENT_TIERS = Object.freeze({
+  'outlook-windows': 'client',
+  'outlook-mac': 'client',
+  'outlook-mobile': 'client',
+  thunderbird: 'client',
+  'browser-ios': 'client',
+  'browser-android': 'client',
+  'browser-windows': 'client',
+  'browser-mac': 'client',
+  'browser-linux': 'client',
+  'webview-ios': 'client',
+  'gmail-proxy': 'proxy',
+  yahoo: 'proxy',
+  'apple-mail': 'proxy',
+  automation: 'machine',
+  unfurler: 'machine',
+});
+
+// TIERS is the render order of the three subtotals. They are shown SEPARATELY and are NEVER
+// summed into one published figure: `client` over-counts (spoofed scanners), `proxy` is a mailbox
+// but not an open, and the untiered remainder is unknown -- a sum would be exactly the "confident
+// opens" number the data cannot support (D8).
+export const TIERS = Object.freeze(['client', 'proxy', 'machine']);
+
+// UNTIERED_TOKENS are the vocabulary tokens that deliberately claim no tier. Unknown (client '')
+// is untiered too, as is any token this map has not heard of (vocabulary drift).
+export const UNTIERED_TOKENS = Object.freeze(['other', 'bare-mozilla']);
+
+export const UNTIERED = 'untiered';
+
+// TIER_ROWS is the render order of the tier footer rows -- the three tiers, then the untiered
+// remainder (`other`, the bare-Mozilla bucket and Unknown) -- with each row's i18n key. Part of
+// the tier's single home (D8): both render sites read this instead of each spelling it out.
+export const TIER_ROWS = Object.freeze([
+  Object.freeze({ key: 'client', i18n: 'analytics.clientsTierClient' }),
+  Object.freeze({ key: 'proxy', i18n: 'analytics.clientsTierProxy' }),
+  Object.freeze({ key: 'machine', i18n: 'analytics.clientsTierMachine' }),
+  Object.freeze({ key: UNTIERED, i18n: 'analytics.clientsTierUntiered' }),
+]);
+
+// clientTier is a token's trust tier, or 'untiered' when it claims none (D8).
+export function clientTier(token) {
+  return Object.prototype.hasOwnProperty.call(CLIENT_TIERS, token) ? CLIENT_TIERS[token] : UNTIERED;
+}
 
 export const DEFAULT_SORT = Object.freeze({ field: 'views', order: 'desc' });
 
@@ -98,6 +165,30 @@ export function shapeClientRows(rows, { locale = 'en', unknownLabel = 'Unknown' 
     };
   });
   return sortClientRows(out, DEFAULT_SORT.field, DEFAULT_SORT.order, locale);
+}
+
+// clientTierSubtotals groups a shaped table's rows by trust tier (D8), over Views and Clicks only
+// -- NOT Combined: a tier-combined figure is close to the very number D8 refuses, and the
+// Dashboard panel has no Combined column anyway (BRAND-USAGE-V2-SPEC D8).
+//
+// It returns exactly the four keys {client, proxy, machine, untiered} and deliberately NO total:
+// the three tiers are rendered separately and never summed (J9).
+export function clientTierSubtotals(rows) {
+  const out = {
+    client: { views: 0, clicks: 0 },
+    proxy: { views: 0, clicks: 0 },
+    machine: { views: 0, clicks: 0 },
+    [UNTIERED]: { views: 0, clicks: 0 },
+  };
+  (Array.isArray(rows) ? rows : []).forEach((r) => {
+    const client = typeof r.client === 'string' ? r.client.trim() : '';
+    // Unknown (no UA, and every pre-vocabulary row) claims no tier.
+    const tier = client === '' ? UNTIERED : clientTier(client);
+    const bucket = out[tier] || out[UNTIERED];
+    bucket.views += num(r.views);
+    bucket.clicks += num(r.clicks);
+  });
+  return out;
 }
 
 // clientTotals sums a shaped table's columns (the denominators of each row's share).
