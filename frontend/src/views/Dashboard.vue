@@ -514,11 +514,11 @@
                 <b-table-column v-slot="props" field="name" :label="$t('analytics.clientsClient')" sortable>
                   <span :class="{ 'has-text-grey': props.row.unknown }" :title="clientRosterTip(props.row.client)">{{ props.row.name }}</span>
                 </b-table-column>
-                <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
+                <b-table-column v-slot="props" field="views" :label="$t('dashboard.clientsViewEvents')" numeric sortable>
                   {{ $utils.formatNumber(props.row.views) }}
                   <span v-if="clientShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ clientShare(props.row.views, 'views') }})</span>
                 </b-table-column>
-                <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
+                <b-table-column v-slot="props" field="clicks" :label="$t('dashboard.clientsClickEvents')" numeric sortable>
                   {{ $utils.formatNumber(props.row.clicks) }}
                   <span v-if="clientShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ clientShare(props.row.clicks, 'clicks') }})</span>
                 </b-table-column>
@@ -536,8 +536,8 @@
                 <thead>
                   <tr>
                     <th>{{ $t('analytics.clientsTier') }}</th>
-                    <th class="has-text-right">{{ $t('campaigns.views') }}</th>
-                    <th class="has-text-right">{{ $t('campaigns.clicks') }}</th>
+                    <th class="has-text-right">{{ $t('dashboard.clientsViewEvents') }}</th>
+                    <th class="has-text-right">{{ $t('dashboard.clientsClickEvents') }}</th>
                   </tr>
                 </thead>
                 <tbody>
