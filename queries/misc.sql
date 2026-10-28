@@ -396,15 +396,15 @@ bh AS (
     SELECT DISTINCT ON (brand) brand, status, doc FROM brand_health ORDER BY brand, day DESC
 ),
 -- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11/D12, I12) -- tracked and
--- matched = the stored campaign_conversions rows of the brand's campaigns (bcamps, the pane's C) whose
--- purchased_at falls in the SAME window (bounds, from the one zone CTE above -- never a second
--- literal), as orders and sales. Counts always (the pct/num toggle never applies). Every stored
--- campaign has exactly one brand, so a brand row is the sum of its campaigns' rows. conversions =
+-- matched = the stored campaign_conversions rows grouped by their STORED brand (the brand the writer
+-- computed the sales for -- Stage 4 F7: a list re-tagged between runs can never put one row in two
+-- brand rows) whose purchased_at falls in the SAME window (bounds, from the one zone CTE above --
+-- never a second literal), as orders and sales. Counts always (the pct/num toggle never applies).
+-- Each row carries one brand, so a brand row is the sum of its campaigns' rows. conversions =
 -- the latest conversions doc's asOf, floors and trackedStale verbatim (NULL with no doc).
 conv AS (
-    SELECT bc.brand, cc.measure, COUNT(*) AS orders, COALESCE(SUM(cc.sales_usd), 0) AS sales
+    SELECT cc.brand, cc.measure, COUNT(*) AS orders, COALESCE(SUM(cc.sales_usd), 0) AS sales
     FROM campaign_conversions cc
-    JOIN bcamps bc ON (bc.id = cc.campaign_id)
     WHERE cc.purchased_at >= (SELECT t0 FROM bounds) AND cc.purchased_at < (SELECT t1 FROM bounds)
     GROUP BY 1, 2
 ),
