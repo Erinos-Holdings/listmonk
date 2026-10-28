@@ -397,7 +397,7 @@ bh AS (
 ),
 -- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11/D12, I12) -- tracked and
 -- matched = the stored campaign_conversions rows grouped by their STORED brand (the brand the writer
--- computed the sales for -- Stage 4 F7: a list re-tagged between runs can never put one row in two
+-- computed the sales for -- Stage 4 F7, so a list re-tagged between runs can never put one row in two
 -- brand rows) whose purchased_at falls in the SAME window (bounds, from the one zone CTE above --
 -- never a second literal), as orders and sales. Counts always (the pct/num toggle never applies).
 -- Each row carries one brand, so a brand row is the sum of its campaigns' rows. conversions =
