@@ -673,8 +673,8 @@ export default Vue.extend({
   watch: {
     // Fork (global brand, D4) -- a selection change re-reads the listing from page 1; the bulk
     // selection made under the old brand is dropped.
-    brandKey(now, before) {
-      if (before === 'pending' || now === 'pending' || this.$route.params.id) {
+    brandKey(now) {
+      if (!this.brandChanged(now) || this.$route.params.id) {
         return;
       }
       this.queryParams.page = 1;

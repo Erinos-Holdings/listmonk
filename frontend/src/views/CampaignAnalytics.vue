@@ -833,8 +833,8 @@ export default Vue.extend({
   watch: {
     // Fork (global brand, D4) -- re-fetch the picker under the new selection; the picked
     // campaigns stay (D9).
-    brandKey(now, before) {
-      if (before === 'pending' || now === 'pending' || this.lastQuery === null) {
+    brandKey(now) {
+      if (!this.brandChanged(now) || this.lastQuery === null) {
         return;
       }
       this.queryCampaigns(this.lastQuery);

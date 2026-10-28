@@ -10,7 +10,7 @@ import {
   campaignBrand, contextNotice, filterTemplates, formBrandDefault, templateNoticeBrand,
   mediaScopeContext, presetNoticeBrand, filterBrandRows,
   launchOf, matchesLaunch, applyLaunch, launchCounts, filterRowsByLaunch, launchApplies,
-  selectionLoaded,
+  selectionLoaded, brandKeyStep,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 const BRANDS = [
@@ -330,6 +330,25 @@ test('D3 selectionLoaded: under a narrowing filter the selection waits for the h
   assert.deepEqual(scope('all', [], false).selection, brand('shala'));
   assert.equal(selectionLoaded(false, 'all', true), false);
   assert.equal(selectionLoaded(true, 'bogus', false), true);
+});
+
+test('brandKeyStep: a page refetches exactly when the resolved key differs from the one it fetched', () => {
+  const K1 = JSON.stringify(brand('ruze'));
+  const K2 = JSON.stringify(ALL);
+  // Mounted while pending: pending is ignored, the first resolution only records.
+  assert.deepEqual(brandKeyStep(null, 'pending'), { seen: null, changed: false });
+  assert.deepEqual(brandKeyStep(null, K1), { seen: K1, changed: false });
+  // An ordinary selector change.
+  assert.deepEqual(brandKeyStep(K1, K2), { seen: K2, changed: true });
+  // The defect: a launch-filter switch while the documents load goes K1 -> pending -> K2. The old
+  // guard skipped both transitions; the step keeps K1 through pending and fetches on K2.
+  let s = brandKeyStep(K1, 'pending');
+  assert.deepEqual(s, { seen: K1, changed: false });
+  s = brandKeyStep(s.seen, K2);
+  assert.deepEqual(s, { seen: K2, changed: true });
+  // A pending round trip back to the same key does not refetch.
+  s = brandKeyStep(brandKeyStep(K1, 'pending').seen, K1);
+  assert.deepEqual(s, { seen: K1, changed: false });
 });
 
 test('I1 launchOf: unknown is unlaunched; ok/warn/issues, no status and no document are launched', () => {

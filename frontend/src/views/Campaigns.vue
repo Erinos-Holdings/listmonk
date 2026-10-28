@@ -959,10 +959,10 @@ export default Vue.extend({
     // Fork (global brand, D4) -- reset the in-page list filter to "All lists" when the chosen
     // list is outside the new scope, then fetch through refreshCampaigns (the poll's path).
     // DASHBOARDS-POLISH2-SPEC D2 (stage 2 F2) -- ANY selector change also clears the route list
-    // scope (campaignsRouteQuery.mjs::afterBrandChange). The pending transitions are the initial
-    // resolution of the stored selection, not a user change, and leave it in place.
-    brandKey(now, before) {
-      if (before === 'pending' || now === 'pending') {
+    // scope (campaignsRouteQuery.mjs::afterBrandChange). The initial resolution of the stored
+    // selection is not a user change and leaves it in place (brandChanged: brandKeyStep).
+    brandKey(now) {
+      if (!this.brandChanged(now)) {
         return;
       }
       const next = afterBrandChange(this.queryParams, this.scopeListIds);

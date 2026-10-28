@@ -1134,8 +1134,8 @@ export default Vue.extend({
 
   watch: {
     // Fork (global brand, D4) -- a selection change re-issues the reads together (fetchData).
-    brandKey(now, before) {
-      if (before !== 'pending' && now !== 'pending') {
+    brandKey(now) {
+      if (this.brandChanged(now)) {
         this.fetchData();
       }
     },

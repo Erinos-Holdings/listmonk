@@ -652,8 +652,8 @@ export default Vue.extend({
     // by-query action can never act on a selection made under another scope. The simple search is
     // carried (withRouteSearch). On the plain subscribers route the push would be a duplicate
     // (same fullPath, no remount), so the page drops the same state itself and re-reads.
-    brandKey(now, before) {
-      if (before === 'pending' || now === 'pending') {
+    brandKey(now) {
+      if (!this.brandChanged(now)) {
         return;
       }
       if (this.$route.name === 'subscribers_list') {

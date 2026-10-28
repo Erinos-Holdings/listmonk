@@ -531,8 +531,8 @@ export default Vue.extend({
     // Fork (global brand, GLOBAL-BRAND-PHASE2-SPEC D7) -- the page (never the picker) re-seeds the
     // filter row and the upload tags from the new selection, discarding any within-page widening,
     // and re-reads from page 1.
-    brandKey(now, before) {
-      if (this.isModal || before === 'pending' || now === 'pending') {
+    brandKey(now) {
+      if (!this.brandChanged(now) || this.isModal) {
         return;
       }
       this.initFilter();

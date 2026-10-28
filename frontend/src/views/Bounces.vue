@@ -228,8 +228,8 @@ export default Vue.extend({
   watch: {
     // Fork (global brand, D7) -- a selection change re-reads from page 1; getBounces drops the
     // bulk selection made under the old scope.
-    brandKey(now, before) {
-      if (before === 'pending' || now === 'pending') {
+    brandKey(now) {
+      if (!this.brandChanged(now)) {
         return;
       }
       this.queryParams.page = 1;

@@ -346,6 +346,22 @@ export function selectionLoaded(listsLoaded, launch, healthLoaded) {
   return !!listsLoaded && (normalizeLaunch(launch) === 'all' || !!healthLoaded);
 }
 
+// A page's brandKey watcher decision: { seen, changed } from the key it last fetched under
+// (`seen`, null before its first fetch) and the new key. Pending never fetches; the first
+// resolution only records (afterListsLoaded runs that fetch); after that a fetch is due exactly
+// when the resolved key differs -- so a change that passes through pending (a launch-filter switch
+// while the health documents load) is not lost, and a pending round trip back to the same key
+// does not refetch.
+export function brandKeyStep(seen, now) {
+  if (now === 'pending') {
+    return { seen, changed: false };
+  }
+  if (seen === null || seen === undefined) {
+    return { seen: now, changed: false };
+  }
+  return { seen: now, changed: now !== seen };
+}
+
 // D4: the filter applies only while the selector is shown and unlocked -- decided by the FULL
 // roster, as resolveSelection decides hidden/locked. Where it does not apply the store resolves
 // the launch value to 'all', so a value stored under a wider roster (or by another user of the
