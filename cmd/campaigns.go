@@ -1002,6 +1002,19 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{out})
 	}
 
+	// Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7) -- per campaign, the
+	// stored Tracked and Matched orders and sales in [from, to] (NULL = not covered), the countries
+	// pattern: after the permission loop and date validation, inheriting both. Aggregates only, no
+	// subscriber data.
+	if typ == "conversions" {
+		out, err := a.core.GetCampaignAnalyticsConversions(ids, from, to)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Get the analytics numbers from the DB for the campaigns.
 	out, err := a.core.GetCampaignAnalyticsCounts(ids, typ, from, to)
 	if err != nil {

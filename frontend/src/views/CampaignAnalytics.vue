@@ -58,6 +58,24 @@
       </div><!-- columns -->
     </form>
 
+    <!-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- the Tracked and
+         Matched header cells over the selected campaigns and date range (by purchase time), summed
+         over the covered campaigns; '—' when none is covered (or no conversions doc exists). Orders,
+         sales underneath in grey; the definitions are in the hover. -->
+    <section v-if="conversions.fetched" class="conversions mt-5 relative" data-cy="conversions">
+      <b-loading v-if="conversions.loading" active :is-full-page="false" />
+      <h4>{{ $t('analytics.conversions.title') }}</h4>
+      <div class="columns is-mobile">
+        <div v-for="m in conversionHeaderCells" :key="m.key" class="column is-3" :title="m.tip"
+          :data-cy="`conversions-${m.key}`">
+          <p class="heading">{{ $t(`analytics.conversions.${m.key}`) }}</p>
+          <p class="title is-4">{{ m.cell.orders }}</p>
+          <p class="is-size-7 has-text-grey">{{ m.cell.sales }}</p>
+        </div>
+      </div>
+      <p class="is-size-7 has-text-grey" data-cy="conversions-hint">{{ $t('analytics.conversions.hint') }}</p>
+    </section>
+
     <section class="charts mt-5">
       <div class="chart" v-for="(v, k) in charts" :key="k">
         <div class="columns">
@@ -235,6 +253,7 @@ import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/e
 import { metricAxisMax, sendOverlayOptions, shapeSendOverlay } from '../sendOverlay.mjs'; // eslint-disable-line import/extensions
 import { aggregateShopLinkRate, shapeShopLinkBars, totalShopLinkClicks } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { MEASURES as CONVERSION_MEASURES, analyticsCells, conversionTooltip } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -405,6 +424,14 @@ export default Vue.extend({
         loading: false,
         fetched: false,
         sort: { ...CLIENT_DEFAULT_SORT },
+      },
+
+      // Fork (campaign conversions, CAMPAIGN-CONVERSIONS-SPEC D11) -- the last conversions read
+      // (null until fetched, or on a failed read: every cell '—').
+      conversions: {
+        data: null,
+        loading: false,
+        fetched: false,
       },
 
       form: {
@@ -691,6 +718,23 @@ export default Vue.extend({
       this.clients.sort = { field, order };
     },
 
+    // Fork (campaign conversions, D7/D11) -- fetched alongside the tables, same campaigns and range.
+    getConversions(camps) {
+      this.conversions.loading = true;
+      this.conversions.fetched = true;
+      this.$api.getCampaignConversions({
+        id: camps.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((data) => {
+        this.conversions.data = data || null;
+      }).catch(() => {
+        this.conversions.data = null;
+      }).finally(() => {
+        this.conversions.loading = false;
+      });
+    },
+
     // A client's share of the column's own total (Unknown included), as countryShare.
     clientShare(n, field) {
       return rateCell(n, this.clientTotalsSum[field], 1).pct;
@@ -784,6 +828,15 @@ export default Vue.extend({
       }
       // The header describes the bars on screen: Hide No link drops that row from the total too.
       return rateCell(totalShopLinkClicks(this.shopLinks.rows, opts), this.sent.total, RATE_DIGITS.shopLinks, fmt);
+    },
+
+    // Fork (campaign conversions, D11) -- the two header cells ({ orders, sales }) and their hovers.
+    conversionHeaderCells() {
+      const { data } = this.conversions;
+      const cells = analyticsCells(data, (n) => this.$utils.formatNumber(n));
+      return CONVERSION_MEASURES.map((key) => ({
+        key, cell: cells[key], tip: conversionTooltip(key, data, (k, p) => this.$t(k, p)),
+      }));
     },
 
     countryTotals() {
@@ -916,6 +969,8 @@ export default Vue.extend({
           this.getCountries(this.form.campaigns);
           // Fork (client stats) -- the Email clients table.
           this.getClients(this.form.campaigns);
+          // Fork (campaign conversions) -- the Tracked and Matched header cells.
+          this.getConversions(this.form.campaigns);
         });
       });
     }

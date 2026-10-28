@@ -610,6 +610,78 @@ SELECT link_clicks.campaign_id,
     WHERE link_clicks.created_at >= $1
     ORDER BY link_clicks.id ASC LIMIT $2 OFFSET $3;
 
+-- name: export-campaign-clicks-keyset
+-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7) -- the click export the
+-- CampaignConversions Lambda reads, export-campaign-link-clicks' shape cut to what Matched needs, with
+-- keyset pagination on link_clicks.id (after $1) instead of OFFSET. Only rows with a subscriber AND a
+-- campaign. Raw rows, no computation. Subscriber data, so its route is gated on subscribers get_all,
+-- never on analytics.
+SELECT link_clicks.id, link_clicks.campaign_id, subscribers.email, link_clicks.created_at
+    FROM link_clicks
+    JOIN subscribers ON (subscribers.id = link_clicks.subscriber_id)
+    WHERE link_clicks.id > $1 AND link_clicks.created_at >= $2
+        AND link_clicks.campaign_id IS NOT NULL
+    ORDER BY link_clicks.id ASC LIMIT $3;
+
+-- name: delete-campaign-conversions
+-- Fork (campaign conversions, D7) -- the first half of the one-measure replace (same transaction as
+-- insert-campaign-conversions). The other measure is untouched.
+DELETE FROM campaign_conversions WHERE measure = $1;
+
+-- name: insert-campaign-conversions
+-- Fork (campaign conversions, D7) -- the second half, every row of one measure from a validated JSON
+-- array. The primary key (measure, order_id) refuses an order twice.
+INSERT INTO campaign_conversions (measure, order_id, campaign_id, brand, purchased_at, sales_usd)
+    SELECT $1, r->>'order_id', (r->>'campaign_id')::INT, r->>'brand', (r->>'purchased_at')::TIMESTAMPTZ,
+        (r->>'sales_usd')::NUMERIC(12, 2)
+    FROM JSONB_ARRAY_ELEMENTS($2::JSONB) AS r;
+
+-- name: get-existing-campaign-ids
+SELECT id FROM campaigns WHERE id = ANY($1::INT[]);
+
+-- name: get-campaign-conversions
+-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7/D8) -- per requested campaign,
+-- the Tracked and Matched orders and sales with purchased_at in [$2, $3], NULL for a measure the latest
+-- conversions doc does not cover (its trackedCampaigns / matchedCampaigns arrays) -- a missing campaign
+-- is not zero. With no doc every measure is NULL. Also the doc's asOf, the two floors and trackedStale,
+-- projected verbatim. Sums only, no rule.
+WITH doc AS (
+    SELECT doc FROM system_health WHERE kind = 'conversions' ORDER BY day DESC LIMIT 1
+),
+cov AS (
+    SELECT
+        CASE WHEN JSONB_TYPEOF(doc->'trackedCampaigns') = 'array' THEN doc->'trackedCampaigns' ELSE '[]'::JSONB END AS tracked,
+        CASE WHEN JSONB_TYPEOF(doc->'matchedCampaigns') = 'array' THEN doc->'matchedCampaigns' ELSE '[]'::JSONB END AS matched
+    FROM doc
+),
+ids AS (
+    SELECT DISTINCT UNNEST($1::INT[]) AS id
+),
+agg AS (
+    SELECT campaign_id, measure, COUNT(*) AS orders, COALESCE(SUM(sales_usd), 0) AS sales
+    FROM campaign_conversions
+    WHERE campaign_id = ANY($1::INT[]) AND purchased_at >= $2::TIMESTAMPTZ AND purchased_at <= $3::TIMESTAMPTZ
+    GROUP BY 1, 2
+)
+SELECT JSON_BUILD_OBJECT(
+    'as_of', (SELECT doc->'asOf' FROM doc),
+    'tracked_floor', (SELECT doc->'trackedFloor' FROM doc),
+    'matched_floor', (SELECT doc->'matchedFloor' FROM doc),
+    'tracked_stale', (SELECT doc->'trackedStale' FROM doc),
+    'campaigns', COALESCE((
+        SELECT JSON_AGG(JSON_BUILD_OBJECT(
+            'campaign_id', i.id,
+            'tracked', CASE WHEN EXISTS (SELECT 1 FROM cov WHERE cov.tracked @> TO_JSONB(i.id))
+                THEN JSON_BUILD_OBJECT('orders', COALESCE(t.orders, 0), 'sales_usd', COALESCE(t.sales, 0)) END,
+            'matched', CASE WHEN EXISTS (SELECT 1 FROM cov WHERE cov.matched @> TO_JSONB(i.id))
+                THEN JSON_BUILD_OBJECT('orders', COALESCE(m.orders, 0), 'sales_usd', COALESCE(m.sales, 0)) END
+        ) ORDER BY i.id)
+        FROM ids i
+        LEFT JOIN agg t ON (t.campaign_id = i.id AND t.measure = 'tracked')
+        LEFT JOIN agg m ON (m.campaign_id = i.id AND m.measure = 'matched')
+    ), '[]'::JSON)
+) AS data;
+
 -- name: get-running-campaign
 -- Returns the metadata for a running campaign that is required by next-campaign-subscribers to retrieve
 -- a batch of campaign subscribers for processing.

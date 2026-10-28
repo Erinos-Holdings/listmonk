@@ -70,6 +70,10 @@
               <th :colspan="matrixSubColumns.length" class="bm-subs bm-group">
                 {{ $tc('globals.terms.subscriber', 2) }}
               </th>
+              <!-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -->
+              <th :colspan="conversionFields.length" class="bm-eng bm-group">
+                {{ $t('analytics.conversions.title') }}
+              </th>
             </tr>
             <tr>
               <th>{{ $t('dashboard.matrix.health') }}</th>
@@ -89,6 +93,12 @@
                 :class="bmTh(c.field)" :title="c.help ? $t(c.help) : null"
                 :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
                 {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
+              </th>
+              <!-- CAMPAIGN-CONVERSIONS-SPEC D11 -- always counts (the %|# toggle never applies). -->
+              <th v-for="f in conversionFields" :key="f" class="bm-eng has-text-right"
+                :class="bmTh(f)" :title="conversionTip(f, matrix.conversions)"
+                :aria-sort="bmAria(f)" @click="onMatrixSort(f)" :data-cy="`matrix-head-${f}`">
+                {{ $t(`analytics.conversions.${f}`) }}<span class="bm-arrow">{{ bmArrow(f) }}</span>
               </th>
             </tr>
           </thead>
@@ -117,9 +127,14 @@
               <td v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right" :class="bmTd(c.field)">
                 {{ matrixCell(row, c.field) }}
               </td>
+              <td v-for="f in conversionFields" :key="f" class="bm-eng has-text-right" :class="bmTd(f)"
+                :title="conversionTip(f, matrix.conversions)" :data-cy="`matrix-${f}-${row.brand || 'totals'}`">
+                {{ matrixConversion(row, f).orders }}
+                <div v-if="matrixConversion(row, f).sales" class="is-size-7 has-text-grey">{{ matrixConversion(row, f).sales }}</div>
+              </td>
             </tr>
             <tr v-if="!matrix.loading && !matrixTableRows.length">
-              <td :colspan="3 + matrixEngCells.length + matrixSubColumns.length">
+              <td :colspan="3 + matrixEngCells.length + matrixSubColumns.length + conversionFields.length">
                 <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
               </td>
             </tr>
@@ -372,6 +387,15 @@
                         <span class="pl-count">{{ l.parts.count }}</span>
                         <span class="pl-label">{{ $t(l.label) }}</span>
                       </li>
+                      <!-- Fork (campaign conversions, CAMPAIGN-CONVERSIONS-SPEC D11) -- Tracked and
+                           Matched over the pane's C, lifetime from each measure's floor; orders,
+                           sales in grey. -->
+                      <li v-for="c in overviewConversions" :key="c.key" :title="c.tip"
+                        :data-cy="`conversions-${c.key}`">
+                        <span class="pl-pct">{{ c.cell.orders }}</span>
+                        <span class="pl-count">{{ c.cell.sales }}</span>
+                        <span class="pl-label">{{ $t(`analytics.conversions.${c.key}`) }}</span>
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -574,9 +598,10 @@ import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsCli
 import DashboardSes from './DashboardSes.vue';
 import HealthChip from '../components/HealthChip.vue';
 import {
-  ENGAGEMENT_FIELDS, cellText, clickSort, engagementCell, initialPane, loadState, saveState, sessionStore, shapeRows,
-  spamCell, tableRows,
+  CONVERSION_FIELDS, ENGAGEMENT_FIELDS, cellText, clickSort, conversionValue, engagementCell, initialPane, loadState,
+  saveState, sessionStore, shapeRows, spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
+import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import {
   SECTIONS as USAGE_SECTIONS, cell as usageCellOf, cellBadges as usageCellBadges, cellLink as usageCellLink,
   clickSort as usageClickSort, columnMeta as usageColumnMeta, headerLayout as usageHeaderLayout, latestAsOf,
@@ -621,6 +646,8 @@ export default Vue.extend({
       // browser session (sessionStorage, never the localStorage pref helper).
       matrix: {
         apiRows: [],
+        // CAMPAIGN-CONVERSIONS-SPEC D11 -- the conversions doc's as_of/floors (null = no doc: '—').
+        conversions: null,
         loading: false,
         ...loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
       },
@@ -751,6 +778,7 @@ export default Vue.extend({
       this.matrix.loading = true;
       this.$api.getDashboardBrandMatrix(params).then((data) => {
         this.matrix.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
+        this.matrix.conversions = (data && data.conversions) || null;
       }).finally(() => {
         this.matrix.loading = false;
       });
@@ -801,6 +829,16 @@ export default Vue.extend({
 
     matrixCell(row, field) {
       return cellText(row, field, this.matrix.mode, (n) => this.$utils.formatNumber(n));
+    },
+
+    // CAMPAIGN-CONVERSIONS-SPEC D11 -- a Tracked/Matched cell ({ orders, sales }); '—' with no doc.
+    matrixConversion(row, field) {
+      return scopedCell(conversionValue(row, field), this.matrix.conversions, (n) => this.$utils.formatNumber(n));
+    },
+
+    // The Tracked/Matched tooltip (definition, floor, as-of, stale note) -- conversionCells.mjs.
+    conversionTip(measure, meta) {
+      return conversionTooltip(measure, meta, (k, p) => this.$t(k, p));
     },
 
     spamCell(row) {
@@ -998,6 +1036,20 @@ export default Vue.extend({
 
     subsColumns() {
       return subscriberColumns(this.subsGrid, !!(this.serverConfig && this.serverConfig.lang_enabled));
+    },
+
+    // Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- the Matrix's two
+    // columns and the Overview's two lines (lifetime over the pane's C, '—' with no doc).
+    conversionFields() {
+      return CONVERSION_FIELDS;
+    },
+
+    overviewConversions() {
+      const conv = (this.counts && this.counts.conversions) || {};
+      const fmt = (n) => this.$utils.formatNumber(n);
+      return CONVERSION_FIELDS.map((f) => ({
+        key: f, cell: scopedCell(conv[f], conv.meta, fmt), tip: this.conversionTip(f, conv.meta),
+      }));
     },
 
     // Fork (dashboard counts, R1/R2) -- Views, Clicks, Bounces, Complaints over Messages sent.

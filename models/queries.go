@@ -129,6 +129,15 @@ type Queries struct {
 	// Fork (client stats, CLIENT-STATS-SPEC D5) -- interpolated on boot like the country counts.
 	GetCampaignClientCounts *sqlx.Stmt `query:"get-campaign-client-counts"`
 
+	// Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D6/D7) -- the one-measure
+	// replace (delete + insert in one transaction), the existence check of its campaign ids, the
+	// keyset click export (subscriber data, behind subscribers:get_all) and the per-campaign sums.
+	DeleteCampaignConversions   *sqlx.Stmt `query:"delete-campaign-conversions"`
+	InsertCampaignConversions   *sqlx.Stmt `query:"insert-campaign-conversions"`
+	GetExistingCampaignIDs      *sqlx.Stmt `query:"get-existing-campaign-ids"`
+	ExportCampaignClicksKeyset  *sqlx.Stmt `query:"export-campaign-clicks-keyset"`
+	GetCampaignConversions      *sqlx.Stmt `query:"get-campaign-conversions"`
+
 	// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D3) -- interpolated on
 	// boot with the link counts' counted expression.
 	GetCampaignShopLinkCounts *sqlx.Stmt `query:"get-campaign-shop-link-counts"`

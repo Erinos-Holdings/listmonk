@@ -202,6 +202,13 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PATCH("/api/campaigns/:id/reviews/:jobId", pm(hasID(a.PatchCampaignReview), "campaigns:review"))
 		g.GET("/api/campaigns/:id", pm(hasID(a.GetCampaign), "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/analytics/:type", pm(a.GetCampaignViewAnalytics, "campaigns:get_analytics"))
+		// Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7, conversions.go). The
+		// click export is SUBSCRIBER data: subscribers:get_all, never campaigns:get_analytics (the
+		// external listmonk_bi token holds analytics reads and is denied subscriber data). A static
+		// two-segment route, so it never collides with :type. The PUT is the conversions writer's
+		// (brands:manage, listmonk_health); the static segment resolves before PUT /api/campaigns/:id.
+		g.GET("/api/campaigns/analytics/clicks/export", pm(a.ExportConversionClicks, "subscribers:get_all"))
+		g.PUT("/api/campaigns/conversions", pm(a.PutCampaignConversions, "brands:manage"))
 		// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker, list-scoped.
 		g.GET("/api/analytics/campaigns", pm(a.GetAnalyticsCampaigns, "campaigns:get_analytics"))
 		g.GET("/api/campaigns/:id/preview", pm(hasID(a.PreviewCampaign), "campaigns:get_all", "campaigns:get"))

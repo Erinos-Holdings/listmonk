@@ -82,8 +82,29 @@ ebc AS (
 ebh AS (
     SELECT COUNT(*) AS num FROM bounces
     WHERE campaign_id IN (SELECT id FROM camps) AND type = 'hard'
+),
+-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- tracked and matched on
+-- the Messages-sent panel, the stored campaign_conversions rows of C, lifetime (as Views and Clicks
+-- are), orders and sales. meta = the latest conversions doc's asOf, floors and trackedStale verbatim
+-- (NULL with no doc). Sums only, no rule.
+convsum AS (
+    SELECT measure, COUNT(*) AS orders, COALESCE(SUM(sales_usd), 0) AS sales FROM campaign_conversions
+    WHERE campaign_id IN (SELECT id FROM camps) GROUP BY measure
+),
+convdoc AS (
+    SELECT doc FROM system_health WHERE kind = 'conversions' ORDER BY day DESC LIMIT 1
 )
 SELECT JSON_BUILD_OBJECT(
+    'conversions', JSON_BUILD_OBJECT(
+        'tracked', JSON_BUILD_OBJECT(
+            'orders', COALESCE((SELECT orders FROM convsum WHERE measure = 'tracked'), 0),
+            'sales_usd', COALESCE((SELECT sales FROM convsum WHERE measure = 'tracked'), 0)),
+        'matched', JSON_BUILD_OBJECT(
+            'orders', COALESCE((SELECT orders FROM convsum WHERE measure = 'matched'), 0),
+            'sales_usd', COALESCE((SELECT sales FROM convsum WHERE measure = 'matched'), 0)),
+        'meta', (SELECT JSON_BUILD_OBJECT('as_of', doc->'asOf', 'tracked_floor', doc->'trackedFloor',
+            'matched_floor', doc->'matchedFloor', 'tracked_stale', doc->'trackedStale') FROM convdoc)
+    ),
     'subscribers', JSON_BUILD_OBJECT(
         'total', (SELECT (g->'all'->>'total')::BIGINT FROM fullgrid),
         'blocklisted', (SELECT (g->'all'->>'blocked')::BIGINT FROM fullgrid),
@@ -373,8 +394,26 @@ ses_sent AS (
 ),
 bh AS (
     SELECT DISTINCT ON (brand) brand, status, doc FROM brand_health ORDER BY brand, day DESC
+),
+-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11/D12, I12) -- tracked and
+-- matched = the stored campaign_conversions rows of the brand's campaigns (bcamps, the pane's C) whose
+-- purchased_at falls in the SAME window (bounds, from the one zone CTE above -- never a second
+-- literal), as orders and sales. Counts always (the pct/num toggle never applies). Every stored
+-- campaign has exactly one brand, so a brand row is the sum of its campaigns' rows. conversions =
+-- the latest conversions doc's asOf, floors and trackedStale verbatim (NULL with no doc).
+conv AS (
+    SELECT bc.brand, cc.measure, COUNT(*) AS orders, COALESCE(SUM(cc.sales_usd), 0) AS sales
+    FROM campaign_conversions cc
+    JOIN bcamps bc ON (bc.id = cc.campaign_id)
+    WHERE cc.purchased_at >= (SELECT t0 FROM bounds) AND cc.purchased_at < (SELECT t1 FROM bounds)
+    GROUP BY 1, 2
+),
+convdoc AS (
+    SELECT doc FROM system_health WHERE kind = 'conversions' ORDER BY day DESC LIMIT 1
 )
 SELECT JSON_BUILD_OBJECT(
+    'conversions', (SELECT JSON_BUILD_OBJECT('as_of', doc->'asOf', 'tracked_floor', doc->'trackedFloor',
+        'matched_floor', doc->'matchedFloor', 'tracked_stale', doc->'trackedStale') FROM convdoc),
     'rows', COALESCE((
         SELECT JSON_AGG(JSONB_BUILD_OBJECT(
             'brand', b.brand,
@@ -391,6 +430,8 @@ SELECT JSON_BUILD_OBJECT(
             'hard_bounces', COALESCE(bn.hard_bounces, 0),
             'blocks', COALESCE(bn.blocks, 0),
             'complaints', COALESCE(bn.complaints, 0),
+            'tracked', JSONB_BUILD_OBJECT('orders', COALESCE(ct.orders, 0), 'sales_usd', COALESCE(ct.sales, 0)),
+            'matched', JSONB_BUILD_OBJECT('orders', COALESCE(cm.orders, 0), 'sales_usd', COALESCE(cm.sales, 0)),
             'health', JSONB_STRIP_NULLS(JSONB_BUILD_OBJECT(
                 'status', bh.status,
                 'spam_rate', CASE WHEN JSONB_TYPEOF(bh.doc->'inputs'->'spamRate'->'detail'->'value') = 'number'
@@ -411,6 +452,8 @@ SELECT JSON_BUILD_OBJECT(
         LEFT JOIN bnc bn ON (bn.brand = b.brand)
         LEFT JOIN ses_sent ss ON (ss.brand = b.brand)
         LEFT JOIN bh ON (bh.brand = b.brand)
+        LEFT JOIN conv ct ON (ct.brand = b.brand AND ct.measure = 'tracked')
+        LEFT JOIN conv cm ON (cm.brand = b.brand AND cm.measure = 'matched')
     ), '[]'),
     'scoped', NOT $2::BOOLEAN
 ) AS data;

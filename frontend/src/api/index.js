@@ -596,6 +596,13 @@ export const getCampaignClientCounts = async (params) => http.get(
   { params, loading: models.campaigns },
 );
 
+// Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7) -- per campaign, the stored
+// Tracked and Matched orders and sales (null = not covered), with the doc's as_of and floors.
+export const getCampaignConversions = async (params) => http.get(
+  '/api/campaigns/analytics/conversions',
+  { params, loading: models.campaigns, camelCase: false },
+);
+
 export const convertCampaignContent = async (data) => http.post(
   `/api/campaigns/${data.id}/content`,
   data,

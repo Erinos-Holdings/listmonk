@@ -855,3 +855,19 @@ CREATE TABLE IF NOT EXISTS campaign_send_hours (
     n                INTEGER NOT NULL,
     PRIMARY KEY (campaign_id, hour)
 );
+
+-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D6) -- the Tracked and Matched
+-- orders the integrations CampaignConversions Lambda computes; at most one row per (measure, order),
+-- so every dashboard scope is a plain sum. The fork stores and sums them and holds no rule. Mirrored
+-- in internal/migrations/v6.2.28.go (the CREATE only; the DROP is schema.sql's).
+DROP TABLE IF EXISTS campaign_conversions CASCADE;
+CREATE TABLE IF NOT EXISTS campaign_conversions (
+    measure          TEXT NOT NULL CHECK (measure IN ('tracked', 'matched')),
+    order_id         TEXT NOT NULL,
+    campaign_id      INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    brand            TEXT NOT NULL,
+    purchased_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+    sales_usd        NUMERIC(12, 2) NOT NULL CHECK (sales_usd >= 0),
+    PRIMARY KEY (measure, order_id)
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_conversions_campaign ON campaign_conversions (campaign_id, measure);

@@ -99,6 +99,8 @@ var migList = []migFunc{
 	{"v6.2.26", migrations.V6_2_26},
 	// Fork migration (erinos): on-demand brand-health refresh -- the app.health_refresh_url + app.health_refresh_hmac_secret settings, seeded empty (BRANDHEALTH-REFRESH-SPEC) — see internal/migrations/v6.2.27.go.
 	{"v6.2.27", migrations.V6_2_27},
+	// Fork migration (erinos): campaign conversions -- the campaign_conversions table (Tracked and Matched orders, one row per (measure, order)) the integrations CampaignConversions Lambda writes (CAMPAIGN-CONVERSIONS-SPEC) — see internal/migrations/v6.2.28.go.
+	{"v6.2.28", migrations.V6_2_28},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

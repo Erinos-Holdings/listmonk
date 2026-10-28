@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import {
   DEFAULT_STATE, ENGAGEMENT_FIELDS, STORAGE_KEY, cellText, clickSort, defaultOrder, displayValue, initialPane, loadState, rateOf,
   SPAM_FLAGGED_HELP, SPAM_HELP, saveState, sessionStore, shapeRows, sortRows, spamCell, tableRows, totalsRow,
-  BREACH_CLASS, breachesThreshold, displayedRate, engagementCell, firstThresholds,
+  BREACH_CLASS, breachesThreshold, displayedRate, engagementCell, firstThresholds, conversionValue,
 } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
 const api = [
@@ -430,4 +430,25 @@ test('I2: the fork source carries no numeric threshold literal (code lines of br
   const code = src.split('\n').filter((l) => !/^\s*\/\//.test(l)).map((l) => l.replace(/\/\/.*$/, '')).join('\n');
   assert.equal(/\b0\.\d+/.test(code), false, 'a fractional literal in brandMatrix.mjs code');
   assert.equal(/\b(200|1000)\b/.test(code), false, 'a floor-like literal in brandMatrix.mjs code');
+});
+
+// Integrations CAMPAIGN-CONVERSIONS-SPEC D11/D12 (I9's client half): the Tracked and Matched
+// columns are counts (the mode never changes them), sortable, and the totals row is their sum.
+test('conversions: shaped, summed into All brands, sorted by orders in both modes', () => {
+  const rows = shapeRows([
+    {
+      brand: 'a', sent: 100, tracked: { orders: 2, sales_usd: 10.5 }, matched: { orders: 5, sales_usd: 20 },
+    },
+    { brand: 'b', sent: 100, tracked: { orders: 7, sales_usd: 1 } },
+  ]);
+  assert.deepEqual(conversionValue(rows[0], 'tracked'), { orders: 2, sales_usd: 10.5 });
+  assert.deepEqual(conversionValue(rows[1], 'matched'), { orders: 0, sales_usd: 0 });
+  const t = totalsRow(rows);
+  assert.deepEqual(conversionValue(t, 'tracked'), { orders: 9, sales_usd: 11.5 });
+  assert.deepEqual(conversionValue(t, 'matched'), { orders: 5, sales_usd: 20 });
+  ['pct', 'num'].forEach((mode) => {
+    assert.equal(displayValue(rows[0], 'tracked', mode), 2);
+    assert.deepEqual(sortRows(rows, { field: 'tracked', order: 'desc' }, mode).map((r) => r.brand), ['b', 'a']);
+  });
+  assert.deepEqual(clickSort(DEFAULT_STATE.sort, 'matched'), { field: 'matched', order: 'desc' });
 });

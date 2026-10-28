@@ -20,8 +20,13 @@ export const ENGAGEMENT_FIELDS = Object.freeze(['views', 'clicks', 'hard_bounces
 // The subscriber columns -- always counts, never governed by the mode.
 export const SUBSCRIBER_FIELDS = Object.freeze(['total', 'active', 'held', 'unsubscribed', 'blocked']);
 
+// Integrations CAMPAIGN-CONVERSIONS-SPEC D11: the Tracked and Matched columns -- stored orders (and
+// sales) of the brand's campaigns in the pane's window; always counts, never governed by the mode.
+// Each row carries `<field>` (orders, the sorted quantity) and `<field>_sales`.
+export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
+
 // Every sortable column. The health chip is not sortable.
-export const SORT_FIELDS = Object.freeze(['brand', ...SUBSCRIBER_FIELDS, 'sent', ...ENGAGEMENT_FIELDS, 'spam_rate']);
+export const SORT_FIELDS = Object.freeze(['brand', ...SUBSCRIBER_FIELDS, 'sent', ...ENGAGEMENT_FIELDS, 'spam_rate', ...CONVERSION_FIELDS]);
 
 export const MODES = Object.freeze(['pct', 'num']);
 
@@ -85,7 +90,18 @@ export function shapeRow(r, brands) {
   };
   SUBSCRIBER_FIELDS.forEach((k) => { out[k] = num(s[k]); });
   ENGAGEMENT_FIELDS.forEach((k) => { out[k] = num(r[k]); });
+  CONVERSION_FIELDS.forEach((k) => {
+    const m = (r && r[k]) || {};
+    out[k] = num(m.orders);
+    out[`${k}_sales`] = num(m.sales_usd);
+  });
   return out;
+}
+
+// conversionValue is a row's measure in the server's shape ({ orders, sales_usd }) for
+// conversionCells.mjs (the totals row's included).
+export function conversionValue(row, field) {
+  return { orders: num(row && row[field]), sales_usd: num(row && row[`${field}_sales`]) };
 }
 
 // healthDocs is the matrix rows' own health documents as the launch filter reads them
@@ -124,7 +140,9 @@ export function totalsRow(rows, label = 'All brands') {
     thresholds: firstThresholds(r),
     totals: true,
   };
-  [...SUBSCRIBER_FIELDS, ...ENGAGEMENT_FIELDS].forEach((k) => {
+  // CAMPAIGN-CONVERSIONS-SPEC D12: All brands = the sum of the brand rows (every stored campaign
+  // has exactly one brand).
+  [...SUBSCRIBER_FIELDS, ...ENGAGEMENT_FIELDS, ...CONVERSION_FIELDS, ...CONVERSION_FIELDS.map((k) => `${k}_sales`)].forEach((k) => {
     out[k] = r.reduce((t, x) => t + num(x[k]), 0);
   });
   const sends = r.map((x) => x.sent).filter((v) => typeof v === 'number');
