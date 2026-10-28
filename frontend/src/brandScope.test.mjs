@@ -10,6 +10,7 @@ import {
   campaignBrand, contextNotice, filterTemplates, formBrandDefault, templateNoticeBrand,
   mediaScopeContext, presetNoticeBrand, filterBrandRows,
   launchOf, matchesLaunch, applyLaunch, launchCounts, filterRowsByLaunch, launchApplies,
+  selectionLoaded,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 const BRANDS = [
@@ -307,6 +308,29 @@ const DOCS = [
   { brand: 'shala', status: 'unknown' },
   { brand: 'younique', status: 'warn' },
 ];
+
+test('D3 selectionLoaded: under a narrowing filter the selection waits for the health documents', () => {
+  // The store's brandScope composition, before and after the documents arrive (2026-10-28: a
+  // stored unlaunched brand under Unlaunched resolved to All brands for one unscoped fetch).
+  const roster = rosterFrom(LISTS, BRANDS);
+  const scope = (launch, docs, healthLoaded) => resolveSelection(
+    brand('shala'),
+    roster,
+    selectionLoaded(true, launch, healthLoaded),
+    applyLaunch(roster, launch, docs),
+  );
+  // The defect, ungated: no documents yet, every brand reads as launched, shala is not offered.
+  assert.deepEqual(resolveSelection(brand('shala'), roster, true, applyLaunch(roster, 'unlaunched', [])).selection, ALL);
+  assert.deepEqual(scope('unlaunched', [], false), { pending: true });
+  assert.deepEqual(scope('unlaunched', DOCS, true).selection, brand('shala'));
+  assert.deepEqual(scope('launched', [], false), { pending: true });
+  // A failed read releases the gate (no documents: every brand launched, as before).
+  assert.deepEqual(scope('unlaunched', [], true).selection, ALL);
+  // Under All nothing waits on the documents.
+  assert.deepEqual(scope('all', [], false).selection, brand('shala'));
+  assert.equal(selectionLoaded(false, 'all', true), false);
+  assert.equal(selectionLoaded(true, 'bogus', false), true);
+});
 
 test('I1 launchOf: unknown is unlaunched; ok/warn/issues, no status and no document are launched', () => {
   assert.equal(launchOf('shala', DOCS), 'unlaunched');

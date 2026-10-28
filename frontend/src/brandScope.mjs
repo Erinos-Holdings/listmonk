@@ -339,6 +339,13 @@ export function normalizeLaunch(launch) {
   return LAUNCH_VALUES.includes(launch) ? launch : 'all';
 }
 
+// D3 (amended 2026-10-28): whether the selection may resolve. The lists must have loaded and,
+// while the launch filter narrows, the health documents too -- before them every brand reads as
+// launched, so a stored brand outside that set would resolve to All brands for one fetch.
+export function selectionLoaded(listsLoaded, launch, healthLoaded) {
+  return !!listsLoaded && (normalizeLaunch(launch) === 'all' || !!healthLoaded);
+}
+
 // D4: the filter applies only while the selector is shown and unlocked -- decided by the FULL
 // roster, as resolveSelection decides hidden/locked. Where it does not apply the store resolves
 // the launch value to 'all', so a value stored under a wider roster (or by another user of the

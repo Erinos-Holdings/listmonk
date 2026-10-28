@@ -3,7 +3,7 @@ import Vuex from 'vuex';
 import { models } from '../constants';
 import Utils from '../utils';
 import {
-  ALL, applyLaunch, launchApplies, normalizeLaunch, resolveSelection, rosterFrom, scopeListIds,
+  ALL, applyLaunch, launchApplies, normalizeLaunch, resolveSelection, rosterFrom, scopeListIds, selectionLoaded,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 Vue.use(Vuex);
@@ -39,8 +39,14 @@ export default new Vuex.Store({
     // value; the launch getter resolves an unknown one to 'all'.
     launchStored: prefs.getPref('brand.launch') || 'all',
     // Fork (launch filter, D3) -- the GET /api/brands/health documents. Empty (never fetched, or a
-    // failed read) means every brand is launched. Never a loading gate.
+    // failed read) means every brand is launched.
     brandHealth: [],
+    // Set by the first health response or its failure. A loading gate ONLY while the launch filter
+    // narrows (Launched/Unlaunched): before the documents, every brand reads as launched, so a
+    // stored brand outside that set would resolve to All brands and a page would fetch unscoped,
+    // then again scoped -- and the slower unscoped response could land last (2026-10-28, BNKD under
+    // Unlaunched showed every brand's campaigns). Under All nothing waits on it.
+    brandHealthLoaded: false,
   },
 
   mutations: {
@@ -84,6 +90,12 @@ export default new Vuex.Store({
     // Fork (launch filter, D3).
     setBrandHealth(state, rows) {
       state.brandHealth = Array.isArray(rows) ? rows : [];
+      state.brandHealthLoaded = true;
+    },
+
+    // A failed read keeps any documents already held and releases the gate.
+    setBrandHealthLoaded(state) {
+      state.brandHealthLoaded = true;
     },
   },
 
@@ -96,7 +108,7 @@ export default new Vuex.Store({
       return Vue.prototype.$api.getBrandsHealth().then((rows) => {
         commit('setBrandHealth', rows);
         return rows;
-      }).catch(() => {});
+      }).catch(() => commit('setBrandHealthLoaded'));
     },
   },
 
@@ -130,10 +142,11 @@ export default new Vuex.Store({
     },
     brandHealth: (state) => state.brandHealth,
     offeredRoster: (state, getters) => applyLaunch(getters.brandRoster, getters.launch, state.brandHealth),
+    // Pending also while a narrowing launch filter waits for the health documents (brandHealthLoaded).
     brandScope: (state, getters) => resolveSelection(
       state.brandStored,
       getters.brandRoster,
-      state.listsLoaded,
+      selectionLoaded(state.listsLoaded, getters.launch, state.brandHealthLoaded),
       getters.offeredRoster,
     ),
 

@@ -569,7 +569,7 @@ export default Vue.extend({
     // first scoped fetch waits for the lists (I13).
     queryCampaigns(q) {
       const query = typeof q === 'string' ? q : '';
-      if (!this.listsLoaded) {
+      if (this.brandScope.pending) {
         // Queue ONE fetch for the lists' arrival; later calls before then only update the query
         // it will run (Stage 4 review F2 -- every focus/typing event used to queue another).
         if (this.lastQuery === null) {
