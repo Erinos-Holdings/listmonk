@@ -96,8 +96,16 @@ func (a *App) GetCampaigns(c echo.Context) error {
 			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
 	}
 
+	// Fork (matrix polish, integrations MATRIX-POLISH-SPEC D10.2) -- optional, repeatable id (absent =
+	// no filter): only those campaigns, ANDed with every filter and the permission scope above.
+	ids, err := parseStringIDs(c.QueryParams()["id"])
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
+	}
+
 	// Query and retrieve campaigns from the DB.
-	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, evergreen, listIDs, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, evergreen, listIDs, ids, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}
@@ -1099,13 +1107,6 @@ func analyticsCampaignScope(user auth.User) (bool, []int) {
 	return user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
 }
 
-// clientStatsFloor (fork, campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D8) is the client-stats
-// release instant (CLIENT-STATS-SPEC status line: erinos.210 deployed and the host re-applied). Views
-// recorded before it carry no client token, so a Campaign Matrix row whose campaign started before it
-// is returned with client_floor: true and the page shows its tier columns as missing. The one copy
-// of the date -- the frontend holds none.
-var clientStatsFloor = time.Date(2026, 10, 7, 9, 3, 0, 0, time.UTC)
-
 // GetCampaignMatrix (fork, campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) is the Campaign
 // Matrix pane: GET /api/analytics/campaigns/matrix behind campaigns:get_analytics. Scoped exactly as
 // GetAnalyticsCampaigns (analyticsCampaignScope, isAnalyticsOnly, list_id ANDed -- it only narrows);
@@ -1136,7 +1137,7 @@ func (a *App) GetCampaignMatrix(c echo.Context) error {
 	allCampaigns, permittedLists := analyticsCampaignScope(user)
 	gp := user.HasPerm(auth.PermBrandsGet)
 
-	out, err := a.core.GetCampaignMatrix(allCampaigns, permittedLists, isAnalyticsOnly(user), scopeLists, evergreen, gp, clientStatsFloor)
+	out, err := a.core.GetCampaignMatrix(allCampaigns, permittedLists, isAnalyticsOnly(user), scopeLists, evergreen, gp)
 	if err != nil {
 		return err
 	}

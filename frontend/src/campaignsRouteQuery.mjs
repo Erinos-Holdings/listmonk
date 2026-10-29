@@ -35,6 +35,11 @@
 //   STATUS SCOPE: sent as GET /api/campaigns `status`, shown as a dismissible chip beside the
 //   pill, cleared by the chip's dismissal and by any real list, brand-selector or scope-pill
 //   interaction, never written to a pref, and -- a fourth narrowing -- it suppresses "select all".
+//
+// MATRIX-POLISH-SPEC D10.2 (I5): a route `id` (repeatable; the Brand Usage "Last broadcast" link) is
+// the ROUTE ID SCOPE: only those campaigns (GET /api/campaigns `id`), the kind pill at All for that
+// view (never written to the pref), a dismissible "N selected campaigns" chip, cleared by exactly
+// the route status scope's interactions, and -- a fifth narrowing -- it suppresses "select all".
 
 // A repeated query param arrives as an array; the first element is the one read (evergreen).
 const first = (v) => (Array.isArray(v) ? v[0] : v);
@@ -127,13 +132,42 @@ export function afterBrandChange(state, scopeListIds) {
 
 // canSelectAll guards the "select all N" whole-query affordance: offered only when the page shows
 // MORE than one page of an UNNARROWED query -- never under the single filter, the route list scope,
-// the brand-selector scope or (POLISH3 D2) the route status scope, since the by-query bulk delete
-// carries only query + evergreen.
+// the brand-selector scope, (POLISH3 D2) the route status scope or (MATRIX-POLISH-SPEC D10.2) the
+// route id scope, since the by-query bulk delete carries only query + evergreen.
 export function canSelectAll({
   bulkAll = false, total = 0, perPage = 0, listID = null, routeListIDs = null, scopeListIds = null, routeStatus = null,
+  routeIDs = null,
 } = {}) {
   return !bulkAll && total > perPage && (listID === null || listID === undefined)
-    && !hasRouteScope(routeListIDs) && !scopeListIds && !routeStatus;
+    && !hasRouteScope(routeListIDs) && !scopeListIds && !routeStatus && !hasRouteScope(routeIDs);
+}
+
+// ---------------------------------------------------------------------------------------------
+// MATRIX-POLISH-SPEC D10.2 -- the route id scope (the Brand Usage "Last broadcast" link)
+// ---------------------------------------------------------------------------------------------
+
+// routeIdsOf is the route id scope from $route.query: the valid `id` values (one or repeated;
+// positive-integer strings, garbage dropped, duplicates collapsed, order kept), or null when none.
+// Sent as GET /api/campaigns' repeatable `id` (only those campaigns, ANDed with every other filter
+// and the permission scope); in-page state only, never a pref.
+export function routeIdsOf(query) {
+  const q = query && typeof query === 'object' ? query : {};
+  const raw = Array.isArray(q.id) ? q.id : [q.id];
+  const ids = [];
+  raw.forEach((v) => {
+    const id = listIdOf(v);
+    if (id !== null && !ids.includes(id)) {
+      ids.push(id);
+    }
+  });
+  return ids.length ? ids : null;
+}
+
+// routeEvergreen is the page's initial kind state given the route id scope: All (null) while ids
+// are set -- the linked campaigns show whatever their kind -- else the route/pref value. Applied to
+// the query state only: never written to the scope-kind pref.
+export function routeEvergreen(evergreen, routeIDs) {
+  return hasRouteScope(routeIDs) ? null : evergreen;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -163,6 +197,17 @@ export function routeStatusAfter(current, interaction) {
     return null;
   }
   return CAMPAIGN_STATUSES.includes(current) ? current : null;
+}
+
+// MATRIX-POLISH-SPEC D10.2 -- routeIdsAfter is the route id scope after an interaction: cleared
+// (null) by exactly the route status scope's clearing interactions (STATUS_CLEARING: the chip's
+// dismissal, a real list pick, a brand-selector change, the kind pill -- whose click then applies
+// and writes the pref normally), else unchanged (paging, sorting, a search keep it).
+export function routeIdsAfter(current, interaction) {
+  if (STATUS_CLEARING.includes(interaction)) {
+    return null;
+  }
+  return hasRouteScope(current) ? current : null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -205,14 +250,18 @@ export function kindOfEvergreen(evergreen) {
 }
 
 // kindStatusParams is the GET /api/campaigns kind/status params for the page state: evergreen sent
-// as a boolean unless All (null -> omitted), status sent only under the route status scope.
-export function kindStatusParams({ evergreen = false, routeStatus = null } = {}) {
+// as a boolean unless All (null -> omitted), status sent only under the route status scope, and
+// (MATRIX-POLISH-SPEC D10.2) the repeatable id only under the route id scope.
+export function kindStatusParams({ evergreen = false, routeStatus = null, routeIDs = null } = {}) {
   const p = {};
   if (evergreen === true || evergreen === false) {
     p.evergreen = evergreen;
   }
   if (CAMPAIGN_STATUSES.includes(routeStatus)) {
     p.status = routeStatus;
+  }
+  if (hasRouteScope(routeIDs)) {
+    p.id = routeIDs;
   }
   return p;
 }

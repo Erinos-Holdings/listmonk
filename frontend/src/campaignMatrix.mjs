@@ -1,24 +1,26 @@
 // Fork (campaign matrix, integrations listmonk/CAMPAIGN-MATRIX-SPEC D4-D9). The pure half of the
-// Campaign Matrix pane of Campaigns > Analytics: row shaping (the trust-tier fold, the launch
-// filter), the %/$ | # cells, the totals row, the sort (Date default, missing last) and the
+// Campaign Matrix pane of Campaigns > Analytics: row shaping (the launch filter), the column
+// headers, the %/$ | # cells, the totals row, the sort (Date default, missing last) and the
 // per-session state. No Vue, no DOM; tested by campaignMatrix.test.mjs (yarn test).
 //
 // The rows come from GET /api/analytics/campaigns/matrix verbatim (camelCase: false):
-// { id, name, status, evergreen, started_at, send_day, last_sent, brand, sent, views, view_clients:
-//   { <client token>: n }, clicks, hard_bounces, soft_bounces, complaints, tracked, matched,
-//   gp_rate, gp_thresholds, client_floor }. Every rate is computed here, over the row's own Sent;
-// the server returns counts, the stored GP point and its stored thresholds -- never a rate or a tier.
-import { clientTier } from './clientRows.mjs'; // eslint-disable-line import/extensions
+// { id, name, status, evergreen, started_at, send_day, last_sent, brand, sent, views, clicks,
+//   shop_founder, shop_self, shop_creator, shop_corp, hard_bounces, soft_bounces, complaints,
+//   tracked, matched, gp_rate, gp_thresholds }. Every rate is computed here, over the row's own Sent;
+// the server returns counts, the stored GP point and its stored thresholds -- never a rate.
+// Fork (matrix polish, integrations MATRIX-POLISH-SPEC D3-D7) -- Views is one column (the Client /
+// Proxy / Machine tiers are gone), the Shop Link Attribution group (null = the campaign has no shop
+// link), Tracked / Matched headers, the Brand column hidden under a single-brand selection, the
+// name truncated to 25 characters.
 import { matchesLaunch, normalizeLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { normalizeMeasure } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
-// D8: the three trust tiers, each its own column. CLIENT_TIERS (clientRows.mjs) is the tier map's
-// one home -- this module folds tokens through clientTier and never names a token itself. The
-// tiers are NEVER added together (no "human" figure): Total is a separate server count.
-export const TIER_FIELDS = Object.freeze(['client', 'proxy', 'machine']);
+// MATRIX-POLISH D5: the shop-link kinds, in column order (Founder, Self, Creator, Corp). The server
+// buckets the clicks; null in all four = the campaign's body holds no shop link.
+export const SHOP_FIELDS = Object.freeze(['shop_founder', 'shop_self', 'shop_creator', 'shop_corp']);
 
 // D5: the count columns that read as a rate over Sent in %/$ mode, left to right.
-export const COUNT_FIELDS = Object.freeze(['views', ...TIER_FIELDS, 'clicks', 'hard_bounces', 'soft_bounces', 'complaints']);
+export const COUNT_FIELDS = Object.freeze(['views', 'clicks', ...SHOP_FIELDS, 'hard_bounces', 'soft_bounces', 'complaints']);
 
 // D9: Tracked / Matched -- sales in %/$ mode, orders in # mode; null = not covered.
 export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
@@ -47,29 +49,81 @@ const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' ? v : '');
 
-// D8: foldTiers is the per-token counts summed per tier ({ client, proxy, machine }); Unknown ('')
-// and untiered tokens fall in no tier. Each tier's figure is a sum of per-token distinct counts --
-// a ceiling, never a count of people (one person on two clients of a tier counts twice).
-export function foldTiers(viewClients) {
-  const out = { client: 0, proxy: 0, machine: 0 };
-  if (!isObj(viewClients)) {
-    return out;
+// MATRIX-POLISH D7: the name cell shows at most NAME_MAX characters, then '…' when longer; the full
+// name is the hover. Counted in characters (code points), so a surrogate pair is never split.
+export const NAME_MAX = 25;
+
+export function nameCell(name) {
+  const full = str(name);
+  const chars = Array.from(full);
+  if (chars.length <= NAME_MAX) {
+    return { text: full, title: full };
   }
-  Object.keys(viewClients).forEach((token) => {
-    const tier = token === '' ? null : clientTier(token);
-    if (TIER_FIELDS.includes(tier)) {
-      out[tier] += num(viewClients[token]);
-    }
-  });
-  return out;
+  return { text: `${chars.slice(0, NAME_MAX).join('')}…`, title: full };
 }
 
-// shapeRow flattens one API row. A client_floor row's tier columns are null (its views predate the
-// client tokens); a missing Sent is null; an uncovered conversion measure is null.
+// MATRIX-POLISH D6: the Brand column is rendered unless the navbar selection is ONE brand (the rows
+// are already scoped to it); All brands and No brand keep it.
+export function showBrandColumn(selection) {
+  return !(selection && selection.kind === 'brand');
+}
+
+// The column headers (i18n keys). The group row: Views and Clicks are single columns spanning both
+// header rows' meaning (MATRIX-POLISH D4: Views is placed where its group was), then SHOP LINK
+// ATTRIBUTION (D5, after Clicks, before Conversions), CONVERSIONS (Tracked / Matched -- D3), BOUNCES,
+// COMPLAINTS (FBL, plus GP S% for a brands:get holder).
+export function midColumns(showGp) {
+  const cols = [
+    {
+      field: 'views', label: 'analytics.matrix.views', help: 'analytics.matrix.viewsHelp', group: '',
+    },
+    {
+      field: 'clicks', label: 'dashboard.matrix.clicks', help: 'analytics.matrix.clicksHelp', group: '',
+    },
+    {
+      field: 'shop_founder', label: 'analytics.matrix.founder', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
+    },
+    {
+      field: 'shop_self', label: 'analytics.matrix.self', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
+    },
+    {
+      field: 'shop_creator', label: 'analytics.matrix.creator', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
+    },
+    {
+      field: 'shop_corp', label: 'analytics.matrix.corp', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
+    },
+    { field: 'tracked', label: 'analytics.conversions.tracked', group: 'bm-eng' },
+    { field: 'matched', label: 'analytics.conversions.matched', group: 'bm-eng' },
+    { field: 'hard_bounces', label: 'analytics.matrix.hard', group: 'bm-subs' },
+    { field: 'soft_bounces', label: 'analytics.matrix.soft', group: 'bm-subs' },
+    {
+      field: 'complaints', label: 'analytics.matrix.fbl', help: 'analytics.matrix.fblHelp', group: 'bm-subs',
+    },
+  ];
+  if (showGp) {
+    cols.push({
+      field: 'gp_rate', label: 'dashboard.matrix.spam', help: 'analytics.matrix.gpHelp', group: 'bm-subs',
+    });
+  }
+  return cols;
+}
+
+// The group header row after the left columns: { label (i18n key or ''), span, cls }. Views and
+// Clicks carry no group (an empty cell over each).
+export function groupHeaders(showGp) {
+  return [
+    { label: '', span: 2, cls: '' },
+    { label: 'analytics.matrix.shopLinks', span: SHOP_FIELDS.length, cls: 'bm-shop bm-group' },
+    { label: 'analytics.conversions.title', span: 2, cls: 'bm-eng bm-group' },
+    { label: 'analytics.matrix.bounces', span: 2, cls: 'bm-subs bm-group' },
+    { label: 'analytics.matrix.complaints', span: showGp ? 2 : 1, cls: 'bm-subs bm-group' },
+  ];
+}
+
+// shapeRow flattens one API row. A missing Sent is null; an uncovered conversion measure is null;
+// a campaign with no shop link has null shop-link kinds (MATRIX-POLISH D5).
 export function shapeRow(r, brandLabel = (s) => s) {
   const brand = str(r && r.brand);
-  const floor = !!(r && r.client_floor === true);
-  const tiers = foldTiers(r && r.view_clients);
   const out = {
     id: r.id,
     name: str(r.name),
@@ -86,12 +140,11 @@ export function shapeRow(r, brandLabel = (s) => s) {
     hard_bounces: num(r.hard_bounces),
     soft_bounces: num(r.soft_bounces),
     complaints: num(r.complaints),
-    clientFloor: floor,
     gp_rate: numOrNull(r.gp_rate),
     gpThresholds: isObj(r.gp_thresholds) ? r.gp_thresholds : null,
     totals: false,
   };
-  TIER_FIELDS.forEach((k) => { out[k] = floor ? null : tiers[k]; });
+  SHOP_FIELDS.forEach((k) => { out[k] = numOrNull(r[k]); });
   CONVERSION_FIELDS.forEach((k) => { out[k] = normalizeMeasure(r[k]); });
   return out;
 }
@@ -131,7 +184,6 @@ export function totalsRow(rows, label = 'Total') {
     label: '',
     date: null,
     lastSent: null,
-    clientFloor: false,
     gp_rate: null,
     gpThresholds: null,
     totals: true,

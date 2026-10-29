@@ -69,14 +69,26 @@ export function sumCovered(campaigns, measure) {
   return rows.reduce((t, r) => ({ orders: t.orders + r.orders, sales: t.sales + r.sales }), { orders: 0, sales: 0 });
 }
 
+// Fork (matrix polish, integrations MATRIX-POLISH-SPEC D8.2) -- aovText is a measure's average order
+// value, sales / orders with two decimals ("$41.25"), or '' when there is nothing to divide: no
+// measure (null -- not covered, '—') or zero orders. `sum` is sumCovered's { orders, sales }.
+// Display arithmetic on the stored sums only.
+export function aovText(sum) {
+  if (!sum || typeof sum !== 'object' || num(sum.orders) <= 0) {
+    return '';
+  }
+  return `$${(num(sum.sales) / num(sum.orders)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 // analyticsCells is the Campaign Analytics header cells from GET /api/campaigns/analytics/conversions
-// ({ as_of, tracked_floor, matched_floor, tracked_stale, campaigns: [...] }): { meta, tracked, matched }.
+// ({ as_of, tracked_floor, matched_floor, tracked_stale, campaigns: [...] }): { meta, tracked, matched },
+// each cell { orders, sales, aov } (aov '' when absent -- D8.2).
 export function analyticsCells(resp, fmt) {
   const meta = normalizeMeta(resp);
   const out = { meta };
   MEASURES.forEach((m) => {
     const sum = meta ? sumCovered(resp && resp.campaigns, m) : null;
-    out[m] = conversionCell(sum ? { orders: sum.orders, sales_usd: sum.sales } : null, fmt);
+    out[m] = { ...conversionCell(sum ? { orders: sum.orders, sales_usd: sum.sales } : null, fmt), aov: aovText(sum) };
   });
   return out;
 }

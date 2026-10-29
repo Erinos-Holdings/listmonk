@@ -29,7 +29,9 @@ const (
 // query expression. It also returns the total number of records in the DB.
 // evergreen (fork) scopes the result to automations (true) or broadcasts (false); nil applies no filter.
 // listIDs (fork) scopes the result to campaigns targeting any of the given lists; empty applies no filter.
-func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs []int, offset, limit int) (models.Campaigns, int, error) {
+// ids (fork, matrix polish, integrations MATRIX-POLISH-SPEC D10.2) scopes the result to those campaign
+// ids, ANDed with every other filter and the permission scope; empty applies no filter.
+func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, offset, limit int) (models.Campaigns, int, error) {
 	queryStr, stmt := makeSearchQuery(searchStr, orderBy, order, c.q.QueryCampaigns, campQuerySortFields)
 
 	if statuses == nil {
@@ -45,10 +47,13 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 	if listIDs == nil {
 		listIDs = []int{}
 	}
+	if ids == nil {
+		ids = []int{}
+	}
 
 	// Unsafe to ignore scanning fields not present in models.Campaigns.
 	var out models.Campaigns
-	if err := c.db.Select(&out, stmt, 0, pq.StringArray(statuses), pq.StringArray(tags), queryStr, getAll, pq.Array(permittedLists), offset, limit, evergreen, pq.Array(listIDs)); err != nil {
+	if err := c.db.Select(&out, stmt, 0, pq.StringArray(statuses), pq.StringArray(tags), queryStr, getAll, pq.Array(permittedLists), offset, limit, evergreen, pq.Array(listIDs), pq.Array(ids)); err != nil {
 		c.log.Printf("error fetching campaigns: %v", err)
 		return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
@@ -123,10 +128,9 @@ func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns
 // GetCampaignMatrix (fork, campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) runs the one
 // Campaign Matrix statement. allCampaigns / permittedLists / startedOnly / scopeLists are exactly
 // QueryAnalyticsCampaigns' scoping arguments (the caller derives them with the picker's own helper);
-// evergreen nil = every kind; gp computes the GP send-day spam rate (the caller holds brands:get);
-// clientFloor is the client-stats release instant (rows started before it carry client_floor).
+// evergreen nil = every kind; gp computes the GP send-day spam rate (the caller holds brands:get).
 func (c *Core) GetCampaignMatrix(allCampaigns bool, permittedLists []int, startedOnly bool, scopeLists []int,
-	evergreen *bool, gp bool, clientFloor time.Time) (types.JSONText, error) {
+	evergreen *bool, gp bool) (types.JSONText, error) {
 	if permittedLists == nil {
 		permittedLists = []int{}
 	}
@@ -136,7 +140,7 @@ func (c *Core) GetCampaignMatrix(allCampaigns bool, permittedLists []int, starte
 
 	var out types.JSONText
 	if err := c.q.GetCampaignMatrix.Get(&out, allCampaigns, pq.Array(permittedLists), startedOnly,
-		pq.Array(scopeLists), evergreen, gp, clientFloor); err != nil {
+		pq.Array(scopeLists), evergreen, gp); err != nil {
 		c.log.Printf("error fetching campaign matrix: %v", err)
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "campaign matrix", "error", pqErrMsg(err)))

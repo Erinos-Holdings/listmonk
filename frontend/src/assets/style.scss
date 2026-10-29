@@ -955,39 +955,40 @@ section.dashboard {
       white-space: nowrap;
     }
   }
+}
 
-  /* Fork (2026-10-29). The Location and Email clients panels' tables (countries; clients, then
-  trust tiers) share one column grid -- fixed layout, the same widths -- and every count is
-  followed by a fixed-width share slot (empty on the tier rows), so the counts in all three tables
-  end on the same edge and the headers sit over them. */
-  .share-grid {
-    table {
-      table-layout: fixed;
-      width: 100%;
-    }
-    th:nth-child(1), td:nth-child(1) {
-      width: 50%;
-    }
-    th:nth-child(n+2), td:nth-child(n+2) {
-      width: 25%;
-    }
-    td, th {
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-    /* Right-aligned in tabular figures: every share has one decimal digit, so "(2.3%)" and
-    "(12.0%)" end on the same edge and their decimal points line up. */
-    .cl-share {
-      display: inline-block;
-      width: 3.75rem;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-    /* b-table draws its own numeric header (label + sort arrow, right-aligned in .th-wrap, which
-    carries is-numeric): the same slot as right padding puts that label over the counts too. */
-    .th-wrap.is-numeric {
-      padding-right: 3.75rem;
-    }
+/* Fork (2026-10-29). The Location and Email clients panels' tables (countries; clients, then
+trust tiers) share one column grid -- fixed layout, the same widths -- and every count is
+followed by a fixed-width share slot (empty on the tier rows), so the counts in all three tables
+end on the same edge and the headers sit over them. Fork (matrix polish, integrations
+MATRIX-POLISH-SPEC D8.1) -- lifted out of section.dashboard so the Campaign view of Campaigns >
+Analytics uses the same grid: the name column takes half, the count columns share the rest equally
+(two count columns = 25% each, the Dashboard's widths; the Campaign view's Email clients table
+carries a third, Combined). */
+.share-grid {
+  table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  th:nth-child(1), td:nth-child(1) {
+    width: 50%;
+  }
+  td, th {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  /* Right-aligned in tabular figures: every share has one decimal digit, so "(2.3%)" and
+  "(12.0%)" end on the same edge and their decimal points line up. */
+  .cl-share {
+    display: inline-block;
+    width: 3.75rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  /* b-table draws its own numeric header (label + sort arrow, right-aligned in .th-wrap, which
+  carries is-numeric): the same slot as right padding puts that label over the counts too. */
+  .th-wrap.is-numeric {
+    padding-right: 3.75rem;
   }
 }
 
@@ -1037,6 +1038,14 @@ section.dashboard (which reopens after them). */
     }
     thead th.bm-subs {
       background-color: rgba(72, 95, 199, 0.11);
+    }
+    /* Fork (matrix polish, integrations MATRIX-POLISH-SPEC D5) -- the Campaign Matrix's Shop Link
+    Attribution group: the same translucent-tint pair, in the analytics charts' teal (#41AC9C). */
+    th.bm-shop, td.bm-shop {
+      background-color: rgba(65, 172, 156, 0.08);
+    }
+    thead th.bm-shop {
+      background-color: rgba(65, 172, 156, 0.15);
     }
     th.bm-sorted, td.bm-sorted {
       background-image: linear-gradient(rgba(54, 54, 54, 0.07), rgba(54, 54, 54, 0.07));

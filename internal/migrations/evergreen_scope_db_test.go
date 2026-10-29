@@ -39,8 +39,9 @@ func TestEvergreenScopeQueries(t *testing.T) {
 	e1 := h.campaign("automation-1", true, 0, h.listA)
 
 	list := func(evergreen *bool) ([]int, int) {
-		// $10 (fork list filter) -- an empty array applies no list filter.
-		rows, err := query.Queryx(0, pq.StringArray{}, pq.StringArray{}, "", true, pq.Array([]int{}), 0, 0, evergreen, pq.Array([]int{}))
+		// $10 (fork list filter) -- an empty array applies no list filter; $11 (MATRIX-POLISH-SPEC
+		// D10.2) likewise for the id filter.
+		rows, err := query.Queryx(0, pq.StringArray{}, pq.StringArray{}, "", true, pq.Array([]int{}), 0, 0, evergreen, pq.Array([]int{}), pq.Array([]int{}))
 		if err != nil {
 			t.Fatalf("query-campaigns: %v", err)
 		}

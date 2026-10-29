@@ -11,13 +11,15 @@
           <template v-else>{{ $t('brands.title') }}</template>
           <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D8) -- the count is the rows shown;
           the navbar launch filter replaced this page's hide toggle. -->
-          <span v-if="!brandParam && pane === 'list' && visibleRows.length">({{ visibleRows.length }})</span>
+          <span v-if="!brandParam && pane === 'health' && visibleRows.length">({{ visibleRows.length }})</span>
           <span v-if="current"> / {{ nameOf(current) }}</span>
         </h1>
-        <!-- Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D1) -- List | Matrix | Usage, the
-             Dashboard pill's pattern, directly under the title; the list view only (the detail route
-             shows none). Sticky per browser (pref brands.pane, list by default). The Matrix and Usage
-             panes are the former Dashboard panes, unchanged; each carries its own scope and fetch. -->
+        <!-- Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D1) -- the Dashboard pill's pattern,
+             directly under the title; the list view only (the detail route shows none). The Matrix and
+             Usage panes are the former Dashboard panes, unchanged; each carries its own scope and fetch.
+             Fork (matrix polish, MATRIX-POLISH-SPEC D1) -- Matrix | Usage | Health (Health is the former
+             List, the brand health table); Matrix by default, kept per browser session
+             (sessionStorage brands.pane). -->
         <b-field v-if="!brandParam && $can('brands:get')" class="is-inline-flex mb-2">
           <b-radio-button v-for="p in panes" :key="p" v-model="pane" :native-value="p" type="is-primary"
             :data-cy="`brands-pane-${p}`" @input="onPaneChange">
@@ -412,7 +414,10 @@ import BrandContextNotice from '../components/BrandContextNotice.vue';
 import BlocklistComposition from '../components/BlocklistComposition.vue';
 import BrandMatrix from '../components/BrandMatrix.vue';
 import BrandUsage from '../components/BrandUsage.vue';
-import { BRANDS_PANES, BRANDS_PANE_PREF, initialBrandsPane } from '../paneState.mjs'; // eslint-disable-line import/extensions
+import {
+  BRANDS_PANES, BRANDS_PANE_PREF, initialBrandsPane, readPane, writePane,
+} from '../paneState.mjs'; // eslint-disable-line import/extensions
+import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   compareDay, compareStatus, compareText, sortRows,
 } from '../health-sort';
@@ -491,9 +496,10 @@ export default Vue.extend({
 
   data() {
     return {
-      // Fork (campaign matrix, CAMPAIGN-MATRIX-SPEC D1) -- the list view's pane (pref brands.pane).
+      // Fork (campaign matrix, CAMPAIGN-MATRIX-SPEC D1; MATRIX-POLISH-SPEC D1) -- the list view's
+      // pane (sessionStorage brands.pane, matrix by default).
       panes: BRANDS_PANES,
-      pane: initialBrandsPane(this.$utils.getPref(BRANDS_PANE_PREF)),
+      pane: initialBrandsPane(readPane(sessionStore(window), BRANDS_PANE_PREF)),
       // BRAND-PICKER-SPEC D7: the brands rows (GET /api/brands), by slug.
       brandRows: {},
       history: [],
@@ -597,7 +603,7 @@ export default Vue.extend({
 
   methods: {
     onPaneChange() {
-      this.$utils.setPref(BRANDS_PANE_PREF, this.pane);
+      writePane(sessionStore(window), BRANDS_PANE_PREF, this.pane);
     },
 
     brandRowOf(row) {

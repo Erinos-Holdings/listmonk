@@ -93,6 +93,10 @@ WHERE ($1 = 0 OR id = $1)
             SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($10)
         )
     )
+    -- Fork (matrix polish, integrations MATRIX-POLISH-SPEC D10.2). Scope to the given campaign ids
+    -- (the Brand Usage "Last broadcast" link). ANDed with every filter above, so it only narrows;
+    -- CARDINALITY for the same '{}' reason as $10.
+    AND (CARDINALITY($11::INT[]) = 0 OR c.id = ANY($11))
 ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 
 -- name: query-analytics-campaigns
@@ -712,8 +716,8 @@ SELECT JSON_BUILD_OBJECT(
 --      users); $4 the global brand's list ids (empty = no scope), ANDed with the permission scope.
 --      Exactly query-analytics-campaigns' scoping predicate (D10) -- keep the two identical.
 --   $5 evergreen (NULL = every kind; the Campaigns page's kind pill, D4); $6 compute GP (the caller
---      holds the brands get permission, D7; otherwise the GP fields are NULL); $7 the client-stats
---      floor instant (D8). No comment line here may carry a colon (goyesql would read it as a tag).
+--      holds the brands get permission, D7; otherwise the GP fields are NULL). No comment line here
+--      may carry a colon (goyesql would read it as a tag).
 --   window = the Brand Matrix's, the 60 America/Denver calendar days ending yesterday, [t0, t1). The
 --     zone is the ONE literal in the zone CTE below and MUST equal get-dashboard-brand-matrix's.
 --   a broadcast (NOT evergreen) is in when started_at is in [t0, t1) and sent > 0; its numbers are
@@ -723,9 +727,15 @@ SELECT JSON_BUILD_OBJECT(
 --   views / clicks follow the tracking mode -- TRUE = each (campaign, subscriber) once, counted when
 --     the pair's FIRST view/click of the campaign is at or after lo (the Brand Matrix's rule, so a
 --     journey never recounts a person), NULL subscribers never; FALSE = raw rows in [lo, t1).
---   view_clients = per client token ('' = Unknown) the same count restricted to that token's views,
---     among the views counted above (TRUE = the counted pairs' in-window views, distinct subscribers per
---     token; FALSE = raw rows). Tokens only -- the trust tier is the frontend's (clientRows.mjs).
+--     (Fork, matrix polish, integrations MATRIX-POLISH-SPEC D4 -- Views is one column; the per-token
+--     view_clients and client_floor are gone.)
+--   shop_founder / shop_self / shop_creator / shop_corp (MATRIX-POLISH-SPEC D5) = the shop-link clicks
+--     bucketed by the clicker's kind, get-campaign-shop-link-counts' rule (a links.url containing
+--     shop_links, the brand the first token after it, the frozen send-time kind from
+--     campaign_shop_link_recipients falling back to the kind held now; corp = kind corporate)
+--     counted by the clicks rule above (TRUE = the counted click pairs, each subscriber once per
+--     kind; FALSE = raw rows in [lo, t1)). NULL in all four when the stored body holds no shop_links
+--     expression (links has no campaign column, so the body decides); 0 for an unclicked one.
 --   hard_bounces / soft_bounces / complaints = raw bounces rows of that type in [lo, t1).
 --   tracked / matched = campaign_conversions in [lo, t1) as orders and sales, NULL when the latest
 --     conversions doc does not cover the campaign (get-campaign-conversions' coverage rule).
@@ -735,9 +745,6 @@ SELECT JSON_BUILD_OBJECT(
 --     Mountain send day from brand_health rows of that brand with day in [sendDay, sendDay + 14] --
 --     the newest row whose series holds the day with ANY Gmail rate (Brands.vue's spamSeries rule),
 --     its spamRate when a number (else NULL) and that row's spamRate.detail.thresholds verbatim.
---   client_floor = a broadcast's started_at is before $7, a journey's window start t0 is before $7
---     (a journey counts only in-window views, so the window, not its start, decides; views before
---     $7 carry no client token).
 WITH zone AS (
     SELECT 'America/Denver'::TEXT AS tz
 ),
@@ -748,7 +755,9 @@ bounds AS (
     SELECT tz, d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win
 ),
 scoped AS (
-    SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.sent FROM campaigns c
+    SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.sent,
+        POSITION('shop_links' IN c.body) > 0 AS has_shop
+    FROM campaigns c
     WHERE (
         $1::BOOLEAN OR EXISTS (
             SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($2::INT[])
@@ -769,7 +778,7 @@ jsent AS (
     GROUP BY h.campaign_id
 ),
 camps AS (
-    SELECT s.id, s.name, s.status, s.evergreen, s.started_at,
+    SELECT s.id, s.name, s.status, s.evergreen, s.started_at, s.has_shop,
         CASE WHEN s.evergreen THEN j.sent ELSE s.sent::BIGINT END AS sent,
         j.last_hour,
         (s.started_at AT TIME ZONE (SELECT tz FROM bounds))::DATE AS send_day,
@@ -781,7 +790,7 @@ camps AS (
             AND s.started_at >= (SELECT t0 FROM bounds) AND s.started_at < (SELECT t1 FROM bounds))
 ),
 vrows AS (
-    SELECT cv.campaign_id, cv.subscriber_id, COALESCE(cv.client, '') AS client FROM campaign_views cv
+    SELECT cv.campaign_id, cv.subscriber_id FROM campaign_views cv
     JOIN camps k ON (k.id = cv.campaign_id)
     WHERE cv.created_at >= k.lo AND cv.created_at < (SELECT t1 FROM bounds)
 ),
@@ -798,16 +807,6 @@ views AS (
     SELECT campaign_id, COUNT(*) AS n FROM vpairs GROUP BY campaign_id
     UNION ALL
     SELECT campaign_id, COUNT(*) AS n FROM vrows WHERE NOT %[1]s GROUP BY campaign_id
-),
-vtok AS (
-    SELECT v.campaign_id, v.client, COUNT(DISTINCT v.subscriber_id) AS n FROM vrows v
-    JOIN vpairs p ON (p.campaign_id = v.campaign_id AND p.subscriber_id = v.subscriber_id)
-    GROUP BY v.campaign_id, v.client
-    UNION ALL
-    SELECT campaign_id, client, COUNT(*) AS n FROM vrows WHERE NOT %[1]s GROUP BY campaign_id, client
-),
-vclients AS (
-    SELECT campaign_id, JSON_OBJECT_AGG(client, n ORDER BY client) AS m FROM vtok GROUP BY campaign_id
 ),
 crows AS (
     SELECT lc.campaign_id, lc.subscriber_id FROM link_clicks lc
@@ -827,6 +826,38 @@ clicks AS (
     SELECT campaign_id, COUNT(*) AS n FROM cpairs GROUP BY campaign_id
     UNION ALL
     SELECT campaign_id, COUNT(*) AS n FROM crows WHERE NOT %[1]s GROUP BY campaign_id
+),
+slrows AS (
+    SELECT lc.campaign_id, lc.subscriber_id,
+        (CASE WHEN lc.subscriber_id IS NULL THEN 'unknown'
+            ELSE COALESCE(frozen.frozen_kind, NULLIF(s.attribs->'shop_links'->lb.brand->>'kind', ''), 'none')
+        END) AS kind
+    FROM link_clicks lc
+    JOIN camps k ON (k.id = lc.campaign_id AND k.has_shop)
+    JOIN links ON (links.id = lc.link_id)
+    CROSS JOIN LATERAL (SELECT SUBSTRING(links.url FROM 'shop_links[."[:space:]]*([A-Za-z0-9_-]+)') AS brand) lb
+    LEFT JOIN LATERAL (
+        SELECT r.kind AS frozen_kind FROM campaign_shop_link_recipients r
+            WHERE r.campaign_id = lc.campaign_id AND r.subscriber_id = lc.subscriber_id AND r.brand = lb.brand
+    ) frozen ON TRUE
+    LEFT JOIN subscribers s ON (s.id = lc.subscriber_id)
+    WHERE lc.created_at >= k.lo AND lc.created_at < (SELECT t1 FROM bounds)
+        AND POSITION('shop_links' IN links.url) > 0
+),
+slk AS (
+    SELECT r.campaign_id, r.kind, COUNT(DISTINCT r.subscriber_id) AS n FROM slrows r
+    JOIN cpairs p ON (p.campaign_id = r.campaign_id AND p.subscriber_id = r.subscriber_id)
+    GROUP BY r.campaign_id, r.kind
+    UNION ALL
+    SELECT campaign_id, kind, COUNT(*) AS n FROM slrows WHERE NOT %[1]s GROUP BY campaign_id, kind
+),
+shop AS (
+    SELECT campaign_id,
+        COALESCE(SUM(n) FILTER (WHERE kind = 'founder'), 0) AS founder,
+        COALESCE(SUM(n) FILTER (WHERE kind = 'self'), 0) AS self,
+        COALESCE(SUM(n) FILTER (WHERE kind = 'creator'), 0) AS creator,
+        COALESCE(SUM(n) FILTER (WHERE kind = 'corporate'), 0) AS corp
+    FROM slk GROUP BY campaign_id
 ),
 bnc AS (
     SELECT b.campaign_id,
@@ -900,8 +931,11 @@ SELECT JSON_BUILD_OBJECT(
             'brand', cb.brand,
             'sent', k.sent,
             'views', COALESCE(v.n, 0),
-            'view_clients', COALESCE(vc.m, '{}'::JSON),
             'clicks', COALESCE(c.n, 0),
+            'shop_founder', CASE WHEN k.has_shop THEN COALESCE(sh.founder, 0) END,
+            'shop_self', CASE WHEN k.has_shop THEN COALESCE(sh.self, 0) END,
+            'shop_creator', CASE WHEN k.has_shop THEN COALESCE(sh.creator, 0) END,
+            'shop_corp', CASE WHEN k.has_shop THEN COALESCE(sh.corp, 0) END,
             'hard_bounces', COALESCE(b.hard, 0),
             'soft_bounces', COALESCE(b.soft, 0),
             'complaints', COALESCE(b.complaint, 0),
@@ -910,14 +944,12 @@ SELECT JSON_BUILD_OBJECT(
             'matched', CASE WHEN EXISTS (SELECT 1 FROM cov WHERE cov.matched @> TO_JSONB(k.id))
                 THEN JSON_BUILD_OBJECT('orders', COALESCE(m.orders, 0), 'sales_usd', COALESCE(m.sales, 0)) END,
             'gp_rate', g.rate,
-            'gp_thresholds', CASE WHEN g.rate IS NOT NULL THEN g.thresholds END,
-            'client_floor', CASE WHEN k.evergreen THEN (SELECT t0 FROM bounds) < $7::TIMESTAMPTZ
-                ELSE k.started_at IS NULL OR k.started_at < $7::TIMESTAMPTZ END
+            'gp_thresholds', CASE WHEN g.rate IS NOT NULL THEN g.thresholds END
         ) ORDER BY k.id)
         FROM camps k
         LEFT JOIN views v ON (v.campaign_id = k.id)
-        LEFT JOIN vclients vc ON (vc.campaign_id = k.id)
         LEFT JOIN clicks c ON (c.campaign_id = k.id)
+        LEFT JOIN shop sh ON (sh.campaign_id = k.id)
         LEFT JOIN bnc b ON (b.campaign_id = k.id)
         LEFT JOIN conv t ON (t.campaign_id = k.id AND t.measure = 'tracked')
         LEFT JOIN conv m ON (m.campaign_id = k.id AND m.measure = 'matched')

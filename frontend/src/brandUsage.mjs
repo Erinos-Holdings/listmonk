@@ -373,6 +373,15 @@ export function circleWords(counts, t = (k) => k) {
 
 const posInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
 
+// MATRIX-POLISH-SPEC D10.3: the usage doc's broadcasts.lastIds (the newest send event's campaign
+// ids, written by the BrandHealth Lambda) when it is a non-empty array of positive integers, else
+// null (absent on a doc written before the field, or malformed).
+function lastIdsOf(u) {
+  const b = isObj(u) && isObj(u.broadcasts) ? u.broadcasts : null;
+  const ids = b && Array.isArray(b.lastIds) ? b.lastIds : null;
+  return ids && ids.length > 0 && ids.every(posInt) ? ids : null;
+}
+
 // V2 D4: a stoplight cell's link query -- the Campaigns page with the list preselected AND the
 // Automations scope (welcome/trigger campaigns are evergreens). Welcome links its master list; a
 // 1st purchase / No purchase cell links only when the family has exactly ONE row (with a list).
@@ -405,6 +414,15 @@ export function cellLink(row, field) {
     const at = rows ? npRowsAt(rows, n) : [];
     return at.length === 1 && posInt(at[0].listId) ? { list_id: String(at[0].listId), evergreen: 'true' } : null;
   }
+  // Fork (matrix polish, integrations MATRIX-POLISH-SPEC D10.3) -- Last broadcast opens the newest
+  // send event's campaigns (the stored broadcasts.lastIds) under the All kind; a doc written before
+  // lastIds existed (or with a malformed one) keeps the brand-lists link below.
+  if (field === 'lastBroadcast') {
+    const last = lastIdsOf(u);
+    if (last) {
+      return { id: last.map(String), evergreen: 'all' };
+    }
+  }
   if (field === 'journeys' || field === 'cadence' || field === 'lastBroadcast') {
     const ids = (Array.isArray(row.listIds) ? row.listIds : []).filter(posInt);
     if (!ids.length) {
@@ -436,6 +454,10 @@ export function cellLink(row, field) {
 // brand's active lists). POLISH3 D5: a linked Skipped cell notes its landing (those lists'
 // campaigns of all ages, both kinds). '' for every other cell, and for an unlinked one.
 export function linkTip(row, field, t = (k) => k) {
+  // MATRIX-POLISH-SPEC D10.3: the Last broadcast link names the last send's campaigns.
+  if (field === 'lastBroadcast' && row && row.usage && lastIdsOf(row.usage) && cellLink(row, field)) {
+    return t('dashboard.usage.lastBroadcastLinkHelp');
+  }
   if ((field === 'cadence' || field === 'lastBroadcast') && cellLink(row, field)) {
     return t('dashboard.usage.broadcastLinkHelp');
   }

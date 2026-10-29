@@ -2,9 +2,11 @@
   <!-- Fork (campaign matrix, integrations listmonk/CAMPAIGN-MATRIX-SPEC D3-D10). The Matrix pane of
        Campaigns > Analytics: one row per campaign in scope with activity in the Brand Matrix's window
        (the 60 Mountain days ending yesterday), in the Brand Matrix's grouped-header style. The server
-       (GET /api/analytics/campaigns/matrix) scopes and counts; every rate, tier fold, sort and
+       (GET /api/analytics/campaigns/matrix) scopes and counts; every rate, header, sort and
        missing-value rule is campaignMatrix.mjs. The brand selector reaches the server as list_id;
-       the navbar launch filter narrows here by each row's brand. -->
+       the navbar launch filter narrows here by each row's brand. Fork (matrix polish, integrations
+       MATRIX-POLISH-SPEC D3-D7): one Views column, the Shop Link Attribution group, Tracked /
+       Matched headers, no Brand column under a single-brand selection, names truncated. -->
   <section class="campaign-matrix relative" data-cy="campaign-matrix">
     <b-loading v-if="loading" active :is-full-page="false" />
     <div class="is-flex is-align-items-center mb-3">
@@ -37,13 +39,11 @@
     <div class="table-container">
       <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="cm-table">
         <thead>
+          <!-- MATRIX-POLISH-SPEC D4/D5: no Views group (Views is one column); SHOP LINK ATTRIBUTION
+               between Clicks and Conversions (campaignMatrix.mjs::groupHeaders). -->
           <tr class="bm-groups">
-            <th colspan="4" />
-            <th :colspan="4" class="bm-eng bm-group">{{ $t('analytics.matrix.views') }}</th>
-            <th />
-            <th :colspan="2" class="bm-eng bm-group">{{ $t('analytics.conversions.title') }}</th>
-            <th :colspan="2" class="bm-subs bm-group">{{ $t('analytics.matrix.bounces') }}</th>
-            <th :colspan="showGp ? 2 : 1" class="bm-subs bm-group">{{ $t('analytics.matrix.complaints') }}</th>
+            <th :colspan="leftCols.length" />
+            <th v-for="(g, i) in groupCols" :key="i" :colspan="g.span" :class="g.cls">{{ g.label ? $t(g.label) : '' }}</th>
           </tr>
           <tr>
             <th v-for="c in leftCols" :key="c.field" :class="[bmTh(c.field), { 'has-text-right': c.field === 'sent' }]"
@@ -60,14 +60,16 @@
         <tbody>
           <tr v-for="row in tableRows" :key="row.totals ? 'totals' : row.id" :class="row.totals ? 'bm-totals' : ''">
             <td :class="bmTd('name')">
-              <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended). -->
+              <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended).
+                   MATRIX-POLISH-SPEC D7: the first 25 characters, then '…'; the full name on hover. -->
               <router-link v-if="!row.totals" :to="{ name: 'campaignAnalytics', query: { id: row.id } }"
-                :data-cy="`cm-name-${row.id}`">
-{{ row.name }}
+                :title="nameOf(row).title" :data-cy="`cm-name-${row.id}`">
+{{ nameOf(row).text }}
 </router-link>
               <template v-else>{{ row.name }}</template>
             </td>
-            <td :class="bmTd('brand')">{{ row.totals ? '' : (row.label || '—') }}</td>
+            <!-- MATRIX-POLISH-SPEC D6: no Brand column under a single-brand selection. -->
+            <td v-if="showBrand" :class="bmTd('brand')">{{ row.totals ? '' : (row.label || '—') }}</td>
             <td :class="bmTd('date')">
               <span :title="dateTip(row)">{{ dateText(row) }}</span>
             </td>
@@ -77,7 +79,6 @@
               <span v-if="c.field === 'gp_rate'" :class="gpClass(row) || null" :title="gpTitle(row)">
                 {{ row.totals ? '' : cell(row, 'gp_rate') }}</span>
               <span v-else-if="isConversion(c.field)" :title="conversionTip(c.field)">{{ conversionText(row, c.field) }}</span>
-              <span v-else-if="isTier(c.field) && row.clientFloor" :title="$t('analytics.matrix.clientFloor')">{{ cell(row, c.field) }}</span>
               <span v-else>{{ cell(row, c.field) }}</span>
             </td>
           </tr>
@@ -100,8 +101,8 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  CONVERSION_FIELDS, TIER_FIELDS, cellText, clickSort, conversionValue, dateCell, gpClass, gpTip, loadState,
-  saveState, shapeRows, tableRows,
+  CONVERSION_FIELDS, cellText, clickSort, conversionValue, dateCell, gpClass, gpTip, groupHeaders, loadState,
+  midColumns, nameCell, saveState, shapeRows, showBrandColumn, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -133,48 +134,29 @@ export default Vue.extend({
       return this.$can('brands:get');
     },
 
+    // MATRIX-POLISH-SPEC D6: the Brand column unless the navbar selection is one brand.
+    showBrand() {
+      return showBrandColumn(this.brandSelection);
+    },
+
     leftCols() {
-      return [
+      const cols = [
         { field: 'name', label: 'analytics.matrix.campaign' },
         { field: 'brand', label: 'dashboard.matrix.brand' },
         { field: 'date', label: 'analytics.matrix.date' },
         { field: 'sent', label: 'dashboard.matrix.sent' },
       ];
+      return this.showBrand ? cols : cols.filter((c) => c.field !== 'brand');
     },
 
-    // D5: Views (Total, Client, Proxy, Machine), Clicks, Conversions, Bounces (Hard, Soft),
-    // Complaints (FBL, GP S%).
+    // D5 / MATRIX-POLISH-SPEC D3-D5: Views, Clicks, Shop Link Attribution (Founder, Self, Creator,
+    // Corp), Conversions (Tracked, Matched), Bounces (Hard, Soft), Complaints (FBL, GP S%).
     midCols() {
-      const cols = [
-        {
-          field: 'views', label: 'analytics.matrix.total', help: 'analytics.matrix.totalHelp', group: 'bm-eng',
-        },
-        {
-          field: 'client', label: 'analytics.matrix.client', help: 'analytics.matrix.clientHelp', group: 'bm-eng',
-        },
-        {
-          field: 'proxy', label: 'analytics.matrix.proxy', help: 'analytics.matrix.proxyHelp', group: 'bm-eng',
-        },
-        {
-          field: 'machine', label: 'analytics.matrix.machine', help: 'analytics.matrix.machineHelp', group: 'bm-eng',
-        },
-        {
-          field: 'clicks', label: 'dashboard.matrix.clicks', help: 'analytics.matrix.clicksHelp', group: '',
-        },
-        { field: 'tracked', label: 'analytics.conversions.trackedConv', group: 'bm-eng' },
-        { field: 'matched', label: 'analytics.conversions.matchedConv', group: 'bm-eng' },
-        { field: 'hard_bounces', label: 'analytics.matrix.hard', group: 'bm-subs' },
-        { field: 'soft_bounces', label: 'analytics.matrix.soft', group: 'bm-subs' },
-        {
-          field: 'complaints', label: 'analytics.matrix.fbl', help: 'analytics.matrix.fblHelp', group: 'bm-subs',
-        },
-      ];
-      if (this.showGp) {
-        cols.push({
-          field: 'gp_rate', label: 'dashboard.matrix.spam', help: 'analytics.matrix.gpHelp', group: 'bm-subs',
-        });
-      }
-      return cols;
+      return midColumns(this.showGp);
+    },
+
+    groupCols() {
+      return groupHeaders(this.showGp);
     },
 
     tableRows() {
@@ -257,8 +239,8 @@ export default Vue.extend({
       return CONVERSION_FIELDS.includes(field);
     },
 
-    isTier(field) {
-      return TIER_FIELDS.includes(field);
+    nameOf(row) {
+      return nameCell(row.name);
     },
 
     // D9: the cell reuses conversionCells.mjs::scopedCell -- whole-dollar sales under %/$, orders

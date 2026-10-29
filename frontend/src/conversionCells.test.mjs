@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MISSING, analyticsCells, conversionCell, conversionTooltip, formatUsd, normalizeMeta, scopedCell, sumCovered,
+  MISSING, analyticsCells, aovText, conversionCell, conversionTooltip, formatUsd, normalizeMeta, scopedCell, sumCovered,
 } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
 const META = {
@@ -40,8 +40,21 @@ test('Campaign Analytics: sums over covered campaigns only', () => {
   assert.deepEqual(sumCovered(campaigns, 'tracked'), { orders: 2, sales: 10 });
   assert.deepEqual(sumCovered(campaigns, 'matched'), { orders: 4, sales: 10.25 });
   const c = analyticsCells({ ...META, campaigns });
-  assert.deepEqual(c.tracked, { orders: '2', sales: '$10' });
-  assert.deepEqual(c.matched, { orders: '4', sales: '$10' });
+  assert.deepEqual(c.tracked, { orders: '2', sales: '$10', aov: '$5.00' });
+  assert.deepEqual(c.matched, { orders: '4', sales: '$10', aov: '$2.56' });
+});
+
+// Fork (matrix polish, integrations MATRIX-POLISH-SPEC I10) -- AOV = sales / orders, two decimals;
+// absent when orders is 0 or the measure is not covered.
+test('MATRIX-POLISH I10: AOV is sales / orders with two decimals, absent at 0 orders or uncovered', () => {
+  assert.equal(aovText({ orders: 3, sales: 100 }), '$33.33');
+  assert.equal(aovText({ orders: 1, sales: 1234.5 }), '$1,234.50');
+  assert.equal(aovText({ orders: 0, sales: 0 }), '');
+  assert.equal(aovText(null), '');
+  const c = analyticsCells({ ...META, campaigns: [{ campaign_id: 1, tracked: null, matched: { orders: 0, sales_usd: 0 } }] });
+  assert.equal(c.tracked.aov, '', 'not covered');
+  assert.equal(c.matched.aov, '', 'covered, zero orders');
+  assert.equal(analyticsCells({ as_of: null, campaigns: [] }).matched.aov, '', 'no doc');
 });
 
 test('no conversions doc: every cell is a dash', () => {

@@ -63,6 +63,15 @@
               {{ $t('campaigns.statusScope', { status: $t(`campaigns.status.${queryParams.routeStatus}`) }) }}
             </b-tag>
           </div>
+          <!-- MATRIX-POLISH-SPEC D10.2 -- the route id scope's chip (the Brand Usage "Last broadcast"
+               link's ?id=...): cleared exactly as the status chip (campaignsRouteQuery.mjs::routeIdsAfter). -->
+          <div v-if="queryParams.routeIDs" class="column is-narrow">
+            <b-tag type="is-primary" size="is-medium" closable
+              :title="$t('campaigns.idScopeHelp')" data-cy="route-ids"
+              @close="onDismissStatus">
+              {{ $tc('campaigns.idScope', queryParams.routeIDs.length, { num: queryParams.routeIDs.length }) }}
+            </b-tag>
+          </div>
           <div class="column is-narrow">
             <!-- Fork (list filter) -- server-side list_id filter on GET /api/campaigns.
                  Single-select (the API param is repeatable); "All lists" sends no param.
@@ -409,7 +418,8 @@ import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/
 import {
   LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KIND_PREF, afterBrandChange, campaignsRouteQuery, canSelectAll,
   deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen, kindStatusParams, listParam,
-  listSelectValue, pollsStats, preEnablesEvergreen, routeStatusAfter, routeStatusOf, scopeKindPref, selectList,
+  listSelectValue, pollsStats, preEnablesEvergreen, routeEvergreen, routeIdsAfter, routeIdsOf, routeStatusAfter,
+  routeStatusOf, scopeKindPref, selectList,
 } from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -456,6 +466,9 @@ export default Vue.extend({
       this.$route && this.$route.query,
       evergreenOfKind(scopeKindPref(this.$utils.getPref(SCOPE_KIND_PREF), this.$utils.getPref(LEGACY_SCOPE_PREF))),
     );
+    // MATRIX-POLISH-SPEC D10.2 -- a route id scope (?id=..., repeatable): only those campaigns, the
+    // kind pill at All for this view (never written to the pref).
+    const routeIDs = routeIdsOf(this.$route && this.$route.query);
     return {
       previewItem: null,
       rateFields: RATE_FIELDS,
@@ -468,9 +481,11 @@ export default Vue.extend({
         // (POLISH3 D3). Sticky across refresh/navigation via the shared localStorage pref (a route
         // query's evergreen=true / false / all selects Automations / Broadcasts / All for this
         // visit only).
-        evergreen: fromRoute.evergreen,
+        evergreen: routeEvergreen(fromRoute.evergreen, routeIDs),
         // DASHBOARDS-POLISH3-SPEC D2 -- the route status scope (one campaign status, or null).
         routeStatus: routeStatusOf(this.$route && this.$route.query),
+        // MATRIX-POLISH-SPEC D10.2 -- the route id scope (campaign ids, or null).
+        routeIDs,
         // Fork (list filter) -- null = all lists (no param sent). In-page state only; a route
         // query's single list_id preselects it.
         listID: fromRoute.listID,
@@ -633,6 +648,7 @@ export default Vue.extend({
     onScopeChange() {
       this.$utils.setPref(SCOPE_KIND_PREF, kindOfEvergreen(this.queryParams.evergreen));
       this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'scope');
+      this.queryParams.routeIDs = routeIdsAfter(this.queryParams.routeIDs, 'scope');
       this.queryParams.page = 1;
       this.bulk.checked = [];
       this.bulk.all = false;
@@ -641,8 +657,11 @@ export default Vue.extend({
 
     // DASHBOARDS-POLISH3-SPEC D2 -- the status chip's dismissal: the scope clears, the list-change
     // hygiene and refetch run. Never a pref.
+    // MATRIX-POLISH-SPEC D10.2 -- the id chip's dismissal too: both route scopes clear together
+    // (the same STATUS_CLEARING interactions clear each).
     onDismissStatus() {
       this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'dismiss');
+      this.queryParams.routeIDs = routeIdsAfter(this.queryParams.routeIDs, 'dismiss');
       this.onListChange();
     },
 
@@ -936,6 +955,7 @@ export default Vue.extend({
         // disabled placeholder, were it ever emitted, changes nothing.
         if (v !== ROUTE_SCOPE_OPTION) {
           this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'list');
+          this.queryParams.routeIDs = routeIdsAfter(this.queryParams.routeIDs, 'list');
         }
         this.onListChange();
       },
@@ -951,6 +971,7 @@ export default Vue.extend({
         routeListIDs: this.queryParams.routeListIDs,
         scopeListIds: this.scopeListIds,
         routeStatus: this.queryParams.routeStatus,
+        routeIDs: this.queryParams.routeIDs,
       });
     },
   },
@@ -970,6 +991,7 @@ export default Vue.extend({
       this.queryParams.routeListIDs = next.routeListIDs;
       // POLISH3 D2 -- any selector change also clears the route status scope.
       this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'brand');
+      this.queryParams.routeIDs = routeIdsAfter(this.queryParams.routeIDs, 'brand');
       this.queryParams.page = 1;
       this.bulk.checked = [];
       this.bulk.all = false;

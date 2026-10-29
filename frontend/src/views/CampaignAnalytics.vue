@@ -3,17 +3,18 @@
     <h1 class="title is-4 mb-2">
       {{ $t('analytics.title') }}
     </h1>
-    <!-- Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D3) -- Campaign | Matrix at the top,
-         sticky per browser (pref analytics.pane, campaign by default); a URL carrying ?id= always
-         opens Campaign. No new nav item. -->
+    <!-- Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D3) -- the pill at the top; a URL
+         carrying ?id= always opens Campaign. No new nav item. Fork (matrix polish, MATRIX-POLISH-SPEC
+         D2) -- Matrix | Campaign, Matrix by default, kept per browser session (sessionStorage
+         analytics.pane). -->
     <b-field class="is-inline-flex">
-      <b-radio-button v-model="pane" native-value="campaign" type="is-primary" data-cy="analytics-pane-campaign"
-        @input="onPaneChange">
-        {{ $t('analytics.panes.campaign') }}
-      </b-radio-button>
       <b-radio-button v-model="pane" native-value="matrix" type="is-primary" data-cy="analytics-pane-matrix"
         @input="onPaneChange">
         {{ $t('analytics.panes.matrix') }}
+      </b-radio-button>
+      <b-radio-button v-model="pane" native-value="campaign" type="is-primary" data-cy="analytics-pane-campaign"
+        @input="onPaneChange">
+        {{ $t('analytics.panes.campaign') }}
       </b-radio-button>
     </b-field>
     <div v-if="serverConfig.privacy.disable_tracking || !serverConfig.privacy.individual_tracking"
@@ -90,6 +91,11 @@
           <p class="title is-4 mb-2 conv-sales">{{ m.cell.sales || m.cell.orders }}</p>
           <p v-if="m.cell.sales" class="title is-4 has-text-weight-normal conv-orders">
             {{ m.cell.orders }} {{ $tc('analytics.conversions.orders', m.cell.orders === '1' ? 1 : 2) }}
+          </p>
+          <!-- Fork (matrix polish, MATRIX-POLISH-SPEC D8.2) -- the AOV line (sales / orders, two
+               decimals); none at 0 orders or when not covered. -->
+          <p v-if="m.cell.aov" class="is-size-7 has-text-grey-dark conv-aov" :data-cy="`conversions-${m.key}-aov`">
+            {{ $t('analytics.conversions.aov', { aov: m.cell.aov }) }}
           </p>
         </div>
         <!-- Orders by day after send (2026-10-29): beside Matched, after its own divider, in a white
@@ -243,7 +249,10 @@
     <!-- Fork (location stats, integrations LOCATION-STATS-SPEC D8): views and clicks per country for
     the same campaigns and date range. The view owns the sort (countryRows.mjs) so Unknown stays
     last in every direction. -->
-    <section v-if="countries.fetched" class="location mt-5">
+    <!-- Fork (matrix polish, integrations MATRIX-POLISH-SPEC D8.1) -- Location and Email clients take
+         the Dashboard panels' aligned grid (.share-grid): each count followed by its fixed-width share
+         slot (parenShare), empty when there is no share, so the counts end on one edge. -->
+    <section v-if="countries.fetched" class="location share-grid mt-5">
       <h4>{{ $t('analytics.location') }}</h4>
       <p class="is-size-7 has-text-grey mb-3">{{ $t('analytics.locationHint') }}</p>
       <b-table :data="countryTableRows" :loading="countries.loading" hoverable narrowed
@@ -255,12 +264,10 @@
              own total (Unknown included) in grey: a share of the table, not a rate over Sent, hence
              the reversed order. The count alone when the column is empty. -->
         <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
-          {{ $utils.formatNumber(props.row.views) }}
-          <span v-if="countryShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ countryShare(props.row.views, 'views') }})</span>
+          {{ $utils.formatNumber(props.row.views) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(countryShare(props.row.views, 'views')) }}</span>
         </b-table-column>
         <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
-          {{ $utils.formatNumber(props.row.clicks) }}
-          <span v-if="countryShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ countryShare(props.row.clicks, 'clicks') }})</span>
+          {{ $utils.formatNumber(props.row.clicks) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(countryShare(props.row.clicks, 'clicks')) }}</span>
         </b-table-column>
         <template #empty v-if="!countries.loading">
           <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
@@ -272,7 +279,7 @@
     email client for the same campaigns and date range, the Location table's shape (clientRows.mjs
     owns the sort: Unknown last always, Other next-to-last by default). A row's tooltip lists the
     Inspect clients that render-verify it (clientRoster.mjs, advisory). -->
-    <section v-if="clients.fetched" class="clients mt-5" data-cy="clients">
+    <section v-if="clients.fetched" class="clients share-grid mt-5" data-cy="clients">
       <h4>{{ $t('analytics.clients') }}</h4>
       <b-table :data="clientTableRows" :loading="clients.loading" hoverable narrowed
         backend-sorting :default-sort="[clients.sort.field, clients.sort.order]" @sort="onClientSort">
@@ -280,16 +287,13 @@
           <span :class="{ 'has-text-grey': props.row.unknown }" :title="clientRosterTip(props.row.client)">{{ props.row.name }}</span>
         </b-table-column>
         <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
-          {{ $utils.formatNumber(props.row.views) }}
-          <span v-if="clientShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ clientShare(props.row.views, 'views') }})</span>
+          {{ $utils.formatNumber(props.row.views) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row.views, 'views')) }}</span>
         </b-table-column>
         <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
-          {{ $utils.formatNumber(props.row.clicks) }}
-          <span v-if="clientShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ clientShare(props.row.clicks, 'clicks') }})</span>
+          {{ $utils.formatNumber(props.row.clicks) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row.clicks, 'clicks')) }}</span>
         </b-table-column>
         <b-table-column v-slot="props" field="combined" :label="$t('analytics.clientsCombined')" numeric sortable>
-          {{ $utils.formatNumber(props.row.combined) }}
-          <span v-if="clientShare(props.row.combined, 'combined')" class="is-size-7 has-text-grey">({{ clientShare(props.row.combined, 'combined') }})</span>
+          {{ $utils.formatNumber(props.row.combined) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row.combined, 'combined')) }}</span>
         </b-table-column>
         <template #empty v-if="!clients.loading">
           <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
@@ -298,20 +302,24 @@
       <!-- Fork (client vocabulary, integrations CLIENT-VOCABULARY-SPEC D8): the three trust-tier
            subtotals plus the untiered remainder, as footer rows beneath the table, over Views and
            Clicks ONLY (never Combined -- a tier-combined figure is close to the very number D8
-           refuses). Rendered separately and NEVER summed into one figure. -->
+           refuses). Rendered separately and NEVER summed into one figure. MATRIX-POLISH-SPEC D8.1:
+           the grid's empty share slots, and an empty last column standing where the clients table
+           has Combined (no figure), so Views and Clicks sit under the clients table's own. -->
       <table v-if="clients.rows.length" class="table is-narrow is-fullwidth client-tiers">
         <thead>
           <tr>
             <th>{{ $t('analytics.clientsTier') }}</th>
-            <th class="has-text-right">{{ $t('campaigns.views') }}</th>
-            <th class="has-text-right">{{ $t('campaigns.clicks') }}</th>
+            <th class="has-text-right">{{ $t('campaigns.views') }}<span class="cl-share is-size-7" /></th>
+            <th class="has-text-right">{{ $t('campaigns.clicks') }}<span class="cl-share is-size-7" /></th>
+            <th />
           </tr>
         </thead>
         <tbody>
           <tr v-for="t in clientTierRows" :key="t.key">
             <td>{{ t.name }}</td>
-            <td class="has-text-right">{{ $utils.formatNumber(t.views) }}</td>
-            <td class="has-text-right">{{ $utils.formatNumber(t.clicks) }}</td>
+            <td class="has-text-right">{{ $utils.formatNumber(t.views) }}<span class="cl-share is-size-7" /></td>
+            <td class="has-text-right">{{ $utils.formatNumber(t.clicks) }}<span class="cl-share is-size-7" /></td>
+            <td />
           </tr>
         </tbody>
       </table>
@@ -348,7 +356,10 @@ import {
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 import CampaignMatrix from '../components/CampaignMatrix.vue';
-import { ANALYTICS_PANE_PREF, initialAnalyticsPane } from '../paneState.mjs'; // eslint-disable-line import/extensions
+import {
+  ANALYTICS_PANE_PREF, initialAnalyticsPane, readPane, writePane,
+} from '../paneState.mjs'; // eslint-disable-line import/extensions
+import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
 // Fork (shop-link header total, 2026-10-19) -- shopLinks joins the rate headers: the shop-link
@@ -388,10 +399,11 @@ export default Vue.extend({
 
   data() {
     return {
-      // Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D3) -- Campaign | Matrix; ?id= forces
-      // Campaign (the URL is read once: a matrix row's link remounts this view).
+      // Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D3) -- ?id= forces Campaign (the URL
+      // is read once: a matrix row's link remounts this view). Fork (matrix polish, MATRIX-POLISH-SPEC
+      // D2) -- Matrix | Campaign, Matrix by default, kept per browser session (sessionStorage).
       pane: initialAnalyticsPane(
-        this.$utils.getPref(ANALYTICS_PANE_PREF),
+        readPane(sessionStore(window), ANALYTICS_PANE_PREF),
         this.$utils.parseQueryIDs(this.$route.query.id).length > 0,
       ),
       isSearchLoading: false,
@@ -452,6 +464,30 @@ export default Vue.extend({
           loading: false,
         },
 
+        // Fork (matrix polish, integrations MATRIX-POLISH-SPEC D8.3) -- Links and Shop Link
+        // Attribution sit directly under the Clicks chart, before the bounce charts (the sections
+        // render in this object's key order).
+        links: {
+          name: this.$t('analytics.links'),
+          type: 'bar',
+          data: null,
+          loading: false,
+          fn: this.$api.getCampaignLinkCounts,
+          chartFn: this.makeLinksChart,
+          onClick: this.onLinkClick,
+        },
+
+        // Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- directly after
+        // links so it renders under it; a bar per stored kind, no ring, no click-through.
+        shopLinks: {
+          name: this.$t('analytics.shopLinks'),
+          type: 'bar',
+          data: null,
+          loading: false,
+          fn: this.$api.getCampaignShopLinkCounts,
+          chartFn: this.makeShopLinksChart,
+        },
+
         hardBounces: {
           name: this.$t('analytics.hardBounces'),
           type: 'line',
@@ -486,27 +522,6 @@ export default Vue.extend({
           fn: this.$api.getCampaignComplaintCounts,
           chartFn: this.makeCharts,
           loading: false,
-        },
-
-        links: {
-          name: this.$t('analytics.links'),
-          type: 'bar',
-          data: null,
-          loading: false,
-          fn: this.$api.getCampaignLinkCounts,
-          chartFn: this.makeLinksChart,
-          onClick: this.onLinkClick,
-        },
-
-        // Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D5) -- directly after
-        // links so it renders under it; a bar per stored kind, no ring, no click-through.
-        shopLinks: {
-          name: this.$t('analytics.shopLinks'),
-          type: 'bar',
-          data: null,
-          loading: false,
-          fn: this.$api.getCampaignShopLinkCounts,
-          chartFn: this.makeShopLinksChart,
         },
       },
 
@@ -550,9 +565,10 @@ export default Vue.extend({
   },
 
   methods: {
-    // Fork (campaign matrix, CAMPAIGN-MATRIX-SPEC D3) -- the pane pref's one writer.
+    // Fork (campaign matrix, CAMPAIGN-MATRIX-SPEC D3; MATRIX-POLISH-SPEC D2) -- the stored choice's
+    // one writer (a pill click only; ?id= never writes it).
     onPaneChange() {
-      this.$utils.setPref(ANALYTICS_PANE_PREF, this.pane);
+      writePane(sessionStore(window), ANALYTICS_PANE_PREF, this.pane);
     },
 
     onFromDateChange() {
@@ -899,6 +915,12 @@ export default Vue.extend({
     // A client's share of the column's own total (Unknown included), as countryShare.
     clientShare(n, field) {
       return rateCell(n, this.clientTotalsSum[field], 1).pct;
+    },
+
+    // Fork (matrix polish, MATRIX-POLISH-SPEC D8.1) -- the Dashboard's slot rule: a share for its
+    // fixed-width slot, parenthesized, or '' -- the slot stays either way, so counts align.
+    parenShare(pct) {
+      return pct ? `(${pct})` : '';
     },
 
     // The row tooltip: the Inspect clients that render-verify the token (advisory, D8).

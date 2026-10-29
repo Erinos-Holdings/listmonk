@@ -80,7 +80,9 @@
               <!-- DASHBOARDS-POLISH2-SPEC D2: the Cadence / Last broadcast text links the brand's
                    lists in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links.
                    POLISH3 D2/D5: the broadcast links carry status=finished; a Skipped count > 0
-                   is red and links its skipping lists in the All scope. -->
+                   is red and links its skipping lists in the All scope. MATRIX-POLISH-SPEC D10.3:
+                   Last broadcast links the last send's campaigns (?id=…, All) when the doc carries
+                   broadcasts.lastIds. -->
               <component v-else :is="link(row, c.field) ? 'router-link' : 'span'"
                 :to="link(row, c.field) ? { name: 'campaigns', query: link(row, c.field) } : null"
                 :class="cell(row, c.field).cls" :title="title(row, c.field)"

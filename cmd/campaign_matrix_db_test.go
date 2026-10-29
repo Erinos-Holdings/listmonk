@@ -10,13 +10,15 @@ package main
 // campaigns only; GP is null for a campaigns:get_analytics-only caller and present with brands:get.
 // I2: broadcasts in/out by started_at (and sent > 0), journeys by campaign_send_hours with Sent the
 // window sum, the kind filter.
-// I3: Views Total = distinct subscribers; per-token counts distinct per (campaign, token); the
-// journey first-view-in-window rule; Clicks likewise.
+// I3: Views = distinct subscribers; the journey first-view-in-window rule; Clicks likewise.
 // I4: hard / soft / complaint bounces by type; conversions NULL when not covered, window-limited for
 // journeys.
 // I5: GP send day -- the newest brand_health row holding the day (with any Gmail rate) wins, with
-// that row's thresholds; no numeric spamRate, an absent day or several brands -> null; client_floor
-// by started_at (broadcasts) or the window start (journeys) against clientStatsFloor.
+// that row's thresholds; no numeric spamRate, an absent day or several brands -> null.
+// MATRIX-POLISH-SPEC I7: the shop-link kinds -- the frozen send-time kind wins, the current kind is
+// the fallback, the click-pair rule (a journey clicker whose first click is before t0 counts 0 in
+// Clicks and in the kinds), NULL for a campaign whose body holds no shop link, 0 for an unclicked
+// one; the D4 tier fields (view_clients, client_floor) are gone from the response.
 
 import (
 	"encoding/json"
@@ -32,6 +34,7 @@ import (
 
 	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/core"
+	"github.com/knadh/paginator"
 	"github.com/labstack/echo/v4"
 )
 
@@ -48,8 +51,11 @@ type cmRow struct {
 	Brand        *string         `json:"brand"`
 	Sent         *int            `json:"sent"`
 	Views        int             `json:"views"`
-	ViewClients  map[string]int  `json:"view_clients"`
 	Clicks       int             `json:"clicks"`
+	ShopFounder  *int            `json:"shop_founder"`
+	ShopSelf     *int            `json:"shop_self"`
+	ShopCreator  *int            `json:"shop_creator"`
+	ShopCorp     *int            `json:"shop_corp"`
 	HardBounces  int             `json:"hard_bounces"`
 	SoftBounces  int             `json:"soft_bounces"`
 	Complaints   int             `json:"complaints"`
@@ -57,7 +63,6 @@ type cmRow struct {
 	Matched      *cmMeasure      `json:"matched"`
 	GPRate       *float64        `json:"gp_rate"`
 	GPThresholds json.RawMessage `json:"gp_thresholds"`
-	ClientFloor  bool            `json:"client_floor"`
 }
 
 type cmResp struct {
@@ -107,12 +112,6 @@ func TestCampaignMatrixDB(t *testing.T) {
 	dayAt := func(n int) time.Time { return start(n).Add(noon) }
 	day := func(n int) string { return start(n).Format("2006-01-02") }
 	ts := func(t time.Time) string { return t.Format(time.RFC3339) }
-
-	// I5 -- the floor pinned for the test: 12 days ago, so a broadcast started 10 days ago is after
-	// it and one started 20 days ago before it.
-	savedFloor := clientStatsFloor
-	clientStatsFloor = start(12)
-	t.Cleanup(func() { clientStatsFloor = savedFloor })
 
 	// Lists: alpha (public + a private derivative), bravo, and an untagged list.
 	listA := h.baList("Alpha", "public", "single")
@@ -181,21 +180,33 @@ func TestCampaignMatrixDB(t *testing.T) {
 	view(jIn, s2, "yahoo", dayAt(5))
 	view(jIn, s3, "yahoo", dayAt(0))
 
-	var link int
+	var link, shopLink int
 	if err := h.db.Get(&link, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), 'https://cm.test') RETURNING id`); err != nil {
 		t.Fatal(err)
 	}
-	click := func(c, sub int, at time.Time) {
-		h.db.MustExec(`INSERT INTO link_clicks (campaign_id, subscriber_id, link_id, created_at) VALUES ($1, NULLIF($2, 0), $3, $4::TIMESTAMPTZ)`,
-			c, sub, link, ts(at))
+	// MATRIX-POLISH I7 -- a shop link (the stored url holds the unexpanded expression) and the bodies
+	// that carry one: bIn and jIn (clicked) and bLow (never clicked). bB's body ('b') holds none.
+	if err := h.db.Get(&shopLink, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), '{{ .Subscriber.Attribs.shop_links.alpha.url }}') RETURNING id`); err != nil {
+		t.Fatal(err)
 	}
-	click(bIn, s1, dayAt(9))
-	click(bIn, s1, dayAt(8))
-	click(bIn, s2, dayAt(8))
-	click(bIn, s3, dayAt(0)) // today: out
-	click(jIn, s1, dayAt(70))
-	click(jIn, s1, dayAt(5))
-	click(jIn, s2, dayAt(5))
+	h.db.MustExec(`UPDATE campaigns SET body = '<a href="{{ TrackLink .Subscriber.Attribs.shop_links.alpha.url }}">Shop</a>' WHERE id IN ($1, $2, $3)`, bIn, jIn, bLow)
+	// Kinds held now: s1 creator, s2 self, s3 corporate. s1's send-time kind on bIn was founder.
+	h.db.MustExec(`UPDATE subscribers SET attribs = '{"shop_links": {"alpha": {"kind": "creator"}}}' WHERE id = $1`, s1)
+	h.db.MustExec(`UPDATE subscribers SET attribs = '{"shop_links": {"alpha": {"kind": "self"}}}' WHERE id = $1`, s2)
+	h.db.MustExec(`UPDATE subscribers SET attribs = '{"shop_links": {"alpha": {"kind": "corporate"}}}' WHERE id = $1`, s3)
+	h.db.MustExec(`INSERT INTO campaign_shop_link_recipients (campaign_id, subscriber_id, brand, kind) VALUES ($1, $2, 'alpha', 'founder')`, bIn, s1)
+	clickOn := func(l, c, sub int, at time.Time) {
+		h.db.MustExec(`INSERT INTO link_clicks (campaign_id, subscriber_id, link_id, created_at) VALUES ($1, NULLIF($2, 0), $3, $4::TIMESTAMPTZ)`,
+			c, sub, l, ts(at))
+	}
+	clickOn(shopLink, bIn, s1, dayAt(9)) // frozen founder
+	clickOn(shopLink, bIn, s1, dayAt(8))
+	clickOn(shopLink, bIn, s2, dayAt(8))  // no frozen row: self, held now
+	clickOn(shopLink, bIn, s3, dayAt(0))  // today: out
+	clickOn(shopLink, jIn, s1, dayAt(70)) // s1's first click is before the window: never counted (TRUE)
+	clickOn(shopLink, jIn, s1, dayAt(5))
+	clickOn(link, jIn, s2, dayAt(5))
+	clickOn(shopLink, jIn, s3, dayAt(4)) // first click in the window: corporate (s3 has no other jIn click)
 
 	bounce := func(c int, typ string, at time.Time) {
 		h.db.MustExec(`INSERT INTO bounces (campaign_id, subscriber_id, source, type, meta, created_at) VALUES ($1, $2, 'test', $3::bounce_type, '{}', $4::TIMESTAMPTZ)`,
@@ -365,14 +376,15 @@ func TestCampaignMatrixDB(t *testing.T) {
 		rows := byID(got)
 
 		// I2 / I3 / I4 / I5 -- the broadcast row.
-		wantViews, wantClients, wantClicks := 2, map[string]int{"outlook-windows": 1, "apple-mail": 2, "": 1}, 2
+		wantViews, wantClicks, wantFounder := 2, 2, 1
 		if !tracking {
-			wantViews, wantClients, wantClicks = 7, map[string]int{"outlook-windows": 3, "apple-mail": 2, "": 1, "gmail-proxy": 1}, 3
+			wantViews, wantClicks, wantFounder = 7, 3, 2
 		}
 		wantB := cmRow{ID: bIn, SendDay: str(day(10)), Brand: str("alpha"), Sent: ip(100),
-			Views: wantViews, ViewClients: wantClients, Clicks: wantClicks, HardBounces: 2, SoftBounces: 1, Complaints: 1,
+			Views: wantViews, Clicks: wantClicks, HardBounces: 2, SoftBounces: 1, Complaints: 1,
+			ShopFounder: ip(wantFounder), ShopSelf: ip(1), ShopCreator: ip(0), ShopCorp: ip(0),
 			Tracked: &cmMeasure{2, 15.5}, Matched: &cmMeasure{1, 7}, GPRate: fp(0.004),
-			GPThresholds: json.RawMessage(`{"issues":0.003,"warn":0.002}`), ClientFloor: false} // compactJSON sorts keys
+			GPThresholds: json.RawMessage(`{"issues":0.003,"warn":0.002}`)} // compactJSON sorts keys
 		gotB := rows[bIn]
 		gotB.GPThresholds = compactJSON(t, gotB.GPThresholds)
 		if !reflect.DeepEqual(gotB, wantB) {
@@ -380,13 +392,17 @@ func TestCampaignMatrixDB(t *testing.T) {
 		}
 
 		// The journey row: Sent = the window's send hours, the first-view rule, journeys carry no GP.
-		wantViews, wantClients, wantClicks = 1, map[string]int{"yahoo": 1}, 1
+		// I7 -- the pair rule: s1's first jIn click is before t0, so (TRUE) s1 counts in neither
+		// Clicks nor a kind; s3's in-window shop click is corporate. FALSE counts raw in-window rows.
+		wantViews, wantClicks = 1, 2
+		wantCreator := 0
 		if !tracking {
-			wantViews, wantClients, wantClicks = 2, map[string]int{"yahoo": 1, "automation": 1}, 2
+			wantViews, wantClicks, wantCreator = 2, 3, 1
 		}
 		wantJ := cmRow{ID: jIn, Evergreen: true, LastSent: str(day(3)), Brand: str("alpha"), Sent: ip(11),
-			Views: wantViews, ViewClients: wantClients, Clicks: wantClicks, SoftBounces: 1,
-			Tracked: &cmMeasure{1, 20}, ClientFloor: true}
+			Views: wantViews, Clicks: wantClicks, SoftBounces: 1,
+			ShopFounder: ip(0), ShopSelf: ip(0), ShopCreator: ip(wantCreator), ShopCorp: ip(1),
+			Tracked: &cmMeasure{1, 20}}
 		gotJ := rows[jIn]
 		gotJ.GPThresholds = compactJSON(t, gotJ.GPThresholds)
 		if !reflect.DeepEqual(gotJ, wantJ) {
@@ -394,18 +410,34 @@ func TestCampaignMatrixDB(t *testing.T) {
 		}
 
 		// I5 -- no numeric spamRate on the newest holder -> null; no brand_health for bravo's day
-		// -> null; two brands -> brand and GP null; client_floor by started_at.
-		if r := rows[bLow]; r.GPRate != nil || r.Brand == nil || *r.Brand != "alpha" || !r.ClientFloor {
-			t.Fatalf("%s: bLow %s, want alpha, gp null, client_floor", name("bLow"), baJSON(r))
+		// -> null; two brands -> brand and GP null. I7 -- an unclicked shop link is 0, no shop link
+		// in the body is null in all four.
+		zero := func(r cmRow) bool {
+			return r.ShopFounder != nil && *r.ShopFounder == 0 && r.ShopSelf != nil && *r.ShopSelf == 0 &&
+				r.ShopCreator != nil && *r.ShopCreator == 0 && r.ShopCorp != nil && *r.ShopCorp == 0
 		}
-		if r := rows[bB]; r.GPRate == nil || *r.GPRate != 0.2 || r.Tracked != nil || r.Matched != nil || !r.ClientFloor {
-			t.Fatalf("%s: bB %s, want gp 0.2 (thresholds absent), conversions null, client_floor", name("bB"), baJSON(r))
+		absent := func(r cmRow) bool {
+			return r.ShopFounder == nil && r.ShopSelf == nil && r.ShopCreator == nil && r.ShopCorp == nil
+		}
+		if r := rows[bLow]; r.GPRate != nil || r.Brand == nil || *r.Brand != "alpha" || !zero(r) {
+			t.Fatalf("%s: bLow %s, want alpha, gp null, shop kinds 0", name("bLow"), baJSON(r))
+		}
+		if r := rows[bB]; r.GPRate == nil || *r.GPRate != 0.2 || r.Tracked != nil || r.Matched != nil || !absent(r) {
+			t.Fatalf("%s: bB %s, want gp 0.2 (thresholds absent), conversions null, shop kinds null", name("bB"), baJSON(r))
 		}
 		if r := rows[bAB]; r.Brand != nil || r.GPRate != nil {
 			t.Fatalf("%s: bAB %s, want brand and gp null (two brands)", name("bAB"), baJSON(r))
 		}
-		if r := rows[jNull]; r.Sent == nil || *r.Sent != 2 || !r.ClientFloor {
-			t.Fatalf("%s: jNull %s, want sent 2, client_floor", name("jNull"), baJSON(r))
+		if r := rows[jNull]; r.Sent == nil || *r.Sent != 2 {
+			t.Fatalf("%s: jNull %s, want sent 2", name("jNull"), baJSON(r))
+		}
+
+		// I7 -- the D4 tier fields are gone from the response.
+		_, _, rawBody := matrix(admin, url.Values{})
+		for _, k := range []string{`"view_clients"`, `"client_floor"`} {
+			if regexp.MustCompile(regexp.QuoteMeta(k)).MatchString(rawBody) {
+				t.Fatalf("%s: the response still carries %s", name("tiers gone"), k)
+			}
 		}
 
 		// GP for a brands:get creator is the same value the admin sees.
@@ -413,16 +445,81 @@ func TestCampaignMatrixDB(t *testing.T) {
 		if r := byID(gpGot)[bIn]; r.GPRate == nil || *r.GPRate != 0.004 {
 			t.Fatalf("%s: alpha creator with brands:get: bIn %s", name("alphaGP"), baJSON(r))
 		}
+	}
+}
 
-		// I5 -- a journey's client_floor follows the WINDOW start, not started_at (stage-4 F1): with
-		// the floor before the window, the journeys started 90 days ago (and the unstarted one) clear.
-		clientStatsFloor = start(61)
-		_, flGot, _ := matrix(admin, url.Values{})
-		if r := byID(flGot); r[jIn].ClientFloor || r[jNull].ClientFloor || r[bLow].ClientFloor {
-			t.Fatalf("%s: floor before the window: jIn %s jNull %s bLow %s, want no client_floor",
-				name("floor"), baJSON(r[jIn]), baJSON(r[jNull]), baJSON(r[bLow]))
+// TestCampaignsIDFilterDB is integrations MATRIX-POLISH-SPEC I4: GET /api/campaigns?id=... lists only
+// those ids, ANDed with the permission scope and every other filter -- a list-scoped user cannot
+// reach a foreign id through it, and no id is today's result.
+func TestCampaignsIDFilterDB(t *testing.T) {
+	h := newLinkHarness(t)
+	h.app.pg = paginator.New(paginator.Opt{DefaultPerPage: 20, MaxPerPage: 50, NumPageNums: 10,
+		PageParam: "page", PerPageParam: "per_page", AllowAll: true})
+
+	listA := h.baList("Alpha", "public", "single")
+	listB := h.baList("Bravo", "public", "single")
+	campA := h.baCamp("On A", "finished", 1, listA)
+	campA2 := h.baCamp("Also on A", "draft", 0, listA)
+	campB := h.baCamp("On B", "finished", 1, listB)
+
+	list := func(u auth.User, q url.Values) []int {
+		t.Helper()
+		code, body := baCall(t, u, "/api/campaigns?"+q.Encode(), h.app.GetCampaigns)
+		if code != http.StatusOK {
+			t.Fatalf("campaigns %v: %d %s", q, code, body)
 		}
-		clientStatsFloor = start(12)
+		var resp struct {
+			Data struct {
+				Results []struct {
+					ID int `json:"id"`
+				} `json:"results"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("campaigns %v: %s: %v", q, body, err)
+		}
+		out := []int{}
+		for _, r := range resp.Data.Results {
+			out = append(out, r.ID)
+		}
+		sort.Ints(out)
+		return out
+	}
+	ints := func(v ...int) []int { sort.Ints(v); return v }
+	idq := func(ids ...int) url.Values {
+		q := url.Values{"no_body": {"true"}}
+		for _, id := range ids {
+			q.Add("id", fmt.Sprint(id))
+		}
+		return q
+	}
+
+	admin := baUser([]string{auth.PermCampaignsGetAll, auth.PermListGetAll})
+	alpha := baUser([]string{auth.PermCampaignsGet}, listA) // permittedLists = [A]
+
+	cases := []struct {
+		name string
+		u    auth.User
+		q    url.Values
+		want []int
+	}{
+		{"list-scoped user, foreign id -> empty", alpha, idq(campB), []int{}},
+		{"list-scoped user, own id -> it", alpha, idq(campA), ints(campA)},
+		{"list-scoped user, both -> only the permitted one", alpha, idq(campA, campB), ints(campA)},
+		{"list-scoped user, no id -> today's result", alpha, idq(), ints(campA, campA2)},
+		{"admin, two ids -> exactly those", admin, idq(campA, campB), ints(campA, campB)},
+		{"admin, no id -> today's result", admin, idq(), ints(campA, campA2, campB)},
+		{"admin, id ANDed with status", admin, func() url.Values { q := idq(campA, campA2); q.Add("status", "draft"); return q }(), ints(campA2)},
+		{"admin, id ANDed with list_id", admin, func() url.Values { q := idq(campA, campB); q.Add("list_id", fmt.Sprint(listB)); return q }(), ints(campB)},
+	}
+	for _, tc := range cases {
+		if got := list(tc.u, tc.q); !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s: ids %v, want %v", tc.name, got, tc.want)
+		}
+	}
+
+	if code, _ := baCall(t, admin, "/api/campaigns?id=x", h.app.GetCampaigns); code != http.StatusBadRequest {
+		t.Fatalf("id=x: %d, want 400", code)
 	}
 }
 

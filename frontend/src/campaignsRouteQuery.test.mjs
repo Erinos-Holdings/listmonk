@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import {
   CAMPAIGN_STATUSES, LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KINDS, SCOPE_KIND_PREF, afterBrandChange,
   campaignsRouteQuery, canSelectAll, deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen,
-  kindStatusParams, listParam, listSelectValue, pollsStats, preEnablesEvergreen, routeStatusAfter, routeStatusOf,
-  scopeKindPref, selectList,
+  kindStatusParams, listParam, listSelectValue, pollsStats, preEnablesEvergreen, routeEvergreen, routeIdsAfter,
+  routeIdsOf, routeStatusAfter, routeStatusOf, scopeKindPref, selectList, STATUS_CLEARING,
 } from './campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 
 test('I8: a numeric list_id string selects the list; garbage is ignored', () => {
@@ -265,4 +265,56 @@ test('POLISH3 D3: the poll follows displayed running BROADCASTS only (a running 
   assert.equal(displayedRunning([{ status: 'running', evergreen: true }, { status: 'running' }]), true);
   assert.equal(displayedRunning([{ status: 'finished', evergreen: false }]), false);
   assert.equal(displayedRunning(null), false);
+});
+
+// Fork (matrix polish, integrations MATRIX-POLISH-SPEC I5) -- the route id scope: route id -> query
+// state, kind All for the view with the pref untouched, select-all suppressed, cleared by the
+// STATUS_CLEARING interactions.
+test('MATRIX-POLISH I5: route id -> the id scope (one or repeated; garbage dropped, order kept)', () => {
+  assert.deepEqual(routeIdsOf({ id: '41' }), [41]);
+  assert.deepEqual(routeIdsOf({ id: ['57', '41', '57'] }), [57, 41]);
+  assert.deepEqual(routeIdsOf({ id: ['x', '0', '-3', '12'] }), [12]);
+  assert.equal(routeIdsOf({ id: ['x', ''] }), null);
+  assert.equal(routeIdsOf({}), null);
+  assert.equal(routeIdsOf(null), null);
+  // The Brand Usage link's whole query: id + evergreen=all; the list parse is untouched by id.
+  const q = { id: ['41', '57'], evergreen: 'all' };
+  assert.deepEqual(campaignsRouteQuery(q, false), { listID: null, routeListIDs: null, evergreen: null });
+  assert.deepEqual(kindStatusParams({ evergreen: null, routeStatus: null, routeIDs: routeIdsOf(q) }), { id: [41, 57] });
+  assert.deepEqual(kindStatusParams({ evergreen: false, routeStatus: null, routeIDs: null }), { evergreen: false });
+});
+
+test('MATRIX-POLISH I5: the kind is All for the id view, whatever the route/pref says; the pref is untouched', () => {
+  const pref = Object.freeze({ kind: 'broadcasts' });
+  assert.equal(routeEvergreen(false, [41]), null);
+  assert.equal(routeEvergreen(true, [41]), null);
+  assert.equal(routeEvergreen(false, null), false);
+  assert.equal(routeEvergreen(true, []), true);
+  // An id link with no evergreen param on a Broadcasts pref still lands on All.
+  const q = { id: '41' };
+  assert.equal(routeEvergreen(campaignsRouteQuery(q, false).evergreen, routeIdsOf(q)), null);
+  assert.equal(kindOfEvergreen(routeEvergreen(false, [41])), 'all');
+  assert.deepEqual(pref, { kind: 'broadcasts' });
+});
+
+test('MATRIX-POLISH I5: the id scope is a route scope -- "select all N" is never offered under it', () => {
+  const base = { total: 100, perPage: 20 };
+  assert.equal(canSelectAll(base), true);
+  assert.equal(canSelectAll({ ...base, routeIDs: [41, 57] }), false);
+  assert.equal(canSelectAll({ ...base, routeIDs: [] }), true);
+  assert.equal(canSelectAll({ ...base, routeIDs: routeIdsAfter([41], 'dismiss') }), true);
+});
+
+test('MATRIX-POLISH I5: cleared by exactly the STATUS_CLEARING interactions; others keep it', () => {
+  assert.deepEqual(STATUS_CLEARING, ['dismiss', 'list', 'brand', 'scope']);
+  STATUS_CLEARING.forEach((i) => assert.equal(routeIdsAfter([41, 57], i), null, i));
+  ['page', 'sort', 'search', undefined].forEach((i) => assert.deepEqual(routeIdsAfter([41, 57], i), [41, 57], String(i)));
+  assert.equal(routeIdsAfter(null, 'page'), null);
+  assert.equal(routeIdsAfter([], 'page'), null);
+  // The helpers write nothing.
+  const ids = Object.freeze([41]);
+  routeIdsAfter(ids, 'scope');
+  kindStatusParams({ routeIDs: ids });
+  canSelectAll({ total: 100, perPage: 20, routeIDs: ids });
+  assert.deepEqual(ids, [41]);
 });

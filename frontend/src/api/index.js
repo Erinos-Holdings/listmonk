@@ -536,7 +536,8 @@ export const getAnalyticsCampaigns = async (params) => http.get(
 
 // Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D10) -- the Campaign Matrix pane:
 // { window, gp, conversions, rows: [...] } (campaignMatrix.mjs reads it). params: { kind, list_id }.
-// camelCase: false -- the rows carry client tokens as keys (view_clients), never to be re-cased.
+// camelCase: false -- campaignMatrix.mjs reads the snake_case keys (hard_bounces, shop_founder, ...)
+// and gp_thresholds is a stored object passed through verbatim, never to be re-cased.
 export const getCampaignMatrix = async (params) => http.get(
   '/api/analytics/campaigns/matrix',
   { params, camelCase: false },

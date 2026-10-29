@@ -367,6 +367,30 @@ test('I3: broadcast cells link the brand set in the Broadcasts scope; Journeys t
   assert.equal(cellLink(ruze, 'purchase'), null);
 });
 
+// Fork (matrix polish, integrations MATRIX-POLISH-SPEC I6) -- Last broadcast opens the newest send
+// event's campaigns ({ id, evergreen: 'all' }) when the doc carries broadcasts.lastIds; without it
+// (a doc written before D10.1, or a malformed one) the old brand-lists link. Cadence is unchanged.
+test('MATRIX-POLISH I6: cellLink(row, lastBroadcast) -> { id } with lastIds, the old link without', () => {
+  const [ruze] = shapeRows(api, { lists });
+  const withIds = { ...ruze, usage: { ...ruze.usage, broadcasts: { ...ruze.usage.broadcasts, lastIds: [41, 57] } } };
+  assert.deepEqual(cellLink(withIds, 'lastBroadcast'), { id: ['41', '57'], evergreen: 'all' });
+  assert.equal(linkTip(withIds, 'lastBroadcast', t), 'dashboard.usage.lastBroadcastLinkHelp');
+  // Cadence keeps its brand-lists link and note.
+  assert.deepEqual(cellLink(withIds, 'cadence'), { evergreen: 'false', status: 'finished', list_id: ['3', '7', '12'] });
+  assert.equal(linkTip(withIds, 'cadence', t), 'dashboard.usage.broadcastLinkHelp');
+  // No lastIds (an older doc), an empty one or a malformed one: the old link.
+  const old = { evergreen: 'false', status: 'finished', list_id: ['3', '7', '12'] };
+  [undefined, [], [0], [3, 'x'], [1.5], 'nope'].forEach((v) => {
+    const r = { ...ruze, usage: { ...ruze.usage, broadcasts: { ...ruze.usage.broadcasts, lastIds: v } } };
+    assert.deepEqual(cellLink(r, 'lastBroadcast'), old, JSON.stringify(v));
+    assert.equal(linkTip(r, 'lastBroadcast', t), 'dashboard.usage.broadcastLinkHelp', JSON.stringify(v));
+  });
+  // A ZMA-dimmed row never links, lastIds or not.
+  const zma = shapeRows(api).find((r) => r.brand === 'oldzma');
+  const zmaIds = { ...zma, usage: { ...zma.usage, broadcasts: { ...(zma.usage.broadcasts || {}), lastIds: [5] } } };
+  assert.equal(cellLink(zmaIds, 'lastBroadcast'), null);
+});
+
 test('I3: a linked broadcast cell carries the brand-broadcasts note; nothing else does', () => {
   const [ruze, tg] = shapeRows(api, { lists });
   assert.equal(linkTip(ruze, 'cadence', t), 'dashboard.usage.broadcastLinkHelp');
