@@ -15,6 +15,7 @@
 // color. The tooltip always lists all four values for the hovered day, whatever is toggled.
 
 import { CLICKS_COLOR, headroomAxisMax } from './sendsClicksChart.mjs'; // eslint-disable-line import/extensions
+import { formatUsd } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
 export const CLICKS_FILL = '#f2c2a6';
 export const CONV_COLOR = '#166534';
@@ -23,8 +24,6 @@ export const UNITS = Object.freeze(['usd', 'orders']);
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const pick = (day, measure, unit) => num(day && day[measure] && day[measure][unit === 'usd' ? 'sales' : 'orders']);
-
-export const formatDollars = (n) => `$${num(n).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
 // clicks: [{date, count}]; conversions: [{date, tracked: {orders, sales}, matched: {orders, sales}}]
 // as GET /api/dashboard/charts returns them. Returns {} when there are no conversion days (no
@@ -101,7 +100,7 @@ export function conversionsAxisMax(conversions, { unit = 'usd', showTracked = fa
 // tooltipLines is the four values for one day, for the tooltip footer -- always all four, so the
 // overlay and the toggle only ever change what is drawn, never what can be read.
 export function tooltipLines(day, { matchedLabel, trackedLabel, ordersLabel }) {
-  const line = (label, measure) => `${label}: ${formatDollars(pick(day, measure, 'usd'))} · ${num(day && day[measure] && day[measure].orders).toLocaleString('en-US')} ${ordersLabel}`;
+  const line = (label, measure) => `${label}: ${formatUsd(pick(day, measure, 'usd'))} · ${num(day && day[measure] && day[measure].orders).toLocaleString('en-US')} ${ordersLabel}`;
   return day ? [line(matchedLabel, 'matched'), line(trackedLabel, 'tracked')] : [];
 }
 
@@ -119,7 +118,7 @@ export function clicksConversionsOptions({
     ticks: { precision: 0, color },
     ...extra,
   });
-  const convTicks = unit === 'usd' ? { callback: (v) => formatDollars(v) } : {};
+  const convTicks = unit === 'usd' ? { callback: (v) => formatUsd(v) } : {};
   return {
     interaction: { mode: 'index', intersect: false },
     plugins: {

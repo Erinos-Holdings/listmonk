@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   shapeClicksConversions, conversionsAxisMax, clicksConversionsOptions, tooltipLines, normalizeConvState,
-  loadConvState, saveConvState, formatDollars, CLICKS_FILL, CONV_COLOR, TRACKED_FILL, CONV_STORAGE_KEY,
+  loadConvState, saveConvState, CLICKS_FILL, CONV_COLOR, TRACKED_FILL, CONV_STORAGE_KEY,
 } from './clicksConversionsChart.mjs'; // eslint-disable-line import/extensions
 
 const labels = {
@@ -72,7 +72,6 @@ test('the tooltip always lists all four values, whatever is toggled; whole dolla
   assert.equal(opts.plugins.tooltip.filter({ dataset: { type: 'line' } }), false);
   assert.equal(opts.plugins.tooltip.filter({ dataset: { type: 'bar' } }), true);
   assert.equal(opts.scales.y1.ticks.callback(12509.38), '$12,509');
-  assert.equal(formatDollars(0), '$0');
 });
 
 test('# mode: plain integer ticks on the right axis, its title and numbers in the line color', () => {

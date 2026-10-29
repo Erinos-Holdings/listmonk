@@ -1,12 +1,12 @@
 // Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D8/D11). The pure half of the
 // Tracked and Matched cells on Campaign Analytics, the Dashboard Overview and the Brand Matrix:
-// orders, with sales underneath in grey, and the tooltip. Rendering only -- every rule (who is
+// the { orders, sales } texts (each surface lays them out) and the tooltip. Rendering only -- every rule (who is
 // covered, what an order is worth) is the integrations CampaignConversions Lambda's; the server
 // returns stored sums and the coverage verdict (null = not covered). No Vue, no DOM; tested by
 // conversionCells.test.mjs (node --test).
 //
 //   uncovered (null) -> '—'          (a missing campaign is not zero)
-//   covered, no rows -> 0 / $0.00     (a real zero)
+//   covered, no rows -> 0 / $0        (a real zero)
 //   no conversions doc at all -> '—' everywhere
 
 export const MEASURES = Object.freeze(['tracked', 'matched']);
@@ -44,7 +44,7 @@ export function normalizeMeta(m) {
   };
 }
 
-// formatUsd is a dollar figure with cents ("$1,234.50").
+// formatUsd is a whole-dollar figure ("$1,235"); the CSV export keeps cents (conversionOrders.mjs).
 export function formatUsd(n) {
   return `$${num(n).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }

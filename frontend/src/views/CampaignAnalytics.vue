@@ -821,12 +821,17 @@ export default Vue.extend({
       if (!this.conversions.params) {
         return;
       }
+      // A response for an older selection is dropped (Stage 4b F1): params is replaced on every
+      // campaign or date change, so only the read for the current params may land.
+      const { params } = this.conversions;
       this.conversions.ordersLoading = true;
-      this.$api.getCampaignConversionOrders(this.conversions.params).then((data) => {
+      this.$api.getCampaignConversionOrders(params).then((data) => {
+        if (params !== this.conversions.params) return;
         this.conversions.orders = shapeOrderRows(data);
+        this.conversions.ordersLoading = false;
       }).catch(() => {
+        if (params !== this.conversions.params) return;
         this.conversions.orders = [];
-      }).finally(() => {
         this.conversions.ordersLoading = false;
       });
     },
@@ -844,7 +849,8 @@ export default Vue.extend({
 
     // The CSV of the drill-down's rows (all of them, in the table's order), saved in the browser.
     downloadConversionOrders() {
-      const blob = new Blob([toCsv(this.conversionOrderRows)], { type: 'text/csv;charset=utf-8' });
+      // A UTF-8 byte-order mark first, so Excel reads non-ASCII campaign names as UTF-8 (Stage 4b F2).
+      const blob = new Blob(['﻿', toCsv(this.conversionOrderRows)], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

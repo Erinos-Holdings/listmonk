@@ -88,8 +88,9 @@ const csvField = (v) => {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-// A spreadsheet treats a cell beginning with = + - @ (or a tab/CR) as a formula; campaign names are
-// user-typed, so such a cell is prefixed with an apostrophe (OWASP CSV injection guidance).
+// A spreadsheet treats a cell beginning with = + - @ (or a tab/CR) as a formula, so every text
+// column (the order id and the user-typed campaign name) is prefixed with an apostrophe when it
+// starts with one (OWASP CSV injection guidance; Stage 4b F3).
 const safeText = (s) => (/^[=+\-@\t\r]/.test(s) ? `'${s}` : s);
 
 // toCsv is the drill-down as CSV text (header + one line per row, CRLF), sales in cents precision so
@@ -99,7 +100,7 @@ export function toCsv(rows) {
   (rows || []).forEach((r) => {
     const at = Date.parse(r.purchased_at);
     lines.push([
-      r.order_id,
+      safeText(r.order_id),
       Number.isFinite(at) ? new Date(at).toISOString() : '',
       r.campaign_id,
       safeText(r.campaign_name),

@@ -545,7 +545,7 @@
     "dashboard.conversionsChart.orders": "Matched orders",
     "dashboard.conversionsChart.ordersUnit": "orders",
     "dashboard.conversionsChart.showTracked": "Show Tracked",
-    "dashboard.conversionsChart.note": "Daily, Mountain time, by purchase date. Matched: paid orders within 5 days after an email click (the line). Tracked: UTM-attributed orders from the BI export (the shaded area, when shown) -- the gap between them is tracking lost between click and checkout. Recent days fill in as orders arrive. Attributed, not incremental.",
+    "dashboard.conversionsChart.note": "Daily, Mountain time, by purchase date. Matched: paid orders within 5 days after an email click (the line). Tracked: UTM-attributed orders from the BI export (the shaded area, when shown) — the gap between them is tracking lost between click and checkout. Recent days fill in as orders arrive. Attributed, not incremental.",
     "dashboard.clientsClickEvents": "Click events",
     "dashboard.clientsViewEvents": "View events",
     "dashboard.clientsWindow": "The 31 days up to the latest view (views) and the latest click (clicks). Counts here are events, not people — one person clicking three links is three — whereas the Overview above counts one clicker per subscriber per campaign.",

@@ -70,6 +70,8 @@ test('CSV: header, UTC times, cents, yes/no, quoting, formula-safe names, CRLF',
   assert.equal(lines[1], 'a,2026-10-22T05:00:00.000Z,217,"Say ""hi"", all",0,12.35,yes,yes');
   assert.equal(lines[2], 'b,2026-10-24T01:00:00.000Z,217,"\'=HYPERLINK(""x"")",,10.00,yes,no');
   assert.equal(lines[3], '');
+  // Every text column is formula-safe, the order id included.
+  assert.equal(toCsv(shapeOrderRows([row('=cmd', '2026-10-22T05:00:00Z')])).split('\r\n')[1].split(',')[0], "'=cmd");
   assert.equal(toCsv([]), 'order_id,purchased_at_utc,campaign_id,campaign_name,day_after_send,sales_usd,tracked,matched\r\n');
 });
 
