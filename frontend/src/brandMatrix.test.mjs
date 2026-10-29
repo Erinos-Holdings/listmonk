@@ -434,7 +434,7 @@ test('I2: the fork source carries no numeric threshold literal (code lines of br
 
 // Integrations CAMPAIGN-CONVERSIONS-SPEC D11/D12 (I9's client half): the Tracked and Matched
 // columns are counts (the mode never changes them), sortable, and the totals row is their sum.
-test('conversions: shaped, summed into All brands, sorted by orders in both modes', () => {
+test('conversions: shaped, summed into All brands; %/$ shows and sorts by sales, # by orders', () => {
   const rows = shapeRows([
     {
       brand: 'a', sent: 100, tracked: { orders: 2, sales_usd: 10.5 }, matched: { orders: 5, sales_usd: 20 },
@@ -446,9 +446,10 @@ test('conversions: shaped, summed into All brands, sorted by orders in both mode
   const t = totalsRow(rows);
   assert.deepEqual(conversionValue(t, 'tracked'), { orders: 9, sales_usd: 11.5 });
   assert.deepEqual(conversionValue(t, 'matched'), { orders: 5, sales_usd: 20 });
-  ['pct', 'num'].forEach((mode) => {
-    assert.equal(displayValue(rows[0], 'tracked', mode), 2);
-    assert.deepEqual(sortRows(rows, { field: 'tracked', order: 'desc' }, mode).map((r) => r.brand), ['b', 'a']);
-  });
+  assert.equal(displayValue(rows[0], 'tracked', 'pct'), 10.5);
+  assert.equal(displayValue(rows[0], 'tracked', 'num'), 2);
+  // a has more sales (10.5 vs 1), b more orders (7 vs 2): the mode decides the order.
+  assert.deepEqual(sortRows(rows, { field: 'tracked', order: 'desc' }, 'pct').map((r) => r.brand), ['a', 'b']);
+  assert.deepEqual(sortRows(rows, { field: 'tracked', order: 'desc' }, 'num').map((r) => r.brand), ['b', 'a']);
   assert.deepEqual(clickSort(DEFAULT_STATE.sort, 'matched'), { field: 'matched', order: 'desc' });
 });

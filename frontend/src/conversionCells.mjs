@@ -46,7 +46,7 @@ export function normalizeMeta(m) {
 
 // formatUsd is a dollar figure with cents ("$1,234.50").
 export function formatUsd(n) {
-  return `$${num(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `$${num(n).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
 // conversionCell is a cell's { orders, sales } text. A null value (not covered, or no doc) is

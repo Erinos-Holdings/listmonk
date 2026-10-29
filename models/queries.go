@@ -137,6 +137,7 @@ type Queries struct {
 	GetExistingCampaignIDs      *sqlx.Stmt `query:"get-existing-campaign-ids"`
 	ExportCampaignClicksKeyset  *sqlx.Stmt `query:"export-campaign-clicks-keyset"`
 	GetCampaignConversions      *sqlx.Stmt `query:"get-campaign-conversions"`
+	GetCampaignConversionOrders *sqlx.Stmt `query:"get-campaign-conversion-orders"`
 
 	// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D3) -- interpolated on
 	// boot with the link counts' counted expression.

@@ -87,6 +87,19 @@ func (c *Core) ReplaceCampaignConversions(measure string, rows json.RawMessage) 
 	return n, nil
 }
 
+// GetCampaignConversionOrders returns the stored orders behind the requested campaigns' Tracked
+// and Matched totals with purchased_at in [from, to], one row per (order, campaign), newest first.
+// The dates are validated by the caller.
+func (c *Core) GetCampaignConversionOrders(campIDs []int, fromDate, toDate string) (types.JSONText, error) {
+	var out types.JSONText
+	if err := c.q.GetCampaignConversionOrders.Get(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
+		c.log.Printf("error fetching campaign conversion orders: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
 // GetCampaignAnalyticsConversions returns, per requested campaign, the Tracked and Matched orders and
 // sales with purchased_at in [from, to] (NULL for a measure the latest conversions doc does not
 // cover), with the doc's asOf, floors and trackedStale. The dates are validated by the caller.

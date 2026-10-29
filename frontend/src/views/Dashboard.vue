@@ -46,7 +46,7 @@
         <b-field class="mb-0">
           <b-radio-button v-model="matrix.mode" native-value="pct" size="is-small" type="is-primary"
             data-cy="matrix-mode-pct" @input="onMatrixMode">
-            {{ $t('dashboard.matrix.pct') }}
+            {{ $t('dashboard.matrix.pctUsd') }}
           </b-radio-button>
           <b-radio-button v-model="matrix.mode" native-value="num" size="is-small" type="is-primary"
             data-cy="matrix-mode-num" @input="onMatrixMode">
@@ -56,7 +56,7 @@
       </div>
       <!-- 2026-10-24 layout pass (user ask): a hand-rolled table so the spreadsheet-style group
            headers exist (Buefy's b-table has no grouped header row) -- Health far left, then
-           Brand and Messages Sent, the Engagement section (incl. GP Spam %) before Subscribers,
+           Brand and Sent, the Engagement section (incl. GP S%), Conversions, then Subscribers,
            each section tinted, the sorted column emphasized. Sorting is clickSort; the spam
            cell's class/style/tooltip stay brandMatrix.mjs::spamCell (GP-SPAM-VISIBILITY D3). -->
       <div class="table-container">
@@ -67,12 +67,13 @@
               <th :colspan="matrixEngCells.length" class="bm-eng bm-group">
                 {{ $t('dashboard.matrix.engagement') }}
               </th>
-              <th :colspan="matrixSubColumns.length" class="bm-subs bm-group">
-                {{ $tc('globals.terms.subscriber', 2) }}
-              </th>
-              <!-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -->
+              <!-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- between
+                   Engagement and Subscribers (2026-10-29). -->
               <th :colspan="conversionFields.length" class="bm-eng bm-group">
                 {{ $t('analytics.conversions.title') }}
+              </th>
+              <th :colspan="matrixSubColumns.length" class="bm-subs bm-group">
+                {{ $tc('globals.terms.subscriber', 2) }}
               </th>
             </tr>
             <tr>
@@ -89,16 +90,16 @@
                 :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
                 {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
               </th>
-              <th v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right"
-                :class="bmTh(c.field)" :title="c.help ? $t(c.help) : null"
-                :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
-                {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
-              </th>
-              <!-- CAMPAIGN-CONVERSIONS-SPEC D11 -- always counts (the %|# toggle never applies). -->
+              <!-- CAMPAIGN-CONVERSIONS-SPEC D11 -- the %/$ mode shows sales, the # mode orders. -->
               <th v-for="f in conversionFields" :key="f" class="bm-eng has-text-right"
                 :class="bmTh(f)" :title="conversionTip(f, matrix.conversions)"
                 :aria-sort="bmAria(f)" @click="onMatrixSort(f)" :data-cy="`matrix-head-${f}`">
                 {{ $t(`analytics.conversions.${f}`) }}<span class="bm-arrow">{{ bmArrow(f) }}</span>
+              </th>
+              <th v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right"
+                :class="bmTh(c.field)" :title="c.help ? $t(c.help) : null"
+                :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
+                {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
               </th>
             </tr>
           </thead>
@@ -124,13 +125,12 @@
                 <span v-else :class="engagementCell(row, c.field).cls || null" :title="c.help ? $t(c.help) : null"
                   :data-cy="`matrix-${c.field}-${row.brand || 'totals'}`">{{ matrixCell(row, c.field) }}</span>
               </td>
-              <td v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right" :class="bmTd(c.field)">
-                {{ matrixCell(row, c.field) }}
-              </td>
               <td v-for="f in conversionFields" :key="f" class="bm-eng has-text-right" :class="bmTd(f)"
                 :title="conversionTip(f, matrix.conversions)" :data-cy="`matrix-${f}-${row.brand || 'totals'}`">
-                {{ matrixConversion(row, f).orders }}
-                <div v-if="matrixConversion(row, f).sales" class="is-size-7 has-text-grey">{{ matrixConversion(row, f).sales }}</div>
+                {{ matrixConversionText(row, f) }}
+              </td>
+              <td v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right" :class="bmTd(c.field)">
+                {{ matrixCell(row, c.field) }}
               </td>
             </tr>
             <tr v-if="!matrix.loading && !matrixTableRows.length">
@@ -388,12 +388,12 @@
                         <span class="pl-label">{{ $t(l.label) }}</span>
                       </li>
                       <!-- Fork (campaign conversions, CAMPAIGN-CONVERSIONS-SPEC D11) -- Tracked and
-                           Matched over the pane's C, lifetime from each measure's floor; orders,
-                           sales in grey. -->
+                           Matched over the pane's C, lifetime from each measure's floor; sales in
+                           the wide rate column, orders beside the label. -->
                       <li v-for="c in overviewConversions" :key="c.key" :title="c.tip"
                         :data-cy="`conversions-${c.key}`">
-                        <span class="pl-pct">{{ c.cell.orders }}</span>
-                        <span class="pl-count">{{ c.cell.sales }}</span>
+                        <span class="pl-pct">{{ c.cell.sales }}</span>
+                        <span class="pl-count">{{ c.cell.orders }}</span>
                         <span class="pl-label">{{ $t(`analytics.conversions.${c.key}`) }}</span>
                       </li>
                     </ul>
@@ -486,6 +486,40 @@
             </article>
           </div>
 
+          <!-- Fork (campaign conversions, CAMPAIGN-CONVERSIONS-SPEC D11 follow-up): Clicks bars and
+               the Matched conversions line by Mountain purchase day on the same window, $ by default
+               (the $|# toggle switches to orders) and an optional light Tracked fill beneath the
+               line (clicksConversionsChart.mjs). Nothing renders until a conversions doc exists. -->
+          <div v-if="clicksConversionsChart.datasets" class="tile is-parent relative">
+            <b-loading v-if="isChartsLoading" active :is-full-page="false" />
+            <article class="tile is-child notification charts" data-cy="clicks-conversions">
+              <div class="is-flex is-align-items-center is-justify-content-space-between mb-2">
+                <h3 class="title is-size-6 mb-0">
+                  {{ $t('dashboard.conversionsChart.title') }}
+                </h3>
+                <div class="is-flex is-align-items-center">
+                  <b-field class="mb-0 mr-4">
+                    <b-radio-button v-model="conv.unit" native-value="usd" size="is-small" type="is-primary"
+                      data-cy="conversions-unit-usd" @input="onConvToggle">
+                      $
+                    </b-radio-button>
+                    <b-radio-button v-model="conv.unit" native-value="orders" size="is-small" type="is-primary"
+                      data-cy="conversions-unit-orders" @input="onConvToggle">
+                      #
+                    </b-radio-button>
+                  </b-field>
+                  <b-checkbox v-model="conv.showTracked" size="is-small" data-cy="conversions-show-tracked"
+                    @input="onConvToggle">
+                    {{ $t('dashboard.conversionsChart.showTracked') }}
+                  </b-checkbox>
+                </div>
+              </div>
+              <chart type="line" :data="clicksConversionsChart" :options="clicksConversionsOptions"
+                data-cy="clicks-conversions-chart" />
+              <p class="is-size-7 has-text-grey" data-cy="conversions-chart-note">{{ $t('dashboard.conversionsChart.note') }}</p>
+            </article>
+          </div>
+
           <!-- Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4): views and clicks per
                country over the client panel's window, scope and RAW row count (the Analytics
                Location table dedupes under individual tracking -- a recorded divergence). Rows
@@ -527,7 +561,7 @@
                counts and charts. -->
           <div class="tile is-parent relative">
             <b-loading v-if="clients.loading" active :is-full-page="false" />
-            <article class="tile is-child notification" data-cy="clients">
+            <article class="tile is-child notification clients-panel" data-cy="clients">
               <div class="columns is-mobile">
                 <div class="column">
                   <h3 class="title is-size-6">{{ $t('analytics.clients') }}</h3>
@@ -539,12 +573,10 @@
                   <span :class="{ 'has-text-grey': props.row.unknown }" :title="clientRosterTip(props.row.client)">{{ props.row.name }}</span>
                 </b-table-column>
                 <b-table-column v-slot="props" field="views" :label="$t('dashboard.clientsViewEvents')" numeric sortable>
-                  {{ $utils.formatNumber(props.row.views) }}
-                  <span v-if="clientShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ clientShare(props.row.views, 'views') }})</span>
+                  {{ $utils.formatNumber(props.row.views) }}<span class="cl-share is-size-7 has-text-grey">{{ shareText(props.row.views, 'views') }}</span>
                 </b-table-column>
                 <b-table-column v-slot="props" field="clicks" :label="$t('dashboard.clientsClickEvents')" numeric sortable>
-                  {{ $utils.formatNumber(props.row.clicks) }}
-                  <span v-if="clientShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ clientShare(props.row.clicks, 'clicks') }})</span>
+                  {{ $utils.formatNumber(props.row.clicks) }}<span class="cl-share is-size-7 has-text-grey">{{ shareText(props.row.clicks, 'clicks') }}</span>
                 </b-table-column>
                 <!-- BRAND-USAGE-V2-SPEC D8: no Combined column on the Dashboard (Campaign Analytics
                      keeps its own). -->
@@ -560,15 +592,15 @@
                 <thead>
                   <tr>
                     <th>{{ $t('analytics.clientsTier') }}</th>
-                    <th class="has-text-right">{{ $t('dashboard.clientsViewEvents') }}</th>
-                    <th class="has-text-right">{{ $t('dashboard.clientsClickEvents') }}</th>
+                    <th class="has-text-right">{{ $t('dashboard.clientsViewEvents') }}<span class="cl-share is-size-7" /></th>
+                    <th class="has-text-right">{{ $t('dashboard.clientsClickEvents') }}<span class="cl-share is-size-7" /></th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="t in clientTierRows" :key="t.key">
                     <td>{{ t.name }}</td>
-                    <td class="has-text-right">{{ $utils.formatNumber(t.views) }}</td>
-                    <td class="has-text-right">{{ $utils.formatNumber(t.clicks) }}</td>
+                    <td class="has-text-right">{{ $utils.formatNumber(t.views) }}<span class="cl-share is-size-7" /></td>
+                    <td class="has-text-right">{{ $utils.formatNumber(t.clicks) }}<span class="cl-share is-size-7" /></td>
                   </tr>
                 </tbody>
               </table>
@@ -595,6 +627,9 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import Chart from '../components/Chart.vue';
 import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsClicksChart.mjs'; // eslint-disable-line import/extensions
+import {
+  clicksConversionsOptions, conversionsAxisMax, loadConvState, saveConvState, shapeClicksConversions,
+} from '../clicksConversionsChart.mjs'; // eslint-disable-line import/extensions
 import DashboardSes from './DashboardSes.vue';
 import HealthChip from '../components/HealthChip.vue';
 import {
@@ -665,6 +700,12 @@ export default Vue.extend({
       isCountsLoading: true,
       sendsClicksChart: null,
       clicksMax: undefined,
+      // Fork (campaign conversions, the Clicks + conversions chart) -- the fetched daily series and
+      // the chart's $|# unit and Show Tracked overlay, per browser session
+      // (sessionStorage key dashboard.conversionsChart; a fresh session is $ with Tracked off).
+      chartClicks: [],
+      chartConversions: [],
+      conv: loadConvState(sessionStore(typeof window !== 'undefined' ? window : null)),
       counts: {
         lists: {},
         subscribers: {},
@@ -836,6 +877,13 @@ export default Vue.extend({
       return scopedCell(conversionValue(row, field), this.matrix.conversions, (n) => this.$utils.formatNumber(n));
     },
 
+    // One figure per mode (2026-10-29): whole-dollar sales under %/$, orders under #; '—' with no
+    // doc (the sales text is '' then, so fall back to the orders text, which is the dash).
+    matrixConversionText(row, field) {
+      const c = this.matrixConversion(row, field);
+      return this.matrix.mode === 'num' ? c.orders : (c.sales || c.orders);
+    },
+
     // The Tracked/Matched tooltip (definition, floor, as-of, stale note) -- conversionCells.mjs.
     conversionTip(measure, meta) {
       return conversionTooltip(measure, meta, (k, p) => this.$t(k, p));
@@ -941,6 +989,8 @@ export default Vue.extend({
         this.isChartsLoading = false;
         this.sendsClicksChart = this.makeSendsClicks(data);
         this.clicksMax = clicksAxisMax(data.clicks);
+        this.chartClicks = data.clicks || [];
+        this.chartConversions = data.conversions || [];
       });
 
       this.fetchClients(params);
@@ -990,9 +1040,20 @@ export default Vue.extend({
       return rateCell(n, this.clientTotalsSum[field], 1).pct;
     },
 
+    // The share in its fixed-width slot, parenthesized, or '' (the slot stays, so counts align).
+    shareText(n, field) {
+      const pct = this.clientShare(n, field);
+      return pct ? `(${pct})` : '';
+    },
+
     clientRosterTip(token) {
       const ids = rosterFor(token);
       return ids.length ? this.$t('analytics.clientsRoster', { ids: ids.join(', ') }) : '';
+    },
+
+    // The Clicks + conversions chart's toggles, saved for the session.
+    onConvToggle() {
+      saveConvState(sessionStore(window), this.conv);
     },
 
     // The one Sends + Clicks chart (sendsClicksChart.mjs aligns the two by date).
@@ -1013,6 +1074,33 @@ export default Vue.extend({
     sendsClicksOptions() {
       return sendsClicksOptions({
         sendsLabel: this.$t('dashboard.sends'), clicksLabel: this.$t('dashboard.clicks'), clicksMax: this.clicksMax,
+      });
+    },
+
+    // Fork (campaign conversions) -- the Clicks + conversions chart and its options; both re-shape
+    // from the fetched series when a toggle changes (no refetch). {} (nothing drawn) with no doc.
+    clicksConversionsChart() {
+      return shapeClicksConversions(this.chartClicks, this.chartConversions, {
+        labelOf: (d) => dayjs(d).format('DD MMM'),
+        clicksLabel: this.$t('dashboard.clicks'),
+        matchedLabel: this.$t('analytics.conversions.matched'),
+        trackedLabel: this.$t('analytics.conversions.tracked'),
+        unit: this.conv.unit,
+        showTracked: this.conv.showTracked,
+      });
+    },
+
+    clicksConversionsOptions() {
+      return clicksConversionsOptions({
+        clicksLabel: this.$t('dashboard.clicks'),
+        axisLabel: this.$t(this.conv.unit === 'usd' ? 'dashboard.conversionsChart.sales' : 'dashboard.conversionsChart.orders'),
+        unit: this.conv.unit,
+        convMax: conversionsAxisMax(this.chartConversions, this.conv),
+        dates: this.clicksConversionsChart.dates || [],
+        byDate: new Map(this.chartConversions.map((d) => [d.date, d])),
+        matchedLabel: this.$t('analytics.conversions.matched'),
+        trackedLabel: this.$t('analytics.conversions.tracked'),
+        ordersLabel: this.$t('dashboard.conversionsChart.ordersUnit'),
       });
     },
 

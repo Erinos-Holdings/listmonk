@@ -16,14 +16,14 @@ test('uncovered (null) renders a dash, never a zero', () => {
 });
 
 test('covered with no rows renders a real zero', () => {
-  assert.deepEqual(conversionCell({ orders: 0, sales_usd: 0 }), { orders: '0', sales: '$0.00' });
+  assert.deepEqual(conversionCell({ orders: 0, sales_usd: 0 }), { orders: '0', sales: '$0' });
 });
 
-test('covered with rows: orders, then sales in dollars', () => {
-  assert.deepEqual(conversionCell({ orders: 1234, sales_usd: 5678.5 }), { orders: '1,234', sales: '$5,678.50' });
+test('covered with rows: orders, then sales in whole dollars', () => {
+  assert.deepEqual(conversionCell({ orders: 1234, sales_usd: 5678.5 }), { orders: '1,234', sales: '$5,679' });
   // The camelCased dashboard counts carry salesUsd.
-  assert.deepEqual(conversionCell({ orders: 2, salesUsd: 3 }), { orders: '2', sales: '$3.00' });
-  assert.equal(formatUsd(0.1 + 0.2), '$0.30');
+  assert.deepEqual(conversionCell({ orders: 2, salesUsd: 3 }), { orders: '2', sales: '$3' });
+  assert.equal(formatUsd(12509.38), '$12,509');
 });
 
 test('Campaign Analytics: one campaign uncovered for a measure shows a dash for it', () => {
@@ -40,8 +40,8 @@ test('Campaign Analytics: sums over covered campaigns only', () => {
   assert.deepEqual(sumCovered(campaigns, 'tracked'), { orders: 2, sales: 10 });
   assert.deepEqual(sumCovered(campaigns, 'matched'), { orders: 4, sales: 10.25 });
   const c = analyticsCells({ ...META, campaigns });
-  assert.deepEqual(c.tracked, { orders: '2', sales: '$10.00' });
-  assert.deepEqual(c.matched, { orders: '4', sales: '$10.25' });
+  assert.deepEqual(c.tracked, { orders: '2', sales: '$10' });
+  assert.deepEqual(c.matched, { orders: '4', sales: '$10' });
 });
 
 test('no conversions doc: every cell is a dash', () => {

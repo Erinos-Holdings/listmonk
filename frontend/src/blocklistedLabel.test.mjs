@@ -8,8 +8,9 @@ import { readFileSync } from 'node:fs';
 
 const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
 
-test('I1: the blocklisted-count labels read "Blocklisted"', () => {
-  assert.equal(en['dashboard.matrix.blocked'], 'Blocklisted');
+test('I1: the blocklisted-count labels read "Blocklisted" (the Matrix abbreviates it "Blockl")', () => {
+  // The Matrix header is abbreviated by user request (2026-10-29) -- still never "Blocked"/"Block".
+  assert.equal(en['dashboard.matrix.blocked'], 'Blockl');
   assert.equal(en['lists.grid.blocked'], 'Blocklisted');
   // "Blocks" stays the bounce-class column.
   assert.equal(en['dashboard.matrix.blocks'], 'Blocks');

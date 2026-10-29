@@ -1015,6 +1015,17 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{out})
 	}
 
+	// Fork (campaign conversions, 2026-10-29) -- the orders behind those totals, the Conversions
+	// card's drill-down and CSV. Same place, so the same permission loop and date check.
+	if typ == "conversion_orders" {
+		out, err := a.core.GetCampaignConversionOrders(ids, from, to)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Get the analytics numbers from the DB for the campaigns.
 	out, err := a.core.GetCampaignAnalyticsCounts(ids, typ, from, to)
 	if err != nil {

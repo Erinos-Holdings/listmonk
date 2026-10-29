@@ -956,6 +956,40 @@ section.dashboard {
     }
   }
 
+  /* Fork (2026-10-29). The Email clients panel's two tables (clients, then trust tiers) share one
+  column grid -- fixed layout, the same widths -- and every count is followed by a fixed-width
+  share slot (empty on the tier rows), so the counts in both tables end on the same edge and the
+  headers sit over them. */
+  .clients-panel {
+    table {
+      table-layout: fixed;
+      width: 100%;
+    }
+    th:nth-child(1), td:nth-child(1) {
+      width: 50%;
+    }
+    th:nth-child(n+2), td:nth-child(n+2) {
+      width: 25%;
+    }
+    td, th {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    /* Right-aligned in tabular figures: every share has one decimal digit, so "(2.3%)" and
+    "(12.0%)" end on the same edge and their decimal points line up. */
+    .cl-share {
+      display: inline-block;
+      width: 3.75rem;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    /* b-table draws its own numeric header (label + sort arrow, right-aligned in .th-wrap, which
+    carries is-numeric): the same slot as right padding puts that label over the counts too. */
+    .th-wrap.is-numeric {
+      padding-right: 3.75rem;
+    }
+  }
+
   /* Fork (brand matrix, integrations BRAND-MATRIX-SPEC D6; 2026-10-24 layout pass). The Brand
   Matrix table: tabular figures; the spreadsheet-style group header row; a subtle tint per
   section (Engagement warm -- it is the pane's point -- Subscribers cool); the sorted column a
@@ -1550,6 +1584,95 @@ section.analytics {
   .charts {
     position: relative;
     min-height: 100px;
+  }
+
+  // Fork (campaign conversions, 2026-10-29) -- the Conversions card: conversion is what the page
+  // comes down to, so it gets a container. A soft green tint with a deep green accent edge (the
+  // Dashboard's conversions-chart green, money), the two measures side by side a modest gap apart
+  // with a hairline between them, sales in bold deep green, the order count beneath in the body
+  // text color at the same size.
+  .conversions-card {
+    background: #f0f7f2;
+    border: 1px solid #cfe5d6;
+    border-left: 4px solid #166534;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem 1rem;
+
+    h4 {
+      color: #166534;
+      margin-bottom: 0.75rem;
+    }
+    .conv-measures {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .conv-measure + .conv-measure {
+      border-left: 1px solid #cfe5d6;
+      padding-left: 2.5rem;
+    }
+    .heading {
+      color: #3f6b4f;
+      letter-spacing: 0.08em;
+    }
+    .conv-sales {
+      color: #14532d;
+      font-variant-numeric: tabular-nums;
+    }
+    .conv-orders {
+      color: #363636;
+      font-variant-numeric: tabular-nums;
+    }
+    .conv-hint {
+      color: #4a6b56;
+      margin-bottom: 0;
+    }
+
+    // The drill-down: a white panel inside the card; the arrivals strip as small green bars (D0..D6+),
+    // each with its count above and its day label below.
+    .conv-toggle {
+      background: #fff;
+      border-color: #cfe5d6;
+      color: #166534;
+    }
+    .conv-orders-panel {
+      background: #fff;
+      border: 1px solid #cfe5d6;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+    }
+    .conv-arrivals {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.6rem;
+    }
+    .conv-arrival {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 1.75rem;
+    }
+    .conv-arrival-count {
+      font-size: 0.75rem;
+      font-weight: bold;
+      color: #14532d;
+      font-variant-numeric: tabular-nums;
+    }
+    .conv-arrival-bar {
+      display: block;
+      width: 100%;
+      background: #166534;
+      border-radius: 2px 2px 0 0;
+    }
+    .conv-arrival-label {
+      font-size: 0.7rem;
+      color: #4a6b56;
+      margin-top: 0.15rem;
+    }
+    .conv-orders-table td {
+      font-variant-numeric: tabular-nums;
+    }
   }
 
   .chart {

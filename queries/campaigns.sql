@@ -639,6 +639,26 @@ INSERT INTO campaign_conversions (measure, order_id, campaign_id, brand, purchas
 -- name: get-existing-campaign-ids
 SELECT id FROM campaigns WHERE id = ANY($1::INT[]);
 
+-- name: get-campaign-conversion-orders
+-- Fork (campaign conversions, 2026-10-29 drill-down) -- the stored orders behind the Conversions card,
+-- one row per (order, campaign) for the requested campaigns with purchased_at in [$2, $3], the
+-- measures that credit it (tracked, matched), its brand-only sales, and the campaign's name, start
+-- and evergreen flag (the page derives the day after send). Newest first, capped at 5000 rows.
+-- Stored rows only, no rule; no subscriber data is stored, so none is returned.
+SELECT COALESCE(JSON_AGG(r), '[]') FROM (
+    SELECT cc.order_id, cc.campaign_id, c.name AS campaign_name, c.started_at, c.evergreen,
+        MIN(cc.purchased_at) AS purchased_at,
+        BOOL_OR(cc.measure = 'tracked') AS tracked,
+        BOOL_OR(cc.measure = 'matched') AS matched,
+        MAX(cc.sales_usd) AS sales_usd
+    FROM campaign_conversions cc
+    JOIN campaigns c ON (c.id = cc.campaign_id)
+    WHERE cc.campaign_id = ANY($1::INT[]) AND cc.purchased_at >= $2::TIMESTAMPTZ AND cc.purchased_at <= $3::TIMESTAMPTZ
+    GROUP BY cc.order_id, cc.campaign_id, c.name, c.started_at, c.evergreen
+    ORDER BY MIN(cc.purchased_at) DESC, cc.order_id
+    LIMIT 5000
+) r;
+
 -- name: get-campaign-conversions
 -- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7/D8) -- per requested campaign,
 -- the Tracked and Matched orders and sales with purchased_at in [$2, $3], NULL for a measure the latest

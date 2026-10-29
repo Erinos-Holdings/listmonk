@@ -60,20 +60,84 @@
 
     <!-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- the Tracked and
          Matched header cells over the selected campaigns and date range (by purchase time), summed
-         over the covered campaigns; '—' when none is covered (or no conversions doc exists). Orders,
-         sales underneath in grey; the definitions are in the hover. -->
-    <section v-if="conversions.fetched" class="conversions mt-5 relative" data-cy="conversions">
+         over the covered campaigns; '—' when none is covered (or no conversions doc exists). Sales
+         (whole dollars) in bold, the order count beneath at the same size, not bold (2026-10-29); the
+         definitions are in the hover. -->
+    <section v-if="conversions.fetched" class="conversions conversions-card mt-5 relative" data-cy="conversions">
       <b-loading v-if="conversions.loading" active :is-full-page="false" />
       <h4>{{ $t('analytics.conversions.title') }}</h4>
-      <div class="columns is-mobile">
-        <div v-for="m in conversionHeaderCells" :key="m.key" class="column is-3" :title="m.tip"
+      <div class="conv-measures">
+        <div v-for="m in conversionHeaderCells" :key="m.key" class="conv-measure" :title="m.tip"
           :data-cy="`conversions-${m.key}`">
           <p class="heading">{{ $t(`analytics.conversions.${m.key}`) }}</p>
-          <p class="title is-4">{{ m.cell.orders }}</p>
-          <p class="is-size-7 has-text-grey">{{ m.cell.sales }}</p>
+          <!-- Not covered: sales is '' and orders is the dash -- the dash goes on top, nothing below. -->
+          <p class="title is-4 mb-2 conv-sales">{{ m.cell.sales || m.cell.orders }}</p>
+          <p v-if="m.cell.sales" class="title is-4 has-text-weight-normal conv-orders">
+            {{ m.cell.orders }} {{ $tc('analytics.conversions.orders', m.cell.orders === '1' ? 1 : 2) }}
+          </p>
         </div>
       </div>
-      <p class="is-size-7 has-text-grey" data-cy="conversions-hint">{{ $t('analytics.conversions.hint') }}</p>
+      <p class="is-size-7 conv-hint" data-cy="conversions-hint">{{ $t('analytics.conversions.hint') }}</p>
+
+      <!-- The drill-down (2026-10-29): the stored orders behind the totals, how they arrived over the
+           days after the send, sortable, and a CSV of every row (conversionOrders.mjs). Collapsed by
+           default; read on first expand. No subscriber data is stored, so none is shown. -->
+      <b-button size="is-small" class="conv-toggle mt-3" :icon-left="conversions.open ? 'arrow-up' : 'arrow-down'"
+        data-cy="conversions-orders-toggle" @click="toggleConversionOrders">
+        {{ $t(conversions.open ? 'analytics.conversions.hideOrders' : 'analytics.conversions.showOrders') }}
+      </b-button>
+      <div v-if="conversions.open" class="conv-orders-panel mt-4 relative" data-cy="conversions-orders">
+        <b-loading v-if="conversions.ordersLoading" active :is-full-page="false" />
+        <template v-if="conversions.orders && conversions.orders.length">
+          <div class="is-flex is-justify-content-space-between is-align-items-flex-end mb-3">
+            <div>
+              <p class="heading mb-1">{{ $t('analytics.conversions.arrivals') }}</p>
+              <div class="conv-arrivals" data-cy="conversions-arrivals">
+                <div v-for="b in conversionArrivals.buckets" :key="b.label" class="conv-arrival"
+                  :title="`${b.label}: ${b.orders} · ${usd(b.sales)}`">
+                  <span class="conv-arrival-count">{{ b.orders }}</span>
+                  <span class="conv-arrival-bar"
+                    :style="{ height: `${conversionArrivals.max ? Math.max(2, (b.orders / conversionArrivals.max) * 48) : 2}px` }" />
+                  <span class="conv-arrival-label">{{ b.label }}</span>
+                </div>
+              </div>
+              <p v-if="conversionArrivals.undated" class="is-size-7 conv-hint mt-1">
+                {{ $t('analytics.conversions.undated', { n: conversionArrivals.undated }) }}
+              </p>
+            </div>
+            <b-button size="is-small" icon-left="cloud-download-outline" data-cy="conversions-orders-csv"
+              @click="downloadConversionOrders">
+              {{ $t('analytics.conversions.downloadCsv') }}
+            </b-button>
+          </div>
+          <b-table :data="conversionOrderRows" narrowed hoverable paginated :per-page="25"
+            backend-sorting :default-sort="[conversions.ordersSort.field, conversions.ordersSort.order]"
+            @sort="onConversionOrdersSort" class="conv-orders-table">
+            <b-table-column v-slot="props" field="purchased_at" :label="$t('analytics.conversions.purchased')" sortable>
+              {{ formatDateTime(props.row.purchased_at) }}
+            </b-table-column>
+            <b-table-column v-slot="props" field="order_id" :label="$t('analytics.conversions.order')">
+              <code>{{ props.row.order_id }}</code>
+            </b-table-column>
+            <b-table-column v-slot="props" field="campaign_name" :label="$tc('globals.terms.campaign')" sortable>
+              {{ props.row.campaign_name }}
+            </b-table-column>
+            <b-table-column v-slot="props" field="day" :label="$t('analytics.conversions.dayAfterSend')" numeric sortable>
+              {{ props.row.day === null ? '—' : `D${props.row.day}` }}
+            </b-table-column>
+            <b-table-column v-slot="props" field="sales_usd" :label="$t('analytics.conversions.sales')" numeric sortable>
+              {{ usd(props.row.sales_usd) }}
+            </b-table-column>
+            <b-table-column v-slot="props" field="tracked" :label="$t('analytics.conversions.tracked')" centered sortable>
+              <b-icon v-if="props.row.tracked" icon="check" size="is-small" />
+            </b-table-column>
+            <b-table-column v-slot="props" field="matched" :label="$t('analytics.conversions.matched')" centered sortable>
+              <b-icon v-if="props.row.matched" icon="check" size="is-small" />
+            </b-table-column>
+          </b-table>
+        </template>
+        <p v-else-if="!conversions.ordersLoading" class="has-text-grey">{{ $t('analytics.conversions.noOrders') }}</p>
+      </div>
     </section>
 
     <section class="charts mt-5">
@@ -253,7 +317,12 @@ import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/e
 import { metricAxisMax, sendOverlayOptions, shapeSendOverlay } from '../sendOverlay.mjs'; // eslint-disable-line import/extensions
 import { aggregateShopLinkRate, shapeShopLinkBars, totalShopLinkClicks } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { MEASURES as CONVERSION_MEASURES, analyticsCells, conversionTooltip } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
+import {
+  MEASURES as CONVERSION_MEASURES, analyticsCells, conversionTooltip, formatUsd,
+} from '../conversionCells.mjs'; // eslint-disable-line import/extensions
+import {
+  DEFAULT_ORDER_SORT, arrivals, csvFileName, shapeOrderRows, sortOrderRows, toCsv,
+} from '../conversionOrders.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -432,6 +501,13 @@ export default Vue.extend({
         data: null,
         loading: false,
         fetched: false,
+        // The drill-down (2026-10-29): collapsed by default, read on first expand for the current
+        // campaigns and range (params), dropped whenever those change.
+        params: null,
+        open: false,
+        orders: null,
+        ordersLoading: false,
+        ordersSort: { ...DEFAULT_ORDER_SORT },
       },
 
       form: {
@@ -457,6 +533,10 @@ export default Vue.extend({
 
     formatDateTime(s) {
       return dayjs(s).format('YYYY-MM-DD HH:mm');
+    },
+
+    usd(n) {
+      return formatUsd(n);
     },
 
     // Fork (brand analytics, BRAND-ANALYTICS-SPEC D11) -- From = start of the day of the earliest
@@ -722,17 +802,57 @@ export default Vue.extend({
     getConversions(camps) {
       this.conversions.loading = true;
       this.conversions.fetched = true;
-      this.$api.getCampaignConversions({
-        id: camps.map((c) => c.id),
-        from: this.form.from,
-        to: this.form.to,
-      }).then((data) => {
+      this.conversions.params = { id: camps.map((c) => c.id), from: this.form.from, to: this.form.to };
+      this.conversions.orders = null;
+      this.$api.getCampaignConversions(this.conversions.params).then((data) => {
         this.conversions.data = data || null;
       }).catch(() => {
         this.conversions.data = null;
       }).finally(() => {
         this.conversions.loading = false;
       });
+      if (this.conversions.open) {
+        this.getConversionOrders();
+      }
+    },
+
+    // The drill-down's read, for the campaigns and range the totals were read for.
+    getConversionOrders() {
+      if (!this.conversions.params) {
+        return;
+      }
+      this.conversions.ordersLoading = true;
+      this.$api.getCampaignConversionOrders(this.conversions.params).then((data) => {
+        this.conversions.orders = shapeOrderRows(data);
+      }).catch(() => {
+        this.conversions.orders = [];
+      }).finally(() => {
+        this.conversions.ordersLoading = false;
+      });
+    },
+
+    toggleConversionOrders() {
+      this.conversions.open = !this.conversions.open;
+      if (this.conversions.open && this.conversions.orders === null) {
+        this.getConversionOrders();
+      }
+    },
+
+    onConversionOrdersSort(field, order) {
+      this.conversions.ordersSort = { field, order };
+    },
+
+    // The CSV of the drill-down's rows (all of them, in the table's order), saved in the browser.
+    downloadConversionOrders() {
+      const blob = new Blob([toCsv(this.conversionOrderRows)], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = csvFileName(this.conversions.params ? this.conversions.params.id : []);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     },
 
     // A client's share of the column's own total (Unknown included), as countryShare.
@@ -831,6 +951,15 @@ export default Vue.extend({
     },
 
     // Fork (campaign conversions, D11) -- the two header cells ({ orders, sales }) and their hovers.
+    // The drill-down's rows in the table's sort, and how they arrived over the days after the send.
+    conversionOrderRows() {
+      return sortOrderRows(this.conversions.orders || [], this.conversions.ordersSort);
+    },
+
+    conversionArrivals() {
+      return arrivals(this.conversions.orders || []);
+    },
+
     conversionHeaderCells() {
       const { data } = this.conversions;
       const cells = analyticsCells(data, (n) => this.$utils.formatNumber(n));

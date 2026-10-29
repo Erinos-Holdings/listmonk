@@ -20,9 +20,9 @@ export const ENGAGEMENT_FIELDS = Object.freeze(['views', 'clicks', 'hard_bounces
 // The subscriber columns -- always counts, never governed by the mode.
 export const SUBSCRIBER_FIELDS = Object.freeze(['total', 'active', 'held', 'unsubscribed', 'blocked']);
 
-// Integrations CAMPAIGN-CONVERSIONS-SPEC D11: the Tracked and Matched columns -- stored orders (and
-// sales) of the brand's campaigns in the pane's window; always counts, never governed by the mode.
-// Each row carries `<field>` (orders, the sorted quantity) and `<field>_sales`.
+// Integrations CAMPAIGN-CONVERSIONS-SPEC D11: the Tracked and Matched columns -- stored orders and
+// sales of the brand's campaigns in the pane's window. Each row carries `<field>` (orders) and
+// `<field>_sales`; the %/$ mode shows and sorts by the sales, the # mode by the orders (2026-10-29).
 export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
 
 // Every sortable column. The health chip is not sortable.
@@ -169,6 +169,10 @@ function isEngagement(field) {
 export function displayValue(row, field, mode = DEFAULT_STATE.mode) {
   if (isEngagement(field)) {
     return mode === 'num' ? num(row[field]) : rateOf(row, field);
+  }
+  // Tracked/Matched: the %/$ mode shows (and sorts by) the sales, the # mode the orders.
+  if (CONVERSION_FIELDS.includes(field)) {
+    return mode === 'num' ? num(row[field]) : num(row[`${field}_sales`]);
   }
   if (field === 'brand') {
     return row.label;

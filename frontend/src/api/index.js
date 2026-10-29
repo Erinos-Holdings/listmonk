@@ -603,6 +603,12 @@ export const getCampaignConversions = async (params) => http.get(
   { params, loading: models.campaigns, camelCase: false },
 );
 
+// Fork (campaign conversions, 2026-10-29) -- the orders behind the Conversions card (its drill-down).
+export const getCampaignConversionOrders = async (params) => http.get(
+  '/api/campaigns/analytics/conversion_orders',
+  { params, loading: models.campaigns, camelCase: false },
+);
+
 export const convertCampaignContent = async (data) => http.post(
   `/api/campaigns/${data.id}/content`,
   data,

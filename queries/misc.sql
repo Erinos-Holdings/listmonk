@@ -227,10 +227,37 @@ send_days AS (
 sends AS (
     SELECT JSON_AGG(JSON_BUILD_OBJECT('date', sd.d, 'count', sd.n) ORDER BY sd.d)
     FROM send_days sd, win WHERE sd.d BETWEEN win.d0 AND win.d1
+),
+-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11 follow-up, the Clicks and
+-- conversions chart) -- the stored campaign_conversions rows of C per Mountain PURCHASE day over the
+-- same window, orders and sales per measure, zero-filled. Summing only, no rule. Empty (no series)
+-- while no conversions doc exists, so the chart renders nothing rather than a false zero line.
+convdoc_present AS (
+    SELECT 1 AS present FROM system_health WHERE kind = 'conversions' LIMIT 1
+),
+conv_days AS (
+    SELECT (cc.purchased_at AT TIME ZONE (SELECT tz FROM zone))::DATE AS d, cc.measure,
+        COUNT(*) AS n, COALESCE(SUM(cc.sales_usd), 0) AS s
+    FROM campaign_conversions cc
+    WHERE cc.campaign_id IN (SELECT id FROM camps)
+        AND cc.purchased_at >= (SELECT t0 FROM bounds) AND cc.purchased_at < (SELECT t1 FROM bounds)
+    GROUP BY 1, 2
+),
+conversions AS (
+    SELECT JSON_AGG(JSON_BUILD_OBJECT(
+        'date', days.d,
+        'tracked', JSON_BUILD_OBJECT('orders', COALESCE(t.n, 0), 'sales', COALESCE(t.s, 0)),
+        'matched', JSON_BUILD_OBJECT('orders', COALESCE(m.n, 0), 'sales', COALESCE(m.s, 0))
+    ) ORDER BY days.d)
+    FROM days
+    LEFT JOIN conv_days t ON (t.d = days.d AND t.measure = 'tracked')
+    LEFT JOIN conv_days m ON (m.d = days.d AND m.measure = 'matched')
+    WHERE EXISTS (SELECT 1 FROM convdoc_present)
 )
 SELECT JSON_BUILD_OBJECT(
     'sends', COALESCE((SELECT * FROM sends), '[]'),
     'clicks', COALESCE((SELECT * FROM clicks), '[]'),
+    'conversions', COALESCE((SELECT * FROM conversions), '[]'),
     'scoped', NOT $3::BOOLEAN
 ) AS data;
 

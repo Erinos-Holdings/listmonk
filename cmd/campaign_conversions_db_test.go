@@ -333,6 +333,42 @@ func TestCampaignConversionsAnalytics(t *testing.T) {
 		if lc != tc.want || cc != lc {
 			t.Fatalf("%s: links %d, conversions %d (%s), want both %d", tc.name, lc, cc, cb, tc.want)
 		}
+		oc, ob := analyticsMultiReq(t, h, tc.u, "conversion_orders", tc.ids...)
+		if oc != lc {
+			t.Fatalf("%s: links %d, conversion_orders %d (%s)", tc.name, lc, oc, ob)
+		}
+	}
+
+	// The drill-down: one row per (order, campaign) in range, newest first, both measures folded;
+	// t3 (out of range) absent. m1 and t1 are separate orders; t1 is tracked only.
+	ins("matched", "t1", f.campA, in, 10)
+	code, body := analyticsMultiReq(t, h, member, "conversion_orders", f.campA)
+	if code != http.StatusOK {
+		t.Fatalf("conversion_orders: %d %s", code, body)
+	}
+	var or struct {
+		Data []struct {
+			OrderID      string  `json:"order_id"`
+			CampaignID   int     `json:"campaign_id"`
+			CampaignName string  `json:"campaign_name"`
+			Tracked      bool    `json:"tracked"`
+			Matched      bool    `json:"matched"`
+			Sales        float64 `json:"sales_usd"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &or); err != nil {
+		t.Fatalf("%s: %v", body, err)
+	}
+	got := map[string]string{}
+	for _, o := range or.Data {
+		if o.CampaignID != f.campA || o.CampaignName == "" {
+			t.Fatalf("row campaign: %+v", o)
+		}
+		got[o.OrderID] = fmt.Sprintf("%v/%v/%v", o.Tracked, o.Matched, o.Sales)
+	}
+	want := map[string]string{"t1": "true/true/10", "t2": "true/false/5.5", "m1": "false/true/7"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("conversion_orders: %v, want %v", got, want)
 	}
 }
 
@@ -449,6 +485,38 @@ func TestCampaignConversionsDashboards(t *testing.T) {
 		t.Fatalf("overview no brand: tracked %+v matched %+v, want zeros", tr, ma)
 	}
 
+	// The Clicks and conversions chart's daily series (charts statement) -- no doc, no series.
+	type convDay struct {
+		Date    string `json:"date"`
+		Tracked struct {
+			Orders int     `json:"orders"`
+			Sales  float64 `json:"sales"`
+		} `json:"tracked"`
+		Matched struct {
+			Orders int     `json:"orders"`
+			Sales  float64 `json:"sales"`
+		} `json:"matched"`
+	}
+	chart := func(q string) []convDay {
+		t.Helper()
+		code, body := baCall(t, admin, "/api/dashboard/charts"+q, h.app.GetDashboardCharts)
+		if code != http.StatusOK {
+			t.Fatalf("charts %q: %d %s", q, code, body)
+		}
+		var r struct {
+			Data struct {
+				Conversions []convDay `json:"conversions"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &r); err != nil {
+			t.Fatal(err)
+		}
+		return r.Data.Conversions
+	}
+	if days := chart(""); len(days) != 0 {
+		t.Fatalf("charts, no doc: %d conversion days, want none", len(days))
+	}
+
 	// The doc's meta is projected verbatim on both.
 	h.db.MustExec(`INSERT INTO system_health (kind, day, status, doc) VALUES ('conversions', CURRENT_DATE, 'warn', '{"asOf":"2026-10-28T02:45:00Z","trackedFloor":"2026-04-01","matchedFloor":"2026-08-31T00:00:00Z","trackedStale":true}'::JSONB)`)
 	_, _, meta := counts(admin, "")
@@ -464,5 +532,31 @@ func TestCampaignConversionsDashboards(t *testing.T) {
 	_, body = baCall(t, admin, "/api/dashboard/brand-matrix", h.app.GetDashboardBrandMatrix)
 	if !bytes.Contains([]byte(body), []byte(`"tracked_stale":true`)) {
 		t.Fatalf("matrix meta: %s", body)
+	}
+
+	// With a doc: 60 zero-filled purchase days, the window's sums (a1+a2+a4 tracked, a1+b1 matched;
+	// a3 today, a5 and b2 before the window are OUT), a1 on the window's last day, and the scope.
+	days := chart("")
+	if len(days) != 60 {
+		t.Fatalf("charts: %d conversion days, want 60", len(days))
+	}
+	var tO, mO int
+	var tS, mS float64
+	for _, d := range days {
+		tO, tS, mO, mS = tO+d.Tracked.Orders, tS+d.Tracked.Sales, mO+d.Matched.Orders, mS+d.Matched.Sales
+	}
+	if tO != 3 || tS != 31 || mO != 2 || mS != 53 {
+		t.Fatalf("charts sums: tracked %d/%v matched %d/%v, want 3/31 and 2/53", tO, tS, mO, mS)
+	}
+	last := days[len(days)-1]
+	if last.Date != start(1).Format("2006-01-02") || last.Tracked.Orders != 1 || last.Matched.Orders != 1 {
+		t.Fatalf("charts last day: %+v, want %s with one tracked and one matched", last, start(1).Format("2006-01-02"))
+	}
+	mO, mS = 0, 0
+	for _, d := range chart(fmt.Sprintf("?list_id=%d", pubB)) {
+		mO, mS = mO+d.Matched.Orders, mS+d.Matched.Sales
+	}
+	if mO != 1 || mS != 50 {
+		t.Fatalf("charts bravo: matched %d/%v, want 1/50 (b1)", mO, mS)
 	}
 }
