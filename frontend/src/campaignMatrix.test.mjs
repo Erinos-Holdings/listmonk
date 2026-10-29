@@ -134,13 +134,13 @@ test('MATRIX-POLISH I8: shop-link totals -- over the rows with a shop link, with
 test('MATRIX-POLISH I8: header texts -- one Views column, Shop Link Attribution after Clicks, Tracked / Matched', () => {
   const cols = midColumns(false);
   assert.deepEqual(cols.map((c) => c.field), [
-    'views', 'clicks', 'shop_founder', 'shop_self', 'shop_creator', 'shop_corp',
-    'tracked', 'matched', 'hard_bounces', 'soft_bounces', 'complaints',
+    'views', 'clicks', 'tracked', 'matched',
+    'shop_founder', 'shop_self', 'shop_creator', 'shop_corp', 'hard_bounces', 'soft_bounces', 'complaints',
   ]);
   assert.deepEqual(cols.map((c) => c.label), [
     'analytics.matrix.views', 'dashboard.matrix.clicks',
-    'analytics.matrix.founder', 'analytics.matrix.self', 'analytics.matrix.creator', 'analytics.matrix.corp',
     'analytics.conversions.tracked', 'analytics.conversions.matched',
+    'analytics.matrix.founder', 'analytics.matrix.self', 'analytics.matrix.creator', 'analytics.matrix.corp',
     'analytics.matrix.hard', 'analytics.matrix.soft', 'analytics.matrix.fbl',
   ]);
   cols.filter((c) => c.field.startsWith('shop_')).forEach((c) => assert.equal(c.group, 'bm-shop'));
@@ -153,11 +153,11 @@ test('MATRIX-POLISH I8: header texts -- one Views column, Shop Link Attribution 
   // The group row: nothing over Views/Clicks, then the four groups; spans match the leaves.
   const g = groupHeaders(false);
   assert.deepEqual(g.map((x) => x.label), [
-    '', 'analytics.matrix.shopLinks', 'analytics.conversions.title', 'analytics.matrix.bounces', 'analytics.matrix.complaints',
+    '', 'analytics.conversions.title', 'analytics.matrix.shopLinks', 'analytics.matrix.bounces', 'analytics.matrix.complaints',
   ]);
   assert.equal(g.reduce((t, x) => t + x.span, 0), midColumns(false).length);
   assert.equal(groupHeaders(true).reduce((t, x) => t + x.span, 0), midColumns(true).length);
-  assert.ok(g[1].cls.includes('bm-shop'));
+  assert.ok(g[2].cls.includes('bm-shop'));
   // The key texts themselves.
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   assert.equal(en['analytics.conversions.tracked'], 'Tracked');

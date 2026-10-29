@@ -39,8 +39,8 @@
     <div class="table-container">
       <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="cm-table">
         <thead>
-          <!-- MATRIX-POLISH-SPEC D4/D5: no Views group (Views is one column); SHOP LINK ATTRIBUTION
-               between Clicks and Conversions (campaignMatrix.mjs::groupHeaders). -->
+          <!-- MATRIX-POLISH-SPEC D4/D5: no Views group (Views is one column); CONVERSIONS then
+               SHOP LINK ATTRIBUTION after Clicks (campaignMatrix.mjs::groupHeaders). -->
           <tr class="bm-groups">
             <th :colspan="leftCols.length" />
             <th v-for="(g, i) in groupCols" :key="i" :colspan="g.span" :class="g.cls">{{ g.label ? $t(g.label) : '' }}</th>

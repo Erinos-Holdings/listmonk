@@ -69,8 +69,8 @@ export function showBrandColumn(selection) {
 }
 
 // The column headers (i18n keys). The group row: Views and Clicks are single columns spanning both
-// header rows' meaning (MATRIX-POLISH D4: Views is placed where its group was), then SHOP LINK
-// ATTRIBUTION (D5, after Clicks, before Conversions), CONVERSIONS (Tracked / Matched -- D3), BOUNCES,
+// header rows' meaning (MATRIX-POLISH D4: Views is placed where its group was), then CONVERSIONS
+// (Tracked / Matched -- D3), SHOP LINK ATTRIBUTION (D5; after Conversions since 2026-10-29), BOUNCES,
 // COMPLAINTS (FBL, plus GP S% for a brands:get holder).
 export function midColumns(showGp) {
   const cols = [
@@ -80,6 +80,8 @@ export function midColumns(showGp) {
     {
       field: 'clicks', label: 'dashboard.matrix.clicks', help: 'analytics.matrix.clicksHelp', group: '',
     },
+    { field: 'tracked', label: 'analytics.conversions.tracked', group: 'bm-eng' },
+    { field: 'matched', label: 'analytics.conversions.matched', group: 'bm-eng' },
     {
       field: 'shop_founder', label: 'analytics.matrix.founder', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
     },
@@ -92,8 +94,6 @@ export function midColumns(showGp) {
     {
       field: 'shop_corp', label: 'analytics.matrix.corp', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
     },
-    { field: 'tracked', label: 'analytics.conversions.tracked', group: 'bm-eng' },
-    { field: 'matched', label: 'analytics.conversions.matched', group: 'bm-eng' },
     { field: 'hard_bounces', label: 'analytics.matrix.hard', group: 'bm-subs' },
     { field: 'soft_bounces', label: 'analytics.matrix.soft', group: 'bm-subs' },
     {
@@ -113,8 +113,8 @@ export function midColumns(showGp) {
 export function groupHeaders(showGp) {
   return [
     { label: '', span: 2, cls: '' },
-    { label: 'analytics.matrix.shopLinks', span: SHOP_FIELDS.length, cls: 'bm-shop bm-group' },
     { label: 'analytics.conversions.title', span: 2, cls: 'bm-eng bm-group' },
+    { label: 'analytics.matrix.shopLinks', span: SHOP_FIELDS.length, cls: 'bm-shop bm-group' },
     { label: 'analytics.matrix.bounces', span: 2, cls: 'bm-subs bm-group' },
     { label: 'analytics.matrix.complaints', span: showGp ? 2 : 1, cls: 'bm-subs bm-group' },
   ];
