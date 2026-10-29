@@ -16,7 +16,7 @@ package main
 // journeys.
 // I5: GP send day -- the newest brand_health row holding the day (with any Gmail rate) wins, with
 // that row's thresholds; no numeric spamRate, an absent day or several brands -> null; client_floor
-// by started_at against clientStatsFloor.
+// by started_at (broadcasts) or the window start (journeys) against clientStatsFloor.
 
 import (
 	"encoding/json"
@@ -413,6 +413,16 @@ func TestCampaignMatrixDB(t *testing.T) {
 		if r := byID(gpGot)[bIn]; r.GPRate == nil || *r.GPRate != 0.004 {
 			t.Fatalf("%s: alpha creator with brands:get: bIn %s", name("alphaGP"), baJSON(r))
 		}
+
+		// I5 -- a journey's client_floor follows the WINDOW start, not started_at (stage-4 F1): with
+		// the floor before the window, the journeys started 90 days ago (and the unstarted one) clear.
+		clientStatsFloor = start(61)
+		_, flGot, _ := matrix(admin, url.Values{})
+		if r := byID(flGot); r[jIn].ClientFloor || r[jNull].ClientFloor || r[bLow].ClientFloor {
+			t.Fatalf("%s: floor before the window: jIn %s jNull %s bLow %s, want no client_floor",
+				name("floor"), baJSON(r[jIn]), baJSON(r[jNull]), baJSON(r[bLow]))
+		}
+		clientStatsFloor = start(12)
 	}
 }
 

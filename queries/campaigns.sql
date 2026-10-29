@@ -735,7 +735,9 @@ SELECT JSON_BUILD_OBJECT(
 --     Mountain send day from brand_health rows of that brand with day in [sendDay, sendDay + 14] --
 --     the newest row whose series holds the day with ANY Gmail rate (Brands.vue's spamSeries rule),
 --     its spamRate when a number (else NULL) and that row's spamRate.detail.thresholds verbatim.
---   client_floor = started_at is before $7 (views before it carry no client token).
+--   client_floor = a broadcast's started_at is before $7, a journey's window start t0 is before $7
+--     (a journey counts only in-window views, so the window, not its start, decides; views before
+--     $7 carry no client token).
 WITH zone AS (
     SELECT 'America/Denver'::TEXT AS tz
 ),
@@ -909,7 +911,8 @@ SELECT JSON_BUILD_OBJECT(
                 THEN JSON_BUILD_OBJECT('orders', COALESCE(m.orders, 0), 'sales_usd', COALESCE(m.sales, 0)) END,
             'gp_rate', g.rate,
             'gp_thresholds', CASE WHEN g.rate IS NOT NULL THEN g.thresholds END,
-            'client_floor', k.started_at IS NULL OR k.started_at < $7::TIMESTAMPTZ
+            'client_floor', CASE WHEN k.evergreen THEN (SELECT t0 FROM bounds) < $7::TIMESTAMPTZ
+                ELSE k.started_at IS NULL OR k.started_at < $7::TIMESTAMPTZ END
         ) ORDER BY k.id)
         FROM camps k
         LEFT JOIN views v ON (v.campaign_id = k.id)
