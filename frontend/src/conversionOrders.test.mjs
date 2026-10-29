@@ -47,6 +47,20 @@ test('arrivals: D0..D5 then D6+, evergreen orders undated, sales per bucket, the
   assert.equal(arrivals([]).max, 0);
 });
 
+test('arrivals by measure: only the rows that measure credits, so the bars sum to its order count', () => {
+  const rows = shapeOrderRows([
+    row('a', '2026-10-22T05:00:00Z', { tracked: true, matched: true }),
+    row('b', '2026-10-22T06:00:00Z', { tracked: true, matched: false }),
+    row('c', '2026-10-24T01:00:00Z', { tracked: false, matched: true }),
+    row('d', '2026-10-24T01:00:00Z', { tracked: false, matched: true, evergreen: true }),
+  ]);
+  const m = arrivals(rows, 'matched');
+  assert.deepEqual(m.buckets.map((b) => b.orders), [1, 0, 1, 0, 0, 0, 0]);
+  assert.equal(m.undated, 1);
+  assert.deepEqual(arrivals(rows, 'tracked').buckets.map((b) => b.orders), [2, 0, 0, 0, 0, 0, 0]);
+  assert.equal(arrivals(rows).buckets[0].orders + arrivals(rows).buckets[2].orders + arrivals(rows).undated, 4);
+});
+
 test('sort: by sales, by day (missing last both ways), default newest first, stable ties', () => {
   const rows = shapeOrderRows([
     row('a', '2026-10-22T05:00:00Z', { sales_usd: 30 }),

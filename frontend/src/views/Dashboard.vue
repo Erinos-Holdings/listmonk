@@ -527,7 +527,7 @@
                the column. -->
           <div class="tile is-parent relative">
             <b-loading v-if="countries.loading" active :is-full-page="false" />
-            <article class="tile is-child notification" data-cy="countries">
+            <article class="tile is-child notification share-grid" data-cy="countries">
               <div class="columns is-mobile">
                 <div class="column">
                   <h3 class="title is-size-6">{{ $t('analytics.location') }}</h3>
@@ -539,12 +539,10 @@
                   <span :class="{ 'has-text-grey': props.row.unknown }" :title="props.row.country">{{ props.row.name }}</span>
                 </b-table-column>
                 <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
-                  {{ $utils.formatNumber(props.row.views) }}
-                  <span v-if="countryShare(props.row.views, 'views')" class="is-size-7 has-text-grey">({{ countryShare(props.row.views, 'views') }})</span>
+                  {{ $utils.formatNumber(props.row.views) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(countryShare(props.row.views, 'views')) }}</span>
                 </b-table-column>
                 <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
-                  {{ $utils.formatNumber(props.row.clicks) }}
-                  <span v-if="countryShare(props.row.clicks, 'clicks')" class="is-size-7 has-text-grey">({{ countryShare(props.row.clicks, 'clicks') }})</span>
+                  {{ $utils.formatNumber(props.row.clicks) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(countryShare(props.row.clicks, 'clicks')) }}</span>
                 </b-table-column>
                 <template #empty v-if="!countries.loading">
                   <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
@@ -561,7 +559,7 @@
                counts and charts. -->
           <div class="tile is-parent relative">
             <b-loading v-if="clients.loading" active :is-full-page="false" />
-            <article class="tile is-child notification clients-panel" data-cy="clients">
+            <article class="tile is-child notification share-grid" data-cy="clients">
               <div class="columns is-mobile">
                 <div class="column">
                   <h3 class="title is-size-6">{{ $t('analytics.clients') }}</h3>
@@ -573,10 +571,10 @@
                   <span :class="{ 'has-text-grey': props.row.unknown }" :title="clientRosterTip(props.row.client)">{{ props.row.name }}</span>
                 </b-table-column>
                 <b-table-column v-slot="props" field="views" :label="$t('dashboard.clientsViewEvents')" numeric sortable>
-                  {{ $utils.formatNumber(props.row.views) }}<span class="cl-share is-size-7 has-text-grey">{{ shareText(props.row.views, 'views') }}</span>
+                  {{ $utils.formatNumber(props.row.views) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row.views, 'views')) }}</span>
                 </b-table-column>
                 <b-table-column v-slot="props" field="clicks" :label="$t('dashboard.clientsClickEvents')" numeric sortable>
-                  {{ $utils.formatNumber(props.row.clicks) }}<span class="cl-share is-size-7 has-text-grey">{{ shareText(props.row.clicks, 'clicks') }}</span>
+                  {{ $utils.formatNumber(props.row.clicks) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row.clicks, 'clicks')) }}</span>
                 </b-table-column>
                 <!-- BRAND-USAGE-V2-SPEC D8: no Combined column on the Dashboard (Campaign Analytics
                      keeps its own). -->
@@ -1040,9 +1038,9 @@ export default Vue.extend({
       return rateCell(n, this.clientTotalsSum[field], 1).pct;
     },
 
-    // The share in its fixed-width slot, parenthesized, or '' (the slot stays, so counts align).
-    shareText(n, field) {
-      const pct = this.clientShare(n, field);
+    // A share for its fixed-width slot (Location and Email clients), parenthesized, or '' -- the
+    // slot stays either way, so counts align.
+    parenShare(pct) {
       return pct ? `(${pct})` : '';
     },
 

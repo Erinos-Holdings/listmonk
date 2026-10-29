@@ -76,12 +76,32 @@
             {{ m.cell.orders }} {{ $tc('analytics.conversions.orders', m.cell.orders === '1' ? 1 : 2) }}
           </p>
         </div>
+        <!-- Orders by day after send (2026-10-29): beside Matched, after its own divider, in a white
+             box -- read with the totals, so it shows without expanding anything. Only when there are
+             dated orders (an evergreen-only selection has none to bucket). -->
+        <div v-if="conversionArrivals.max" class="conv-measure" data-cy="conversions-arrivals">
+          <div class="conv-arrivals-box">
+            <p class="heading mb-1">{{ $t('analytics.conversions.arrivals') }}</p>
+            <div class="conv-arrivals">
+              <div v-for="b in conversionArrivals.buckets" :key="b.label" class="conv-arrival"
+                :title="`${b.label}: ${b.orders} · ${usd(b.sales)}`">
+                <span class="conv-arrival-count">{{ b.orders }}</span>
+                <span class="conv-arrival-bar"
+                  :style="{ height: `${Math.max(2, (b.orders / conversionArrivals.max) * 48)}px` }" />
+                <span class="conv-arrival-label">{{ b.label }}</span>
+              </div>
+            </div>
+          </div>
+          <p v-if="conversionArrivals.undated" class="is-size-7 conv-hint mt-1">
+            {{ $t('analytics.conversions.undated', { n: conversionArrivals.undated }) }}
+          </p>
+        </div>
       </div>
       <p class="is-size-7 conv-hint" data-cy="conversions-hint">{{ $t('analytics.conversions.hint') }}</p>
 
-      <!-- The drill-down (2026-10-29): the stored orders behind the totals, how they arrived over the
-           days after the send, sortable, and a CSV of every row (conversionOrders.mjs). Collapsed by
-           default; read on first expand. No subscriber data is stored, so none is shown. -->
+      <!-- The drill-down (2026-10-29): the stored orders behind the totals, sortable, and a CSV of
+           every row (conversionOrders.mjs). Collapsed by default; the rows are read with the totals
+           (the arrivals chart above needs them). No subscriber data is stored, so none is shown. -->
       <b-button size="is-small" class="conv-toggle mt-3" :icon-left="conversions.open ? 'arrow-up' : 'arrow-down'"
         data-cy="conversions-orders-toggle" @click="toggleConversionOrders">
         {{ $t(conversions.open ? 'analytics.conversions.hideOrders' : 'analytics.conversions.showOrders') }}
@@ -89,22 +109,7 @@
       <div v-if="conversions.open" class="conv-orders-panel mt-4 relative" data-cy="conversions-orders">
         <b-loading v-if="conversions.ordersLoading" active :is-full-page="false" />
         <template v-if="conversions.orders && conversions.orders.length">
-          <div class="is-flex is-justify-content-space-between is-align-items-flex-end mb-3">
-            <div>
-              <p class="heading mb-1">{{ $t('analytics.conversions.arrivals') }}</p>
-              <div class="conv-arrivals" data-cy="conversions-arrivals">
-                <div v-for="b in conversionArrivals.buckets" :key="b.label" class="conv-arrival"
-                  :title="`${b.label}: ${b.orders} · ${usd(b.sales)}`">
-                  <span class="conv-arrival-count">{{ b.orders }}</span>
-                  <span class="conv-arrival-bar"
-                    :style="{ height: `${conversionArrivals.max ? Math.max(2, (b.orders / conversionArrivals.max) * 48) : 2}px` }" />
-                  <span class="conv-arrival-label">{{ b.label }}</span>
-                </div>
-              </div>
-              <p v-if="conversionArrivals.undated" class="is-size-7 conv-hint mt-1">
-                {{ $t('analytics.conversions.undated', { n: conversionArrivals.undated }) }}
-              </p>
-            </div>
+          <div class="is-flex is-justify-content-flex-end mb-3">
             <b-button size="is-small" icon-left="cloud-download-outline" data-cy="conversions-orders-csv"
               @click="downloadConversionOrders">
               {{ $t('analytics.conversions.downloadCsv') }}
@@ -811,9 +816,8 @@ export default Vue.extend({
       }).finally(() => {
         this.conversions.loading = false;
       });
-      if (this.conversions.open) {
-        this.getConversionOrders();
-      }
+      // Read with the totals: the arrivals chart beside Matched is built from these rows.
+      this.getConversionOrders();
     },
 
     // The drill-down's read, for the campaigns and range the totals were read for.
@@ -962,8 +966,9 @@ export default Vue.extend({
       return sortOrderRows(this.conversions.orders || [], this.conversions.ordersSort);
     },
 
+    // Matched only, so the bars sum to the Matched order count beside them.
     conversionArrivals() {
-      return arrivals(this.conversions.orders || []);
+      return arrivals(this.conversions.orders || [], 'matched');
     },
 
     conversionHeaderCells() {

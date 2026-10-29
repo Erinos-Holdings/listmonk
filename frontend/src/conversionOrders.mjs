@@ -40,10 +40,13 @@ export function shapeOrderRows(rows) {
 
 // arrivals is the orders per DAY_BUCKETS bucket (orders with no day -- evergreens -- are counted in
 // `undated`), with each bucket's sales; `max` is the busiest bucket's order count (bar scale).
-export function arrivals(rows) {
+// `measure` ('tracked' | 'matched') keeps only the rows that measure credits, so the bars sum to
+// that measure's order count; the card charts Matched (2026-10-29: the union of both measures
+// summed to neither total beside it). Omitted, every row counts.
+export function arrivals(rows, measure) {
   const buckets = DAY_BUCKETS.map((label) => ({ label, orders: 0, sales: 0 }));
   let undated = 0;
-  (rows || []).forEach((r) => {
+  (rows || []).filter((r) => !measure || r[measure]).forEach((r) => {
     if (r.day === null || r.day === undefined) {
       undated += 1;
       return;
