@@ -115,9 +115,11 @@
               </p>
             </div>
             <b-field v-if="triggerOption === 'no_purchase'" :label="$t('lists.joinTriggerDays')"
-              :type="daysText === '' || daysOk ? '' : 'is-danger'">
-              <b-input v-model="daysText" type="number" min="1" max="365" step="1" name="join_trigger_days"
-                :disabled="locked" data-cy="list-trigger-days" />
+              :type="daysText === '' || daysOk ? '' : 'is-danger'" data-cy="list-trigger-days">
+              <b-radio v-for="d in daysOptions" :key="d" v-model="daysText" :native-value="String(d)"
+                name="join_trigger_days" :disabled="locked" :data-cy="`list-trigger-days-${d}`">
+                {{ $tc('lists.joinTriggerDaysOption', d, { n: d }) }}
+              </b-radio>
             </b-field>
           </div>
           <!-- JOURNEY-UX-SPEC F8: in both selector states -- Broadcast lists host automations too. -->
@@ -204,7 +206,7 @@ import {
   brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import {
-  buildListFormRequest, buildListTypeTrigger, daysValid, journeyOption, listTypeHelpKey, listTypeOf, skusToText,
+  buildListFormRequest, buildListTypeTrigger, daysChoices, daysValid, journeyOption, listTypeHelpKey, listTypeOf, skusToText,
   storedDays, storedTrigger, storedTriggerSync, triggerBadge, triggerHelpKeys, LIST_TYPE_BROADCAST,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -362,6 +364,12 @@ export default Vue.extend({
     // NO-PURCHASE-STEPS-SPEC D7: the days field's inline state (the server is the control).
     daysOk() {
       return daysValid(this.daysText);
+    },
+
+    // The days radios: 3 / 7 / 15, plus the STORED value outside them (not the selection, or
+    // picking a preset would drop the stored choice).
+    daysOptions() {
+      return daysChoices(storedDays(storedTrigger(this.data)));
     },
 
     // The badge from the STORED trigger and trigger_sync (null = no trigger, no badge).

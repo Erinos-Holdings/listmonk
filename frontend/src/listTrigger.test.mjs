@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   TRIGGER_NONE, TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NO_PURCHASE,
   triggerOption, skusToText, textToSkus, buildJoinTrigger, triggerBadge, storedDays, textToDays, daysValid,
-  listTriggerItem, withTriggerItem, pickerLabel, buildListFormRequest, storedTrigger, storedTriggerSync,
+  daysChoices, listTriggerItem, withTriggerItem, pickerLabel, buildListFormRequest, storedTrigger, storedTriggerSync,
   LIST_TYPE_BROADCAST, LIST_TYPE_JOURNEY, listTypeOf, journeyOption, buildListTypeTrigger,
   listTypeHelpKey, triggerHelpKeys,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
@@ -89,6 +89,13 @@ test('no_purchase: option <-> document round-trip and the days field', () => {
   assert.equal(daysValid('1'), true);
   assert.equal(daysValid('365'), true);
   ['0', '366', '', '2.5'].forEach((bad) => assert.equal(daysValid(bad), false, bad));
+});
+
+test('no_purchase: the days radios are 3/7/15 plus a stored value outside them', () => {
+  assert.deepEqual(daysChoices(''), [3, 7, 15]);
+  assert.deepEqual(daysChoices('7'), [3, 7, 15]);
+  assert.deepEqual(daysChoices('14'), [3, 7, 14, 15]);
+  assert.deepEqual(daysChoices('30'), [3, 7, 15, 30]);
 });
 
 test('no_purchase: picker label and sub-line item', () => {

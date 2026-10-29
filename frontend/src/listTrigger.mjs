@@ -69,6 +69,19 @@ export function daysValid(text) {
   return d !== null && d >= DAYS_MIN && d <= DAYS_MAX;
 }
 
+// DAYS_PRESETS are the form's days choices. The server still accepts 1-365 (D1); this narrows
+// only what the form offers.
+export const DAYS_PRESETS = [3, 7, 15];
+
+// daysChoices is the radio options for the days field: the presets, plus a stored value outside
+// them (kept so a Save of an older list never changes its days unseen), ascending.
+export function daysChoices(daysText) {
+  const d = textToDays(daysText);
+  const out = [...DAYS_PRESETS];
+  if (d !== null && !out.includes(d)) out.push(d);
+  return out.sort((a, b) => a - b);
+}
+
 // skusToText is the textarea text for a stored SKU array, one per line.
 export function skusToText(skus) {
   return (Array.isArray(skus) ? skus : []).join('\n');
