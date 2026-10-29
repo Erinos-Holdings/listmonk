@@ -81,9 +81,11 @@ const api = [
   { brand: '' }, // never a row
 ];
 
-test('D2: the pane pill sits between matrix and ses and the sticky pref keeps it', () => {
-  assert.deepEqual(PANES, ['overview', 'matrix', 'usage', 'ses']);
-  assert.equal(initialPane(true, 'usage', false), 'usage');
+// Integrations CAMPAIGN-MATRIX-SPEC D2/I7 -- the usage pane moved to the Brands page (paneState.mjs):
+// the Dashboard pill is Overview | SES and a stored `usage` reads as overview.
+test('D2: the Dashboard pill is Overview | SES; a stored usage pane reads as overview', () => {
+  assert.deepEqual(PANES, ['overview', 'ses']);
+  assert.equal(initialPane(true, 'usage', false), 'overview');
   assert.equal(initialPane(false, 'usage', false), 'overview');
 });
 

@@ -1,8 +1,21 @@
 <template>
   <section class="analytics content relative">
-    <h1 class="title is-4">
+    <h1 class="title is-4 mb-2">
       {{ $t('analytics.title') }}
     </h1>
+    <!-- Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D3) -- Campaign | Matrix at the top,
+         sticky per browser (pref analytics.pane, campaign by default); a URL carrying ?id= always
+         opens Campaign. No new nav item. -->
+    <b-field class="is-inline-flex">
+      <b-radio-button v-model="pane" native-value="campaign" type="is-primary" data-cy="analytics-pane-campaign"
+        @input="onPaneChange">
+        {{ $t('analytics.panes.campaign') }}
+      </b-radio-button>
+      <b-radio-button v-model="pane" native-value="matrix" type="is-primary" data-cy="analytics-pane-matrix"
+        @input="onPaneChange">
+        {{ $t('analytics.panes.matrix') }}
+      </b-radio-button>
+    </b-field>
     <div v-if="serverConfig.privacy.disable_tracking || !serverConfig.privacy.individual_tracking"
       class="notification is-info">
       <template v-if="serverConfig.privacy.disable_tracking">
@@ -14,6 +27,9 @@
     </div>
     <hr />
 
+    <campaign-matrix v-if="pane === 'matrix'" />
+
+    <template v-else>
     <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D9/D11, S4) -- a prefilled campaign
          outside the selected brand stays selected, with the notice (one line per such brand). -->
     <brand-context-notice v-for="b in noticeBrands" :key="`notice-${b}`" :record-brand="b"
@@ -302,6 +318,7 @@
       <p class="is-size-7 has-text-grey mt-2">{{ $t('analytics.clientsHint') }}</p>
       <p v-if="clients.rows.length" class="is-size-7 has-text-grey mt-2">{{ $t('analytics.clientsTierHint') }}</p>
     </section>
+    </template>
   </section>
 </template>
 
@@ -330,6 +347,8 @@ import {
 } from '../conversionOrders.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
+import CampaignMatrix from '../components/CampaignMatrix.vue';
+import { ANALYTICS_PANE_PREF, initialAnalyticsPane } from '../paneState.mjs'; // eslint-disable-line import/extensions
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
 // Fork (shop-link header total, 2026-10-19) -- shopLinks joins the rate headers: the shop-link
@@ -361,6 +380,7 @@ export default Vue.extend({
   components: {
     Chart,
     BrandContextNotice,
+    CampaignMatrix,
   },
 
   // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4/D9/D11).
@@ -368,6 +388,12 @@ export default Vue.extend({
 
   data() {
     return {
+      // Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D3) -- Campaign | Matrix; ?id= forces
+      // Campaign (the URL is read once: a matrix row's link remounts this view).
+      pane: initialAnalyticsPane(
+        this.$utils.getPref(ANALYTICS_PANE_PREF),
+        this.$utils.parseQueryIDs(this.$route.query.id).length > 0,
+      ),
       isSearchLoading: false,
       queriedCampaigns: [],
       // Fork (global brand, D9) -- the picker's last search (re-run on a selection change; null =
@@ -524,6 +550,11 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (campaign matrix, CAMPAIGN-MATRIX-SPEC D3) -- the pane pref's one writer.
+    onPaneChange() {
+      this.$utils.setPref(ANALYTICS_PANE_PREF, this.pane);
+    },
+
     onFromDateChange() {
       if (this.form.from > this.form.to) {
         this.form.to = dayjs(this.form.from).add(7, 'day').toDate();

@@ -107,6 +107,9 @@ type Queries struct {
 
 	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker.
 	QueryAnalyticsCampaigns *sqlx.Stmt `query:"query-analytics-campaigns"`
+	// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) -- the Campaign Matrix pane,
+	// interpolated at boot with the Brand Matrix's tracking-mode constant.
+	GetCampaignMatrix *sqlx.Stmt `query:"get-campaign-matrix"`
 
 	// These two queries are read as strings and based on settings.individual_tracking=on/off,
 	// are interpolated and copied to view and click counts. Same query, different tables.

@@ -211,6 +211,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/campaigns/conversions", pm(a.PutCampaignConversions, "brands:manage"))
 		// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker, list-scoped.
 		g.GET("/api/analytics/campaigns", pm(a.GetAnalyticsCampaigns, "campaigns:get_analytics"))
+		// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D10) -- the Campaign Matrix pane,
+		// the picker's permission and scoping; GP only for brands:get holders (in the handler).
+		g.GET("/api/analytics/campaigns/matrix", pm(a.GetCampaignMatrix, "campaigns:get_analytics"))
 		g.GET("/api/campaigns/:id/preview", pm(hasID(a.PreviewCampaign), "campaigns:get_all", "campaigns:get"))
 		g.POST("/api/campaigns/:id/preview/archive", pm(hasID(a.PreviewCampaignArchive), "campaigns:get_all", "campaigns:get"))
 		g.POST("/api/campaigns/:id/preview", pm(hasID(a.PreviewCampaign), "campaigns:get_all", "campaigns:get"))

@@ -702,6 +702,227 @@ SELECT JSON_BUILD_OBJECT(
     ), '[]'::JSON)
 ) AS data;
 
+-- name: get-campaign-matrix
+-- raw: true
+-- Fork (campaign matrix, integrations listmonk/CAMPAIGN-MATRIX-SPEC D4-D10). The Campaign Matrix
+-- pane of Campaigns > Analytics -- one row per campaign in scope with activity in the window, live.
+-- Prepared on boot (cmd/init.go) with the Brand Matrix's tracking-mode constant as the one
+-- interpolated value -- so this text holds no bare percent sign (the house rule for raw statements).
+--   $1 all campaigns, else $2 the permitted list ids; $3 started campaigns only (analytics-only
+--      users); $4 the global brand's list ids (empty = no scope), ANDed with the permission scope.
+--      Exactly query-analytics-campaigns' scoping predicate (D10) -- keep the two identical.
+--   $5 evergreen (NULL = every kind; the Campaigns page's kind pill, D4); $6 compute GP (the caller
+--      holds the brands get permission, D7; otherwise the GP fields are NULL); $7 the client-stats
+--      floor instant (D8). No comment line here may carry a colon (goyesql would read it as a tag).
+--   window = the Brand Matrix's, the 60 America/Denver calendar days ending yesterday, [t0, t1). The
+--     zone is the ONE literal in the zone CTE below and MUST equal get-dashboard-brand-matrix's.
+--   a broadcast (NOT evergreen) is in when started_at is in [t0, t1) and sent > 0; its numbers are
+--     everything recorded for it before t1 (lo = -infinity). Its Sent is campaigns.sent.
+--   a journey (evergreen) is in when a campaign_send_hours row has its hour in [t0, t1); its Sent is
+--     those rows' sum and its events are those in [t0, t1) (lo = t0).
+--   views / clicks follow the tracking mode -- TRUE = each (campaign, subscriber) once, counted when
+--     the pair's FIRST view/click of the campaign is at or after lo (the Brand Matrix's rule, so a
+--     journey never recounts a person), NULL subscribers never; FALSE = raw rows in [lo, t1).
+--   view_clients = per client token ('' = Unknown) the same count restricted to that token's views,
+--     among the views counted above (TRUE = the counted pairs' in-window views, distinct subscribers per
+--     token; FALSE = raw rows). Tokens only -- the trust tier is the frontend's (clientRows.mjs).
+--   hard_bounces / soft_bounces / complaints = raw bounces rows of that type in [lo, t1).
+--   tracked / matched = campaign_conversions in [lo, t1) as orders and sales, NULL when the latest
+--     conversions doc does not cover the campaign (get-campaign-conversions' coverage rule).
+--   brand = the ONE brand of the campaign's ACTIVE lists (list_brand_tag, unattributed excluded --
+--     the Brand Matrix's lst rule); NULL with zero or several.
+--   gp_rate / gp_thresholds (broadcasts with a brand, $6 only) = the GP point of the broadcast's
+--     Mountain send day from brand_health rows of that brand with day in [sendDay, sendDay + 14] --
+--     the newest row whose series holds the day with ANY Gmail rate (Brands.vue's spamSeries rule),
+--     its spamRate when a number (else NULL) and that row's spamRate.detail.thresholds verbatim.
+--   client_floor = started_at is before $7 (views before it carry no client token).
+WITH zone AS (
+    SELECT 'America/Denver'::TEXT AS tz
+),
+win AS (
+    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE - 1 AS d1 FROM zone
+),
+bounds AS (
+    SELECT tz, d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win
+),
+scoped AS (
+    SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.sent FROM campaigns c
+    WHERE (
+        $1::BOOLEAN OR EXISTS (
+            SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($2::INT[])
+        )
+    )
+        AND (NOT $3::BOOLEAN OR c.started_at IS NOT NULL)
+        AND (
+            CARDINALITY($4::INT[]) = 0 OR EXISTS (
+                SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($4::INT[])
+            )
+        )
+        AND ($5::BOOLEAN IS NULL OR c.evergreen = $5::BOOLEAN)
+),
+jsent AS (
+    SELECT h.campaign_id, SUM(h.n)::BIGINT AS sent, MAX(h.hour) AS last_hour FROM campaign_send_hours h
+    WHERE h.campaign_id IN (SELECT id FROM scoped WHERE evergreen)
+        AND h.hour >= (SELECT t0 FROM bounds) AND h.hour < (SELECT t1 FROM bounds)
+    GROUP BY h.campaign_id
+),
+camps AS (
+    SELECT s.id, s.name, s.status, s.evergreen, s.started_at,
+        CASE WHEN s.evergreen THEN j.sent ELSE s.sent::BIGINT END AS sent,
+        j.last_hour,
+        (s.started_at AT TIME ZONE (SELECT tz FROM bounds))::DATE AS send_day,
+        CASE WHEN s.evergreen THEN (SELECT t0 FROM bounds) ELSE '-infinity'::TIMESTAMPTZ END AS lo
+    FROM scoped s
+    LEFT JOIN jsent j ON (j.campaign_id = s.id)
+    WHERE (s.evergreen AND j.campaign_id IS NOT NULL)
+        OR (NOT s.evergreen AND s.sent > 0
+            AND s.started_at >= (SELECT t0 FROM bounds) AND s.started_at < (SELECT t1 FROM bounds))
+),
+vrows AS (
+    SELECT cv.campaign_id, cv.subscriber_id, COALESCE(cv.client, '') AS client FROM campaign_views cv
+    JOIN camps k ON (k.id = cv.campaign_id)
+    WHERE cv.created_at >= k.lo AND cv.created_at < (SELECT t1 FROM bounds)
+),
+vpairs AS (
+    SELECT DISTINCT v.campaign_id, v.subscriber_id FROM vrows v
+    JOIN camps k ON (k.id = v.campaign_id)
+    WHERE %[1]s AND v.subscriber_id IS NOT NULL
+        AND (NOT k.evergreen OR NOT EXISTS (
+            SELECT 1 FROM campaign_views p
+            WHERE p.campaign_id = v.campaign_id AND p.subscriber_id = v.subscriber_id AND p.created_at < k.lo
+        ))
+),
+views AS (
+    SELECT campaign_id, COUNT(*) AS n FROM vpairs GROUP BY campaign_id
+    UNION ALL
+    SELECT campaign_id, COUNT(*) AS n FROM vrows WHERE NOT %[1]s GROUP BY campaign_id
+),
+vtok AS (
+    SELECT v.campaign_id, v.client, COUNT(DISTINCT v.subscriber_id) AS n FROM vrows v
+    JOIN vpairs p ON (p.campaign_id = v.campaign_id AND p.subscriber_id = v.subscriber_id)
+    GROUP BY v.campaign_id, v.client
+    UNION ALL
+    SELECT campaign_id, client, COUNT(*) AS n FROM vrows WHERE NOT %[1]s GROUP BY campaign_id, client
+),
+vclients AS (
+    SELECT campaign_id, JSON_OBJECT_AGG(client, n ORDER BY client) AS m FROM vtok GROUP BY campaign_id
+),
+crows AS (
+    SELECT lc.campaign_id, lc.subscriber_id FROM link_clicks lc
+    JOIN camps k ON (k.id = lc.campaign_id)
+    WHERE lc.created_at >= k.lo AND lc.created_at < (SELECT t1 FROM bounds)
+),
+cpairs AS (
+    SELECT DISTINCT c.campaign_id, c.subscriber_id FROM crows c
+    JOIN camps k ON (k.id = c.campaign_id)
+    WHERE %[1]s AND c.subscriber_id IS NOT NULL
+        AND (NOT k.evergreen OR NOT EXISTS (
+            SELECT 1 FROM link_clicks p
+            WHERE p.campaign_id = c.campaign_id AND p.subscriber_id = c.subscriber_id AND p.created_at < k.lo
+        ))
+),
+clicks AS (
+    SELECT campaign_id, COUNT(*) AS n FROM cpairs GROUP BY campaign_id
+    UNION ALL
+    SELECT campaign_id, COUNT(*) AS n FROM crows WHERE NOT %[1]s GROUP BY campaign_id
+),
+bnc AS (
+    SELECT b.campaign_id,
+        COUNT(*) FILTER (WHERE b.type = 'hard') AS hard,
+        COUNT(*) FILTER (WHERE b.type = 'soft') AS soft,
+        COUNT(*) FILTER (WHERE b.type = 'complaint') AS complaint
+    FROM bounces b
+    JOIN camps k ON (k.id = b.campaign_id)
+    WHERE b.created_at >= k.lo AND b.created_at < (SELECT t1 FROM bounds)
+    GROUP BY b.campaign_id
+),
+convdoc AS (
+    SELECT doc FROM system_health WHERE kind = 'conversions' ORDER BY day DESC LIMIT 1
+),
+cov AS (
+    SELECT
+        CASE WHEN JSONB_TYPEOF(doc->'trackedCampaigns') = 'array' THEN doc->'trackedCampaigns' ELSE '[]'::JSONB END AS tracked,
+        CASE WHEN JSONB_TYPEOF(doc->'matchedCampaigns') = 'array' THEN doc->'matchedCampaigns' ELSE '[]'::JSONB END AS matched
+    FROM convdoc
+),
+conv AS (
+    SELECT cc.campaign_id, cc.measure, COUNT(*) AS orders, COALESCE(SUM(cc.sales_usd), 0) AS sales
+    FROM campaign_conversions cc
+    JOIN camps k ON (k.id = cc.campaign_id)
+    WHERE cc.purchased_at >= k.lo AND cc.purchased_at < (SELECT t1 FROM bounds)
+    GROUP BY cc.campaign_id, cc.measure
+),
+cbrand AS (
+    SELECT cl.campaign_id,
+        CASE WHEN COUNT(DISTINCT list_brand_tag(l.tags)) = 1 THEN MIN(list_brand_tag(l.tags)) END AS brand
+    FROM campaign_lists cl
+    JOIN lists l ON (l.id = cl.list_id)
+    WHERE cl.campaign_id IN (SELECT id FROM camps) AND l.status = 'active'
+        AND list_brand_tag(l.tags) IS NOT NULL AND list_brand_tag(l.tags) <> 'unattributed'
+    GROUP BY cl.campaign_id
+),
+gp AS (
+    SELECT k.id AS campaign_id, pt.rate, pt.thresholds FROM camps k
+    JOIN cbrand cb ON (cb.campaign_id = k.id AND cb.brand IS NOT NULL)
+    CROSS JOIN LATERAL (
+        SELECT CASE WHEN JSONB_TYPEOF(x->'spamRate') = 'number' THEN x->'spamRate' END AS rate,
+            bh.doc->'inputs'->'spamRate'->'detail'->'thresholds' AS thresholds
+        FROM brand_health bh
+        CROSS JOIN LATERAL JSONB_ARRAY_ELEMENTS(
+            CASE WHEN JSONB_TYPEOF(bh.doc->'inputs'->'spamRate'->'detail'->'series') = 'array'
+                THEN bh.doc->'inputs'->'spamRate'->'detail'->'series' ELSE '[]'::JSONB END) x
+        WHERE bh.brand = cb.brand AND bh.day BETWEEN k.send_day AND k.send_day + 14
+            AND x->>'day' = TO_CHAR(k.send_day, 'YYYY-MM-DD')
+            AND (JSONB_TYPEOF(x->'spamRate') = 'number' OR JSONB_TYPEOF(x->'spf') = 'number'
+                OR JSONB_TYPEOF(x->'dkim') = 'number' OR JSONB_TYPEOF(x->'dmarc') = 'number'
+                OR JSONB_TYPEOF(x->'deliveryErrorRate') = 'number' OR JSONB_TYPEOF(x->'tlsOut') = 'number')
+        ORDER BY bh.day DESC
+        LIMIT 1
+    ) pt
+    WHERE $6::BOOLEAN AND NOT k.evergreen
+)
+SELECT JSON_BUILD_OBJECT(
+    'window', (SELECT JSON_BUILD_OBJECT('from', TO_CHAR(d0, 'YYYY-MM-DD'), 'to', TO_CHAR(d1, 'YYYY-MM-DD')) FROM bounds),
+    'gp', $6::BOOLEAN,
+    'conversions', (SELECT JSON_BUILD_OBJECT('as_of', doc->'asOf', 'tracked_floor', doc->'trackedFloor',
+        'matched_floor', doc->'matchedFloor', 'tracked_stale', doc->'trackedStale') FROM convdoc),
+    'rows', COALESCE((
+        SELECT JSON_AGG(JSON_BUILD_OBJECT(
+            'id', k.id,
+            'name', k.name,
+            'status', k.status,
+            'evergreen', k.evergreen,
+            'started_at', k.started_at,
+            'send_day', CASE WHEN NOT k.evergreen THEN TO_CHAR(k.send_day, 'YYYY-MM-DD') END,
+            'last_sent', CASE WHEN k.evergreen THEN TO_CHAR((k.last_hour AT TIME ZONE (SELECT tz FROM bounds))::DATE, 'YYYY-MM-DD') END,
+            'brand', cb.brand,
+            'sent', k.sent,
+            'views', COALESCE(v.n, 0),
+            'view_clients', COALESCE(vc.m, '{}'::JSON),
+            'clicks', COALESCE(c.n, 0),
+            'hard_bounces', COALESCE(b.hard, 0),
+            'soft_bounces', COALESCE(b.soft, 0),
+            'complaints', COALESCE(b.complaint, 0),
+            'tracked', CASE WHEN EXISTS (SELECT 1 FROM cov WHERE cov.tracked @> TO_JSONB(k.id))
+                THEN JSON_BUILD_OBJECT('orders', COALESCE(t.orders, 0), 'sales_usd', COALESCE(t.sales, 0)) END,
+            'matched', CASE WHEN EXISTS (SELECT 1 FROM cov WHERE cov.matched @> TO_JSONB(k.id))
+                THEN JSON_BUILD_OBJECT('orders', COALESCE(m.orders, 0), 'sales_usd', COALESCE(m.sales, 0)) END,
+            'gp_rate', g.rate,
+            'gp_thresholds', CASE WHEN g.rate IS NOT NULL THEN g.thresholds END,
+            'client_floor', k.started_at IS NULL OR k.started_at < $7::TIMESTAMPTZ
+        ) ORDER BY k.id)
+        FROM camps k
+        LEFT JOIN views v ON (v.campaign_id = k.id)
+        LEFT JOIN vclients vc ON (vc.campaign_id = k.id)
+        LEFT JOIN clicks c ON (c.campaign_id = k.id)
+        LEFT JOIN bnc b ON (b.campaign_id = k.id)
+        LEFT JOIN conv t ON (t.campaign_id = k.id AND t.measure = 'tracked')
+        LEFT JOIN conv m ON (m.campaign_id = k.id AND m.measure = 'matched')
+        LEFT JOIN cbrand cb ON (cb.campaign_id = k.id)
+        LEFT JOIN gp g ON (g.campaign_id = k.id)
+    ), '[]'::JSON)
+) AS data;
+
 -- name: get-running-campaign
 -- Returns the metadata for a running campaign that is required by next-campaign-subscribers to retrieve
 -- a batch of campaign subscribers for processing.

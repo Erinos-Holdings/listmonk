@@ -14,18 +14,8 @@
             data-cy="pane-overview" @input="onPaneChange">
             {{ $t('dashboard.panes.overview') }}
           </b-radio-button>
-          <!-- Fork (brand matrix, integrations BRAND-MATRIX-SPEC D1) -- the third pane, between
-               Overview and SES, behind the same brands:get gate (its rows carry health data). -->
-          <b-radio-button v-model="pane" native-value="matrix" type="is-primary"
-            data-cy="pane-matrix" @input="onPaneChange">
-            {{ $t('dashboard.panes.matrix') }}
-          </b-radio-button>
-          <!-- Fork (brand usage, integrations BRAND-USAGE-SPEC D2) -- the fourth pane, between Brand
-               Matrix and SES, behind the same brands:get gate; it renders off the matrix fetch. -->
-          <b-radio-button v-model="pane" native-value="usage" type="is-primary"
-            data-cy="pane-usage" @input="onPaneChange">
-            {{ $t('dashboard.panes.usage') }}
-          </b-radio-button>
+          <!-- Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D1/D2) -- the Brand Matrix and
+               Brand Usage panes moved to the Brands page (List | Matrix | Usage). -->
           <b-radio-button v-model="pane" native-value="ses" type="is-primary"
             data-cy="pane-ses" @input="onPaneChange">
             {{ $t('dashboard.panes.ses') }}
@@ -35,230 +25,6 @@
     </header>
 
     <dashboard-ses v-if="pane === 'ses'" />
-
-    <!-- Fork (brand matrix, integrations BRAND-MATRIX-SPEC D2-D7). One row per brand of the global
-         selection (narrowed by the navbar launch filter), the totals row pinned last; every rate,
-         sort and missing-value rule is brandMatrix.mjs. -->
-    <section v-else-if="pane === 'matrix'" class="brand-matrix relative" data-cy="brand-matrix">
-      <b-loading v-if="matrix.loading" active :is-full-page="false" />
-      <div class="is-flex is-align-items-center mb-3">
-        <span class="has-text-grey mr-2">{{ $t('dashboard.matrix.engagement') }}</span>
-        <b-field class="mb-0">
-          <b-radio-button v-model="matrix.mode" native-value="pct" size="is-small" type="is-primary"
-            data-cy="matrix-mode-pct" @input="onMatrixMode">
-            {{ $t('dashboard.matrix.pctUsd') }}
-          </b-radio-button>
-          <b-radio-button v-model="matrix.mode" native-value="num" size="is-small" type="is-primary"
-            data-cy="matrix-mode-num" @input="onMatrixMode">
-            {{ $t('dashboard.matrix.num') }}
-          </b-radio-button>
-        </b-field>
-      </div>
-      <!-- 2026-10-24 layout pass (user ask): a hand-rolled table so the spreadsheet-style group
-           headers exist (Buefy's b-table has no grouped header row) -- Health far left, then
-           Brand and Sent, the Engagement section (incl. GP S%), Conversions, then Subscribers,
-           each section tinted, the sorted column emphasized. Sorting is clickSort; the spam
-           cell's class/style/tooltip stay brandMatrix.mjs::spamCell (GP-SPAM-VISIBILITY D3). -->
-      <div class="table-container">
-        <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="matrix-table">
-          <thead>
-            <tr class="bm-groups">
-              <th colspan="3" />
-              <th :colspan="matrixEngCells.length" class="bm-eng bm-group">
-                {{ $t('dashboard.matrix.engagement') }}
-              </th>
-              <!-- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- between
-                   Engagement and Subscribers (2026-10-29). -->
-              <th :colspan="conversionFields.length" class="bm-eng bm-group">
-                {{ $t('analytics.conversions.title') }}
-              </th>
-              <th :colspan="matrixSubColumns.length" class="bm-subs bm-group">
-                {{ $tc('globals.terms.subscriber', 2) }}
-              </th>
-            </tr>
-            <tr>
-              <th>{{ $t('dashboard.matrix.health') }}</th>
-              <th :class="bmTh('brand')" :aria-sort="bmAria('brand')" @click="onMatrixSort('brand')">
-                {{ $t('dashboard.matrix.brand') }}<span class="bm-arrow">{{ bmArrow('brand') }}</span>
-              </th>
-              <th class="has-text-right" :class="bmTh('sent')" :title="$t('dashboard.matrix.sentHelp')"
-                :aria-sort="bmAria('sent')" @click="onMatrixSort('sent')">
-                {{ $t('dashboard.matrix.sent') }}<span class="bm-arrow">{{ bmArrow('sent') }}</span>
-              </th>
-              <th v-for="c in matrixEngCells" :key="c.field" class="bm-eng has-text-right"
-                :class="bmTh(c.field)" :title="c.help ? $t(c.help) : null"
-                :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
-                {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
-              </th>
-              <!-- CAMPAIGN-CONVERSIONS-SPEC D11 -- the %/$ mode shows sales, the # mode orders. -->
-              <th v-for="f in conversionFields" :key="f" class="bm-eng has-text-right"
-                :class="bmTh(f)" :title="conversionTip(f, matrix.conversions)"
-                :aria-sort="bmAria(f)" @click="onMatrixSort(f)" :data-cy="`matrix-head-${f}`">
-                {{ $t(`analytics.conversions.${f}`) }}<span class="bm-arrow">{{ bmArrow(f) }}</span>
-              </th>
-              <th v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right"
-                :class="bmTh(c.field)" :title="c.help ? $t(c.help) : null"
-                :aria-sort="bmAria(c.field)" @click="onMatrixSort(c.field)">
-                {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in matrixTableRows" :key="row.brand || 'totals'" :class="matrixRowClass(row)">
-              <td class="bm-health">
-                <health-chip v-if="row.status" :status="row.status"
-                  :to="{ name: 'brand', params: { brand: row.brand } }" />
-              </td>
-              <td :class="bmTd('brand')">
-                <span :data-cy="`matrix-brand-${row.brand || 'totals'}`">{{ row.label }}</span>
-              </td>
-              <td class="has-text-right" :class="bmTd('sent')">
-                <span :title="$t('dashboard.matrix.sentHelp')">{{ matrixCell(row, 'sent') }}</span>
-              </td>
-              <td v-for="c in matrixEngCells" :key="c.field" class="bm-eng has-text-right" :class="bmTd(c.field)">
-                <span v-if="c.field === 'spam_rate'" :class="spamCell(row).cls"
-                  :style="spamCell(row).style || null" :title="$t(spamCell(row).tooltip)"
-                  :data-cy="`matrix-spam-${row.brand || 'totals'}`">
-                  {{ row.totals ? '' : matrixCell(row, 'spam_rate') }}</span>
-                <!-- DASHBOARDS-POLISH-SPEC D1: red when the displayed rate crosses the row's STORED
-                     threshold (brandMatrix.mjs::engagementCell decides; POLISH3 D1: both modes). -->
-                <span v-else :class="engagementCell(row, c.field).cls || null" :title="c.help ? $t(c.help) : null"
-                  :data-cy="`matrix-${c.field}-${row.brand || 'totals'}`">{{ matrixCell(row, c.field) }}</span>
-              </td>
-              <td v-for="f in conversionFields" :key="f" class="bm-eng has-text-right" :class="bmTd(f)"
-                :title="conversionTip(f, matrix.conversions)" :data-cy="`matrix-${f}-${row.brand || 'totals'}`">
-                {{ matrixConversionText(row, f) }}
-              </td>
-              <td v-for="c in matrixSubColumns" :key="c.field" class="bm-subs has-text-right" :class="bmTd(c.field)">
-                {{ matrixCell(row, c.field) }}
-              </td>
-            </tr>
-            <tr v-if="!matrix.loading && !matrixTableRows.length">
-              <td :colspan="3 + matrixEngCells.length + matrixSubColumns.length + conversionFields.length">
-                <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="is-size-7 has-text-grey mt-2" data-cy="matrix-note">{{ $t('dashboard.matrix.note') }}</p>
-    </section>
-
-    <!-- Fork (brand usage, integrations BRAND-USAGE-SPEC D2/D7; BRAND-USAGE-V2-SPEC D1-D5). The
-         Brand Matrix's rows (same fetch, scope and launch filter), each brand's stored usage object
-         rendered: the Score, then the Broadcasts / Journeys / Configurations sections. Every state,
-         count, threshold and weight was computed by the integrations BrandHealth Lambda; every cell,
-         circle, link and sort rule is brandUsage.mjs. V2 D2: the matrix's hand-rolled table pattern
-         (group header row, sorted-column emphasis) with neutral-grey section bands -- the
-         stoplight circles are the table's only chroma. -->
-    <section v-else-if="pane === 'usage'" class="brand-usage relative" data-cy="brand-usage">
-      <b-loading v-if="matrix.loading" active :is-full-page="false" />
-      <div class="table-container">
-        <table class="table is-hoverable is-narrow bu-table" data-cy="usage-table">
-          <thead>
-            <tr class="bu-groups">
-              <th colspan="2" />
-              <th v-for="s in usageSections" :key="s.key" :colspan="s.fields.length"
-                :class="['bu-group', 'bu-start', `bu-band-${s.band}`]">
-                {{ $t(s.label) }}
-              </th>
-            </tr>
-            <!-- DASHBOARDS-POLISH3-SPEC D4/D5 -- brandUsage.mjs::headerLayout: plain leaves span the
-                 two lower header rows; a sub-group (No purchase, Skipped) puts its label over its
-                 leaves (3d | 7d | 15d; FR ES DE IT). -->
-            <tr>
-              <th rowspan="2" class="bu-head" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"
-                :aria-sort="buAria('score')" @click="onUsageSort('score')">
-                {{ $t('dashboard.usage.score') }}<span class="bm-arrow">{{ buArrow('score') }}</span>
-              </th>
-              <th rowspan="2" class="bu-head" :class="buTh('brand')" :aria-sort="buAria('brand')" @click="onUsageSort('brand')">
-                {{ $t('dashboard.matrix.brand') }}<span class="bm-arrow">{{ buArrow('brand') }}</span>
-              </th>
-              <template v-for="c in usageHeader.row2">
-                <th v-if="c.kind === 'group'" :key="`g-${c.key}`" :colspan="c.span"
-                  class="has-text-centered bu-head bu-subgroup"
-                  :class="[`bu-band-${c.band}`, { 'bu-start': c.first, 'bu-small': c.small }]"
-                  :title="$t(c.help)" :data-cy="`usage-group-${c.key}`">
-                  {{ $t(c.label) }}
-                </th>
-                <th v-else :key="c.field" rowspan="2" class="has-text-centered bu-head"
-                  :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]" :title="$t(usageMeta(c.field).help)"
-                  :aria-sort="buAria(c.field)" @click="onUsageSort(c.field)">
-                  {{ usageLabel(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
-                </th>
-              </template>
-            </tr>
-            <tr>
-              <th v-for="c in usageHeader.row3" :key="c.field" class="has-text-centered bu-small"
-                :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.groupStart }]"
-                :title="$t(usageMeta(c.field).help)" :aria-sort="buAria(c.field)" @click="onUsageSort(c.field)"
-                :data-cy="`usage-head-${c.field}`">
-                {{ usageLabel(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in usageTableRows" :key="row.brand" :class="{ 'bu-zma': row.zma }">
-              <td class="has-text-right bu-score" :class="buTd('score')">
-                <span :title="usageCell(row, 'score').tooltip || null" :data-cy="`usage-score-${row.brand}`">
-                  {{ usageCell(row, 'score').text }}</span>
-              </td>
-              <td :class="buTd('brand')">
-                <span :data-cy="`usage-brand-${row.brand}`">{{ row.label }}</span>
-                <b-tag v-if="row.zma" size="is-small" class="ml-1" :title="$t('dashboard.usage.zmaHelp')">
-                  {{ $t('dashboard.usage.zma') }}
-                </b-tag>
-              </td>
-              <td v-for="c in usageColumns" :key="c.field" class="has-text-centered"
-                :class="[buTd(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]">
-                <!-- V2 D3/D4: one circle per state, the stored count inside; the link is per CELL
-                     (Campaigns, the list preselected, the Automations scope; Journeys -- POLISH2 D2 --
-                     the Automations scope filtered to the brand's lists). -->
-                <component v-if="usageCell(row, c.field).circles.length" :is="usageLink(row, c.field) ? 'router-link' : 'span'"
-                  :to="usageLink(row, c.field) ? { name: 'campaigns', query: usageLink(row, c.field) } : null"
-                  class="bu-circles" :data-cy="`usage-${c.field}-${row.brand}`">
-                  <span v-for="ci in usageCell(row, c.field).circles" :key="ci.color"
-                    :class="['bu-circle', `bu-${ci.color}`]" :title="usageCell(row, c.field).tooltip"
-                    :aria-label="usageCell(row, c.field).tooltip">{{ ci.n }}</span>
-                </component>
-                <!-- DASHBOARDS-POLISH2-SPEC D2: the Cadence / Last broadcast text links the brand's
-                     lists in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links.
-                     POLISH3 D2/D5: the broadcast links carry status=finished; a Skipped count > 0
-                     is red and links its skipping lists in the All scope. -->
-                <component v-else :is="usageLink(row, c.field) ? 'router-link' : 'span'"
-                  :to="usageLink(row, c.field) ? { name: 'campaigns', query: usageLink(row, c.field) } : null"
-                  :class="usageCell(row, c.field).cls" :title="usageTitle(row, c.field)"
-                  :data-cy="`usage-${c.field}-${row.brand}`">
-                  <span>{{ usageCell(row, c.field).text }}</span>
-                </component>
-                <!-- DASHBOARDS-POLISH3-SPEC D4 (stage 2 F5) -- one amber ⚠ per No purchase step
-                     with no parseable days, after the sub-group's last leaf; its parser error in
-                     the tooltip (brandUsage.mjs::cellBadges). -->
-                <span v-for="(b, bi) in usageBadges(row, c.field)" :key="`w-${bi}`"
-                  class="bu-warn has-text-warning-dark ml-1" :title="b.tooltip" :aria-label="b.tooltip"
-                  :data-cy="`usage-npwarn-${row.brand}`">{{ b.glyph }}</span>
-              </td>
-            </tr>
-            <tr v-if="!matrix.loading && !usageTableRows.length">
-              <td :colspan="2 + usageColumns.length">
-                <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <!-- V2 D5: the stoplight key, then the ZMA line and the as-of line (Mountain time). -->
-      <p class="is-size-7 has-text-grey mt-2 bu-legend" data-cy="usage-legend">
-        <span class="bu-circle bu-green">1</span> {{ $t('dashboard.usage.legendRunning') }}
-        <span class="bu-circle bu-amber">1</span> {{ $t('dashboard.usage.legendIdle') }}
-        <span class="bu-circle bu-red">0</span> {{ $t('dashboard.usage.legendNone') }}
-        · {{ $t('dashboard.usage.legendConfig') }}
-      </p>
-      <p class="is-size-7 has-text-grey" data-cy="usage-zma-note">{{ $t('dashboard.usage.note') }}</p>
-      <p class="is-size-7 has-text-grey" data-cy="usage-note">
-        {{ usageRunTime ? $t('dashboard.usage.noteAsOf', { date: usageRunTime }) : $t('dashboard.usage.computed') }}
-      </p>
-    </section>
 
     <section v-else class="counts wrap">
       <div class="tile is-ancestor">
@@ -389,12 +155,13 @@
                       </li>
                       <!-- Fork (campaign conversions, CAMPAIGN-CONVERSIONS-SPEC D11) -- Tracked and
                            Matched over the pane's C, lifetime from each measure's floor; sales in
-                           the wide rate column, orders beside the label. -->
+                           the wide rate column, orders beside the label. Labelled "Tracked Conv." /
+                           "Matched Conv." (integrations CAMPAIGN-MATRIX-SPEC D11). -->
                       <li v-for="c in overviewConversions" :key="c.key" :title="c.tip"
                         :data-cy="`conversions-${c.key}`">
                         <span class="pl-pct">{{ c.cell.sales }}</span>
                         <span class="pl-count">{{ c.cell.orders }}</span>
-                        <span class="pl-label">{{ $t(`analytics.conversions.${c.key}`) }}</span>
+                        <span class="pl-label">{{ $t(`analytics.conversions.${c.key}Conv`) }}</span>
                       </li>
                     </ul>
                   </div>
@@ -622,26 +389,18 @@
 <script>
 import dayjs from 'dayjs';
 import Vue from 'vue';
-import { mapGetters, mapState } from 'vuex';
+import { mapState } from 'vuex';
 import Chart from '../components/Chart.vue';
 import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsClicksChart.mjs'; // eslint-disable-line import/extensions
 import {
   clicksConversionsOptions, conversionsAxisMax, loadConvState, saveConvState, shapeClicksConversions,
 } from '../clicksConversionsChart.mjs'; // eslint-disable-line import/extensions
 import DashboardSes from './DashboardSes.vue';
-import HealthChip from '../components/HealthChip.vue';
-import {
-  CONVERSION_FIELDS, ENGAGEMENT_FIELDS, cellText, clickSort, conversionValue, engagementCell, initialPane, loadState,
-  saveState, sessionStore, shapeRows, spamCell, tableRows,
-} from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
+// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D2) -- the Brand Matrix and Brand Usage
+// panes moved to the Brands page (components/BrandMatrix.vue, BrandUsage.vue); the Overview keeps
+// what it shares with them (the pane rule, the conversion fields and cells, the session store).
+import { CONVERSION_FIELDS, initialPane, sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
-import {
-  SECTIONS as USAGE_SECTIONS, cell as usageCellOf, cellBadges as usageCellBadges, cellLink as usageCellLink,
-  clickSort as usageClickSort, columnMeta as usageColumnMeta, headerLayout as usageHeaderLayout, latestAsOf,
-  linkTip as usageLinkTip,
-  loadState as loadUsageState, mountainRunTime, saveState as saveUsageState, shapeRows as shapeUsageRows,
-  sortRows as sortUsageRows,
-} from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
   DEFAULT_SORT as CLIENT_DEFAULT_SORT, TIER_ROWS, clientTierSubtotals, clientTotals,
   shapeClientRows, sortClientRows,
@@ -662,7 +421,6 @@ export default Vue.extend({
   components: {
     Chart,
     DashboardSes,
-    HealthChip,
   },
 
   // Fork (global brand, integrations GLOBAL-BRAND-SPEC D4/D5).
@@ -674,20 +432,8 @@ export default Vue.extend({
       canSes,
       // Fork (brand matrix, BRAND-MATRIX-SPEC D1) -- the sticky dashboard.pane pref (the legacy
       // dashboard.sesPane boolean read only while it is unset); Overview without brands:get.
+      // CAMPAIGN-MATRIX-SPEC D2: Overview | SES -- a stored matrix or usage reads as overview.
       pane: initialPane(canSes, this.$utils.getPref('dashboard.pane'), this.$utils.getPref('dashboard.sesPane')),
-      // Fork (brand matrix, D6/D7) -- the matrix's API rows, and its sort and %|# mode, per
-      // browser session (sessionStorage, never the localStorage pref helper).
-      matrix: {
-        apiRows: [],
-        // CAMPAIGN-CONVERSIONS-SPEC D11 -- the conversions doc's as_of/floors (null = no doc: '—').
-        conversions: null,
-        loading: false,
-        ...loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
-      },
-      // Fork (brand usage, BRAND-USAGE-SPEC D7) -- the usage pane's sort, per browser session
-      // (sessionStorage key dashboard.usage; V2 D2: a fresh session is Score descending); its rows
-      // are matrix.apiRows.
-      usage: loadUsageState(sessionStore(typeof window !== 'undefined' ? window : null)),
       // Fork (BRAND-USAGE-V2-SPEC D7) -- the expanded Subscribers table's %|# mode, per browser
       // session (sessionStorage key dashboard.overview).
       overview: loadOverviewState(sessionStore(typeof window !== 'undefined' ? window : null)),
@@ -726,81 +472,9 @@ export default Vue.extend({
   },
 
   methods: {
-    // Fork (brand matrix, D1/D7) -- the string pref (dashboard.sesPane is no longer written); the
-    // matrix is fetched on every activation, so a scope change made while it was hidden is read.
+    // Fork (brand matrix, D1) -- the string pref (dashboard.sesPane is no longer written).
     onPaneChange() {
       this.$utils.setPref('dashboard.pane', this.pane);
-      if (this.pane === 'matrix' || this.pane === 'usage') {
-        this.fetchMatrix(this.scopeParams());
-      }
-    },
-
-    // Fork (brand usage, V2 D2) -- the pane owns its own header (the matrix's pattern), so a header
-    // click is brandUsage.mjs::clickSort, nothing else: a NEW column takes its default direction
-    // (Brand asc, every other desc), a repeat click toggles.
-    onUsageSort(field) {
-      this.usage.sort = usageClickSort(this.usage.sort, field);
-      saveUsageState(sessionStore(window), { sort: this.usage.sort });
-    },
-
-    usageCell(row, field) {
-      return usageCellOf(row, field, (k, p) => this.$t(k, p));
-    },
-
-    // DASHBOARDS-POLISH3-SPEC D4 -- the No purchase sub-group's ⚠ badges (last leaf only).
-    usageBadges(row, field) {
-      return usageCellBadges(row, field, (k, p) => this.$t(k, p));
-    },
-
-    // A leaf column's header label and hover (brandUsage.mjs::columnMeta): an i18n key with params,
-    // or a literal (the Skipped language codes).
-    usageMeta(field) {
-      return usageColumnMeta(field);
-    },
-
-    usageLabel(field) {
-      const m = usageColumnMeta(field);
-      return m.text !== undefined ? m.text : this.$t(m.label, m.params);
-    },
-
-    // V2 D4; DASHBOARDS-POLISH2-SPEC D2 -- the cell's Campaigns query ({ list_id, evergreen }: one
-    // list for welcome/trigger, the brand's list set for Journeys and the broadcast cells), or null.
-    usageLink(row, field) {
-      return usageCellLink(row, field);
-    },
-
-    // DASHBOARDS-POLISH-SPEC D2 -- a text cell's tooltip: the cell's own, then (a linked broadcast
-    // cell) the brand-broadcasts link note; null when both are empty.
-    usageTitle(row, field) {
-      const parts = [this.usageCell(row, field).tooltip, usageLinkTip(row, field, (k, p) => this.$t(k, p))];
-      return parts.filter(Boolean).join('\n') || null;
-    },
-
-    // The sorted column's emphasis and arrow (the matrix's bm* helpers over the usage sort).
-    buSorted(field) {
-      return this.usage.sort.field === field;
-    },
-
-    buTh(field) {
-      return ['bm-sort', { 'bu-sorted': this.buSorted(field) }];
-    },
-
-    buTd(field) {
-      return { 'bu-sorted': this.buSorted(field) };
-    },
-
-    buArrow(field) {
-      if (!this.buSorted(field)) {
-        return '';
-      }
-      return this.usage.sort.order === 'asc' ? '↑' : '↓';
-    },
-
-    buAria(field) {
-      if (!this.buSorted(field)) {
-        return null;
-      }
-      return this.usage.sort.order === 'asc' ? 'ascending' : 'descending';
     },
 
     // V2 D7 -- the expanded Subscribers table's %|# mode, per session.
@@ -812,92 +486,9 @@ export default Vue.extend({
       return this.scopeListIds ? { list_id: this.scopeListIds } : {};
     },
 
-    // Fork (brand matrix, D7) -- the matrix over the same scope as the counts.
-    fetchMatrix(params) {
-      this.matrix.loading = true;
-      this.$api.getDashboardBrandMatrix(params).then((data) => {
-        this.matrix.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
-        this.matrix.conversions = (data && data.conversions) || null;
-      }).finally(() => {
-        this.matrix.loading = false;
-      });
-    },
-
-    saveMatrixState() {
-      saveState(sessionStore(window), { sort: this.matrix.sort, mode: this.matrix.mode });
-    },
-
-    onMatrixMode() {
-      this.saveMatrixState();
-    },
-
-    // D6 -- the matrix table owns its own header (2026-10-24 layout pass), so a header click is
-    // brandMatrix.mjs::clickSort, nothing else: a NEW column takes its default direction, a
-    // repeat click toggles.
-    onMatrixSort(field) {
-      this.matrix.sort = clickSort(this.matrix.sort, field);
-      this.saveMatrixState();
-    },
-
-    // The sorted column's emphasis and arrow (user ask 2026-10-24).
-    bmSorted(field) {
-      return this.matrix.sort.field === field;
-    },
-
-    bmTh(field) {
-      return ['bm-sort', { 'bm-sorted': this.bmSorted(field) }];
-    },
-
-    bmTd(field) {
-      return { 'bm-sorted': this.bmSorted(field) };
-    },
-
-    bmArrow(field) {
-      if (!this.bmSorted(field)) {
-        return '';
-      }
-      return this.matrix.sort.order === 'asc' ? '↑' : '↓';
-    },
-
-    bmAria(field) {
-      if (!this.bmSorted(field)) {
-        return null;
-      }
-      return this.matrix.sort.order === 'asc' ? 'ascending' : 'descending';
-    },
-
-    matrixCell(row, field) {
-      return cellText(row, field, this.matrix.mode, (n) => this.$utils.formatNumber(n));
-    },
-
-    // CAMPAIGN-CONVERSIONS-SPEC D11 -- a Tracked/Matched cell ({ orders, sales }); '—' with no doc.
-    matrixConversion(row, field) {
-      return scopedCell(conversionValue(row, field), this.matrix.conversions, (n) => this.$utils.formatNumber(n));
-    },
-
-    // One figure per mode (2026-10-29): whole-dollar sales under %/$, orders under #; '—' with no
-    // doc (the sales text is '' then, so fall back to the orders text, which is the dash).
-    matrixConversionText(row, field) {
-      const c = this.matrixConversion(row, field);
-      return this.matrix.mode === 'num' ? c.orders : (c.sales || c.orders);
-    },
-
     // The Tracked/Matched tooltip (definition, floor, as-of, stale note) -- conversionCells.mjs.
     conversionTip(measure, meta) {
       return conversionTooltip(measure, meta, (k, p) => this.$t(k, p));
-    },
-
-    spamCell(row) {
-      return spamCell(row);
-    },
-
-    // DASHBOARDS-POLISH-SPEC D1 -- the engagement cell's red class, from the stored thresholds.
-    engagementCell(row, field) {
-      return engagementCell(row, field, this.matrix.mode);
-    },
-
-    matrixRowClass(row) {
-      return row.totals ? 'bm-totals' : '';
     },
 
     // Fork (dashboard counts, D3).
@@ -971,12 +562,6 @@ export default Vue.extend({
       this.isCountsLoading = true;
       this.isChartsLoading = true;
       const params = this.scopeParams();
-
-      // Fork (brand matrix, D7) -- refetched with the others only while its pane (or the brand
-      // usage pane, which renders off the same fetch -- BRAND-USAGE-SPEC D2) is active.
-      if (this.pane === 'matrix' || this.pane === 'usage') {
-        this.fetchMatrix(params);
-      }
 
       this.$api.getDashboardCounts(params).then((data) => {
         this.counts = data;
@@ -1124,12 +709,8 @@ export default Vue.extend({
       return subscriberColumns(this.subsGrid, !!(this.serverConfig && this.serverConfig.lang_enabled));
     },
 
-    // Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- the Matrix's two
-    // columns and the Overview's two lines (lifetime over the pane's C, '—' with no doc).
-    conversionFields() {
-      return CONVERSION_FIELDS;
-    },
-
+    // Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- the Overview's two
+    // lines (lifetime over the pane's C, '—' with no doc).
     overviewConversions() {
       const conv = (this.counts && this.counts.conversions) || {};
       const fmt = (n) => this.$utils.formatNumber(n);
@@ -1144,94 +725,6 @@ export default Vue.extend({
       return this.engagementLines.map((l) => ({
         ...l, parts: this.pctParts(l.count, l.denominator, (n) => this.$utils.formatNumber(n)),
       }));
-    },
-
-    // Fork (brand matrix, D2/D4/D6) -- the launch value and the brands rows (display names); the
-    // module narrows, shapes, sorts and appends the totals row.
-    ...mapGetters(['launch']),
-
-    matrixTableRows() {
-      const rows = shapeRows(this.matrix.apiRows, { brands: this.brandRows, launch: this.launch });
-      return tableRows(rows, this.matrix.sort, this.matrix.mode, {
-        locale: (this.$i18n && this.$i18n.locale) || 'en',
-        totalsLabel: this.$t('dashboard.matrix.total'),
-      });
-    },
-
-    // Fork (brand usage, D2/D7) -- the matrix rows (same launch filter and display names), sorted.
-    // DASHBOARDS-POLISH2-SPEC D2 -- the lists store (active, permitted lists) gives each row its
-    // brand list-id set, the Journeys / broadcast link filter.
-    usageTableRows() {
-      const rows = shapeUsageRows(this.matrix.apiRows, {
-        brands: this.brandRows, launch: this.launch, lists: this.$store.state.lists,
-      });
-      return sortUsageRows(rows, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en');
-    },
-
-    // D1 -- the note's "as of" day: the newest stored asOf among the rendered rows (null = none).
-    usageAsOf() {
-      return latestAsOf(this.usageTableRows);
-    },
-
-    // V2 D5 -- that day's run time in Mountain time (Intl, America/Denver), null without a day.
-    usageRunTime() {
-      return mountainRunTime(this.usageAsOf);
-    },
-
-    // V2 D2 -- the sections (brandUsage.mjs SECTIONS) with their alternating band: grey, white, grey.
-    usageSections() {
-      return USAGE_SECTIONS.map((s, i) => ({ ...s, band: i % 2 === 0 ? 'grey' : 'white' }));
-    },
-
-    // The section leaf columns in display order, each with its band and whether it opens its
-    // section (POLISH3 D4/D5: the sub-group leaves included -- labels come from usageMeta).
-    usageColumns() {
-      return this.usageSections.flatMap((s) => s.fields.map((f, i) => ({
-        field: f, band: s.band, first: i === 0,
-      })));
-    },
-
-    // POLISH3 D4/D5 -- the two lower header rows (brandUsage.mjs::headerLayout).
-    usageHeader() {
-      return usageHeaderLayout();
-    },
-
-    matrixSubColumns() {
-      return [
-        { field: 'total', label: 'dashboard.matrix.subscr' },
-        { field: 'active', label: 'dashboard.matrix.active' },
-        { field: 'held', label: 'dashboard.matrix.held' },
-        { field: 'unsubscribed', label: 'dashboard.matrix.unsub' },
-        // DELIVERABILITY-CONSISTENCY-SPEC D1/D2 -- "Blocklisted" (status), never "Blocked" (the
-        // 5.7.x bounce class); the hover names the scope.
-        { field: 'blocked', label: 'dashboard.matrix.blocked', help: 'dashboard.matrix.blockedHelp' },
-      ];
-    },
-
-    // D4 -- Blocks is a subset of H. Bounces; its header says so. The Engagement section's cells
-    // in column order, GP Spam % included (2026-10-24 layout pass).
-    matrixEngCells() {
-      const labels = {
-        views: 'dashboard.matrix.views',
-        clicks: 'dashboard.matrix.clicks',
-        hard_bounces: 'dashboard.matrix.hardBounces',
-        blocks: 'dashboard.matrix.blocks',
-        complaints: 'dashboard.matrix.complaints',
-      };
-      // DASHBOARDS-POLISH-SPEC D1 -- every Engagement header carries its target hover (the
-      // literals restated in i18n name their homes: lib/brand-health.ts MATRIX_THRESHOLDS /
-      // SPAM_RATE_*, lib/ses-health.ts SES_BRAND_THRESHOLDS).
-      const helps = {
-        views: 'dashboard.matrix.viewsHelp',
-        clicks: 'dashboard.matrix.clicksHelp',
-        hard_bounces: 'dashboard.matrix.hardBouncesHelp',
-        blocks: 'dashboard.matrix.blocksHelp',
-        complaints: 'dashboard.matrix.complaintsHelp',
-      };
-      return [
-        ...ENGAGEMENT_FIELDS.map((f) => ({ field: f, label: labels[f], help: helps[f] })),
-        { field: 'spam_rate', label: 'dashboard.matrix.spam', help: 'dashboard.matrix.gpSpamHelp' },
-      ];
     },
 
     engagementLines() {

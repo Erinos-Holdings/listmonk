@@ -1,5 +1,6 @@
 // Fork (brand matrix, integrations listmonk/BRAND-MATRIX-SPEC D2/D4/D5/D6). The pure half of the
-// Dashboard's Brand Matrix pane: row shaping (display name, launch filter), the totals row, the
+// Brand Matrix pane (the Brands page since integrations CAMPAIGN-MATRIX-SPEC D1; its session key
+// keeps the dashboard.matrix name): row shaping (display name, launch filter), the totals row, the
 // rates, the %|# display mode, the sort (default directions, initial sort, missing-last) and the
 // per-session persistence wrapper. No Vue, no DOM; tested by brandMatrix.test.mjs (yarn test).
 //
@@ -359,8 +360,9 @@ export function normalizeState(s) {
 
 // D1: the Dashboard panes. Without brands:get only the Overview exists. The sticky pref is the
 // string dashboard.pane; the legacy boolean dashboard.sesPane is read only while dashboard.pane is
-// unset (true = ses). BRAND-USAGE-SPEC D2: `usage` (the Brand Usage pane) sits between matrix and ses.
-export const PANES = Object.freeze(['overview', 'matrix', 'usage', 'ses']);
+// unset (true = ses). Integrations CAMPAIGN-MATRIX-SPEC D2: the Brand Matrix and Brand Usage panes
+// moved to the Brands page (paneState.mjs), so a stored `matrix` or `usage` now reads as overview.
+export const PANES = Object.freeze(['overview', 'ses']);
 
 export function initialPane(canSes, storedPane, legacySesPane) {
   if (!canSes) {

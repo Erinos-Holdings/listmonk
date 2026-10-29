@@ -1056,13 +1056,7 @@ func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
 			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
 	}
 
-	var (
-		allCampaigns   = user.HasPerm(auth.PermCampaignsGetAll)
-		permittedLists []int
-	)
-	if !allCampaigns {
-		allCampaigns, permittedLists = user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
-	}
+	allCampaigns, permittedLists := analyticsCampaignScope(user)
 
 	// Fork (global brand, integrations GLOBAL-BRAND-SPEC D9) -- optional, repeatable list_id: the
 	// global brand's effective list set, a separate scope ANDed with the permission scoping above
@@ -1087,6 +1081,62 @@ func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
 	}
 
 	out, err := a.core.QueryAnalyticsCampaigns(ids, query, allCampaigns, permittedLists, isAnalyticsOnly(user), perPage, scopeLists)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// analyticsCampaignScope (fork, brand analytics, BRAND-ANALYTICS-SPEC D2/D3) is the permission half
+// of the Campaign Analytics scoping: campaigns:get_all (or blanket list access) reads every
+// campaign, otherwise the campaigns on the permitted (get or manage) lists. The picker and the
+// Campaign Matrix (integrations CAMPAIGN-MATRIX-SPEC D10) both derive their scope here -- one rule.
+func analyticsCampaignScope(user auth.User) (bool, []int) {
+	if user.HasPerm(auth.PermCampaignsGetAll) {
+		return true, nil
+	}
+	return user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
+}
+
+// clientStatsFloor (fork, campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D8) is the client-stats
+// release instant (CLIENT-STATS-SPEC status line: erinos.210 deployed and the host re-applied). Views
+// recorded before it carry no client token, so a Campaign Matrix row whose campaign started before it
+// is returned with client_floor: true and the page shows its tier columns as missing. The one copy
+// of the date -- the frontend holds none.
+var clientStatsFloor = time.Date(2026, 10, 7, 9, 3, 0, 0, time.UTC)
+
+// GetCampaignMatrix (fork, campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) is the Campaign
+// Matrix pane: GET /api/analytics/campaigns/matrix behind campaigns:get_analytics. Scoped exactly as
+// GetAnalyticsCampaigns (analyticsCampaignScope, isAnalyticsOnly, list_id ANDed -- it only narrows);
+// kind is the Campaigns page's pill (broadcasts | automations | all, empty = all). The GP send-day
+// spam rate is computed only for a brands:get holder (every brand_health read is gated on it, D7).
+func (a *App) GetCampaignMatrix(c echo.Context) error {
+	user := auth.GetUser(c)
+
+	scopeLists, err := parseStringIDs(c.QueryParams()["list_id"])
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
+	}
+
+	var evergreen *bool
+	switch c.QueryParam("kind") {
+	case "", "all":
+	case "broadcasts":
+		v := false
+		evergreen = &v
+	case "automations":
+		v := true
+		evergreen = &v
+	default:
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "kind"))
+	}
+
+	allCampaigns, permittedLists := analyticsCampaignScope(user)
+	gp := user.HasPerm(auth.PermBrandsGet)
+
+	out, err := a.core.GetCampaignMatrix(allCampaigns, permittedLists, isAnalyticsOnly(user), scopeLists, evergreen, gp, clientStatsFloor)
 	if err != nil {
 		return err
 	}

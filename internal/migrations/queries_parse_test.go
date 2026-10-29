@@ -273,6 +273,52 @@ func TestDashboardBrandMatrixQueryInterpolates(t *testing.T) {
 	}
 }
 
+// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4/D8) -- the Campaign Matrix statement
+// shares the Brand Matrix's window: its zone literal is ONE and the SAME as the matrix's; its only
+// tag is raw; every percent sign is the boot-time %[1]s mode placeholder, and both modes interpolate
+// cleanly.
+func TestCampaignMatrixQueryInterpolates(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	qs := goyesql.Queries{}
+	for _, f := range []string{"campaigns.sql", "misc.sql"} {
+		b, err := os.ReadFile(filepath.Join(root, "queries", f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		q, err := goyesql.ParseBytes(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k, v := range q {
+			qs[k] = v
+		}
+	}
+	got, ok := qs["get-campaign-matrix"]
+	if !ok || !strings.Contains(got.Query, "SELECT") {
+		t.Fatal("get-campaign-matrix missing or empty after parse")
+	}
+	if len(got.Tags) != 1 || got.Tags["raw"] != "true" {
+		t.Errorf("get-campaign-matrix tags %v, want only raw=true (a colon-bearing comment line?)", got.Tags)
+	}
+	if n := strings.Count(got.Query, "%"); n != strings.Count(got.Query, "%[1]s") {
+		t.Errorf("query text carries %d percent signs beyond the %%[1]s placeholders", n)
+	}
+	zoneRe := regexp.MustCompile(`'([A-Za-z_]+/[A-Za-z_]+)'::TEXT AS tz`)
+	mz, cz := zoneRe.FindAllStringSubmatch(qs["get-dashboard-brand-matrix"].Query, -1), zoneRe.FindAllStringSubmatch(got.Query, -1)
+	if len(mz) != 1 || len(cz) != 1 || mz[0][1] != cz[0][1] {
+		t.Errorf("zone literals: brand matrix %v, campaign matrix %v -- want exactly one each, equal", mz, cz)
+	}
+	for _, mode := range []string{"TRUE", "FALSE"} {
+		s := fmt.Sprintf(got.Query, mode)
+		if strings.Contains(s, "%") {
+			t.Errorf("interpolated with %q: verb error or leftover percent sign", mode)
+		}
+	}
+}
+
 // Fork (campaign send series, integrations CAMPAIGN-SEND-SERIES-SPEC D5) -- the Campaign Analytics
 // statements bucket in Mountain wall-clock: each carries its zone as ONE literal, the SAME literal as
 // the Dashboard charts statement's (and so the integrations SES_DAILY_ZONE -- a cross-repo prose

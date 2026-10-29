@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/jmoiron/sqlx/types"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 	"github.com/lib/pq"
@@ -114,6 +115,31 @@ func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns
 		c.log.Printf("error fetching analytics campaigns: %v", err)
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
+// GetCampaignMatrix (fork, campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) runs the one
+// Campaign Matrix statement. allCampaigns / permittedLists / startedOnly / scopeLists are exactly
+// QueryAnalyticsCampaigns' scoping arguments (the caller derives them with the picker's own helper);
+// evergreen nil = every kind; gp computes the GP send-day spam rate (the caller holds brands:get);
+// clientFloor is the client-stats release instant (rows started before it carry client_floor).
+func (c *Core) GetCampaignMatrix(allCampaigns bool, permittedLists []int, startedOnly bool, scopeLists []int,
+	evergreen *bool, gp bool, clientFloor time.Time) (types.JSONText, error) {
+	if permittedLists == nil {
+		permittedLists = []int{}
+	}
+	if scopeLists == nil {
+		scopeLists = []int{}
+	}
+
+	var out types.JSONText
+	if err := c.q.GetCampaignMatrix.Get(&out, allCampaigns, pq.Array(permittedLists), startedOnly,
+		pq.Array(scopeLists), evergreen, gp, clientFloor); err != nil {
+		c.log.Printf("error fetching campaign matrix: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "campaign matrix", "error", pqErrMsg(err)))
 	}
 
 	return out, nil

@@ -219,7 +219,9 @@ test('I8: an engagement column sorts by the displayed quantity -- rate in pct, c
 
 test('D1: the pane pref -- brands:get gates every non-Overview pane; the legacy boolean only while unset', () => {
   assert.equal(initialPane(false, 'matrix', true), 'overview');
-  assert.equal(initialPane(true, 'matrix', true), 'matrix');
+  // Integrations CAMPAIGN-MATRIX-SPEC I7 -- the matrix moved to the Brands page: a stored `matrix`
+  // reads as overview.
+  assert.equal(initialPane(true, 'matrix', true), 'overview');
   assert.equal(initialPane(true, 'overview', true), 'overview');
   assert.equal(initialPane(true, undefined, true), 'ses');
   assert.equal(initialPane(true, null, false), 'overview');

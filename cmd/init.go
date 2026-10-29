@@ -471,6 +471,9 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	// Fork (brand matrix, integrations BRAND-MATRIX-SPEC D3) -- the matrix counts clicks with the
 	// SAME mode constant as the charts statement (its '5.7.%%' LIKE pattern becomes '5.7.%' here).
 	qMap["get-dashboard-brand-matrix"].Query = fmt.Sprintf(qMap["get-dashboard-brand-matrix"].Query, uniqueClicks)
+	// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D8) -- the Campaign Matrix counts views
+	// and clicks with the SAME mode constant (each subscriber once under individual tracking).
+	qMap["get-campaign-matrix"].Query = fmt.Sprintf(qMap["get-campaign-matrix"].Query, uniqueClicks)
 
 	// Scan and prepare all queries.
 	var q models.Queries

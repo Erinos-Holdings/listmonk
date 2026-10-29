@@ -989,13 +989,20 @@ section.dashboard {
       padding-right: 3.75rem;
     }
   }
+}
 
+/* Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D1/D5) -- the Brand Matrix and Brand Usage
+panes left the Dashboard for the Brands page, and the Campaign Matrix (Campaigns > Analytics) takes
+the Brand Matrix's table style, so the blocks down to .bu-circle are no longer nested under
+section.dashboard (which reopens after them). */
+#app {
   /* Fork (brand matrix, integrations BRAND-MATRIX-SPEC D6; 2026-10-24 layout pass). The Brand
   Matrix table: tabular figures; the spreadsheet-style group header row; a subtle tint per
   section (Engagement warm -- it is the pane's point -- Subscribers cool); the sorted column a
   shade stronger via a translucent overlay, so it composes with either tint; the totals row in
   bold. */
-  .brand-matrix {
+  .brand-matrix,
+  .campaign-matrix {
     td, th {
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
@@ -1181,7 +1188,9 @@ section.dashboard {
       color: #fff;
     }
   }
+}
 
+section.dashboard {
   /* Fork (BRAND-USAGE-V2-SPEC D7b; DASHBOARDS-POLISH-SPEC D4) -- the Subscribers + Messages sent
   container's PERMANENT width, sized to its widest POSSIBLE state: the expanded segment x
   send-language table in # mode with ALL SIX gridLines.mjs GRID_LANGS columns present (label
