@@ -256,6 +256,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Fork (on-demand brand-health refresh) -- BRANDHEALTH-REFRESH-SPEC D2 (system_health.go).
 		// brands:manage, not settings:manage (a refresh is not a settings write; no step-up).
 		g.POST("/api/system/health/refresh", pm(a.RefreshSystemHealth, "brands:manage"))
+		// Fork (usage decisions) -- USAGE-DECISIONS-SPEC D3/D4 (usage_decisions.go). The read is any
+		// Brands reader's; the write is registered under brands:decide and the handler then applies
+		// canDecide, which also refuses Super Admin (pm lets role 1 through) and every API token.
+		g.GET("/api/usage/decisions", pm(a.GetUsageDecisions, "brands:get"))
+		g.POST("/api/usage/decisions/:key", pm(a.PostUsageDecision, "brands:decide"))
 
 		g.GET("/api/media", pm(a.GetAllMedia, "media:get"))
 		// Fork (media tags) -- MEDIA-TAGS-SPEC 3.4. Registered before /api/media/:id for the

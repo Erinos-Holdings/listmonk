@@ -311,6 +311,22 @@ export const putBrandPersonas = (slug, personas) => http.put(
   { camelCase: false },
 );
 
+// Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D4/D5) -- the lifecycle decision record
+// under Brands > Usage. The GET never toasts (a reader without the section simply sees none); the
+// POST's 400/403 message is toasted by the interceptor, and its 409 (stale text) is shown by the
+// pane, which then reloads (disableToast so it is not shown twice). snake_case kept (camelCase:
+// false) -- usageDecisions.mjs reads can_decide / user_name / created_at.
+export const getUsageDecisions = () => http.get(
+  '/api/usage/decisions',
+  { camelCase: false, disableToast: true },
+);
+
+export const postUsageDecision = (key, body) => http.post(
+  `/api/usage/decisions/${encodeURIComponent(key)}`,
+  body,
+  { camelCase: false, disableToast: true },
+);
+
 // Brand theme (visual editor swatches). The swatch row is a convenience, so a failed fetch
 // must never surface as an editor error toast.
 export const getBrandTheme = (slug) => http.get(

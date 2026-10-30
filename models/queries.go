@@ -206,6 +206,10 @@ type Queries struct {
 	// Fork (persona From) -- queries/brands.sql, PERSONA-FROM-SPEC D4.
 	UpdateBrandPersonas      *sqlx.Stmt `query:"update-brand-personas"`
 	GetCampaignsCarryingFrom *sqlx.Stmt `query:"get-campaigns-carrying-from"`
+	// Fork (usage decisions) -- queries/brands.sql, USAGE-DECISIONS-SPEC D4. An INSERT and a SELECT
+	// only: the table is append-only (TestNoMutatingQueries, and the v6.2.29 trigger).
+	InsertUsageDecision *sqlx.Stmt `query:"insert-usage-decision"`
+	GetUsageDecisions   *sqlx.Stmt `query:"get-usage-decisions"`
 
 	// Fork (system health) -- queries/system.sql, SES-HEALTH-SPEC D6.
 	UpsertSystemHealth     *sqlx.Stmt `query:"upsert-system-health"`

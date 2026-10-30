@@ -1,0 +1,104 @@
+{
+  "approver": "Kaylinn Brophy",
+  "published": "2026-10-30",
+  "items": [
+    {
+      "key": "np-entry",
+      "section": "no-purchase",
+      "n": 1,
+      "since": "2026-10-30",
+      "text": "Entry. Anyone who joins a brand's newsletter list (site signup, checkout opt-in, or an import marked as new) gets the Day 0 welcome on joining, then the follow-up steps on their days."
+    },
+    {
+      "key": "np-exit-on-purchase",
+      "section": "no-purchase",
+      "n": 2,
+      "since": "2026-10-30",
+      "text": "Exit on purchase (your W01–W05 request). Any paid order of the brand, at any time, stops every remaining Welcome step. The check runs daily, so a step already sent isn't recalled."
+    },
+    {
+      "key": "np-same-day-double",
+      "section": "no-purchase",
+      "n": 3,
+      "since": "2026-10-30",
+      "text": "Frequency Risk: Welcome and Thank-you on the same day. Someone who opts in at checkout on their first order currently gets BOTH the welcome and the first-order thank-you (last 28 days: ~20% of Thirsty Girl & ~10% of Ruze sign-ups got both messages back-to-back).\nRecommended: Skip the Welcome and send only the Thank-you to someone whose signup IS their first order."
+    },
+    {
+      "key": "np-launch-overlap",
+      "section": "no-purchase",
+      "n": 4,
+      "since": "2026-10-30",
+      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Nothing suppresses a broadcast for someone part-way through the Welcome series; they receive both.\nRecommended: Keep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. This is the only way I see to effectively and efficiently maintain multi-brand/multi-language campaigns at this scale – even more so from a human perspective than a platform perspective."
+    },
+    {
+      "key": "np-no-restarts",
+      "section": "no-purchase",
+      "n": 5,
+      "since": "2026-10-30",
+      "text": "No restarts (your completion-tracking question). Every follow-up step sends once per person, ever — even if they unsubscribe and later re-subscribe. The one exception: the Day 0 welcome DOES send again on re-subscribe. That's deliberate today; confirm you want it."
+    },
+    {
+      "key": "np-unsubscribe-stops",
+      "section": "no-purchase",
+      "n": 6,
+      "since": "2026-10-30",
+      "text": "Unsubscribing from the newsletter stops every remaining step of both series."
+    },
+    {
+      "key": "np-ruze-15d",
+      "section": "no-purchase",
+      "n": 7,
+      "since": "2026-10-30",
+      "text": "Ruze's 15-day step. Keeps sending as-is.\nRecommended: The current campaign looks like it best fits the Day 2 “Gentle conversion reminder.”  I recommend retiring the 15-day campaign and re-scheduling it as the 2-day campaign (while preventing prior recipients from receiving it again)."
+    },
+    {
+      "key": "pp-entry",
+      "section": "post-purchase",
+      "n": 8,
+      "since": "2026-10-30",
+      "text": "Entry (your transition request). A customer enters on their first paid order EVER with the brand, only if they are subscribed to the newsletter at the time (ticking the checkout opt-in counts). Returning customers get no thank-you and no series. A buyer who isn't subscribed gets only the receipt — no marketing email."
+    },
+    {
+      "key": "pp-delivery-clock",
+      "section": "post-purchase",
+      "n": 9,
+      "since": "2026-10-30",
+      "text": "The clock is the order date, not delivery. The step timings assume 5-day delivery.\nRecommended: Start the clock at delivery instead. Aftership delivery confirmations would trigger the \"Getting started\" and \"How's it going?\" emails relative to when the product actually arrives — this would help avoid asking for a review of something still in transit. Orders with no delivery confirmation (untracked carriers, split shipments) would fall back to an order date plus 5 days, so nobody gets stuck."
+    },
+    {
+      "key": "pp-final-step-skip",
+      "section": "post-purchase",
+      "n": 10,
+      "since": "2026-10-30",
+      "text": "Final step skipped for anyone who has ordered again since their first order. A repeat buyer never gets an earlier step late either."
+    },
+    {
+      "key": "pp-returning-thanks",
+      "section": "post-purchase",
+      "n": 11,
+      "since": "2026-10-30",
+      "text": "Returning customers get no thank-you today. Do you want one?"
+    },
+    {
+      "key": "both-multi-brand",
+      "section": "both",
+      "n": null,
+      "since": "2026-10-30",
+      "text": "Frequency Risk: Multiple brands. The industry pattern is a per-person cap by message class, with journeys and transactional exempt, and engagement-based where it's sophisticated.  Our overlap today is small: 4.7% (1,185 of 25,045 active newsletter subscribers) are on two or more brands' lists, and only .8% (205) are on three or more.\nRecommended: Implement a per-person cap if overlap grows past ~15%.  For broadcasts, skip, never defer — skip the second brand's broadcast to someone who already got one that day rather than pushing it to the next day. Tiebreak by the person's own recent engagement with each brand. This is a skip, not a defer: Klaviyo Smart Sending skips (16-hour default, per account, no cross-brand awareness)."
+    },
+    {
+      "key": "both-per-brand",
+      "section": "both",
+      "n": null,
+      "since": "2026-10-30",
+      "text": "Frequency Risk: Per brand. This is where the real frequency risk is today (broadcast cadence + two series).  A new non-buyer in their first 10 days can get the welcome plus three No-purchase steps, and every broadcast the brand sends in that window. That's up to seven emails in ten days. A buyer gets the same shape from the New Customer series. Journeys alone are fine; it’s journey steps stacking on broadcasts that creates concern.\nRecommended:\n1. A \"Smart Sending\" rule.  Per brand, broadcasts only: skip a broadcast to anyone who received a journey email from the same brand in the last 24 hours. Journeys are exempt: they're one-shot and time-bound.\nNOTE: This is a skip, not a defer. Deferring a broadcast recipient to tomorrow doesn't fit listmonk's send model (a campaign finishes and doesn't revisit). Klaviyo Smart Sending skips (16-hour default, per account, no cross-brand awareness).\n2. Fix the same-day double. Welcome plus thank-you on one day is the one stack that hits every checkout opt-in.\n3. Keep sunset as the backstop.  Watch complaint rates in Brand Health. Fatigue shows up there first."
+    },
+    {
+      "key": "both-language",
+      "section": "both",
+      "n": null,
+      "since": "2026-10-30",
+      "text": "Language. A campaign's language reaches that language only, EN also reaches no-language subscribers, and automations have no English fallback."
+    }
+  ]
+}

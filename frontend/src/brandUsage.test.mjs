@@ -672,6 +672,34 @@ test('I15: each leaf maps the stored step at EXACTLY that day -- green running, 
   assert.match(cell(pp, 'postPurchase:14', t).tooltip, /^series\.postPurchaseDay14\n/);
 });
 
+// Fork (usage decisions, integrations USAGE-DECISIONS-SPEC I12 / D7): the legacy chip's glyph is
+// "{n}d" (no "legacy"), and it links the row's STORED campaigns -- { id, evergreen: 'all' }, the Day 0
+// circle's shape, ids ascending as strings -- with no link when the row stores none or predates
+// the field. The warn badge is unchanged (no link).
+test('I12: the legacy chip reads "{n}d" and links the row\'s stored campaigns; none when empty or absent', () => {
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en['dashboard.usage.legacyChip'], '{n}d');
+  const tEn = (k, p) => (en[k] || k).replace(/\{(\w+)\}/g, (m, name) => (p && name in p ? String(p[name]) : m));
+  const stored = { ...npStep(15, 56, 'running'), campaigns: [{ id: 231, status: 'paused' }, { id: 229, status: 'running' }, { id: 229, status: 'running' }] };
+  const ruze = wsRow([], [stored], 'ruze');
+  const [chip] = cellBadges(ruze, 'welcome:10', tEn);
+  assert.equal(chip.kind, 'legacy');
+  assert.equal(chip.glyph, '15d');
+  assert.deepEqual(chip.link, { id: ['229', '231'], evergreen: 'all' });
+  // Empty, absent, or malformed ids -> no link key at all.
+  [[], undefined, [{ id: 0 }, { id: 'x' }, null]].forEach((campaigns) => {
+    const row = wsRow([], [{ ...npStep(15, 56, 'running'), ...(campaigns === undefined ? {} : { campaigns }) }], 'ruze');
+    const [b] = cellBadges(row, 'welcome:10', tEn);
+    assert.equal(b.glyph, '15d');
+    assert.equal('link' in b, false, JSON.stringify(campaigns));
+  });
+  // The warn badge carries no link even when the row stores campaigns.
+  const warn = wsRow([], [{ ...npStep(null, 44, 'running', 'bad days'), campaigns: [{ id: 9, status: 'running' }] }]);
+  const [w] = cellBadges(warn, 'welcome:10', tEn);
+  assert.equal(w.kind, 'warn');
+  assert.equal('link' in w, false);
+});
+
 test('I15 (POLISH3 stage 2 F5): a no-days row is an amber ⚠ badge with its parser error; a pre-release doc is — throughout', () => {
   const r = wsRow([npStep(5, 41, 'running')], [npStep(null, 44, 'none', 'days "x" is not an integer ≥ 1'), npStep(null, 45, 'none', 'days "0" is not an integer ≥ 1')]);
   assert.deepEqual(cellBadges(r, 'welcome:10', t), [

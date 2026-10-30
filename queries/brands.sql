@@ -77,3 +77,14 @@ UPDATE lists SET tags = ARRAY(
     )::VARCHAR(100)[] || $2::VARCHAR(100)[],
     updated_at = NOW()
     WHERE list_brand_tag(tags) = $1;
+
+-- name: insert-usage-decision
+-- Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D4) -- append one decision. The table is
+-- append-only, so this file holds only this INSERT and the SELECT below for it (TestNoMutatingQueries).
+INSERT INTO usage_decisions (item_key, text_hash, decision, note, user_id, user_name)
+    VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;
+
+-- name: get-usage-decisions
+-- Every stored decision, newest first (the table holds one row per click; the GET folds them per item).
+SELECT id, item_key, text_hash, decision, note, user_id, user_name, created_at
+    FROM usage_decisions ORDER BY id DESC;

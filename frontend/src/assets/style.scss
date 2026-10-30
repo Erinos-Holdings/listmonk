@@ -1343,6 +1343,90 @@ section.dashboard (which reopens after them). */
     font-size: 0.875rem;
     color: $grey-dark;
   }
+  /* Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D5) -- the decision record under the
+  guide: the header and Both series span the width; the two series sit in the guide's columns,
+  split at the same measured --bu-guide-x (stacked when the guide is). Neutral like the guide. */
+  .bu-decisions {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #e8eaed;
+    display: grid;
+    gap: 1.5rem;
+    &.bu-decisions-split {
+      grid-template-columns: var(--bu-guide-x) minmax(0, 1fr);
+      column-gap: 0;
+      .bu-decisions-no-purchase {
+        padding-right: 2rem;
+        border-right: 1px solid #dbdee2;
+      }
+      .bu-decisions-post-purchase {
+        padding-left: 2rem;
+      }
+    }
+    .bu-decisions-head,
+    .bu-decisions-both {
+      grid-column: 1 / -1;
+    }
+  }
+  .bu-decisions-head {
+    font-size: 0.875rem;
+    color: $grey-dark;
+  }
+  .bu-decision-list {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+  }
+  .bu-decision {
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #f1f3f5;
+    font-size: 0.875rem;
+    p {
+      margin: 0;
+    }
+  }
+  .bu-decision-text,
+  .bu-decision-note {
+    white-space: pre-line;
+  }
+  .bu-decision-n {
+    margin-right: 0.35rem;
+  }
+  .bu-decision-state {
+    margin-top: 0.3rem !important;
+    font-size: 0.8rem;
+    color: $grey;
+    &.bu-decision-accepted,
+    &.bu-decision-rejected {
+      color: #363636;
+      font-weight: 600;
+    }
+  }
+  .bu-decision-note {
+    display: block;
+    font-size: 0.8rem;
+    color: $grey-dark;
+  }
+  .bu-decision-controls {
+    margin-top: 0.4rem;
+    .button + .button {
+      margin-left: 0.4rem;
+    }
+  }
+  .bu-decision-history {
+    margin-top: 0.3rem;
+    font-size: 0.8rem;
+    color: $grey;
+    summary {
+      cursor: pointer;
+    }
+    ol {
+      margin: 0.2rem 0 0 1.2rem;
+    }
+  }
+  .bu-decision-voided {
+    color: $grey-light;
+  }
 }
 
 section.dashboard {

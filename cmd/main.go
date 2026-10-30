@@ -21,6 +21,7 @@ import (
 	"github.com/knadh/listmonk/internal/buflog"
 	"github.com/knadh/listmonk/internal/captcha"
 	"github.com/knadh/listmonk/internal/core"
+	"github.com/knadh/listmonk/internal/decisions"
 	"github.com/knadh/listmonk/internal/events"
 	"github.com/knadh/listmonk/internal/i18n"
 	"github.com/knadh/listmonk/internal/manager"
@@ -67,6 +68,13 @@ type App struct {
 	// once from app.root_url; nil (with the error) makes the passkey routes answer 503.
 	webAuthn    *webauthn.WebAuthn
 	webAuthnErr error
+
+	// Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D2/D6) -- the embedded lifecycle
+	// items (parsed once at boot), the append-only table's store, and the Slack notice poster
+	// (ERINOS_SLACK_NOTICES_WEBHOOK; disabled when unset). See cmd/usage_decisions.go.
+	decisionDoc    decisions.Doc
+	usageDecisions usageDecisionStore
+	decisionNotice *decisionNotifier
 
 	about         about
 	fnOptinNotify func(models.Subscriber, []int) (int, error)
@@ -331,6 +339,17 @@ func main() {
 		// If there are no users, then the app needs to prompt for new user setup.
 		needsUserSetup: !hasUsers,
 	}
+
+	// Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D2/D6): the embedded lifecycle items
+	// (a malformed file is a build defect -- fail the boot), the table store, and the Slack notice
+	// URL, read once here.
+	decisionDoc, err := decisions.Lifecycle()
+	if err != nil {
+		lo.Fatalf("%v", err)
+	}
+	app.decisionDoc = decisionDoc
+	app.usageDecisions = dbDecisionStore{q: queries}
+	app.decisionNotice = newDecisionNotifier(os.Getenv("ERINOS_SLACK_NOTICES_WEBHOOK"), urlCfg.RootURL, lo)
 
 	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D2): a bad root URL never fails boot.
 	app.webAuthn, app.webAuthnErr = initWebAuthn(urlCfg.RootURL, cfg.SiteName)

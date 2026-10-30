@@ -871,3 +871,28 @@ CREATE TABLE IF NOT EXISTS campaign_conversions (
     PRIMARY KEY (measure, order_id)
 );
 CREATE INDEX IF NOT EXISTS idx_campaign_conversions_campaign ON campaign_conversions (campaign_id, measure);
+
+-- Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D4) -- Marketing's accept/reject record of
+-- the lifecycle-series items on Brands > Usage (texts: internal/decisions/lifecycle.json). Append-only:
+-- the trigger refuses UPDATE, DELETE and TRUNCATE; no foreign key to users (a deleted user's history
+-- survives; user_name is a snapshot). Mirrored in internal/migrations/v6.2.29.go (everything after the
+-- DROP; the function is CREATE OR REPLACE in both, since the DROP ... CASCADE drops only the trigger).
+DROP TABLE IF EXISTS usage_decisions CASCADE;
+CREATE TABLE IF NOT EXISTS usage_decisions (
+    id               BIGSERIAL PRIMARY KEY,
+    item_key         TEXT NOT NULL,
+    text_hash        CHAR(64) NOT NULL,
+    decision         TEXT NOT NULL CHECK (decision IN ('accept', 'reject')),
+    note             TEXT NULL,
+    user_id          INTEGER NOT NULL,
+    user_name        TEXT NOT NULL,
+    created_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE OR REPLACE FUNCTION usage_decisions_append_only() RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'usage_decisions is append-only: % refused', TG_OP;
+END;
+$$ LANGUAGE plpgsql;
+CREATE OR REPLACE TRIGGER usage_decisions_append_only
+    BEFORE UPDATE OR DELETE OR TRUNCATE ON usage_decisions
+    FOR EACH STATEMENT EXECUTE FUNCTION usage_decisions_append_only();

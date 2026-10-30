@@ -13,7 +13,8 @@
         "permissions":
         [
             "brands:get",
-            "brands:manage"
+            "brands:manage",
+            "brands:decide"
         ]
     },
     {

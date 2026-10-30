@@ -83,6 +83,10 @@ const (
 	// Fork (brand health, BRAND-HEALTH-SPEC D10).
 	PermBrandsGet    = "brands:get"
 	PermBrandsManage = "brands:manage"
+	// Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D3) -- accept or reject a lifecycle
+	// series item on Brands > Usage. Read directly from PermissionsMap by cmd/usage_decisions.go's
+	// canDecide (never HasPerm): Super Admin and API users are refused even holding it.
+	PermBrandsDecide = "brands:decide"
 
 	// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D5) -- set or change a list's transactional
 	// flag, and change the join trigger or brand of a list whose stored flag is true.

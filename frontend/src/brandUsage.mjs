@@ -377,7 +377,7 @@ export function triggerTip(p, t = (k) => k) {
   }).join('\n');
 }
 
-// S9: the group's chips, after its LAST leaf -- one grey "Nd legacy" chip per stored legacy row
+// S9: the group's chips, after its LAST leaf -- one grey "Nd" chip (USAGE-DECISIONS D7) per stored legacy row
 // with a whole `days` (its hover the legacy description, then the row), and one amber ⚠ per stored
 // row with NO parseable `days` (the lib stores null; its parser error in the hover -- the
 // POLISH3 F5 badge). [] on every other field, a pre-release doc, or a usage-less row. `kind` is
@@ -393,11 +393,21 @@ export function cellBadges(row, field, t = (k) => k) {
   }
   return s.legacy.filter(isObj).map((r) => {
     if (typeof r.days === 'number' && Number.isInteger(r.days) && r.days > 0) {
-      return {
+      const badge = {
         kind: 'legacy',
         glyph: t('dashboard.usage.legacyChip', { n: r.days }),
         tooltip: `${t(seriesStepKey(family, r.days))}\n${triggerTip({ rows: [r] }, t)}`,
       };
+      // Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D7) -- the chip opens the row's
+      // stored evergreens (lib/brand-usage.ts `TriggerRowUsage.campaigns`), the Day 0 circle's
+      // link shape; no `link` when the row stores none or predates the field. Never a hardcoded id.
+      const ids = Array.isArray(r.campaigns)
+        ? r.campaigns.filter(isObj).map((c) => c.id).filter((v) => typeof v === 'number' && Number.isInteger(v) && v > 0)
+        : [];
+      if (ids.length) {
+        badge.link = { id: [...new Set(ids)].sort((a, b) => a - b).map(String), evergreen: 'all' };
+      }
+      return badge;
     }
     return {
       kind: 'warn',

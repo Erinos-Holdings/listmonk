@@ -94,10 +94,16 @@
                    chip per off-standard step (does not count toward the score), and one amber ⚠
                    per step with no parseable days (POLISH3 stage 2 F5); the hover carries the
                    legacy description or the parser error (brandUsage.mjs::cellBadges). -->
-              <span v-for="(b, bi) in badges(row, c.field)" :key="`w-${bi}`"
+              <!-- USAGE-DECISIONS-SPEC D7: a legacy chip with stored campaigns opens them
+                   (b.link, the Day 0 circle's { id, evergreen: 'all' } shape). -->
+              <component v-for="(b, bi) in badges(row, c.field)" :key="`w-${bi}`"
+                :is="b.link ? 'router-link' : 'span'"
+                :to="b.link ? { name: 'campaigns', query: b.link } : null"
                 :class="b.kind === 'legacy' ? 'tag is-light is-small bu-legacy ml-1' : 'bu-warn has-text-warning-dark ml-1'"
                 :title="b.tooltip" :aria-label="b.tooltip"
-                :data-cy="b.kind === 'legacy' ? `usage-legacy-${row.brand}` : `usage-npwarn-${row.brand}`">{{ b.glyph }}</span>
+                :data-cy="b.kind === 'legacy' ? `usage-legacy-${row.brand}` : `usage-npwarn-${row.brand}`">
+                <span>{{ b.glyph }}</span>
+              </component>
             </td>
           </tr>
           <tr v-if="!loading && !tableRows.length">
@@ -146,6 +152,66 @@
         </ol>
       </div>
     </div>
+    <!-- Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D5) -- Marketing's decision record
+         on the lifecycle items, under the guide: the No-purchase and Post-purchase items in the
+         guide's two columns (the same measured split, stacked when the guide is), Both series full
+         width. The fork STORES these (D1); every rule is the server's -- who may decide
+         (can_decide), the current state and voiding. Text only through mustache interpolation, never raw HTML.
+         Pure half: usageDecisions.mjs. -->
+    <div v-if="decisionView" class="bu-decisions" :class="{ 'bu-decisions-split': guideX !== null }"
+      :style="guideX !== null ? { '--bu-guide-x': `${guideX}px` } : null" data-cy="usage-decisions">
+      <p class="bu-decisions-head" data-cy="usage-decisions-head">{{ decisionsHeader }}</p>
+      <div v-for="col in decisionColumns" :key="col.key" :class="['bu-decisions-col', `bu-decisions-${col.key}`]"
+        :data-cy="`usage-decisions-${col.key}`">
+        <h4 class="bu-guide-title">{{ col.title }}</h4>
+        <ul class="bu-decision-list">
+          <li v-for="it in col.items" :key="it.key" class="bu-decision" :data-cy="`decision-${it.key}`">
+            <p class="bu-decision-text">
+              <strong v-if="itemNum(it)" class="bu-decision-n">{{ itemNum(it) }}.</strong>{{ it.text }}
+            </p>
+            <p :class="['bu-decision-state', `bu-decision-${stateOf(it).kind}`]" :data-cy="`decision-state-${it.key}`">
+              {{ stateOf(it).text }}
+            </p>
+            <p v-if="stateOf(it).note" class="bu-decision-note">{{ stateOf(it).note }}</p>
+            <div v-if="canDecide" class="bu-decision-controls">
+              <template v-if="rejecting !== it.key">
+                <b-button size="is-small" type="is-success" :loading="saving === it.key" :disabled="saving !== null"
+                  :data-cy="`decision-accept-${it.key}`" @click="decide(it, 'accept')">
+                  {{ $t('decisions.accept') }}
+                </b-button>
+                <b-button size="is-small" :disabled="saving !== null" :data-cy="`decision-reject-${it.key}`"
+                  @click="startReject(it)">
+                  {{ $t('decisions.reject') }}
+                </b-button>
+              </template>
+              <template v-else>
+                <b-input v-model="note" type="textarea" maxlength="2000" rows="2"
+                  :placeholder="$t('decisions.notePlaceholder')" :data-cy="`decision-note-${it.key}`" />
+                <div class="buttons mt-1">
+                  <b-button size="is-small" type="is-danger" :loading="saving === it.key"
+                    :disabled="!rejectReady || saving !== null" :data-cy="`decision-submit-${it.key}`"
+                    @click="decide(it, 'reject')">
+                    {{ $t('decisions.submit') }}
+                  </b-button>
+                  <b-button size="is-small" :disabled="saving !== null" @click="cancelReject">
+                    {{ $t('decisions.cancel') }}
+                  </b-button>
+                </div>
+              </template>
+            </div>
+            <details v-if="historyOf(it).rows.length" class="bu-decision-history" :data-cy="`decision-history-${it.key}`">
+              <summary>{{ historyOf(it).summary }}</summary>
+              <ol>
+                <li v-for="(h, hi) in historyOf(it).rows" :key="hi" :class="{ 'bu-decision-voided': h.voided }">
+                  {{ h.text }}<span v-if="h.mark" class="bu-decision-mark"> ({{ h.mark }})</span>
+                  <span v-if="h.note" class="bu-decision-note">{{ h.note }}</span>
+                </li>
+              </ol>
+            </details>
+          </li>
+        </ul>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -157,6 +223,10 @@ import {
   SECTIONS, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideSplitX, headerLayout, latestAsOf,
   linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
+import {
+  canSubmitReject, columnsOf, decisionBody, headerText, historyOf as decisionHistory, isStale, itemNumber,
+  replaceItem, showControls, stateLine,
+} from '../usageDecisions.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -173,6 +243,12 @@ export default Vue.extend({
       usage: loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
       // The journey guide's divider x (px from the guide's left edge), or null = stacked.
       guideX: null,
+      // USAGE-DECISIONS-SPEC D5 -- GET /api/usage/decisions (null hides the section), the item
+      // whose Reject note is open, its note, and the item being saved.
+      decisionView: null,
+      rejecting: null,
+      note: '',
+      saving: null,
     };
   },
 
@@ -215,6 +291,29 @@ export default Vue.extend({
     guideSteps() {
       return Math.max(...this.guide.map((g) => g.steps.length));
     },
+
+    // USAGE-DECISIONS-SPEC D5 -- the header, the columns (the guide's two titles, Both series full
+    // width), and whether to show Accept / Reject (the server's can_decide only).
+    decisionsHeader() {
+      return headerText(this.decisionView, (k, p) => this.$t(k, p));
+    },
+
+    decisionColumns() {
+      const c = columnsOf(this.decisionView);
+      return [
+        { key: 'no-purchase', title: this.$t('dashboard.usage.guideWelcome'), items: c.noPurchase },
+        { key: 'post-purchase', title: this.$t('dashboard.usage.guideNewCustomer'), items: c.postPurchase },
+        { key: 'both', title: this.$t('decisions.both'), items: c.both },
+      ];
+    },
+
+    canDecide() {
+      return showControls(this.decisionView);
+    },
+
+    rejectReady() {
+      return canSubmitReject(this.note);
+    },
   },
 
   methods: {
@@ -228,6 +327,61 @@ export default Vue.extend({
         this.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
       }).finally(() => {
         this.loading = false;
+      });
+    },
+
+    // USAGE-DECISIONS-SPEC D4/D5 -- the decision record. A failed read hides the section.
+    fetchDecisions() {
+      this.$api.getUsageDecisions().then((data) => {
+        this.decisionView = data && Array.isArray(data.items) ? data : null;
+      }).catch(() => {
+        this.decisionView = null;
+      });
+    },
+
+    itemNum(it) {
+      return itemNumber(it);
+    },
+
+    stateOf(it) {
+      return stateLine(it, (k, p) => this.$t(k, p));
+    },
+
+    historyOf(it) {
+      return decisionHistory(it, (k, p) => this.$t(k, p));
+    },
+
+    startReject(it) {
+      this.rejecting = it.key;
+      this.note = '';
+    },
+
+    cancelReject() {
+      this.rejecting = null;
+      this.note = '';
+    },
+
+    // One decision. A 409 (the text changed since the page loaded) shows the stale message and
+    // reloads the decisions; any other refusal shows the server's message.
+    decide(it, decision) {
+      if (this.saving !== null || (decision === 'reject' && !this.rejectReady)) {
+        return;
+      }
+      this.saving = it.key;
+      this.$api.postUsageDecision(it.key, decisionBody(it, decision, this.note)).then((item) => {
+        this.decisionView = replaceItem(this.decisionView, item);
+        this.cancelReject();
+      }).catch((err) => {
+        if (isStale(err)) {
+          this.$utils.toast(this.$t('decisions.stale'), 'is-danger');
+          this.cancelReject();
+          this.fetchDecisions();
+          return;
+        }
+        const msg = err && err.response && err.response.data && err.response.data.message;
+        this.$utils.toast(msg || String(err), 'is-danger');
+      }).finally(() => {
+        this.saving = null;
       });
     },
 
@@ -346,6 +500,7 @@ export default Vue.extend({
 
   mounted() {
     this.afterListsLoaded(() => this.fetchRows());
+    this.fetchDecisions();
     window.addEventListener('resize', this.queueMeasure);
     const box = this.$el.querySelector('.table-container');
     if (box) {
