@@ -1,12 +1,12 @@
 // Fork (brand usage, integrations listmonk/BRAND-USAGE-V2-SPEC D4/I8; DASHBOARDS-POLISH-SPEC
 // D2/I3; DASHBOARDS-POLISH2-SPEC D2/I2). The pure half of the Campaigns page's route-query read
-// and of the list-filter state it seeds: the Dashboard's Brand Usage cells link to /campaigns --
-// the welcome/trigger cells with ?list_id=<id>&evergreen=true (the list preselected, the
-// Automations scope selected: those campaigns are evergreens, which the Broadcasts scope hides),
-// the Journeys circles with ?list_id=<each of the brand's active lists>&evergreen=true, and the
-// Cadence / Last broadcast cells with the same brand list set and evergreen=false (the Broadcasts
-// scope forced). Tested by campaignsRouteQuery.test.mjs (yarn test); Campaigns.vue holds the
-// wiring only.
+// and of the list-filter state it seeds: the Brands page's Usage pane links to /campaigns -- each
+// stoplight circle (integrations LIFECYCLE-SERIES-SPEC §10 A9, brandUsage.mjs::circleLink) with
+// ?list_id=<its steps' lists>&evergreen=true (step and SKU circles: the Automations scope, which
+// shows the evergreens the Broadcasts scope hides) or ?id=<its campaigns>&evergreen=all (the
+// No-purchase Day 0 circles), and the Cadence / Last broadcast cells with the brand's active list
+// set and evergreen=false&status=finished (the Broadcasts scope forced). Tested by
+// campaignsRouteQuery.test.mjs (yarn test); Campaigns.vue holds the wiring only.
 //
 // list_id is read as ONE value or an ARRAY (a repeated param): each a positive-integer string,
 // garbage entries dropped, duplicates collapsed, order preserved. ONE id is the in-page single
