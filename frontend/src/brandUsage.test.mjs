@@ -180,7 +180,7 @@ test('I16: every leaf help, group label and score part key is in en.json', () =>
     assert.equal(typeof en[c.help], 'string', c.help);
   });
   SCORE_PARTS.forEach((p) => assert.equal(typeof en[p.label], 'string', p.label));
-  ['dashboard.usage.legacyChip', 'dashboard.usage.seriesMissing', 'series.legacy'].forEach((k) => assert.equal(typeof en[k], 'string', k));
+  ['dashboard.usage.legacyChip', 'dashboard.usage.seriesMissing', 'series.welcomeLegacy', 'series.postPurchaseLegacy'].forEach((k) => assert.equal(typeof en[k], 'string', k));
   assert.equal(en['dashboard.usage.noPurchase'], 'Welcome series');
   assert.equal(en['dashboard.usage.postPurchase'], 'Post-purchase series');
   assert.equal(en['dashboard.usage.partWelcomeSeries'], 'Welcome series');
@@ -637,7 +637,7 @@ test('I15: each leaf maps the stored step at EXACTLY that day -- green running, 
   assert.deepEqual(cellBadges(r, 'welcome:10', t), [{
     kind: 'legacy',
     glyph: 'dashboard.usage.legacyChip{"n":15}',
-    tooltip: 'series.legacy\nx-no-purchase-42: dashboard.usage.listEvergreen{"list":42,"state":"running"}',
+    tooltip: 'series.welcomeLegacy\nx-no-purchase-42: dashboard.usage.listEvergreen{"list":42,"state":"running"}',
   }]);
   // The tooltip: the D5 description, the words, then the step's row.
   assert.equal(

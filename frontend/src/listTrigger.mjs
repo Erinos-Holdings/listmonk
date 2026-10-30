@@ -38,7 +38,6 @@ export const POST_PURCHASE_STEP_DAYS = Object.freeze([5, 14, 30]);
 // Post-purchase series is the first-order list.
 export const SERIES_WELCOME = 'welcome';
 export const SERIES_POST_PURCHASE = 'postPurchase';
-export const SERIES_LEGACY_KEY = 'series.legacy';
 
 export function seriesOfTrigger(option) {
   if (option === TRIGGER_NO_PURCHASE) return SERIES_WELCOME;
@@ -48,14 +47,15 @@ export function seriesOfTrigger(option) {
 
 // seriesStepKey is the ONE resolver of a series step's D5 description (LIFECYCLE-SERIES-SPEC
 // D5/S10): the i18n key of (family, days) -- `series.<family>Day<days>` for a standard day (0 or a
-// standard step day), else the legacy description; null for an unknown family. Each text has one
-// home in en.json; the Lists form's radios and the Usage pane's leaves both resolve through here.
+// standard step day), else the family's own legacy description `series.<family>Legacy` (Stage 4
+// F2 -- each names its own standard days); null for an unknown family. Each text has one home in
+// en.json; the Lists form's radios and the Usage pane's leaves both resolve through here.
 export function seriesStepKey(family, days) {
   let std = null;
   if (family === SERIES_WELCOME) std = [0, ...WELCOME_STEP_DAYS];
   if (family === SERIES_POST_PURCHASE) std = [0, ...POST_PURCHASE_STEP_DAYS];
   if (!std) return null;
-  return std.includes(days) ? `series.${family}Day${days}` : SERIES_LEGACY_KEY;
+  return std.includes(days) ? `series.${family}Day${days}` : `series.${family}Legacy`;
 }
 
 // The keys the list form sends (F3) -- never the spread GET row, whose sunset, health,

@@ -9,7 +9,7 @@ import {
   daysChoices, listTriggerItem, withTriggerItem, pickerLabel, buildListFormRequest, storedTrigger, storedTriggerSync,
   LIST_TYPE_BROADCAST, LIST_TYPE_JOURNEY, listTypeOf, journeyOption, buildListTypeTrigger,
   listTypeHelpKey, triggerHelpKeys, DAYS_PRESETS, POST_PURCHASE_DAYS_PRESETS, daysRadios, seriesStepKey,
-  SERIES_WELCOME, SERIES_POST_PURCHASE, SERIES_LEGACY_KEY, WELCOME_STEP_DAYS, POST_PURCHASE_STEP_DAYS,
+  SERIES_WELCOME, SERIES_POST_PURCHASE, WELCOME_STEP_DAYS, POST_PURCHASE_STEP_DAYS,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 // JOURNEY-UX-SPEC IA4 -- the selector's help follows the value (A1.4); A1.3's bold lead + prose.
@@ -112,7 +112,7 @@ test('I14: post_purchase presets 5/14/30; a stored off-pattern value is a legacy
     { days: 2, legacy: false, help: 'series.welcomeDay2' },
     { days: 5, legacy: false, help: 'series.welcomeDay5' },
     { days: 10, legacy: false, help: 'series.welcomeDay10' },
-    { days: 15, legacy: true, help: 'series.legacy' },
+    { days: 15, legacy: true, help: 'series.welcomeLegacy' },
   ]);
   assert.deepEqual(daysRadios(TRIGGER_POST_PURCHASE, ''), [
     { days: 5, legacy: false, help: 'series.postPurchaseDay5' },
@@ -137,7 +137,7 @@ test('I16: every series description key exists in en.json', () => {
   const keys = [
     ...[0, ...WELCOME_STEP_DAYS].map((d) => seriesStepKey(SERIES_WELCOME, d)),
     ...[0, ...POST_PURCHASE_STEP_DAYS].map((d) => seriesStepKey(SERIES_POST_PURCHASE, d)),
-    seriesStepKey(SERIES_WELCOME, 15), SERIES_LEGACY_KEY,
+    seriesStepKey(SERIES_WELCOME, 15), seriesStepKey(SERIES_POST_PURCHASE, 7),
     ...daysRadios(TRIGGER_NO_PURCHASE, '15').map((r) => r.help),
     ...daysRadios(TRIGGER_POST_PURCHASE, '').map((r) => r.help),
     'lists.joinTriggerPostPurchase', 'lists.joinTriggerPostPurchaseHelp', 'lists.joinTriggerDaysLegacy',
@@ -146,6 +146,10 @@ test('I16: every series description key exists in en.json', () => {
   keys.forEach((k) => assert.equal(typeof en[k], 'string', k));
   assert.equal(new Set(keys.slice(0, 8)).size, 8); // eight distinct step texts
   assert.equal(seriesStepKey('nope', 5), null);
+  // Stage 4 F2 -- each family's legacy text names its own standard.
+  assert.equal(seriesStepKey(SERIES_WELCOME, 15), 'series.welcomeLegacy');
+  assert.equal(seriesStepKey(SERIES_POST_PURCHASE, 7), 'series.postPurchaseLegacy');
+  assert.match(en['series.postPurchaseLegacy'], /5, 14, 30/);
   // S10's pinned label values.
   assert.equal(en['campaigns.evergreen'], 'Automation');
   assert.equal(en['lists.joinTrigger'], 'Entry trigger');
