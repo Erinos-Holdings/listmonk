@@ -158,6 +158,9 @@ test('I16: every series description key exists in en.json', () => {
   assert.equal(en['lists.joinTriggerPostPurchase'], 'Post-purchase series step — days after the first order …');
   // No en.json value shows a user the retired terms.
   Object.entries(en).forEach(([k, v]) => assert.equal(/still deciding|no-purchase nudge|journey automation/i.test(v), false, k));
+  // LIFECYCLE-SERIES §10 A1 -- on screen the first series is the No-purchase series; the journey
+  // guide's heading is the ONE value allowed the industry name.
+  assert.deepEqual(Object.keys(en).filter((k) => /welcome series/i.test(en[k])), ['dashboard.usage.guideWelcome']);
 });
 
 test('no_purchase: picker label and sub-line item (LIFECYCLE-SERIES-SPEC S10 phrases)', () => {

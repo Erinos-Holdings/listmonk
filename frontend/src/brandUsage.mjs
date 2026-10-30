@@ -550,9 +550,6 @@ export function linkTip(row, field, t = (k) => k) {
   if (skippedLangOf(field) !== null && cellLink(row, field)) {
     return t('dashboard.usage.skippedLinkHelp');
   }
-  if (field === 'sku' && cellLink(row, field)) {
-    return t('dashboard.usage.skuLinkHelp');
-  }
   return '';
 }
 
@@ -758,7 +755,7 @@ export function clickSort(current, field) {
 }
 
 // Sort keys: the Score by its stored total; states and booleans as BADNESS (higher = worse, so desc
-// is worst first -- v1's comparators exactly); journeys by running count; cadence by days; Last
+// is worst first -- v1's comparators exactly); the SKU column by its stored count; cadence by days; Last
 // broadcast by daysSince with a never-broadcast row above every number. null = missing (no usage,
 // no stored score, a ZMA-dimmed column, an unrecognized value) -- ranks last in BOTH orders.
 const BADNESS = Object.freeze({ active: 0, idle: 1, none: 2 });

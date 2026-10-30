@@ -798,7 +798,7 @@ test('SKU column: stored counts as circles, rows in the tooltip, linked to every
   ].join('\n'));
   // The filtered set: every SKU row's list (ascending, de-duplicated), in the Automations scope.
   assert.deepEqual(cellLink(r, 'sku'), { evergreen: 'true', list_id: ['40', '41'] });
-  assert.equal(linkTip(r, 'sku', t), 'dashboard.usage.skuLinkHelp');
+  assert.equal(linkTip(r, 'sku', t), ''); // like the series leaves: no link hint (circle cells show the tooltip only)
   assert.equal(sortValue(r, 'sku'), 3);
   assert.deepEqual(columnMeta('sku'), { label: 'dashboard.usage.sku', help: 'dashboard.usage.skuHelp' });
   // None: a red 0, no link, sort 0.
@@ -813,7 +813,7 @@ test('SKU column: stored counts as circles, rows in the tooltip, linked to every
   assert.equal(sortValue(old, 'sku'), null);
   // The strings exist.
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
-  ['dashboard.usage.sku', 'dashboard.usage.skuHelp', 'dashboard.usage.skuLinkHelp'].forEach((k) => assert.equal(typeof en[k], 'string', k));
+  ['dashboard.usage.sku', 'dashboard.usage.skuHelp'].forEach((k) => assert.equal(typeof en[k], 'string', k));
 });
 
 // 2026-10-30: the journey guide below the table.
