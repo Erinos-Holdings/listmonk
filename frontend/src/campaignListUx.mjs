@@ -7,11 +7,15 @@
 // add a member to a step list, A1.1); this is the mirror. Tested by campaignListUx.test.mjs.
 
 import {
-  storedTrigger, triggerOption, TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NO_PURCHASE,
+  storedTrigger, triggerOption, isStepTrigger, TRIGGER_FIRST_ORDER, TRIGGER_SKUS,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 export const CLASS_NONE = 'none';
 export const CLASS_PURCHASE = 'purchase';
+// The STEP class -- a list the integrations sweep fills: a no_purchase (Welcome series) or, since
+// LIFECYCLE-SERIES-SPEC S2/F11, a post_purchase (Post-purchase series) step list. Its value keeps
+// the historical 'no_purchase' spelling; every step rule (the zero-delay row, the locked
+// automation, the step-list notice, isStepList, addableLists) keys on it.
 export const CLASS_NO_PURCHASE = 'no_purchase';
 
 // The D2 rows: a single list's class, or one of these.
@@ -33,7 +37,7 @@ export const REENGAGE_TAG_PREFIX = 'reengage:';
 export function listJourneyClass(list) {
   const opt = triggerOption(storedTrigger(list));
   if (opt === TRIGGER_FIRST_ORDER || opt === TRIGGER_SKUS) return CLASS_PURCHASE;
-  if (opt === TRIGGER_NO_PURCHASE) return CLASS_NO_PURCHASE;
+  if (isStepTrigger(opt)) return CLASS_NO_PURCHASE;
   return CLASS_NONE;
 }
 
@@ -209,7 +213,8 @@ export function journeyPayload(m, f) {
   };
 }
 
-// isStepList is a no_purchase step list: no session may add a member to it (A1.1).
+// isStepList is a step list (no_purchase or post_purchase -- the step class): no session may add a
+// member to it (A1.1; LIFECYCLE-SERIES-SPEC S2).
 export function isStepList(list) {
   return listJourneyClass(list) === CLASS_NO_PURCHASE;
 }

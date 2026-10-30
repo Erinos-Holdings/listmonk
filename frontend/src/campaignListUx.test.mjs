@@ -356,6 +356,23 @@ test('IA3: step lists are absent as a new addition; an existing membership stays
   assert.deepEqual(addableLists(null), []);
 });
 
+// LIFECYCLE-SERIES-SPEC I13 (Stage 2 F11) -- a post_purchase list is a step list in every UI rule:
+// the step class (zero delay, locked automation, the step-list notice), isStepList, addableLists.
+test('I13: a post_purchase list classifies as a step list everywhere', () => {
+  const PP = { id: 8, name: 'Ruze day 14', joinTrigger: { kind: 'post_purchase', days: 14 } };
+  assert.equal(listJourneyClass(PP), CLASS_NO_PURCHASE);
+  assert.equal(listJourneyClass({ join_trigger: { kind: 'post_purchase', days: 5 } }), CLASS_NO_PURCHASE);
+  assert.equal(isStepList(PP), true);
+  assert.deepEqual(addableLists([PLAIN, PP]).map((l) => l.id), [PLAIN.id]);
+  assert.deepEqual(addableLists([PLAIN, PP], [PP.id]).map((l) => l.id), [PLAIN.id, PP.id]);
+  // The selection row is the step class -- the row the matrix zeroes the delay and locks the
+  // automation on (one rule for both step kinds) -- and the step-list notice shows.
+  const sel = selectionClasses(pick(PP), [PP]);
+  assert.equal(selectionRow(sel), CLASS_NO_PURCHASE);
+  assert.equal(selectionRow(sel), rowOf(NP));
+  assert.equal(journeyNotices(sel, true).noPurchase, true);
+});
+
 test('IA3: the Manage-lists picker is filtered only under action add, restored on change', () => {
   const ids = (ls) => ls.map((l) => l.id);
   assert.deepEqual(ids(manageListOptions(OPTIONS, 'add')), [1, 2, 4, 5, 6]);

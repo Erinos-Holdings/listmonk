@@ -49,14 +49,25 @@ const (
 	// joinTriggerNoPurchase is the "still deciding" step (integrations NO-PURCHASE-STEPS-SPEC D1):
 	// {"kind":"no_purchase","days":N}, N an integer 1-365. Shape only -- the reconciler owns meaning.
 	joinTriggerNoPurchase = "no_purchase"
+	// joinTriggerPostPurchase is a Post-purchase series step (integrations LIFECYCLE-SERIES-SPEC
+	// S2): {"kind":"post_purchase","days":N}, N an integer 1-365. Shape only (hazard 110) -- the
+	// reconciler owns meaning (it accepts 5, 14 and 30 only).
+	joinTriggerPostPurchase = "post_purchase"
 
-	// minJoinTriggerDays and maxJoinTriggerDays bound a no_purchase trigger's days.
+	// minJoinTriggerDays and maxJoinTriggerDays bound a step trigger's days.
 	minJoinTriggerDays = 1
 	maxJoinTriggerDays = 365
 )
 
 // joinTriggerKindErr is the refusal for a missing or unknown kind.
-var joinTriggerKindErr = fmt.Errorf("join_trigger.kind must be %q, %q or %q", joinTriggerFirstOrder, joinTriggerSkus, joinTriggerNoPurchase)
+var joinTriggerKindErr = fmt.Errorf("join_trigger.kind must be %q, %q, %q or %q", joinTriggerFirstOrder, joinTriggerSkus, joinTriggerNoPurchase, joinTriggerPostPurchase)
+
+// isStepTriggerKind reports whether a join_trigger kind is a STEP kind -- a list filled by the
+// integrations sweep alone (a Welcome series no_purchase step or a Post-purchase series
+// post_purchase step, LIFECYCLE-SERIES-SPEC S2). The ONE helper every step-list guard calls.
+func isStepTriggerKind(kind string) bool {
+	return kind == joinTriggerNoPurchase || kind == joinTriggerPostPurchase
+}
 
 // normalizedJoinTrigger is the stored form; field order fixes the stored key order.
 type normalizedJoinTrigger struct {
@@ -67,8 +78,9 @@ type normalizedJoinTrigger struct {
 
 // validateJoinTrigger checks a non-null join_trigger object and returns its normalized JSON: kind
 // first_order with no other key; kind skus with a skus array of strings -- trimmed, lower-cased,
-// de-duplicated in order, none empty, each at most 100 characters, at most 200 of them; or kind
-// no_purchase with days a JSON integer 1-365 and no other key. Anything else is refused.
+// de-duplicated in order, none empty, each at most 100 characters, at most 200 of them; or a step
+// kind (no_purchase, post_purchase) with days a JSON integer 1-365 and no other key. Anything else
+// is refused.
 func validateJoinTrigger(raw []byte) ([]byte, error) {
 	var doc map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &doc); err != nil || doc == nil {
@@ -79,7 +91,7 @@ func validateJoinTrigger(raw []byte) ([]byte, error) {
 		return nil, joinTriggerKindErr
 	}
 	switch kind {
-	case joinTriggerNoPurchase:
+	case joinTriggerNoPurchase, joinTriggerPostPurchase:
 		for k := range doc {
 			if k != "kind" && k != "days" {
 				return nil, fmt.Errorf("join_trigger has an unknown key: %s", k)
@@ -252,10 +264,11 @@ func (a *App) planListTrigger(r listReq, cur models.List) (listTriggerPlan, erro
 	}
 
 	// Fork (integrations JOURNEY-UX-SPEC D5.1) -- the list-side half of D5 (validateCampaignFields):
-	// a request carrying a no_purchase trigger is refused while a non-cancelled evergreen with a
-	// nonzero delay targets the list. Nothing re-validates the campaign when the trigger is set, and
-	// the sweep joins members on their due day, so such a delay would land the nudge late.
-	if r.JoinTrigger != nil && joinTriggerKind(p.joinTrigger) == joinTriggerNoPurchase {
+	// a request carrying a step trigger (no_purchase or post_purchase -- LIFECYCLE-SERIES-SPEC S2)
+	// is refused while a non-cancelled evergreen with a nonzero delay targets the list. Nothing
+	// re-validates the campaign when the trigger is set, and the sweep joins members on their due
+	// day, so such a delay would land the step late.
+	if r.JoinTrigger != nil && isStepTriggerKind(joinTriggerKind(p.joinTrigger)) {
 		ev, found, err := a.core.GetListDelayedEvergreen(cur.ID)
 		if err != nil {
 			return p, err
@@ -266,7 +279,7 @@ func (a *App) planListTrigger(r listReq, cur models.List) (listTriggerPlan, erro
 		}
 	}
 
-	// Fork (integrations JOURNEY-UX-SPEC A1.1b) -- a no_purchase step list is never public: the
+	// Fork (integrations JOURNEY-UX-SPEC A1.1b) -- a step list (no_purchase or post_purchase) is never public: the
 	// public subscription path refuses only private lists, so a public step list would let the
 	// public form add members, each one mailed by the running evergreen. Judged on the RESULTING
 	// type and trigger, so neither half of the pair can be set while the other stands.
@@ -274,7 +287,7 @@ func (a *App) planListTrigger(r listReq, cur models.List) (listTriggerPlan, erro
 	if r.Type != "" {
 		typ = r.Type
 	}
-	if typ == models.ListTypePublic && joinTriggerKind(p.joinTrigger) == joinTriggerNoPurchase {
+	if typ == models.ListTypePublic && isStepTriggerKind(joinTriggerKind(p.joinTrigger)) {
 		return p, echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.noPurchasePublic"))
 	}
 	return p, nil

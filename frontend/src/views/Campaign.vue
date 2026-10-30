@@ -2199,7 +2199,8 @@ export default Vue.extend({
     // united with the campaign's SAVED lists, so an existing campaign outside the scope keeps its
     // lists addable and removable; a new campaign offers the scope. Every list under All brands.
     // LIST-JOIN-TRIGGER-SPEC D7: each option carries a derived dropdown label -- a list with a
-    // join trigger reads "<name> — joins on first purchase / SKU purchase"; the chosen tag shows
+    // join trigger reads "<name> — Post-purchase series day 0 / joins on SKU purchase / Welcome
+    // series day N / Post-purchase series day N" (LIFECYCLE-SERIES-SPEC S10); the chosen tag shows
     // the name unchanged (ListSelector).
     listOptions() {
       return filterByIds(this.lists, scopeUnion(this.scopeListIds, [this.data.lists]))

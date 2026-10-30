@@ -501,6 +501,8 @@ SELECT JSON_BUILD_OBJECT(
 --   a campaign's language (attribs.lang, a closed set) decides its role for L -- exactly L, or NO
 --     language (it targets everyone -- models.Campaign.Lang), COVERS L; a SPECIFIC language other
 --     than L is an ANCHOR. A list is L-skipping when it has an anchor and no cover for L.
+--     That is exactly the automation language rule since LIFECYCLE-SERIES-SPEC D4 (no English
+--     fallback) -- under the old fallback this over-counted lists whose only automation was EN.
 --   count = DISTINCT subscribers whose subscriber_lang (the one language partition) is L and whose
 --     subscription_segment (the one segment definition) is active, on ANY of the brand's
 --     L-skipping lists -- one subscriber counts once however many lists or campaigns missed them.

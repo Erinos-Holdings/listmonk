@@ -157,7 +157,10 @@ func TestLangBroadcastPredicate(t *testing.T) {
 }
 
 // TestLangEvergreen -- the evergreen language rule, the widened exclusion set, and the
-// lang-aware collision check.
+// lang-aware collision check. Since integrations LIFECYCLE-SERIES-SPEC D4 (I11) the rule is the
+// broadcast predicate: EN reaches en + no-language subscribers ONLY (no English fallback for a
+// language with no automation of its own), ES/FR/DE/IT exact; one automation per joiner per list
+// across languages; collisions unchanged.
 func TestLangEvergreen(t *testing.T) {
 	h := newEvergreenHarness(t)
 	L := h.listA
@@ -193,42 +196,48 @@ func TestLangEvergreen(t *testing.T) {
 	de := h.subscriber("de@x")
 	h.setSubLang(de, "de")
 	h.join(de, L, "confirmed")
+	// A stored language outside en/es/fr/de/it (import or hand edit only) reaches no automation,
+	// EN included (LIFECYCLE-SERIES-SPEC D4, Stage 2 F12).
+	pt := h.subscriber("pt@x")
+	h.setSubLang(pt, "pt")
+	h.join(pt, L, "confirmed")
 
 	eq(t, "FR exact", h.batch(frW, 10), []int{fr})
-	// EN = en + unknown + uncovered (de has no DE evergreen).
-	eq(t, "EN fallback", h.batch(enW, 10), []int{en, none, de})
+	// EN = en + no language ONLY. de has no DE automation and gets NOTHING (the old English
+	// fallback is gone); pt gets nothing.
+	eq(t, "EN is en + no language only (de and pt get nothing)", h.batch(enW, 10), []int{en, none})
+	eq(t, "EN never reaches de or pt on a later batch", h.batch(enW, 10), nil)
 
 	// One welcome per joiner per list -- none was welcomed in English; their order then
 	// tags them fr. The FR evergreen must NOT welcome them again.
 	h.setSubLang(none, "fr")
 	eq(t, "no second welcome", h.batch(frW, 10), nil)
 
-	// A DE evergreen claims de for new joiners; EN stops covering them.
+	// A DE automation takes de joiners after its watermark; EN never reaches de either way.
 	deW := h.campaign("welcome-de", true, 0, L)
 	h.setCampLang(deW, "de")
 	h.setStatus(deW, "running")
 	de2 := h.subscriber("de2@x")
 	h.setSubLang(de2, "de")
 	h.join(de2, L, "confirmed")
-	eq(t, "EN excludes claimed de", h.batch(enW, 10), nil)
-	eq(t, "DE takes de2", h.batch(deW, 10), []int{de2})
+	eq(t, "EN does not reach de2", h.batch(enW, 10), nil)
+	eq(t, "DE takes de2 (not de, who joined before its watermark)", h.batch(deW, 10), []int{de2})
 
-	// Paused still claims.
+	// Paused DE: EN still never reaches de; DE resumes and takes the joiner.
 	h.setStatus(deW, "paused")
 	de3 := h.subscriber("de3@x")
 	h.setSubLang(de3, "de")
 	h.join(de3, L, "confirmed")
-	eq(t, "EN excludes de while DE paused", h.batch(enW, 10), nil)
+	eq(t, "EN does not reach de while DE paused", h.batch(enW, 10), nil)
 	h.setStatus(deW, "running")
 	eq(t, "DE resumes and takes de3", h.batch(deW, 10), []int{de3})
 
-	// Cancelling hands the language back to EN -- but the cancelled campaign's sends
-	// keep excluding the people it welcomed (de2, de3 never get a second welcome).
+	// Cancelling DE does NOT hand de to EN any more: a de joiner after the cancel gets nothing.
 	h.setStatus(deW, "cancelled")
 	de4 := h.subscriber("de4@x")
 	h.setSubLang(de4, "de")
 	h.join(de4, L, "confirmed")
-	eq(t, "EN covers de after DE cancelled, never re-welcomes de2/de3", h.batch(enW, 10), []int{de4})
+	eq(t, "EN does not reach de after DE cancelled", h.batch(enW, 10), nil)
 
 	// A cancelled EN sibling's sends keep excluding a joiner who later becomes fr.
 	late := h.subscriber("late@x")
@@ -238,10 +247,10 @@ func TestLangEvergreen(t *testing.T) {
 	h.setSubLang(late, "fr")
 	eq(t, "cancelled EN still excludes late from FR", h.batch(frW, 10), nil)
 
-	// Delay > 0 and a sibling started AFTER the join (blind review finding 1): the FR
-	// sibling cannot welcome a joiner who predates its watermark, so it must not claim
-	// them -- EN does, at delay expiry. Exclusion set is any-delay (finding 5a): the
-	// delay-0 EN evergreen still excludes what the delay-60 ones sent.
+	// Delay > 0 and an FR automation started AFTER a fr joiner's join: FR cannot welcome a
+	// joiner who predates its watermark, and EN does not cover them either (no fallback, D4).
+	// Exclusion set is any-delay (finding 5a): the delay-0 EN evergreen still excludes what the
+	// delay-60 ones sent.
 	var L3 int
 	h.db.Get(&L3, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'C', 'private', 'single') RETURNING id`)
 	enD := h.campaign("welcome-en-delay", true, 60, L3)
@@ -252,21 +261,25 @@ func TestLangEvergreen(t *testing.T) {
 	h.setSubLang(early, "fr")
 	h.join(early, L3, "confirmed")
 	h.db.MustExec(`UPDATE subscriber_lists SET confirmed_at = NOW() - INTERVAL '120 seconds' WHERE subscriber_id = $1`, early)
+	e3 := h.subscriber("e3@x") // no language -- EN's
+	h.join(e3, L3, "confirmed")
+	h.db.MustExec(`UPDATE subscriber_lists SET confirmed_at = NOW() - INTERVAL '120 seconds' WHERE subscriber_id = $1`, e3)
 	frD := h.campaign("welcome-fr-late", true, 60, L3)
 	h.setCampLang(frD, "fr")
 	h.setStatus(frD, "running")
 	h.db.MustExec(`UPDATE campaigns SET started_at = NOW() - INTERVAL '60 seconds' WHERE id = $1`, frD)
 	eq(t, "FR started after the join cannot welcome", h.batch(frD, 10), nil)
-	eq(t, "EN covers the joiner FR cannot", h.batch(enD, 10), []int{early})
-	// ...and a fr joiner after FR's watermark is FR's, not EN's, once the delay elapses.
+	eq(t, "EN takes only the no-language joiner, never the fr one FR cannot", h.batch(enD, 10), []int{e3})
+	// ...and a fr joiner after FR's watermark is FR's once the delay elapses; EN never.
 	later := h.subscriber("later-fr@x")
 	h.setSubLang(later, "FR") // imported uppercase still counts as fr (finding 4)
 	h.join(later, L3, "confirmed")
 	h.db.MustExec(`UPDATE subscriber_lists SET confirmed_at = NOW() - INTERVAL '61 seconds' WHERE subscriber_id = $1`, later)
 	h.db.MustExec(`UPDATE campaigns SET started_at = NOW() - INTERVAL '90 seconds' WHERE id = $1`, frD)
-	eq(t, "EN leaves a claimable fr joiner alone", h.batch(enD, 10), nil)
+	eq(t, "EN leaves a fr joiner alone", h.batch(enD, 10), nil)
 	eq(t, "FR takes the joiner after its watermark", h.batch(frD, 10), []int{later})
-	// Any-delay exclusion: a delay-0 EN evergreen on L3 must not re-welcome early/later.
+	// Any-delay exclusion: a delay-0 EN evergreen on L3 must not re-welcome e3 (sent by the
+	// delay-60 EN one), and never reaches early/later (fr).
 	en0 := h.campaign("welcome-en-0", true, 0, L3)
 	h.setCampLang(en0, "en")
 	h.setStatus(en0, "running")

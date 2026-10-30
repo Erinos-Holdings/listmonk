@@ -20,8 +20,9 @@
             </th>
           </tr>
           <!-- DASHBOARDS-POLISH3-SPEC D4/D5 -- brandUsage.mjs::headerLayout: plain leaves span the
-               two lower header rows; a sub-group (No purchase, Skipped) puts its label over its
-               leaves (3d | 7d | 15d; FR ES DE IT). -->
+               two lower header rows; a sub-group (Welcome series, Post-purchase series, Skipped)
+               puts its label over its leaves (Day 0 | 2d | 5d | 10d; Day 0 | 5d | 14d | 30d --
+               LIFECYCLE-SERIES-SPEC S9, each leaf's hover its D5 description; FR ES DE IT). -->
           <tr>
             <th rowspan="2" class="bu-head" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"
               :aria-sort="buAria('score')" @click="onSort('score')">
@@ -89,12 +90,14 @@
                 :data-cy="`usage-${c.field}-${row.brand}`">
                 <span>{{ cell(row, c.field).text }}</span>
               </component>
-              <!-- DASHBOARDS-POLISH3-SPEC D4 (stage 2 F5) -- one amber ⚠ per No purchase step
-                   with no parseable days, after the sub-group's last leaf; its parser error in
-                   the tooltip (brandUsage.mjs::cellBadges). -->
+              <!-- LIFECYCLE-SERIES-SPEC S9 -- after a series group's last leaf: one grey "Nd legacy"
+                   chip per off-standard step (does not count toward the score), and one amber ⚠
+                   per step with no parseable days (POLISH3 stage 2 F5); the hover carries the
+                   legacy description or the parser error (brandUsage.mjs::cellBadges). -->
               <span v-for="(b, bi) in badges(row, c.field)" :key="`w-${bi}`"
-                class="bu-warn has-text-warning-dark ml-1" :title="b.tooltip" :aria-label="b.tooltip"
-                :data-cy="`usage-npwarn-${row.brand}`">{{ b.glyph }}</span>
+                :class="b.kind === 'legacy' ? 'tag is-light is-small bu-legacy ml-1' : 'bu-warn has-text-warning-dark ml-1'"
+                :title="b.tooltip" :aria-label="b.tooltip"
+                :data-cy="b.kind === 'legacy' ? `usage-legacy-${row.brand}` : `usage-npwarn-${row.brand}`">{{ b.glyph }}</span>
             </td>
           </tr>
           <tr v-if="!loading && !tableRows.length">

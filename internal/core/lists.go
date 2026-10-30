@@ -289,7 +289,7 @@ func (c *Core) LockedListsOf(ids []int) ([]string, error) {
 	return out, nil
 }
 
-// StepListAdd returns the first no_purchase step list among listIDs on which the write would add
+// StepListAdd returns the first step list (no_purchase or post_purchase) among listIDs on which the write would add
 // a membership row (fork, integrations JOURNEY-UX-SPEC A1.1): any of them when existing is empty
 // (a new subscriber, an import, a by-query add), else one on which some subscriber in existing
 // has no row yet. found is false when the write adds no step-list row.

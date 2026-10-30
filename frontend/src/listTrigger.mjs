@@ -1,7 +1,8 @@
 // Fork (list join triggers, integrations LIST-JOIN-TRIGGER-SPEC D7). The pure half of the Lists
 // form's "Who joins automatically" section, the Lists page sub-line item and the campaign list
-// picker label. The server stores join_trigger ({kind: 'first_order'}, {kind: 'skus', skus} or
-// {kind: 'no_purchase', days} -- NO-PURCHASE-STEPS-SPEC D7) and
+// picker label. The server stores join_trigger ({kind: 'first_order'}, {kind: 'skus', skus},
+// {kind: 'no_purchase', days} -- NO-PURCHASE-STEPS-SPEC D7, a Welcome series step -- or
+// {kind: 'post_purchase', days} -- LIFECYCLE-SERIES-SPEC S2, a Post-purchase series step) and
 // the reconciler's write-back trigger_sync ({synced_at, state: 'live'|'invalid', slug?, error?});
 // this module only maps them to and from the form and formats them -- the fork stores and
 // renders, never computes. Tested by listTrigger.test.mjs.
@@ -13,8 +14,49 @@ export const TRIGGER_FIRST_ORDER = 'first_order';
 export const TRIGGER_SKUS = 'skus';
 // NO-PURCHASE-STEPS-SPEC D1/D7 -- a "still deciding" step: {kind: 'no_purchase', days: N}, N 1-365.
 export const TRIGGER_NO_PURCHASE = 'no_purchase';
+// LIFECYCLE-SERIES-SPEC S2 -- a Post-purchase series step: {kind: 'post_purchase', days: N}, N 1-365
+// on the server (shape only); the reconciler accepts 5, 14 and 30.
+export const TRIGGER_POST_PURCHASE = 'post_purchase';
 export const DAYS_MIN = 1;
 export const DAYS_MAX = 365;
+
+// The two STEP kinds (a list the integrations sweep fills) -- the server's isStepTriggerKind.
+export const STEP_TRIGGERS = Object.freeze([TRIGGER_NO_PURCHASE, TRIGGER_POST_PURCHASE]);
+
+export function isStepTrigger(option) {
+  return STEP_TRIGGERS.includes(option);
+}
+
+// LIFECYCLE-SERIES-SPEC S7 -- the standard step days. Cross-repo literals (the SES_DAILY_ZONE
+// precedent; no test spans the repos): integrations lib/no-purchase.ts WELCOME_STEP_DAYS and
+// POST_PURCHASE_STEP_DAYS carry the same values -- change both in one release.
+export const WELCOME_STEP_DAYS = Object.freeze([2, 5, 10]);
+export const POST_PURCHASE_STEP_DAYS = Object.freeze([5, 14, 30]);
+
+// The two series (the Usage pane's groups and the Lists form's step radios): a series family per
+// step kind. Day 0 of the Welcome series is the brand newsletter list's automation; day 0 of the
+// Post-purchase series is the first-order list.
+export const SERIES_WELCOME = 'welcome';
+export const SERIES_POST_PURCHASE = 'postPurchase';
+export const SERIES_LEGACY_KEY = 'series.legacy';
+
+export function seriesOfTrigger(option) {
+  if (option === TRIGGER_NO_PURCHASE) return SERIES_WELCOME;
+  if (option === TRIGGER_POST_PURCHASE) return SERIES_POST_PURCHASE;
+  return null;
+}
+
+// seriesStepKey is the ONE resolver of a series step's D5 description (LIFECYCLE-SERIES-SPEC
+// D5/S10): the i18n key of (family, days) -- `series.<family>Day<days>` for a standard day (0 or a
+// standard step day), else the legacy description; null for an unknown family. Each text has one
+// home in en.json; the Lists form's radios and the Usage pane's leaves both resolve through here.
+export function seriesStepKey(family, days) {
+  let std = null;
+  if (family === SERIES_WELCOME) std = [0, ...WELCOME_STEP_DAYS];
+  if (family === SERIES_POST_PURCHASE) std = [0, ...POST_PURCHASE_STEP_DAYS];
+  if (!std) return null;
+  return std.includes(days) ? `series.${family}Day${days}` : SERIES_LEGACY_KEY;
+}
 
 // The keys the list form sends (F3) -- never the spread GET row, whose sunset, health,
 // subscriber_grid, trigger_* and transactional keys must not ride back to the server.
@@ -44,13 +86,14 @@ export function triggerOption(joinTrigger) {
   if (joinTrigger.kind === TRIGGER_FIRST_ORDER) return TRIGGER_FIRST_ORDER;
   if (joinTrigger.kind === TRIGGER_SKUS) return TRIGGER_SKUS;
   if (joinTrigger.kind === TRIGGER_NO_PURCHASE) return TRIGGER_NO_PURCHASE;
+  if (joinTrigger.kind === TRIGGER_POST_PURCHASE) return TRIGGER_POST_PURCHASE;
   return TRIGGER_NONE;
 }
 
-// storedDays is the days input's value for a stored join_trigger: its days for a no_purchase
-// trigger, else '' (the field starts empty for every other kind).
+// storedDays is the days input's value for a stored join_trigger: its days for a step trigger
+// (no_purchase or post_purchase), else '' (the field starts empty for every other kind).
 export function storedDays(joinTrigger) {
-  if (triggerOption(joinTrigger) !== TRIGGER_NO_PURCHASE) return '';
+  if (!isStepTrigger(triggerOption(joinTrigger))) return '';
   const d = joinTrigger.days;
   return Number.isInteger(d) ? String(d) : '';
 }
@@ -69,17 +112,37 @@ export function daysValid(text) {
   return d !== null && d >= DAYS_MIN && d <= DAYS_MAX;
 }
 
-// DAYS_PRESETS are the form's days choices. The server still accepts 1-365 (D1); this narrows
-// only what the form offers.
-export const DAYS_PRESETS = [3, 7, 15];
+// DAYS_PRESETS are the form's no_purchase (Welcome series) days choices -- LIFECYCLE-SERIES-SPEC
+// S7 (2/5/10, replacing the provisional 3/7/15). The server still accepts 1-365 (D1); this narrows
+// only what the form offers. POST_PURCHASE_DAYS_PRESETS are the post_purchase choices.
+export const DAYS_PRESETS = WELCOME_STEP_DAYS;
+export const POST_PURCHASE_DAYS_PRESETS = POST_PURCHASE_STEP_DAYS;
 
-// daysChoices is the radio options for the days field: the presets, plus a stored value outside
-// them (kept so a Save of an older list never changes its days unseen), ascending.
-export function daysChoices(daysText) {
+// daysPresetsFor is the presets of a step option (no_purchase when the option is not a step).
+export function daysPresetsFor(option) {
+  return option === TRIGGER_POST_PURCHASE ? POST_PURCHASE_DAYS_PRESETS : DAYS_PRESETS;
+}
+
+// daysChoices is the radio options for the days field: the option's presets, plus a stored value
+// outside them (kept so a Save of an older list never changes its days unseen -- D2, Ruze's
+// grandfathered 15), ascending.
+export function daysChoices(daysText, option = TRIGGER_NO_PURCHASE) {
   const d = textToDays(daysText);
-  const out = [...DAYS_PRESETS];
+  const out = [...daysPresetsFor(option)];
   if (d !== null && !out.includes(d)) out.push(d);
   return out.sort((a, b) => a - b);
+}
+
+// daysRadios is the days field's radios for a step option: daysChoices, each with `legacy` (a
+// stored value outside the presets -- labeled "N days (legacy)") and `help`, the D5 description
+// key it hovers with (seriesStepKey; the legacy description for a legacy value). `storedText` is
+// the STORED days, passed only when the stored trigger is this option's kind.
+export function daysRadios(option, storedText) {
+  const presets = daysPresetsFor(option);
+  const family = seriesOfTrigger(option) || SERIES_WELCOME;
+  return daysChoices(storedText, option).map((days) => ({
+    days, legacy: !presets.includes(days), help: seriesStepKey(family, days),
+  }));
 }
 
 // skusToText is the textarea text for a stored SKU array, one per line.
@@ -98,7 +161,7 @@ export function textToSkus(text) {
 export function buildJoinTrigger(option, skusText, daysText) {
   if (option === TRIGGER_FIRST_ORDER) return { kind: TRIGGER_FIRST_ORDER };
   if (option === TRIGGER_SKUS) return { kind: TRIGGER_SKUS, skus: textToSkus(skusText) };
-  if (option === TRIGGER_NO_PURCHASE) return { kind: TRIGGER_NO_PURCHASE, days: textToDays(daysText) };
+  if (isStepTrigger(option)) return { kind: option, days: textToDays(daysText) };
   return null;
 }
 
@@ -125,7 +188,7 @@ export function journeyOption(joinTrigger) {
 // radio reading first_order -- never null.
 export function buildListTypeTrigger(listType, option, skusText, daysText) {
   if (listType !== LIST_TYPE_JOURNEY) return null;
-  const opt = [TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NO_PURCHASE].includes(option) ? option : TRIGGER_FIRST_ORDER;
+  const opt = [TRIGGER_FIRST_ORDER, TRIGGER_SKUS, ...STEP_TRIGGERS].includes(option) ? option : TRIGGER_FIRST_ORDER;
   return buildJoinTrigger(opt, skusText, daysText);
 }
 
@@ -145,18 +208,29 @@ export function triggerHelpKeys(option) {
       return { lead: 'lists.joinTriggerSkusSends', body: 'lists.joinTriggerLatency' };
     case TRIGGER_NO_PURCHASE:
       return { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerNoPurchaseHelp' };
+    case TRIGGER_POST_PURCHASE:
+      return { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerPostPurchaseHelp' };
     default:
       return null;
   }
 }
 
+// seriesPhrase is LIFECYCLE-SERIES-SPEC S10's standard phrase for a stored trigger: "Post-purchase
+// series day 0" (first order), "Welcome series day N" (no_purchase), "Post-purchase series day N"
+// (post_purchase); '' for any other kind.
+function seriesPhrase(joinTrigger) {
+  const opt = triggerOption(joinTrigger);
+  if (opt === TRIGGER_FIRST_ORDER) return 'Post-purchase series day 0';
+  if (opt === TRIGGER_NO_PURCHASE) return `Welcome series day ${joinTrigger.days}`;
+  if (opt === TRIGGER_POST_PURCHASE) return `Post-purchase series day ${joinTrigger.days}`;
+  return '';
+}
+
 // triggerWhat is the sub-line's kind phrase for a stored trigger ('' for none).
 function triggerWhat(joinTrigger) {
   const opt = triggerOption(joinTrigger);
-  if (opt === TRIGGER_FIRST_ORDER) return 'joins on first order';
   if (opt === TRIGGER_SKUS) return 'joins on SKU purchase';
-  if (opt === TRIGGER_NO_PURCHASE) return `joins on day ${joinTrigger.days} no-purchase`;
-  return '';
+  return seriesPhrase(joinTrigger);
 }
 
 // triggerBadge is the badge beside the section title: null when the list has no trigger, else
@@ -197,10 +271,9 @@ export function pickerLabel(list) {
   const l = list || {};
   const name = l.name || '';
   const opt = triggerOption(storedTrigger(l));
-  if (opt === TRIGGER_FIRST_ORDER) return `${name} — joins on first purchase`;
   if (opt === TRIGGER_SKUS) return `${name} — joins on SKU purchase`;
-  if (opt === TRIGGER_NO_PURCHASE) return `${name} — joins when still deciding (day ${storedTrigger(l).days})`;
-  return name;
+  const phrase = seriesPhrase(storedTrigger(l));
+  return phrase ? `${name} — ${phrase}` : name;
 }
 
 // buildListFormRequest is the body the list form sends (F3): exactly the allow-listed form keys,

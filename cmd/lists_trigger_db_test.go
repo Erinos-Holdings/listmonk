@@ -208,6 +208,13 @@ func TestListTriggerTriState(t *testing.T) {
 		"days 366":        `{"kind":"no_purchase","days":366}`,
 		"days huge":       `{"kind":"no_purchase","days":99999999}`,
 		"no_purchase key": `{"kind":"no_purchase","days":7,"skus":["a"]}`,
+		// LIFECYCLE-SERIES-SPEC I12 -- the post_purchase kind's refusals (same shape as no_purchase).
+		"post days missing": `{"kind":"post_purchase"}`,
+		"post days float":   `{"kind":"post_purchase","days":5.5}`,
+		"post days string":  `{"kind":"post_purchase","days":"5"}`,
+		"post days 0":       `{"kind":"post_purchase","days":0}`,
+		"post days 366":     `{"kind":"post_purchase","days":366}`,
+		"post extra key":    `{"kind":"post_purchase","days":5,"skus":["a"]}`,
 	} {
 		if code, _ := th.put(list, `{"name":"Must not apply","join_trigger":`+jtBody+`}`, marketer); code != http.StatusBadRequest {
 			t.Fatalf("%s: want 400, got %d", name, code)
@@ -235,9 +242,17 @@ func TestListTriggerTriState(t *testing.T) {
 			t.Fatalf("no_purchase days %s stored as %s, want %s", days, str(r.JoinTrigger), want)
 		}
 	}
+	// LIFECYCLE-SERIES-SPEC I12 -- post_purchase is stored normalized too.
+	if code, _ := th.put(list, `{"name":"Acme buyers 2","join_trigger":{"days":14,"kind":"post_purchase"}}`, marketer); code != http.StatusOK {
+		t.Fatalf("post_purchase days 14: %d", code)
+	}
+	if r := th.row(list); str(r.JoinTrigger) != `{"days": 14, "kind": "post_purchase"}` {
+		t.Fatalf("post_purchase stored as %s", str(r.JoinTrigger))
+	}
 	// The pure validator's normalized output (key order kind, days; the other kinds unchanged).
 	for in, want := range map[string]string{
-		`{"days":30,"kind":"no_purchase"}`: `{"kind":"no_purchase","days":30}`,
+		`{"days":30,"kind":"no_purchase"}`:   `{"kind":"no_purchase","days":30}`,
+		`{"days":30,"kind":"post_purchase"}`: `{"kind":"post_purchase","days":30}`,
 		`{"kind":"first_order"}`:           `{"kind":"first_order"}`,
 		`{"kind":"skus","skus":[" A "]}`:   `{"kind":"skus","skus":["a"]}`,
 	} {

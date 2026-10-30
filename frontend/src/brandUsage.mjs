@@ -17,30 +17,44 @@
 // rendered, not a health rule).
 import { brandLabelOf, matchesLaunch, storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { healthDocs } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
+import {
+  POST_PURCHASE_STEP_DAYS, SERIES_POST_PURCHASE, SERIES_WELCOME, WELCOME_STEP_DAYS, seriesStepKey,
+} from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
-// DASHBOARDS-POLISH3-SPEC D4: the No purchase sub-group's standard step delays, one leaf column
-// each. PROVISIONAL -- a presentation constant for the demo, pending the user's 2026-10-26
-// Marketing meeting that sets the standard (the list UI will later forbid off-standard steps). A
-// step whose stored `days` is not in this list is deliberately NOT shown (recorded limitation).
-export const STANDARD_NO_PURCHASE_DAYS = Object.freeze([3, 7, 15]);
+// LIFECYCLE-SERIES-SPEC S9 (replacing DASHBOARDS-POLISH3-SPEC D4's provisional No purchase
+// 3d | 7d | 15d leaves and the plain Welcome / 1st purchase columns): two series groups, one leaf
+// per standard day -- the Welcome series Day 0 | 2d | 5d | 10d and the Post-purchase series
+// Day 0 | 5d | 14d | 30d. The lib stores usage.series.<family>.steps (one {days, state, rows} per
+// leaf) and .legacy (the off-standard step rows, a grey chip each after the group's last leaf); the
+// fork maps them and computes nothing.
+export const SERIES_DAYS = Object.freeze({
+  [SERIES_WELCOME]: Object.freeze([0, ...WELCOME_STEP_DAYS]),
+  [SERIES_POST_PURCHASE]: Object.freeze([0, ...POST_PURCHASE_STEP_DAYS]),
+});
 
 // DASHBOARDS-POLISH3-SPEC D5: the Languages section's Skipped leaves (the fork's I18N languages,
 // English excluded by design -- the section is international transparency).
 export const SKIPPED_LANGS = Object.freeze(['fr', 'es', 'de', 'it']);
 
-const NP_PREFIX = 'noPurchase:';
 const SK_PREFIX = 'skipped:';
-export const NO_PURCHASE_FIELDS = Object.freeze(STANDARD_NO_PURCHASE_DAYS.map((n) => `${NP_PREFIX}${n}`));
+export const WELCOME_FIELDS = Object.freeze(SERIES_DAYS[SERIES_WELCOME].map((n) => `${SERIES_WELCOME}:${n}`));
+export const POST_PURCHASE_FIELDS = Object.freeze(SERIES_DAYS[SERIES_POST_PURCHASE].map((n) => `${SERIES_POST_PURCHASE}:${n}`));
 export const SKIPPED_FIELDS = Object.freeze(SKIPPED_LANGS.map((l) => `${SK_PREFIX}${l}`));
 
-// The day of a No purchase leaf field ('noPurchase:7' -> 7), the language of a Skipped leaf
-// ('skipped:fr' -> 'fr'); null for any other field.
-export function npDaysOf(field) {
-  if (typeof field !== 'string' || !field.startsWith(NP_PREFIX)) {
+// The series leaf of a field ('welcome:5' -> { family: 'welcome', days: 5 }; 'postPurchase:0' ->
+// { family: 'postPurchase', days: 0 }); null for any other field or an off-standard day.
+export function seriesLeafOf(field) {
+  if (typeof field !== 'string') {
     return null;
   }
-  const n = Number(field.slice(NP_PREFIX.length));
-  return STANDARD_NO_PURCHASE_DAYS.includes(n) ? n : null;
+  const i = field.indexOf(':');
+  if (i < 0) {
+    return null;
+  }
+  const family = field.slice(0, i);
+  const days = Number(field.slice(i + 1));
+  const std = SERIES_DAYS[family];
+  return std && std.includes(days) ? { family, days } : null;
 }
 
 export function skippedLangOf(field) {
@@ -53,7 +67,8 @@ export function skippedLangOf(field) {
 
 // V2 D2: the columns, left to right -- Score and Brand ungrouped, then the sections. POLISH3 D4/D5:
 // a section's `items` are its leaf fields in order, a SUB-GROUP ({ group, label, help, fields })
-// standing for its leaves under one label (No purchase over 3d | 7d | 15d; the new Languages
+// standing for its leaves under one label (since LIFECYCLE-SERIES-SPEC S9 the Welcome series over
+// Day 0 | 2d | 5d | 10d and the Post-purchase series over Day 0 | 5d | 14d | 30d; the Languages
 // section's Skipped over FR ES DE IT, between Journeys and Configurations); `fields` is the flat
 // leaf list.
 // `small` (G5): the label takes the small header font (Skipped subscribers is long); otherwise it
@@ -67,8 +82,9 @@ const section = (key, label, items) => Object.freeze({
 export const SECTIONS = Object.freeze([
   section('broadcasts', 'dashboard.usage.sectionBroadcasts', ['cadence', 'lastBroadcast']),
   section('journeys', 'dashboard.usage.sectionJourneys', [
-    'journeys', 'welcome', 'purchase',
-    group('noPurchase', 'dashboard.usage.noPurchase', 'dashboard.usage.noPurchaseHelp', NO_PURCHASE_FIELDS),
+    'journeys',
+    group(SERIES_WELCOME, 'dashboard.usage.noPurchase', 'dashboard.usage.noPurchaseHelp', WELCOME_FIELDS),
+    group(SERIES_POST_PURCHASE, 'dashboard.usage.postPurchase', 'dashboard.usage.postPurchaseHelp', POST_PURCHASE_FIELDS),
   ]),
   section('languages', 'dashboard.usage.sectionLanguages', [
     // G5 round 2: Skipped subscribers shares the header font size with No purchase (small: false).
@@ -80,8 +96,8 @@ export const SECTIONS = Object.freeze([
 // Every sortable column, in display order.
 export const SORT_FIELDS = Object.freeze(['score', 'brand', ...SECTIONS.flatMap((s) => s.fields)]);
 
-// The stoplight columns (V2 D3) -- one circle per state. POLISH3 D4: the No purchase leaves.
-export const CIRCLE_FIELDS = Object.freeze(['journeys', 'welcome', 'purchase', ...NO_PURCHASE_FIELDS]);
+// The stoplight columns (V2 D3) -- one circle per state. LIFECYCLE-SERIES-SPEC S9: the series leaves.
+export const CIRCLE_FIELDS = Object.freeze(['journeys', ...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS]);
 
 // POLISH3 D4/D5: the header layout over SECTIONS (the band alternates grey/white by section). Row
 // 2 holds every plain leaf (rowspan 2) and every sub-group label (colspan = its leaves); row 3
@@ -110,22 +126,22 @@ export function headerLayout(sections = SECTIONS) {
 }
 
 // The leaf columns' header label and hover, in display order of every field: label is an i18n key
-// with params (the No purchase leaves "3d"; the Skipped leaves the uppercase language code, a
-// language-neutral literal).
+// with params (a series leaf "Day 0" or "5d"; the Skipped leaves the uppercase language code, a
+// language-neutral literal). LIFECYCLE-SERIES-SPEC S9: a series leaf's hover is its D5 description
+// (listTrigger.mjs::seriesStepKey -- one home per text).
 const COLUMN_META = Object.freeze({
   cadence: { label: 'dashboard.usage.cadence', help: 'dashboard.usage.cadenceHelp' },
   lastBroadcast: { label: 'dashboard.usage.lastBroadcast', help: 'dashboard.usage.lastBroadcastHelp' },
   journeys: { label: 'dashboard.usage.journeys', help: 'dashboard.usage.journeysHelp' },
-  welcome: { label: 'dashboard.usage.welcome', help: 'dashboard.usage.welcomeHelp' },
-  purchase: { label: 'dashboard.usage.purchase', help: 'dashboard.usage.purchaseHelp' },
   attribution: { label: 'dashboard.usage.attribution', help: 'dashboard.usage.attributionHelp' },
   sunset: { label: 'dashboard.usage.sunset', help: 'dashboard.usage.sunsetHelp' },
 });
 
 export function columnMeta(field) {
-  const n = npDaysOf(field);
-  if (n !== null) {
-    return { label: 'dashboard.usage.npDays', params: { n }, help: 'dashboard.usage.noPurchaseHelp' };
+  const leaf = seriesLeafOf(field);
+  if (leaf !== null) {
+    const help = seriesStepKey(leaf.family, leaf.days);
+    return leaf.days === 0 ? { label: 'dashboard.usage.day0', help } : { label: 'dashboard.usage.npDays', params: { n: leaf.days }, help };
   }
   const l = skippedLangOf(field);
   if (l !== null) {
@@ -148,11 +164,14 @@ const RED = 'has-text-danger';
 
 // V2 D1/F5: the Score breakdown's display order -- a FIXED list, because jsonb returns the stored
 // `parts` keys lexicographically. Rendering order only; every number comes from `parts`.
+// LIFECYCLE-SERIES-SPEC S9: the parts are broadcasts, welcomeSeries, postPurchaseSeries,
+// attribution and sunset (integrations lib/brand-usage.ts SCORE_WEIGHTS). A part this list does not
+// name -- a doc written before the release still carries welcome / purchase / noPurchase -- is
+// skipped by the unknown-part rule (scoreTip), never mapped: there is no dual vocabulary.
 export const SCORE_PARTS = Object.freeze([
   Object.freeze({ key: 'broadcasts', label: 'dashboard.usage.partBroadcasts' }),
-  Object.freeze({ key: 'welcome', label: 'dashboard.usage.partWelcome' }),
-  Object.freeze({ key: 'purchase', label: 'dashboard.usage.partPurchase' }),
-  Object.freeze({ key: 'noPurchase', label: 'dashboard.usage.partNoPurchase' }),
+  Object.freeze({ key: 'welcomeSeries', label: 'dashboard.usage.partWelcomeSeries' }),
+  Object.freeze({ key: 'postPurchaseSeries', label: 'dashboard.usage.partPostPurchaseSeries' }),
   Object.freeze({ key: 'attribution', label: 'dashboard.usage.partAttribution' }),
   Object.freeze({ key: 'sunset', label: 'dashboard.usage.partSunset' }),
 ]);
@@ -219,46 +238,29 @@ export function skippedOf(row, lang) {
   return { count: s.count, lists: ids };
 }
 
-// POLISH3 D4: the No purchase sub-group's stored rows -- null when the doc does not carry the
-// family (a doc written before V2), or when it is a PRE-`days` doc (any row without a `days` key:
-// written before this release) -- the whole sub-group then renders '—', never a false red 0.
-function npRows(u) {
-  const np = isObj(u && u.noPurchase) ? u.noPurchase : null;
-  if (!np || !Array.isArray(np.rows)) {
-    return null;
-  }
-  const rows = np.rows.filter(isObj);
-  if (rows.some((r) => !Object.prototype.hasOwnProperty.call(r, 'days'))) {
-    return null;
-  }
-  return rows;
+// LIFECYCLE-SERIES-SPEC S9: a series family's stored object -- usage.series.<family> with its
+// `steps` array; null when the doc does not carry it (a doc written before the release: every leaf
+// of the group renders '—', never a false red 0, until the next daily run).
+function seriesOf(u, family) {
+  const s = isObj(u) && isObj(u.series) && isObj(u.series[family]) ? u.series[family] : null;
+  return s && Array.isArray(s.steps) ? s : null;
 }
 
-// The step rows of leaf N: exactly `days === N` (an off-standard day matches no leaf).
-const npRowsAt = (rows, n) => rows.filter((r) => r.days === n);
+// The stored leaf of (family, days): its { days, state, rows } entry, or null when absent.
+function stepAt(u, family, days) {
+  const s = seriesOf(u, family);
+  if (!s) {
+    return null;
+  }
+  const st = s.steps.find((x) => isObj(x) && x.days === days);
+  return st || null;
+}
 
-// A step row is green when the lib's stored facts say clean -- no error, a list, its evergreen
+const stepRows = (st) => (st && Array.isArray(st.rows) ? st.rows.filter(isObj) : []);
+
+// A step row is green when the lib's stored facts say clean -- no error, a list, its automation
 // running (the stored `evergreen` state, mapped, never re-derived); amber otherwise.
-const npClean = (r) => !(typeof r.error === 'string' && r.error) && r.listId !== null && r.listId !== undefined && r.evergreen === 'running';
-
-// POLISH3 D4 (stage 2 F5): the sub-group's ⚠ badges -- one per stored step row with NO parseable
-// `days` (the lib stores null), carrying the row's parser error. Rendered after the LAST leaf's
-// circles; [] on every other field, a pre-`days` doc, or a usage-less row. (NOT ZMA-guarded:
-// the No purchase leaves are not in ZMA_DIMMED — a ZMA row with step rows is unreachable today
-// because PurchaseTriggerSync writes steps for listmonk-channel brands only; POLISH3 stage 4 F1.)
-export function cellBadges(row, field, t = (k) => k) {
-  if (field !== NO_PURCHASE_FIELDS[NO_PURCHASE_FIELDS.length - 1]) {
-    return [];
-  }
-  const rows = npRows(row && row.usage);
-  if (!rows) {
-    return [];
-  }
-  return rows.filter((r) => !(typeof r.days === 'number' && Number.isInteger(r.days) && r.days > 0)).map((r) => ({
-    glyph: '⚠',
-    tooltip: t('dashboard.usage.npInvalid', { slug: String(r.slug), error: typeof r.error === 'string' && r.error ? r.error : t('dashboard.usage.npNoDays') }),
-  }));
-}
+const rowClean = (r) => !(typeof r.error === 'string' && r.error) && r.listId !== null && r.listId !== undefined && r.evergreen === 'running';
 
 // D2: the Brand Matrix's rows exactly -- the API rows narrowed by the launch filter over the rows'
 // own health documents, then flattened. The server has already applied the brand scope. `lists`
@@ -271,7 +273,7 @@ export function shapeRows(apiRows, { brands = [], launch = 'all', lists = [] } =
 
 // The columns a ZMA row does not score (its sends live in ZMA -- a red would be false, v1 I6),
 // plus the Score (V2 D1: a ZMA row's score is null).
-const ZMA_DIMMED = Object.freeze(['score', 'welcome', 'journeys', 'lastBroadcast', 'cadence']);
+const ZMA_DIMMED = Object.freeze(['score', WELCOME_FIELDS[0], 'journeys', 'lastBroadcast', 'cadence']);
 
 // The welcome tooltip: the master list's evergreen campaigns ("#id status"), or none.
 export function welcomeTip(w, t = (k) => k) {
@@ -297,6 +299,36 @@ export function triggerTip(p, t = (k) => k) {
   }).join('\n');
 }
 
+// S9: the group's chips, after its LAST leaf -- one grey "Nd legacy" chip per stored legacy row
+// with a whole `days` (its hover the legacy description, then the row), and one amber ⚠ per stored
+// row with NO parseable `days` (the lib stores null; its parser error in the hover -- the
+// POLISH3 F5 badge). [] on every other field, a pre-release doc, or a usage-less row. `kind` is
+// 'legacy' or 'warn' (the Vue styles them).
+export function cellBadges(row, field, t = (k) => k) {
+  const family = [SERIES_WELCOME, SERIES_POST_PURCHASE].find((f) => {
+    const fields = f === SERIES_WELCOME ? WELCOME_FIELDS : POST_PURCHASE_FIELDS;
+    return field === fields[fields.length - 1];
+  });
+  const s = family ? seriesOf(row && row.usage, family) : null;
+  if (!s || !Array.isArray(s.legacy)) {
+    return [];
+  }
+  return s.legacy.filter(isObj).map((r) => {
+    if (typeof r.days === 'number' && Number.isInteger(r.days) && r.days > 0) {
+      return {
+        kind: 'legacy',
+        glyph: t('dashboard.usage.legacyChip', { n: r.days }),
+        tooltip: `${t(seriesStepKey(family, r.days))}\n${triggerTip({ rows: [r] }, t)}`,
+      };
+    }
+    return {
+      kind: 'warn',
+      glyph: '⚠',
+      tooltip: t('dashboard.usage.npInvalid', { slug: String(r.slug), error: typeof r.error === 'string' && r.error ? r.error : t('dashboard.usage.npNoDays') }),
+    };
+  });
+}
+
 // D7: the Last broadcast tooltip -- cadence, ratio and windowCount.
 export function broadcastTip(b, t = (k) => k) {
   const cadence = numOrNull(b && b.cadenceDays);
@@ -317,9 +349,9 @@ export function scoreTip(score, t = (k) => k) {
     .join(' · ');
 }
 
-// V2 D3: the stored per-state numbers of a stoplight column -- { green, amber } from the family's
-// stored `counts` (Welcome, 1st purchase, No purchase) or Journeys' stored { running, idle }; null
-// when the doc does not carry them (a doc written before V2). The fork classifies nothing.
+// V2 D3: the stored per-state numbers of a stoplight -- { green, amber } from the welcome family's
+// stored `counts` (the Welcome series Day 0 leaf, `welcome`) or Journeys' stored { running, idle };
+// null when the doc does not carry them (a doc written before V2). The fork classifies nothing.
 export function storedCounts(usage, field) {
   if (!isObj(usage)) {
     return null;
@@ -330,7 +362,7 @@ export function storedCounts(usage, field) {
     const j = isObj(usage.journeys) ? usage.journeys : {};
     green = countOrNull(j.running);
     amber = countOrNull(j.idle);
-  } else if (field === 'welcome' || field === 'purchase' || field === 'noPurchase') {
+  } else if (field === 'welcome') {
     const c = isObj(usage[field]) && isObj(usage[field].counts) ? usage[field].counts : {};
     green = countOrNull(c.green);
     amber = countOrNull(c.amber);
@@ -408,10 +440,16 @@ export function cellLink(row, field) {
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
   }
-  const n = npDaysOf(field);
-  if (n !== null) {
-    const rows = npRows(u);
-    const at = rows ? npRowsAt(rows, n) : [];
+  // LIFECYCLE-SERIES-SPEC S9: the Welcome series Day 0 leaf links its master list (the old Welcome
+  // column's rule); every other series leaf links its step's list when exactly ONE row sits at that
+  // day (the POLISH3 one-row rule; Post-purchase Day 0 = the first-order trigger rows).
+  const leaf = seriesLeafOf(field);
+  if (leaf !== null) {
+    if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
+      const listId = isObj(u.welcome) ? u.welcome.listId : null;
+      return seriesOf(u, leaf.family) && posInt(listId) ? { list_id: String(listId), evergreen: 'true' } : null;
+    }
+    const at = stepRows(stepAt(u, leaf.family, leaf.days));
     return at.length === 1 && posInt(at[0].listId) ? { list_id: String(at[0].listId), evergreen: 'true' } : null;
   }
   // Fork (matrix polish, integrations MATRIX-POLISH-SPEC D10.3) -- Last broadcast opens the newest
@@ -435,18 +473,7 @@ export function cellLink(row, field) {
     const shown = field === 'cadence' ? numOrNull(b.cadenceDays) !== null : (b.state === 'none' || numOrNull(b.daysSince) !== null);
     return shown ? { evergreen: 'false', status: 'finished', list_id: ids.map(String) } : null;
   }
-  let listId = null;
-  if (field === 'welcome') {
-    listId = isObj(u.welcome) ? u.welcome.listId : null;
-  } else if (field === 'purchase') {
-    // (The plain 'noPurchase' column retired with the 3d/7d/15d leaves — POLISH3 stage 4 F2.)
-    const rows = isObj(u[field]) && Array.isArray(u[field].rows) ? u[field].rows : [];
-    listId = rows.length === 1 ? rows[0].listId : null;
-  }
-  if (!posInt(listId)) {
-    return null;
-  }
-  return { list_id: String(listId), evergreen: 'true' };
+  return null;
 }
 
 // DASHBOARDS-POLISH-SPEC D2; POLISH2-SPEC D2 (stage 2 F3): the note a linked broadcast cell's
@@ -511,22 +538,36 @@ export function cell(row, field, t = (k) => k) {
       text: MISSING, cls: '', tooltip: t('dashboard.usage.zmaHelp'), circles: [],
     };
   }
-  const n = npDaysOf(field);
-  if (n !== null) {
-    const rows = npRows(u);
-    if (!rows) {
-      const detail = triggerTip(isObj(u.noPurchase) ? u.noPurchase : {}, t);
-      const missing = t('dashboard.usage.countsMissing');
+  // LIFECYCLE-SERIES-SPEC S9: a series leaf -- its D5 description first, then the circle words and
+  // the rows. Welcome Day 0 is the welcome family's stored counts and campaigns (today's welcome
+  // state); every other leaf the circle(s) of its stored rows (green clean, amber idle/invalid), a
+  // red 0 when none. A doc without `series` renders the leaf '—'.
+  const leaf = seriesLeafOf(field);
+  if (leaf !== null) {
+    const desc = t(seriesStepKey(leaf.family, leaf.days));
+    if (!seriesOf(u, leaf.family)) {
       return {
-        text: MISSING, cls: '', tooltip: detail ? `${missing}\n${detail}` : missing, circles: [],
+        text: MISSING, cls: '', tooltip: `${desc}\n${t('dashboard.usage.seriesMissing')}`, circles: [],
       };
     }
-    const at = npRowsAt(rows, n);
-    const counts = { green: at.filter(npClean).length, amber: at.filter((r) => !npClean(r)).length };
+    let counts;
+    let detail;
+    if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
+      counts = storedCounts(u, 'welcome');
+      if (!counts) {
+        return {
+          text: MISSING, cls: '', tooltip: `${desc}\n${t('dashboard.usage.countsMissing')}`, circles: [],
+        };
+      }
+      detail = welcomeTip(isObj(u.welcome) ? u.welcome : {}, t);
+    } else {
+      const at = stepRows(stepAt(u, leaf.family, leaf.days));
+      counts = { green: at.filter(rowClean).length, amber: at.filter((r) => !rowClean(r)).length };
+      detail = triggerTip({ rows: at }, t);
+    }
     const words = circleWords(counts, t);
-    const detail = triggerTip({ rows: at }, t);
     return {
-      text: '', cls: '', tooltip: detail ? `${words}\n${detail}` : words, circles: circlesOf(counts),
+      text: '', cls: '', tooltip: [desc, words, detail].filter(Boolean).join('\n'), circles: circlesOf(counts),
     };
   }
   switch (field) {
@@ -541,25 +582,16 @@ export function cell(row, field, t = (k) => k) {
         text: String(total), cls: '', tooltip: scoreTip(u.score, t), circles: [],
       };
     }
-    case 'journeys':
-    case 'welcome':
-    case 'purchase': {
-      // (Plain 'noPurchase' retired for the 3d/7d/15d leaves — POLISH3 stage 4 F2.)
+    case 'journeys': {
+      // (The plain Welcome and 1st purchase columns retired for the series leaves -- LIFECYCLE-SERIES-SPEC S9.)
       const counts = storedCounts(u, field);
       if (!counts) {
         return {
           text: MISSING, cls: '', tooltip: t('dashboard.usage.countsMissing'), circles: [],
         };
       }
-      let detail = '';
-      if (field === 'welcome') {
-        detail = welcomeTip(isObj(u.welcome) ? u.welcome : {}, t);
-      } else if (field !== 'journeys') {
-        detail = triggerTip(isObj(u[field]) ? u[field] : {}, t);
-      }
-      const words = circleWords(counts, t);
       return {
-        text: '', cls: '', tooltip: detail ? `${words}\n${detail}` : words, circles: circlesOf(counts),
+        text: '', cls: '', tooltip: circleWords(counts, t), circles: circlesOf(counts),
       };
     }
     case 'sunset':
@@ -670,7 +702,7 @@ export function clickSort(current, field) {
 const BADNESS = Object.freeze({ active: 0, idle: 1, none: 2 });
 
 //
-// POLISH3 D4: a No purchase leaf by badness (green 0, any amber 1, absent red 2; '—' null). D5: a
+// LIFECYCLE-SERIES-SPEC S9: a series leaf by badness (green 0, any amber 1, absent red 2; '—' null). D5: a
 // Skipped leaf by its count (desc = most skipped first); ZMA '—' or a missing entry null -- it
 // does not need usage.
 export function sortValue(row, field) {
@@ -683,27 +715,26 @@ export function sortValue(row, field) {
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
   }
-  const n = npDaysOf(field);
-  if (n !== null) {
-    const rows = npRows(u);
-    if (!rows) {
+  // S9: a series leaf by badness -- Welcome Day 0 by the stored welcome state; every other leaf
+  // green 0, any amber 1, absent red 2; '—' (no series) null.
+  const leaf = seriesLeafOf(field);
+  if (leaf !== null) {
+    if (!seriesOf(u, leaf.family)) {
       return null;
     }
-    const at = npRowsAt(rows, n);
+    if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
+      const s = isObj(u.welcome) ? u.welcome.state : undefined;
+      return Object.prototype.hasOwnProperty.call(BADNESS, s) ? BADNESS[s] : null;
+    }
+    const at = stepRows(stepAt(u, leaf.family, leaf.days));
     if (!at.length) {
       return 2;
     }
-    return at.every(npClean) ? 0 : 1;
+    return at.every(rowClean) ? 0 : 1;
   }
   switch (field) {
     case 'score':
       return numOrNull(isObj(u.score) ? u.score.total : null);
-    case 'welcome':
-    case 'purchase': {
-      // (Plain 'noPurchase' retired for the 3d/7d/15d leaves — POLISH3 stage 4 F2.)
-      const s = isObj(u[field]) ? u[field].state : undefined;
-      return Object.prototype.hasOwnProperty.call(BADNESS, s) ? BADNESS[s] : null;
-    }
     case 'sunset':
     case 'attribution':
       if (typeof u[field] !== 'boolean') {
