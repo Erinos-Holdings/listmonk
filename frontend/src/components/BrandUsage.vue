@@ -68,17 +68,15 @@
             </td>
             <td v-for="c in columns" :key="c.field" class="has-text-centered"
               :class="[buTd(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.divide }]">
-              <!-- V2 D3/D4: one circle per state, the stored count inside; the link is per CELL
-                   (Campaigns, the list preselected, the Automations scope; Journeys -- POLISH2 D2 --
-                   the Automations scope filtered to the brand's lists). -->
-              <!-- 2026-10-30: EACH circle links what it counts (brandUsage.mjs::circleLink) -- green the
-                   running campaigns / clean steps, amber the rest; red never links. -->
+              <!-- V2 D3: one circle per state, the stored count inside. 2026-10-30: EACH circle links
+                   what it counts (brandUsage.mjs::circleLink) -- green the running campaigns / clean
+                   steps, amber the rest; red never links; each carries its own accessible name. -->
               <span v-if="cell(row, c.field).circles.length" class="bu-circles" :data-cy="`usage-${c.field}-${row.brand}`">
                 <component v-for="ci in cell(row, c.field).circles" :key="ci.color"
                   :is="circleTo(row, c.field, ci.color) ? 'router-link' : 'span'"
                   :to="circleTo(row, c.field, ci.color) ? { name: 'campaigns', query: circleTo(row, c.field, ci.color) } : null"
                   :class="['bu-circle', `bu-${ci.color}`]" :title="cell(row, c.field).tooltip"
-                  :aria-label="cell(row, c.field).tooltip" :data-cy="`usage-${c.field}-${row.brand}-${ci.color}`">{{ ci.n }}</component>
+                  :aria-label="circleAria(ci)" :data-cy="`usage-${c.field}-${row.brand}-${ci.color}`">{{ ci.n }}</component>
               </span>
               <!-- DASHBOARDS-POLISH2-SPEC D2: the Cadence / Last broadcast text links the brand's
                    lists in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links.
@@ -156,7 +154,7 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  SECTIONS, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, clickSort, columnMeta, guideSplitX, headerLayout, latestAsOf,
+  SECTIONS, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideSplitX, headerLayout, latestAsOf,
   linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -261,6 +259,11 @@ export default Vue.extend({
 
     circleTo(row, field, color) {
       return circleLink(row, field, color);
+    },
+
+    // Each circle's own accessible name (its part, not the whole cell's tooltip).
+    circleAria(ci) {
+      return circleName(ci.color, ci.n, (k, p) => this.$t(k, p));
     },
 
     title(row, field) {

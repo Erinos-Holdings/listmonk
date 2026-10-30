@@ -8,7 +8,7 @@ import {
   boolCell, broadcastTip, cell, cellBadges, cellLink, circlesOf, circleWords, clickSort, columnMeta, defaultOrder,
   headerLayout, latestAsOf, loadState, mountainRunTime, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
-  GUIDE_MIN_COLUMN, GUIDE_SERIES, guideSplitX, parseStepText, seriesGuide, bodyColumns, circleLink,
+  GUIDE_MIN_COLUMN, GUIDE_SERIES, guideSplitX, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -300,10 +300,13 @@ test('D7: the trigger tooltip lists each stored row with its error or its list',
   );
 });
 
-test('V2 D4 / S9: links per cell -- Welcome Day 0 its master list, a series leaf only with exactly one row; Automations scope', () => {
+// 2026-10-30: the circle cells link per CIRCLE (circleLink), never per cell; cellLink serves the
+// text cells only.
+test('V2 D4 / S9 / §10 A9: circle cells link per circle -- Day 0 its own campaigns, a leaf its own rows\' lists', () => {
   const [ruze] = shapeRows(api);
-  assert.deepEqual(cellLink(ruze, 'welcome:0'), { list_id: '7', evergreen: 'true' });
-  assert.equal(cellLink(ruze, 'postPurchase:0'), null); // no rows
+  assert.equal(cellLink(ruze, 'welcome:0'), null);
+  assert.deepEqual(circleLink(ruze, 'welcome:0', 'green'), { id: ['3'], evergreen: 'all' });
+  assert.equal(circleLink(ruze, 'postPurchase:0', 'green'), null); // no rows
   assert.equal(cellLink(ruze, 'sunset'), null);
   assert.equal(cellLink(ruze, 'attribution'), null);
   assert.equal(cellLink(ruze, 'score'), null);
@@ -318,16 +321,20 @@ test('V2 D4 / S9: links per cell -- Welcome Day 0 its master list, a series leaf
       },
     }),
   }])[0];
-  assert.deepEqual(cellLink(one, 'welcome:5'), { list_id: '12', evergreen: 'true' }); // (a step row; the slug is immaterial)
-  assert.equal(cellLink(one, 'postPurchase:0'), null); // several rows = several lists
+  assert.deepEqual(circleLink(one, 'welcome:5', 'green'), { list_id: ['12'], evergreen: 'true' }); // (a step row; the slug is immaterial)
+  // Several rows: each circle its own rows' lists.
+  assert.deepEqual(circleLink(one, 'postPurchase:0', 'green'), { list_id: ['4'], evergreen: 'true' });
+  assert.deepEqual(circleLink(one, 'postPurchase:0', 'amber'), { list_id: ['5'], evergreen: 'true' });
   const noList = shapeRows([{
     brand: 'y',
     usage: usage({ series: { welcome: series('welcome'), postPurchase: series('postPurchase', { 0: [{ slug: 'a', listId: null, evergreen: 'none' }] }) } }),
   }])[0];
-  assert.equal(cellLink(noList, 'postPurchase:0'), null);
+  // A list-less (invalid) row is counted amber but cannot be linked (§10 A9).
+  assert.deepEqual(cell(noList, 'postPurchase:0', t).circles, [{ color: 'amber', n: 1 }]);
+  assert.equal(circleLink(noList, 'postPurchase:0', 'amber'), null);
   // A ZMA row's dimmed Welcome Day 0 does not link; no usage, no link.
-  assert.equal(cellLink(shapeRows(api).find((r) => r.brand === 'oldzma'), 'welcome:0'), null);
-  assert.equal(cellLink(shapeRows(api).find((r) => r.brand === 'nodoc'), 'welcome:0'), null);
+  assert.equal(circleLink(shapeRows(api).find((r) => r.brand === 'oldzma'), 'welcome:0', 'green'), null);
+  assert.equal(circleLink(shapeRows(api).find((r) => r.brand === 'nodoc'), 'welcome:0', 'green'), null);
 });
 
 // DASHBOARDS-POLISH2-SPEC I3 (supersedes POLISH I4's master-list / no-list landings): the
@@ -411,8 +418,8 @@ test('I3: broadcast cells link the brand set in the Broadcasts scope', () => {
   const nodoc = shapeRows([{ brand: 'ruze' }], { lists })[0];
   ['cadence', 'lastBroadcast'].forEach((f) => assert.equal(cellLink(nodoc, f), null, f));
   // The Welcome Day 0 / series links are unchanged by the brand set (Automations, their own single list).
-  assert.deepEqual(cellLink(ruze, 'welcome:0'), { list_id: '7', evergreen: 'true' });
-  assert.equal(cellLink(ruze, 'postPurchase:0'), null);
+  assert.deepEqual(circleLink(ruze, 'welcome:0', 'green'), { id: ['3'], evergreen: 'all' });
+  assert.equal(circleLink(ruze, 'postPurchase:0', 'green'), null);
 });
 
 // Fork (matrix polish, integrations MATRIX-POLISH-SPEC I6) -- Last broadcast opens the newest send
@@ -690,14 +697,17 @@ test('I15 (POLISH3 stage 2 F5): a no-days row is an amber ⚠ badge with its par
   assert.deepEqual(cellBadges(pre, 'welcome:10', t), []);
 });
 
-test('I15: a leaf links its step list only when exactly one step sits at that day', () => {
+test('I15 / §10 A9: a leaf\'s circles link their own steps\' lists -- green the running, amber the rest', () => {
   const r = wsRow([npStep(10, 40, 'running'), npStep(5, 41, 'idle'), npStep(5, 46, 'running')]);
-  assert.deepEqual(cellLink(r, 'welcome:10'), { list_id: '40', evergreen: 'true' });
-  assert.equal(cellLink(r, 'welcome:5'), null); // two steps at 5d
+  assert.deepEqual(circleLink(r, 'welcome:10', 'green'), { list_id: ['40'], evergreen: 'true' });
+  // Two steps at 5d: one circle each, each linking its own.
   assert.deepEqual(cell(r, 'welcome:5', t).circles, [{ color: 'green', n: 1 }, { color: 'amber', n: 1 }]);
-  assert.equal(cellLink(r, 'welcome:2'), null); // absent
-  assert.equal(cellLink(wsRow([npStep(2, null, 'none')]), 'welcome:2'), null); // no list
-  assert.equal(cellLink(shapeRows(api).find((x) => x.brand === 'nodoc'), 'welcome:2'), null);
+  assert.deepEqual(circleLink(r, 'welcome:5', 'green'), { list_id: ['46'], evergreen: 'true' });
+  assert.deepEqual(circleLink(r, 'welcome:5', 'amber'), { list_id: ['41'], evergreen: 'true' });
+  assert.equal(circleLink(r, 'welcome:2', 'green'), null); // absent
+  assert.equal(circleLink(r, 'welcome:2', 'red'), null); // red never links
+  assert.equal(circleLink(wsRow([npStep(2, null, 'none')]), 'welcome:2', 'amber'), null); // no list
+  assert.equal(circleLink(shapeRows(api).find((x) => x.brand === 'nodoc'), 'welcome:2', 'green'), null);
 });
 
 test('I15: the leaves sort by badness -- absent worst, then amber, then green; — last', () => {
@@ -771,8 +781,8 @@ test('POLISH3 D5: Skipped leaves sort descending by count, missing/— last', ()
 });
 
 // 2026-10-30: the SKU column -- the lib's stored `usage.sku` rendered verbatim (circles from the
-// stored counts), linked to the automations of every SKU-trigger list, sorted by how many there are.
-test('SKU column: stored counts as circles, rows in the tooltip, linked to every SKU list, sorted by count', () => {
+// stored counts), each circle linked to its own rows' lists, sorted by how many there are.
+test('SKU column: stored counts as circles, rows in the tooltip, per-circle links, sorted by count', () => {
   const sku = {
     rows: [
       {
@@ -796,20 +806,23 @@ test('SKU column: stored counts as circles, rows in the tooltip, linked to every
     'ruze-skus-40: dashboard.usage.listEvergreen{"list":40,"state":"idle"}',
     'ruze-skus-42: trigger.skus must be a non-empty array',
   ].join('\n'));
-  // The filtered set: every SKU row's list (ascending, de-duplicated), in the Automations scope.
-  assert.deepEqual(cellLink(r, 'sku'), { evergreen: 'true', list_id: ['40', '41'] });
+  // Per circle (§10 A9): green the running row's list, amber the others' (the list-less invalid
+  // row is counted but not linkable); no per-cell link.
+  assert.deepEqual(circleLink(r, 'sku', 'green'), { list_id: ['41'], evergreen: 'true' });
+  assert.deepEqual(circleLink(r, 'sku', 'amber'), { list_id: ['40'], evergreen: 'true' });
+  assert.equal(cellLink(r, 'sku'), null);
   assert.equal(linkTip(r, 'sku', t), ''); // like the series leaves: no link hint (circle cells show the tooltip only)
   assert.equal(sortValue(r, 'sku'), 3);
   assert.deepEqual(columnMeta('sku'), { label: 'dashboard.usage.sku', help: 'dashboard.usage.skuHelp' });
   // None: a red 0, no link, sort 0.
   const [none] = shapeRows([{ brand: 'ruze', usage: usage({ sku: { rows: [], counts: { green: 0, amber: 0 } } }) }]);
   assert.deepEqual(cell(none, 'sku', t).circles, [{ color: 'red', n: 0 }]);
-  assert.equal(cellLink(none, 'sku'), null);
+  assert.equal(circleLink(none, 'sku', 'red'), null);
   assert.equal(sortValue(none, 'sku'), 0);
   // A doc written before the column (no `sku`): '—', no link, sorts last (null).
   const [old] = shapeRows([{ brand: 'ruze', usage: usage() }]);
   assert.equal(cell(old, 'sku', t).text, MISSING);
-  assert.equal(cellLink(old, 'sku'), null);
+  assert.equal(circleLink(old, 'sku', 'green'), null);
   assert.equal(sortValue(old, 'sku'), null);
   // The strings exist.
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
@@ -850,8 +863,12 @@ test('circleLink: Day 0 green/amber open their own campaigns; step and SKU circl
       sku,
     }),
   }]);
-  assert.deepEqual(circleLink(r, 'welcome:0', 'green'), { id: ['67'], evergreen: 'true' });
-  assert.deepEqual(circleLink(r, 'welcome:0', 'amber'), { id: ['70', '71'], evergreen: 'true' });
+  assert.deepEqual(circleLink(r, 'welcome:0', 'green'), { id: ['67'], evergreen: 'all' });
+  assert.deepEqual(circleLink(r, 'welcome:0', 'amber'), { id: ['70', '71'], evergreen: 'all' });
+  // Each circle's own accessible name (§10 review F1), never the whole cell's tooltip.
+  assert.equal(circleName('green', 1, t), 'dashboard.usage.circleRunning{"n":1}');
+  assert.equal(circleName('amber', 2, t), 'dashboard.usage.circleIdle{"n":2}');
+  assert.equal(circleName('red', 0, t), 'dashboard.usage.circleNone');
   assert.equal(circleLink(r, 'welcome:0', 'red'), null);
   assert.deepEqual(circleLink(r, 'postPurchase:5', 'green'), { list_id: ['80'], evergreen: 'true' });
   assert.deepEqual(circleLink(r, 'postPurchase:5', 'amber'), { list_id: ['81', '82'], evergreen: 'true' });

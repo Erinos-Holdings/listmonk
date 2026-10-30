@@ -461,6 +461,18 @@ export function circlesOf(counts) {
   return out.length ? out : [{ color: 'red', n: 0 }];
 }
 
+// circleName (2026-10-30) is ONE circle's accessible name -- since each circle is its own link, two
+// links in a cell must not share a name: green "N running", amber "N not running", red "none in use".
+export function circleName(color, n, t = (k) => k) {
+  if (color === 'green') {
+    return t('dashboard.usage.circleRunning', { n });
+  }
+  if (color === 'amber') {
+    return t('dashboard.usage.circleIdle', { n });
+  }
+  return t('dashboard.usage.circleNone');
+}
+
 // V2 D3/I3: the words every circle of the cell carries -- color is never the only carrier:
 // "1 running, 2 not running", or "none in use".
 export function circleWords(counts, t = (k) => k) {
@@ -488,28 +500,14 @@ function lastIdsOf(u) {
   return ids && ids.length > 0 && ids.every(posInt) ? ids : null;
 }
 
-// V2 D4: a stoplight cell's link query -- the Campaigns page with the list preselected AND the
-// Automations scope (welcome/trigger campaigns are evergreens). Welcome links its master list; a
-// 1st purchase / No purchase cell links only when the family has exactly ONE row (with a list).
-// DASHBOARDS-POLISH2-SPEC D2/I3 (superseding POLISH D2's master-list / no-list landings): the
-// Journeys circles link the Automations scope and the Cadence / Last broadcast cells the
-// Broadcasts scope, both filtered to the BRAND's active lists -- { evergreen, list_id: [ids] }, the
-// row's listIds as strings, ascending (a repeated list_id: the Campaigns page's route list scope,
-// or its single filter when the brand has one list). An empty set does not link. A ZMA-dimmed
-// cell, a '—' / blank cell (no stored value) and the booleans never link. null = no link.
-//
-// DASHBOARDS-POLISH3-SPEC D2: the Cadence / Last broadcast links also carry status=finished (the
-// cadence counts finished broadcasts; the landing must not include drafts). D4: a No purchase leaf
-// links its step's list when exactly ONE step sits at that day (the one-row rule). D5: a Skipped
-// leaf with a count > 0 links { list_id: that language's skipping lists, evergreen: 'all' } (both
-// kinds -- the finished broadcasts and the running evergreens); it renders from the row's live
-// `skipped`, INDEPENDENT of usage, and never links on a ZMA-dimmed row or at 0.
 // circleLink (2026-10-30) is ONE circle's link: the click filters to what THAT circle counts, never
 // the whole cell. Welcome Day 0 -- its stored campaigns (`welcome.campaigns`), green the running
-// ones, amber the rest (the lib's welcome counts split exactly so) -> { id, evergreen: 'true' }.
+// ones, amber the rest (the lib's welcome counts split exactly so) -> { id, evergreen: 'all' }.
 // Every other series leaf and SKU -- the stored rows' lists, green the clean rows (rowClean, the
 // lib's isClean), amber the others -> { list_id, evergreen: 'true' }; the rows store no campaign
-// ids, so a list is the finest filter. Red (none) never links, nor a ZMA-dimmed or `—` cell.
+// ids, so a list is the finest filter, and an invalid row with no list is counted but cannot be
+// linked (an amber circle of only such rows does not link). Red (none) never links, nor a
+// ZMA-dimmed or `—` cell.
 export function circleLink(row, field, color) {
   const u = row && row.usage;
   if (!u || (color !== 'green' && color !== 'amber') || (row.zma && ZMA_DIMMED.includes(field))) {
@@ -520,7 +518,9 @@ export function circleLink(row, field, color) {
   if (leaf !== null && leaf.family === SERIES_WELCOME && leaf.days === 0) {
     const camps = isObj(u.welcome) && Array.isArray(u.welcome.campaigns) ? u.welcome.campaigns.filter(isObj) : [];
     const ids = camps.filter((c) => (c.status === 'running') === green).map((c) => c.id).filter(posInt);
-    return ids.length ? { id: [...new Set(ids)].sort((a, b) => a - b).map(String), evergreen: 'true' } : null;
+    // evergreen 'all': an id scope forces All on the Campaigns page anyway (routeEvergreen), the
+    // Last broadcast link's shape.
+    return ids.length ? { id: [...new Set(ids)].sort((a, b) => a - b).map(String), evergreen: 'all' } : null;
   }
   let rows = null;
   if (leaf !== null) {
@@ -535,6 +535,14 @@ export function circleLink(row, field, color) {
   return ids.length ? { list_id: ids.map(String), evergreen: 'true' } : null;
 }
 
+// cellLink is a TEXT cell's link query (the circle cells link per circle, circleLink). DASHBOARDS-
+// POLISH2-SPEC D2/I3 + POLISH3 D2: Cadence / Last broadcast open the BRAND's active lists in the
+// Broadcasts scope with status=finished -- { evergreen: 'false', status, list_id: [ids] }, the row's
+// listIds as strings, ascending; an empty set, a ZMA-dimmed or '—' / blank cell never links.
+// MATRIX-POLISH D10.3: Last broadcast opens the newest send event's campaigns when stored. POLISH3
+// D5: a Skipped leaf with a count > 0 links { list_id: that language's skipping lists, evergreen:
+// 'all' }, from the row's live `skipped` (independent of usage), never on a ZMA-dimmed row or at 0.
+// null = no link.
 export function cellLink(row, field) {
   const lang = skippedLangOf(field);
   if (lang !== null) {
@@ -545,24 +553,7 @@ export function cellLink(row, field) {
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
   }
-  // LIFECYCLE-SERIES-SPEC S9: the No-purchase series Day 0 leaf links its master list (the old Welcome
-  // column's rule); every other series leaf links its step's list when exactly ONE row sits at that
-  // day (the POLISH3 one-row rule; Post-purchase Day 0 = the first-order trigger rows).
-  const leaf = seriesLeafOf(field);
-  if (leaf !== null) {
-    if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
-      const listId = isObj(u.welcome) ? u.welcome.listId : null;
-      return seriesOf(u, leaf.family) && posInt(listId) ? { list_id: String(listId), evergreen: 'true' } : null;
-    }
-    const at = stepRows(stepAt(u, leaf.family, leaf.days));
-    return at.length === 1 && posInt(at[0].listId) ? { list_id: String(at[0].listId), evergreen: 'true' } : null;
-  }
-  // The SKU column opens the automations of EVERY stored SKU-trigger row's list (the filtered set),
-  // ascending; no row with a list → no link.
-  if (field === 'sku') {
-    const ids = [...new Set(skuRows(u).map((r) => r.listId).filter(posInt))].sort((a, b) => a - b);
-    return storedCounts(u, 'sku') && ids.length ? { evergreen: 'true', list_id: ids.map(String) } : null;
-  }
+  // The circle cells (series leaves, SKU) link per circle -- circleLink (2026-10-30) -- never here.
   // Fork (matrix polish, integrations MATRIX-POLISH-SPEC D10.3) -- Last broadcast opens the newest
   // send event's campaigns (the stored broadcasts.lastIds) under the All kind; a doc written before
   // lastIds existed (or with a malformed one) keeps the brand-lists link below.
@@ -608,7 +599,7 @@ export function linkTip(row, field, t = (k) => k) {
 // shows '—' in Score/Welcome/Journeys/Last broadcast/Cadence.
 //
 // POLISH3 D5: a Skipped leaf renders from the row's live `skipped` whether or not the row has
-// usage -- a red count (linked) when > 0, a green ✓ at 0 (G5; covered or no window activity), '—'
+// usage -- a red count (linked) when > 0, a plain grey 0 at 0 (§10 A11, replacing G5's ✓), '—'
 // on a ZMA-dimmed row (or a malformed entry). D4: a No purchase leaf -- the circle(s) of the step(s)
 // at exactly that day (green running, amber idle/invalid), a red 0 when none; '—' for the whole
 // sub-group on a pre-`days` doc.
