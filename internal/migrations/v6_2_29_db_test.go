@@ -43,7 +43,8 @@ func TestUsageDecisionsMigration_V6_2_29(t *testing.T) {
 
 	fresh := h.decisionsShape()
 	for _, want := range []string{
-		"BEFORE UPDATE OR DELETE OR TRUNCATE ON public.usage_decisions FOR EACH STATEMENT",
+		// pg_get_triggerdef renders events in Postgres's canonical order (DELETE before UPDATE).
+		"BEFORE DELETE OR UPDATE OR TRUNCATE ON public.usage_decisions FOR EACH STATEMENT",
 		"CHECK ((decision = ANY (ARRAY['accept'::text, 'reject'::text])))",
 		"text_hash character NO 64",
 		"note text YES",

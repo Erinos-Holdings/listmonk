@@ -313,8 +313,8 @@ export const putBrandPersonas = (slug, personas) => http.put(
 
 // Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D4/D5) -- the lifecycle decision record
 // under Brands > Usage. The GET never toasts (a reader without the section simply sees none); the
-// POST's 400/403 message is toasted by the interceptor, and its 409 (stale text) is shown by the
-// pane, which then reloads (disableToast so it is not shown twice). snake_case kept (camelCase:
+// POST passes disableToast, so the pane toasts every refusal itself (one toast), and on a 409
+// (stale text) it also reloads. snake_case kept (camelCase:
 // false) -- usageDecisions.mjs reads can_decide / user_name / created_at.
 export const getUsageDecisions = () => http.get(
   '/api/usage/decisions',

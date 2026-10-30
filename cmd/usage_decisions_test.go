@@ -311,6 +311,20 @@ func TestSlackNotice(t *testing.T) {
 		t.Fatalf("log %q", logs.String())
 	}
 
+	// A transport error (*url.Error, which names the URL) logs only its cause. A webhook's secret
+	// is its path (hooks.slack.com/services/<secret>), so the path must never appear; the cause's
+	// dial address (the public host) may.
+	dead := httptest.NewTLSServer(http.NotFoundHandler())
+	deadURL := dead.URL
+	dead.Close()
+	var dl strings.Builder
+	dn := newDecisionNotifier(deadURL+"/services/WEBHOOKSECRET", "https://email.example", log.New(&dl, "", 0))
+	dn.Notify("K", decisions.Accept, both, "")
+	dn.wg.Wait()
+	if !strings.Contains(dl.String(), "decisions: slack notice failed") || strings.Contains(dl.String(), "WEBHOOKSECRET") {
+		t.Fatalf("transport-error log leaks the URL or is missing: %q", dl.String())
+	}
+
 	// Unset or non-https: no request at all.
 	mu.Lock()
 	before := len(bodies)
