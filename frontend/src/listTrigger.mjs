@@ -1,7 +1,7 @@
 // Fork (list join triggers, integrations LIST-JOIN-TRIGGER-SPEC D7). The pure half of the Lists
 // form's "Who joins automatically" section, the Lists page sub-line item and the campaign list
 // picker label. The server stores join_trigger ({kind: 'first_order'}, {kind: 'skus', skus},
-// {kind: 'no_purchase', days} -- NO-PURCHASE-STEPS-SPEC D7, a Welcome series step -- or
+// {kind: 'no_purchase', days} -- NO-PURCHASE-STEPS-SPEC D7, a No-purchase series step -- or
 // {kind: 'post_purchase', days} -- LIFECYCLE-SERIES-SPEC S2, a Post-purchase series step) and
 // the reconciler's write-back trigger_sync ({synced_at, state: 'live'|'invalid', slug?, error?});
 // this module only maps them to and from the form and formats them -- the fork stores and
@@ -34,7 +34,7 @@ export const WELCOME_STEP_DAYS = Object.freeze([2, 5, 10]);
 export const POST_PURCHASE_STEP_DAYS = Object.freeze([5, 14, 30]);
 
 // The two series (the Usage pane's groups and the Lists form's step radios): a series family per
-// step kind. Day 0 of the Welcome series is the brand newsletter list's automation; day 0 of the
+// step kind. Day 0 of the No-purchase series is the brand newsletter list's automation; day 0 of the
 // Post-purchase series is the first-order list.
 export const SERIES_WELCOME = 'welcome';
 export const SERIES_POST_PURCHASE = 'postPurchase';
@@ -112,7 +112,7 @@ export function daysValid(text) {
   return d !== null && d >= DAYS_MIN && d <= DAYS_MAX;
 }
 
-// DAYS_PRESETS are the form's no_purchase (Welcome series) days choices -- LIFECYCLE-SERIES-SPEC
+// DAYS_PRESETS are the form's no_purchase (No-purchase series) days choices -- LIFECYCLE-SERIES-SPEC
 // S7 (2/5/10, replacing the provisional 3/7/15). The server still accepts 1-365 (D1); this narrows
 // only what the form offers. POST_PURCHASE_DAYS_PRESETS are the post_purchase choices.
 export const DAYS_PRESETS = WELCOME_STEP_DAYS;
@@ -216,12 +216,12 @@ export function triggerHelpKeys(option) {
 }
 
 // seriesPhrase is LIFECYCLE-SERIES-SPEC S10's standard phrase for a stored trigger: "Post-purchase
-// series day 0" (first order), "Welcome series day N" (no_purchase), "Post-purchase series day N"
+// series day 0" (first order), "No-purchase series day N" (no_purchase), "Post-purchase series day N"
 // (post_purchase); '' for any other kind.
 function seriesPhrase(joinTrigger) {
   const opt = triggerOption(joinTrigger);
   if (opt === TRIGGER_FIRST_ORDER) return 'Post-purchase series day 0';
-  if (opt === TRIGGER_NO_PURCHASE) return `Welcome series day ${joinTrigger.days}`;
+  if (opt === TRIGGER_NO_PURCHASE) return `No-purchase series day ${joinTrigger.days}`;
   if (opt === TRIGGER_POST_PURCHASE) return `Post-purchase series day ${joinTrigger.days}`;
   return '';
 }

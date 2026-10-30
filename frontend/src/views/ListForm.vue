@@ -102,7 +102,7 @@
               <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
                 data-cy="list-trigger-skus" />
             </b-field>
-            <!-- NO-PURCHASE-STEPS-SPEC D7: a Welcome series step -- {kind: no_purchase, days}. -->
+            <!-- NO-PURCHASE-STEPS-SPEC D7: a No-purchase series step -- {kind: no_purchase, days}. -->
             <div class="trigger-option">
               <b-field>
                 <b-radio v-model="triggerOption" native-value="no_purchase" name="join_trigger" :disabled="locked"
@@ -126,7 +126,7 @@
                 <strong>{{ $t(helpFor('post_purchase').lead) }}</strong> {{ $t(helpFor('post_purchase').body) }}
               </p>
             </div>
-            <!-- LIFECYCLE-SERIES-SPEC S7/D5: the step's days -- 2/5/10 (Welcome series) or 5/14/30
+            <!-- LIFECYCLE-SERIES-SPEC S7/D5: the step's days -- 2/5/10 (No-purchase series) or 5/14/30
             (Post-purchase series), a stored off-pattern value as a "N days (legacy)" radio; each
             radio hovers with its D5 description (listTrigger.mjs::daysRadios). -->
             <b-field v-if="isStepOption" :label="$t(triggerOption === 'post_purchase' ? 'lists.joinTriggerDaysPostPurchase' : 'lists.joinTriggerDays')"

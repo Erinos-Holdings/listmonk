@@ -26,7 +26,11 @@
             {{ $t(`brands.panes.${p}`) }}
           </b-radio-button>
         </b-field>
-        <p class="is-size-7 has-text-grey">{{ $t('brands.gmailNote') }}</p>
+        <!-- The Gmail note qualifies the Postmaster data on Matrix, Health and the brand detail; the
+             Usage pane shows none, so it carries no note (2026-10-30). -->
+        <p v-if="brandParam || pane !== 'usage'" class="is-size-7 has-text-grey" data-cy="brands-gmail-note">
+          {{ $t('brands.gmailNote') }}
+        </p>
       </div>
     </header>
 

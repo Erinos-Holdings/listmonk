@@ -23,7 +23,7 @@ import {
 
 // LIFECYCLE-SERIES-SPEC S9 (replacing DASHBOARDS-POLISH3-SPEC D4's provisional No purchase
 // 3d | 7d | 15d leaves and the plain Welcome / 1st purchase columns): two series groups, one leaf
-// per standard day -- the Welcome series Day 0 | 2d | 5d | 10d and the Post-purchase series
+// per standard day -- the No-purchase series Day 0 | 2d | 5d | 10d and the Post-purchase series
 // Day 0 | 5d | 14d | 30d. The lib stores usage.series.<family>.steps (one {days, state, rows} per
 // leaf) and .legacy (the off-standard step rows, a grey chip each after the group's last leaf); the
 // fork maps them and computes nothing.
@@ -31,6 +31,59 @@ export const SERIES_DAYS = Object.freeze({
   [SERIES_WELCOME]: Object.freeze([0, ...WELCOME_STEP_DAYS]),
   [SERIES_POST_PURCHASE]: Object.freeze([0, ...POST_PURCHASE_STEP_DAYS]),
 });
+
+// 2026-10-30: the journey guide below the table -- each series' steps as a visual list, the same
+// D5 texts the leaf hovers carry (one home each, en.json via seriesStepKey). Below the chart the
+// series take the industry names (Welcome / New Customer, after Klaviyo), each with the table's
+// purchase-designation name as its subline -- the guide sits directly under the matching columns.
+export const GUIDE_SERIES = Object.freeze([
+  Object.freeze({ family: SERIES_WELCOME, title: 'dashboard.usage.guideWelcome', subtitle: 'dashboard.usage.noPurchase' }),
+  Object.freeze({ family: SERIES_POST_PURCHASE, title: 'dashboard.usage.guideNewCustomer', subtitle: 'dashboard.usage.postPurchase' }),
+]);
+
+// parseStepText splits a D5 text ("Day 5 Address purchase hesitation: \"A few reasons …\" Include
+// …") into { title, quote, body }: the title between the leading "Day N " and the FIRST ": " (a
+// title may itself end in "?", e.g. "How's it going?"), an optional leading double-quoted example
+// subject line, and the rest as the guidance. A text without ": " is all body.
+export function parseStepText(text) {
+  const s = String(text == null ? '' : text).trim();
+  const i = s.indexOf(': ');
+  if (i < 0) {
+    return { title: '', quote: '', body: s };
+  }
+  const title = s.slice(0, i).replace(/^Day \d+\s+/, '').trim();
+  let rest = s.slice(i + 2).trim();
+  let quote = '';
+  const m = rest.match(/^"([^"]+)"\s*/);
+  if (m) {
+    [, quote] = m;
+    rest = rest.slice(m[0].length).trim();
+  }
+  return { title, quote, body: rest };
+}
+
+// seriesGuide is the guide's content: per series (GUIDE_SERIES order) its title/subtitle keys and
+// one { days, title, quote, body } per standard day, parsed from the translated D5 text.
+export function seriesGuide(t = (k) => k) {
+  return GUIDE_SERIES.map((g) => ({
+    ...g,
+    steps: SERIES_DAYS[g.family].map((days) => ({ days, ...parseStepText(t(seriesStepKey(g.family, days))) })),
+  }));
+}
+
+// The narrowest a guide column may be beside the divider; below it the guide stacks.
+export const GUIDE_MIN_COLUMN = 300;
+
+// guideSplitX decides the guide's layout from the measured divider x (the Post-purchase group
+// header's left edge, px from the guide's left) and the guide's width: the rounded x when BOTH
+// sides keep GUIDE_MIN_COLUMN, else null (stacked) -- a narrow window, or a table scrolled so far
+// that the line sits off to one side.
+export function guideSplitX(x, width, min = GUIDE_MIN_COLUMN) {
+  if (typeof x !== 'number' || !Number.isFinite(x) || typeof width !== 'number' || !Number.isFinite(width)) {
+    return null;
+  }
+  return x >= min && width - x >= min ? Math.round(x) : null;
+}
 
 // DASHBOARDS-POLISH3-SPEC D5: the Languages section's Skipped leaves (the fork's I18N languages,
 // English excluded by design -- the section is international transparency).
@@ -67,7 +120,7 @@ export function skippedLangOf(field) {
 
 // V2 D2: the columns, left to right -- Score and Brand ungrouped, then the sections. POLISH3 D4/D5:
 // a section's `items` are its leaf fields in order, a SUB-GROUP ({ group, label, help, fields })
-// standing for its leaves under one label (since LIFECYCLE-SERIES-SPEC S9 the Welcome series over
+// standing for its leaves under one label (since LIFECYCLE-SERIES-SPEC S9 the No-purchase series over
 // Day 0 | 2d | 5d | 10d and the Post-purchase series over Day 0 | 5d | 14d | 30d; the Languages
 // section's Skipped over FR ES DE IT, between Journeys and Configurations); `fields` is the flat
 // leaf list.
@@ -81,10 +134,13 @@ const section = (key, label, items) => Object.freeze({
 });
 export const SECTIONS = Object.freeze([
   section('broadcasts', 'dashboard.usage.sectionBroadcasts', ['cadence', 'lastBroadcast']),
+  // The Journeys count column retired 2026-10-30: the Score sorts by usage and the series leaves
+  // show what it summed.
   section('journeys', 'dashboard.usage.sectionJourneys', [
-    'journeys',
     group(SERIES_WELCOME, 'dashboard.usage.noPurchase', 'dashboard.usage.noPurchaseHelp', WELCOME_FIELDS),
     group(SERIES_POST_PURCHASE, 'dashboard.usage.postPurchase', 'dashboard.usage.postPurchaseHelp', POST_PURCHASE_FIELDS),
+    // 2026-10-30: the brand's SKU-triggered journeys (the lib's stored `usage.sku`), not scored.
+    'sku',
   ]),
   section('languages', 'dashboard.usage.sectionLanguages', [
     // G5 round 2: Skipped subscribers shares the header font size with No purchase (small: false).
@@ -96,8 +152,9 @@ export const SECTIONS = Object.freeze([
 // Every sortable column, in display order.
 export const SORT_FIELDS = Object.freeze(['score', 'brand', ...SECTIONS.flatMap((s) => s.fields)]);
 
-// The stoplight columns (V2 D3) -- one circle per state. LIFECYCLE-SERIES-SPEC S9: the series leaves.
-export const CIRCLE_FIELDS = Object.freeze(['journeys', ...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS]);
+// The stoplight columns (V2 D3) -- one circle per state. LIFECYCLE-SERIES-SPEC S9: the series
+// leaves, then the SKU column.
+export const CIRCLE_FIELDS = Object.freeze([...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS, 'sku']);
 
 // POLISH3 D4/D5: the header layout over SECTIONS (the band alternates grey/white by section). Row
 // 2 holds every plain leaf (rowspan 2) and every sub-group label (colspan = its leaves); row 3
@@ -132,7 +189,7 @@ export function headerLayout(sections = SECTIONS) {
 const COLUMN_META = Object.freeze({
   cadence: { label: 'dashboard.usage.cadence', help: 'dashboard.usage.cadenceHelp' },
   lastBroadcast: { label: 'dashboard.usage.lastBroadcast', help: 'dashboard.usage.lastBroadcastHelp' },
-  journeys: { label: 'dashboard.usage.journeys', help: 'dashboard.usage.journeysHelp' },
+  sku: { label: 'dashboard.usage.sku', help: 'dashboard.usage.skuHelp' },
   attribution: { label: 'dashboard.usage.attribution', help: 'dashboard.usage.attributionHelp' },
   sunset: { label: 'dashboard.usage.sunset', help: 'dashboard.usage.sunsetHelp' },
 });
@@ -260,6 +317,9 @@ const stepRows = (st) => (st && Array.isArray(st.rows) ? st.rows.filter(isObj) :
 
 // A step row is green when the lib's stored facts say clean -- no error, a list, its automation
 // running (the stored `evergreen` state, mapped, never re-derived); amber otherwise.
+// The SKU column's stored rows (the lib's `usage.sku.rows`); [] when the doc does not carry them.
+const skuRows = (u) => (isObj(u && u.sku) && Array.isArray(u.sku.rows) ? u.sku.rows.filter(isObj) : []);
+
 const rowClean = (r) => !(typeof r.error === 'string' && r.error) && r.listId !== null && r.listId !== undefined && r.evergreen === 'running';
 
 // D2: the Brand Matrix's rows exactly -- the API rows narrowed by the launch filter over the rows'
@@ -273,7 +333,7 @@ export function shapeRows(apiRows, { brands = [], launch = 'all', lists = [] } =
 
 // The columns a ZMA row does not score (its sends live in ZMA -- a red would be false, v1 I6),
 // plus the Score (V2 D1: a ZMA row's score is null).
-const ZMA_DIMMED = Object.freeze(['score', WELCOME_FIELDS[0], 'journeys', 'lastBroadcast', 'cadence']);
+const ZMA_DIMMED = Object.freeze(['score', WELCOME_FIELDS[0], 'lastBroadcast', 'cadence']);
 
 // The welcome tooltip: the master list's evergreen campaigns ("#id status"), or none.
 export function welcomeTip(w, t = (k) => k) {
@@ -350,19 +410,15 @@ export function scoreTip(score, t = (k) => k) {
 }
 
 // V2 D3: the stored per-state numbers of a stoplight -- { green, amber } from the welcome family's
-// stored `counts` (the Welcome series Day 0 leaf, `welcome`) or Journeys' stored { running, idle };
-// null when the doc does not carry them (a doc written before V2). The fork classifies nothing.
+// stored `counts` (the No-purchase series Day 0 leaf, `welcome`) or the SKU column's (`sku`); null when
+// the doc does not carry them (a doc written before them). The fork classifies nothing.
 export function storedCounts(usage, field) {
   if (!isObj(usage)) {
     return null;
   }
   let green = null;
   let amber = null;
-  if (field === 'journeys') {
-    const j = isObj(usage.journeys) ? usage.journeys : {};
-    green = countOrNull(j.running);
-    amber = countOrNull(j.idle);
-  } else if (field === 'welcome') {
+  if (field === 'welcome' || field === 'sku') {
     const c = isObj(usage[field]) && isObj(usage[field].counts) ? usage[field].counts : {};
     green = countOrNull(c.green);
     amber = countOrNull(c.amber);
@@ -440,7 +496,7 @@ export function cellLink(row, field) {
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
   }
-  // LIFECYCLE-SERIES-SPEC S9: the Welcome series Day 0 leaf links its master list (the old Welcome
+  // LIFECYCLE-SERIES-SPEC S9: the No-purchase series Day 0 leaf links its master list (the old Welcome
   // column's rule); every other series leaf links its step's list when exactly ONE row sits at that
   // day (the POLISH3 one-row rule; Post-purchase Day 0 = the first-order trigger rows).
   const leaf = seriesLeafOf(field);
@@ -452,6 +508,12 @@ export function cellLink(row, field) {
     const at = stepRows(stepAt(u, leaf.family, leaf.days));
     return at.length === 1 && posInt(at[0].listId) ? { list_id: String(at[0].listId), evergreen: 'true' } : null;
   }
+  // The SKU column opens the automations of EVERY stored SKU-trigger row's list (the filtered set),
+  // ascending; no row with a list → no link.
+  if (field === 'sku') {
+    const ids = [...new Set(skuRows(u).map((r) => r.listId).filter(posInt))].sort((a, b) => a - b);
+    return storedCounts(u, 'sku') && ids.length ? { evergreen: 'true', list_id: ids.map(String) } : null;
+  }
   // Fork (matrix polish, integrations MATRIX-POLISH-SPEC D10.3) -- Last broadcast opens the newest
   // send event's campaigns (the stored broadcasts.lastIds) under the All kind; a doc written before
   // lastIds existed (or with a malformed one) keeps the brand-lists link below.
@@ -461,13 +523,10 @@ export function cellLink(row, field) {
       return { id: last.map(String), evergreen: 'all' };
     }
   }
-  if (field === 'journeys' || field === 'cadence' || field === 'lastBroadcast') {
+  if (field === 'cadence' || field === 'lastBroadcast') {
     const ids = (Array.isArray(row.listIds) ? row.listIds : []).filter(posInt);
     if (!ids.length) {
       return null;
-    }
-    if (field === 'journeys') {
-      return storedCounts(u, field) ? { evergreen: 'true', list_id: ids.map(String) } : null;
     }
     const b = isObj(u.broadcasts) ? u.broadcasts : {};
     const shown = field === 'cadence' ? numOrNull(b.cadenceDays) !== null : (b.state === 'none' || numOrNull(b.daysSince) !== null);
@@ -490,6 +549,9 @@ export function linkTip(row, field, t = (k) => k) {
   }
   if (skippedLangOf(field) !== null && cellLink(row, field)) {
     return t('dashboard.usage.skippedLinkHelp');
+  }
+  if (field === 'sku' && cellLink(row, field)) {
+    return t('dashboard.usage.skuLinkHelp');
   }
   return '';
 }
@@ -582,8 +644,8 @@ export function cell(row, field, t = (k) => k) {
         text: String(total), cls: '', tooltip: scoreTip(u.score, t), circles: [],
       };
     }
-    case 'journeys': {
-      // (The plain Welcome and 1st purchase columns retired for the series leaves -- LIFECYCLE-SERIES-SPEC S9.)
+    case 'sku': {
+      // The stored counts (green running, amber idle/invalid, red 0 none), then each row.
       const counts = storedCounts(u, field);
       if (!counts) {
         return {
@@ -591,7 +653,7 @@ export function cell(row, field, t = (k) => k) {
         };
       }
       return {
-        text: '', cls: '', tooltip: circleWords(counts, t), circles: circlesOf(counts),
+        text: '', cls: '', tooltip: [circleWords(counts, t), triggerTip({ rows: skuRows(u) }, t)].filter(Boolean).join('\n'), circles: circlesOf(counts),
       };
     }
     case 'sunset':
@@ -735,14 +797,17 @@ export function sortValue(row, field) {
   switch (field) {
     case 'score':
       return numOrNull(isObj(u.score) ? u.score.total : null);
+    case 'sku': {
+      // By how many SKU journeys the brand has (desc = most first); '—' (no stored counts) null.
+      const c = storedCounts(u, field);
+      return c ? c.green + c.amber : null;
+    }
     case 'sunset':
     case 'attribution':
       if (typeof u[field] !== 'boolean') {
         return null;
       }
       return u[field] ? 0 : 1;
-    case 'journeys':
-      return numOrNull(isObj(u.journeys) ? u.journeys.running : null);
     case 'cadence':
       return numOrNull(isObj(u.broadcasts) ? u.broadcasts.cadenceDays : null);
     case 'lastBroadcast': {

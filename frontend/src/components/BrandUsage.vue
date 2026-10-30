@@ -20,7 +20,7 @@
             </th>
           </tr>
           <!-- DASHBOARDS-POLISH3-SPEC D4/D5 -- brandUsage.mjs::headerLayout: plain leaves span the
-               two lower header rows; a sub-group (Welcome series, Post-purchase series, Skipped)
+               two lower header rows; a sub-group (No-purchase series, Post-purchase series, Skipped)
                puts its label over its leaves (Day 0 | 2d | 5d | 10d; Day 0 | 5d | 14d | 30d --
                LIFECYCLE-SERIES-SPEC S9, each leaf's hover its D5 description; FR ES DE IT). -->
           <tr>
@@ -119,6 +119,30 @@
     <p class="is-size-7 has-text-grey" data-cy="usage-note">
       {{ runTime ? $t('dashboard.usage.noteAsOf', { date: runTime }) : $t('dashboard.usage.computed') }}
     </p>
+    <!-- 2026-10-30: the journey guide -- each series' steps as a timeline (the leaf hovers' D5
+         texts, brandUsage.mjs::seriesGuide), the two side by side with the divider at the table's
+         No-purchase | Post-purchase line (measured, brandUsage.mjs::guideSplitX); stacked when
+         either side lacks the room. -->
+    <div ref="guide" class="bu-guide" :class="{ 'bu-guide-split': guideX !== null }"
+      :style="guideX !== null ? { '--bu-guide-x': `${guideX}px` } : null" data-cy="usage-guide">
+      <div v-for="g in guide" :key="g.family" :class="['bu-guide-series', `bu-guide-${g.family}`]"
+        :data-cy="`usage-guide-${g.family}`">
+        <h4 class="bu-guide-title">{{ $t(g.title) }}</h4>
+        <p class="bu-guide-subtitle">{{ $t(g.subtitle) }}</p>
+        <ol class="bu-guide-steps">
+          <li v-for="s in g.steps" :key="s.days" class="bu-guide-step">
+            <span class="bu-guide-day" :aria-label="`${$t('dashboard.usage.guideDay')} ${s.days}`">
+              <small>{{ $t('dashboard.usage.guideDay') }}</small>{{ s.days }}
+            </span>
+            <div class="bu-guide-text">
+              <p class="bu-guide-step-title">{{ s.title }}</p>
+              <p v-if="s.quote" class="bu-guide-quote">“{{ s.quote }}”</p>
+              <p class="bu-guide-body">{{ s.body }}</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -127,8 +151,8 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  SECTIONS, cell as cellOf, cellBadges, cellLink, clickSort, columnMeta, headerLayout, latestAsOf, linkTip,
-  loadState, mountainRunTime, saveState, shapeRows, sortRows,
+  SECTIONS, cell as cellOf, cellBadges, cellLink, clickSort, columnMeta, guideSplitX, headerLayout, latestAsOf,
+  linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -144,6 +168,8 @@ export default Vue.extend({
       // BRAND-USAGE-SPEC D7 -- the sort, per browser session (sessionStorage key dashboard.usage, kept;
       // V2 D2: a fresh session is Score descending).
       usage: loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
+      // The journey guide's divider x (px from the guide's left edge), or null = stacked.
+      guideX: null,
     };
   },
 
@@ -177,6 +203,10 @@ export default Vue.extend({
 
     header() {
       return headerLayout();
+    },
+
+    guide() {
+      return seriesGuide((k, p) => this.$t(k, p));
     },
   },
 
@@ -244,6 +274,23 @@ export default Vue.extend({
       return this.usage.sort.order === 'asc' ? '↑' : '↓';
     },
 
+    // The guide's divider follows the table's No-purchase | Post-purchase line: the Post-purchase
+    // group header's left edge, relative to the guide (the table container's scroll included).
+    measureGuide() {
+      const th = this.$el && this.$el.querySelector('[data-cy="usage-group-postPurchase"]');
+      const { guide } = this.$refs;
+      if (!th || !guide) {
+        this.guideX = null;
+        return;
+      }
+      const x = th.getBoundingClientRect().left - guide.getBoundingClientRect().left;
+      this.guideX = guideSplitX(x, guide.clientWidth);
+    },
+
+    queueMeasure() {
+      this.$nextTick(() => this.measureGuide());
+    },
+
     buAria(field) {
       if (!this.buSorted(field)) {
         return null;
@@ -258,6 +305,11 @@ export default Vue.extend({
         this.fetchRows();
       }
     },
+
+    // The column widths follow the rows' content, so the divider is re-measured after each render.
+    tableRows() {
+      this.queueMeasure();
+    },
   },
 
   created() {
@@ -266,10 +318,29 @@ export default Vue.extend({
 
   destroyed() {
     this.$root.$off('page.refresh', this.fetchRows);
+    window.removeEventListener('resize', this.queueMeasure);
+    if (this.guideObserver) {
+      this.guideObserver.disconnect();
+    }
+    const box = this.$el && this.$el.querySelector('.table-container');
+    if (box) {
+      box.removeEventListener('scroll', this.queueMeasure);
+    }
   },
 
   mounted() {
     this.afterListsLoaded(() => this.fetchRows());
+    window.addEventListener('resize', this.queueMeasure);
+    const box = this.$el.querySelector('.table-container');
+    if (box) {
+      box.addEventListener('scroll', this.queueMeasure, { passive: true });
+    }
+    // A pane shown after mount (a hidden tab) or a resized table re-measures too.
+    if (typeof ResizeObserver !== 'undefined') {
+      this.guideObserver = new ResizeObserver(() => this.queueMeasure());
+      this.guideObserver.observe(this.$el);
+    }
+    this.queueMeasure();
   },
 });
 </script>

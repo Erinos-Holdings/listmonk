@@ -93,7 +93,7 @@ test('no_purchase: option <-> document round-trip and the days field', () => {
   ['0', '366', '', '2.5'].forEach((bad) => assert.equal(daysValid(bad), false, bad));
 });
 
-// LIFECYCLE-SERIES-SPEC I14 (rewriting the 3/7/15 pin): the Welcome series step days are 2/5/10;
+// LIFECYCLE-SERIES-SPEC I14 (rewriting the 3/7/15 pin): the No-purchase series step days are 2/5/10;
 // a stored value outside them (Ruze's grandfathered 15, D2) stays a choice.
 test('no_purchase: the days radios are 2/5/10 plus a stored value outside them', () => {
   assert.deepEqual(DAYS_PRESETS, [2, 5, 10]);
@@ -153,7 +153,7 @@ test('I16: every series description key exists in en.json', () => {
   // S10's pinned label values.
   assert.equal(en['campaigns.evergreen'], 'Automation');
   assert.equal(en['lists.joinTrigger'], 'Entry trigger');
-  assert.equal(en['lists.joinTriggerNoPurchase'], 'Welcome series step — no purchase since joining …');
+  assert.equal(en['lists.joinTriggerNoPurchase'], 'No-purchase series step — days after joining the newsletter …');
   assert.equal(en['lists.joinTriggerFirstOrder'], 'Post-purchase series day 0 — every customer\'s first order of this brand');
   assert.equal(en['lists.joinTriggerPostPurchase'], 'Post-purchase series step — days after the first order …');
   // No en.json value shows a user the retired terms.
@@ -162,18 +162,18 @@ test('I16: every series description key exists in en.json', () => {
 
 test('no_purchase: picker label and sub-line item (LIFECYCLE-SERIES-SPEC S10 phrases)', () => {
   const l = { name: 'Ruze Still Deciding', join_trigger: { kind: 'no_purchase', days: 7 } };
-  assert.equal(pickerLabel(l), 'Ruze Still Deciding — Welcome series day 7');
-  assert.equal(listTriggerItem(l), 'Welcome series day 7 · pending sync');
+  assert.equal(pickerLabel(l), 'Ruze Still Deciding — No-purchase series day 7');
+  assert.equal(listTriggerItem(l), 'No-purchase series day 7 · pending sync');
   const live = { ...l, trigger_sync: { state: 'live', slug: 'ruze-no-purchase-56' } };
-  assert.equal(listTriggerItem(live), 'Welcome series day 7 · live');
-  assert.equal(withTriggerItem('#56 · Ruze', live), '#56 · Ruze · Welcome series day 7 · live');
+  assert.equal(listTriggerItem(live), 'No-purchase series day 7 · live');
+  assert.equal(withTriggerItem('#56 · Ruze', live), '#56 · Ruze · No-purchase series day 7 · live');
   const pp = { name: 'Ruze day 14', join_trigger: { kind: 'post_purchase', days: 14 } };
   assert.equal(pickerLabel(pp), 'Ruze day 14 — Post-purchase series day 14');
   assert.equal(listTriggerItem(pp), 'Post-purchase series day 14 · pending sync');
   // The camel-cased browser row reads the same.
   const camel = { name: 'Step 2', joinTrigger: { kind: 'no_purchase', days: 14 }, triggerSync: { state: 'invalid', error: 'x' } };
-  assert.equal(pickerLabel(camel), 'Step 2 — Welcome series day 14');
-  assert.equal(listTriggerItem(camel), 'Welcome series day 14 · invalid');
+  assert.equal(pickerLabel(camel), 'Step 2 — No-purchase series day 14');
+  assert.equal(listTriggerItem(camel), 'No-purchase series day 14 · invalid');
   assert.deepEqual(triggerBadge(storedTrigger(camel), storedTriggerSync(camel)), { state: 'invalid', key: 'lists.triggerSyncInvalid', params: { error: 'x' } });
 });
 

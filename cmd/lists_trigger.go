@@ -63,7 +63,7 @@ const (
 var joinTriggerKindErr = fmt.Errorf("join_trigger.kind must be %q, %q, %q or %q", joinTriggerFirstOrder, joinTriggerSkus, joinTriggerNoPurchase, joinTriggerPostPurchase)
 
 // isStepTriggerKind reports whether a join_trigger kind is a STEP kind -- a list filled by the
-// integrations sweep alone (a Welcome series no_purchase step or a Post-purchase series
+// integrations sweep alone (a No-purchase series no_purchase step or a Post-purchase series
 // post_purchase step, LIFECYCLE-SERIES-SPEC S2). The ONE helper every step-list guard calls.
 func isStepTriggerKind(kind string) bool {
 	return kind == joinTriggerNoPurchase || kind == joinTriggerPostPurchase

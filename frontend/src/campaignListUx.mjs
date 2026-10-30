@@ -12,7 +12,7 @@ import {
 
 export const CLASS_NONE = 'none';
 export const CLASS_PURCHASE = 'purchase';
-// The STEP class -- a list the integrations sweep fills: a no_purchase (Welcome series) or, since
+// The STEP class -- a list the integrations sweep fills: a no_purchase (No-purchase series) or, since
 // LIFECYCLE-SERIES-SPEC S2/F11, a post_purchase (Post-purchase series) step list. Its value keeps
 // the historical 'no_purchase' spelling; every step rule (the zero-delay row, the locked
 // automation, the step-list notice, isStepList, addableLists) keys on it.

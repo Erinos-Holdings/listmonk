@@ -8,6 +8,7 @@ import {
   boolCell, broadcastTip, cell, cellBadges, cellLink, circlesOf, circleWords, clickSort, columnMeta, defaultOrder,
   headerLayout, latestAsOf, loadState, mountainRunTime, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
+  GUIDE_MIN_COLUMN, GUIDE_SERIES, guideSplitX, parseStepText, seriesGuide,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -47,7 +48,6 @@ const usage = (over = {}) => ({
   series: { welcome: series('welcome', {}, [], { 0: 'active' }), postPurchase: series('postPurchase') },
   sunset: true,
   attribution: false,
-  journeys: { running: 2, idle: 1 },
   broadcasts: {
     lastAt: '2026-10-20T12:00:00.000Z', windowCount: 4, cadenceDays: 12.4, daysSince: 4.6, ratio: 0.37, state: 'ok',
   },
@@ -120,8 +120,9 @@ test('D2: rows are the Brand Matrix rows -- the launch filter over the rows\' ow
 });
 
 // LIFECYCLE-SERIES-SPEC S9 (replacing POLISH3 D4's No purchase 3d | 7d | 15d sub-group and the
-// plain Welcome / 1st purchase columns): Journeys is the journeys column, then the Welcome series
-// group over Day 0 | 2d | 5d | 10d and the Post-purchase series group over Day 0 | 5d | 14d | 30d.
+// plain Welcome / 1st purchase columns): Journeys is the No-purchase series group over
+// Day 0 | 2d | 5d | 10d and the Post-purchase series group over Day 0 | 5d | 14d | 30d (the
+// journeys count column retired 2026-10-30 -- the Score sorts by usage).
 // The Languages section (Skipped over FR ES DE IT) still sits between Journeys and Configurations.
 test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two series groups) / Languages / Configurations', () => {
   assert.deepEqual(SERIES_DAYS, { welcome: [0, 2, 5, 10], postPurchase: [0, 5, 14, 30] });
@@ -131,27 +132,27 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   assert.deepEqual(POST_PURCHASE_FIELDS, P);
   assert.deepEqual(SECTIONS.map((s) => [s.key, s.fields]), [
     ['broadcasts', ['cadence', 'lastBroadcast']],
-    ['journeys', ['journeys', ...W, ...P]],
+    ['journeys', [...W, ...P, 'sku']],
     ['languages', ['skipped:fr', 'skipped:es', 'skipped:de', 'skipped:it']],
     ['configurations', ['attribution', 'sunset']],
   ]);
   assert.deepEqual(SORT_FIELDS, [
-    'score', 'brand', 'cadence', 'lastBroadcast', 'journeys', ...W, ...P,
+    'score', 'brand', 'cadence', 'lastBroadcast', ...W, ...P, 'sku',
     'skipped:fr', 'skipped:es', 'skipped:de', 'skipped:it', 'attribution', 'sunset',
   ]);
-  assert.deepEqual(CIRCLE_FIELDS, ['journeys', ...W, ...P]);
+  assert.deepEqual(CIRCLE_FIELDS, [...W, ...P, 'sku']);
   // The header: plain leaves in row 2 (rowspan 2), the sub-group labels over their leaves in row 3.
   const h = headerLayout();
   assert.deepEqual(h.row2.map((c) => (c.kind === 'group' ? `[${c.key}:${c.span}]` : c.field)), [
-    'cadence', 'lastBroadcast', 'journeys', '[welcome:4]', '[postPurchase:4]', '[skipped:4]', 'attribution', 'sunset',
+    'cadence', 'lastBroadcast', '[welcome:4]', '[postPurchase:4]', 'sku', '[skipped:4]', 'attribution', 'sunset',
   ]);
   // G5 round 2: every group label takes the single-row headers' font size (small: false).
   assert.deepEqual(h.row2.filter((c) => c.kind === 'group').map((c) => [c.label, c.band, c.first, c.small]), [
-    ['dashboard.usage.noPurchase', 'white', false, false], ['dashboard.usage.postPurchase', 'white', false, false],
+    ['dashboard.usage.noPurchase', 'white', true, false], ['dashboard.usage.postPurchase', 'white', false, false],
     ['dashboard.usage.skipped', 'grey', true, false],
   ]);
   assert.deepEqual(h.row3.map((c) => [c.field, c.first, c.groupStart]), [
-    ['welcome:0', false, true], ['welcome:2', false, false], ['welcome:5', false, false], ['welcome:10', false, false],
+    ['welcome:0', true, true], ['welcome:2', false, false], ['welcome:5', false, false], ['welcome:10', false, false],
     ['postPurchase:0', false, true], ['postPurchase:5', false, false], ['postPurchase:14', false, false], ['postPurchase:30', false, false],
     ['skipped:fr', true, true], ['skipped:es', false, false], ['skipped:de', false, false], ['skipped:it', false, false],
   ]);
@@ -181,9 +182,9 @@ test('I16: every leaf help, group label and score part key is in en.json', () =>
   });
   SCORE_PARTS.forEach((p) => assert.equal(typeof en[p.label], 'string', p.label));
   ['dashboard.usage.legacyChip', 'dashboard.usage.seriesMissing', 'series.welcomeLegacy', 'series.postPurchaseLegacy'].forEach((k) => assert.equal(typeof en[k], 'string', k));
-  assert.equal(en['dashboard.usage.noPurchase'], 'Welcome series');
+  assert.equal(en['dashboard.usage.noPurchase'], 'No-purchase series');
   assert.equal(en['dashboard.usage.postPurchase'], 'Post-purchase series');
-  assert.equal(en['dashboard.usage.partWelcomeSeries'], 'Welcome series');
+  assert.equal(en['dashboard.usage.partWelcomeSeries'], 'No-purchase series');
   assert.equal(en['dashboard.usage.partPostPurchaseSeries'], 'Post-purchase series');
 });
 
@@ -235,14 +236,13 @@ test('V2 D3 / I3: circles -- one per state from the STORED numbers, green/amber 
   assert.deepEqual(circlesOf({ green: 0, amber: 2 }), [{ color: 'amber', n: 2 }]);
   assert.deepEqual(circlesOf({ green: 0, amber: 0 }), [{ color: 'red', n: 0 }]);
   assert.deepEqual(circlesOf(null), []);
-  // The numbers are the stored ones: Journeys from journeys.{running, idle}, Welcome Day 0 from the
-  // welcome family's counts.
+  // The numbers are the stored ones: Welcome Day 0 from the welcome family's counts.
   const u = usage({
     welcome: {
       state: 'idle', listId: 7, campaigns: [], counts: { green: 4, amber: 5 },
     },
   });
-  assert.deepEqual(storedCounts(u, 'journeys'), { green: 2, amber: 1 });
+  assert.equal(storedCounts(u, 'journeys'), null); // the journeys column retired 2026-10-30
   // The state is NOT consulted: idle with a stored green 4 renders 4 green (lib owns the predicate).
   assert.deepEqual(storedCounts(u, 'welcome'), { green: 4, amber: 5 });
   assert.deepEqual(cell(shapeRows([{ brand: 'u', usage: u }])[0], 'welcome:0', t).circles, [{ color: 'green', n: 4 }, { color: 'amber', n: 5 }]);
@@ -250,16 +250,12 @@ test('V2 D3 / I3: circles -- one per state from the STORED numbers, green/amber 
   // A doc written before V2 (no counts) renders '—', never a derived circle.
   const old = shapeRows([{ brand: 'o', usage: usage({ welcome: { state: 'active', listId: 7, campaigns: [] } }) }])[0];
   assert.deepEqual([cell(old, 'welcome:0', t).text, cell(old, 'welcome:0', t).circles], [MISSING, []]);
-  assert.equal(storedCounts(usage({ journeys: { running: 1 } }), 'journeys'), null);
 });
 
 test('V2 I3: every circle carries a words tooltip; red is the digit 0', () => {
   assert.equal(circleWords({ green: 1, amber: 2 }, t), 'dashboard.usage.circleRunning{"n":1}, dashboard.usage.circleIdle{"n":2}');
   assert.equal(circleWords({ green: 0, amber: 0 }, t), 'dashboard.usage.circleNone');
   const [ruze] = shapeRows(api);
-  const j = cell(ruze, 'journeys', t);
-  assert.deepEqual(j.circles, [{ color: 'green', n: 2 }, { color: 'amber', n: 1 }]);
-  assert.equal(j.tooltip, 'dashboard.usage.circleRunning{"n":2}, dashboard.usage.circleIdle{"n":1}');
   // Welcome Day 0: the D5 description, the words, then the stored campaigns (S9).
   assert.equal(cell(ruze, 'welcome:0', t).tooltip, 'series.welcomeDay0\ndashboard.usage.circleRunning{"n":1}\n#3 running');
   const p = cell(ruze, 'postPurchase:0', t);
@@ -363,13 +359,13 @@ test('I3: the brand list set -- the brand\'s active lists, ascending; store shap
 
 // DASHBOARDS-POLISH3-SPEC D2 (amending POLISH2 I3's broadcast link): the broadcast cells also
 // carry status=finished -- the landing shows the broadcasts the cadence counts, never drafts.
-test('I3: broadcast cells link the brand set in the Broadcasts scope; Journeys the brand set in Automations', () => {
+test('I3: broadcast cells link the brand set in the Broadcasts scope', () => {
   const [ruze, tg, lux] = shapeRows(api, { lists });
   const set = ['3', '7', '12'];
   const bcast = { evergreen: 'false', status: 'finished', list_id: set };
   assert.deepEqual(cellLink(ruze, 'cadence'), bcast);
   assert.deepEqual(cellLink(ruze, 'lastBroadcast'), bcast);
-  assert.deepEqual(cellLink(ruze, 'journeys'), { evergreen: 'true', list_id: set });
+  assert.equal(cellLink(ruze, 'journeys'), null); // the journeys column retired 2026-10-30
   // A one-list brand links its one list (the Campaigns page reads it as the single filter).
   assert.equal(cell(tg, 'lastBroadcast', t).text, 'dashboard.usage.never'); // "never" is shown and links
   assert.deepEqual(cellLink(tg, 'lastBroadcast'), { evergreen: 'false', status: 'finished', list_id: ['20'] });
@@ -378,7 +374,6 @@ test('I3: broadcast cells link the brand set in the Broadcasts scope; Journeys t
   assert.equal(cell(lux, 'cadence', t).text, MISSING);
   assert.equal(cellLink(lux, 'cadence'), null);
   assert.deepEqual(cellLink(lux, 'lastBroadcast'), { evergreen: 'false', status: 'finished', list_id: ['21'] });
-  assert.deepEqual(cellLink(lux, 'journeys'), { evergreen: 'true', list_id: ['21'] }); // journeys: no status
   // A blank Last broadcast (no stored daysSince, not "never") does not link.
   const blank = shapeRows([{
     brand: 'ruze',
@@ -401,24 +396,20 @@ test('I3: broadcast cells link the brand set in the Broadcasts scope; Journeys t
     }),
   }], { lists })[0];
   assert.deepEqual(cellLink(noMaster, 'cadence'), bcast);
-  assert.deepEqual(cellLink(noMaster, 'journeys'), { evergreen: 'true', list_id: set });
-  // An EMPTY set -> no link on any of the three (the brand has no active list in the store).
+  // An EMPTY set -> no link on either (the brand has no active list in the store).
   const noLists = shapeRows([{ brand: 'nolists', usage: usage() }], { lists })[0];
-  ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => assert.equal(cellLink(noLists, f), null, f));
+  ['cadence', 'lastBroadcast'].forEach((f) => assert.equal(cellLink(noLists, f), null, f));
   const unloaded = shapeRows(api)[0]; // ruze, shaped before the lists store loaded
-  ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => assert.equal(cellLink(unloaded, f), null, f));
+  ['cadence', 'lastBroadcast'].forEach((f) => assert.equal(cellLink(unloaded, f), null, f));
   // ZMA-dimmed cells ('—') never link, even with lists.
   const zma = shapeRows(api, { lists }).find((r) => r.brand === 'oldzma');
-  ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => {
+  ['cadence', 'lastBroadcast'].forEach((f) => {
     assert.equal(cell(zma, f, t).text, MISSING, f);
     assert.equal(cellLink(zma, f), null, f);
   });
-  // Journeys without stored counts ('—', a pre-V2 doc) does not link; no usage, no link.
-  const old = shapeRows([{ brand: 'ruze', usage: usage({ journeys: { running: 1 } }) }], { lists })[0];
-  assert.equal(cell(old, 'journeys', t).text, MISSING);
-  assert.equal(cellLink(old, 'journeys'), null);
+  // No usage, no link.
   const nodoc = shapeRows([{ brand: 'ruze' }], { lists })[0];
-  ['cadence', 'lastBroadcast', 'journeys'].forEach((f) => assert.equal(cellLink(nodoc, f), null, f));
+  ['cadence', 'lastBroadcast'].forEach((f) => assert.equal(cellLink(nodoc, f), null, f));
   // The Welcome Day 0 / series links are unchanged by the brand set (Automations, their own single list).
   assert.deepEqual(cellLink(ruze, 'welcome:0'), { list_id: '7', evergreen: 'true' });
   assert.equal(cellLink(ruze, 'postPurchase:0'), null);
@@ -479,7 +470,7 @@ test('D7: cells -- Nd ago, never, ~Nd, —, Last broadcast colored on the TEXT; 
 
 test('I6: a ZMA row never renders a red broadcast or welcome cell; registry facts still render', () => {
   const zma = shapeRows(api).find((r) => r.brand === 'oldzma');
-  ['score', 'welcome:0', 'journeys', 'lastBroadcast', 'cadence'].forEach((f) => {
+  ['score', 'welcome:0', 'lastBroadcast', 'cadence'].forEach((f) => {
     const c = cell(zma, f, t);
     assert.equal(c.text, MISSING, f);
     assert.notEqual(c.cls, 'has-text-danger', f);
@@ -552,7 +543,6 @@ test('I7: the v1 comparators stand -- Last broadcast worst first; states and boo
   assert.equal(sortValue(rows[3], 'welcome:0'), null);
   assert.equal(sortValue(rows[0], 'attribution'), 1);
   assert.equal(sortValue(rows[0], 'sunset'), 0);
-  assert.equal(sortValue(rows[0], 'journeys'), 2);
 });
 
 test('V2 D2 / I2: header clicks (clickSort) -- first click Score desc, Brand asc, every other desc; repeat flips', () => {
@@ -561,7 +551,7 @@ test('V2 D2 / I2: header clicks (clickSort) -- first click Score desc, Brand asc
   const start = { field: 'lastBroadcast', order: 'desc' };
   assert.deepEqual(clickSort(start, 'brand'), { field: 'brand', order: 'asc' });
   assert.deepEqual(clickSort(start, 'score'), { field: 'score', order: 'desc' });
-  ['welcome:0', 'postPurchase:0', 'welcome:2', 'postPurchase:30', 'skipped:fr', 'sunset', 'attribution', 'journeys', 'cadence'].forEach((f) => {
+  ['welcome:0', 'postPurchase:0', 'welcome:2', 'postPurchase:30', 'skipped:fr', 'sunset', 'attribution', 'cadence'].forEach((f) => {
     assert.deepEqual(clickSort(start, f), { field: f, order: 'desc' }, f);
   });
   assert.deepEqual(clickSort({ field: 'brand', order: 'asc' }, 'lastBroadcast'), { field: 'lastBroadcast', order: 'desc' });
@@ -571,6 +561,7 @@ test('V2 D2 / I2: header clicks (clickSort) -- first click Score desc, Brand asc
   assert.deepEqual(clickSort({ field: 'brand', order: 'asc' }, 'brand'), { field: 'brand', order: 'desc' });
   // An unsortable field leaves the sort unchanged; no current sort is the default.
   assert.deepEqual(clickSort(start, 'bogus'), start);
+  assert.deepEqual(clickSort(start, 'journeys'), start); // retired 2026-10-30: no longer a column
   assert.deepEqual(clickSort(null, 'score'), { field: 'score', order: 'asc' });
 });
 
@@ -617,7 +608,7 @@ test('I7 / V2 I2: session persistence -- a stored sort wins; a throwing sessionS
 const npStep = (days, listId, evergreen, error) => ({
   slug: `x-no-purchase-${listId}`, listId, evergreen, days, ...(error ? { error } : {}),
 });
-// A row whose Welcome series carries `rows` at their days (standard days only) and `legacy`.
+// A row whose No-purchase series carries `rows` at their days (standard days only) and `legacy`.
 const wsRow = (rows, legacy = [], brand = 'x') => {
   const byDay = {};
   rows.forEach((r) => { byDay[r.days] = [...(byDay[r.days] || []), r]; });
@@ -777,4 +768,96 @@ test('POLISH3 D5: Skipped leaves sort descending by count, missing/— last', ()
   assert.equal(defaultOrder('skipped:fr'), 'desc');
   assert.deepEqual(sortRows(rows, { field: 'skipped:fr', order: 'desc' }).map((r) => r.brand), ['b', 'a', 'c', 'd', 'z']);
   assert.deepEqual(sortRows(rows, { field: 'skipped:fr', order: 'asc' }).map((r) => r.brand), ['c', 'a', 'b', 'd', 'z']);
+});
+
+// 2026-10-30: the SKU column -- the lib's stored `usage.sku` rendered verbatim (circles from the
+// stored counts), linked to the automations of every SKU-trigger list, sorted by how many there are.
+test('SKU column: stored counts as circles, rows in the tooltip, linked to every SKU list, sorted by count', () => {
+  const sku = {
+    rows: [
+      {
+        slug: 'ruze-skus-41', listId: 41, evergreen: 'running', days: null,
+      },
+      {
+        slug: 'ruze-skus-40', listId: 40, evergreen: 'idle', days: null,
+      },
+      {
+        slug: 'ruze-skus-42', listId: null, error: 'trigger.skus must be a non-empty array', evergreen: 'none', days: null,
+      },
+    ],
+    counts: { green: 1, amber: 2 },
+  };
+  const [r] = shapeRows([{ brand: 'ruze', usage: usage({ sku }) }]);
+  const c = cell(r, 'sku', t);
+  assert.deepEqual(c.circles, [{ color: 'green', n: 1 }, { color: 'amber', n: 2 }]);
+  assert.equal(c.tooltip, [
+    'dashboard.usage.circleRunning{"n":1}, dashboard.usage.circleIdle{"n":2}',
+    'ruze-skus-41: dashboard.usage.listEvergreen{"list":41,"state":"running"}',
+    'ruze-skus-40: dashboard.usage.listEvergreen{"list":40,"state":"idle"}',
+    'ruze-skus-42: trigger.skus must be a non-empty array',
+  ].join('\n'));
+  // The filtered set: every SKU row's list (ascending, de-duplicated), in the Automations scope.
+  assert.deepEqual(cellLink(r, 'sku'), { evergreen: 'true', list_id: ['40', '41'] });
+  assert.equal(linkTip(r, 'sku', t), 'dashboard.usage.skuLinkHelp');
+  assert.equal(sortValue(r, 'sku'), 3);
+  assert.deepEqual(columnMeta('sku'), { label: 'dashboard.usage.sku', help: 'dashboard.usage.skuHelp' });
+  // None: a red 0, no link, sort 0.
+  const [none] = shapeRows([{ brand: 'ruze', usage: usage({ sku: { rows: [], counts: { green: 0, amber: 0 } } }) }]);
+  assert.deepEqual(cell(none, 'sku', t).circles, [{ color: 'red', n: 0 }]);
+  assert.equal(cellLink(none, 'sku'), null);
+  assert.equal(sortValue(none, 'sku'), 0);
+  // A doc written before the column (no `sku`): '—', no link, sorts last (null).
+  const [old] = shapeRows([{ brand: 'ruze', usage: usage() }]);
+  assert.equal(cell(old, 'sku', t).text, MISSING);
+  assert.equal(cellLink(old, 'sku'), null);
+  assert.equal(sortValue(old, 'sku'), null);
+  // The strings exist.
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['dashboard.usage.sku', 'dashboard.usage.skuHelp', 'dashboard.usage.skuLinkHelp'].forEach((k) => assert.equal(typeof en[k], 'string', k));
+});
+
+// 2026-10-30: the journey guide below the table.
+test('guide: parseStepText splits title / quoted subject line / guidance', () => {
+  assert.deepEqual(parseStepText('Day 2 Gentle conversion reminder: "Still exploring? Here\'s why customers love [Brand]." Highlight bestsellers.'), {
+    title: 'Gentle conversion reminder', quote: 'Still exploring? Here\'s why customers love [Brand].', body: 'Highlight bestsellers.',
+  });
+  // A title ending in "?" and a body containing ": " -- split at the FIRST ": ".
+  assert.deepEqual(parseStepText('Day 14 How\'s it going?: About a week after delivery: ask for a review.'), {
+    title: 'How\'s it going?', quote: '', body: 'About a week after delivery: ask for a review.',
+  });
+  assert.deepEqual(parseStepText('Day 5 Getting started: Around delivery: how to use it.'), {
+    title: 'Getting started', quote: '', body: 'Around delivery: how to use it.',
+  });
+  assert.deepEqual(parseStepText('no colon here'), { title: '', quote: '', body: 'no colon here' });
+  assert.deepEqual(parseStepText(undefined), { title: '', quote: '', body: '' });
+});
+
+test('guide: seriesGuide over the real en.json -- Welcome then New Customer, every standard day, every step titled', () => {
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  const tt = (k) => en[k];
+  const g = seriesGuide(tt);
+  assert.deepEqual(g.map((s) => [s.family, tt(s.title), tt(s.subtitle)]), [
+    ['welcome', 'Welcome series', 'No-purchase series'],
+    ['postPurchase', 'New Customer series', 'Post-purchase series'],
+  ]);
+  assert.deepEqual(g.map((s) => s.steps.map((x) => x.days)), [SERIES_DAYS.welcome, SERIES_DAYS.postPurchase]);
+  g.flatMap((s) => s.steps).forEach((x) => {
+    assert.ok(x.title && x.body, `day ${x.days}`);
+  });
+  assert.deepEqual(g[0].steps.map((x) => x.title), ['Welcome', 'Gentle conversion reminder', 'Address purchase hesitation', 'Final conversion nudge']);
+  assert.deepEqual(g[1].steps.map((x) => x.title), ['Thank you', 'Getting started', 'How\'s it going?', 'Your next favorite']);
+  assert.equal(g[0].steps[1].quote, 'Still exploring? Here\'s why customers love [Brand].');
+  assert.equal(g[1].steps[0].quote, '');
+  assert.equal(GUIDE_SERIES.length, 2);
+  assert.equal(typeof en['dashboard.usage.guideDay'], 'string');
+});
+
+test('guide: guideSplitX -- the measured line when both sides keep the minimum, else stacked (null)', () => {
+  assert.equal(guideSplitX(640.4, 1400), 640);
+  assert.equal(guideSplitX(GUIDE_MIN_COLUMN, GUIDE_MIN_COLUMN * 2), GUIDE_MIN_COLUMN);
+  assert.equal(guideSplitX(GUIDE_MIN_COLUMN - 1, 1400), null); // too little room on the left
+  assert.equal(guideSplitX(1200, 1400), null); // too little room on the right
+  assert.equal(guideSplitX(-50, 1400), null); // the table scrolled the line off to the left
+  assert.equal(guideSplitX(NaN, 1400), null);
+  assert.equal(guideSplitX(600, undefined), null);
 });

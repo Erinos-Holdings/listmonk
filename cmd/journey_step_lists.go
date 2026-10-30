@@ -1,7 +1,7 @@
 package main
 
 // Fork (journey form UX, integrations JOURNEY-UX-SPEC A1.1) -- a step list (a list whose
-// join_trigger kind is a step kind, isStepTriggerKind: no_purchase -- a Welcome series step -- or,
+// join_trigger kind is a step kind, isStepTriggerKind: no_purchase -- a No-purchase series step -- or,
 // since LIFECYCLE-SERIES-SPEC S2, post_purchase) is filled by the NoPurchaseSweep alone: a hand-added
 // member is joined outside the step's timing, and the running delay-0 evergreen on the list mails
 // them at once. A browser SESSION may therefore never ADD a membership row to one; an API token
