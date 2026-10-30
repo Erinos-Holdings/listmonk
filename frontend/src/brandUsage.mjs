@@ -33,12 +33,13 @@ export const SERIES_DAYS = Object.freeze({
 });
 
 // 2026-10-30: the journey guide below the table -- each series' steps as a visual list, the same
-// D5 texts the leaf hovers carry (one home each, en.json via seriesStepKey). Below the chart the
-// series take the industry names (Welcome / New Customer, after Klaviyo), each with the table's
-// purchase-designation name as its subline -- the guide sits directly under the matching columns.
+// D5 texts the leaf hovers carry (one home each, en.json via seriesStepKey). Each series is titled
+// with the chart's own name (No-purchase / Post-purchase series) and sublined with the industry
+// name (Welcome / New Customer series, after Klaviyo; the CSS sets it in grey capitals) -- the
+// guide sits directly under the matching columns.
 export const GUIDE_SERIES = Object.freeze([
-  Object.freeze({ family: SERIES_WELCOME, title: 'dashboard.usage.guideWelcome', subtitle: 'dashboard.usage.noPurchase' }),
-  Object.freeze({ family: SERIES_POST_PURCHASE, title: 'dashboard.usage.guideNewCustomer', subtitle: 'dashboard.usage.postPurchase' }),
+  Object.freeze({ family: SERIES_WELCOME, title: 'dashboard.usage.noPurchase', subtitle: 'dashboard.usage.guideWelcome' }),
+  Object.freeze({ family: SERIES_POST_PURCHASE, title: 'dashboard.usage.postPurchase', subtitle: 'dashboard.usage.guideNewCustomer' }),
 ]);
 
 // parseStepText splits a D5 text ("Day 5 Address purchase hesitation: \"A few reasons …\" Include
@@ -159,27 +160,44 @@ export const CIRCLE_FIELDS = Object.freeze([...WELCOME_FIELDS, ...POST_PURCHASE_
 // POLISH3 D4/D5: the header layout over SECTIONS (the band alternates grey/white by section). Row
 // 2 holds every plain leaf (rowspan 2) and every sub-group label (colspan = its leaves); row 3
 // the sub-group leaves. `first` marks the cell opening its section (the band's left rule).
+// `divide` (2026-10-30) marks an item boundary INSIDE a section that touches a group -- a group
+// that is not the section's first item, or a plain leaf right after a group (the SKU column after
+// the Post-purchase series) -- drawn as a rule through the header AND every body row.
 export function headerLayout(sections = SECTIONS) {
   const row2 = [];
   const row3 = [];
   sections.forEach((s, si) => {
     const band = si % 2 === 0 ? 'grey' : 'white';
     s.items.forEach((it, i) => {
+      const divide = i > 0 && (typeof it !== 'string' || typeof s.items[i - 1] !== 'string');
       if (typeof it === 'string') {
         row2.push({
-          kind: 'leaf', field: it, band, first: i === 0,
+          kind: 'leaf', field: it, band, first: i === 0, divide,
         });
         return;
       }
       row2.push({
-        kind: 'group', key: it.group, label: it.label, help: it.help, span: it.fields.length, band, first: i === 0, small: it.small,
+        kind: 'group', key: it.group, label: it.label, help: it.help, span: it.fields.length, band, first: i === 0, small: it.small, divide,
       });
       it.fields.forEach((f, fi) => row3.push({
-        kind: 'leaf', field: f, band, first: i === 0 && fi === 0, groupStart: fi === 0,
+        kind: 'leaf', field: f, band, first: i === 0 && fi === 0, groupStart: fi === 0, divide: divide && fi === 0,
       }));
     });
   });
   return { row2, row3 };
+}
+
+// The body columns in display order -- { field, band, first, divide }, the same flags as the
+// header's leaves (headerLayout), so a body rule always continues its header rule.
+export function bodyColumns(sections = SECTIONS) {
+  const { row2, row3 } = headerLayout(sections);
+  const leaf = new Map([...row2, ...row3].filter((c) => c.kind === 'leaf').map((c) => [c.field, c]));
+  return sections.flatMap((s) => s.fields).map((f) => {
+    const c = leaf.get(f);
+    return {
+      field: f, band: c.band, first: c.first, divide: !!c.divide,
+    };
+  });
 }
 
 // The leaf columns' header label and hover, in display order of every field: label is an i18n key
@@ -486,6 +504,37 @@ function lastIdsOf(u) {
 // leaf with a count > 0 links { list_id: that language's skipping lists, evergreen: 'all' } (both
 // kinds -- the finished broadcasts and the running evergreens); it renders from the row's live
 // `skipped`, INDEPENDENT of usage, and never links on a ZMA-dimmed row or at 0.
+// circleLink (2026-10-30) is ONE circle's link: the click filters to what THAT circle counts, never
+// the whole cell. Welcome Day 0 -- its stored campaigns (`welcome.campaigns`), green the running
+// ones, amber the rest (the lib's welcome counts split exactly so) -> { id, evergreen: 'true' }.
+// Every other series leaf and SKU -- the stored rows' lists, green the clean rows (rowClean, the
+// lib's isClean), amber the others -> { list_id, evergreen: 'true' }; the rows store no campaign
+// ids, so a list is the finest filter. Red (none) never links, nor a ZMA-dimmed or `—` cell.
+export function circleLink(row, field, color) {
+  const u = row && row.usage;
+  if (!u || (color !== 'green' && color !== 'amber') || (row.zma && ZMA_DIMMED.includes(field))) {
+    return null;
+  }
+  const green = color === 'green';
+  const leaf = seriesLeafOf(field);
+  if (leaf !== null && leaf.family === SERIES_WELCOME && leaf.days === 0) {
+    const camps = isObj(u.welcome) && Array.isArray(u.welcome.campaigns) ? u.welcome.campaigns.filter(isObj) : [];
+    const ids = camps.filter((c) => (c.status === 'running') === green).map((c) => c.id).filter(posInt);
+    return ids.length ? { id: [...new Set(ids)].sort((a, b) => a - b).map(String), evergreen: 'true' } : null;
+  }
+  let rows = null;
+  if (leaf !== null) {
+    rows = seriesOf(u, leaf.family) ? stepRows(stepAt(u, leaf.family, leaf.days)) : null;
+  } else if (field === 'sku') {
+    rows = storedCounts(u, 'sku') ? skuRows(u) : null;
+  }
+  if (!rows) {
+    return null;
+  }
+  const ids = [...new Set(rows.filter((r) => rowClean(r) === green).map((r) => r.listId).filter(posInt))].sort((a, b) => a - b);
+  return ids.length ? { list_id: ids.map(String), evergreen: 'true' } : null;
+}
+
 export function cellLink(row, field) {
   const lang = skippedLangOf(field);
   if (lang !== null) {
@@ -582,10 +631,12 @@ export function cell(row, field, t = (k) => k) {
         text: String(s.count), cls: RED, tooltip: t('dashboard.usage.skippedCell', { n: s.count, lists: s.lists.join(', ') }), circles: [],
       };
     }
-    // G5: 0 renders the Configurations-style green ✓ (covered OR no window activity -- the tooltip
-    // still tells the two apart); the sort key stays the count 0.
+    // 0 renders a plain grey "0" (2026-10-30, replacing G5's green ✓): the column is a COUNT of
+    // skipped people, and 0 has three causes -- a campaign in that language ran, nobody of that
+    // language is on the brand's lists, or no campaign activity in the window -- so a ✓ implied a
+    // coverage it could not know. The tooltip names the causes; the sort key stays the count 0.
     return {
-      text: boolCell(true).glyph, cls: boolCell(true).cls, tooltip: t('dashboard.usage.skippedZero'), circles: [],
+      text: '0', cls: 'has-text-grey', tooltip: t('dashboard.usage.skippedZero'), circles: [],
     };
   }
   const u = row && row.usage;

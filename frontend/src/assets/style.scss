@@ -1144,8 +1144,21 @@ section.dashboard (which reopens after them). */
         margin-left: 2px;
       }
     }
-    th.bu-substart {
+    /* The in-section rule (headerLayout's groupStart / divide): through the header and, since
+    2026-10-30, every body row -- the No-purchase | Post-purchase and Post-purchase | SKU lines. */
+    th.bu-substart, td.bu-substart {
       border-left: 1px solid #dbdee2;
+    }
+    /* A single-column header (rowspan 2, e.g. SKU) centers its label: the sort arrow takes no
+    width (the bu-small leaves' rule), so it no longer pushes the label left of center. */
+    th.bu-leafhead {
+      position: relative;
+      .bm-arrow {
+        position: absolute;
+        min-width: 0;
+        padding-left: 0;
+        margin-left: 2px;
+      }
     }
     .bu-warn {
       cursor: help;
@@ -1159,7 +1172,7 @@ section.dashboard (which reopens after them). */
       gap: 3px;
       align-items: center;
     }
-    a.bu-circles:hover .bu-circle {
+    a.bu-circle:hover {
       filter: brightness(0.92);
     }
     .bu-legend .bu-circle {
@@ -1227,11 +1240,28 @@ section.dashboard (which reopens after them). */
       .bu-guide-series:last-child {
         padding-left: 2rem;
       }
+      /* Row-for-row alignment: ONE grid of a heading row + one row per step, each series and its
+      list a subgrid of it, so step N of both series shares a row (the taller text sets the
+      height) and the day badges line up across the divider. */
+      grid-template-rows: auto repeat(var(--bu-guide-steps), auto);
+      .bu-guide-series {
+        grid-row: 1 / -1;
+        display: grid;
+        grid-template-rows: subgrid;
+      }
+      .bu-guide-steps {
+        grid-row: 2 / -1;
+        display: grid;
+        grid-template-rows: subgrid;
+      }
     }
   }
   .bu-guide-series {
     max-width: 32rem;
     width: 100%;
+  }
+  .bu-guide-head {
+    text-align: center;
   }
   .bu-guide-title {
     font-size: 1rem;

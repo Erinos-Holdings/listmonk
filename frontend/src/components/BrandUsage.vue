@@ -34,12 +34,12 @@
             <template v-for="c in header.row2">
               <th v-if="c.kind === 'group'" :key="`g-${c.key}`" :colspan="c.span"
                 class="has-text-centered bu-head bu-subgroup"
-                :class="[`bu-band-${c.band}`, { 'bu-start': c.first, 'bu-small': c.small }]"
+                :class="[`bu-band-${c.band}`, { 'bu-start': c.first, 'bu-small': c.small, 'bu-substart': c.divide }]"
                 :title="$t(c.help)" :data-cy="`usage-group-${c.key}`">
                 {{ $t(c.label) }}
               </th>
-              <th v-else :key="c.field" rowspan="2" class="has-text-centered bu-head"
-                :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]" :title="$t(meta(c.field).help)"
+              <th v-else :key="c.field" rowspan="2" class="has-text-centered bu-head bu-leafhead"
+                :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.divide }]" :title="$t(meta(c.field).help)"
                 :aria-sort="buAria(c.field)" @click="onSort(c.field)">
                 {{ label(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
               </th>
@@ -56,7 +56,7 @@
         </thead>
         <tbody>
           <tr v-for="row in tableRows" :key="row.brand" :class="{ 'bu-zma': row.zma }">
-            <td class="has-text-right bu-score" :class="buTd('score')">
+            <td class="has-text-centered bu-score" :class="buTd('score')">
               <span :title="cell(row, 'score').tooltip || null" :data-cy="`usage-score-${row.brand}`">
                 {{ cell(row, 'score').text }}</span>
             </td>
@@ -67,17 +67,19 @@
               </b-tag>
             </td>
             <td v-for="c in columns" :key="c.field" class="has-text-centered"
-              :class="[buTd(c.field), `bu-band-${c.band}`, { 'bu-start': c.first }]">
+              :class="[buTd(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.divide }]">
               <!-- V2 D3/D4: one circle per state, the stored count inside; the link is per CELL
                    (Campaigns, the list preselected, the Automations scope; Journeys -- POLISH2 D2 --
                    the Automations scope filtered to the brand's lists). -->
-              <component v-if="cell(row, c.field).circles.length" :is="link(row, c.field) ? 'router-link' : 'span'"
-                :to="link(row, c.field) ? { name: 'campaigns', query: link(row, c.field) } : null"
-                class="bu-circles" :data-cy="`usage-${c.field}-${row.brand}`">
-                <span v-for="ci in cell(row, c.field).circles" :key="ci.color"
+              <!-- 2026-10-30: EACH circle links what it counts (brandUsage.mjs::circleLink) -- green the
+                   running campaigns / clean steps, amber the rest; red never links. -->
+              <span v-if="cell(row, c.field).circles.length" class="bu-circles" :data-cy="`usage-${c.field}-${row.brand}`">
+                <component v-for="ci in cell(row, c.field).circles" :key="ci.color"
+                  :is="circleTo(row, c.field, ci.color) ? 'router-link' : 'span'"
+                  :to="circleTo(row, c.field, ci.color) ? { name: 'campaigns', query: circleTo(row, c.field, ci.color) } : null"
                   :class="['bu-circle', `bu-${ci.color}`]" :title="cell(row, c.field).tooltip"
-                  :aria-label="cell(row, c.field).tooltip">{{ ci.n }}</span>
-              </component>
+                  :aria-label="cell(row, c.field).tooltip" :data-cy="`usage-${c.field}-${row.brand}-${ci.color}`">{{ ci.n }}</component>
+              </span>
               <!-- DASHBOARDS-POLISH2-SPEC D2: the Cadence / Last broadcast text links the brand's
                    lists in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links.
                    POLISH3 D2/D5: the broadcast links carry status=finished; a Skipped count > 0
@@ -108,14 +110,14 @@
         </tbody>
       </table>
     </div>
-    <!-- V2 D5: the stoplight key, then the ZMA line and the as-of line (Mountain time). -->
+    <!-- V2 D5: the stoplight key, then the as-of line (Mountain time). The ZMA line was removed
+         2026-10-30; a ZMA row still carries its ZMA tag and the dimmed cells' hover. -->
     <p class="is-size-7 has-text-grey mt-2 bu-legend" data-cy="usage-legend">
       <span class="bu-circle bu-green">1</span> {{ $t('dashboard.usage.legendRunning') }}
       <span class="bu-circle bu-amber">1</span> {{ $t('dashboard.usage.legendIdle') }}
       <span class="bu-circle bu-red">0</span> {{ $t('dashboard.usage.legendNone') }}
       · {{ $t('dashboard.usage.legendConfig') }}
     </p>
-    <p class="is-size-7 has-text-grey" data-cy="usage-zma-note">{{ $t('dashboard.usage.note') }}</p>
     <p class="is-size-7 has-text-grey" data-cy="usage-note">
       {{ runTime ? $t('dashboard.usage.noteAsOf', { date: runTime }) : $t('dashboard.usage.computed') }}
     </p>
@@ -124,11 +126,14 @@
          No-purchase | Post-purchase line (measured, brandUsage.mjs::guideSplitX); stacked when
          either side lacks the room. -->
     <div ref="guide" class="bu-guide" :class="{ 'bu-guide-split': guideX !== null }"
-      :style="guideX !== null ? { '--bu-guide-x': `${guideX}px` } : null" data-cy="usage-guide">
+      :style="guideX !== null ? { '--bu-guide-x': `${guideX}px`, '--bu-guide-steps': guideSteps } : null"
+      data-cy="usage-guide">
       <div v-for="g in guide" :key="g.family" :class="['bu-guide-series', `bu-guide-${g.family}`]"
         :data-cy="`usage-guide-${g.family}`">
-        <h4 class="bu-guide-title">{{ $t(g.title) }}</h4>
-        <p class="bu-guide-subtitle">{{ $t(g.subtitle) }}</p>
+        <div class="bu-guide-head">
+          <h4 class="bu-guide-title">{{ $t(g.title) }}</h4>
+          <p class="bu-guide-subtitle">{{ $t(g.subtitle) }}</p>
+        </div>
         <ol class="bu-guide-steps">
           <li v-for="s in g.steps" :key="s.days" class="bu-guide-step">
             <span class="bu-guide-day" :aria-label="`${$t('dashboard.usage.guideDay')} ${s.days}`">
@@ -151,7 +156,7 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  SECTIONS, cell as cellOf, cellBadges, cellLink, clickSort, columnMeta, guideSplitX, headerLayout, latestAsOf,
+  SECTIONS, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, clickSort, columnMeta, guideSplitX, headerLayout, latestAsOf,
   linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -195,10 +200,9 @@ export default Vue.extend({
       return SECTIONS.map((s, i) => ({ ...s, band: i % 2 === 0 ? 'grey' : 'white' }));
     },
 
+    // The body columns with the header's flags (band, section start, the in-section rule).
     columns() {
-      return this.sections.flatMap((s) => s.fields.map((f, i) => ({
-        field: f, band: s.band, first: i === 0,
-      })));
+      return bodyColumns();
     },
 
     header() {
@@ -207,6 +211,11 @@ export default Vue.extend({
 
     guide() {
       return seriesGuide((k, p) => this.$t(k, p));
+    },
+
+    // The shared grid's step-row count: the longer series (both have 4 today).
+    guideSteps() {
+      return Math.max(...this.guide.map((g) => g.steps.length));
     },
   },
 
@@ -248,6 +257,10 @@ export default Vue.extend({
 
     link(row, field) {
       return cellLink(row, field);
+    },
+
+    circleTo(row, field, color) {
+      return circleLink(row, field, color);
     },
 
     title(row, field) {

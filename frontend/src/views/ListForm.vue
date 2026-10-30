@@ -102,40 +102,33 @@
               <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
                 data-cy="list-trigger-skus" />
             </b-field>
-            <!-- NO-PURCHASE-STEPS-SPEC D7: a No-purchase series step -- {kind: no_purchase, days}. -->
-            <div class="trigger-option">
-              <b-field>
-                <b-radio v-model="triggerOption" native-value="no_purchase" name="join_trigger" :disabled="locked"
-                  data-cy="list-trigger-no-purchase">
-                  {{ $t('lists.joinTriggerNoPurchase') }}
+            <!-- The two series step kinds (NO-PURCHASE-STEPS-SPEC D7: a No-purchase series step,
+            {kind: no_purchase, days}; LIFECYCLE-SERIES-SPEC S2/S7: a Post-purchase series step,
+            {kind: post_purchase, days}). Each option carries its own days field directly beneath it
+            (2026-10-30), so the days sit under the selected step, never below the other one. -->
+            <template v-for="k in stepKinds">
+              <div :key="`opt-${k.value}`" class="trigger-option">
+                <b-field>
+                  <b-radio v-model="triggerOption" :native-value="k.value" name="join_trigger" :disabled="locked"
+                    :data-cy="k.cy">
+                    {{ $t(k.label) }}
+                  </b-radio>
+                </b-field>
+                <p v-if="triggerOption === k.value" class="help trigger-help" :data-cy="`trigger-help-${k.value}`">
+                  <strong>{{ $t(helpFor(k.value).lead) }}</strong> {{ $t(helpFor(k.value).body) }}
+                </p>
+              </div>
+              <!-- LIFECYCLE-SERIES-SPEC S7/D5: the step's days -- 2/5/10 (No-purchase series) or 5/14/30
+              (Post-purchase series), a stored off-pattern value as a "N days (legacy)" radio; each
+              radio hovers with its D5 description (listTrigger.mjs::daysRadios). -->
+              <b-field v-if="triggerOption === k.value" :key="`days-${k.value}`" :label="$t(k.daysLabel)"
+                :type="daysText === '' || daysOk ? '' : 'is-danger'" data-cy="list-trigger-days">
+                <b-radio v-for="r in daysOptions" :key="r.days" v-model="daysText" :native-value="String(r.days)"
+                  name="join_trigger_days" :disabled="locked" :title="$t(r.help)" :data-cy="`list-trigger-days-${r.days}`">
+                  {{ r.legacy ? $t('lists.joinTriggerDaysLegacy', { n: r.days }) : $tc('lists.joinTriggerDaysOption', r.days, { n: r.days }) }}
                 </b-radio>
               </b-field>
-              <p v-if="triggerOption === 'no_purchase'" class="help trigger-help" data-cy="trigger-help-no_purchase">
-                <strong>{{ $t(helpFor('no_purchase').lead) }}</strong> {{ $t(helpFor('no_purchase').body) }}
-              </p>
-            </div>
-            <!-- LIFECYCLE-SERIES-SPEC S2/S7: a Post-purchase series step -- {kind: post_purchase, days}. -->
-            <div class="trigger-option">
-              <b-field>
-                <b-radio v-model="triggerOption" native-value="post_purchase" name="join_trigger" :disabled="locked"
-                  data-cy="list-trigger-post-purchase">
-                  {{ $t('lists.joinTriggerPostPurchase') }}
-                </b-radio>
-              </b-field>
-              <p v-if="triggerOption === 'post_purchase'" class="help trigger-help" data-cy="trigger-help-post_purchase">
-                <strong>{{ $t(helpFor('post_purchase').lead) }}</strong> {{ $t(helpFor('post_purchase').body) }}
-              </p>
-            </div>
-            <!-- LIFECYCLE-SERIES-SPEC S7/D5: the step's days -- 2/5/10 (No-purchase series) or 5/14/30
-            (Post-purchase series), a stored off-pattern value as a "N days (legacy)" radio; each
-            radio hovers with its D5 description (listTrigger.mjs::daysRadios). -->
-            <b-field v-if="isStepOption" :label="$t(triggerOption === 'post_purchase' ? 'lists.joinTriggerDaysPostPurchase' : 'lists.joinTriggerDays')"
-              :type="daysText === '' || daysOk ? '' : 'is-danger'" data-cy="list-trigger-days">
-              <b-radio v-for="r in daysOptions" :key="r.days" v-model="daysText" :native-value="String(r.days)"
-                name="join_trigger_days" :disabled="locked" :title="$t(r.help)" :data-cy="`list-trigger-days-${r.days}`">
-                {{ r.legacy ? $t('lists.joinTriggerDaysLegacy', { n: r.days }) : $tc('lists.joinTriggerDaysOption', r.days, { n: r.days }) }}
-              </b-radio>
-            </b-field>
+            </template>
           </div>
           <!-- JOURNEY-UX-SPEC F8: in both selector states -- Broadcast lists host automations too. -->
           <p v-if="isEditing" class="is-size-7 has-text-grey">
@@ -221,7 +214,7 @@ import {
   brandLabel, isLockedList, isReservedTag, splitReservedTags,
 } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import {
-  buildListFormRequest, buildListTypeTrigger, daysRadios, daysValid, isStepTrigger, journeyOption, listTypeHelpKey, listTypeOf,
+  buildListFormRequest, buildListTypeTrigger, daysRadios, daysValid, journeyOption, listTypeHelpKey, listTypeOf,
   skusToText, storedDays, storedTrigger, storedTriggerSync, triggerBadge, triggerHelpKeys, triggerOption as triggerOptionOf,
   LIST_TYPE_BROADCAST,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
@@ -390,8 +383,16 @@ export default Vue.extend({
       return daysRadios(this.triggerOption, triggerOptionOf(jt) === this.triggerOption ? storedDays(jt) : '');
     },
 
-    isStepOption() {
-      return isStepTrigger(this.triggerOption);
+    // The two series step options, in form order, each with its days field's label.
+    stepKinds() {
+      return [
+        {
+          value: 'no_purchase', label: 'lists.joinTriggerNoPurchase', daysLabel: 'lists.joinTriggerDays', cy: 'list-trigger-no-purchase',
+        },
+        {
+          value: 'post_purchase', label: 'lists.joinTriggerPostPurchase', daysLabel: 'lists.joinTriggerDaysPostPurchase', cy: 'list-trigger-post-purchase',
+        },
+      ];
     },
 
     // The badge from the STORED trigger and trigger_sync (null = no trigger, no badge).

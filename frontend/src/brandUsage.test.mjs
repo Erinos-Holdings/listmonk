@@ -8,7 +8,7 @@ import {
   boolCell, broadcastTip, cell, cellBadges, cellLink, circlesOf, circleWords, clickSort, columnMeta, defaultOrder,
   headerLayout, latestAsOf, loadState, mountainRunTime, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
-  GUIDE_MIN_COLUMN, GUIDE_SERIES, guideSplitX, parseStepText, seriesGuide,
+  GUIDE_MIN_COLUMN, GUIDE_SERIES, guideSplitX, parseStepText, seriesGuide, bodyColumns, circleLink,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -735,9 +735,9 @@ test('POLISH3 D5: Skipped -- red linked count > 0, plain 0 otherwise, — on ZMA
   assert.deepEqual(cellLink(ruze, 'skipped:fr'), { list_id: ['7', '12'], evergreen: 'all' });
   assert.deepEqual(cellLink(ruze, 'skipped:es'), { list_id: ['12'], evergreen: 'all' });
   assert.equal(linkTip(ruze, 'skipped:fr', t), 'dashboard.usage.skippedLinkHelp');
-  // 0 -> the green ✓ (G5 feedback, replacing the plain '0'), unlinked (covered or no activity --
-  // the tooltip owns the wording).
-  assert.deepEqual([cell(ruze, 'skipped:de', t).text, cell(ruze, 'skipped:de', t).cls], ['✓', 'has-text-success']);
+  // 0 -> a plain grey '0' (2026-10-30, replacing G5's green ✓: a count, not a coverage claim),
+  // unlinked; the tooltip names the causes.
+  assert.deepEqual([cell(ruze, 'skipped:de', t).text, cell(ruze, 'skipped:de', t).cls], ['0', 'has-text-grey']);
   assert.equal(sortValue(ruze, 'skipped:de'), 0); // the sort key stays the count
   assert.equal(cell(ruze, 'skipped:de', t).tooltip, 'dashboard.usage.skippedZero');
   assert.equal(cellLink(ruze, 'skipped:de'), null);
@@ -746,7 +746,7 @@ test('POLISH3 D5: Skipped -- red linked count > 0, plain 0 otherwise, — on ZMA
   assert.equal(nousage.usage, null);
   assert.deepEqual([cell(nousage, 'skipped:de', t).text, cell(nousage, 'skipped:de', t).cls], ['5', 'has-text-danger']);
   assert.deepEqual(cellLink(nousage, 'skipped:de'), { list_id: ['21'], evergreen: 'all' });
-  assert.equal(cell(nousage, 'skipped:fr', t).text, '✓'); // G5: was '0'
+  assert.equal(cell(nousage, 'skipped:fr', t).text, '0'); // a count again (2026-10-30; G5's ✓ retired)
   assert.equal(cell(nousage, 'welcome', t).text, '');
   // ZMA dimming (keyed off usage.channel): '—', unlinked, sorts last.
   assert.equal(cell(zma, 'skipped:fr', t).text, MISSING);
@@ -816,6 +816,54 @@ test('SKU column: stored counts as circles, rows in the tooltip, linked to every
   ['dashboard.usage.sku', 'dashboard.usage.skuHelp'].forEach((k) => assert.equal(typeof en[k], 'string', k));
 });
 
+// 2026-10-30: the in-section rules -- No-purchase | Post-purchase and Post-purchase | SKU, the same
+// on the header and every body column; no rule between plain leaves (Cadence | Last broadcast).
+test('dividers: header and body carry the same in-section rules', () => {
+  const h = headerLayout();
+  assert.deepEqual(h.row2.filter((c) => c.divide).map((c) => (c.kind === 'group' ? `[${c.key}]` : c.field)), ['[postPurchase]', 'sku']);
+  assert.deepEqual(h.row3.filter((c) => c.divide).map((c) => c.field), ['postPurchase:0']);
+  const cols = bodyColumns();
+  assert.deepEqual(cols.map((c) => c.field), SORT_FIELDS.slice(2));
+  assert.deepEqual(cols.filter((c) => c.divide).map((c) => c.field), ['postPurchase:0', 'sku']);
+  assert.deepEqual(cols.filter((c) => c.first).map((c) => c.field), ['cadence', 'welcome:0', 'skipped:fr', 'attribution']);
+});
+
+// 2026-10-30: each circle links only what it counts.
+test('circleLink: Day 0 green/amber open their own campaigns; step and SKU circles their own lists; red never', () => {
+  const welcome = {
+    state: 'idle',
+    listId: 6,
+    campaigns: [{ id: 67, status: 'running' }, { id: 70, status: 'paused' }, { id: 71, status: 'draft' }],
+    counts: { green: 1, amber: 2 },
+  };
+  const step = (listId, evergreen, extra = {}) => ({
+    slug: `x-${listId}`, listId, evergreen, days: 5, ...extra,
+  });
+  const postPurchase = series('postPurchase');
+  postPurchase.steps = postPurchase.steps.map((s) => (s.days === 5 ? { ...s, rows: [step(80, 'running'), step(81, 'idle'), step(82, 'none', { error: 'bad' })] } : s));
+  const sku = { rows: [step(90, 'running'), step(91, 'idle')], counts: { green: 1, amber: 1 } };
+  const [r] = shapeRows([{
+    brand: 'thirstygirl',
+    usage: usage({
+      welcome,
+      series: { welcome: series('welcome', {}, [], { 0: 'idle' }), postPurchase },
+      sku,
+    }),
+  }]);
+  assert.deepEqual(circleLink(r, 'welcome:0', 'green'), { id: ['67'], evergreen: 'true' });
+  assert.deepEqual(circleLink(r, 'welcome:0', 'amber'), { id: ['70', '71'], evergreen: 'true' });
+  assert.equal(circleLink(r, 'welcome:0', 'red'), null);
+  assert.deepEqual(circleLink(r, 'postPurchase:5', 'green'), { list_id: ['80'], evergreen: 'true' });
+  assert.deepEqual(circleLink(r, 'postPurchase:5', 'amber'), { list_id: ['81', '82'], evergreen: 'true' });
+  assert.equal(circleLink(r, 'postPurchase:14', 'green'), null); // no rows at that day
+  assert.deepEqual(circleLink(r, 'sku', 'green'), { list_id: ['90'], evergreen: 'true' });
+  assert.deepEqual(circleLink(r, 'sku', 'amber'), { list_id: ['91'], evergreen: 'true' });
+  // No usage, or a ZMA-dimmed Day 0: no link.
+  assert.equal(circleLink(shapeRows([{ brand: 'n' }])[0], 'welcome:0', 'green'), null);
+  const zma = shapeRows(api).find((x) => x.brand === 'oldzma');
+  assert.equal(circleLink(zma, 'welcome:0', 'green'), null);
+});
+
 // 2026-10-30: the journey guide below the table.
 test('guide: parseStepText splits title / quoted subject line / guidance', () => {
   assert.deepEqual(parseStepText('Day 2 Gentle conversion reminder: "Still exploring? Here\'s why customers love [Brand]." Highlight bestsellers.'), {
@@ -837,8 +885,8 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   const tt = (k) => en[k];
   const g = seriesGuide(tt);
   assert.deepEqual(g.map((s) => [s.family, tt(s.title), tt(s.subtitle)]), [
-    ['welcome', 'Welcome series', 'No-purchase series'],
-    ['postPurchase', 'New Customer series', 'Post-purchase series'],
+    ['welcome', 'No-purchase series', 'Welcome series'],
+    ['postPurchase', 'Post-purchase series', 'New Customer series'],
   ]);
   assert.deepEqual(g.map((s) => s.steps.map((x) => x.days)), [SERIES_DAYS.welcome, SERIES_DAYS.postPurchase]);
   g.flatMap((s) => s.steps).forEach((x) => {
