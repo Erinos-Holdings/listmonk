@@ -145,8 +145,9 @@ test('F6: columnsOf returns sunsetPolicy; tableOf returns the stored table or nu
   assert.equal(tableOf({ tables: { 'sunset-policy': { ...table, columns: [] } } }, 'sunset-policy'), null);
   assert.deepEqual(tableOf({ tables: { 'sunset-policy': { columns: ['a'], rows: [] } } }, 'sunset-policy'), { columns: ['a'], rows: [], note: '' });
   // The block's strings exist, and the Vue renders the table through interpolation (no v-html).
-  ['decisions.sunsetPolicy', 'decisions.sunsetPolicyPlanned'].forEach((k) => assert.equal(typeof en[k], 'string', k));
   assert.equal(en['decisions.sunsetPolicy'], 'Curated Sunset Policy');
+  // 2026-10-31 polish 2: the planned-policy line (USAGE-REENGAGEMENT-SPEC D10) is gone with its key.
+  assert.equal(en['decisions.sunsetPolicyPlanned'], undefined);
   // The real lifecycle.json's table is well-formed for tableOf.
   const doc = JSON.parse(readFileSync(new URL('../../internal/decisions/lifecycle.json', import.meta.url), 'utf8'));
   const real = tableOf(doc, 'sunset-policy');
@@ -154,19 +155,21 @@ test('F6: columnsOf returns sunsetPolicy; tableOf returns the stored table or nu
   assert.deepEqual(columnsOf(doc).sunsetPolicy.map((i) => i.n), [15, 16, 17, 18, 19, 20, 21, 22]);
 });
 
-test('textLines: the first sentence and the Recommended:/NOTE: labels are the bold leads; text is unchanged', () => {
-  const s = 'Exit on purchase (your W01–W05 request). Any paid order stops it.\nRecommended: Skip it.\nNOTE: A skip.\n1. A rule.';
+test('textLines: the first sentence and the Recommended:/NOTE: labels are the bold leads; the recommendation is flagged to its end; text is unchanged', () => {
+  const s = 'Exit on purchase (your W01–W05 request). Any paid order stops it.\nNOTE: Before.\nRecommended: Skip it.\nNOTE: A skip.\n1. A rule.';
   const lines = textLines(s);
   assert.deepEqual(lines, [
-    { lead: 'Exit on purchase (your W01–W05 request).', rest: ' Any paid order stops it.' },
-    { lead: 'Recommended:', rest: ' Skip it.' },
-    { lead: 'NOTE:', rest: ' A skip.' },
-    { lead: '', rest: '1. A rule.' },
+    { lead: 'Exit on purchase (your W01–W05 request).', rest: ' Any paid order stops it.', recommended: false },
+    { lead: 'NOTE:', rest: ' Before.', recommended: false },
+    { lead: 'Recommended:', rest: ' Skip it.', recommended: true },
+    { lead: 'NOTE:', rest: ' A skip.', recommended: true },
+    { lead: '', rest: '1. A rule.', recommended: true },
   ]);
   assert.equal(lines.map((l) => l.lead + l.rest).join('\n'), s);
-  assert.deepEqual(textLines('Language.'), [{ lead: 'Language.', rest: '' }]);
-  assert.deepEqual(textLines('Recommended:'), [{ lead: 'Recommended:', rest: '' }]);
-  assert.deepEqual(textLines(null), [{ lead: '', rest: '' }]);
+  assert.deepEqual(textLines('Language.'), [{ lead: 'Language.', rest: '', recommended: false }]);
+  // A first-line "Recommended:" is the lead, not a recommendation (internal/decisions::HasRecommended agrees).
+  assert.deepEqual(textLines('Recommended:'), [{ lead: 'Recommended:', rest: '', recommended: false }]);
+  assert.deepEqual(textLines(null), [{ lead: '', rest: '', recommended: false }]);
 });
 
 test('D5: the pane renders decisions through interpolation only (no v-html) and every key is in en.json', () => {

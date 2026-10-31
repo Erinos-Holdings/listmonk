@@ -1118,13 +1118,16 @@ section.dashboard (which reopens after them). */
       border-left: 1px solid #dbdee2;
     }
     /* 2026-10-31 polish: the table widened to the guide's three columns -- --bu-line-pad (px, set by
-    BrandUsage.vue::fitTable via brandUsage.mjs::linePad) on BOTH sides of every vertical line, in
-    the body cells (the header columns follow the body's widths). */
+    BrandUsage.vue::fitTable via brandUsage.mjs::linePad) on BOTH sides of every vertical line.
+    Polish 2: the sides are the bu-pad-l / bu-pad-r classes headerLayout/bodyColumns compute once
+    over the column order, carried by the HEADER cells and the body cells alike -- padding only the
+    body cells left each header centred over a wider box than its content (Last broadcast left of
+    its header, Day 0 / Shop links right of theirs, FR ES DE IT unevenly spaced). */
     table.bu-table {
-      td.bu-start, td.bu-substart {
+      th.bu-pad-l, td.bu-pad-l {
         padding-left: calc(0.25em + var(--bu-line-pad, 0px));
       }
-      td:has(+ td.bu-start), td:has(+ td.bu-substart) {
+      th.bu-pad-r, td.bu-pad-r {
         padding-right: calc(0.25em + var(--bu-line-pad, 0px));
       }
     }
@@ -1177,6 +1180,16 @@ section.dashboard (which reopens after them). */
         padding-left: 0;
         margin-left: 2px;
       }
+    }
+    /* 2026-10-31 polish 2: a `hug` group's two leaves (Re-engagement 180d | 270d) -- the label is
+    wider than the pair, so the first leaf's header and circles sit against the group's centre line
+    from the left and the second's from the right: the pair spaced like the other groups' leaves,
+    the slack on the outside. After `thead th { text-align: center }`, which it overrides. */
+    th.bu-align-right, td.bu-align-right {
+      text-align: right;
+    }
+    th.bu-align-left, td.bu-align-left {
+      text-align: left;
     }
     .bu-warn {
       cursor: help;
@@ -1425,12 +1438,11 @@ section.dashboard (which reopens after them). */
   }
   /* USAGE-REENGAGEMENT-SPEC D9/D10: the Curated Sunset Policy block -- Both series' box, the grey
   planned-policy line under its heading, the non-decision table, then its note in small italic. */
-  .bu-decisions-planned {
-    color: $grey;
-  }
   /* 2026-10-31 polish: a readable table -- a light cool-grey body, a shaded header row, and darker
   slate rules (outer ring and every cell) so the grid is visible; rounded outer corners. Neutral like
-  the rest of the pane (the stoplight circles stay its only chroma). */
+  the rest of the pane (the stoplight circles stay its only chroma). Polish 2: its cells WRAP --
+  the pane-wide `.brand-usage td, th { white-space: nowrap }` (the usage table's rule) reached them
+  and pushed the table past its column; only the first column stays on one line. */
   .bu-decisions-table {
     margin-top: 0.5rem;
     font-size: 0.875rem;
@@ -1449,6 +1461,7 @@ section.dashboard (which reopens after them). */
         border-bottom: 1px solid #b4bdc7;
         vertical-align: top;
         color: #363636;
+        white-space: normal;
       }
       th + th, td + td {
         border-left: 1px solid #b4bdc7;
@@ -1509,6 +1522,12 @@ section.dashboard (which reopens after them). */
   }
   .bu-decision-line {
     display: block;
+  }
+  /* 2026-10-31 polish 2 (user): the whole recommendation -- from the "Recommended:" line to the
+  item's end -- in red (Bulma's danger-dark), so the proposed change reads apart from the current
+  behaviour above it. */
+  .bu-decision-recommended {
+    color: #cc0f35;
   }
   .bu-decision-n {
     margin-right: 0.35rem;

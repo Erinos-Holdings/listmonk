@@ -13,10 +13,13 @@
       <table class="table is-hoverable is-narrow bu-table" data-cy="usage-table"
         :style="{ '--bu-line-pad': `${linePadPx}px` }">
         <thead>
+          <!-- 2026-10-31 polish 2: every header cell carries the same --bu-line-pad sides as the
+               body cells of its column(s) (brandUsage.mjs::headerLayout padLeft/padRight, the
+               bu-pad-l / bu-pad-r classes), so each header stays centred over its content. -->
           <tr class="bu-groups">
-            <th colspan="2" />
-            <th v-for="s in sections" :key="s.key" :colspan="s.fields.length"
-              :class="['bu-group', 'bu-start', `bu-band-${s.band}`]">
+            <th colspan="2" class="bu-pad-r" />
+            <th v-for="s in header.row1" :key="s.key" :colspan="s.span"
+              :class="['bu-group', 'bu-start', `bu-band-${s.band}`, padClass(s)]">
               {{ $t(s.label) }}
             </th>
           </tr>
@@ -29,26 +32,26 @@
               :aria-sort="buAria('score')" @click="onSort('score')">
               {{ $t('dashboard.usage.score') }}<span class="bm-arrow">{{ buArrow('score') }}</span>
             </th>
-            <th rowspan="2" class="bu-head" :class="buTh('brand')" :aria-sort="buAria('brand')" @click="onSort('brand')">
+            <th rowspan="2" class="bu-head bu-pad-r" :class="buTh('brand')" :aria-sort="buAria('brand')" @click="onSort('brand')">
               {{ $t('dashboard.matrix.brand') }}<span class="bm-arrow">{{ buArrow('brand') }}</span>
             </th>
             <template v-for="c in header.row2">
               <th v-if="c.kind === 'group'" :key="`g-${c.key}`" :colspan="c.span"
                 class="has-text-centered bu-head bu-subgroup"
-                :class="[`bu-band-${c.band}`, { 'bu-start': c.first, 'bu-small': c.small, 'bu-substart': c.divide }]"
+                :class="[`bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-small': c.small, 'bu-substart': c.divide }]"
                 :title="$t(c.help)" :data-cy="`usage-group-${c.key}`">
                 {{ $t(c.label) }}
               </th>
               <th v-else :key="c.field" rowspan="2" class="has-text-centered bu-head bu-leafhead"
-                :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.divide }]" :title="$t(meta(c.field).help)"
+                :class="[buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide }]" :title="$t(meta(c.field).help)"
                 :aria-sort="buAria(c.field)" @click="onSort(c.field)">
                 {{ label(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
               </th>
             </template>
           </tr>
           <tr>
-            <th v-for="c in header.row3" :key="c.field" class="has-text-centered bu-small"
-              :class="[buTh(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.groupStart }]"
+            <th v-for="c in header.row3" :key="c.field" class="bu-small"
+              :class="[alignClass(c), buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.groupStart }]"
               :title="$t(meta(c.field).help)" :aria-sort="buAria(c.field)" @click="onSort(c.field)"
               :data-cy="`usage-head-${c.field}`">
               {{ label(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
@@ -61,14 +64,14 @@
               <span :title="cell(row, 'score').tooltip || null" :data-cy="`usage-score-${row.brand}`">
                 {{ cell(row, 'score').text }}</span>
             </td>
-            <td :class="buTd('brand')">
+            <td class="bu-pad-r" :class="buTd('brand')">
               <span :data-cy="`usage-brand-${row.brand}`">{{ row.label }}</span>
               <b-tag v-if="row.zma" size="is-small" class="ml-1" :title="$t('dashboard.usage.zmaHelp')">
                 {{ $t('dashboard.usage.zma') }}
               </b-tag>
             </td>
-            <td v-for="c in columns" :key="c.field" class="has-text-centered"
-              :class="[buTd(c.field), `bu-band-${c.band}`, { 'bu-start': c.first, 'bu-substart': c.divide }]">
+            <td v-for="c in columns" :key="c.field"
+              :class="[alignClass(c), buTd(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide }]">
               <!-- V2 D3: one circle per state, the stored count inside. 2026-10-30: EACH circle links
                    what it counts (brandUsage.mjs::circleLink) -- green the running campaigns / clean
                    steps, amber the rest; red never links; each carries its own accessible name. -->
@@ -169,13 +172,17 @@
       </div>
       <div v-for="col in decisionColumns" :key="col.key" :class="['bu-decisions-col', `bu-decisions-${col.key}`]"
         :data-cy="`usage-decisions-${col.key}`">
+        <!-- 2026-10-31 polish 2 (user): the guide's series heading repeated at the top of its decision
+             column -- the record sits far enough below the guide that the columns need their own. -->
+        <div v-if="col.guide" class="bu-guide-head" :data-cy="`usage-decisions-guide-${col.key}`">
+          <h4 class="bu-guide-title">{{ $t(col.guide.title) }}</h4>
+          <p class="bu-guide-subtitle">{{ $t(col.guide.subtitle) }}</p>
+        </div>
         <h4 v-if="col.title" class="bu-guide-title">{{ col.title }}</h4>
-        <!-- USAGE-REENGAGEMENT-SPEC D9/D10: the Curated Sunset Policy block -- the planned-policy line,
-             then the stored non-decision table (usageDecisions.mjs::tableOf; never approvable) and its
-             note in small italic, then the items as Both series renders them. -->
-        <p v-if="col.planned" class="bu-decisions-meta bu-decisions-planned" data-cy="usage-decisions-planned">
-          {{ col.planned }}
-        </p>
+        <!-- USAGE-REENGAGEMENT-SPEC D9: the Curated Sunset Policy block -- the stored non-decision
+             table (usageDecisions.mjs::tableOf; never approvable) and its note in small italic, then
+             the items as Both series renders them. (D10's planned-policy line was struck by the user
+             2026-10-31: the texts read as the policy being released.) -->
         <div v-if="col.table" class="bu-decisions-table" data-cy="usage-decisions-table">
           <table class="table is-narrow">
             <thead>
@@ -194,10 +201,11 @@
         <ul class="bu-decision-list">
           <li v-for="it in col.items" :key="it.key" class="bu-decision" :data-cy="`decision-${it.key}`">
             <!-- One block per text line; each line's lead (the first sentence, "Recommended:",
-                 "NOTE:") in bold -- usageDecisions.mjs::textLines. Kept on one line: no template
+                 "NOTE:") in bold -- usageDecisions.mjs::textLines; from the "Recommended:" line on,
+                 every line in red (2026-10-31 polish 2, user). Kept on one line: no template
                  whitespace inside a line. -->
             <p class="bu-decision-text">
-              <span v-for="(l, li) in textLines(it.text)" :key="li" class="bu-decision-line"><strong
+              <span v-for="(l, li) in textLines(it.text)" :key="li" :class="['bu-decision-line', { 'bu-decision-recommended': l.recommended }]"><strong
                 v-if="li === 0 && itemNum(it)" class="bu-decision-n">{{ itemNum(it) }}.</strong><strong
                 v-if="l.lead">{{ l.lead }}</strong>{{ l.rest }}</span>
             </p>
@@ -259,7 +267,7 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  SECTIONS, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad,
+  GUIDE_SERIES, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad,
   linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
@@ -313,11 +321,6 @@ export default Vue.extend({
       return mountainRunTime(latestAsOf(this.tableRows));
     },
 
-    // V2 D2 -- the sections with their alternating band: grey, white, grey.
-    sections() {
-      return SECTIONS.map((s, i) => ({ ...s, band: i % 2 === 0 ? 'grey' : 'white' }));
-    },
-
     // The body columns with the header's flags (band, section start, the in-section rule).
     columns() {
       return bodyColumns();
@@ -349,19 +352,26 @@ export default Vue.extend({
 
     decisionColumns() {
       const c = columnsOf(this.decisionView);
+      // 2026-10-31 polish 2: each series column repeats its guide heading (GUIDE_SERIES order:
+      // No-purchase, Post-purchase, Re-engagement over the Curated Sunset Policy).
+      const [npGuide, ppGuide, reGuide] = GUIDE_SERIES;
       const cols = [
-        { key: 'no-purchase', title: '', items: c.noPurchase },
-        { key: 'post-purchase', title: '', items: c.postPurchase },
+        {
+          key: 'no-purchase', title: '', guide: npGuide, items: c.noPurchase,
+        },
+        {
+          key: 'post-purchase', title: '', guide: ppGuide, items: c.postPurchase,
+        },
         { key: 'both', title: this.$t('decisions.both'), items: c.both },
       ];
-      // USAGE-REENGAGEMENT-SPEC D9: the fourth block, full width below Both series (shown when the GET
-      // carries its items or its table).
+      // USAGE-REENGAGEMENT-SPEC D9: the fourth block, under the Re-engagement series (shown when the
+      // GET carries its items or its table).
       const table = tableOf(this.decisionView, SECTION_SUNSET_POLICY);
       if (c.sunsetPolicy.length || table) {
         cols.push({
           key: SECTION_SUNSET_POLICY,
           title: this.$t('decisions.sunsetPolicy'),
-          planned: this.$t('decisions.sunsetPolicyPlanned'),
+          guide: reGuide,
           table,
           items: c.sunsetPolicy,
         });
@@ -519,6 +529,16 @@ export default Vue.extend({
     title(row, field) {
       const parts = [this.cell(row, field).tooltip, linkTip(row, field, (k, p) => this.$t(k, p))];
       return parts.filter(Boolean).join('\n') || null;
+    },
+
+    // 2026-10-31 polish 2: the line-pad sides and the hugged pair's alignment, header and body alike
+    // (brandUsage.mjs::headerLayout / bodyColumns). A cell with no `align` is centred.
+    padClass(c) {
+      return { 'bu-pad-l': !!c.padLeft, 'bu-pad-r': !!c.padRight };
+    },
+
+    alignClass(c) {
+      return c.align ? `bu-align-${c.align}` : 'has-text-centered';
     },
 
     buSorted(field) {

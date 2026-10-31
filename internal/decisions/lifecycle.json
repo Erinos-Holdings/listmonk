@@ -27,8 +27,8 @@
       "key": "np-launch-overlap",
       "section": "no-purchase",
       "n": 4,
-      "since": "2026-10-30",
-      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Nothing suppresses a broadcast for someone part-way through the Welcome series; they receive both.\nRecommended: Keep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. This is the only way I see to effectively and efficiently maintain multi-brand/multi-language campaigns at this scale – even more so from a human perspective than a platform perspective."
+      "since": "2026-10-31",
+      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Nothing suppresses a broadcast for someone part-way through the Welcome series; they receive both.\nRecommended: Keep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform."
     },
     {
       "key": "np-no-restarts",
@@ -48,8 +48,8 @@
       "key": "np-ruze-15d",
       "section": "no-purchase",
       "n": 7,
-      "since": "2026-10-30",
-      "text": "Ruze's 15-day step. Keeps sending as-is.\nRecommended: The current campaign looks like it best fits the Day 2 “Gentle conversion reminder.”  I recommend retiring the 15-day campaign and re-scheduling it as the 2-day campaign (while preventing prior recipients from receiving it again)."
+      "since": "2026-10-31",
+      "text": "Ruze's 15-day step. Keeps sending as-is.\nRecommended: The current campaign best fits the Day 2 “Gentle conversion reminder”: retire the 15-day campaign and re-schedule it as the 2-day step, without re-sending it to anyone who already received it."
     },
     {
       "key": "pp-entry",
@@ -62,8 +62,8 @@
       "key": "pp-delivery-clock",
       "section": "post-purchase",
       "n": 9,
-      "since": "2026-10-30",
-      "text": "The clock is the order date, not delivery. The step timings assume 5-day delivery.\nRecommended: Start the clock at delivery instead. Aftership delivery confirmations would trigger the \"Getting started\" and \"How's it going?\" emails relative to when the product actually arrives — this would help avoid asking for a review of something still in transit. Orders with no delivery confirmation (untracked carriers, split shipments) would fall back to an order date plus 5 days, so nobody gets stuck."
+      "since": "2026-10-31",
+      "text": "The clock is the order date, not delivery. The step timings assume 5-day delivery.\nRecommended: Start the clock at delivery instead. Aftership delivery confirmations would time \"Getting started\" and \"How's it going?\" to when the product actually arrives, so we never ask for a review of something still in transit. Orders with no delivery confirmation (untracked carriers, split shipments) fall back to order date plus 5 days, so nobody gets stuck."
     },
     {
       "key": "pp-final-step-skip",
@@ -83,22 +83,22 @@
       "key": "both-multi-brand",
       "section": "both",
       "n": 12,
-      "since": "2026-10-30",
-      "text": "Frequency Risk: Multiple brands. The industry pattern is a per-person cap by message class, with journeys and transactional exempt, and engagement-based where it's sophisticated.  Our overlap today is small: 4.7% (1,185 of 25,045 active newsletter subscribers) are on two or more brands' lists, and only .8% (205) are on three or more.\nRecommended: Implement a per-person cap if overlap grows past ~15%.  For broadcasts, skip, never defer — skip the second brand's broadcast to someone who already got one that day rather than pushing it to the next day. Tiebreak by the person's own recent engagement with each brand. This is a skip, not a defer: Klaviyo Smart Sending skips (16-hour default, per account, no cross-brand awareness)."
+      "since": "2026-10-31",
+      "text": "Frequency Risk: Multiple brands. Overlap today is small: 4.7% (1,185 of 25,045 active newsletter subscribers) are on two or more brands' lists, and only 0.8% (205) on three or more. The industry pattern is a per-person cap by message class, with journeys and transactional email exempt.\nRecommended: Add a per-person cap only if overlap grows past ~15%. For broadcasts, skip, never defer: someone who already got one brand's broadcast that day is skipped from the second brand's, not pushed to the next day, with the tiebreak going to the brand they engage with more. (Klaviyo Smart Sending skips the same way: 16-hour default, per account, no cross-brand awareness.)"
     },
     {
       "key": "both-per-brand",
       "section": "both",
       "n": 13,
-      "since": "2026-10-30",
-      "text": "Frequency Risk: Per brand. This is where the real frequency risk is today (broadcast cadence + two series).  A new non-buyer in their first 10 days can get the welcome plus three No-purchase steps, and every broadcast the brand sends in that window. That's up to seven emails in ten days. A buyer gets the same shape from the New Customer series. Journeys alone are fine; it’s journey steps stacking on broadcasts that creates concern.\nRecommended:\n1. A \"Smart Sending\" rule.  Per brand, broadcasts only: skip a broadcast to anyone who received a journey email from the same brand in the last 24 hours. Journeys are exempt: they're one-shot and time-bound.\nNOTE: This is a skip, not a defer. Deferring a broadcast recipient to tomorrow doesn't fit listmonk's send model (a campaign finishes and doesn't revisit). Klaviyo Smart Sending skips (16-hour default, per account, no cross-brand awareness).\n2. Fix the same-day double. Welcome plus thank-you on one day is the one stack that hits every checkout opt-in.\n3. Keep sunset as the backstop.  Watch complaint rates in Brand Health. Fatigue shows up there first."
+      "since": "2026-10-31",
+      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, three No-purchase steps and every broadcast the brand sends in their first 10 days — up to seven emails in ten days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nRecommended:\n1. A \"Smart Sending\" rule, per brand, broadcasts only: skip a broadcast to anyone who received a journey email from the same brand in the last 24 hours. Journeys are exempt: one-shot and time-bound.\nNOTE: A skip, not a defer. A listmonk campaign finishes and doesn't revisit, so there is no \"tomorrow\" to defer to. (Klaviyo Smart Sending skips too: 16-hour default, per account, no cross-brand awareness.)\n2. Fix the same-day double (item 3): the one stack that hits every checkout opt-in.\n3. Keep sunset as the backstop, and watch complaint rates in Brand Health: fatigue shows up there first."
     },
     {
       "key": "both-language",
       "section": "both",
       "n": 14,
-      "since": "2026-10-30",
-      "text": "Language. A campaign's language reaches that language only, EN also reaches no-language subscribers, and automations have no English fallback."
+      "since": "2026-10-31",
+      "text": "Language. A campaign's language reaches that language only; English also reaches subscribers with no language on record."
     },
     {
       "key": "sp-scope",
@@ -111,50 +111,50 @@
       "key": "sp-engagement",
       "section": "sunset-policy",
       "n": 16,
-      "since": "2026-10-30",
-      "text": "What counts as engagement. A click on any of the brand's emails, a paid order of the brand (whether or not an email drove it), or an open we can confirm was a person: today that means an open through Gmail. Automatic opens, such as Apple Mail's privacy feature, and opens we can't confirm don't count. Those subscribers are judged on clicks and purchases. This matches Klaviyo's practice: Klaviyo counts clicks and placed orders as engagement and recommends excluding Apple privacy opens from it."
+      "since": "2026-10-31",
+      "text": "What counts as engagement. A click on any of the brand's emails, a paid order of the brand (whether or not an email drove it), or an open we can confirm was a person — today, an open through Gmail. Automatic opens (such as Apple Mail's privacy feature) and opens we can't confirm don't count; those subscribers are judged on clicks and purchases. Klaviyo does the same: clicks and placed orders count, and Apple privacy opens are excluded."
     },
     {
       "key": "sp-normal",
       "section": "sunset-policy",
       "n": 17,
-      "since": "2026-10-30",
-      "text": "0–180 days: normal sending. This sits at the most generous end of common practice (90 to 180 days, with 90 the usual starting point), so a subscriber gets twice the usual time before any hold. The stricter engagement definition (bullet 16) is what makes 180 days safe. Automatic opens no longer count, so a subscriber who doesn't read can't stay \"engaged\" indefinitely, and each of the 180 days reflects real engagement. 180 days is our starting point: if complaint rates in Brand Health rise, we will shorten it."
+      "since": "2026-10-31",
+      "text": "0–180 days: normal sending. This is the generous end of common practice (90 to 180 days, with 90 the usual starting point), so a subscriber gets twice the usual time before any hold. The stricter engagement definition (item 16) is what makes 180 days safe: automatic opens don't count, so nobody stays \"engaged\" without reading. 180 days is our starting point; if complaint rates in Brand Health rise, we will shorten it."
     },
     {
       "key": "sp-hold",
       "section": "sunset-policy",
       "n": 18,
-      "since": "2026-10-30",
-      "text": "Hold at 180 days without engagement. When someone's last engagement is 180 or more days ago (or their sign-up date, if they have never engaged), and the brand has sent them at least 6 broadcasts since then, they stop getting its regular sends. Every new engagement restarts the 180 days. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list."
+      "since": "2026-10-31",
+      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago and the brand has sent them at least 6 broadcasts since, they stop getting its regular sends. Every new engagement restarts the 180 days. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list."
     },
     {
       "key": "sp-asks",
       "section": "sunset-policy",
       "n": 19,
-      "since": "2026-10-30",
-      "text": "Two re-engagement emails, 90 days apart. Re-engagement emails are automated journeys, one per brand for each ask, in each language the brand's subscribers use. Each person gets the first ask the day they are held. If they don't engage within 90 days of receiving it, they get the last-chance ask, with another 90 days to respond. No one moves on or is suppressed without having received both asks. The Brands › Usage pane shows each brand's re-engagement journeys under Re-engagement (180d and 270d); the Sunset column under Configuration shows whether sunset is set up.\n⚠ Each brand's two re-engagement journeys must be running, in every language its subscribers use, before its first subscriber reaches 180 days. If a journey is missing, held subscribers stop getting the brand's regular emails but are never asked to come back. They wait with no emails at all and are never suppressed, until the journey starts or they come back on their own (signing up again, opting in at checkout, or re-subscribing on the preferences page). When a missing journey is finally started, everyone who has been waiting gets the ask that same day. For a brand that has been without one for a while, that is a large one-day send to a cold audience, so plan it like a win-back send."
+      "since": "2026-10-31",
+      "text": "Two re-engagement emails, 90 days apart. Each ask is an automated journey, one per brand, in each language the brand's subscribers use. The first ask goes out the day someone is held; if they don't engage within 90 days, the last-chance ask follows, with another 90 days to respond. No one is suppressed without having received both asks. The Re-engagement circles above (180d, 270d) show each brand's journeys; the Sunset column shows whether sunset is set up.\n⚠ Both journeys must be running, in every language the brand's subscribers use, before its first subscriber reaches 180 days. Without them, held subscribers get no emails at all and are never suppressed: they wait until the journey starts or they come back on their own. When the journey finally starts, everyone waiting gets the ask that same day — for a brand that has gone without one for a while, that is a large send to a cold audience, so plan it like a win-back send."
     },
     {
       "key": "sp-coming-back",
       "section": "sunset-policy",
       "n": 20,
-      "since": "2026-10-30",
-      "text": "Coming back. Any engagement from bullet 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email. Unsubscribing from an ask is a real opt-out, and they are never asked again."
+      "since": "2026-10-31",
+      "text": "Coming back. Any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email. Unsubscribing from an ask is a real opt-out: they are never asked again."
     },
     {
       "key": "sp-suppressed",
       "section": "sunset-policy",
       "n": 21,
-      "since": "2026-10-30",
-      "text": "360 days: suppressed from marketing. After 360 days with no engagement (180 days, then two 90-day re-engagement windows), the person is archived for that brand. They come off the re-engagement lists and get no marketing from it, but they are never deleted or blocked. Only their own action brings them back: signing up again, opting in at checkout, or re-subscribing on the preferences page."
+      "since": "2026-10-31",
+      "text": "360 days: suppressed from marketing. After 360 days without engagement (180, then the two 90-day re-engagement windows), the person is archived for that brand: off its re-engagement lists and out of its marketing, but never deleted or blocked. Only their own action brings them back: signing up again, opting in at checkout, or re-subscribing on the preferences page."
     },
     {
       "key": "sp-safety",
       "section": "sunset-policy",
       "n": 22,
-      "since": "2026-10-30",
-      "text": "Safety check. If a brand's latest broadcast shows zero tracked opens, that day's run skips the brand, because broken tracking looks exactly like nobody reading. Holds for bounce problems are handled separately and never get the re-engagement emails."
+      "since": "2026-10-31",
+      "text": "Safety check. If a brand's latest broadcast shows zero tracked opens, that day's run skips the brand: broken tracking looks exactly like nobody reading. Holds for bounce problems are handled separately and never get the re-engagement emails."
     }
   ],
   "tables": {

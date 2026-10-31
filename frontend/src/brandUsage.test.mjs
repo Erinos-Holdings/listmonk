@@ -162,6 +162,30 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
     ['reengagement:180', false, true], ['reengagement:270', false, false],
     ['skipped:fr', true, true], ['skipped:es', false, false], ['skipped:de', false, false], ['skipped:it', false, false],
   ]);
+  // 2026-10-31 polish 2: the line-pad sides, the same on a header cell and its column's body cells
+  // -- the side opening a rule and the side facing the next column's rule; a group takes its first
+  // leaf's left and its last leaf's right; the section row pads every section's left and all but
+  // the last's right. The hugged Re-engagement pair aligns right | left; every other leaf centred.
+  const pads = (c) => `${c.padLeft ? 'L' : '-'}${c.padRight ? 'R' : '-'}`;
+  assert.deepEqual(h.row1.map((c) => [c.key, c.span, c.band, pads(c)]), [
+    ['broadcasts', 2, 'grey', 'LR'], ['journeys', 11, 'white', 'LR'], ['languages', 4, 'grey', 'LR'], ['configurations', 2, 'white', 'L-'],
+  ]);
+  assert.deepEqual(h.row2.map((c) => [c.kind === 'group' ? `[${c.key}]` : c.field, pads(c)]), [
+    ['cadence', 'L-'], ['lastBroadcast', '-R'], ['[welcome]', 'LR'], ['[postPurchase]', 'LR'], ['[reengagement]', 'LR'], ['sku', 'LR'],
+    ['[skipped]', 'LR'], ['attribution', 'L-'], ['sunset', '--'],
+  ]);
+  assert.deepEqual(h.row3.map((c) => [c.field, pads(c), c.align]), [
+    ['welcome:0', 'L-', undefined], ['welcome:2', '--', undefined], ['welcome:5', '--', undefined], ['welcome:10', '-R', undefined],
+    ['postPurchase:0', 'L-', undefined], ['postPurchase:5', '--', undefined], ['postPurchase:14', '--', undefined], ['postPurchase:30', '-R', undefined],
+    ['reengagement:180', 'L-', 'right'], ['reengagement:270', '-R', 'left'],
+    ['skipped:fr', 'L-', undefined], ['skipped:es', '--', undefined], ['skipped:de', '--', undefined], ['skipped:it', '-R', undefined],
+  ]);
+  const body = bodyColumns();
+  const bodyLeaf = (f) => body.find((c) => c.field === f);
+  [...h.row2.filter((c) => c.kind === 'leaf'), ...h.row3].forEach((c) => {
+    const b = bodyLeaf(c.field);
+    assert.deepEqual([b.padLeft, b.padRight, b.align], [!!c.padLeft, !!c.padRight, c.align], c.field);
+  });
   assert.deepEqual(columnMeta('reengagement:180'), { label: 'dashboard.usage.npDays', params: { n: 180 }, help: 'series.reengagementDay180' });
   assert.deepEqual(columnMeta('reengagement:270'), { label: 'dashboard.usage.npDays', params: { n: 270 }, help: 'series.reengagementDay270' });
   // S9: each leaf's header hover is its D5 description.

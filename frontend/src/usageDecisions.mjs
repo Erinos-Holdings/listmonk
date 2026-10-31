@@ -47,18 +47,22 @@ export function approverText(view, t = (k) => k) {
 // The labels set in bold at the start of a later line ("Recommended:", "NOTE:").
 export const LEAD_LABELS = Object.freeze(['Recommended:', 'NOTE:']);
 
-// textLines splits a bullet's text into its lines, each { lead, rest } with `lead` set in bold: the
-// FIRST line's lead is its first sentence (through the first ". ", or the whole line when it has
-// none -- "Entry.", "Exit on purchase (your W01–W05 request)."); a later line's lead is a LEAD_LABELS
-// label it starts with, else ''. Presentation only: the stored text (and its hash) is unchanged.
+// textLines splits a bullet's text into its lines, each { lead, rest, recommended } with `lead` set
+// in bold: the FIRST line's lead is its first sentence (through the first ". ", or the whole line
+// when it has none -- "Entry.", "Exit on purchase (your W01–W05 request)."); a later line's lead is
+// a LEAD_LABELS label it starts with, else ''. `recommended` (2026-10-31 polish 2) is true from the
+// first later line starting "Recommended:" to the end -- the whole recommendation, numbered lines
+// and NOTE included, is set in red. Presentation only: the stored text (and its hash) is unchanged.
 export function textLines(text) {
+  let recommended = false;
   return String(text == null ? '' : text).split('\n').map((line, i) => {
     if (i === 0) {
       const at = line.indexOf('. ');
-      return at < 0 ? { lead: line, rest: '' } : { lead: line.slice(0, at + 1), rest: line.slice(at + 1) };
+      return at < 0 ? { lead: line, rest: '', recommended } : { lead: line.slice(0, at + 1), rest: line.slice(at + 1), recommended };
     }
     const label = LEAD_LABELS.find((l) => line.startsWith(l));
-    return label ? { lead: label, rest: line.slice(label.length) } : { lead: '', rest: line };
+    recommended = recommended || label === 'Recommended:';
+    return label ? { lead: label, rest: line.slice(label.length), recommended } : { lead: '', rest: line, recommended };
   });
 }
 

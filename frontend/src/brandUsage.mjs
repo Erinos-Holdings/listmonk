@@ -23,7 +23,7 @@ import {
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 // USAGE-REENGAGEMENT-SPEC D1/D6: the Re-engagement group's two leaves (the sunset queues' asks),
-// 180d and 270d -- display labels of the planned policy (D10). Cross-repo literal: integrations
+// 180d and 270d (the Curated Sunset Policy's two asks). Cross-repo literal: integrations
 // lib/brand-usage.ts REENGAGEMENT_DAYS stores usage.reengagement.steps at exactly these days, and
 // the fields below are named after them (`reengagement:180`, `reengagement:270`).
 export { REENGAGEMENT_DAYS };
@@ -167,8 +167,12 @@ export function skippedLangOf(field) {
 // leaf list.
 // `small` (G5): the label takes the small header font (Skipped subscribers is long); otherwise it
 // matches the single-row headers' size (No purchase).
-const group = (key, label, help, fields, small = false) => Object.freeze({
-  group: key, label, help, fields, small,
+// `hug` (2026-10-31 polish 2): a two-leaf group whose label is wider than its leaves -- the leaves
+// keep the label's width but their content hugs the group's centre line (the first leaf right-,
+// the second left-aligned, header and body alike), so the pair sits as close as the other
+// groups' leaves instead of drifting apart under the label (Re-engagement 180d | 270d).
+const group = (key, label, help, fields, small = false, hug = false) => Object.freeze({
+  group: key, label, help, fields, small, hug,
 });
 const section = (key, label, items) => Object.freeze({
   key, label, items: Object.freeze(items), fields: Object.freeze(items.flatMap((i) => (typeof i === 'string' ? [i] : i.fields))),
@@ -181,7 +185,7 @@ export const SECTIONS = Object.freeze([
     group(SERIES_WELCOME, 'dashboard.usage.noPurchase', 'dashboard.usage.noPurchaseHelp', WELCOME_FIELDS),
     group(SERIES_POST_PURCHASE, 'dashboard.usage.postPurchase', 'dashboard.usage.postPurchaseHelp', POST_PURCHASE_FIELDS),
     // USAGE-REENGAGEMENT-SPEC D6: the sunset queues' two asks (the lib's stored usage.reengagement).
-    group(SERIES_REENGAGEMENT, 'dashboard.usage.reengagement', 'dashboard.usage.reengagementHelp', REENGAGEMENT_FIELDS),
+    group(SERIES_REENGAGEMENT, 'dashboard.usage.reengagement', 'dashboard.usage.reengagementHelp', REENGAGEMENT_FIELDS, false, true),
     // 2026-10-30: the brand's SKU-triggered journeys (the lib's stored `usage.sku`), not scored.
     'sku',
   ]),
@@ -200,44 +204,79 @@ export const SORT_FIELDS = Object.freeze(['score', 'brand', ...SECTIONS.flatMap(
 export const CIRCLE_FIELDS = Object.freeze([...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS, ...REENGAGEMENT_FIELDS, 'sku']);
 
 // POLISH3 D4/D5: the header layout over SECTIONS (the band alternates grey/white by section). Row
-// 2 holds every plain leaf (rowspan 2) and every sub-group label (colspan = its leaves); row 3
-// the sub-group leaves. `first` marks the cell opening its section (the band's left rule).
-// `divide` (2026-10-30) marks an item boundary INSIDE a section that touches a group -- a group
-// that is not the section's first item, or a plain leaf right after a group (the SKU column after
-// the Post-purchase series) -- drawn as a rule through the header AND every body row.
+// 1 holds the section labels (colspan = the section's leaves); row 2 every plain leaf (rowspan 2)
+// and every sub-group label (colspan = its leaves); row 3 the sub-group leaves. `first` marks the
+// cell opening its section (the band's left rule). `divide` (2026-10-30) marks an item boundary
+// INSIDE a section that touches a group -- a group that is not the section's first item, or a
+// plain leaf right after a group (the SKU column after the Post-purchase series) -- drawn as a
+// rule through the header AND every body row.
+// `padLeft` / `padRight` (2026-10-31 polish 2): which sides of a cell carry the --bu-line-pad that
+// widens the table to the guide (BrandUsage.vue::fitTable) -- the side that opens a rule and the
+// side that faces the next column's rule -- computed ONCE over the flat column order and applied
+// to the header cells and the body cells alike (a group cell takes its first leaf's left and its
+// last leaf's right), so a header stays centred over its column's content: padding only the body
+// cells pushed Last broadcast left of its header and Day 0 / Shop links right of theirs.
+// `align` ('right' | 'left') is set on a `hug` group's two leaves, else undefined.
 export function headerLayout(sections = SECTIONS) {
+  const row1 = [];
   const row2 = [];
   const row3 = [];
+  const flat = sections.flatMap((s) => s.fields);
+  const opens = new Map();
+  sections.forEach((s) => s.items.forEach((it, i) => {
+    const divide = i > 0 && (typeof it !== 'string' || typeof s.items[i - 1] !== 'string');
+    const fields = typeof it === 'string' ? [it] : it.fields;
+    fields.forEach((f, fi) => opens.set(f, fi === 0 && (i === 0 || divide)));
+  }));
+  const padLeft = (f) => opens.get(f);
+  const padRight = (f) => {
+    const next = flat[flat.indexOf(f) + 1];
+    return next !== undefined && opens.get(next);
+  };
   sections.forEach((s, si) => {
     const band = si % 2 === 0 ? 'grey' : 'white';
+    row1.push({
+      key: s.key, label: s.label, span: s.fields.length, band, padLeft: padLeft(s.fields[0]), padRight: padRight(s.fields[s.fields.length - 1]),
+    });
     s.items.forEach((it, i) => {
       const divide = i > 0 && (typeof it !== 'string' || typeof s.items[i - 1] !== 'string');
       if (typeof it === 'string') {
         row2.push({
-          kind: 'leaf', field: it, band, first: i === 0, divide,
+          kind: 'leaf', field: it, band, first: i === 0, divide, padLeft: padLeft(it), padRight: padRight(it),
         });
         return;
       }
+      const last = it.fields[it.fields.length - 1];
       row2.push({
-        kind: 'group', key: it.group, label: it.label, help: it.help, span: it.fields.length, band, first: i === 0, small: it.small, divide,
+        kind: 'group', key: it.group, label: it.label, help: it.help, span: it.fields.length, band, first: i === 0, small: it.small, divide, padLeft: padLeft(it.fields[0]), padRight: padRight(last),
       });
+      const hug = it.hug && it.fields.length === 2 ? ['right', 'left'] : [];
       it.fields.forEach((f, fi) => row3.push({
-        kind: 'leaf', field: f, band, first: i === 0 && fi === 0, groupStart: fi === 0, divide: divide && fi === 0,
+        kind: 'leaf',
+        field: f,
+        band,
+        first: i === 0 && fi === 0,
+        groupStart: fi === 0,
+        divide: divide && fi === 0,
+        padLeft: padLeft(f),
+        padRight: padRight(f),
+        align: hug[fi],
       }));
     });
   });
-  return { row2, row3 };
+  return { row1, row2, row3 };
 }
 
-// The body columns in display order -- { field, band, first, divide }, the same flags as the
-// header's leaves (headerLayout), so a body rule always continues its header rule.
+// The body columns in display order -- { field, band, first, divide, padLeft, padRight, align },
+// the same flags as the header's leaves (headerLayout), so a body rule always continues its
+// header rule and a body cell pads and aligns exactly as its header does.
 export function bodyColumns(sections = SECTIONS) {
   const { row2, row3 } = headerLayout(sections);
   const leaf = new Map([...row2, ...row3].filter((c) => c.kind === 'leaf').map((c) => [c.field, c]));
   return sections.flatMap((s) => s.fields).map((f) => {
     const c = leaf.get(f);
     return {
-      field: f, band: c.band, first: c.first, divide: !!c.divide,
+      field: f, band: c.band, first: c.first, divide: !!c.divide, padLeft: !!c.padLeft, padRight: !!c.padRight, align: c.align,
     };
   });
 }
