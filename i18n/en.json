@@ -762,7 +762,7 @@
     "dashboard.usage.skuHelp": "SKU-triggered journeys (a list whose entry trigger is \"every buyer of these SKUs\"). Not scored.",
     "dashboard.usage.skuNone": "No SKU-triggered journey. Optional: it may or may not apply to this brand, so this is not a gap.",
     "dashboard.usage.sunset": "Sunset",
-    "dashboard.usage.sunsetHelp": "The sunset rule (holds for the unengaged): ✓ only when sunset is enabled and both re-engagement lists are set — the daily sunset run's own check.",
+    "dashboard.usage.sunsetHelp": "The sunset rule (holds for the unengaged): ✓ only when the daily sunset run examines the brand — a listmonk brand with a newsletter list, sunset enabled and both re-engagement lists set.",
     "dashboard.usage.zma": "ZMA",
     "dashboard.usage.zmaHelp": "This brand sends from ZMA — its sends are not visible here",
     "email.data.info": "A copy of all data recorded on you is attached as a file in JSON format. It can be viewed in a text editor.",
