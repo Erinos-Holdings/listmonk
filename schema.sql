@@ -882,7 +882,7 @@ CREATE TABLE IF NOT EXISTS usage_decisions (
     id               BIGSERIAL PRIMARY KEY,
     item_key         TEXT NOT NULL,
     text_hash        CHAR(64) NOT NULL,
-    decision         TEXT NOT NULL CHECK (decision IN ('accept', 'reject')),
+    decision         TEXT NOT NULL CHECK (decision IN ('accept', 'reject', 'current', 'recommended')),
     note             TEXT NULL,
     user_id          INTEGER NOT NULL,
     user_name        TEXT NOT NULL,

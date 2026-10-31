@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  approverText, canSubmitReject, columnsOf, decisionBody, denverDay, historyOf, isStale, itemNumber,
-  publishedText, replaceItem, showControls, stateLine, textLines, tableOf, SECTION_SUNSET_POLICY,
+  approverText, canSubmitReject, choicesOf, columnsOf, decisionBody, denverDay, historyOf, isStale, itemNumber,
+  publishedText, replaceItem, selectedChoice, showControls, stateLine, textLines, tableOf, SECTION_SUNSET_POLICY,
 } from './usageDecisions.mjs'; // eslint-disable-line import/extensions
 
 const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
@@ -72,6 +72,32 @@ test('I10: controls only on can_decide; Reject Submit disabled on a blank note',
   assert.equal(isStale({ response: { status: 409 } }), true);
   assert.equal(isStale({ response: { status: 400 } }), false);
   assert.equal(isStale(null), false);
+});
+
+// 2026-10-31 polish: the toggle -- the server's choices with their hovers, nothing selected until
+// pressed or stored, the POST passing the choice through, and the new state lines.
+test('toggle: choices, selection, body and state lines for Current | Recommended | Reject', () => {
+  const rec = (over = {}) => item({ key: 'both-per-brand', choices: ['current', 'recommended', 'reject'], ...over });
+  assert.deepEqual(choicesOf(rec(), t).map((c) => [c.value, c.label]), [['current', 'Current'], ['recommended', 'Recommended'], ['reject', 'Reject']]);
+  assert.equal(choicesOf(rec(), t)[2].help, en['decisions.rejectRecommendedHelp']);
+  assert.ok(choicesOf(rec(), t).every((c) => c.help && !c.help.startsWith('decisions.')));
+  assert.deepEqual(choicesOf(item({ choices: ['accept', 'reject'] }), t).map((c) => c.value), ['accept', 'reject']);
+  assert.equal(choicesOf(item({ choices: ['accept', 'reject'] }), t)[1].help, en['decisions.rejectHelp']);
+  // An older server's GET (no choices) and unknown values fall back to Accept | Reject.
+  assert.deepEqual(choicesOf(item(), t).map((c) => c.value), ['accept', 'reject']);
+  assert.deepEqual(choicesOf(item({ choices: ['defer'] }), t).map((c) => c.value), ['accept', 'reject']);
+
+  assert.equal(selectedChoice(rec(), null, t), null); // awaiting: nothing blue
+  assert.equal(selectedChoice(rec(), 'reject', t), 'reject'); // a Reject being written
+  assert.equal(selectedChoice(rec({ current: row('recommended', '2026-10-31T18:00:00Z') }), null, t), 'recommended');
+  assert.equal(selectedChoice(rec({ current: row('accept', '2026-10-31T18:00:00Z') }), null, t), null); // not one of its choices
+
+  assert.deepEqual(decisionBody(rec(), 'current', 'x'), { hash: 'h1', decision: 'current', note: '' });
+  assert.deepEqual(decisionBody(rec(), 'recommended'), { hash: 'h1', decision: 'recommended', note: '' });
+
+  assert.equal(stateLine(rec({ current: row('current', '2026-10-31T18:00:00Z') }), t).text, 'Current kept by Kaylinn Brophy · 2026-10-31');
+  assert.equal(stateLine(rec({ current: row('recommended', '2026-10-31T18:00:00Z') }), t).text, 'Recommended chosen by Kaylinn Brophy · 2026-10-31');
+  assert.equal(historyOf(rec({ history: [row('current', '2026-10-31T18:00:00Z')] }), t).rows[0].text, 'Current kept by Kaylinn Brophy · 2026-10-31');
 });
 
 test('D5: header from the GET, columns by section, numbers, item replace', () => {

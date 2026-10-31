@@ -10,7 +10,8 @@
   <section class="brand-usage relative" data-cy="brand-usage">
     <b-loading v-if="loading" active :is-full-page="false" />
     <div class="table-container">
-      <table class="table is-hoverable is-narrow bu-table" data-cy="usage-table">
+      <table class="table is-hoverable is-narrow bu-table" data-cy="usage-table"
+        :style="{ '--bu-line-pad': `${linePadPx}px` }">
         <thead>
           <tr class="bu-groups">
             <th colspan="2" />
@@ -126,12 +127,11 @@
       {{ runTime ? $t('dashboard.usage.noteAsOf', { date: runTime }) : $t('dashboard.usage.computed') }}
     </p>
     <!-- 2026-10-30: the journey guide -- each series' steps as a timeline (the leaf hovers' D5
-         texts, brandUsage.mjs::seriesGuide), side by side with the divider at the table's
-         No-purchase | Post-purchase line (measured, brandUsage.mjs::guideSplitX); the Re-engagement
-         series (USAGE-REENGAGEMENT-SPEC D6) follows Post-purchase behind a second divider; stacked
-         when either side lacks the room. -->
-    <div ref="guide" class="bu-guide" :class="{ 'bu-guide-split': guideX !== null }"
-      :style="guideX !== null ? { '--bu-guide-x': `${guideX}px`, '--bu-guide-steps': guideSteps } : null"
+         texts, brandUsage.mjs::seriesGuide). 2026-10-31 polish: the three series side by side in
+         left-justified list-box columns (brandUsage.mjs::guideColumnsFit), no longer aligned to the
+         table's line; stacked when the width lacks the room. -->
+    <div ref="guide" class="bu-guide" :class="{ 'bu-guide-split': guideSplit }"
+      :style="guideSplit ? { '--bu-guide-steps': guideSteps } : null"
       data-cy="usage-guide">
       <div v-for="g in guide" :key="g.family" :class="['bu-guide-series', `bu-guide-${g.family}`]"
         :data-cy="`usage-guide-${g.family}`">
@@ -154,13 +154,13 @@
       </div>
     </div>
     <!-- Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D5) -- Marketing's decision record
-         on the lifecycle items, under the guide: the No-purchase and Post-purchase items in the
-         guide's two columns (the same measured split, stacked when the guide is), Both series full
-         width. The fork STORES these (D1); every rule is the server's -- who may decide
+         on the lifecycle items, under the guide's three columns: No-purchase and Post-purchase items
+         under their series, the Curated Sunset Policy under the Re-engagement series, Both series
+         across the first two (stacked when the guide is). The fork STORES these (D1); every rule is the server's -- who may decide
          (can_decide), the current state and voiding. Text only through mustache interpolation, never raw HTML.
          Pure half: usageDecisions.mjs. -->
-    <div v-if="decisionView" class="bu-decisions" :class="{ 'bu-decisions-split': guideX !== null }"
-      :style="guideX !== null ? { '--bu-guide-x': `${guideX}px` } : null" data-cy="usage-decisions">
+    <div v-if="decisionView" class="bu-decisions" :class="{ 'bu-decisions-split': guideSplit }"
+      data-cy="usage-decisions">
       <!-- 2026-10-30 polish: a centered title + the published line; the approver line at the bottom.
            The series columns carry no title (the guide above names them); Both series keeps its own. -->
       <div class="bu-decisions-head" data-cy="usage-decisions-head">
@@ -206,17 +206,23 @@
             </p>
             <p v-if="stateOf(it).note" class="bu-decision-note">{{ stateOf(it).note }}</p>
             <div v-if="canDecide" class="bu-decision-controls">
-              <template v-if="rejecting !== it.key">
-                <b-button size="is-small" type="is-success" :loading="saving === it.key" :disabled="saving !== null"
-                  :data-cy="`decision-accept-${it.key}`" @click="decide(it, 'accept')">
-                  {{ $t('decisions.accept') }}
-                </b-button>
-                <b-button size="is-small" :disabled="saving !== null" :data-cy="`decision-reject-${it.key}`"
-                  @click="startReject(it)">
-                  {{ $t('decisions.reject') }}
-                </b-button>
-              </template>
-              <template v-else>
+              <!-- 2026-10-31 polish: one small neutral segmented toggle -- Current | Recommended |
+                   Reject on an item with a "Recommended:" line, else Accept | Reject (the server's
+                   `choices`); nothing selected until pressed, the pressed (or stored) choice blue.
+                   Each button's hover says what it records (usageDecisions.mjs::choicesOf). -->
+              <b-field :key="`${it.key}-${selectedOf(it)}-${toggleRev}`" class="segmented bu-decision-toggle"
+                :data-cy="`decision-choices-${it.key}`">
+                <!-- A radio fires no input when pressed while already selected, so a stored Reject
+                     reopens its note through the native click (Buefy delivers a label click twice;
+                     the second is a no-op: the note is already open). -->
+                <b-radio-button v-for="ch in choicesOf(it)" :key="ch.value" :value="selectedOf(it)"
+                  :native-value="ch.value" :name="`decision-${it.key}`" size="is-small" type="is-primary"
+                  :title="ch.help" :disabled="saving !== null" :data-cy="`decision-${ch.value}-${it.key}`"
+                  @input="pick(it, ch.value)" @click.native="repress(it, ch.value)">
+                  {{ ch.label }}
+                </b-radio-button>
+              </b-field>
+              <template v-if="rejecting === it.key">
                 <b-input v-model="note" type="textarea" maxlength="2000" rows="2"
                   :placeholder="$t('decisions.notePlaceholder')" :data-cy="`decision-note-${it.key}`" />
                 <div class="buttons mt-1">
@@ -253,12 +259,13 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  SECTIONS, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideSplitX, headerLayout, latestAsOf,
+  SECTIONS, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad,
   linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
-  SECTION_SUNSET_POLICY, approverText, canSubmitReject, columnsOf, decisionBody, historyOf as decisionHistory, isStale,
-  itemNumber, publishedText, replaceItem, showControls, stateLine, tableOf, textLines,
+  SECTION_SUNSET_POLICY, approverText, canSubmitReject, choicesOf as decisionChoices, columnsOf, decisionBody,
+  historyOf as decisionHistory, isStale, itemNumber, publishedText, replaceItem, selectedChoice, showControls, stateLine,
+  tableOf, textLines,
 } from '../usageDecisions.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -274,12 +281,16 @@ export default Vue.extend({
       // BRAND-USAGE-SPEC D7 -- the sort, per browser session (sessionStorage key dashboard.usage, kept;
       // V2 D2: a fresh session is Score descending).
       usage: loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
-      // The journey guide's divider x (px from the guide's left edge), or null = stacked.
-      guideX: null,
+      // The journey guide side by side (true) or stacked (false); the decision record follows it.
+      guideSplit: false,
+      // The px padded on each side of each of the table's vertical lines (fitTable).
+      linePadPx: 0,
       // USAGE-DECISIONS-SPEC D5 -- GET /api/usage/decisions (null hides the section), the item
       // whose Reject note is open, its note, and the item being saved.
       decisionView: null,
       rejecting: null,
+      // Bumped after every save attempt so the toggles redraw from the stored state.
+      toggleRev: 0,
       note: '',
       saving: null,
     };
@@ -437,7 +448,36 @@ export default Vue.extend({
         this.$utils.toast(msg || String(err), 'is-danger');
       }).finally(() => {
         this.saving = null;
+        // Redraw the toggles from the stored state: a refused press never stays blue.
+        this.toggleRev += 1;
       });
+    },
+
+    // 2026-10-31 polish: a toggle press. Reject opens the note (Reject shows selected while it is
+    // written); every other choice (Accept / Current / Recommended) is recorded at once.
+    pick(it, value) {
+      if (value === 'reject') {
+        this.startReject(it);
+        return;
+      }
+      this.cancelReject();
+      this.decide(it, value);
+    },
+
+    // A press on the STORED Reject (the radio emits no input then) reopens its note, so a new reject
+    // row with a new note can still be recorded; any other re-press does nothing.
+    repress(it, value) {
+      if (value === 'reject' && this.saving === null && this.rejecting !== it.key && selectedChoice(it, null) === 'reject') {
+        this.startReject(it);
+      }
+    },
+
+    choicesOf(it) {
+      return decisionChoices(it, (k, p) => this.$t(k, p));
+    },
+
+    selectedOf(it) {
+      return selectedChoice(it, this.rejecting === it.key ? 'reject' : null, (k, p) => this.$t(k, p));
     },
 
     onSort(field) {
@@ -500,17 +540,34 @@ export default Vue.extend({
       return this.usage.sort.order === 'asc' ? '↑' : '↓';
     },
 
-    // The guide's divider follows the table's No-purchase | Post-purchase line: the Post-purchase
-    // group header's left edge, relative to the guide (the table container's scroll included).
+    // 2026-10-31 polish: the guide (and the decision record) go side by side, left-justified, when
+    // the guide's width holds every series column -- no longer aligned to the table's line.
     measureGuide() {
-      const th = this.$el && this.$el.querySelector('[data-cy="usage-group-postPurchase"]');
       const { guide } = this.$refs;
-      if (!th || !guide) {
-        this.guideX = null;
+      this.guideSplit = !!guide && guideColumnsFit(guide.clientWidth);
+      this.$nextTick(() => this.fitTable(0));
+    },
+
+    // 2026-10-31 polish: the table is widened to the guide's three columns by padding each side of
+    // its vertical lines (brandUsage.mjs::linePad, the --bu-line-pad of style.scss), so the page
+    // keeps one overall width; no pad while the guide is stacked. Re-applied until stable (at most
+    // three passes) -- a column a wider header sets absorbs part of a pad.
+    fitTable(pass) {
+      const { guide } = this.$refs;
+      const table = this.$el && this.$el.querySelector('table.bu-table');
+      const series = this.guideSplit && guide ? guide.querySelectorAll('.bu-guide-series') : [];
+      const row = table && table.querySelector('tbody tr');
+      if (!table || !row || series.length === 0) {
+        this.linePadPx = 0;
         return;
       }
-      const x = th.getBoundingClientRect().left - guide.getBoundingClientRect().left;
-      this.guideX = guideSplitX(x, guide.clientWidth);
+      const target = series[series.length - 1].getBoundingClientRect().right - series[0].getBoundingClientRect().left;
+      const lines = row.querySelectorAll('td.bu-start, td.bu-substart').length;
+      const next = linePad(target, table.getBoundingClientRect().width, this.linePadPx, lines);
+      if (next !== this.linePadPx && pass < 3) {
+        this.linePadPx = next;
+        this.$nextTick(() => this.fitTable(pass + 1));
+      }
     },
 
     queueMeasure() {
@@ -548,20 +605,12 @@ export default Vue.extend({
     if (this.guideObserver) {
       this.guideObserver.disconnect();
     }
-    const box = this.$el && this.$el.querySelector('.table-container');
-    if (box) {
-      box.removeEventListener('scroll', this.queueMeasure);
-    }
   },
 
   mounted() {
     this.afterListsLoaded(() => this.fetchRows());
     this.fetchDecisions();
     window.addEventListener('resize', this.queueMeasure);
-    const box = this.$el.querySelector('.table-container');
-    if (box) {
-      box.addEventListener('scroll', this.queueMeasure, { passive: true });
-    }
     // A pane shown after mount (a hidden tab) or a resized table re-measures too.
     if (typeof ResizeObserver !== 'undefined') {
       this.guideObserver = new ResizeObserver(() => this.queueMeasure());

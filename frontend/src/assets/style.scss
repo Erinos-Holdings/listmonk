@@ -1117,6 +1117,17 @@ section.dashboard (which reopens after them). */
     th.bu-start, td.bu-start {
       border-left: 1px solid #dbdee2;
     }
+    /* 2026-10-31 polish: the table widened to the guide's three columns -- --bu-line-pad (px, set by
+    BrandUsage.vue::fitTable via brandUsage.mjs::linePad) on BOTH sides of every vertical line, in
+    the body cells (the header columns follow the body's widths). */
+    table.bu-table {
+      td.bu-start, td.bu-substart {
+        padding-left: calc(0.25em + var(--bu-line-pad, 0px));
+      }
+      td:has(+ td.bu-start), td:has(+ td.bu-substart) {
+        padding-right: calc(0.25em + var(--bu-line-pad, 0px));
+      }
+    }
     /* DASHBOARDS-POLISH3-SPEC D7 (user, 2026-10-25): the sorted column reads unmistakably at a
     glance -- still NEUTRAL, the wash roughly doubled (0.06 -> 0.12) and the sorted header cell a
     step darker (0.18). The one value pair; the Brand Matrix's bm-sorted is untouched. */
@@ -1231,9 +1242,9 @@ section.dashboard (which reopens after them). */
   }
   /* 2026-10-30: the journey guide below the Usage table -- each series a timeline of day badges on
   a connecting rail, NEUTRAL like the table (the stoplight circles stay the pane's only chroma).
-  Split: two grid columns meeting at --bu-guide-x (measured: the table's No-purchase |
-  Post-purchase line), the divider drawn there; the Welcome list hugs the line from the left, the
-  New Customer list from the right. Stacked (no measure, or a narrow window): one column. */
+  Split (2026-10-31 polish, three series): three left-justified columns of the list box (<= 32rem
+  each), a divider before the second and third -- no longer aligned to the table's line.
+  guideColumnsFit decides it from the width; stacked (a narrow window): one column. */
   .bu-guide {
     position: relative;
     margin-top: 1.5rem;
@@ -1241,31 +1252,17 @@ section.dashboard (which reopens after them). */
     border-top: 1px solid #e8eaed;
     display: grid;
     gap: 2rem;
-    /* USAGE-REENGAGEMENT-SPEC D6: a third column -- Post-purchase still hugs the measured divider
-    from the right, and the Re-engagement series follows it in its own <= 32rem column behind a
-    second divider (its border-left). The two right columns share the right side equally up to 32rem
-    each; guideSplitX requires 2 x GUIDE_MIN_COLUMN there, else the whole guide stacks. */
     &.bu-guide-split {
-      grid-template-columns: var(--bu-guide-x) minmax(0, 32rem) minmax(0, 32rem);
+      grid-template-columns: repeat(3, minmax(0, 32rem));
+      justify-content: start;
       gap: 0;
-      &::before {
-        content: '';
-        position: absolute;
-        top: 1.25rem;
-        bottom: 0;
-        left: var(--bu-guide-x);
-        border-left: 1px solid #dbdee2;
+      .bu-guide-series {
+        padding: 0 2rem;
       }
       .bu-guide-series:first-child {
-        justify-self: end;
-        padding-right: 2rem;
+        padding-left: 0;
       }
-      .bu-guide-postPurchase {
-        padding-left: 2rem;
-        padding-right: 2rem;
-      }
-      .bu-guide-reengagement {
-        padding-left: 2rem;
+      .bu-guide-series + .bu-guide-series {
         border-left: 1px solid #dbdee2;
       }
       /* Row-for-row alignment: ONE grid of a heading row + one row per step, each series and its
@@ -1372,12 +1369,10 @@ section.dashboard (which reopens after them). */
     color: $grey-dark;
   }
   /* Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D5) -- the decision record under the
-  guide: the header and Both series span the width; the two series sit in the guide's columns,
-  split at the same measured --bu-guide-x (stacked when the guide is). Neutral like the guide. */
-  /* 2026-10-30 polish: the guide's margins -- each series column is the guide list's box (32rem,
-  hugging the divider from its side), and the title, Both series and the approver line span exactly
-  from the No-purchase list's left edge to the Post-purchase list's right edge (--bu-guide-x ±
-  32rem, clipped to the pane), so nothing runs to the page margins. Stacked: one 32rem column. */
+  guide, neutral like the guide. 2026-10-31 polish: the guide's three columns -- No-purchase items under the No-purchase series,
+  Post-purchase items under Post-purchase, the Curated Sunset Policy under the Re-engagement series
+  (running beside Both series, which spans the first two columns); the title and the approver line
+  span all three. Stacked: one 32rem column, in file order. */
   .bu-decisions {
     margin-top: 1.5rem;
     padding-top: 1.25rem;
@@ -1391,30 +1386,41 @@ section.dashboard (which reopens after them). */
       width: 100%;
     }
     &.bu-decisions-split {
-      grid-template-columns: var(--bu-guide-x) minmax(0, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 32rem));
+      justify-content: start;
       column-gap: 0;
+      .bu-decisions-col {
+        padding: 0 2rem;
+      }
       .bu-decisions-no-purchase {
-        justify-self: end;
-        padding-right: 2rem;
-        border-right: 1px solid #dbdee2;
+        grid-column: 1;
+        grid-row: 2;
+        padding-left: 0;
       }
       .bu-decisions-post-purchase {
-        padding-left: 2rem;
+        grid-column: 2;
+        grid-row: 2;
+        border-left: 1px solid #dbdee2;
+      }
+      .bu-decisions-both {
+        grid-column: 1 / 3;
+        grid-row: 3;
+        padding-left: 0;
+        max-width: none;
+      }
+      .bu-decisions-sunset-policy {
+        grid-column: 3;
+        grid-row: 2 / span 2;
+        border-left: 1px solid #dbdee2;
       }
       .bu-decisions-head,
-      .bu-decisions-both,
-      .bu-decisions-sunset-policy,
       .bu-decisions-approver {
-        margin-left: #{'max(0px, calc(var(--bu-guide-x) - 32rem))'};
-        width: #{'calc(min(var(--bu-guide-x), 32rem) + 32rem)'};
-        max-width: #{'calc(100% - max(0px, calc(var(--bu-guide-x) - 32rem)))'};
+        grid-column: 1 / -1;
+        max-width: none;
       }
-    }
-    .bu-decisions-head,
-    .bu-decisions-both,
-    .bu-decisions-sunset-policy,
-    .bu-decisions-approver {
-      grid-column: 1 / -1;
+      .bu-decisions-approver {
+        grid-row: 4;
+      }
     }
   }
   /* USAGE-REENGAGEMENT-SPEC D9/D10: the Curated Sunset Policy block -- Both series' box, the grey
@@ -1422,12 +1428,44 @@ section.dashboard (which reopens after them). */
   .bu-decisions-planned {
     color: $grey;
   }
+  /* 2026-10-31 polish: a readable table -- a light cool-grey body, a shaded header row, and darker
+  slate rules (outer ring and every cell) so the grid is visible; rounded outer corners. Neutral like
+  the rest of the pane (the stoplight circles stay its only chroma). */
   .bu-decisions-table {
     margin-top: 0.5rem;
     font-size: 0.875rem;
     .table {
-      margin-bottom: 0.25rem;
-      background: transparent;
+      margin-bottom: 0.35rem;
+      width: 100%;
+      background: #f7f9fb;
+      border: 1px solid #8a96a3;
+      border-collapse: separate;
+      border-spacing: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      th, td {
+        padding: 0.4rem 0.65rem;
+        border: 0;
+        border-bottom: 1px solid #b4bdc7;
+        vertical-align: top;
+        color: #363636;
+      }
+      th + th, td + td {
+        border-left: 1px solid #b4bdc7;
+      }
+      thead th {
+        background: #e2e7ed;
+        border-bottom: 1px solid #8a96a3;
+        font-weight: 700;
+        text-align: left;
+      }
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      tbody td:first-child {
+        white-space: nowrap;
+        font-weight: 600;
+      }
     }
   }
   .bu-decisions-table-note {
@@ -1496,6 +1534,16 @@ section.dashboard (which reopens after them). */
     margin-top: 0.4rem;
     .button + .button {
       margin-left: 0.4rem;
+    }
+    /* 2026-10-31 polish: the decision toggle -- the shared .segmented control (neutral grey track
+    and ring, never the global blue ring; the pressed/stored choice the primary pill), at the old
+    is-small button size, smaller than the navbar's global toggle. */
+    .field.segmented.bu-decision-toggle {
+      margin-bottom: 0.4rem;
+      > .field-body > .field.has-addons .b-radio.radio.button {
+        padding: 2px 10px;
+        font-size: 0.75rem;
+      }
     }
   }
   .bu-decision-history {

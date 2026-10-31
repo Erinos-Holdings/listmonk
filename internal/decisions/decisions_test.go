@@ -153,6 +153,43 @@ func TestItemHashesPinned(t *testing.T) {
 	}
 }
 
+// 2026-10-31 polish: Choices -- Current | Recommended | Reject exactly on the items whose text has a
+// "Recommended:" line after the first; Accept | Reject on every other. The six shipped items with a
+// Recommended option are pinned, so a text edit that adds or drops one is a deliberate change.
+func TestChoices(t *testing.T) {
+	if HasRecommended("Recommended: lead line only") {
+		t.Fatal("a first-line Recommended: is the lead, not an option")
+	}
+	if !HasRecommended("Lead.\nRecommended:\n1. x") || HasRecommended("Lead.\nNot Recommended: x") {
+		t.Fatal("HasRecommended reads a later line's prefix")
+	}
+	d, err := Lifecycle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var three []string
+	for _, it := range d.Items {
+		c := Choices(it)
+		switch len(c) {
+		case 3:
+			if c[0] != Current || c[1] != Recommended || c[2] != Reject {
+				t.Fatalf("%s: %v", it.Key, c)
+			}
+			three = append(three, it.Key)
+		case 2:
+			if c[0] != Accept || c[1] != Reject {
+				t.Fatalf("%s: %v", it.Key, c)
+			}
+		default:
+			t.Fatalf("%s: %v", it.Key, c)
+		}
+	}
+	want := []string{"np-same-day-double", "np-launch-overlap", "np-ruze-15d", "pp-delivery-clock", "both-multi-brand", "both-per-brand"}
+	if strings.Join(three, ",") != strings.Join(want, ",") {
+		t.Fatalf("items with three choices %v, want %v", three, want)
+	}
+}
+
 func TestParseRefusesBadFiles(t *testing.T) {
 	for name, src := range map[string]string{
 		"duplicate key":   `{"items":[{"key":"a","section":"both","since":"2026-10-30","text":"x"},{"key":"a","section":"both","since":"2026-10-30","text":"y"}]}`,

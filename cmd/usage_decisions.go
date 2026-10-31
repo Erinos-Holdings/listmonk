@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -99,8 +100,8 @@ func (a *App) GetUsageDecisions(c echo.Context) error {
 
 // PostUsageDecision appends one decision. Body: {hash, decision, note}. Every refusal writes
 // nothing (D4): not a decider (403), an unknown key (404), a hash other than the current one (409,
-// reload), a decision other than accept/reject, a reject with a blank note, a note over 2,000
-// characters, or an accept carrying a note (400).
+// reload), a decision outside the item's choices (decisions.Choices), a reject with a blank note,
+// a note over 2,000 characters, or an accept / current / recommended carrying a note (400).
 func (a *App) PostUsageDecision(c echo.Context) error {
 	u := auth.GetUser(c)
 	if !decideGate(u) {
@@ -133,8 +134,13 @@ func (a *App) PostUsageDecision(c echo.Context) error {
 	}
 	note := strings.TrimSpace(raw)
 	var stored *string
+	// 2026-10-31 polish: the decision must be one of THIS item's choices (decisions.Choices --
+	// Current | Recommended | Reject on an item with a "Recommended:" line, else Accept | Reject).
+	if !slices.Contains(decisions.Choices(it), req.Decision) {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("decisions.badDecision"))
+	}
 	switch req.Decision {
-	case decisions.Accept:
+	case decisions.Accept, decisions.Current, decisions.Recommended:
 		if raw != "" {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("decisions.acceptNote"))
 		}
@@ -213,14 +219,20 @@ func cutRunes(s string, n int) string {
 	return string([]rune(s)[:n])
 }
 
-// decisionNoticeText is D6's text: `Lifecycle decision: <name> <accepted|rejected> <#n | Both
+// decisionNoticeText is D6's text: `Lifecycle decision: <name> <accepted|rejected|kept current
+// on|chose recommended on> <#n | Both
 // series> "<first line of the item, cut at 120 runes>"`, then `\nNote: <note>` on a reject, then
 // `\n<root>/admin/brands`. The name, item line and note are escaped (the cut first, so an entity is
 // never split).
 func decisionNoticeText(name, decision string, it decisions.Item, note, root string) string {
 	verb := "accepted"
-	if decision == decisions.Reject {
+	switch decision {
+	case decisions.Reject:
 		verb = "rejected"
+	case decisions.Current:
+		verb = "kept current on"
+	case decisions.Recommended:
+		verb = "chose recommended on"
 	}
 	where := "Both series"
 	if it.N != nil {

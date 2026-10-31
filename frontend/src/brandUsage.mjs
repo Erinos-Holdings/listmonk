@@ -86,19 +86,30 @@ export function seriesGuide(t = (k) => k) {
   }));
 }
 
-// The narrowest a guide column may be beside the divider; below it the guide stacks.
+// The narrowest a guide column may be; below it the guide stacks.
 export const GUIDE_MIN_COLUMN = 300;
 
-// guideSplitX decides the guide's layout from the measured divider x (the Post-purchase group
-// header's left edge, px from the guide's left) and the guide's width: the rounded x when the left
-// side keeps GUIDE_MIN_COLUMN and the right side keeps one GUIDE_MIN_COLUMN per series right of the
-// divider (USAGE-REENGAGEMENT-SPEC D6: Post-purchase and Re-engagement, so 2 x min), else null
-// (stacked) -- a narrow window, or a table scrolled so far that the line sits off to one side.
-export function guideSplitX(x, width, min = GUIDE_MIN_COLUMN, rightColumns = GUIDE_SERIES.length - 1) {
-  if (typeof x !== 'number' || !Number.isFinite(x) || typeof width !== 'number' || !Number.isFinite(width)) {
-    return null;
+// guideColumnsFit (2026-10-31 polish) decides the guide's layout from its measured width: side by
+// side -- one left-justified column per series, no longer aligned to the table's No-purchase |
+// Post-purchase line -- when every series keeps GUIDE_MIN_COLUMN, else stacked (false). The
+// decision record follows the same answer.
+export function guideColumnsFit(width, min = GUIDE_MIN_COLUMN, columns = GUIDE_SERIES.length) {
+  return typeof width === 'number' && Number.isFinite(width) && width >= min * columns;
+}
+
+// linePad (2026-10-31 polish) is the extra padding, in whole px, on EACH side of each of the table's
+// `lines` vertical lines that widens it to `target` (the guide's three columns), so the page keeps
+// one overall width: the table's width without the current pad (`width` measured with `pad` applied
+// -- each line adds 2 x pad) is spread evenly over 2 x lines sides. 0 when the table is already as
+// wide, there are no lines, or an input is not a finite number. Re-applied until stable, since a
+// column whose width a wider header sets absorbs part of a pad.
+export function linePad(target, width, pad, lines) {
+  const ok = (v) => typeof v === 'number' && Number.isFinite(v);
+  if (!ok(target) || !ok(width) || !ok(pad) || !Number.isInteger(lines) || lines < 1) {
+    return 0;
   }
-  return x >= min && width - x >= min * rightColumns ? Math.round(x) : null;
+  const natural = width - 2 * lines * pad;
+  return Math.max(0, Math.floor((target - natural) / (2 * lines)));
 }
 
 // DASHBOARDS-POLISH3-SPEC D5: the Languages section's Skipped leaves (the fork's I18N languages,
@@ -413,7 +424,8 @@ function reCircle(st) {
 }
 
 // D3: a Re-engagement circle's accessible name -- green "{n} running", amber "needs attention", red
-// "no re-engagement list" (its own words; the series circles' circleName means something else).
+// "no automation" (no evergreen on the queue list, or no list -- 2026-10-31 polish; its own words,
+// the series circles' circleName means something else).
 export function reCircleName(color, n, t = (k) => k) {
   if (color === 'green') {
     return t('dashboard.usage.reCircleRunning', { n });
@@ -591,17 +603,30 @@ function lastIdsOf(u) {
 // ZMA-dimmed or `—` cell.
 export function circleLink(row, field, color) {
   const u = row && row.usage;
-  if (!u || (color !== 'green' && color !== 'amber') || (row.zma && ZMA_DIMMED.includes(field))) {
+  if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
   }
-  // USAGE-REENGAGEMENT-SPEC D6: a Re-engagement leaf's stored circle (green or amber) opens the
-  // queue list's automations -- { list_id: [listId], evergreen: 'true' }; a circle of another color
-  // than the stored one, a red, or a step with no list never links.
+  // USAGE-REENGAGEMENT-SPEC D6, 2026-10-31 polish: EVERY Re-engagement circle links to its campaigns.
+  // Green -- the running automations on the queue list; amber -- every automation there (none
+  // running, or a language uncovered); red -- every campaign on the queue list (no automation yet,
+  // so the asks sent as broadcasts show), { list_id, evergreen: 'all' }. A circle of another color
+  // than the stored one, or a step with no list, never links.
   const re = reengagementLeafOf(field);
   if (re !== null) {
     const st = reStepAt(u, re.days);
     const c = reCircle(st);
-    return c && c.color === color && posInt(st.listId) ? { list_id: [String(st.listId)], evergreen: 'true' } : null;
+    if (!c || c.color !== color || !posInt(st.listId)) {
+      return null;
+    }
+    const camps = Array.isArray(st.campaigns) ? st.campaigns.filter(isObj) : [];
+    const ids = camps.filter((x) => color !== 'green' || x.status === 'running').map((x) => x.id).filter(posInt);
+    if (color !== 'red' && ids.length) {
+      return { id: [...new Set(ids)].sort((a, b) => a - b).map(String), evergreen: 'all' };
+    }
+    return { list_id: [String(st.listId)], evergreen: color === 'red' ? 'all' : 'true' };
+  }
+  if (color !== 'green' && color !== 'amber') {
+    return null;
   }
   const green = color === 'green';
   const leaf = seriesLeafOf(field);

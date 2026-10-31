@@ -103,6 +103,8 @@ var migList = []migFunc{
 	{"v6.2.28", migrations.V6_2_28},
 	// Fork migration (erinos): usage decisions -- the append-only usage_decisions table (Marketing's lifecycle-series decision record on Brands > Usage) with its UPDATE/DELETE/TRUNCATE-refusing trigger, and brands:decide granted to role 1 (USAGE-DECISIONS-SPEC) — see internal/migrations/v6.2.29.go.
 	{"v6.2.29", migrations.V6_2_29},
+	// Fork migration (erinos): usage decisions -- the decision CHECK widened to accept/reject/current/recommended (Current | Recommended | Reject on an item with a "Recommended:" line, 2026-10-31 polish) — see internal/migrations/v6.2.30.go.
+	{"v6.2.30", migrations.V6_2_30},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

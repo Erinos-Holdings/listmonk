@@ -45,7 +45,8 @@ func TestUsageDecisionsMigration_V6_2_29(t *testing.T) {
 	for _, want := range []string{
 		// pg_get_triggerdef renders events in Postgres's canonical order (DELETE before UPDATE).
 		"BEFORE DELETE OR UPDATE OR TRUNCATE ON public.usage_decisions FOR EACH STATEMENT",
-		"CHECK ((decision = ANY (ARRAY['accept'::text, 'reject'::text])))",
+		// schema.sql carries v6.2.30's wider CHECK; v6.2.29 + v6.2.30 reach it (below).
+		"CHECK ((decision = ANY (ARRAY['accept'::text, 'reject'::text, 'current'::text, 'recommended'::text])))",
 		"text_hash character NO 64",
 		"note text YES",
 	} {
@@ -57,14 +58,17 @@ func TestUsageDecisionsMigration_V6_2_29(t *testing.T) {
 		t.Fatalf("usage_decisions has a foreign key (D4: none): %s", fresh)
 	}
 
-	// A v6.2.28 database: no table, no function. The migration creates the same shape, and is
-	// idempotent (run twice).
+	// A v6.2.28 database: no table, no function. The migration creates the same shape (with
+	// v6.2.30's wider CHECK applied after it, as an upgrade runs them), and is idempotent (run twice).
 	h.db.MustExec(`DROP TABLE usage_decisions`)
 	h.db.MustExec(`DROP FUNCTION usage_decisions_append_only()`)
 	for i := 0; i < 2; i++ {
 		if err := V6_2_29(h.db, nil, nil, lo); err != nil {
 			t.Fatalf("V6_2_29 run %d: %v", i+1, err)
 		}
+	}
+	if err := V6_2_30(h.db, nil, nil, lo); err != nil {
+		t.Fatal(err)
 	}
 	if got := h.decisionsShape(); got != fresh {
 		t.Fatalf("migration shape differs from schema.sql\n migration %s\n schema    %s", got, fresh)

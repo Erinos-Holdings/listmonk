@@ -96,10 +96,45 @@ export function itemNumber(item) {
   return isObj(item) && Number.isInteger(item.n) ? String(item.n) : '';
 }
 
-// One decision row's line: "Accepted by <name> · <date>" / "Rejected by <name> · <date>".
+// The line key of each stored decision (2026-10-31 polish adds current / recommended).
+const LINE_KEYS = Object.freeze({
+  accept: 'decisions.accepted',
+  reject: 'decisions.rejected',
+  current: 'decisions.keptCurrent',
+  recommended: 'decisions.choseRecommended',
+});
+
+// One decision row's line: "Accepted by <name> · <date>", "Rejected by …", "Current kept by …",
+// "Recommended chosen by …".
 function decisionLine(row, t) {
-  const key = row.decision === 'reject' ? 'decisions.rejected' : 'decisions.accepted';
+  const key = LINE_KEYS[row.decision] || LINE_KEYS.accept;
   return t(key, { name: String(row.user_name || ''), date: denverDay(row.created_at) });
+}
+
+// choicesOf (2026-10-31 polish) is the item's toggle buttons, in order, from the server's
+// `choices` (decisions.Choices: Current | Recommended | Reject on an item with a "Recommended:"
+// line, else Accept | Reject; the page never re-derives the rule) -- each { value, label, help },
+// the help a hover saying what the choice records. A GET without `choices` (an older server)
+// falls back to Accept | Reject.
+export function choicesOf(item, t = (k) => k) {
+  const raw = isObj(item) && Array.isArray(item.choices) ? item.choices.filter((v) => Object.prototype.hasOwnProperty.call(LINE_KEYS, v)) : [];
+  const values = raw.length ? raw : ['accept', 'reject'];
+  const withRecommended = values.includes('recommended');
+  return values.map((value) => ({
+    value,
+    label: t(`decisions.${value}`),
+    help: t(value === 'reject' && withRecommended ? 'decisions.rejectRecommendedHelp' : `decisions.${value}Help`),
+  }));
+}
+
+// The toggle shown selected (blue): a Reject being written (`pending`, its note open), else the
+// stored decision when it is one of the item's choices; null (nothing selected) while awaiting.
+export function selectedChoice(item, pending = null, t = (k) => k) {
+  if (pending === 'reject') {
+    return 'reject';
+  }
+  const cur = isObj(item) && isObj(item.current) ? item.current.decision : null;
+  return choicesOf(item, t).some((c) => c.value === cur) ? cur : null;
 }
 
 // The bullet's ONE state line: decided -> { kind: 'accepted' | 'rejected', text, note } (the note
@@ -132,7 +167,7 @@ export function historyOf(item, t = (k) => k) {
   };
 }
 
-// Accept / Reject show only when the server says this user may decide.
+// The decision toggles show only when the server says this user may decide.
 export function showControls(view) {
   return isObj(view) && view.can_decide === true;
 }
@@ -142,12 +177,13 @@ export function canSubmitReject(note) {
   return typeof note === 'string' && note.trim() !== '';
 }
 
-// The POST body for a decision: an accept carries no note; a reject carries the note as typed (the
-// server trims and re-checks it).
+// The POST body for a decision: a reject carries the note as typed (the server trims and re-checks
+// it); every other choice (accept / current / recommended) carries no note. The server refuses a
+// decision outside the item's choices.
 export function decisionBody(item, decision, note) {
   return decision === 'reject'
     ? { hash: item.hash, decision, note: String(note || '') }
-    : { hash: item.hash, decision: 'accept', note: '' };
+    : { hash: item.hash, decision: String(decision), note: '' };
 }
 
 // A 409 is the stale-text refusal: show its message and reload the decisions.

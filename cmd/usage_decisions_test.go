@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -208,6 +209,8 @@ func TestPostRefusals(t *testing.T) {
 		return string(b)
 	}
 	long := strings.Repeat("é", 2001)
+	rec, _ := a.decisionDoc.Find("both-per-brand")
+	recHash := decisions.Hash(rec.Text)
 	cases := []struct {
 		name string
 		u    auth.User
@@ -231,6 +234,13 @@ func TestPostRefusals(t *testing.T) {
 		{"accept with a note", approver, "np-entry", body(hash, "accept", "fine"), 400, a.i18n.T("decisions.acceptNote")},
 		{"note over 2,000 characters", approver, "np-entry", body(hash, "reject", long), 400, a.i18n.T("decisions.noteTooLong")},
 		{"malformed body", approver, "np-entry", `{`, 400, ""},
+		// 2026-10-31 polish: a decision outside the item's choices (decisions.Choices). np-entry has
+		// no "Recommended:" line (Accept | Reject); both-per-brand has one (Current | Recommended | Reject).
+		{"current on an item without a Recommended", approver, "np-entry", body(hash, "current", nil), 400, a.i18n.T("decisions.badDecision")},
+		{"recommended on an item without a Recommended", approver, "np-entry", body(hash, "recommended", nil), 400, a.i18n.T("decisions.badDecision")},
+		{"accept on an item with a Recommended", approver, "both-per-brand", body(recHash, "accept", nil), 400, a.i18n.T("decisions.badDecision")},
+		{"recommended with a note", approver, "both-per-brand", body(recHash, "recommended", "yes"), 400, a.i18n.T("decisions.acceptNote")},
+		{"current with a note", approver, "both-per-brand", body(recHash, "current", "yes"), 400, a.i18n.T("decisions.acceptNote")},
 	}
 	for _, c := range cases {
 		code, msg := callDecisions(t, a, c.u, http.MethodPost, c.key, c.body)
@@ -274,6 +284,36 @@ func TestPostRefusals(t *testing.T) {
 	}
 	if store.rows[1].Note != nil {
 		t.Fatal("an accept stored a note")
+	}
+	if !slices.Equal(resp.Data.Choices, []string{decisions.Accept, decisions.Reject}) {
+		t.Fatalf("np-entry choices %v", resp.Data.Choices)
+	}
+
+	// Current and Recommended on an item with a "Recommended:" line: each appends one row, no note.
+	for i, d := range []string{decisions.Current, decisions.Recommended} {
+		code, out = callDecisions(t, a, approver, http.MethodPost, "both-per-brand", body(recHash, d, nil))
+		if code != 200 || store.inserts != 3+i || store.rows[2+i].Decision != d || store.rows[2+i].Note != nil {
+			t.Fatalf("%s: %d %s (inserts %d)", d, code, out, store.inserts)
+		}
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(resp.Data.Choices, []string{decisions.Current, decisions.Recommended, decisions.Reject}) || resp.Data.Current.Decision != decisions.Recommended {
+		t.Fatalf("both-per-brand response: %+v", resp.Data)
+	}
+}
+
+// 2026-10-31 polish: the notice's verb for the two new decisions; neither carries a Note line.
+func TestSlackNoticeChoiceVerbs(t *testing.T) {
+	n := 13
+	it := decisions.Item{Key: "both-per-brand", N: &n, Text: "Frequency Risk.\nRecommended: x"}
+	for d, verb := range map[string]string{decisions.Current: "kept current on", decisions.Recommended: "chose recommended on"} {
+		got := decisionNoticeText("K", d, it, "", "https://email.example")
+		want := `Lifecycle decision: K ` + verb + ` #13 "Frequency Risk."` + "\nhttps://email.example/admin/brands"
+		if got != want {
+			t.Errorf("%s\n got %q\nwant %q", d, got, want)
+		}
 	}
 }
 

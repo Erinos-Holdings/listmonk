@@ -8,7 +8,7 @@ import {
   boolCell, broadcastTip, cell, cellBadges, cellLink, circlesOf, circleWords, clickSort, columnMeta, defaultOrder,
   headerLayout, latestAsOf, loadState, mountainRunTime, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
-  GUIDE_MIN_COLUMN, GUIDE_SERIES, guideSplitX, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
+  GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
   REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
@@ -963,17 +963,25 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   assert.equal(typeof en['dashboard.usage.guideDay'], 'string');
 });
 
-test('guide: guideSplitX -- the measured line when the left keeps the minimum and the right 2 x min, else stacked (null)', () => {
-  assert.equal(guideSplitX(640.4, 1400), 640);
-  // USAGE-REENGAGEMENT-SPEC F3: the right side holds two columns (Post-purchase, Re-engagement).
-  assert.equal(guideSplitX(GUIDE_MIN_COLUMN, GUIDE_MIN_COLUMN * 3), GUIDE_MIN_COLUMN);
-  assert.equal(guideSplitX(GUIDE_MIN_COLUMN, GUIDE_MIN_COLUMN * 3 - 1), null); // right side under 2 x min
-  assert.equal(guideSplitX(GUIDE_MIN_COLUMN, GUIDE_MIN_COLUMN * 2), null); // one column's room is not enough
-  assert.equal(guideSplitX(GUIDE_MIN_COLUMN - 1, 1400), null); // too little room on the left
-  assert.equal(guideSplitX(1200, 1400), null); // too little room on the right
-  assert.equal(guideSplitX(-50, 1400), null); // the table scrolled the line off to the left
-  assert.equal(guideSplitX(NaN, 1400), null);
-  assert.equal(guideSplitX(600, undefined), null);
+test('guide: guideColumnsFit -- side by side when every series keeps the minimum, else stacked', () => {
+  // 2026-10-31 polish: three left-justified columns, no measured line.
+  assert.equal(guideColumnsFit(1400), true);
+  assert.equal(guideColumnsFit(GUIDE_MIN_COLUMN * 3), true);
+  assert.equal(guideColumnsFit(GUIDE_MIN_COLUMN * 3 - 1), false);
+  assert.equal(guideColumnsFit(GUIDE_MIN_COLUMN * 2, GUIDE_MIN_COLUMN, 2), true);
+  assert.equal(guideColumnsFit(NaN), false);
+  assert.equal(guideColumnsFit(undefined), false);
+});
+
+test('table: linePad -- the per-side pad that widens the table to the guide, from its unpadded width', () => {
+  assert.equal(linePad(1536, 1136, 0, 5), 40); // 400 px over 10 sides
+  assert.equal(linePad(1536, 1536, 40, 5), 40); // already fitted: stable
+  assert.equal(linePad(1536, 1500, 40, 5), 43); // a header absorbed part of the pad: grows
+  assert.equal(linePad(1536, 1137, 0, 5), 39); // floored, never over the target
+  assert.equal(linePad(1000, 1200, 0, 5), 0); // already wider: no pad
+  assert.equal(linePad(1536, 1136, 0, 0), 0); // no lines
+  assert.equal(linePad(NaN, 1136, 0, 5), 0);
+  assert.equal(linePad(1536, undefined, 0, 5), 0);
 });
 
 // USAGE-REENGAGEMENT-SPEC F2 -- the Re-engagement leaves: the stored circle verbatim, the tooltip
@@ -1004,12 +1012,25 @@ test('F2: Re-engagement cells render the stored circle, tooltip, link and sort; 
   assert.deepEqual(cell(idle0, 'reengagement:180', t).circles, [{ color: 'amber', n: 0, name: 'dashboard.usage.reCircleAttention' }]);
   assert.deepEqual(cell(idle0, 'reengagement:270', t).circles, [{ color: 'red', n: 0, name: 'dashboard.usage.reCircleNone' }]);
   assert.equal(cell(idle0, 'reengagement:270', t).tooltip, 'series.reengagementDay270\ndashboard.usage.reCircleNone'); // waiting null: no line
-  // circleLink: the stored green/amber opens the queue list's automations; red, or another color, never.
+  // circleLink (2026-10-31 polish): every stored circle links to its campaigns -- green the running
+  // automations, amber every automation, red every campaign on the queue list; with no stored
+  // campaign ids, the list's automations. Another color than the stored one, or no list, never.
   assert.deepEqual(circleLink(r, 'reengagement:180', 'amber'), { list_id: ['49'], evergreen: 'true' });
   assert.equal(circleLink(r, 'reengagement:180', 'green'), null);
   assert.deepEqual(circleLink(r, 'reengagement:270', 'green'), { list_id: ['50'], evergreen: 'true' });
   assert.deepEqual(circleLink(idle0, 'reengagement:180', 'amber'), { list_id: ['49'], evergreen: 'true' });
-  assert.equal(circleLink(idle0, 'reengagement:270', 'red'), null);
+  assert.equal(circleLink(idle0, 'reengagement:270', 'red'), null); // red with no list
+  const camps = [{ id: 91, status: 'paused', lang: null }, { id: 90, status: 'running', lang: 'en' }];
+  const linkSteps = [
+    step(180, 1, 49, 'none', 'red', 0),
+    step(270, 2, 50, 'active', 'green', 1, { campaigns: camps }),
+  ];
+  const [lk] = shapeRows([{ brand: 'y', usage: usage({ reengagement: { steps: linkSteps } }) }]);
+  assert.deepEqual(circleLink(lk, 'reengagement:180', 'red'), { list_id: ['49'], evergreen: 'all' });
+  assert.deepEqual(circleLink(lk, 'reengagement:270', 'green'), { id: ['90'], evergreen: 'all' });
+  const amberCamps = [step(180, 1, 49, 'idle', 'amber', 0, { campaigns: camps }), step(270, 2, 50, 'none', 'red', 0)];
+  const [am] = shapeRows([{ brand: 'z', usage: usage({ reengagement: { steps: amberCamps } }) }]);
+  assert.deepEqual(circleLink(am, 'reengagement:180', 'amber'), { id: ['90', '91'], evergreen: 'all' });
   // sortValue by the stored state's rank (active 0, idle 1, none 2).
   assert.equal(sortValue(r, 'reengagement:270'), 0);
   assert.equal(sortValue(r, 'reengagement:180'), 1);

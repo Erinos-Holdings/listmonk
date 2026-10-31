@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -32,11 +33,38 @@ const (
 	SectionSunsetPolicy = "sunset-policy"
 )
 
-// The two decisions a row may carry.
+// The decisions a row may carry. An item with a "Recommended:" line (HasRecommended) is decided
+// Current | Recommended | Reject; every other item Accept | Reject (Choices; 2026-10-31 polish,
+// migration v6.2.30).
 const (
-	Accept = "accept"
-	Reject = "reject"
+	Accept      = "accept"
+	Reject      = "reject"
+	Current     = "current"
+	Recommended = "recommended"
 )
+
+// RecommendedLabel opens the line that offers an item's recommended option.
+const RecommendedLabel = "Recommended:"
+
+// HasRecommended reports whether an item's text offers a recommended option: a line (after the
+// first) that starts with RecommendedLabel. The first line is the item's lead, never an option.
+func HasRecommended(text string) bool {
+	lines := strings.Split(text, "\n")
+	for _, l := range lines[1:] {
+		if strings.HasPrefix(l, RecommendedLabel) {
+			return true
+		}
+	}
+	return false
+}
+
+// Choices is the ONE rule for which decisions an item takes, in button order.
+func Choices(it Item) []string {
+	if HasRecommended(it.Text) {
+		return []string{Current, Recommended, Reject}
+	}
+	return []string{Accept, Reject}
+}
 
 // Item is one lifecycle item. N is the display number (nil for Both series) and never part of
 // the item's identity (Key is) nor of its hash.
@@ -151,14 +179,17 @@ type Entry struct {
 
 // ItemView is one item of the GET.
 type ItemView struct {
-	Key     string  `json:"key"`
-	Section string  `json:"section"`
-	N       *int    `json:"n"`
-	Since   string  `json:"since"`
-	Text    string  `json:"text"`
-	Hash    string  `json:"hash"`
-	Current *Entry  `json:"current"`
-	History []Entry `json:"history"`
+	Key     string `json:"key"`
+	Section string `json:"section"`
+	N       *int   `json:"n"`
+	Since   string `json:"since"`
+	Text    string `json:"text"`
+	Hash    string `json:"hash"`
+	// Choices is the item's decisions in button order (Choices) -- the page renders them, never
+	// re-deriving the rule.
+	Choices []string `json:"choices"`
+	Current *Entry   `json:"current"`
+	History []Entry  `json:"history"`
 }
 
 // View is the GET /api/usage/decisions body.
@@ -205,7 +236,7 @@ func ItemOf(it Item, rows []Row) ItemView {
 	}
 	h := Hash(it.Text)
 	cur, hist := State(own, h)
-	return ItemView{Key: it.Key, Section: it.Section, N: it.N, Since: it.Since, Text: it.Text, Hash: h, Current: cur, History: hist}
+	return ItemView{Key: it.Key, Section: it.Section, N: it.N, Since: it.Since, Text: it.Text, Hash: h, Choices: Choices(it), Current: cur, History: hist}
 }
 
 // Build is the whole GET body.
