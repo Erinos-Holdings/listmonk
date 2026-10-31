@@ -50,7 +50,7 @@ func TestItemsShape(t *testing.T) {
 		{"sp-engagement", SectionSunsetPolicy, intp(16), "2026-10-31"},
 		{"sp-normal", SectionSunsetPolicy, intp(17), "2026-10-31"},
 		{"sp-hold", SectionSunsetPolicy, intp(18), "2026-10-31"},
-		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-10-31"},
+		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-10-31"}, // SUNSET-V3 D7 rewording, same date
 		{"sp-coming-back", SectionSunsetPolicy, intp(20), "2026-10-31"},
 		{"sp-suppressed", SectionSunsetPolicy, intp(21), "2026-10-31"},
 		{"sp-safety", SectionSunsetPolicy, intp(22), "2026-10-31"},
@@ -126,7 +126,7 @@ var pinnedHashes = map[string]string{
 	"sp-engagement":        "062c825492e7b62fb3c206bd99ed4ab4632a2b424cb14786058d22516e78263c",
 	"sp-normal":            "c2afde039a1d8a35496f2f5f23abbfea2a3b36e1659d5d4f19b06aa984a97c1e",
 	"sp-hold":              "82038c303d156fcd91d49b849be02297ad47855fa76b036714042ba93c3d52c1",
-	"sp-asks":              "8d61ad588e5db25063692764e4d4d8075e2b2a199a556d759fd61b8b4b70daf7",
+	"sp-asks":              "cc7e02596840583f861b676ccbb464fc022a1aadaadcf1b12f30ae4fe6b4d7c6", // SUNSET-V3 D7: no catch-up on journey start (2026-10-31)
 	"sp-coming-back":       "1c1cf2c139641bffd5f23b59240691d8d334f97b17b3730cfe2b93c1a515f86b",
 	"sp-suppressed":        "6631fa895a51be4629cb6516d184cf1f1a48f947e17d2f18ad3b82a0f309e75e",
 	"sp-safety":            "0170340a622e3402a6e022dc13baa67062567c9d2cdce51af2bc1d0ebcb46dfb",

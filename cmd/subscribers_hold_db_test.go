@@ -625,8 +625,9 @@ func TestHoldRelease_FinalRequiresFlag(t *testing.T) {
 	}
 }
 
-// TestSunsetV2Predicates_PassTableAllowlist -- integrations SUNSET-V2-SPEC §4.3 / D4. The queue
-// predicates of lib/sunset.ts queuePredicates (copied verbatim for brand list $L, queues $Q1/$Q2;
+// TestSunsetV2Predicates_PassTableAllowlist -- integrations SUNSET-V2-SPEC §4.3 / D4, updated to
+// SUNSET-V3-SPEC §4 / K12a. The queue predicates of lib/sunset.ts queuePredicates and its
+// rulePredicate (copied verbatim for brand list $L, queues $Q1/$Q2, run start 2027-11-01T15:00:00Z;
 // keep in step with that file) run through the subscriber query API: each passes
 // validateQueryTables -- the ask-received predicate names campaign_sends, which v6.2.22 added to
 // the allowlist -- and the evergreen arm of "ask received" selects exactly the queue-1 row that an
@@ -638,27 +639,48 @@ func TestSunsetV2Predicates_PassTableAllowlist(t *testing.T) {
 	f.db.Get(&q2, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Brand re-engagement 2', 'private', 'single', '{reengage:1:2}') RETURNING id`)
 	L, Q1, Q2 := itoa(f.brandID), itoa(q1), itoa(q2)
 
+	// SUNSET-V3-SPEC §4 / K12a (2026-10-31): the V3 strings — releases reason-scoped and
+	// final_at-excluded, widened to the brand list, a Gmail-open release, the late-decline arm, the
+	// ask-gap time clause, the archive on ask 2, and the rule predicate's Gmail NOT IN.
+	cutoff := func(days string) string { return "'2027-11-01T15:00:00Z'::timestamptz - INTERVAL '" + days + " days'" }
+	releasable := "b.status = 'unsubscribed' AND b.meta ? 'hold' AND b.meta->'hold'->>'reason' = 'never-engaged' AND NOT (b.meta->'hold' ? 'final_at')"
 	clickRelease := "subscribers.id IN (SELECT k.subscriber_id FROM link_clicks k JOIN links l ON l.id = k.link_id " +
 		"JOIN campaign_lists cl ON cl.campaign_id = k.campaign_id " +
 		"JOIN subscriber_lists b ON b.subscriber_id = k.subscriber_id AND b.list_id = " + L + " " +
-		"WHERE cl.list_id IN (" + Q1 + ", " + Q2 + ") AND b.status = 'unsubscribed' AND b.meta ? 'hold' " +
+		"WHERE cl.list_id IN (" + Q1 + ", " + Q2 + ", " + L + ") AND " + releasable + " " +
 		"AND k.created_at > (b.meta->'hold'->>'at')::timestamptz AND l.url NOT LIKE '%manage-preferences.curatedfor.you%')"
+	viewRelease := "subscribers.id IN (SELECT v.subscriber_id FROM campaign_views v " +
+		"JOIN campaign_lists cl ON cl.campaign_id = v.campaign_id " +
+		"JOIN subscriber_lists b ON b.subscriber_id = v.subscriber_id AND b.list_id = " + L + " " +
+		"WHERE cl.list_id IN (" + Q1 + ", " + Q2 + ", " + L + ") AND v.client = 'gmail-proxy' AND " + releasable + " " +
+		"AND v.created_at > (b.meta->'hold'->>'at')::timestamptz)"
 	// Decorrelated via the qs/bs join aliases since 2026-10-23 (integrations lib/sunset.ts, the
 	// win-back scale work): a bare outer `subscribers.` reference inside the IN-subquery made
 	// Postgres re-evaluate it per outer row — quadratic past ~100K subscribers.
-	askReceived := "subscribers.id IN (SELECT q.subscriber_id FROM subscriber_lists q JOIN subscribers qs ON qs.id = q.subscriber_id WHERE q.list_id = " + Q1 + " AND (" +
-		"EXISTS (SELECT 1 FROM campaigns c JOIN campaign_lists cl ON cl.campaign_id = c.id WHERE cl.list_id = " + Q1 + " " +
-		"AND c.type = 'regular' AND c.evergreen = false AND c.status = 'finished' AND c.started_at > q.created_at " +
-		"AND (c.attribs->>'lang' IS NULL OR c.attribs->>'lang' = COALESCE(NULLIF(LOWER(LEFT(qs.attribs->>'lang', 2)), ''), 'en'))) " +
-		"OR EXISTS (SELECT 1 FROM campaign_sends s JOIN campaigns c ON c.id = s.campaign_id JOIN campaign_lists cl ON cl.campaign_id = c.id " +
-		"WHERE cl.list_id = " + Q1 + " AND c.evergreen = true AND s.subscriber_id = q.subscriber_id AND s.sent_at IS NOT NULL AND s.sent_at > q.created_at)))"
-	decline := "subscribers.id IN (SELECT b.subscriber_id FROM subscriber_lists b JOIN subscribers bs ON bs.id = b.subscriber_id WHERE b.list_id = " + L + " " +
-		"AND b.status = 'unsubscribed' AND b.meta ? 'hold' AND EXISTS (SELECT 1 FROM subscriber_lists q " +
+	askReceivedOn := func(Q string) string {
+		return "subscribers.id IN (SELECT q.subscriber_id FROM subscriber_lists q JOIN subscribers qs ON qs.id = q.subscriber_id WHERE q.list_id = " + Q + " AND (" +
+			"EXISTS (SELECT 1 FROM campaigns c JOIN campaign_lists cl ON cl.campaign_id = c.id WHERE cl.list_id = " + Q + " " +
+			"AND c.type = 'regular' AND c.evergreen = false AND c.status = 'finished' AND c.started_at > q.created_at AND c.started_at <= " + cutoff("90") + " " +
+			"AND (c.attribs->>'lang' IS NULL OR c.attribs->>'lang' = COALESCE(NULLIF(LOWER(LEFT(qs.attribs->>'lang', 2)), ''), 'en'))) " +
+			"OR EXISTS (SELECT 1 FROM campaign_sends s JOIN campaigns c ON c.id = s.campaign_id JOIN campaign_lists cl ON cl.campaign_id = c.id " +
+			"WHERE cl.list_id = " + Q + " AND c.evergreen = true AND s.subscriber_id = q.subscriber_id AND s.sent_at IS NOT NULL AND s.sent_at > q.created_at AND s.sent_at <= " + cutoff("90") + ")))"
+	}
+	askReceived := askReceivedOn(Q1)
+	decline := "subscribers.id IN (SELECT b.subscriber_id FROM subscriber_lists b JOIN subscribers bs ON bs.id = b.subscriber_id WHERE b.list_id = " + L + " AND (" +
+		"(b.status = 'unsubscribed' AND b.meta ? 'hold' AND EXISTS (SELECT 1 FROM subscriber_lists q " +
 		"WHERE q.subscriber_id = b.subscriber_id AND q.list_id IN (" + Q1 + ", " + Q2 + ") " +
-		"AND (q.status = 'unsubscribed' OR bs.status = 'blocklisted')))"
+		"AND (q.status = 'unsubscribed' OR bs.status = 'blocklisted'))) " +
+		"OR (b.meta->'hold_released'->>'to' = 'confirmed' AND EXISTS (SELECT 1 FROM subscriber_lists q " +
+		"WHERE q.subscriber_id = b.subscriber_id AND q.list_id IN (" + Q1 + ", " + Q2 + ") " +
+		"AND q.status = 'unsubscribed' AND q.updated_at > (b.meta->'hold_released'->>'at')::timestamptz))))"
 	archive := "subscribers.status <> 'blocklisted' AND subscribers.id IN (SELECT subscriber_id FROM subscriber_lists WHERE list_id = " + L + " " +
-		"AND status = 'unsubscribed' AND meta ? 'hold' AND meta->'hold'->>'reason' = 'never-engaged' AND NOT (meta->'hold' ? 'final_at') " +
-		"AND COALESCE(meta->'hold'->>'anchor_at', meta->'hold'->>'at')::timestamptz <= '2027-11-01T15:00:00Z'::timestamptz - INTERVAL '365 days')"
+		"AND status = 'unsubscribed' AND meta ? 'hold' AND meta->'hold'->>'reason' = 'never-engaged' AND NOT (meta->'hold' ? 'final_at')) " +
+		"AND " + askReceivedOn(Q2)
+	rule := "subscribers.id IN (SELECT subscriber_id FROM subscription_engagement(" + L + ") " +
+		"WHERE anchor_at <= " + cutoff("180") + " AND eligible_sends >= 6 AND first_eligible_send_at >= '2026-08-31T00:00:00Z' " +
+		"AND (last_click_at IS NULL OR last_click_at <= " + cutoff("180") + ")) " +
+		"AND subscribers.id NOT IN (SELECT v.subscriber_id FROM campaign_views v JOIN campaign_lists cl ON cl.campaign_id = v.campaign_id " +
+		"WHERE cl.list_id = " + L + " AND v.client = 'gmail-proxy' AND v.subscriber_id IS NOT NULL AND v.created_at > " + cutoff("180") + ")"
 
 	// Fixtures for the evergreen arm: two held subscribers on queue 1; an evergreen on queue 1 sent
 	// to the first after its queue row was created, and to the second BEFORE (a stale send).
@@ -673,7 +695,7 @@ func TestSunsetV2Predicates_PassTableAllowlist(t *testing.T) {
 	f.db.MustExec(`INSERT INTO campaign_lists (campaign_id, list_id, list_name) VALUES ($1, $2, 'q1')`, ev, q1)
 	f.db.MustExec(`INSERT INTO campaign_sends (campaign_id, subscriber_id, claimed_at, sent_at) VALUES ($1, $2, NOW(), NOW() - INTERVAL '1 day'), ($1, $3, NOW(), NOW() - INTERVAL '3 days')`, ev, sent, stale)
 
-	for name, pred := range map[string]string{"clickRelease": clickRelease, "askReceived": askReceived, "decline": decline, "archive": archive} {
+	for name, pred := range map[string]string{"clickRelease": clickRelease, "viewRelease": viewRelease, "askReceived": askReceived, "decline": decline, "archive": archive, "rule": rule} {
 		if _, _, err := f.app.core.QuerySubscribers("", pred, nil, "", models.SubscriberFilter{}, "", "", 0, 100); err != nil {
 			t.Fatalf("%s rejected: %v", name, err)
 		}
