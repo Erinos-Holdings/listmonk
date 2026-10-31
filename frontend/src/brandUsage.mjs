@@ -18,8 +18,15 @@
 import { brandLabelOf, matchesLaunch, storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { healthDocs } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  POST_PURCHASE_STEP_DAYS, SERIES_POST_PURCHASE, SERIES_WELCOME, WELCOME_STEP_DAYS, seriesStepKey,
+  POST_PURCHASE_STEP_DAYS, REENGAGEMENT_DAYS, SERIES_POST_PURCHASE, SERIES_REENGAGEMENT, SERIES_WELCOME, WELCOME_STEP_DAYS,
+  seriesStepKey,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
+
+// USAGE-REENGAGEMENT-SPEC D1/D6: the Re-engagement group's two leaves (the sunset queues' asks),
+// 180d and 270d -- display labels of the planned policy (D10). Cross-repo literal: integrations
+// lib/brand-usage.ts REENGAGEMENT_DAYS stores usage.reengagement.steps at exactly these days, and
+// the fields below are named after them (`reengagement:180`, `reengagement:270`).
+export { REENGAGEMENT_DAYS };
 
 // LIFECYCLE-SERIES-SPEC S9 (replacing DASHBOARDS-POLISH3-SPEC D4's provisional No purchase
 // 3d | 7d | 15d leaves and the plain Welcome / 1st purchase columns): two series groups, one leaf
@@ -40,7 +47,14 @@ export const SERIES_DAYS = Object.freeze({
 export const GUIDE_SERIES = Object.freeze([
   Object.freeze({ family: SERIES_WELCOME, title: 'dashboard.usage.noPurchase', subtitle: 'dashboard.usage.guideWelcome' }),
   Object.freeze({ family: SERIES_POST_PURCHASE, title: 'dashboard.usage.postPurchase', subtitle: 'dashboard.usage.guideNewCustomer' }),
+  // USAGE-REENGAGEMENT-SPEC D6: the third series -- titled "Re-engagement series" (NOT the table's
+  // group label), sublined "Sunset flow"; its days are REENGAGEMENT_DAYS, never SERIES_DAYS.
+  Object.freeze({ family: SERIES_REENGAGEMENT, title: 'dashboard.usage.guideReengagement', subtitle: 'dashboard.usage.guideSunset' }),
 ]);
+
+// The standard days a guide series lists: SERIES_DAYS for the two lifecycle series,
+// REENGAGEMENT_DAYS for the Re-engagement series.
+const guideDays = (family) => (family === SERIES_REENGAGEMENT ? REENGAGEMENT_DAYS : SERIES_DAYS[family]);
 
 // parseStepText splits a D5 text ("Day 5 Address purchase hesitation: \"A few reasons …\" Include
 // …") into { title, quote, body }: the title between the leading "Day N " and the FIRST ": " (a
@@ -68,7 +82,7 @@ export function parseStepText(text) {
 export function seriesGuide(t = (k) => k) {
   return GUIDE_SERIES.map((g) => ({
     ...g,
-    steps: SERIES_DAYS[g.family].map((days) => ({ days, ...parseStepText(t(seriesStepKey(g.family, days))) })),
+    steps: guideDays(g.family).map((days) => ({ days, ...parseStepText(t(seriesStepKey(g.family, days))) })),
   }));
 }
 
@@ -76,14 +90,15 @@ export function seriesGuide(t = (k) => k) {
 export const GUIDE_MIN_COLUMN = 300;
 
 // guideSplitX decides the guide's layout from the measured divider x (the Post-purchase group
-// header's left edge, px from the guide's left) and the guide's width: the rounded x when BOTH
-// sides keep GUIDE_MIN_COLUMN, else null (stacked) -- a narrow window, or a table scrolled so far
-// that the line sits off to one side.
-export function guideSplitX(x, width, min = GUIDE_MIN_COLUMN) {
+// header's left edge, px from the guide's left) and the guide's width: the rounded x when the left
+// side keeps GUIDE_MIN_COLUMN and the right side keeps one GUIDE_MIN_COLUMN per series right of the
+// divider (USAGE-REENGAGEMENT-SPEC D6: Post-purchase and Re-engagement, so 2 x min), else null
+// (stacked) -- a narrow window, or a table scrolled so far that the line sits off to one side.
+export function guideSplitX(x, width, min = GUIDE_MIN_COLUMN, rightColumns = GUIDE_SERIES.length - 1) {
   if (typeof x !== 'number' || !Number.isFinite(x) || typeof width !== 'number' || !Number.isFinite(width)) {
     return null;
   }
-  return x >= min && width - x >= min ? Math.round(x) : null;
+  return x >= min && width - x >= min * rightColumns ? Math.round(x) : null;
 }
 
 // DASHBOARDS-POLISH3-SPEC D5: the Languages section's Skipped leaves (the fork's I18N languages,
@@ -94,6 +109,20 @@ const SK_PREFIX = 'skipped:';
 export const WELCOME_FIELDS = Object.freeze(SERIES_DAYS[SERIES_WELCOME].map((n) => `${SERIES_WELCOME}:${n}`));
 export const POST_PURCHASE_FIELDS = Object.freeze(SERIES_DAYS[SERIES_POST_PURCHASE].map((n) => `${SERIES_POST_PURCHASE}:${n}`));
 export const SKIPPED_FIELDS = Object.freeze(SKIPPED_LANGS.map((l) => `${SK_PREFIX}${l}`));
+const RE_PREFIX = `${SERIES_REENGAGEMENT}:`;
+export const REENGAGEMENT_FIELDS = Object.freeze(REENGAGEMENT_DAYS.map((n) => `${RE_PREFIX}${n}`));
+
+// USAGE-REENGAGEMENT-SPEC D6 (Stage 2 F4): the Re-engagement leaf of a field ('reengagement:180' ->
+// { days: 180 }); null for any other field or day. NOT a series leaf: seriesLeafOf never matches
+// these fields (SERIES_DAYS has no reengagement family), and cell / sortValue / circleLink check
+// this first.
+export function reengagementLeafOf(field) {
+  if (typeof field !== 'string' || !field.startsWith(RE_PREFIX)) {
+    return null;
+  }
+  const days = Number(field.slice(RE_PREFIX.length));
+  return REENGAGEMENT_DAYS.includes(days) ? { days } : null;
+}
 
 // The series leaf of a field ('welcome:5' -> { family: 'welcome', days: 5 }; 'postPurchase:0' ->
 // { family: 'postPurchase', days: 0 }); null for any other field or an off-standard day.
@@ -140,6 +169,8 @@ export const SECTIONS = Object.freeze([
   section('journeys', 'dashboard.usage.sectionJourneys', [
     group(SERIES_WELCOME, 'dashboard.usage.noPurchase', 'dashboard.usage.noPurchaseHelp', WELCOME_FIELDS),
     group(SERIES_POST_PURCHASE, 'dashboard.usage.postPurchase', 'dashboard.usage.postPurchaseHelp', POST_PURCHASE_FIELDS),
+    // USAGE-REENGAGEMENT-SPEC D6: the sunset queues' two asks (the lib's stored usage.reengagement).
+    group(SERIES_REENGAGEMENT, 'dashboard.usage.reengagement', 'dashboard.usage.reengagementHelp', REENGAGEMENT_FIELDS),
     // 2026-10-30: the brand's SKU-triggered journeys (the lib's stored `usage.sku`), not scored.
     'sku',
   ]),
@@ -154,8 +185,8 @@ export const SECTIONS = Object.freeze([
 export const SORT_FIELDS = Object.freeze(['score', 'brand', ...SECTIONS.flatMap((s) => s.fields)]);
 
 // The stoplight columns (V2 D3) -- one circle per state. LIFECYCLE-SERIES-SPEC S9: the series
-// leaves, then the SKU column.
-export const CIRCLE_FIELDS = Object.freeze([...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS, 'sku']);
+// leaves, then (USAGE-REENGAGEMENT-SPEC D6) the Re-engagement leaves, then the SKU column.
+export const CIRCLE_FIELDS = Object.freeze([...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS, ...REENGAGEMENT_FIELDS, 'sku']);
 
 // POLISH3 D4/D5: the header layout over SECTIONS (the band alternates grey/white by section). Row
 // 2 holds every plain leaf (rowspan 2) and every sub-group label (colspan = its leaves); row 3
@@ -213,6 +244,10 @@ const COLUMN_META = Object.freeze({
 });
 
 export function columnMeta(field) {
+  const re = reengagementLeafOf(field);
+  if (re !== null) {
+    return { label: 'dashboard.usage.npDays', params: { n: re.days }, help: seriesStepKey(SERIES_REENGAGEMENT, re.days) };
+  }
   const leaf = seriesLeafOf(field);
   if (leaf !== null) {
     const help = seriesStepKey(leaf.family, leaf.days);
@@ -247,6 +282,8 @@ export const SCORE_PARTS = Object.freeze([
   Object.freeze({ key: 'broadcasts', label: 'dashboard.usage.partBroadcasts' }),
   Object.freeze({ key: 'welcomeSeries', label: 'dashboard.usage.partWelcomeSeries' }),
   Object.freeze({ key: 'postPurchaseSeries', label: 'dashboard.usage.partPostPurchaseSeries' }),
+  // USAGE-REENGAGEMENT-SPEC D5/D6.
+  Object.freeze({ key: 'reengagement', label: 'dashboard.usage.partReengagement' }),
   Object.freeze({ key: 'attribution', label: 'dashboard.usage.partAttribution' }),
   Object.freeze({ key: 'sunset', label: 'dashboard.usage.partSunset' }),
 ]);
@@ -351,7 +388,41 @@ export function shapeRows(apiRows, { brands = [], launch = 'all', lists = [] } =
 
 // The columns a ZMA row does not score (its sends live in ZMA -- a red would be false, v1 I6),
 // plus the Score (V2 D1: a ZMA row's score is null).
-const ZMA_DIMMED = Object.freeze(['score', WELCOME_FIELDS[0], 'lastBroadcast', 'cadence']);
+// USAGE-REENGAGEMENT-SPEC D6 (Stage 2 F6): the Re-engagement leaves too -- a ZMA brand has no
+// listmonk sunset queue, like welcome Day 0.
+const ZMA_DIMMED = Object.freeze(['score', WELCOME_FIELDS[0], ...REENGAGEMENT_FIELDS, 'lastBroadcast', 'cadence']);
+
+// USAGE-REENGAGEMENT-SPEC D1: the stored step of a Re-engagement leaf -- usage.reengagement.steps'
+// entry at `days`; `undefined` when the doc carries no reengagement object (a doc written before the
+// release: '—'), null when it does but holds no entry at that day.
+function reStepAt(u, days) {
+  const re = isObj(u) && isObj(u.reengagement) && Array.isArray(u.reengagement.steps) ? u.reengagement : null;
+  if (!re) {
+    return undefined;
+  }
+  return re.steps.find((s) => isObj(s) && s.days === days) || null;
+}
+
+const RE_COLORS = Object.freeze(['green', 'amber', 'red']);
+
+// The stored circle of a step ({ color, n }, rendered verbatim -- D3, never through circlesOf), or
+// null when malformed.
+function reCircle(st) {
+  const c = st && isObj(st.circle) ? st.circle : null;
+  return c && RE_COLORS.includes(c.color) && countOrNull(c.n) !== null ? { color: c.color, n: c.n } : null;
+}
+
+// D3: a Re-engagement circle's accessible name -- green "{n} running", amber "needs attention", red
+// "no re-engagement list" (its own words; the series circles' circleName means something else).
+export function reCircleName(color, n, t = (k) => k) {
+  if (color === 'green') {
+    return t('dashboard.usage.reCircleRunning', { n });
+  }
+  if (color === 'amber') {
+    return t('dashboard.usage.reCircleAttention');
+  }
+  return t('dashboard.usage.reCircleNone');
+}
 
 // The welcome tooltip: the master list's evergreen campaigns ("#id status"), or none.
 export function welcomeTip(w, t = (k) => k) {
@@ -523,6 +594,15 @@ export function circleLink(row, field, color) {
   if (!u || (color !== 'green' && color !== 'amber') || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
   }
+  // USAGE-REENGAGEMENT-SPEC D6: a Re-engagement leaf's stored circle (green or amber) opens the
+  // queue list's automations -- { list_id: [listId], evergreen: 'true' }; a circle of another color
+  // than the stored one, a red, or a step with no list never links.
+  const re = reengagementLeafOf(field);
+  if (re !== null) {
+    const st = reStepAt(u, re.days);
+    const c = reCircle(st);
+    return c && c.color === color && posInt(st.listId) ? { list_id: [String(st.listId)], evergreen: 'true' } : null;
+  }
   const green = color === 'green';
   const leaf = seriesLeafOf(field);
   if (leaf !== null && leaf.family === SERIES_WELCOME && leaf.days === 0) {
@@ -649,6 +729,34 @@ export function cell(row, field, t = (k) => k) {
       text: MISSING, cls: '', tooltip: t('dashboard.usage.zmaHelp'), circles: [],
     };
   }
+  // USAGE-REENGAGEMENT-SPEC D6: a Re-engagement leaf -- the stored circle verbatim (each circle
+  // carries its own accessible `name`, D3); the tooltip is the step text, the circle's name, "{n}
+  // waiting" when `waiting` is a number, and "Not covered: FR, ES" when `uncovered` is non-empty. A
+  // doc without `reengagement` renders '—'.
+  const re = reengagementLeafOf(field);
+  if (re !== null) {
+    const desc = t(seriesStepKey(SERIES_REENGAGEMENT, re.days));
+    const st = reStepAt(u, re.days);
+    const c = reCircle(st);
+    if (!c) {
+      return {
+        text: MISSING, cls: '', tooltip: `${desc}\n${t('dashboard.usage.seriesMissing')}`, circles: [],
+      };
+    }
+    const name = reCircleName(c.color, c.n, t);
+    const waiting = countOrNull(st.waiting);
+    const uncovered = Array.isArray(st.uncovered) ? st.uncovered.filter((l) => typeof l === 'string' && l !== '') : [];
+    const lines = [desc, name];
+    if (waiting !== null) {
+      lines.push(t('dashboard.usage.reWaiting', { n: waiting }));
+    }
+    if (uncovered.length) {
+      lines.push(t('dashboard.usage.reUncovered', { langs: uncovered.map((l) => l.toUpperCase()).join(', ') }));
+    }
+    return {
+      text: '', cls: '', tooltip: lines.join('\n'), circles: [{ color: c.color, n: c.n, name }],
+    };
+  }
   // LIFECYCLE-SERIES-SPEC S9: a series leaf -- its D5 description first, then the circle words and
   // the rows. Welcome Day 0 is the welcome family's stored counts and campaigns (today's welcome
   // state); every other leaf the circle(s) of its stored rows (green clean, amber idle/invalid), a
@@ -694,11 +802,18 @@ export function cell(row, field, t = (k) => k) {
       };
     }
     case 'sku': {
-      // The stored counts (green running, amber idle/invalid, red 0 none), then each row.
+      // The stored counts (green running, amber idle/invalid), then each row. A brand with NO SKU
+      // journey shows '—', never a red 0 (user, 2026-10-30): the journey is optional -- it may or
+      // may not apply to a brand -- so its absence is not a campaign gap like the series leaves'.
       const counts = storedCounts(u, field);
       if (!counts) {
         return {
           text: MISSING, cls: '', tooltip: t('dashboard.usage.countsMissing'), circles: [],
+        };
+      }
+      if (counts.green + counts.amber === 0) {
+        return {
+          text: MISSING, cls: '', tooltip: t('dashboard.usage.skuNone'), circles: [],
         };
       }
       return {
@@ -825,6 +940,14 @@ export function sortValue(row, field) {
   const u = row && row.usage;
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
+  }
+  // USAGE-REENGAGEMENT-SPEC D6: a Re-engagement leaf by its stored state's rank (active 0, idle 1,
+  // none 2, as a series leaf sorts); '—' (no reengagement object, or an unrecognized state) null.
+  const re = reengagementLeafOf(field);
+  if (re !== null) {
+    const st = reStepAt(u, re.days);
+    const s = st ? st.state : undefined;
+    return Object.prototype.hasOwnProperty.call(BADNESS, s) ? BADNESS[s] : null;
   }
   // S9: a series leaf by badness -- Welcome Day 0 by the stored welcome state; every other leaf
   // green 0, any amber 1, absent red 2; '—' (no series) null.

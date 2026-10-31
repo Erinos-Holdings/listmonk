@@ -1,7 +1,8 @@
 package decisions
 
 // Fork (usage decisions) -- integrations USAGE-DECISIONS-SPEC I1/I2. I1: lifecycle.json carries
-// exactly §0's 14 keys in order, with §0's sections, numbers, since dates and header. I2: each
+// exactly §0's 22 keys in order (14 + the 8 Curated Sunset Policy items, USAGE-REENGAGEMENT-SPEC
+// D7), with §0's sections, numbers, since dates and header, and the sunset-policy table. I2: each
 // item's hash is pinned as a literal -- a text edit fails TestItemHashesPinned until the editor
 // bumps the item's `since` AND its pin here, the deliberate act that voids Marketing's decision on
 // that item (D2). I3 (word-for-word agreement with the spec's §0) is untestable across repos:
@@ -38,9 +39,18 @@ func TestItemsShape(t *testing.T) {
 		{"pp-delivery-clock", SectionPostPurchase, intp(9)},
 		{"pp-final-step-skip", SectionPostPurchase, intp(10)},
 		{"pp-returning-thanks", SectionPostPurchase, intp(11)},
-		{"both-multi-brand", SectionBoth, nil},
-		{"both-per-brand", SectionBoth, nil},
-		{"both-language", SectionBoth, nil},
+		{"both-multi-brand", SectionBoth, intp(12)},
+		{"both-per-brand", SectionBoth, intp(13)},
+		{"both-language", SectionBoth, intp(14)},
+		// USAGE-REENGAGEMENT-SPEC D7: the Curated Sunset Policy section.
+		{"sp-scope", SectionSunsetPolicy, intp(15)},
+		{"sp-engagement", SectionSunsetPolicy, intp(16)},
+		{"sp-normal", SectionSunsetPolicy, intp(17)},
+		{"sp-hold", SectionSunsetPolicy, intp(18)},
+		{"sp-asks", SectionSunsetPolicy, intp(19)},
+		{"sp-coming-back", SectionSunsetPolicy, intp(20)},
+		{"sp-suppressed", SectionSunsetPolicy, intp(21)},
+		{"sp-safety", SectionSunsetPolicy, intp(22)},
 	}
 	if len(d.Items) != len(want) {
 		t.Fatalf("%d items, want %d", len(d.Items), len(want))
@@ -70,6 +80,26 @@ func TestItemsShape(t *testing.T) {
 			}
 		}
 	}
+	// USAGE-REENGAGEMENT-SPEC D8: the one table, sunset-policy's, 3 rows x 2 columns plus its note.
+	if len(d.Tables) != 1 {
+		t.Fatalf("%d tables, want 1", len(d.Tables))
+	}
+	tb, ok := d.Tables[SectionSunsetPolicy]
+	if !ok {
+		t.Fatal("no sunset-policy table")
+	}
+	if len(tb.Columns) != 2 || len(tb.Rows) != 3 || tb.Note == "" {
+		t.Fatalf("sunset-policy table: %d columns, %d rows, note %q", len(tb.Columns), len(tb.Rows), tb.Note)
+	}
+	for i, r := range tb.Rows {
+		if len(r) != 2 {
+			t.Errorf("row %d has %d cells", i, len(r))
+		}
+	}
+	// Not an item: no item carries a table's name as its key.
+	if _, ok := d.Find(SectionSunsetPolicy); ok {
+		t.Fatal("a table name is an item key")
+	}
 }
 
 // pinnedHashes are the literal sha256 of each item's text (D2). Changing a text is a deliberate
@@ -89,6 +119,14 @@ var pinnedHashes = map[string]string{
 	"both-multi-brand":     "95407fcce716865e6d984a41ca5e1ba8a592f72c897907f19dfa00dcb6941f65",
 	"both-per-brand":       "7c9f2715ff814ee3d0d2a426db85098be5bbfa1ab77cd718237f493ddfbf435d",
 	"both-language":        "c2d1365f1f8172d6a7f207d1d0045d54759108c8601271f9c8b14dc777b0b7de",
+	"sp-scope":             "b82a9e15281891935c2c3afc621e29db5f26497c40d8988ba87f32615ba5a54b",
+	"sp-engagement":        "dbe685e2e8d3a89c32ebebf136591cb339a68d2a92502a91cf6887212cbc0308",
+	"sp-normal":            "f01cea5fd9042d6a902aca96fd3d3b6bbe90da6343a9d247912aa6c6cb876dfd",
+	"sp-hold":              "78cd9a4bc2bba4247e6976a8d7c1cb1e43822b0655648715d8a61e2ccf84294f",
+	"sp-asks":              "db2355a65f19c25fb2518476a6a66195c815bcd2dc27de69d118db776203c40b",
+	"sp-coming-back":       "d0182e01fe31f3f5092c2bc03f9ed1b370c1ae0c789c30892f86875210cb4a80",
+	"sp-suppressed":        "62cc82deeab51aa616c8cc56266e481aea66fe3a468381d62532f454eca70fba",
+	"sp-safety":            "72d7dec4c5e21d2fb028c078240f71a91d27901343e1740f31c33d7fb8a6d253",
 }
 
 func TestItemHashesPinned(t *testing.T) {
@@ -122,9 +160,23 @@ func TestParseRefusesBadFiles(t *testing.T) {
 		"bad since":       `{"items":[{"key":"a","section":"both","since":"30/10/2026","text":"x"}]}`,
 		"empty text":      `{"items":[{"key":"a","section":"both","since":"2026-10-30","text":""}]}`,
 		"not json":        `{`,
+		// USAGE-REENGAGEMENT-SPEC D8: a table only on sunset-policy, never ragged.
+		"table on another section": `{"items":[],"tables":{"both":{"columns":["a","b"],"rows":[["1","2"]],"note":""}}}`,
+		"table on an unknown name": `{"items":[],"tables":{"other":{"columns":["a","b"],"rows":[],"note":""}}}`,
+		"ragged table row":         `{"items":[],"tables":{"sunset-policy":{"columns":["a","b"],"rows":[["1","2"],["3"]],"note":""}}}`,
+		"table with no columns":    `{"items":[],"tables":{"sunset-policy":{"columns":[],"rows":[],"note":""}}}`,
 	} {
 		if _, err := parse([]byte(src)); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+	// D7: sunset-policy is an accepted section, and a well-formed table on it parses.
+	ok := `{"items":[{"key":"a","section":"sunset-policy","n":15,"since":"2026-10-30","text":"x"}],"tables":{"sunset-policy":{"columns":["a","b"],"rows":[["1","2"]],"note":"n"}}}`
+	d, err := parse([]byte(ok))
+	if err != nil {
+		t.Fatalf("sunset-policy refused: %v", err)
+	}
+	if d.Items[0].Section != SectionSunsetPolicy || len(d.Tables[SectionSunsetPolicy].Rows) != 1 {
+		t.Fatalf("parsed %+v", d)
 	}
 }

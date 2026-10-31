@@ -126,9 +126,10 @@
       {{ runTime ? $t('dashboard.usage.noteAsOf', { date: runTime }) : $t('dashboard.usage.computed') }}
     </p>
     <!-- 2026-10-30: the journey guide -- each series' steps as a timeline (the leaf hovers' D5
-         texts, brandUsage.mjs::seriesGuide), the two side by side with the divider at the table's
-         No-purchase | Post-purchase line (measured, brandUsage.mjs::guideSplitX); stacked when
-         either side lacks the room. -->
+         texts, brandUsage.mjs::seriesGuide), side by side with the divider at the table's
+         No-purchase | Post-purchase line (measured, brandUsage.mjs::guideSplitX); the Re-engagement
+         series (USAGE-REENGAGEMENT-SPEC D6) follows Post-purchase behind a second divider; stacked
+         when either side lacks the room. -->
     <div ref="guide" class="bu-guide" :class="{ 'bu-guide-split': guideX !== null }"
       :style="guideX !== null ? { '--bu-guide-x': `${guideX}px`, '--bu-guide-steps': guideSteps } : null"
       data-cy="usage-guide">
@@ -160,14 +161,45 @@
          Pure half: usageDecisions.mjs. -->
     <div v-if="decisionView" class="bu-decisions" :class="{ 'bu-decisions-split': guideX !== null }"
       :style="guideX !== null ? { '--bu-guide-x': `${guideX}px` } : null" data-cy="usage-decisions">
-      <p class="bu-decisions-head" data-cy="usage-decisions-head">{{ decisionsHeader }}</p>
+      <!-- 2026-10-30 polish: a centered title + the published line; the approver line at the bottom.
+           The series columns carry no title (the guide above names them); Both series keeps its own. -->
+      <div class="bu-decisions-head" data-cy="usage-decisions-head">
+        <h4 class="bu-decisions-title">{{ $t('decisions.title') }}</h4>
+        <p class="bu-decisions-meta">{{ decisionsPublished }}</p>
+      </div>
       <div v-for="col in decisionColumns" :key="col.key" :class="['bu-decisions-col', `bu-decisions-${col.key}`]"
         :data-cy="`usage-decisions-${col.key}`">
-        <h4 class="bu-guide-title">{{ col.title }}</h4>
+        <h4 v-if="col.title" class="bu-guide-title">{{ col.title }}</h4>
+        <!-- USAGE-REENGAGEMENT-SPEC D9/D10: the Curated Sunset Policy block -- the planned-policy line,
+             then the stored non-decision table (usageDecisions.mjs::tableOf; never approvable) and its
+             note in small italic, then the items as Both series renders them. -->
+        <p v-if="col.planned" class="bu-decisions-meta bu-decisions-planned" data-cy="usage-decisions-planned">
+          {{ col.planned }}
+        </p>
+        <div v-if="col.table" class="bu-decisions-table" data-cy="usage-decisions-table">
+          <table class="table is-narrow">
+            <thead>
+              <tr>
+                <th v-for="(h, hi) in col.table.columns" :key="hi">{{ h }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(r, ri) in col.table.rows" :key="ri">
+                <td v-for="(v, vi) in r" :key="vi">{{ v }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="col.table.note" class="bu-decisions-table-note">{{ col.table.note }}</p>
+        </div>
         <ul class="bu-decision-list">
           <li v-for="it in col.items" :key="it.key" class="bu-decision" :data-cy="`decision-${it.key}`">
+            <!-- One block per text line; each line's lead (the first sentence, "Recommended:",
+                 "NOTE:") in bold -- usageDecisions.mjs::textLines. Kept on one line: no template
+                 whitespace inside a line. -->
             <p class="bu-decision-text">
-              <strong v-if="itemNum(it)" class="bu-decision-n">{{ itemNum(it) }}.</strong>{{ it.text }}
+              <span v-for="(l, li) in textLines(it.text)" :key="li" class="bu-decision-line"><strong
+                v-if="li === 0 && itemNum(it)" class="bu-decision-n">{{ itemNum(it) }}.</strong><strong
+                v-if="l.lead">{{ l.lead }}</strong>{{ l.rest }}</span>
             </p>
             <p :class="['bu-decision-state', `bu-decision-${stateOf(it).kind}`]" :data-cy="`decision-state-${it.key}`">
               {{ stateOf(it).text }}
@@ -211,6 +243,7 @@
           </li>
         </ul>
       </div>
+      <p class="bu-decisions-meta bu-decisions-approver" data-cy="usage-decisions-approver">{{ decisionsApprover }}</p>
     </div>
   </section>
 </template>
@@ -224,8 +257,8 @@ import {
   linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
-  canSubmitReject, columnsOf, decisionBody, headerText, historyOf as decisionHistory, isStale, itemNumber,
-  replaceItem, showControls, stateLine,
+  SECTION_SUNSET_POLICY, approverText, canSubmitReject, columnsOf, decisionBody, historyOf as decisionHistory, isStale,
+  itemNumber, publishedText, replaceItem, showControls, stateLine, tableOf, textLines,
 } from '../usageDecisions.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -287,24 +320,42 @@ export default Vue.extend({
       return seriesGuide((k, p) => this.$t(k, p));
     },
 
-    // The shared grid's step-row count: the longer series (both have 4 today).
+    // The shared grid's step-row count: the longest series (4 today; Re-engagement's 2 take the
+    // first two rows).
     guideSteps() {
       return Math.max(...this.guide.map((g) => g.steps.length));
     },
 
     // USAGE-DECISIONS-SPEC D5 -- the header, the columns (the guide's two titles, Both series full
     // width), and whether to show Accept / Reject (the server's can_decide only).
-    decisionsHeader() {
-      return headerText(this.decisionView, (k, p) => this.$t(k, p));
+    decisionsPublished() {
+      return publishedText(this.decisionView, (k, p) => this.$t(k, p));
+    },
+
+    decisionsApprover() {
+      return approverText(this.decisionView, (k, p) => this.$t(k, p));
     },
 
     decisionColumns() {
       const c = columnsOf(this.decisionView);
-      return [
-        { key: 'no-purchase', title: this.$t('dashboard.usage.guideWelcome'), items: c.noPurchase },
-        { key: 'post-purchase', title: this.$t('dashboard.usage.guideNewCustomer'), items: c.postPurchase },
+      const cols = [
+        { key: 'no-purchase', title: '', items: c.noPurchase },
+        { key: 'post-purchase', title: '', items: c.postPurchase },
         { key: 'both', title: this.$t('decisions.both'), items: c.both },
       ];
+      // USAGE-REENGAGEMENT-SPEC D9: the fourth block, full width below Both series (shown when the GET
+      // carries its items or its table).
+      const table = tableOf(this.decisionView, SECTION_SUNSET_POLICY);
+      if (c.sunsetPolicy.length || table) {
+        cols.push({
+          key: SECTION_SUNSET_POLICY,
+          title: this.$t('decisions.sunsetPolicy'),
+          planned: this.$t('decisions.sunsetPolicyPlanned'),
+          table,
+          items: c.sunsetPolicy,
+        });
+      }
+      return cols;
     },
 
     canDecide() {
@@ -341,6 +392,10 @@ export default Vue.extend({
 
     itemNum(it) {
       return itemNumber(it);
+    },
+
+    textLines(text) {
+      return textLines(text);
     },
 
     stateOf(it) {
@@ -415,9 +470,10 @@ export default Vue.extend({
       return circleLink(row, field, color);
     },
 
-    // Each circle's own accessible name (its part, not the whole cell's tooltip).
+    // Each circle's own accessible name (its part, not the whole cell's tooltip). A Re-engagement
+    // circle carries its own (brandUsage.mjs::reCircleName, USAGE-REENGAGEMENT-SPEC D3).
     circleAria(ci) {
-      return circleName(ci.color, ci.n, (k, p) => this.$t(k, p));
+      return ci.name || circleName(ci.color, ci.n, (k, p) => this.$t(k, p));
     },
 
     title(row, field) {

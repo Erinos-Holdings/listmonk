@@ -107,10 +107,12 @@ func callDecisions(t *testing.T, a *App, u auth.User, method, key, body string) 
 }
 
 func TestCanDecide(t *testing.T) {
-	both := decisionUser(auth.UserTypeUser, auth.SuperAdminRoleID, auth.PermBrandsDecide)
+	both := decisionUser(auth.UserTypeUser, auth.SuperAdminRoleID)
 	both.UserRoleID = auth.SuperAdminRoleID
-	legacyField := decisionUser(auth.UserTypeUser, 0, auth.PermBrandsDecide)
+	legacyField := decisionUser(auth.UserTypeUser, 0)
 	legacyField.UserRoleID = auth.SuperAdminRoleID
+	superNoStored := decisionUser(auth.UserTypeUser, auth.SuperAdminRoleID)
+	superAPI := decisionUser(auth.UserTypeAPI, auth.SuperAdminRoleID, auth.PermBrandsDecide)
 	cases := []struct {
 		name string
 		u    auth.User
@@ -118,9 +120,11 @@ func TestCanDecide(t *testing.T) {
 	}{
 		{"user role holding brands:decide", approver, true},
 		{"API token holding brands:decide", apiDecider, false},
-		{"Super Admin (UserRole.ID) holding brands:decide", superAdmin, false},
-		{"Super Admin on both fields", both, false},
-		{"Super Admin on UserRoleID only", legacyField, false},
+		{"Super Admin (UserRole.ID) holding brands:decide", superAdmin, true},
+		{"Super Admin with no stored permission list", superNoStored, true},
+		{"Super Admin on both fields", both, true},
+		{"Super Admin on UserRoleID only", legacyField, true},
+		{"API token on the Super Admin role", superAPI, false},
 		{"user role without brands:decide", noPerm, false},
 		{"brands:manage is not brands:decide", decisionUser(auth.UserTypeUser, 7, "brands:manage"), false},
 	}
@@ -153,8 +157,41 @@ func TestCanDecide(t *testing.T) {
 	if _, body := callDecisions(t, a, approver, http.MethodGet, "", ""); !strings.Contains(body, `"can_decide":true`) {
 		t.Fatalf("approver GET: %s", body)
 	}
-	if _, body := callDecisions(t, a, superAdmin, http.MethodGet, "", ""); !strings.Contains(body, `"can_decide":false`) {
+	if _, body := callDecisions(t, a, superAdmin, http.MethodGet, "", ""); !strings.Contains(body, `"can_decide":true`) {
 		t.Fatalf("Super Admin GET: %s", body)
+	}
+}
+
+// USAGE-REENGAGEMENT-SPEC D-I4: the GET carries the stored tables verbatim, and the sunset-policy
+// items are ordinary items (numbered, hashed).
+func TestGetCarriesTables(t *testing.T) {
+	a, _ := decisionsApp(t)
+	code, body := callDecisions(t, a, approver, http.MethodGet, "", "")
+	if code != 200 {
+		t.Fatalf("GET: %d %s", code, body)
+	}
+	var resp struct {
+		Data decisions.View `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatal(err)
+	}
+	tb, ok := resp.Data.Tables[decisions.SectionSunsetPolicy]
+	want := a.decisionDoc.Tables[decisions.SectionSunsetPolicy]
+	if !ok || len(tb.Rows) != 3 || tb.Note != want.Note || tb.Columns[0] != want.Columns[0] || tb.Rows[1][0] != want.Rows[1][0] {
+		t.Fatalf("GET tables: %+v", resp.Data.Tables)
+	}
+	n := 0
+	for _, it := range resp.Data.Items {
+		if it.Section == decisions.SectionSunsetPolicy {
+			n++
+			if it.N == nil || it.Hash != decisions.Hash(it.Text) {
+				t.Errorf("%s: %+v", it.Key, it)
+			}
+		}
+	}
+	if n != 8 || len(resp.Data.Items) != 22 {
+		t.Fatalf("%d sunset-policy items of %d", n, len(resp.Data.Items))
 	}
 }
 
@@ -180,7 +217,10 @@ func TestPostRefusals(t *testing.T) {
 		msg  string
 	}{
 		{"API token", apiDecider, "np-entry", body(hash, "accept", nil), 403, a.i18n.T("decisions.apiRefused")},
-		{"Super Admin", superAdmin, "np-entry", body(hash, "accept", nil), 403, a.i18n.T("decisions.forbidden")},
+		// USAGE-REENGAGEMENT-SPEC D-I5 (Stage 2 F11): an API token on the Super Admin role is still refused.
+		{"API token on the Super Admin role", decisionUser(auth.UserTypeAPI, auth.SuperAdminRoleID, "brands:get", auth.PermBrandsDecide), "np-entry", body(hash, "accept", nil), 403, a.i18n.T("decisions.apiRefused")},
+		// D-I4: a table name is not an item -- the unknown-key 404, nothing written.
+		{"table name", approver, "sunset-policy", body(hash, "accept", nil), 404, a.i18n.T("decisions.unknown")},
 		{"no permission", noPerm, "np-entry", body(hash, "accept", nil), 403, a.i18n.T("decisions.forbidden")},
 		{"unknown key", approver, "np-nope", body(hash, "accept", nil), 404, a.i18n.T("decisions.unknown")},
 		{"stale hash", approver, "np-entry", body(strings.Repeat("0", 64), "accept", nil), 409, a.i18n.T("decisions.stale")},
@@ -282,10 +322,10 @@ func TestSlackNotice(t *testing.T) {
 		t.Fatalf("reject text\n got %q\nwant %q", got, want)
 	}
 
-	// An accept on a Both series item: no number, no Note line.
+	// An accept on a Both series item (numbered 14 since 2026-10-30): no Note line.
 	n.Notify("K", decisions.Accept, both, "")
 	n.wg.Wait()
-	if got := text(1); got != `Lifecycle decision: K accepted Both series "`+cutRunes(both.Text, 120)+`"`+"\nhttps://email.example/admin/brands" {
+	if got := text(1); got != `Lifecycle decision: K accepted #14 "`+cutRunes(both.Text, 120)+`"`+"\nhttps://email.example/admin/brands" {
 		t.Fatalf("accept text %q", got)
 	}
 

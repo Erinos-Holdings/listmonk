@@ -27,6 +27,9 @@ const (
 	SectionNoPurchase   = "no-purchase"
 	SectionPostPurchase = "post-purchase"
 	SectionBoth         = "both"
+	// SectionSunsetPolicy is the Curated Sunset Policy block (integrations USAGE-REENGAGEMENT-SPEC
+	// D7) -- ordinary items, plus the one non-decision table (Doc.Tables, D8).
+	SectionSunsetPolicy = "sunset-policy"
 )
 
 // The two decisions a row may carry.
@@ -45,11 +48,21 @@ type Item struct {
 	Text    string `json:"text"`
 }
 
-// Doc is lifecycle.json. Approver and Published are display only, never enforcement.
+// Table is a rendered, never-approvable table above a section's items (USAGE-REENGAGEMENT-SPEC
+// D8): no key, no hash, no decision. Every row has len(Columns) cells.
+type Table struct {
+	Columns []string   `json:"columns"`
+	Rows    [][]string `json:"rows"`
+	Note    string     `json:"note"`
+}
+
+// Doc is lifecycle.json. Approver and Published are display only, never enforcement. Tables is
+// keyed by section; only SectionSunsetPolicy may carry one (D8).
 type Doc struct {
-	Approver  string `json:"approver"`
-	Published string `json:"published"`
-	Items     []Item `json:"items"`
+	Approver  string           `json:"approver"`
+	Published string           `json:"published"`
+	Items     []Item           `json:"items"`
+	Tables    map[string]Table `json:"tables"`
 }
 
 // Hash is the lowercase hex sha256 of an item's text bytes (D2).
@@ -76,7 +89,7 @@ func parse(b []byte) (Doc, error) {
 		}
 		seen[it.Key] = true
 		switch it.Section {
-		case SectionNoPurchase, SectionPostPurchase, SectionBoth:
+		case SectionNoPurchase, SectionPostPurchase, SectionBoth, SectionSunsetPolicy:
 		default:
 			return Doc{}, fmt.Errorf("decisions: lifecycle.json: %s: unknown section %q", it.Key, it.Section)
 		}
@@ -85,6 +98,20 @@ func parse(b []byte) (Doc, error) {
 		}
 		if it.Text == "" {
 			return Doc{}, fmt.Errorf("decisions: lifecycle.json: %s: empty text", it.Key)
+		}
+	}
+	// D8: a table only on the section that renders one, and no ragged row.
+	for sec, tb := range d.Tables {
+		if sec != SectionSunsetPolicy {
+			return Doc{}, fmt.Errorf("decisions: lifecycle.json: a table on section %q (only %q renders one)", sec, SectionSunsetPolicy)
+		}
+		if len(tb.Columns) == 0 {
+			return Doc{}, fmt.Errorf("decisions: lifecycle.json: table %q has no columns", sec)
+		}
+		for i, r := range tb.Rows {
+			if len(r) != len(tb.Columns) {
+				return Doc{}, fmt.Errorf("decisions: lifecycle.json: table %q row %d has %d cells, want %d", sec, i, len(r), len(tb.Columns))
+			}
 		}
 	}
 	return d, nil
@@ -136,10 +163,11 @@ type ItemView struct {
 
 // View is the GET /api/usage/decisions body.
 type View struct {
-	Approver  string     `json:"approver"`
-	Published string     `json:"published"`
-	CanDecide bool       `json:"can_decide"`
-	Items     []ItemView `json:"items"`
+	Approver  string           `json:"approver"`
+	Published string           `json:"published"`
+	CanDecide bool             `json:"can_decide"`
+	Items     []ItemView       `json:"items"`
+	Tables    map[string]Table `json:"tables"`
 }
 
 // State is D4's current-state rule over one item's rows: the newest row (max id) counts only when
@@ -182,7 +210,11 @@ func ItemOf(it Item, rows []Row) ItemView {
 
 // Build is the whole GET body.
 func Build(d Doc, rows []Row, canDecide bool) View {
-	v := View{Approver: d.Approver, Published: d.Published, CanDecide: canDecide, Items: make([]ItemView, 0, len(d.Items))}
+	tables := d.Tables
+	if tables == nil {
+		tables = map[string]Table{}
+	}
+	v := View{Approver: d.Approver, Published: d.Published, CanDecide: canDecide, Items: make([]ItemView, 0, len(d.Items)), Tables: tables}
 	for _, it := range d.Items {
 		v.Items = append(v.Items, ItemOf(it, rows))
 	}

@@ -9,6 +9,7 @@ import {
   headerLayout, latestAsOf, loadState, mountainRunTime, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
   GUIDE_MIN_COLUMN, GUIDE_SERIES, guideSplitX, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
+  REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -130,32 +131,39 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   const P = ['postPurchase:0', 'postPurchase:5', 'postPurchase:14', 'postPurchase:30'];
   assert.deepEqual(WELCOME_FIELDS, W);
   assert.deepEqual(POST_PURCHASE_FIELDS, P);
+  // USAGE-REENGAGEMENT-SPEC F1: the Re-engagement group (180, 270) after Post-purchase, before sku.
+  const R = ['reengagement:180', 'reengagement:270'];
+  assert.deepEqual(REENGAGEMENT_FIELDS, R);
   assert.deepEqual(SECTIONS.map((s) => [s.key, s.fields]), [
     ['broadcasts', ['cadence', 'lastBroadcast']],
-    ['journeys', [...W, ...P, 'sku']],
+    ['journeys', [...W, ...P, ...R, 'sku']],
     ['languages', ['skipped:fr', 'skipped:es', 'skipped:de', 'skipped:it']],
     ['configurations', ['attribution', 'sunset']],
   ]);
   assert.deepEqual(SORT_FIELDS, [
-    'score', 'brand', 'cadence', 'lastBroadcast', ...W, ...P, 'sku',
+    'score', 'brand', 'cadence', 'lastBroadcast', ...W, ...P, ...R, 'sku',
     'skipped:fr', 'skipped:es', 'skipped:de', 'skipped:it', 'attribution', 'sunset',
   ]);
-  assert.deepEqual(CIRCLE_FIELDS, [...W, ...P, 'sku']);
+  assert.deepEqual(CIRCLE_FIELDS, [...W, ...P, ...R, 'sku']);
   // The header: plain leaves in row 2 (rowspan 2), the sub-group labels over their leaves in row 3.
   const h = headerLayout();
   assert.deepEqual(h.row2.map((c) => (c.kind === 'group' ? `[${c.key}:${c.span}]` : c.field)), [
-    'cadence', 'lastBroadcast', '[welcome:4]', '[postPurchase:4]', 'sku', '[skipped:4]', 'attribution', 'sunset',
+    'cadence', 'lastBroadcast', '[welcome:4]', '[postPurchase:4]', '[reengagement:2]', 'sku', '[skipped:4]', 'attribution', 'sunset',
   ]);
   // G5 round 2: every group label takes the single-row headers' font size (small: false).
   assert.deepEqual(h.row2.filter((c) => c.kind === 'group').map((c) => [c.label, c.band, c.first, c.small]), [
     ['dashboard.usage.noPurchase', 'white', true, false], ['dashboard.usage.postPurchase', 'white', false, false],
+    ['dashboard.usage.reengagement', 'white', false, false],
     ['dashboard.usage.skipped', 'grey', true, false],
   ]);
   assert.deepEqual(h.row3.map((c) => [c.field, c.first, c.groupStart]), [
     ['welcome:0', true, true], ['welcome:2', false, false], ['welcome:5', false, false], ['welcome:10', false, false],
     ['postPurchase:0', false, true], ['postPurchase:5', false, false], ['postPurchase:14', false, false], ['postPurchase:30', false, false],
+    ['reengagement:180', false, true], ['reengagement:270', false, false],
     ['skipped:fr', true, true], ['skipped:es', false, false], ['skipped:de', false, false], ['skipped:it', false, false],
   ]);
+  assert.deepEqual(columnMeta('reengagement:180'), { label: 'dashboard.usage.npDays', params: { n: 180 }, help: 'series.reengagementDay180' });
+  assert.deepEqual(columnMeta('reengagement:270'), { label: 'dashboard.usage.npDays', params: { n: 270 }, help: 'series.reengagementDay270' });
   // S9: each leaf's header hover is its D5 description.
   assert.deepEqual(columnMeta('welcome:5'), { label: 'dashboard.usage.npDays', params: { n: 5 }, help: 'series.welcomeDay5' });
   assert.deepEqual(columnMeta('welcome:0'), { label: 'dashboard.usage.day0', help: 'series.welcomeDay0' });
@@ -171,7 +179,7 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
 // every label key the pane binds exists.
 test('I16: every leaf help, group label and score part key is in en.json', () => {
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
-  [...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS].forEach((f) => {
+  [...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS, ...REENGAGEMENT_FIELDS].forEach((f) => {
     const m = columnMeta(f);
     assert.equal(typeof en[m.help], 'string', `${f} help ${m.help}`);
     assert.equal(typeof en[m.label], 'string', `${f} label ${m.label}`);
@@ -192,7 +200,7 @@ test('V2 D1 / I1: the Score cell -- the stored total, the breakdown from parts v
   const [ruze] = shapeRows(api);
   const c = cell(ruze, 'score', t);
   assert.equal(c.text, '55');
-  assert.deepEqual(SCORE_PARTS.map((p) => p.key), ['broadcasts', 'welcomeSeries', 'postPurchaseSeries', 'attribution', 'sunset']);
+  assert.deepEqual(SCORE_PARTS.map((p) => p.key), ['broadcasts', 'welcomeSeries', 'postPurchaseSeries', 'reengagement', 'attribution', 'sunset']);
   assert.equal(
     c.tooltip,
     'dashboard.usage.partBroadcasts 40/40 · dashboard.usage.partWelcomeSeries 5/20 · dashboard.usage.partPostPurchaseSeries 0/20 · '
@@ -842,9 +850,11 @@ test('SKU column: stored counts as circles, rows in the tooltip, per-circle link
   assert.equal(linkTip(r, 'sku', t), ''); // like the series leaves: no link hint (circle cells show the tooltip only)
   assert.equal(sortValue(r, 'sku'), 3);
   assert.deepEqual(columnMeta('sku'), { label: 'dashboard.usage.sku', help: 'dashboard.usage.skuHelp' });
-  // None: a red 0, no link, sort 0.
+  // None: '—' (optional, never a red 0 -- user 2026-10-30), no link, sort 0.
   const [none] = shapeRows([{ brand: 'ruze', usage: usage({ sku: { rows: [], counts: { green: 0, amber: 0 } } }) }]);
-  assert.deepEqual(cell(none, 'sku', t).circles, [{ color: 'red', n: 0 }]);
+  assert.deepEqual(cell(none, 'sku', t).circles, []);
+  assert.equal(cell(none, 'sku', t).text, MISSING);
+  assert.equal(cell(none, 'sku', t).tooltip, 'dashboard.usage.skuNone');
   assert.equal(circleLink(none, 'sku', 'red'), null);
   assert.equal(sortValue(none, 'sku'), 0);
   // A doc written before the column (no `sku`): '—', no link, sorts last (null).
@@ -854,18 +864,19 @@ test('SKU column: stored counts as circles, rows in the tooltip, per-circle link
   assert.equal(sortValue(old, 'sku'), null);
   // The strings exist.
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
-  ['dashboard.usage.sku', 'dashboard.usage.skuHelp'].forEach((k) => assert.equal(typeof en[k], 'string', k));
+  ['dashboard.usage.sku', 'dashboard.usage.skuHelp', 'dashboard.usage.skuNone'].forEach((k) => assert.equal(typeof en[k], 'string', k));
 });
 
 // 2026-10-30: the in-section rules -- No-purchase | Post-purchase and Post-purchase | SKU, the same
 // on the header and every body column; no rule between plain leaves (Cadence | Last broadcast).
 test('dividers: header and body carry the same in-section rules', () => {
   const h = headerLayout();
-  assert.deepEqual(h.row2.filter((c) => c.divide).map((c) => (c.kind === 'group' ? `[${c.key}]` : c.field)), ['[postPurchase]', 'sku']);
-  assert.deepEqual(h.row3.filter((c) => c.divide).map((c) => c.field), ['postPurchase:0']);
+  // USAGE-REENGAGEMENT-SPEC: the Re-engagement group opens its own rule, like Post-purchase.
+  assert.deepEqual(h.row2.filter((c) => c.divide).map((c) => (c.kind === 'group' ? `[${c.key}]` : c.field)), ['[postPurchase]', '[reengagement]', 'sku']);
+  assert.deepEqual(h.row3.filter((c) => c.divide).map((c) => c.field), ['postPurchase:0', 'reengagement:180']);
   const cols = bodyColumns();
   assert.deepEqual(cols.map((c) => c.field), SORT_FIELDS.slice(2));
-  assert.deepEqual(cols.filter((c) => c.divide).map((c) => c.field), ['postPurchase:0', 'sku']);
+  assert.deepEqual(cols.filter((c) => c.divide).map((c) => c.field), ['postPurchase:0', 'reengagement:180', 'sku']);
   assert.deepEqual(cols.filter((c) => c.first).map((c) => c.field), ['cadence', 'welcome:0', 'skipped:fr', 'attribution']);
 });
 
@@ -929,11 +940,18 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   const tt = (k) => en[k];
   const g = seriesGuide(tt);
+  // USAGE-REENGAGEMENT-SPEC F3: three series -- the third titled "Re-engagement series" (not the
+  // group label), sublined "Sunset flow", its days REENGAGEMENT_DAYS.
   assert.deepEqual(g.map((s) => [s.family, tt(s.title), tt(s.subtitle)]), [
     ['welcome', 'No-purchase series', 'Welcome series'],
     ['postPurchase', 'Post-purchase series', 'New Customer series'],
+    ['reengagement', 'Re-engagement series', 'Sunset flow'],
   ]);
-  assert.deepEqual(g.map((s) => s.steps.map((x) => x.days)), [SERIES_DAYS.welcome, SERIES_DAYS.postPurchase]);
+  assert.deepEqual(g.map((s) => s.steps.map((x) => x.days)), [SERIES_DAYS.welcome, SERIES_DAYS.postPurchase, REENGAGEMENT_DAYS]);
+  assert.deepEqual(g[2].steps.map((x) => [x.title, x.quote]), [
+    ['We miss you', 'Still want to hear from us?'], ['Last chance', 'Should we stop emailing you?'],
+  ]);
+  assert.equal(SERIES_DAYS.reengagement, undefined); // never a series family
   g.flatMap((s) => s.steps).forEach((x) => {
     assert.ok(x.title && x.body, `day ${x.days}`);
   });
@@ -941,16 +959,93 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   assert.deepEqual(g[1].steps.map((x) => x.title), ['Thank you', 'Getting started', 'How\'s it going?', 'Your next favorite']);
   assert.equal(g[0].steps[1].quote, 'Still exploring? Here\'s why customers love [Brand].');
   assert.equal(g[1].steps[0].quote, '');
-  assert.equal(GUIDE_SERIES.length, 2);
+  assert.equal(GUIDE_SERIES.length, 3);
   assert.equal(typeof en['dashboard.usage.guideDay'], 'string');
 });
 
-test('guide: guideSplitX -- the measured line when both sides keep the minimum, else stacked (null)', () => {
+test('guide: guideSplitX -- the measured line when the left keeps the minimum and the right 2 x min, else stacked (null)', () => {
   assert.equal(guideSplitX(640.4, 1400), 640);
-  assert.equal(guideSplitX(GUIDE_MIN_COLUMN, GUIDE_MIN_COLUMN * 2), GUIDE_MIN_COLUMN);
+  // USAGE-REENGAGEMENT-SPEC F3: the right side holds two columns (Post-purchase, Re-engagement).
+  assert.equal(guideSplitX(GUIDE_MIN_COLUMN, GUIDE_MIN_COLUMN * 3), GUIDE_MIN_COLUMN);
+  assert.equal(guideSplitX(GUIDE_MIN_COLUMN, GUIDE_MIN_COLUMN * 3 - 1), null); // right side under 2 x min
+  assert.equal(guideSplitX(GUIDE_MIN_COLUMN, GUIDE_MIN_COLUMN * 2), null); // one column's room is not enough
   assert.equal(guideSplitX(GUIDE_MIN_COLUMN - 1, 1400), null); // too little room on the left
   assert.equal(guideSplitX(1200, 1400), null); // too little room on the right
   assert.equal(guideSplitX(-50, 1400), null); // the table scrolled the line off to the left
   assert.equal(guideSplitX(NaN, 1400), null);
   assert.equal(guideSplitX(600, undefined), null);
+});
+
+// USAGE-REENGAGEMENT-SPEC F2 -- the Re-engagement leaves: the stored circle verbatim, the tooltip
+// lines, '—' without the field, the per-circle link, ZMA dimmed, sort by state, and never a series leaf.
+test('F2: Re-engagement cells render the stored circle, tooltip, link and sort; not series leaves', () => {
+  const step = (days, queue, listId, state, color, n, extra = {}) => ({
+    days, queue, listId, state, circle: { color, n }, campaigns: [], waiting: 0, byLang: {}, uncovered: [], ...extra,
+  });
+  const reengagement = {
+    steps: [
+      step(180, 1, 49, 'idle', 'amber', 1, { waiting: 120, byLang: { en: 100, fr: 20 }, uncovered: ['fr', 'es'] }),
+      step(270, 2, 50, 'active', 'green', 2, { waiting: 3, byLang: { en: 3 } }),
+    ],
+  };
+  const [r] = shapeRows([{ brand: 'shala', usage: usage({ reengagement }) }]);
+  const c180 = cell(r, 'reengagement:180', t);
+  assert.deepEqual(c180.circles, [{ color: 'amber', n: 1, name: 'dashboard.usage.reCircleAttention' }]);
+  assert.equal(c180.tooltip, [
+    'series.reengagementDay180', 'dashboard.usage.reCircleAttention',
+    'dashboard.usage.reWaiting{"n":120}', 'dashboard.usage.reUncovered{"langs":"FR, ES"}',
+  ].join('\n'));
+  const c270 = cell(r, 'reengagement:270', t);
+  assert.deepEqual(c270.circles, [{ color: 'green', n: 2, name: 'dashboard.usage.reCircleRunning{"n":2}' }]);
+  assert.equal(c270.tooltip, ['series.reengagementDay270', 'dashboard.usage.reCircleRunning{"n":2}', 'dashboard.usage.reWaiting{"n":3}'].join('\n'));
+  // An amber with n 0 (zero evergreens on an active list) renders verbatim -- never circlesOf's red.
+  const zeroSteps = [step(180, 1, 49, 'idle', 'amber', 0), step(270, 2, null, 'none', 'red', 0, { waiting: null })];
+  const [idle0] = shapeRows([{ brand: 'x', usage: usage({ reengagement: { steps: zeroSteps } }) }]);
+  assert.deepEqual(cell(idle0, 'reengagement:180', t).circles, [{ color: 'amber', n: 0, name: 'dashboard.usage.reCircleAttention' }]);
+  assert.deepEqual(cell(idle0, 'reengagement:270', t).circles, [{ color: 'red', n: 0, name: 'dashboard.usage.reCircleNone' }]);
+  assert.equal(cell(idle0, 'reengagement:270', t).tooltip, 'series.reengagementDay270\ndashboard.usage.reCircleNone'); // waiting null: no line
+  // circleLink: the stored green/amber opens the queue list's automations; red, or another color, never.
+  assert.deepEqual(circleLink(r, 'reengagement:180', 'amber'), { list_id: ['49'], evergreen: 'true' });
+  assert.equal(circleLink(r, 'reengagement:180', 'green'), null);
+  assert.deepEqual(circleLink(r, 'reengagement:270', 'green'), { list_id: ['50'], evergreen: 'true' });
+  assert.deepEqual(circleLink(idle0, 'reengagement:180', 'amber'), { list_id: ['49'], evergreen: 'true' });
+  assert.equal(circleLink(idle0, 'reengagement:270', 'red'), null);
+  // sortValue by the stored state's rank (active 0, idle 1, none 2).
+  assert.equal(sortValue(r, 'reengagement:270'), 0);
+  assert.equal(sortValue(r, 'reengagement:180'), 1);
+  assert.equal(sortValue(idle0, 'reengagement:270'), 2);
+  // A doc without `reengagement`: '—' with seriesMissing, no link, sorts null.
+  const [old] = shapeRows([{ brand: 'ruze', usage: usage() }]);
+  const m = cell(old, 'reengagement:180', t);
+  assert.equal(m.text, MISSING);
+  assert.deepEqual(m.circles, []);
+  assert.equal(m.tooltip, 'series.reengagementDay180\ndashboard.usage.seriesMissing');
+  assert.equal(circleLink(old, 'reengagement:180', 'amber'), null);
+  assert.equal(sortValue(old, 'reengagement:180'), null);
+  // ZMA dimmed (Stage 2 F6), like welcome Day 0.
+  const [zma] = shapeRows([{ brand: 'z', usage: usage({ channel: 'zma', reengagement }) }]);
+  assert.equal(cell(zma, 'reengagement:180', t).text, MISSING);
+  assert.equal(cell(zma, 'reengagement:180', t).tooltip, 'dashboard.usage.zmaHelp');
+  assert.equal(circleLink(zma, 'reengagement:180', 'amber'), null);
+  assert.equal(sortValue(zma, 'reengagement:180'), null);
+  // Not series leaves (Stage 2 F4).
+  REENGAGEMENT_FIELDS.forEach((f) => assert.equal(seriesLeafOf(f), null, f));
+  assert.deepEqual(reengagementLeafOf('reengagement:270'), { days: 270 });
+  assert.equal(reengagementLeafOf('reengagement:120'), null);
+  assert.equal(reengagementLeafOf('welcome:5'), null);
+  // D3: each circle's accessible name.
+  assert.equal(reCircleName('green', 3, t), 'dashboard.usage.reCircleRunning{"n":3}');
+  assert.equal(reCircleName('amber', 0, t), 'dashboard.usage.reCircleAttention');
+  assert.equal(reCircleName('red', 0, t), 'dashboard.usage.reCircleNone');
+  // The score part renders after Post-purchase.
+  const reParts = { sunset: { points: 0, max: 10 }, reengagement: { points: 4, max: 10 }, postPurchaseSeries: { points: 0, max: 20 } };
+  assert.equal(
+    scoreTip({ total: 1, parts: reParts }, (k) => k),
+    'dashboard.usage.partPostPurchaseSeries 0/20 · dashboard.usage.partReengagement 4/10 · dashboard.usage.partSunset 0/10',
+  );
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['dashboard.usage.reengagement', 'dashboard.usage.reengagementHelp', 'dashboard.usage.reCircleRunning', 'dashboard.usage.reCircleAttention',
+    'dashboard.usage.reCircleNone', 'dashboard.usage.reWaiting', 'dashboard.usage.reUncovered', 'dashboard.usage.partReengagement',
+    'dashboard.usage.guideReengagement', 'dashboard.usage.guideSunset'].forEach((k) => assert.equal(typeof en[k], 'string', k));
+  assert.equal(en['dashboard.usage.reengagement'], 'Re-engagement');
 });

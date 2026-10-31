@@ -10,6 +10,7 @@ import {
   LIST_TYPE_BROADCAST, LIST_TYPE_JOURNEY, listTypeOf, journeyOption, buildListTypeTrigger,
   listTypeHelpKey, triggerHelpKeys, DAYS_PRESETS, POST_PURCHASE_DAYS_PRESETS, daysRadios, seriesStepKey,
   SERIES_WELCOME, SERIES_POST_PURCHASE, WELCOME_STEP_DAYS, POST_PURCHASE_STEP_DAYS,
+  SERIES_REENGAGEMENT, REENGAGEMENT_DAYS, STEP_TRIGGERS, seriesOfTrigger,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 // JOURNEY-UX-SPEC IA4 -- the selector's help follows the value (A1.4); A1.3's bold lead + prose.
@@ -161,6 +162,22 @@ test('I16: every series description key exists in en.json', () => {
   // LIFECYCLE-SERIES §10 A1 -- on screen the first series is the No-purchase series; the journey
   // guide's heading is the ONE value allowed the industry name.
   assert.deepEqual(Object.keys(en).filter((k) => /welcome series/i.test(en[k])), ['dashboard.usage.guideWelcome']);
+});
+
+// USAGE-REENGAGEMENT-SPEC D6 -- seriesStepKey extended with the reengagement family: its two
+// standard days resolve to keys that exist; an off-standard day has no text (null, no legacy).
+test('reengagement family: seriesStepKey on REENGAGEMENT_DAYS only', () => {
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.deepEqual([...REENGAGEMENT_DAYS], [180, 270]);
+  REENGAGEMENT_DAYS.forEach((d) => {
+    const k = seriesStepKey(SERIES_REENGAGEMENT, d);
+    assert.equal(k, `series.reengagementDay${d}`);
+    assert.equal(typeof en[k], 'string', k);
+  });
+  assert.equal(seriesStepKey(SERIES_REENGAGEMENT, 0), null);
+  assert.equal(seriesStepKey(SERIES_REENGAGEMENT, 120), null);
+  // Never a step-trigger family.
+  assert.equal(STEP_TRIGGERS.map(seriesOfTrigger).includes(SERIES_REENGAGEMENT), false);
 });
 
 test('no_purchase: picker label and sub-line item (LIFECYCLE-SERIES-SPEC S10 phrases)', () => {

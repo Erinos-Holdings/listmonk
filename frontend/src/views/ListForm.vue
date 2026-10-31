@@ -121,7 +121,7 @@
               <!-- LIFECYCLE-SERIES-SPEC S7/D5: the step's days -- 2/5/10 (No-purchase series) or 5/14/30
               (Post-purchase series), a stored off-pattern value as a "N days (legacy)" radio; each
               radio hovers with its D5 description (listTrigger.mjs::daysRadios). -->
-              <b-field v-if="triggerOption === k.value" :key="`days-${k.value}`" :label="$t(k.daysLabel)"
+              <b-field v-if="triggerOption === k.value" :key="`days-${k.value}`" class="trigger-days" :label="$t(k.daysLabel)"
                 :type="daysText === '' || daysOk ? '' : 'is-danger'" data-cy="list-trigger-days">
                 <b-radio v-for="r in daysOptions" :key="r.days" v-model="daysText" :native-value="String(r.days)"
                   name="join_trigger_days" :disabled="locked" :title="$t(r.help)" :data-cy="`list-trigger-days-${r.days}`">

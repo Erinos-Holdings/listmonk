@@ -24,8 +24,10 @@ import (
 // STORES itself (the rest is the integrations BrandHealth Lambda's, rendered verbatim). The item
 // texts are internal/decisions/lifecycle.json; the rows are the append-only usage_decisions table.
 //
-//   GET  /api/usage/decisions       brands:get      every item, its current state and history, and
+//   GET  /api/usage/decisions       brands:get      every item, its current state and history,
 //                                                   can_decide (canDecide -- the POST's own gate)
+//                                                   and the non-decision tables, verbatim
+//                                                   (USAGE-REENGAGEMENT-SPEC D8; never approvable)
 //   POST /api/usage/decisions/:key  brands:decide   one decision, gated by canDecide in the handler
 //
 // After a write commits, a goroutine posts one notice to #integrations-notices
@@ -40,16 +42,17 @@ const (
 	decisionNoticeTimeout = 5 * time.Second
 )
 
-// canDecide is D3's ONE predicate: a user-type account (never an API token), whose role is not
-// Super Admin on EITHER role field (a retrieved user carries its role in UserRole.ID with UserRoleID
-// zeroed -- core.setupUserFields -- the isAnalyticsOnly precedent), holding brands:decide read
-// directly from PermissionsMap (never HasPerm, whose Super Admin short-circuit would let it in).
+// canDecide is D3's ONE predicate: a user-type account (never an API token) that is Super Admin
+// on EITHER role field (a retrieved user carries its role in UserRole.ID with UserRoleID zeroed --
+// core.setupUserFields -- the isAnalyticsOnly precedent) or holds brands:decide, read directly
+// from PermissionsMap. Super Admin may decide (D3 amendment 2026-10-30, the user's call, so the
+// record can be tested by its owner); every decision names its user.
 func canDecide(u auth.User) bool {
 	if u.Type != auth.UserTypeUser {
 		return false
 	}
 	if u.UserRole.ID == auth.SuperAdminRoleID || u.UserRoleID == auth.SuperAdminRoleID {
-		return false
+		return true
 	}
 	_, ok := u.PermissionsMap[auth.PermBrandsDecide]
 	return ok

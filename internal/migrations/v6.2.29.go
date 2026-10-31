@@ -15,8 +15,8 @@ import (
 // bug cannot rewrite history (the fork's queries hold only an INSERT and a SELECT for it). No
 // foreign key to users: a deleted user's history survives, and user_name is a snapshot. It also
 // grants the new brands:decide permission to Super Admin (role 1), keeping the v6.2.17 invariant
-// (TestSuperAdminHoldsEveryPermission) -- Super Admin is nevertheless REFUSED a decision by
-// cmd/usage_decisions.go::canDecide (D3), so the grant is inert.
+// (TestSuperAdminHoldsEveryPermission). cmd/usage_decisions.go::canDecide admits Super Admin by
+// role either way (D3, amended 2026-10-30).
 //
 // ROLLBACK: pin the previous image and re-apply the host. The older binary never reads or writes
 // the table, and an unknown permission on role 1 is inert; no DDL reversal is needed.

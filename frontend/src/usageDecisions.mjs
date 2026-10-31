@@ -8,6 +8,8 @@
 export const SECTION_NO_PURCHASE = 'no-purchase';
 export const SECTION_POST_PURCHASE = 'post-purchase';
 export const SECTION_BOTH = 'both';
+// USAGE-REENGAGEMENT-SPEC D7/D9: the Curated Sunset Policy block (full width, below Both series).
+export const SECTION_SUNSET_POLICY = 'sunset-policy';
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -30,20 +32,63 @@ export function denverDay(iso) {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
-// The section header: "Approver: <approver> · Spec published <published>", both from the GET.
-export function headerText(view, t = (k) => k) {
+// The section's framing lines (2026-10-30 polish): "Spec published <published>" under the centered
+// title, and "Approver: <approver>" at the bottom -- both from the GET.
+export function publishedText(view, t = (k) => k) {
   const v = isObj(view) ? view : {};
-  return t('decisions.header', { approver: String(v.approver || ''), published: String(v.published || '') });
+  return t('decisions.published', { published: String(v.published || '') });
 }
 
-// The items split into the guide's two columns plus the full-width Both series, in file order.
+export function approverText(view, t = (k) => k) {
+  const v = isObj(view) ? view : {};
+  return t('decisions.approver', { approver: String(v.approver || '') });
+}
+
+// The labels set in bold at the start of a later line ("Recommended:", "NOTE:").
+export const LEAD_LABELS = Object.freeze(['Recommended:', 'NOTE:']);
+
+// textLines splits a bullet's text into its lines, each { lead, rest } with `lead` set in bold: the
+// FIRST line's lead is its first sentence (through the first ". ", or the whole line when it has
+// none -- "Entry.", "Exit on purchase (your W01–W05 request)."); a later line's lead is a LEAD_LABELS
+// label it starts with, else ''. Presentation only: the stored text (and its hash) is unchanged.
+export function textLines(text) {
+  return String(text == null ? '' : text).split('\n').map((line, i) => {
+    if (i === 0) {
+      const at = line.indexOf('. ');
+      return at < 0 ? { lead: line, rest: '' } : { lead: line.slice(0, at + 1), rest: line.slice(at + 1) };
+    }
+    const label = LEAD_LABELS.find((l) => line.startsWith(l));
+    return label ? { lead: label, rest: line.slice(label.length) } : { lead: '', rest: line };
+  });
+}
+
+// The items split into the guide's two columns plus the full-width Both series and Curated Sunset
+// Policy blocks, in file order.
 export function columnsOf(view) {
   const items = isObj(view) && Array.isArray(view.items) ? view.items.filter(isObj) : [];
   return {
     noPurchase: items.filter((i) => i.section === SECTION_NO_PURCHASE),
     postPurchase: items.filter((i) => i.section === SECTION_POST_PURCHASE),
     both: items.filter((i) => i.section === SECTION_BOTH),
+    sunsetPolicy: items.filter((i) => i.section === SECTION_SUNSET_POLICY),
   };
+}
+
+const strings = (a) => Array.isArray(a) && a.every((s) => typeof s === 'string');
+
+// USAGE-REENGAGEMENT-SPEC D8/D9: a section's stored non-decision table from the GET's `tables` --
+// { columns, rows, note } verbatim -- or null when the view carries none (an older fork) or it is
+// malformed (no columns, a ragged or non-string row). Rendered, never approvable.
+export function tableOf(view, section) {
+  const tables = isObj(view) && isObj(view.tables) ? view.tables : null;
+  const tb = tables && isObj(tables[section]) ? tables[section] : null;
+  if (!tb || !strings(tb.columns) || !tb.columns.length || !Array.isArray(tb.rows)) {
+    return null;
+  }
+  if (!tb.rows.every((r) => strings(r) && r.length === tb.columns.length)) {
+    return null;
+  }
+  return { columns: tb.columns, rows: tb.rows, note: typeof tb.note === 'string' ? tb.note : '' };
 }
 
 // A bullet's number: "3", or '' for a Both series item (n null).

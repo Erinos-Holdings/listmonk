@@ -176,6 +176,9 @@ hr.form-divider {
 
 // The list form's journey triggers: a radio and, while selected, its help (ListForm.vue). The
 // wrapper carries the field gap so the help sits tight under its radio.
+// $trigger-label-indent is where a radio's label text starts: Buefy's check ($radio-size 1.25em)
+// plus the label's padding (Bulma's $control-padding-horizontal, 0.75em - 1px), at the radio's 1rem.
+$trigger-label-indent: calc(2rem - 1px);
 .list-journey-pane .trigger-option {
   margin-bottom: 0.75rem;
 
@@ -184,8 +187,12 @@ hr.form-divider {
   }
   .trigger-help {
     margin-top: 0.25rem;
-    padding-left: 1.75rem;
+    padding-left: $trigger-label-indent;
   }
+}
+// A step's days field (its label and radios) sits under its radio's label text too.
+.list-journey-pane .trigger-days {
+  padding-left: $trigger-label-indent;
 }
 
 .navbar-item.user {
@@ -1182,6 +1189,18 @@ section.dashboard (which reopens after them). */
   }
   /* V2 D3: one circle per state, the stored count inside; a 1px same-hue ring keeps each crisp on
   white and grey bands alike. Amber carries dark text for contrast. */
+  /* 2026-10-30 polish: the legacy step chip ("15d") takes the circle's box -- its height, minimum
+  width and side padding -- so it reads as a peer of the circles, not a wide tag. */
+  .tag.bu-legacy {
+    height: 1.45rem;
+    min-width: 1.45rem;
+    padding: 0 0.3rem;
+    font-size: 0.75rem;
+    line-height: 1;
+  }
+  a.tag.bu-legacy:hover {
+    filter: brightness(0.92);
+  }
   .bu-circle {
     display: inline-flex;
     align-items: center;
@@ -1222,8 +1241,12 @@ section.dashboard (which reopens after them). */
     border-top: 1px solid #e8eaed;
     display: grid;
     gap: 2rem;
+    /* USAGE-REENGAGEMENT-SPEC D6: a third column -- Post-purchase still hugs the measured divider
+    from the right, and the Re-engagement series follows it in its own <= 32rem column behind a
+    second divider (its border-left). The two right columns share the right side equally up to 32rem
+    each; guideSplitX requires 2 x GUIDE_MIN_COLUMN there, else the whole guide stacks. */
     &.bu-guide-split {
-      grid-template-columns: var(--bu-guide-x) minmax(0, 1fr);
+      grid-template-columns: var(--bu-guide-x) minmax(0, 32rem) minmax(0, 32rem);
       gap: 0;
       &::before {
         content: '';
@@ -1237,8 +1260,13 @@ section.dashboard (which reopens after them). */
         justify-self: end;
         padding-right: 2rem;
       }
-      .bu-guide-series:last-child {
+      .bu-guide-postPurchase {
         padding-left: 2rem;
+        padding-right: 2rem;
+      }
+      .bu-guide-reengagement {
+        padding-left: 2rem;
+        border-left: 1px solid #dbdee2;
       }
       /* Row-for-row alignment: ONE grid of a heading row + one row per step, each series and its
       list a subgrid of it, so step N of both series shares a row (the taller text sets the
@@ -1346,31 +1374,84 @@ section.dashboard (which reopens after them). */
   /* Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D5) -- the decision record under the
   guide: the header and Both series span the width; the two series sit in the guide's columns,
   split at the same measured --bu-guide-x (stacked when the guide is). Neutral like the guide. */
+  /* 2026-10-30 polish: the guide's margins -- each series column is the guide list's box (32rem,
+  hugging the divider from its side), and the title, Both series and the approver line span exactly
+  from the No-purchase list's left edge to the Post-purchase list's right edge (--bu-guide-x ±
+  32rem, clipped to the pane), so nothing runs to the page margins. Stacked: one 32rem column. */
   .bu-decisions {
     margin-top: 1.5rem;
     padding-top: 1.25rem;
     border-top: 1px solid #e8eaed;
     display: grid;
     gap: 1.5rem;
+    .bu-decisions-col,
+    .bu-decisions-head,
+    .bu-decisions-approver {
+      max-width: 32rem;
+      width: 100%;
+    }
     &.bu-decisions-split {
       grid-template-columns: var(--bu-guide-x) minmax(0, 1fr);
       column-gap: 0;
       .bu-decisions-no-purchase {
+        justify-self: end;
         padding-right: 2rem;
         border-right: 1px solid #dbdee2;
       }
       .bu-decisions-post-purchase {
         padding-left: 2rem;
       }
+      .bu-decisions-head,
+      .bu-decisions-both,
+      .bu-decisions-sunset-policy,
+      .bu-decisions-approver {
+        margin-left: #{'max(0px, calc(var(--bu-guide-x) - 32rem))'};
+        width: #{'calc(min(var(--bu-guide-x), 32rem) + 32rem)'};
+        max-width: #{'calc(100% - max(0px, calc(var(--bu-guide-x) - 32rem)))'};
+      }
     }
     .bu-decisions-head,
-    .bu-decisions-both {
+    .bu-decisions-both,
+    .bu-decisions-sunset-policy,
+    .bu-decisions-approver {
       grid-column: 1 / -1;
     }
   }
-  .bu-decisions-head {
+  /* USAGE-REENGAGEMENT-SPEC D9/D10: the Curated Sunset Policy block -- Both series' box, the grey
+  planned-policy line under its heading, the non-decision table, then its note in small italic. */
+  .bu-decisions-planned {
+    color: $grey;
+  }
+  .bu-decisions-table {
+    margin-top: 0.5rem;
     font-size: 0.875rem;
+    .table {
+      margin-bottom: 0.25rem;
+      background: transparent;
+    }
+  }
+  .bu-decisions-table-note {
+    font-size: 0.75rem;
+    font-style: italic;
     color: $grey-dark;
+    margin: 0;
+  }
+  .bu-decisions-head {
+    text-align: center;
+  }
+  .bu-decisions-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #363636;
+    margin: 0;
+  }
+  /* Every approval-related line is italic (the published/approver lines, the state line, notes,
+  history); the item text stays upright. */
+  .bu-decisions-meta {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: $grey-dark;
+    margin: 0.1rem 0 0;
   }
   .bu-decision-list {
     list-style: none;
@@ -1385,9 +1466,11 @@ section.dashboard (which reopens after them). */
       margin: 0;
     }
   }
-  .bu-decision-text,
   .bu-decision-note {
     white-space: pre-line;
+  }
+  .bu-decision-line {
+    display: block;
   }
   .bu-decision-n {
     margin-right: 0.35rem;
@@ -1395,6 +1478,7 @@ section.dashboard (which reopens after them). */
   .bu-decision-state {
     margin-top: 0.3rem !important;
     font-size: 0.8rem;
+    font-style: italic;
     color: $grey;
     &.bu-decision-accepted,
     &.bu-decision-rejected {
@@ -1405,6 +1489,7 @@ section.dashboard (which reopens after them). */
   .bu-decision-note {
     display: block;
     font-size: 0.8rem;
+    font-style: italic;
     color: $grey-dark;
   }
   .bu-decision-controls {
@@ -1416,6 +1501,7 @@ section.dashboard (which reopens after them). */
   .bu-decision-history {
     margin-top: 0.3rem;
     font-size: 0.8rem;
+    font-style: italic;
     color: $grey;
     summary {
       cursor: pointer;

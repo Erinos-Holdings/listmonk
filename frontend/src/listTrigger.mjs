@@ -39,6 +39,14 @@ export const POST_PURCHASE_STEP_DAYS = Object.freeze([5, 14, 30]);
 export const SERIES_WELCOME = 'welcome';
 export const SERIES_POST_PURCHASE = 'postPurchase';
 
+// USAGE-REENGAGEMENT-SPEC D6 -- the Usage pane's Re-engagement group (the two sunset queue asks)
+// and the journey guide's third series. NOT a step-trigger family: no list trigger maps to it (the
+// queues are filled by the ListmonkSunset Lambda), and the Lists form never passes it. Its days are
+// display labels (D10). Cross-repo literal (the SES_DAILY_ZONE precedent; no test spans the repos):
+// integrations lib/brand-usage.ts REENGAGEMENT_DAYS carries the same values -- change both together.
+export const SERIES_REENGAGEMENT = 'reengagement';
+export const REENGAGEMENT_DAYS = Object.freeze([180, 270]);
+
 export function seriesOfTrigger(option) {
   if (option === TRIGGER_NO_PURCHASE) return SERIES_WELCOME;
   if (option === TRIGGER_POST_PURCHASE) return SERIES_POST_PURCHASE;
@@ -50,7 +58,12 @@ export function seriesOfTrigger(option) {
 // standard step day), else the family's own legacy description `series.<family>Legacy` (Stage 4
 // F2 -- each names its own standard days); null for an unknown family. Each text has one home in
 // en.json; the Lists form's radios and the Usage pane's leaves both resolve through here.
+// USAGE-REENGAGEMENT-SPEC D6: the `reengagement` family's standard days are REENGAGEMENT_DAYS; it
+// has no legacy text, so an off-standard day is null.
 export function seriesStepKey(family, days) {
+  if (family === SERIES_REENGAGEMENT) {
+    return REENGAGEMENT_DAYS.includes(days) ? `series.${family}Day${days}` : null;
+  }
   let std = null;
   if (family === SERIES_WELCOME) std = [0, ...WELCOME_STEP_DAYS];
   if (family === SERIES_POST_PURCHASE) std = [0, ...POST_PURCHASE_STEP_DAYS];
