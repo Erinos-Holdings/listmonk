@@ -1184,12 +1184,14 @@ section.dashboard (which reopens after them). */
     /* 2026-10-31 polish 2: a `hug` group's two leaves (Re-engagement 180d | 270d) -- the label is
     wider than the pair, so the first leaf's header and circles sit against the group's centre line
     from the left and the second's from the right: the pair spaced like the other groups' leaves,
-    the slack on the outside. After `thead th { text-align: center }`, which it overrides. */
-    th.bu-align-right, td.bu-align-right {
+    the slack on the outside. After `thead th { text-align: center }`, which it overrides.
+    Scoped under table.bu-table like bu-pad-l/r: the generic `table.bu-table td` padding rule above
+    outranks a bare `td.bu-align-*` (1,2,2 vs 1,2,1), so an unscoped padding here never applies. */
+    table.bu-table th.bu-align-right, table.bu-table td.bu-align-right {
       text-align: right;
       padding-right: 1.25em; // 2026-11-01 polish: the pair spaced like the Post-purchase leaves, not touching
     }
-    th.bu-align-left, td.bu-align-left {
+    table.bu-table th.bu-align-left, table.bu-table td.bu-align-left {
       text-align: left;
       padding-left: 1.25em;
     }
