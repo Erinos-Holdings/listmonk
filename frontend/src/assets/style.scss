@@ -1532,6 +1532,16 @@ section.dashboard (which reopens after them). */
   behaviour above it. */
   .bu-decision-recommended {
     color: #cc0f35;
+    /* 2026-11-01 (user): the bold "Recommended:" label too -- Bulma sets `strong { color }` directly,
+    so the span's colour was not inherited by the label and it stayed dark grey. */
+    strong {
+      color: #cc0f35;
+    }
+  }
+  /* 2026-11-01 (user): a blank row before each recommendation -- one line of space above the first
+  red line, the adjacent-sibling rule so the text and its hash stay unchanged. */
+  .bu-decision-line:not(.bu-decision-recommended) + .bu-decision-line.bu-decision-recommended {
+    margin-top: 1.4em;
   }
   .bu-decision-n {
     margin-right: 0.35rem;

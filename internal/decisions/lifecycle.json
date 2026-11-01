@@ -90,8 +90,8 @@
       "key": "both-per-brand",
       "section": "both",
       "n": 13,
-      "since": "2026-10-31",
-      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, three No-purchase steps and every broadcast the brand sends in their first 10 days — up to seven emails in ten days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nRecommended:\n1. A \"Smart Sending\" rule, per brand, broadcasts only: skip a broadcast to anyone who received a journey email from the same brand in the last 24 hours. Journeys are exempt: one-shot and time-bound.\nNOTE: A skip, not a defer. A listmonk campaign finishes and doesn't revisit, so there is no \"tomorrow\" to defer to. (Klaviyo Smart Sending skips too: 16-hour default, per account, no cross-brand awareness.)\n2. Fix the same-day double (item 3): the one stack that hits every checkout opt-in.\n3. Keep sunset as the backstop, and watch complaint rates in Brand Health: fatigue shows up there first."
+      "since": "2026-11-01",
+      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, three No-purchase steps and every broadcast the brand sends in their first 10 days — up to seven emails in ten days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nRecommended:\n1. A \"Smart Sending\" rule, per brand, broadcasts only: skip a broadcast to anyone who received a journey email from the same brand in the last 24 hours. Journeys are exempt: one-shot and time-bound. (Klaviyo Smart Sending skips too: 16-hour default, per account, no cross-brand awareness.)\n2. Fix the same-day double (item 3): the one stack that hits every checkout opt-in.\n3. Keep sunset as the backstop, and watch complaint rates in Brand Health: fatigue shows up there first."
     },
     {
       "key": "both-language",

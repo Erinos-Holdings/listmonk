@@ -43,7 +43,7 @@ func TestItemsShape(t *testing.T) {
 		{"pp-final-step-skip", SectionPostPurchase, intp(10), "2026-10-30"},
 		{"pp-returning-thanks", SectionPostPurchase, intp(11), "2026-10-30"},
 		{"both-multi-brand", SectionBoth, intp(12), "2026-10-31"},
-		{"both-per-brand", SectionBoth, intp(13), "2026-10-31"},
+		{"both-per-brand", SectionBoth, intp(13), "2026-11-01"},
 		{"both-language", SectionBoth, intp(14), "2026-10-31"},
 		// USAGE-REENGAGEMENT-SPEC D7: the Curated Sunset Policy section.
 		{"sp-scope", SectionSunsetPolicy, intp(15), "2026-10-30"},
@@ -120,7 +120,7 @@ var pinnedHashes = map[string]string{
 	"pp-final-step-skip":   "3f068c366f42b25026a83d1503499af293c02791c7ca4784e4e1dc3a85b65e95",
 	"pp-returning-thanks":  "96bad4eae80e5bbb49a8517ec66c8b9daae5d2458142e0bc7bc7a78fb572e64b",
 	"both-multi-brand":     "cce91d6c3233d5109155fd799daa3cd573b13f283be22c296c8c9f3a6d821bd6",
-	"both-per-brand":       "22c62880631320e478228b0ddcdb713afc79733054e1afe0a882db76d4c94865",
+	"both-per-brand":       "fffd6054bb4f91b4c3e0e2cd09a38bdf326bc3bc4e7bed46a93fb50d0e1ae9ef", // NOTE line dropped, Klaviyo aside kept (2026-11-01)
 	"both-language":        "578c218c31eaab2268ed5b8f3fdbf306f4573c3ac4211b697f86e92392cb9d0f",
 	"sp-scope":             "b82a9e15281891935c2c3afc621e29db5f26497c40d8988ba87f32615ba5a54b",
 	"sp-engagement":        "062c825492e7b62fb3c206bd99ed4ab4632a2b424cb14786058d22516e78263c",
