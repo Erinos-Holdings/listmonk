@@ -101,7 +101,8 @@ export default Vue.extend({
 
   computed: {
     brand() {
-      return pickBrand(this.previews.brands, this.$route.query.brand);
+      // Stage 4 F4: the default is the picker's first option (label order), not the first slug.
+      return pickBrand(this.brandOptions.map((b) => b.slug), this.$route.query.brand);
     },
 
     brandOptions() {

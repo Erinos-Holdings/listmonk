@@ -1393,14 +1393,10 @@ section.dashboard (which reopens after them). */
       &.jp-split {
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 0;
+        // Stage 4 F1: every column keeps the same side padding so the ONE measured render width
+        // (JourneyPreview.vue::measure reads the first box) fits all three.
         .jp-series {
           padding: 0 1.5rem;
-        }
-        .jp-series:first-child {
-          padding-left: 0;
-        }
-        .jp-series:last-child {
-          padding-right: 0;
         }
         .jp-series + .jp-series {
           border-left: 1px solid #dbdee2;
