@@ -268,7 +268,7 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  GUIDE_MIN_COLUMN, GUIDE_SERIES, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad,
+  GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad, pageWidth,
   linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
@@ -561,13 +561,14 @@ export default Vue.extend({
       return this.usage.sort.order === 'asc' ? '↑' : '↓';
     },
 
-    // 2026-11-02 (user): ONE page width, owned here. The table's NATURAL width (its measured width
-    // minus the current line pads) sets it; the guide and the decision record are set to exactly
-    // that width (three equal columns of it, style.scss), and only when the table is narrower than
-    // the guide's minimum (GUIDE_MIN_COLUMN x 3) does the table get padded UP to that minimum
-    // (brandUsage.mjs::linePad). So a wider table — a new leaf, a wider header — widens the
-    // documentation by itself; nothing elsewhere has to be kept in step. Stacked (narrow) layouts
-    // carry neither the width nor the pad.
+    // 2026-11-02 (user): ONE page width, owned here -- brandUsage.mjs::pageWidth: the WIDER of the
+    // table's natural width (its measured width minus the current line pads) and the
+    // documentation's standard width (three GUIDE_COLUMN_REM columns, capped by the container).
+    // The table is padded UP to it along its group dividers (brandUsage.mjs::linePad -- the
+    // padding at the secondary headers), and the guide and the decision record are set to exactly
+    // that width (three equal columns of it, style.scss). So a table wider than the standard -- a
+    // new leaf, a wider header -- widens the documentation by itself; nothing elsewhere has to be
+    // kept in step. Stacked (narrow) layouts carry neither the width nor the pad.
     measureGuide() {
       this.$nextTick(() => this.fitTable(0));
     },
@@ -584,7 +585,8 @@ export default Vue.extend({
       const lines = row.querySelectorAll('td.bu-start, td.bu-substart').length;
       const measured = table.getBoundingClientRect().width;
       const natural = Math.max(0, measured - 2 * lines * this.linePadPx);
-      const target = Math.max(natural, GUIDE_MIN_COLUMN * GUIDE_SERIES.length);
+      const rem = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+      const target = pageWidth(natural, GUIDE_SERIES.length * GUIDE_COLUMN_REM * rem, this.$el.clientWidth);
       this.guideSplit = guideColumnsFit(target);
       this.fitWidthPx = this.guideSplit ? Math.round(target) : 0;
       const next = this.guideSplit ? linePad(target, measured, this.linePadPx, lines) : 0;

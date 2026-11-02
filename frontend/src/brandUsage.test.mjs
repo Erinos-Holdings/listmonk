@@ -8,7 +8,7 @@ import {
   boolCell, broadcastTip, cell, cellBadges, cellLink, circlesOf, circleWords, clickSort, columnMeta, defaultOrder,
   headerLayout, latestAsOf, loadState, mountainRunTime, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
-  GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
+  GUIDE_COLUMN_REM, GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, pageWidth, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
   REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
@@ -1009,6 +1009,17 @@ test('guide: guideColumnsFit -- side by side when every series keeps the minimum
   assert.equal(guideColumnsFit(GUIDE_MIN_COLUMN * 2, GUIDE_MIN_COLUMN, 2), true);
   assert.equal(guideColumnsFit(NaN), false);
   assert.equal(guideColumnsFit(undefined), false);
+});
+
+test('table: pageWidth (2026-11-02) -- the wider of the natural table and three standard columns capped by the container', () => {
+  assert.equal(GUIDE_COLUMN_REM, 32);
+  assert.equal(pageWidth(1400, 1536, 1800), 1536); // the standard wins: the table is padded out to it
+  assert.equal(pageWidth(1600, 1536, 1800), 1600); // a wider table wins: the documentation follows it
+  assert.equal(pageWidth(1400, 1536, 1500), 1500); // the standard is capped by the container; the table never is
+  assert.equal(pageWidth(1600, 1536, 1500), 1600);
+  assert.equal(pageWidth(1400, 1536, NaN), 1536); // no container measure: the standard stands
+  assert.equal(pageWidth(NaN, 1536, 1800), 1536);
+  assert.equal(pageWidth(1400, NaN, 1800), 1400);
 });
 
 test('table: linePad -- the per-side pad that widens the table to the guide, from its unpadded width', () => {

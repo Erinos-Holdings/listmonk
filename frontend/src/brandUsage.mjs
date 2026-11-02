@@ -90,6 +90,25 @@ export function seriesGuide(t = (k) => k) {
 // The narrowest a guide column may be; below it the guide stacks.
 export const GUIDE_MIN_COLUMN = 300;
 
+// The documentation's standard column, in rem (the 2026-10-31 polish's 32rem columns). The page
+// width (BrandUsage.vue::fitTable) is the WIDER of the table's natural width and three of these
+// (capped by the container): the table is padded out to it along its group dividers -- the
+// "little padding" at the secondary headers -- and the guide and the decision record are set to
+// exactly that width. Change here, nowhere else.
+export const GUIDE_COLUMN_REM = 32;
+
+// pageWidth (2026-11-02, user) is that one rule, pure: `natural` the table's unpadded width,
+// `standard` three standard columns in px, `container` the available width (the standard is
+// capped by it, the table never is).
+export function pageWidth(natural, standard, container) {
+  const ok = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+  let std = ok(standard) ? standard : 0;
+  if (std && ok(container)) {
+    std = Math.min(std, container);
+  }
+  return Math.max(ok(natural) ? natural : 0, std);
+}
+
 // guideColumnsFit (2026-10-31 polish) decides the guide's layout from its measured width: side by
 // side -- one left-justified column per series, no longer aligned to the table's No-purchase |
 // Post-purchase line -- when every series keeps GUIDE_MIN_COLUMN, else stacked (false). The
