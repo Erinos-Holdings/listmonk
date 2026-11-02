@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // newFinalQueueFixture is a bpFixture with a manager and the four queue lists of brand list 23
@@ -17,7 +18,9 @@ import (
 func newFinalQueueFixture(t *testing.T) (f *bpFixture, q map[int]int, plain int) {
 	t.Helper()
 	f = newBPFixture(t)
-	ensureManager(f.h.linkHarness)
+	// The URL-configured manager, so the footer guard sees a rendered unsubscribe link and the
+	// status pass-throughs below are answered by the rule after it.
+	ensureReviewManager(f.h.linkHarness)
 	q = map[int]int{
 		1: f.sqlList("Brand re-engagement 1", "reengage:23:1"),
 		2: f.sqlList("Brand re-engagement 2", "reengage:23:2"),
@@ -86,9 +89,8 @@ func TestCampaignFinalQueueCreateUpdate(t *testing.T) {
 
 // K2 + K3 (Start, Schedule) -- the stored campaign's lists are read: a regular campaign saved on an
 // untagged list that is LATER tagged reengage:23:4 is refused at running and scheduled with its
-// status unchanged; a regular campaign on queue 1 and an evergreen on queue 4 are not refused by
-// this guard (later guards -- footer, review -- may still answer; only this refusal is asserted
-// absent).
+// status unchanged; a regular campaign on queue 1 or 2 enters running / scheduled, and an evergreen
+// on queue 4 is answered by the next rule (the automation feature flag), not this one.
 func TestCampaignFinalQueueStatus(t *testing.T) {
 	f, q, plain := newFinalQueueFixture(t)
 
@@ -102,20 +104,29 @@ func TestCampaignFinalQueueStatus(t *testing.T) {
 		}
 	}
 
-	refusal := func(l int) string {
-		return f.h.app.i18n.Ts("campaigns.finalQueueNoBroadcast", "list", "Brand re-engagement "+itoa(l))
-	}
-
-	r := f.campaignOf("create on queue 1", f.postCampaign(q[1], "", nil))
-	e := f.campaignOf("create evergreen on queue 4", f.postCampaign(q[4], "", map[string]any{"evergreen": true}))
-	for _, st := range []string{"running", "scheduled"} {
-		if rec := f.putStatus(r.ID, st); message(rec) == refusal(1) {
-			t.Fatalf("queue-1 campaign refused at %s by the final-queue guard", st)
+	// K3 -- a body the footer guard accepts (the fixture's manager renders the unsubscribe URL)
+	// and no review_url: a regular campaign on queue 1 or queue 2 actually enters running /
+	// scheduled.
+	body := `hello <a href="{{ UnsubscribeURL }}">unsubscribe</a>`
+	for _, n := range []int{1, 2} {
+		for _, st := range []string{"running", "scheduled"} {
+			extra := map[string]any{"body": body}
+			if st == "scheduled" {
+				extra["send_at"] = time.Now().Add(48 * time.Hour).Format(time.RFC3339)
+			}
+			r := f.campaignOf("create on queue "+itoa(n), f.postCampaign(q[n], "", extra))
+			f.ok("queue "+itoa(n)+" "+st, f.putStatus(r.ID, st))
+			if s := f.campaignStatus(r.ID); s != st {
+				t.Fatalf("queue %d campaign at %s: stored status %q", n, st, s)
+			}
 		}
 	}
-	if rec := f.putStatus(e.ID, "running"); message(rec) == refusal(4) {
-		t.Fatalf("evergreen on queue 4 refused at running by the final-queue guard")
-	}
+
+	// An evergreen on queue 4 passes this guard; the next rule to answer is core's automation
+	// feature flag (EvergreenEnabled is off in the harness), named exactly so the test knows
+	// which rule refused.
+	e := f.campaignOf("create evergreen on queue 4", f.postCampaign(q[4], "", map[string]any{"evergreen": true, "body": body}))
+	f.wantErr("evergreen on queue 4 running", f.putStatus(e.ID, "running"), http.StatusBadRequest, "campaigns.evergreenDisabled")
 }
 
 // K4 -- a list update that omits, alters or repeats its reengage: tag saves the list with the tag
@@ -144,7 +155,11 @@ func TestListReengageTagKept(t *testing.T) {
 	put("repeated", map[string]any{"tags": []string{"reengage:23:4", "y"}}, "reengage:23:4|y")
 	put("brand acme", map[string]any{"tags": []string{"z"}, "brand": "acme"}, "brand:acme|from:Acme <hello@acme.test>|reengage:23:4|z")
 	put("brand cleared", map[string]any{"tags": []string{}, "brand": ""}, "reengage:23:4")
-	// Altered: the stored tag stays; the typed one is a free tag like any other (a new
-	// reengage: tag added on update round-trips, TestListReservedTagRefused).
-	put("altered", map[string]any{"tags": []string{"reengage:23:1"}}, "reengage:23:1|reengage:23:4")
+	// Altered: a reengage: tag the list does not carry is refused on update; the stored tag stays.
+	f.wantErr("altered", f.admin.json(http.MethodPut, "/api/lists/"+itoa(l.ID),
+		map[string]any{"name": "Acme re-engagement 4", "tags": []string{"reengage:23:1"}}),
+		http.StatusBadRequest, "lists.reservedTag", "tag", "reengage:23:1")
+	if got := f.tags(l.ID); got != "reengage:23:4" {
+		t.Fatalf("altered: %q", got)
+	}
 }

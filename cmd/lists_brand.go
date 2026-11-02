@@ -48,6 +48,34 @@ func isRefusedListTag(t string) bool {
 	return strings.HasPrefix(strings.TrimSpace(t), repermissionTagPrefix)
 }
 
+// reengageTagPrefix is the sunset queue tag (reengage:<brand list id>:<n>). Fork (integrations
+// FINAL-QUEUE-GUARD-SPEC D2) -- minted only on CREATE (the provisioning scripts); on update a
+// stored one is merged back by the update-list statement and a NEW one is refused.
+const reengageTagPrefix = "reengage:"
+
+// newReengageTag returns the first typed reengage: tag (trimmed) the stored list does not already
+// carry, "" when there is none. A tag the list already has is accepted on update: the Lists form
+// sends a list's stored reengage: tags back as free tags on every save.
+func newReengageTag(typed, stored []string) string {
+	for _, t := range typed {
+		t = strings.TrimSpace(t)
+		if !strings.HasPrefix(t, reengageTagPrefix) {
+			continue
+		}
+		have := false
+		for _, s := range stored {
+			if s == t {
+				have = true
+				break
+			}
+		}
+		if !have {
+			return t
+		}
+	}
+	return ""
+}
+
 // listTagsFor applies the reserved-tag refusal and the brand projection to a request. It returns
 // the tags to store and keepReserved (brand absent).
 func (a *App) listTagsFor(r listReq) ([]string, bool, error) {

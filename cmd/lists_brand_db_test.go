@@ -112,7 +112,8 @@ func TestListBrandProjection(t *testing.T) {
 // I2 -- a write whose tags carry a reserved tag (any of the three prefixes, the whitespace form
 // included) is refused 400 lists.reservedTag, with or without brand, on create and update, and
 // nothing is written. JOURNEY-UX-SPEC A1.7 (IA7): the retired repermission:<id> is refused the same
-// way; a free tag, the reengage: queue tag included, round-trips.
+// way; free tags round-trip, and a list's stored reengage: queue tag is kept while a new one is
+// refused on update (FINAL-QUEUE-GUARD-SPEC D2).
 func TestListReservedTagRefused(t *testing.T) {
 	f := newBPFixture(t)
 	f.listsFixture()
@@ -139,9 +140,19 @@ func TestListReservedTagRefused(t *testing.T) {
 		t.Fatalf("a refused update changed the tags: %q -> %q", before, got)
 	}
 
-	// Free tags, the machine-written reengage: queue tag among them, are kept.
-	f.ok("free tags", f.admin.json(http.MethodPut, "/api/lists/"+itoa(id), map[string]any{"name": "Existing", "tags": []string{"reengage:5:1", "holiday"}}))
-	if got := f.tags(id); got != "brand:acme|from:Acme <hello@acme.test>|holiday|reengage:5:1|site:https://shop.acme.test" {
+	// FINAL-QUEUE-GUARD-SPEC D2 -- a reengage: tag the list does not carry is refused on update
+	// (create is the only minting path) and nothing is written.
+	f.wantErr("update new reengage", f.admin.json(http.MethodPut, "/api/lists/"+itoa(id), map[string]any{"name": "Existing", "tags": []string{"reengage:5:1", "holiday"}}),
+		http.StatusBadRequest, "lists.reservedTag", "tag", "reengage:5:1")
+	if got := f.tags(id); got != before {
+		t.Fatalf("a refused reengage update changed the tags: %q -> %q", before, got)
+	}
+
+	// Free tags are replaced; the machine-written reengage: queue tag the list already carries is
+	// kept although the request omits it.
+	q := f.sqlList("Queue", "keep", "reengage:5:1")
+	f.ok("free tags", f.admin.json(http.MethodPut, "/api/lists/"+itoa(q), map[string]any{"name": "Queue", "tags": []string{"holiday"}}))
+	if got := f.tags(q); got != "holiday|reengage:5:1" {
 		t.Fatalf("free tags: %q", got)
 	}
 }

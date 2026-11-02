@@ -177,9 +177,25 @@ func (a *App) UpdateList(c echo.Context) error {
 	// projection (merged in the update-list statement), "" clears it, a slug projects its row.
 	// Fork (FINAL-QUEUE-GUARD-SPEC D2) -- the list's current reengage: queue tags are merged back
 	// in the same statement whatever these tags carry: they key the final-queue campaign refusal.
+	// A reengage: tag the list does not already carry is refused (create is the only minting path).
 	tags, keepReserved, err := a.listTagsFor(r)
 	if err != nil {
 		return err
+	}
+	for _, t := range r.Tags {
+		if !strings.HasPrefix(strings.TrimSpace(t), reengageTagPrefix) {
+			continue
+		}
+		stored := cur // read above only when needCur; needCur itself is left alone (it gates the trigger plan)
+		if !needCur {
+			if stored, err = a.core.GetList(id, ""); err != nil {
+				return err
+			}
+		}
+		if nt := newReengageTag(r.Tags, stored.Tags); nt != "" {
+			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("lists.reservedTag", "tag", nt))
+		}
+		break
 	}
 	l.Tags = tags
 	// A rename ONTO a locked name is refused outright (this list is not locked -- refuseLocked

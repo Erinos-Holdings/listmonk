@@ -26,3 +26,23 @@ func TestIsFinalQueueTag(t *testing.T) {
 		}
 	}
 }
+
+// D2 -- the list-update predicate: only a typed reengage: tag the stored list lacks is returned.
+func TestNewReengageTag(t *testing.T) {
+	stored := []string{"reengage:23:4", "x"}
+	for _, c := range []struct {
+		typed []string
+		want  string
+	}{
+		{nil, ""},
+		{[]string{"x", "y"}, ""},
+		{[]string{"reengage:23:4"}, ""},
+		{[]string{" reengage:23:4 "}, ""},
+		{[]string{"reengage:23:4", "reengage:23:1"}, "reengage:23:1"},
+		{[]string{" reengage:5:3"}, "reengage:5:3"},
+	} {
+		if got := newReengageTag(c.typed, stored); got != c.want {
+			t.Errorf("newReengageTag(%q) = %q, want %q", c.typed, got, c.want)
+		}
+	}
+}

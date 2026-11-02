@@ -297,7 +297,7 @@
     "campaigns.fieldInvalidName": "Invalid length for name.",
     "campaigns.fieldInvalidSendAt": "Scheduled date should be in the future.",
     "campaigns.fieldInvalidSubject": "Invalid length for subject.",
-    "campaigns.finalQueueNoBroadcast": "{list} is a last-chance or unsubscribe-confirmation list: it takes automations only, never a broadcast",
+    "campaigns.finalQueueNoBroadcast": "{list} is a last-chance or unsubscribe-confirmation list: it takes automations only, never a broadcast.",
     "campaigns.formatHTML": "Format HTML",
     "campaigns.fromAddress": "From address",
     "campaigns.fromAddressPlaceholder": "Your Name <noreply@yoursite.com>",
