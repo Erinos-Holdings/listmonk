@@ -134,7 +134,7 @@
          left-justified list-box columns (brandUsage.mjs::guideColumnsFit), no longer aligned to the
          table's line; stacked when the width lacks the room. -->
     <div ref="guide" class="bu-guide" :class="{ 'bu-guide-split': guideSplit }"
-      :style="guideSplit ? { '--bu-guide-steps': guideSteps } : null"
+      :style="guideSplit ? { '--bu-guide-steps': guideSteps, width: fitWidthPx ? `${fitWidthPx}px` : null } : null"
       data-cy="usage-guide">
       <div v-for="g in guide" :key="g.family" :class="['bu-guide-series', `bu-guide-${g.family}`]"
         :data-cy="`usage-guide-${g.family}`">
@@ -163,6 +163,7 @@
          (can_decide), the current state and voiding. Text only through mustache interpolation, never raw HTML.
          Pure half: usageDecisions.mjs. -->
     <div v-if="decisionView" class="bu-decisions" :class="{ 'bu-decisions-split': guideSplit }"
+      :style="guideSplit && fitWidthPx ? { width: `${fitWidthPx}px` } : null"
       data-cy="usage-decisions">
       <!-- 2026-10-30 polish: a centered title + the published line; the approver line at the bottom.
            The series columns carry no title (the guide above names them); Both series keeps its own. -->
@@ -267,7 +268,7 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  GUIDE_SERIES, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad,
+  GUIDE_MIN_COLUMN, GUIDE_SERIES, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad,
   linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
@@ -293,6 +294,10 @@ export default Vue.extend({
       guideSplit: false,
       // The px padded on each side of each of the table's vertical lines (fitTable).
       linePadPx: 0,
+      // 2026-11-02 (user): the ONE page width — the table's natural width (or the guide's minimum
+      // when the table is narrower). The guide and the decision record are set to it, so whatever
+      // the table grows to, the documentation follows (fitTable); 0 = not yet measured.
+      fitWidthPx: 0,
       // USAGE-DECISIONS-SPEC D5 -- GET /api/usage/decisions (null hides the section), the item
       // whose Reject note is open, its note, and the item being saved.
       decisionView: null,
@@ -556,30 +561,33 @@ export default Vue.extend({
       return this.usage.sort.order === 'asc' ? '↑' : '↓';
     },
 
-    // 2026-10-31 polish: the guide (and the decision record) go side by side, left-justified, when
-    // the guide's width holds every series column -- no longer aligned to the table's line.
+    // 2026-11-02 (user): ONE page width, owned here. The table's NATURAL width (its measured width
+    // minus the current line pads) sets it; the guide and the decision record are set to exactly
+    // that width (three equal columns of it, style.scss), and only when the table is narrower than
+    // the guide's minimum (GUIDE_MIN_COLUMN x 3) does the table get padded UP to that minimum
+    // (brandUsage.mjs::linePad). So a wider table — a new leaf, a wider header — widens the
+    // documentation by itself; nothing elsewhere has to be kept in step. Stacked (narrow) layouts
+    // carry neither the width nor the pad.
     measureGuide() {
-      const { guide } = this.$refs;
-      this.guideSplit = !!guide && guideColumnsFit(guide.clientWidth);
       this.$nextTick(() => this.fitTable(0));
     },
 
-    // 2026-10-31 polish: the table is widened to the guide's three columns by padding each side of
-    // its vertical lines (brandUsage.mjs::linePad, the --bu-line-pad of style.scss), so the page
-    // keeps one overall width; no pad while the guide is stacked. Re-applied until stable (at most
-    // three passes) -- a column a wider header sets absorbs part of a pad.
     fitTable(pass) {
-      const { guide } = this.$refs;
       const table = this.$el && this.$el.querySelector('table.bu-table');
-      const series = this.guideSplit && guide ? guide.querySelectorAll('.bu-guide-series') : [];
       const row = table && table.querySelector('tbody tr');
-      if (!table || !row || series.length === 0) {
+      if (!table || !row) {
+        this.guideSplit = false;
         this.linePadPx = 0;
+        this.fitWidthPx = 0;
         return;
       }
-      const target = series[series.length - 1].getBoundingClientRect().right - series[0].getBoundingClientRect().left;
       const lines = row.querySelectorAll('td.bu-start, td.bu-substart').length;
-      const next = linePad(target, table.getBoundingClientRect().width, this.linePadPx, lines);
+      const measured = table.getBoundingClientRect().width;
+      const natural = Math.max(0, measured - 2 * lines * this.linePadPx);
+      const target = Math.max(natural, GUIDE_MIN_COLUMN * GUIDE_SERIES.length);
+      this.guideSplit = guideColumnsFit(target);
+      this.fitWidthPx = this.guideSplit ? Math.round(target) : 0;
+      const next = this.guideSplit ? linePad(target, measured, this.linePadPx, lines) : 0;
       if (next !== this.linePadPx && pass < 3) {
         this.linePadPx = next;
         this.$nextTick(() => this.fitTable(pass + 1));

@@ -48,10 +48,10 @@ func TestItemsShape(t *testing.T) {
 		{"both-language", SectionBoth, intp(14), "2026-10-31"},
 		// USAGE-REENGAGEMENT-SPEC D7: the Curated Sunset Policy section.
 		{"sp-scope", SectionSunsetPolicy, intp(15), "2026-10-30"},
-		{"sp-engagement", SectionSunsetPolicy, intp(16), "2026-10-31"},
-		{"sp-normal", SectionSunsetPolicy, intp(17), "2026-10-31"},
+		{"sp-engagement", SectionSunsetPolicy, intp(16), "2026-11-02"},
+		{"sp-normal", SectionSunsetPolicy, intp(17), "2026-11-02"},
 		{"sp-hold", SectionSunsetPolicy, intp(18), "2026-10-31"},
-		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-11-01"}, // SUNSET-V4 D8
+		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-11-02"}, // SUNSET-V4 D8; NOTE reworded 2026-11-02
 		{"sp-coming-back", SectionSunsetPolicy, intp(20), "2026-10-31"},
 		{"sp-suppressed", SectionSunsetPolicy, intp(21), "2026-11-01"}, // SUNSET-V4 D8
 		{"sp-safety", SectionSunsetPolicy, intp(22), "2026-10-31"},
@@ -124,10 +124,10 @@ var pinnedHashes = map[string]string{
 	"both-per-brand":       "fffd6054bb4f91b4c3e0e2cd09a38bdf326bc3bc4e7bed46a93fb50d0e1ae9ef", // NOTE line dropped, Klaviyo aside kept (2026-11-01)
 	"both-language":        "578c218c31eaab2268ed5b8f3fdbf306f4573c3ac4211b697f86e92392cb9d0f",
 	"sp-scope":             "b82a9e15281891935c2c3afc621e29db5f26497c40d8988ba87f32615ba5a54b",
-	"sp-engagement":        "062c825492e7b62fb3c206bd99ed4ab4632a2b424cb14786058d22516e78263c",
-	"sp-normal":            "c2afde039a1d8a35496f2f5f23abbfea2a3b36e1659d5d4f19b06aa984a97c1e",
+	"sp-engagement":        "7c179904c1332c8b4065b6b0c0f17bb0bd9b7857ef109b0c02d83fc13f2794fc", // Klaviyo aside parenthesized (2026-11-02)
+	"sp-normal":            "019dcdef0d1a6ca90c79b7808b27a885d03586fa7ee398dabc818cf3a0214a83", // justification reworded (2026-11-02)
 	"sp-hold":              "82038c303d156fcd91d49b849be02297ad47855fa76b036714042ba93c3d52c1",
-	"sp-asks":              "a1f08930a2228b2e8c9283fddee451513fb1335c689ecad878293a73ff8c9068", // SUNSET-V4 D8: four emails on a fixed schedule from the hold (2026-11-01)
+	"sp-asks":              "9cbef215bde10bcf78b2ed9de83ff2755631560494142855d057fd323e6644db", // SUNSET-V4 D8; the NOTE's refusal wording (2026-11-02)
 	"sp-coming-back":       "1c1cf2c139641bffd5f23b59240691d8d334f97b17b3730cfe2b93c1a515f86b",
 	"sp-suppressed":        "36cfe7f4776d4db972dbdba74e1639b1f784e7670f9e5fced74101f9c91fcc8e", // SUNSET-V4 D8: unsubscribed at 365, with the confirmation (2026-11-01)
 	"sp-safety":            "0170340a622e3402a6e022dc13baa67062567c9d2cdce51af2bc1d0ebcb46dfb",

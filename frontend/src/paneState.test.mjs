@@ -22,7 +22,7 @@ function fakeSession() {
 }
 
 test('I9: brands.pane -- Matrix | Usage | Health, matrix by default, anything else matrix', () => {
-  assert.deepEqual(BRANDS_PANES, ['matrix', 'usage', 'health']);
+  assert.deepEqual(BRANDS_PANES, ['usage', 'matrix', 'health']);
   assert.equal(initialBrandsPane(undefined), 'matrix');
   assert.equal(initialBrandsPane(null), 'matrix');
   assert.equal(initialBrandsPane('usage'), 'usage');

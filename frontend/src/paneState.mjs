@@ -7,9 +7,9 @@
 // choice within the session is kept. A localStorage brands.pane / analytics.pane pref from before is
 // ignored (no migration).
 
-// D1: the Brands list view's panes, in pill order; `health` (the brand health table, the former
-// "List") is last, `matrix` the default.
-export const BRANDS_PANES = Object.freeze(['matrix', 'usage', 'health']);
+// D1: the Brands list view's panes, in pill order (Usage first since 2026-11-02, user); `health`
+// (the brand health table, the former "List") is last, `matrix` the default.
+export const BRANDS_PANES = Object.freeze(['usage', 'matrix', 'health']);
 export const BRANDS_PANE_PREF = 'brands.pane';
 
 export function initialBrandsPane(stored) {

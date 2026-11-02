@@ -1256,11 +1256,15 @@ section.dashboard (which reopens after them). */
     display: grid;
     gap: 2rem;
     &.bu-guide-split {
-      grid-template-columns: repeat(3, minmax(0, 32rem));
+      /* 2026-11-02 (user): three EQUAL columns of the page width BrandUsage.vue::fitTable sets on
+      this element (the table's width) — no column cap, so the documentation is always exactly as
+      wide as the chart. */
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       justify-content: start;
       gap: 0;
       .bu-guide-series {
         padding: 0 2rem;
+        max-width: none;
       }
       .bu-guide-series:first-child {
         padding-left: 0;
@@ -1389,11 +1393,13 @@ section.dashboard (which reopens after them). */
       width: 100%;
     }
     &.bu-decisions-split {
-      grid-template-columns: repeat(3, minmax(0, 32rem));
+      /* The guide's rule (above): three equal columns of the width fitTable sets. */
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       justify-content: start;
       column-gap: 0;
       .bu-decisions-col {
         padding: 0 2rem;
+        max-width: none;
       }
       .bu-decisions-no-purchase {
         grid-column: 1;

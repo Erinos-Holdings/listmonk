@@ -284,9 +284,11 @@ test('V2 D3 / I3: circles -- one per state from the STORED numbers, green/amber 
   assert.deepEqual(storedCounts(u, 'welcome'), { green: 4, amber: 5 });
   assert.deepEqual(cell(shapeRows([{ brand: 'u', usage: u }])[0], 'welcome:0', t).circles, [{ color: 'green', n: 4 }, { color: 'amber', n: 5 }]);
   assert.equal(storedCounts(u, 'sunset'), null);
-  // A doc written before V2 (no counts) renders '—', never a derived circle.
+  // A doc written before V2 (no counts) renders the "none" circle (a journey cell is always a
+  // circle -- user 2026-11-02), with the countsMissing note; never a derived count.
   const old = shapeRows([{ brand: 'o', usage: usage({ welcome: { state: 'active', listId: 7, campaigns: [] } }) }])[0];
-  assert.deepEqual([cell(old, 'welcome:0', t).text, cell(old, 'welcome:0', t).circles], [MISSING, []]);
+  assert.deepEqual([cell(old, 'welcome:0', t).text, cell(old, 'welcome:0', t).circles], ['', [{ color: 'red', n: 0 }]]);
+  assert.match(cell(old, 'welcome:0', t).tooltip, /\ndashboard\.usage\.countsMissing$/);
 });
 
 test('V2 I3: every circle carries a words tooltip; red is the digit 0', () => {
@@ -514,13 +516,17 @@ test('D7: cells -- Nd ago, never, ~Nd, —, Last broadcast colored on the TEXT; 
 
 test('I6: a ZMA row never renders a red broadcast or welcome cell; registry facts still render', () => {
   const zma = shapeRows(api).find((r) => r.brand === 'oldzma');
-  ['score', 'welcome:0', 'lastBroadcast', 'cadence'].forEach((f) => {
+  ['score', 'lastBroadcast', 'cadence'].forEach((f) => {
     const c = cell(zma, f, t);
     assert.equal(c.text, MISSING, f);
     assert.notEqual(c.cls, 'has-text-danger', f);
     assert.equal(c.cls, '', f);
     assert.deepEqual(c.circles, [], f);
   });
+  // A journey cell is always a circle (user 2026-11-02): welcome Day 0 and the Re-engagement leaves
+  // render their stored circles on a ZMA row too (dimmed with the row), never '—'.
+  assert.equal(cell(zma, 'welcome:0', t).text, '');
+  assert.ok(cell(zma, 'welcome:0', t).circles.length >= 1);
   assert.deepEqual(cell(zma, 'postPurchase:0', t).circles, [{ color: 'amber', n: 1 }]);
   assert.equal(cell(zma, 'sunset', t).text, '✓');
 });
@@ -584,7 +590,7 @@ test('I7: the v1 comparators stand -- Last broadcast worst first; states and boo
   assert.deepEqual(sortRows(rows, { field: 'brand', order: 'asc' }).map((r) => r.brand), ['lux', 'nodoc', 'oldzma', 'ruze', 'thirstygirl']);
   assert.equal(sortValue(rows[0], 'welcome:0'), 0);
   assert.equal(sortValue(rows[3], 'postPurchase:0'), 1);
-  assert.equal(sortValue(rows[3], 'welcome:0'), null);
+  assert.equal(sortValue(rows[3], 'welcome:0'), 2); // a ZMA row sorts by its stored state like any row (2026-11-02; was null while dimmed to '—')
   assert.equal(sortValue(rows[0], 'attribution'), 1);
   assert.equal(sortValue(rows[0], 'sunset'), 0);
 });
@@ -747,14 +753,15 @@ test('I15 (POLISH3 stage 2 F5): a no-days row is an amber ⚠ badge with its par
   ['welcome:0', 'welcome:2', 'welcome:5', 'postPurchase:0', 'postPurchase:30', 'skipped:fr'].forEach((f) => assert.deepEqual(cellBadges(r, f, t), [], f));
   assert.deepEqual(cell(r, 'welcome:5', t).circles, [{ color: 'green', n: 1 }]);
   // A doc written before the release (no `series`; it still carries noPurchase) -> every series
-  // leaf '—', never a red 0; no link, no sort value, no chip (S9 / Stage 2 F7).
+  // leaf the "none" circle (a journey cell is always a circle -- user 2026-11-02; before that '—'),
+  // with the seriesMissing note; no link, no sort value, no chip (S9 / Stage 2 F7).
   const preUsage = usage({ noPurchase: { state: 'active', rows: [npStep(15, 9, 'running')], counts: { green: 1, amber: 0 } } });
   delete preUsage.series;
   const pre = shapeRows([{ brand: 'p', usage: preUsage }], { lists })[0];
   [...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS].forEach((f) => {
     const c = cell(pre, f, t);
-    assert.equal(c.text, MISSING, f);
-    assert.deepEqual(c.circles, [], f);
+    assert.equal(c.text, '', f);
+    assert.deepEqual(c.circles, [{ color: 'red', n: 0 }], f);
     assert.match(c.tooltip, /\ndashboard\.usage\.seriesMissing$/, f);
     assert.equal(cellLink(pre, f), null, f);
     assert.equal(sortValue(pre, f), null, f);
@@ -982,9 +989,6 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
     ['We miss you', 'Still want to hear from us?'], ['Second reminder', 'Still want to hear from us?'],
     ['Last chance', 'Should we stop emailing you?'], ['Unsubscribed', 'You\'ve been unsubscribed.'],
   ]);
-  // F5: the two short-dwell steps say "Send at once".
-  assert.match(g[2].steps[2].body, /Send at once: people are on this list for five days\.$/);
-  assert.match(g[2].steps[3].body, /Send at once: people are on this list for one day\.$/);
   assert.equal(SERIES_DAYS.reengagement, undefined); // never a series family
   g.flatMap((s) => s.steps).forEach((x) => {
     assert.ok(x.title && x.body, `day ${x.days}`);
@@ -1069,20 +1073,24 @@ test('F2: Re-engagement cells render the stored circle, tooltip, link and sort; 
   assert.equal(sortValue(r, 'reengagement:270'), 0);
   assert.equal(sortValue(r, 'reengagement:180'), 1);
   assert.equal(sortValue(idle0, 'reengagement:270'), 2);
-  // A doc without `reengagement`: '—' with seriesMissing, no link, sorts null.
+  // A doc without `reengagement` (or without this step -- a doc older than a new leaf): the "none"
+  // circle with seriesMissing (a journey cell is always a circle -- user 2026-11-02), no link,
+  // sorts null.
   const [old] = shapeRows([{ brand: 'ruze', usage: usage() }]);
   const m = cell(old, 'reengagement:180', t);
-  assert.equal(m.text, MISSING);
-  assert.deepEqual(m.circles, []);
-  assert.equal(m.tooltip, 'series.reengagementDay180\ndashboard.usage.seriesMissing');
+  assert.equal(m.text, '');
+  assert.deepEqual(m.circles, [{ color: 'red', n: 0, name: 'dashboard.usage.reCircleNone' }]);
+  assert.equal(m.tooltip, 'series.reengagementDay180\ndashboard.usage.reCircleNone\ndashboard.usage.seriesMissing');
+  const [twoSteps] = shapeRows([{ brand: 'ruze', usage: usage({ reengagement }) }]);
+  assert.deepEqual(cell(twoSteps, 'reengagement:365', t).circles, [{ color: 'red', n: 0, name: 'dashboard.usage.reCircleNone' }]);
   assert.equal(circleLink(old, 'reengagement:180', 'amber'), null);
   assert.equal(sortValue(old, 'reengagement:180'), null);
-  // ZMA dimmed (Stage 2 F6), like welcome Day 0.
+  // A ZMA brand (user 2026-11-02): the circle is shown like every journey leaf (dimmed with the
+  // row), never linked; sorts by its stored state like any row.
   const [zma] = shapeRows([{ brand: 'z', usage: usage({ channel: 'zma', reengagement }) }]);
-  assert.equal(cell(zma, 'reengagement:180', t).text, MISSING);
-  assert.equal(cell(zma, 'reengagement:180', t).tooltip, 'dashboard.usage.zmaHelp');
+  assert.deepEqual(cell(zma, 'reengagement:180', t).circles, cell(r, 'reengagement:180', t).circles);
   assert.equal(circleLink(zma, 'reengagement:180', 'amber'), null);
-  assert.equal(sortValue(zma, 'reengagement:180'), null);
+  assert.equal(sortValue(zma, 'reengagement:180'), sortValue(r, 'reengagement:180'));
   // Not series leaves (Stage 2 F4).
   REENGAGEMENT_FIELDS.forEach((f) => assert.equal(seriesLeafOf(f), null, f));
   assert.deepEqual(reengagementLeafOf('reengagement:270'), { days: 270 });

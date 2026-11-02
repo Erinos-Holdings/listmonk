@@ -111,15 +111,15 @@
       "key": "sp-engagement",
       "section": "sunset-policy",
       "n": 16,
-      "since": "2026-10-31",
-      "text": "What counts as engagement. A click on any of the brand's emails, a paid order of the brand (whether or not an email drove it), or an open we can confirm was a person — today, an open through Gmail. Automatic opens (such as Apple Mail's privacy feature) and opens we can't confirm don't count; those subscribers are judged on clicks and purchases. Klaviyo does the same: clicks and placed orders count, and Apple privacy opens are excluded."
+      "since": "2026-11-02",
+      "text": "What counts as engagement. A click on any of the brand's emails, a paid order of the brand (whether or not an email drove it), or an open we can confirm was a person — today, an open through Gmail. Automatic opens (such as Apple Mail's privacy feature) and opens we can't confirm don't count; those subscribers are judged on clicks and purchases. (Klaviyo does the same: clicks and placed orders count, and Apple privacy opens are excluded.)"
     },
     {
       "key": "sp-normal",
       "section": "sunset-policy",
       "n": 17,
-      "since": "2026-10-31",
-      "text": "0–180 days: normal sending. This is the generous end of common practice (90 to 180 days, with 90 the usual starting point), so a subscriber gets twice the usual time before any hold. The stricter engagement definition (item 16) is what makes 180 days safe: automatic opens don't count, so nobody stays \"engaged\" without reading. 180 days is our starting point; if complaint rates in Brand Health rise, we will shorten it."
+      "since": "2026-11-02",
+      "text": "0–180 days: normal sending. This is the generous end of common practice (90 to 180 days, with 90 the usual starting point), so a subscriber gets twice the usual time before any hold. The strict engagement definition (item 16) and data from the Oct 2026 Younique win-back campaign serve as justification for this expanded window. If complaint rates rise, however, we'll be obligated to shorten it out of necessity."
     },
     {
       "key": "sp-hold",
@@ -132,8 +132,8 @@
       "key": "sp-asks",
       "section": "sunset-policy",
       "n": 19,
-      "since": "2026-11-01",
-      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that they have been unsubscribed, with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.\nNOTE: Marketing may send a win-back broadcast to the 180d or 270d list at any time; it changes no one's schedule. Nothing is sent by hand after the last chance: the 360d list holds people for five days and the 365d list for one."
+      "since": "2026-11-02",
+      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that they have been unsubscribed, with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.\nNOTE: Marketing may send a win-back broadcast to the 180d or 270d list at any time; it changes no one's schedule. The 360d and 365d lists take automations only: the system refuses any broadcast to them, win-back or promotional, so nothing but the last chance and the confirmation can reach anyone past day 360."
     },
     {
       "key": "sp-coming-back",

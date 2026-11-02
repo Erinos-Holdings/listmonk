@@ -435,7 +435,16 @@ export function shapeRows(apiRows, { brands = [], launch = 'all', lists = [] } =
 // plus the Score (V2 D1: a ZMA row's score is null).
 // USAGE-REENGAGEMENT-SPEC D6 (Stage 2 F6): the Re-engagement leaves too -- a ZMA brand has no
 // listmonk sunset queue, like welcome Day 0.
-const ZMA_DIMMED = Object.freeze(['score', WELCOME_FIELDS[0], ...REENGAGEMENT_FIELDS, 'lastBroadcast', 'cadence']);
+// 2026-11-02 (user): ONE rule for what a cell shows when a brand lacks the thing — a JOURNEY cell
+// (every series leaf: No-purchase, Post-purchase, Re-engagement) is expected of every brand, so it
+// is always a circle (a red 0 when the brand has none; dimmed with the row on a ZMA brand), while an
+// OPTIONAL or non-journey cell (SKU, the score, the broadcast columns) reads '—'. ZMA_DIMMED is the
+// second set; the journey leaves are never in it.
+const ZMA_DIMMED = Object.freeze(['score', 'lastBroadcast', 'cadence']);
+
+// The circle a journey leaf shows when the stored doc has nothing for it (an older doc, a brand
+// with no list): the "none" circle, never '—' (the rule above).
+const NONE_CIRCLE = Object.freeze({ color: 'red', n: 0 });
 
 // USAGE-REENGAGEMENT-SPEC D1: the stored step of a Re-engagement leaf -- usage.reengagement.steps'
 // entry at `days`; `undefined` when the doc carries no reengagement object (a doc written before the
@@ -637,7 +646,9 @@ function lastIdsOf(u) {
 // ZMA-dimmed or `—` cell.
 export function circleLink(row, field, color) {
   const u = row && row.usage;
-  if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
+  // A ZMA brand's circles are shown (dimmed with the row — ZMA_DIMMED's rule) but never link: the
+  // row is informational, listmonk runs none of its journeys.
+  if (!u || row.zma) {
     return null;
   }
   // USAGE-REENGAGEMENT-SPEC D6, 2026-10-31 polish: EVERY Re-engagement circle links to its campaigns.
@@ -791,15 +802,17 @@ export function cell(row, field, t = (k) => k) {
   // USAGE-REENGAGEMENT-SPEC D6: a Re-engagement leaf -- the stored circle verbatim (each circle
   // carries its own accessible `name`, D3); the tooltip is the step text, the circle's name, "{n}
   // waiting" when `waiting` is a number, and "Not covered: FR, ES" when `uncovered` is non-empty. A
-  // doc without `reengagement` renders '—'.
+  // doc without the step (an older doc) renders the "none" circle with the seriesMissing note —
+  // a journey cell is always a circle (ZMA_DIMMED's rule).
   const re = reengagementLeafOf(field);
   if (re !== null) {
     const desc = t(seriesStepKey(SERIES_REENGAGEMENT, re.days));
     const st = reStepAt(u, re.days);
     const c = reCircle(st);
     if (!c) {
+      const none = reCircleName(NONE_CIRCLE.color, NONE_CIRCLE.n, t);
       return {
-        text: MISSING, cls: '', tooltip: `${desc}\n${t('dashboard.usage.seriesMissing')}`, circles: [],
+        text: '', cls: '', tooltip: `${desc}\n${none}\n${t('dashboard.usage.seriesMissing')}`, circles: [{ ...NONE_CIRCLE, name: none }],
       };
     }
     const name = reCircleName(c.color, c.n, t);
@@ -819,23 +832,23 @@ export function cell(row, field, t = (k) => k) {
   // LIFECYCLE-SERIES-SPEC S9: a series leaf -- its D5 description first, then the circle words and
   // the rows. Welcome Day 0 is the welcome family's stored counts and campaigns (today's welcome
   // state); every other leaf the circle(s) of its stored rows (green clean, amber idle/invalid), a
-  // red 0 when none. A doc without `series` renders the leaf '—'.
+  // red 0 when none. A doc without `series` (or without the welcome counts) renders the "none"
+  // circle with the missing note — a journey cell is always a circle (ZMA_DIMMED's rule).
   const leaf = seriesLeafOf(field);
   if (leaf !== null) {
     const desc = t(seriesStepKey(leaf.family, leaf.days));
+    const noneCell = (why) => ({
+      text: '', cls: '', tooltip: `${desc}\n${circleWords({ green: 0, amber: 0 }, t)}\n${t(why)}`, circles: circlesOf({ green: 0, amber: 0 }),
+    });
     if (!seriesOf(u, leaf.family)) {
-      return {
-        text: MISSING, cls: '', tooltip: `${desc}\n${t('dashboard.usage.seriesMissing')}`, circles: [],
-      };
+      return noneCell('dashboard.usage.seriesMissing');
     }
     let counts;
     let detail;
     if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
       counts = storedCounts(u, 'welcome');
       if (!counts) {
-        return {
-          text: MISSING, cls: '', tooltip: `${desc}\n${t('dashboard.usage.countsMissing')}`, circles: [],
-        };
+        return noneCell('dashboard.usage.countsMissing');
       }
       detail = welcomeTip(isObj(u.welcome) ? u.welcome : {}, t);
     } else {
