@@ -133,6 +133,16 @@
          texts, brandUsage.mjs::seriesGuide). 2026-10-31 polish: the three series side by side in
          left-justified list-box columns (brandUsage.mjs::guideColumnsFit), no longer aligned to the
          table's line; stacked when the width lacks the room. -->
+    <!-- Fork (journey preview, integrations JOURNEY-PREVIEW-SPEC D2) -- the campaign editor's own
+         Preview button (Editor.vue), right-aligned above the guide: click or F9 (bound while this pane
+         is mounted) opens the journey preview page, carrying the global selector's brand when it is
+         one brand (journeyPreview.mjs::usageTarget). -->
+    <div class="bu-preview has-text-right" :style="guideSplit && fitWidthPx ? { width: `${fitWidthPx}px` } : null">
+      <b-button @click="onPreview" type="is-primary" icon-left="file-find-outline" data-cy="usage-preview"
+        aria-keyshortcuts="F9">
+        <span class="has-kbd">{{ $t('campaigns.preview') }} <span class="kbd">F9</span></span>
+      </b-button>
+    </div>
     <div ref="guide" class="bu-guide" :class="{ 'bu-guide-split': guideSplit }"
       :style="guideSplit ? { '--bu-guide-steps': guideSteps, width: fitWidthPx ? `${fitWidthPx}px` : null } : null"
       data-cy="usage-guide">
@@ -276,6 +286,7 @@ import {
   historyOf as decisionHistory, isStale, itemNumber, publishedText, replaceItem, selectedChoice, showControls, stateLine,
   tableOf, textLines,
 } from '../usageDecisions.mjs'; // eslint-disable-line import/extensions
+import { usageTarget } from '../journeyPreview.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -600,6 +611,18 @@ export default Vue.extend({
       this.$nextTick(() => this.measureGuide());
     },
 
+    // JOURNEY-PREVIEW-SPEC D2 -- the Preview button and its F9 shortcut (Editor.vue's pattern).
+    onPreview() {
+      this.$router.push(usageTarget(this.brandSelection));
+    },
+
+    onKeyboardShortcut(e) {
+      if (e.key === 'F9') {
+        this.onPreview();
+        e.preventDefault();
+      }
+    },
+
     buAria(field) {
       if (!this.buSorted(field)) {
         return null;
@@ -628,6 +651,7 @@ export default Vue.extend({
   destroyed() {
     this.$root.$off('page.refresh', this.fetchRows);
     window.removeEventListener('resize', this.queueMeasure);
+    window.removeEventListener('keydown', this.onKeyboardShortcut);
     if (this.guideObserver) {
       this.guideObserver.disconnect();
     }
@@ -637,6 +661,7 @@ export default Vue.extend({
     this.afterListsLoaded(() => this.fetchRows());
     this.fetchDecisions();
     window.addEventListener('resize', this.queueMeasure);
+    window.addEventListener('keydown', this.onKeyboardShortcut);
     // A pane shown after mount (a hidden tab) or a resized table re-measures too.
     if (typeof ResizeObserver !== 'undefined') {
       this.guideObserver = new ResizeObserver(() => this.queueMeasure());

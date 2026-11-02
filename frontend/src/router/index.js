@@ -42,6 +42,14 @@ const routes = [
     meta: { title: 'brands.title' },
     component: () => import('../views/Brands.vue'),
   },
+  // Fork (journey preview, integrations JOURNEY-PREVIEW-SPEC D3) -- before /brands/:brand, which
+  // would otherwise take "journeys" as a brand slug.
+  {
+    path: '/brands/journeys',
+    name: 'journeyPreview',
+    meta: { title: 'journeyPreview.title' },
+    component: () => import('../views/JourneyPreview.vue'),
+  },
   {
     path: '/brands/:brand',
     name: 'brand',

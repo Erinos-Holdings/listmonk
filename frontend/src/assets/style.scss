@@ -1375,6 +1375,90 @@ section.dashboard (which reopens after them). */
     font-size: 0.875rem;
     color: $grey-dark;
   }
+  /* Fork (journey preview, integrations JOURNEY-PREVIEW-SPEC D2/D3). The Usage pane's Preview
+  button, right-aligned above the guide (BrandUsage.vue sets the guide's page width on it when split),
+  and the journey preview page (views/JourneyPreview.vue): the guide's heading, Day bubble and step
+  title classes above; three equal columns across the FULL width of .main (no column cap -- the
+  user's point is readable emails), stacked under GUIDE_MIN_COLUMN x 3. Each rendering is a 600 px
+  iframe, CSS-scaled to the column (the wrapper takes the scaled box), fixed height with its own
+  scroll. */
+  .bu-preview {
+    margin-top: 1.5rem;
+  }
+  .journey-preview {
+    .jp-columns {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2rem;
+      &.jp-split {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0;
+        .jp-series {
+          padding: 0 1.5rem;
+        }
+        .jp-series:first-child {
+          padding-left: 0;
+        }
+        .jp-series:last-child {
+          padding-right: 0;
+        }
+        .jp-series + .jp-series {
+          border-left: 1px solid #dbdee2;
+        }
+      }
+    }
+    .jp-series {
+      min-width: 0;
+    }
+    .jp-steps {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .jp-step {
+      padding-bottom: 2rem;
+    }
+    .jp-step-head {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      margin-bottom: 0.6rem;
+      p {
+        margin: 0;
+      }
+    }
+    .jp-subject {
+      margin: 0 0 0.2rem;
+      font-size: 0.875rem;
+      overflow-wrap: anywhere;
+    }
+    .jp-meta {
+      margin: 0 0 0.2rem;
+      font-size: 0.75rem;
+      overflow-wrap: anywhere;
+    }
+    .jp-render-box {
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    .jp-render {
+      overflow: hidden;
+      box-shadow: 0 0 0 1px #dbdee2; // a ring that takes no layout width (the box is exactly scaled)
+      iframe {
+        display: block;
+        border: 0;
+        background: $white;
+      }
+    }
+    .jp-placeholder {
+      border: 2px dashed #d6dade;
+      border-radius: 6px;
+      padding: 1rem;
+      p {
+        margin: 0;
+      }
+    }
+  }
   /* Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D5) -- the decision record under the
   guide, neutral like the guide. 2026-10-31 polish: the guide's three columns -- No-purchase items under the No-purchase series,
   Post-purchase items under Post-purchase, the Curated Sunset Policy under the Re-engagement series

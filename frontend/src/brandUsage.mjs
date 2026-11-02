@@ -54,8 +54,9 @@ export const GUIDE_SERIES = Object.freeze([
 ]);
 
 // The standard days a guide series lists: SERIES_DAYS for the two lifecycle series,
-// REENGAGEMENT_DAYS for the Re-engagement series.
-const guideDays = (family) => (family === SERIES_REENGAGEMENT ? REENGAGEMENT_DAYS : SERIES_DAYS[family]);
+// REENGAGEMENT_DAYS for the Re-engagement series (exported for the journey preview page,
+// journeyPreview.mjs -- integrations JOURNEY-PREVIEW-SPEC D1: a step preview's days are these).
+export const guideDays = (family) => (family === SERIES_REENGAGEMENT ? REENGAGEMENT_DAYS : SERIES_DAYS[family]);
 
 // parseStepText splits a D5 text ("Day 5 Address purchase hesitation: \"A few reasons …\" Include
 // …") into { title, quote, body }: the title between the leading "Day N " and the FIRST ": " (a
