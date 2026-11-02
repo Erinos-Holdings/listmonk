@@ -133,26 +133,33 @@
       "section": "sunset-policy",
       "n": 19,
       "since": "2026-11-02",
-      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that they have been unsubscribed, with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.\nNOTE: Marketing may send a win-back broadcast to the 180d or 270d list at any time; it changes no one's schedule. The 360d and 365d lists take automations only: the system refuses any broadcast to them, win-back or promotional, so nothing but the last chance and the confirmation can reach anyone past day 360."
+      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that they have been unsubscribed, with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up."
+    },
+    {
+      "key": "sp-winback",
+      "section": "sunset-policy",
+      "n": 20,
+      "since": "2026-11-02",
+      "text": "Marketing may send a win-back broadcast to the 180d or 270d list at any time. This changes no one's schedule. The 360d and 365d lists take automations only: the system refuses any broadcast to them, win-back or promotional, so nothing but the last chance and the confirmation can reach anyone past day 360."
     },
     {
       "key": "sp-coming-back",
       "section": "sunset-policy",
-      "n": 20,
-      "since": "2026-10-31",
-      "text": "Coming back. Any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email. Unsubscribing from an ask is a real opt-out: they are never asked again."
+      "n": 21,
+      "since": "2026-11-02",
+      "text": "Coming back. Any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email. They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out: they are never asked again."
     },
     {
       "key": "sp-suppressed",
       "section": "sunset-policy",
-      "n": 21,
+      "n": 22,
       "since": "2026-11-01",
       "text": "365 days: unsubscribed from marketing. After 365 days without engagement (180, then the re-engagement schedule), the person is unsubscribed from the brand's marketing — and sent the confirmation when the brand's day-365 automation is running — whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout."
     },
     {
       "key": "sp-safety",
       "section": "sunset-policy",
-      "n": 22,
+      "n": 23,
       "since": "2026-10-31",
       "text": "Safety check. If a brand's latest broadcast shows zero tracked opens, that day's run skips the brand: broken tracking looks exactly like nobody reading. Holds for bounce problems are handled separately and never get the re-engagement emails."
     }

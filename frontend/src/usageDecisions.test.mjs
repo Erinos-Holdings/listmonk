@@ -130,7 +130,7 @@ test('F6: columnsOf returns sunsetPolicy; tableOf returns the stored table or nu
     note: '*and at least 6 broadcasts.',
   };
   const view = {
-    items: [item(), item({ key: 'sp-scope', section: 'sunset-policy', n: 15 }), item({ key: 'sp-safety', section: 'sunset-policy', n: 22 })],
+    items: [item(), item({ key: 'sp-scope', section: 'sunset-policy', n: 15 }), item({ key: 'sp-safety', section: 'sunset-policy', n: 23 })],
     tables: { 'sunset-policy': table },
   };
   assert.deepEqual(columnsOf(view).sunsetPolicy.map((i) => i.key), ['sp-scope', 'sp-safety']);
@@ -152,7 +152,7 @@ test('F6: columnsOf returns sunsetPolicy; tableOf returns the stored table or nu
   const doc = JSON.parse(readFileSync(new URL('../../internal/decisions/lifecycle.json', import.meta.url), 'utf8'));
   const real = tableOf(doc, 'sunset-policy');
   assert.ok(real && real.rows.length === 3 && real.columns.length === 2 && real.note);
-  assert.deepEqual(columnsOf(doc).sunsetPolicy.map((i) => i.n), [15, 16, 17, 18, 19, 20, 21, 22]);
+  assert.deepEqual(columnsOf(doc).sunsetPolicy.map((i) => i.n), [15, 16, 17, 18, 19, 20, 21, 22, 23]); // 23 since item 19's NOTE became item 20 (2026-11-02)
 });
 
 test('textLines: the first sentence and the Recommended:/NOTE: labels are the bold leads; the recommendation is flagged to its end; text is unchanged', () => {

@@ -21,14 +21,14 @@ function fakeSession() {
   };
 }
 
-test('I9: brands.pane -- Matrix | Usage | Health, matrix by default, anything else matrix', () => {
+test('I9: brands.pane -- Usage | Matrix | Health, usage by default (2026-11-02), anything else usage', () => {
   assert.deepEqual(BRANDS_PANES, ['usage', 'matrix', 'health']);
-  assert.equal(initialBrandsPane(undefined), 'matrix');
-  assert.equal(initialBrandsPane(null), 'matrix');
-  assert.equal(initialBrandsPane('usage'), 'usage');
+  assert.equal(initialBrandsPane(undefined), 'usage'); // Usage the default since 2026-11-02 (user)
+  assert.equal(initialBrandsPane(null), 'usage');
+  assert.equal(initialBrandsPane('matrix'), 'matrix');
   assert.equal(initialBrandsPane('health'), 'health');
-  assert.equal(initialBrandsPane('list'), 'matrix', 'the former List key is no pane');
-  assert.equal(initialBrandsPane('ses'), 'matrix');
+  assert.equal(initialBrandsPane('list'), 'usage', 'the former List key is no pane');
+  assert.equal(initialBrandsPane('ses'), 'usage');
 });
 
 test('I9: analytics.pane -- Matrix | Campaign, matrix by default; ?id= forces campaign', () => {
@@ -40,16 +40,16 @@ test('I9: analytics.pane -- Matrix | Campaign, matrix by default; ?id= forces ca
   assert.equal(initialAnalyticsPane('bogus', false), 'matrix');
 });
 
-test('I9: the choice is kept for the session; a new session starts on matrix', () => {
+test('I9: the choice is kept for the session; a new session starts on usage (brands) / matrix (analytics)', () => {
   const s1 = fakeSession();
-  assert.equal(initialBrandsPane(readPane(s1, BRANDS_PANE_PREF)), 'matrix');
+  assert.equal(initialBrandsPane(readPane(s1, BRANDS_PANE_PREF)), 'usage');
   writePane(s1, BRANDS_PANE_PREF, 'health');
   assert.equal(initialBrandsPane(readPane(s1, BRANDS_PANE_PREF)), 'health');
   writePane(s1, ANALYTICS_PANE_PREF, 'campaign');
   assert.equal(initialAnalyticsPane(readPane(s1, ANALYTICS_PANE_PREF), false), 'campaign');
 
   const s2 = fakeSession(); // a new browser session
-  assert.equal(initialBrandsPane(readPane(s2, BRANDS_PANE_PREF)), 'matrix');
+  assert.equal(initialBrandsPane(readPane(s2, BRANDS_PANE_PREF)), 'usage');
   assert.equal(initialAnalyticsPane(readPane(s2, ANALYTICS_PANE_PREF), false), 'matrix');
 });
 
@@ -67,7 +67,7 @@ test('I9: no store, or a throwing one, reads null and writes nothing (matrix)', 
   const bad = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
   assert.equal(readPane(bad, BRANDS_PANE_PREF), null);
   writePane(bad, BRANDS_PANE_PREF, 'usage');
-  assert.equal(initialBrandsPane(readPane(bad, BRANDS_PANE_PREF)), 'matrix');
+  assert.equal(initialBrandsPane(readPane(bad, BRANDS_PANE_PREF)), 'usage');
 });
 
 test('I7: dashboard.pane -- Overview | SES; a stored matrix or usage reads as overview', () => {

@@ -1,7 +1,7 @@
 package decisions
 
 // Fork (usage decisions) -- integrations USAGE-DECISIONS-SPEC I1/I2. I1: lifecycle.json carries
-// exactly §0's 22 keys in order (14 + the 8 Curated Sunset Policy items, USAGE-REENGAGEMENT-SPEC
+// exactly §0's 23 keys in order (14 + the 9 Curated Sunset Policy items, USAGE-REENGAGEMENT-SPEC
 // D7), with §0's sections, numbers, since dates and header, and the sunset-policy table. I2: each
 // item's hash is pinned as a literal -- a text edit fails TestItemHashesPinned until the editor
 // bumps the item's `since` AND its pin here, the deliberate act that voids Marketing's decision on
@@ -51,10 +51,11 @@ func TestItemsShape(t *testing.T) {
 		{"sp-engagement", SectionSunsetPolicy, intp(16), "2026-11-02"},
 		{"sp-normal", SectionSunsetPolicy, intp(17), "2026-11-02"},
 		{"sp-hold", SectionSunsetPolicy, intp(18), "2026-10-31"},
-		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-11-02"}, // SUNSET-V4 D8; NOTE reworded 2026-11-02
-		{"sp-coming-back", SectionSunsetPolicy, intp(20), "2026-10-31"},
-		{"sp-suppressed", SectionSunsetPolicy, intp(21), "2026-11-01"}, // SUNSET-V4 D8
-		{"sp-safety", SectionSunsetPolicy, intp(22), "2026-10-31"},
+		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-11-02"}, // SUNSET-V4 D8; its NOTE became item 20 (2026-11-02)
+		{"sp-winback", SectionSunsetPolicy, intp(20), "2026-11-02"}, // the win-back line + the 360d/365d refusal (FINAL-QUEUE-GUARD-SPEC)
+		{"sp-coming-back", SectionSunsetPolicy, intp(21), "2026-11-02"}, // the journey-candidate sentence (2026-11-02)
+		{"sp-suppressed", SectionSunsetPolicy, intp(22), "2026-11-01"}, // SUNSET-V4 D8
+		{"sp-safety", SectionSunsetPolicy, intp(23), "2026-10-31"},
 	}
 	if len(d.Items) != len(want) {
 		t.Fatalf("%d items, want %d", len(d.Items), len(want))
@@ -127,8 +128,9 @@ var pinnedHashes = map[string]string{
 	"sp-engagement":        "7c179904c1332c8b4065b6b0c0f17bb0bd9b7857ef109b0c02d83fc13f2794fc", // Klaviyo aside parenthesized (2026-11-02)
 	"sp-normal":            "019dcdef0d1a6ca90c79b7808b27a885d03586fa7ee398dabc818cf3a0214a83", // justification reworded (2026-11-02)
 	"sp-hold":              "82038c303d156fcd91d49b849be02297ad47855fa76b036714042ba93c3d52c1",
-	"sp-asks":              "9cbef215bde10bcf78b2ed9de83ff2755631560494142855d057fd323e6644db", // SUNSET-V4 D8; the NOTE's refusal wording (2026-11-02)
-	"sp-coming-back":       "1c1cf2c139641bffd5f23b59240691d8d334f97b17b3730cfe2b93c1a515f86b",
+	"sp-asks":              "3138349591e68f7ca4675f4a13a676d75b65ba92e7ef77d98126fd4943d91e8a", // SUNSET-V4 D8; its NOTE split out as item 20 (2026-11-02)
+	"sp-winback":           "c18615cfff81bf60a8fa66f12dd36eaefac1278cce6a526ddc7d41ab291685e3", // the win-back line + the 360d/365d refusal (2026-11-02)
+	"sp-coming-back":       "a618929fb8f9f59a1b92953eacf813614c1ce9e1afbdfd2f862711984bb0d86f", // the journey-candidate sentence (2026-11-02)
 	"sp-suppressed":        "36cfe7f4776d4db972dbdba74e1639b1f784e7670f9e5fced74101f9c91fcc8e", // SUNSET-V4 D8: unsubscribed at 365, with the confirmation (2026-11-01)
 	"sp-safety":            "0170340a622e3402a6e022dc13baa67062567c9d2cdce51af2bc1d0ebcb46dfb",
 }
