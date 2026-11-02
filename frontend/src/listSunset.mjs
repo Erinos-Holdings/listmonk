@@ -2,9 +2,10 @@
 // countdown: one dot-separated item on a queue list's grey sub-line. The ListmonkSunset Lambda
 // computes {oldestDays, archiveInDays, asOf} each run and the server stores it (lists.sunset,
 // PUT /api/lists/:id/sunset); this module only formats it -- the fork stores and renders, never
-// computes. Queue 1 carries archiveInDays null ("oldest waiting N d"), queue 2 a number ("oldest
-// archives in N d"). A list without a sunset (every brand list) renders nothing. Tested by
-// listSunset.test.mjs.
+// computes. Since integrations SUNSET-V4-SPEC D10 every one of the four queues carries a number
+// ("oldest archives in N d" -- 185 days from the oldest hold.at on the queue) unless it is empty
+// (archiveInDays null: "oldest waiting 0 d"). A list without a sunset (every brand list) renders
+// nothing. Tested by listSunset.test.mjs.
 
 const int = (v) => (Number.isInteger(v) ? v : null);
 

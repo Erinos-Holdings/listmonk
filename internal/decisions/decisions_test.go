@@ -25,7 +25,8 @@ func TestItemsShape(t *testing.T) {
 		t.Fatalf("header = %q / %q", d.Approver, d.Published)
 	}
 	// `since` is each item's text date (D2): 2026-10-30 at publication; 2026-10-31 on the thirteen
-	// items the user's concision pass reworded (no decision existed, so nothing was voided).
+	// items the user's concision pass reworded (no decision existed, so nothing was voided);
+	// 2026-11-01 on item 13 and on 19/21 (SUNSET-V4 D8 — still no decision, nothing voided).
 	want := []struct {
 		key, section string
 		n            *int
@@ -50,9 +51,9 @@ func TestItemsShape(t *testing.T) {
 		{"sp-engagement", SectionSunsetPolicy, intp(16), "2026-10-31"},
 		{"sp-normal", SectionSunsetPolicy, intp(17), "2026-10-31"},
 		{"sp-hold", SectionSunsetPolicy, intp(18), "2026-10-31"},
-		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-10-31"}, // SUNSET-V3 D7 rewording, same date
+		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-11-01"}, // SUNSET-V4 D8
 		{"sp-coming-back", SectionSunsetPolicy, intp(20), "2026-10-31"},
-		{"sp-suppressed", SectionSunsetPolicy, intp(21), "2026-10-31"},
+		{"sp-suppressed", SectionSunsetPolicy, intp(21), "2026-11-01"}, // SUNSET-V4 D8
 		{"sp-safety", SectionSunsetPolicy, intp(22), "2026-10-31"},
 	}
 	if len(d.Items) != len(want) {
@@ -126,9 +127,9 @@ var pinnedHashes = map[string]string{
 	"sp-engagement":        "062c825492e7b62fb3c206bd99ed4ab4632a2b424cb14786058d22516e78263c",
 	"sp-normal":            "c2afde039a1d8a35496f2f5f23abbfea2a3b36e1659d5d4f19b06aa984a97c1e",
 	"sp-hold":              "82038c303d156fcd91d49b849be02297ad47855fa76b036714042ba93c3d52c1",
-	"sp-asks":              "cc7e02596840583f861b676ccbb464fc022a1aadaadcf1b12f30ae4fe6b4d7c6", // SUNSET-V3 D7: no catch-up on journey start (2026-10-31)
+	"sp-asks":              "a1f08930a2228b2e8c9283fddee451513fb1335c689ecad878293a73ff8c9068", // SUNSET-V4 D8: four emails on a fixed schedule from the hold (2026-11-01)
 	"sp-coming-back":       "1c1cf2c139641bffd5f23b59240691d8d334f97b17b3730cfe2b93c1a515f86b",
-	"sp-suppressed":        "6631fa895a51be4629cb6516d184cf1f1a48f947e17d2f18ad3b82a0f309e75e",
+	"sp-suppressed":        "36cfe7f4776d4db972dbdba74e1639b1f784e7670f9e5fced74101f9c91fcc8e", // SUNSET-V4 D8: unsubscribed at 365, with the confirmation (2026-11-01)
 	"sp-safety":            "0170340a622e3402a6e022dc13baa67062567c9d2cdce51af2bc1d0ebcb46dfb",
 }
 

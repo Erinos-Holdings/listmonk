@@ -50,8 +50,8 @@
             </template>
           </tr>
           <tr>
-            <th v-for="c in header.row3" :key="c.field" class="bu-small"
-              :class="[alignClass(c), buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.groupStart }]"
+            <th v-for="c in header.row3" :key="c.field" class="bu-small has-text-centered"
+              :class="[buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.groupStart }]"
               :title="$t(meta(c.field).help)" :aria-sort="buAria(c.field)" @click="onSort(c.field)"
               :data-cy="`usage-head-${c.field}`">
               {{ label(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
@@ -70,8 +70,8 @@
                 {{ $t('dashboard.usage.zma') }}
               </b-tag>
             </td>
-            <td v-for="c in columns" :key="c.field"
-              :class="[alignClass(c), buTd(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide }]">
+            <td v-for="c in columns" :key="c.field" class="has-text-centered"
+              :class="[buTd(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide }]">
               <!-- V2 D3: one circle per state, the stored count inside. 2026-10-30: EACH circle links
                    what it counts (brandUsage.mjs::circleLink) -- green the running campaigns / clean
                    steps, amber the rest; red never links; each carries its own accessible name. -->
@@ -531,14 +531,10 @@ export default Vue.extend({
       return parts.filter(Boolean).join('\n') || null;
     },
 
-    // 2026-10-31 polish 2: the line-pad sides and the hugged pair's alignment, header and body alike
-    // (brandUsage.mjs::headerLayout / bodyColumns). A cell with no `align` is centred.
+    // 2026-10-31 polish 2: the line-pad sides, header and body alike
+    // (brandUsage.mjs::headerLayout / bodyColumns).
     padClass(c) {
       return { 'bu-pad-l': !!c.padLeft, 'bu-pad-r': !!c.padRight };
-    },
-
-    alignClass(c) {
-      return c.align ? `bu-align-${c.align}` : 'has-text-centered';
     },
 
     buSorted(field) {

@@ -164,11 +164,11 @@ test('I16: every series description key exists in en.json', () => {
   assert.deepEqual(Object.keys(en).filter((k) => /welcome series/i.test(en[k])), ['dashboard.usage.guideWelcome']);
 });
 
-// USAGE-REENGAGEMENT-SPEC D6 -- seriesStepKey extended with the reengagement family: its two
-// standard days resolve to keys that exist; an off-standard day has no text (null, no legacy).
+// USAGE-REENGAGEMENT-SPEC D6 / SUNSET-V4 D7 -- seriesStepKey extended with the reengagement family:
+// its four standard days resolve to keys that exist; an off-standard day has no text (null, no legacy).
 test('reengagement family: seriesStepKey on REENGAGEMENT_DAYS only', () => {
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
-  assert.deepEqual([...REENGAGEMENT_DAYS], [180, 270]);
+  assert.deepEqual([...REENGAGEMENT_DAYS], [180, 270, 360, 365]);
   REENGAGEMENT_DAYS.forEach((d) => {
     const k = seriesStepKey(SERIES_REENGAGEMENT, d);
     assert.equal(k, `series.reengagementDay${d}`);

@@ -626,90 +626,76 @@ func TestHoldRelease_FinalRequiresFlag(t *testing.T) {
 }
 
 // TestSunsetV2Predicates_PassTableAllowlist -- integrations SUNSET-V2-SPEC §4.3 / D4, updated to
-// SUNSET-V3-SPEC §4 / K12a. The queue predicates of lib/sunset.ts queuePredicates and its
-// rulePredicate (copied verbatim for brand list $L, queues $Q1/$Q2, run start 2027-11-01T15:00:00Z;
-// keep in step with that file) run through the subscriber query API: each passes
-// validateQueryTables -- the ask-received predicate names campaign_sends, which v6.2.22 added to
-// the allowlist -- and the evergreen arm of "ask received" selects exactly the queue-1 row that an
-// evergreen sent to after the row was created.
+// SUNSET-V3-SPEC §4 / K12a and SUNSET-V4-SPEC §4 / K10. The queue predicates of lib/sunset.ts
+// queuePredicates and its rulePredicate (copied verbatim for brand list $L, queues $Q1..$Q4, run
+// start 2027-11-01T15:00:00Z; keep in step with that file) run through the subscriber query API:
+// each passes validateQueryTables. SUNSET-V4 deleted the "ask received" and archive predicates (the
+// stages and the archive run from hold.at, computed in the Lambda); the decline predicate's both
+// arms span the four queues, so an Unsubscribe on the queue-4 confirmation behind an ARCHIVED brand
+// row is a decline.
 func TestSunsetV2Predicates_PassTableAllowlist(t *testing.T) {
 	f := newHoldFixture(t)
-	var q1, q2 int
+	var q1, q2, q3, q4 int
 	f.db.Get(&q1, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Brand re-engagement 1', 'private', 'single', '{reengage:1:1}') RETURNING id`)
 	f.db.Get(&q2, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Brand re-engagement 2', 'private', 'single', '{reengage:1:2}') RETURNING id`)
-	L, Q1, Q2 := itoa(f.brandID), itoa(q1), itoa(q2)
+	f.db.Get(&q3, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Brand re-engagement 3', 'private', 'single', '{reengage:1:3}') RETURNING id`)
+	f.db.Get(&q4, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Brand re-engagement 4', 'private', 'single', '{reengage:1:4}') RETURNING id`)
+	L, Q1, Q2, Q3, Q4 := itoa(f.brandID), itoa(q1), itoa(q2), itoa(q3), itoa(q4)
+	Qs := Q1 + ", " + Q2 + ", " + Q3 + ", " + Q4
 
-	// SUNSET-V3-SPEC §4 / K12a (2026-10-31): the V3 strings — releases reason-scoped and
-	// final_at-excluded, widened to the brand list, a Gmail-open release, the late-decline arm, the
-	// ask-gap time clause, the archive on ask 2, and the rule predicate's Gmail NOT IN.
+	// SUNSET-V4-SPEC §3 / K10 (2026-11-01): releases reason-scoped and final_at-excluded over the
+	// four queues and the brand list, a Gmail-open release, the decline over the four queues with
+	// its late arm, and the rule predicate's Gmail NOT IN (unchanged).
 	cutoff := func(days string) string { return "'2027-11-01T15:00:00Z'::timestamptz - INTERVAL '" + days + " days'" }
 	releasable := "b.status = 'unsubscribed' AND b.meta ? 'hold' AND b.meta->'hold'->>'reason' = 'never-engaged' AND NOT (b.meta->'hold' ? 'final_at')"
 	clickRelease := "subscribers.id IN (SELECT k.subscriber_id FROM link_clicks k JOIN links l ON l.id = k.link_id " +
 		"JOIN campaign_lists cl ON cl.campaign_id = k.campaign_id " +
 		"JOIN subscriber_lists b ON b.subscriber_id = k.subscriber_id AND b.list_id = " + L + " " +
-		"WHERE cl.list_id IN (" + Q1 + ", " + Q2 + ", " + L + ") AND " + releasable + " " +
+		"WHERE cl.list_id IN (" + Qs + ", " + L + ") AND " + releasable + " " +
 		"AND k.created_at > (b.meta->'hold'->>'at')::timestamptz AND l.url NOT LIKE '%manage-preferences.curatedfor.you%')"
 	viewRelease := "subscribers.id IN (SELECT v.subscriber_id FROM campaign_views v " +
 		"JOIN campaign_lists cl ON cl.campaign_id = v.campaign_id " +
 		"JOIN subscriber_lists b ON b.subscriber_id = v.subscriber_id AND b.list_id = " + L + " " +
-		"WHERE cl.list_id IN (" + Q1 + ", " + Q2 + ", " + L + ") AND v.client = 'gmail-proxy' AND " + releasable + " " +
+		"WHERE cl.list_id IN (" + Qs + ", " + L + ") AND v.client = 'gmail-proxy' AND " + releasable + " " +
 		"AND v.created_at > (b.meta->'hold'->>'at')::timestamptz)"
-	// Decorrelated via the qs/bs join aliases since 2026-10-23 (integrations lib/sunset.ts, the
-	// win-back scale work): a bare outer `subscribers.` reference inside the IN-subquery made
-	// Postgres re-evaluate it per outer row — quadratic past ~100K subscribers.
-	askReceivedOn := func(Q string) string {
-		return "subscribers.id IN (SELECT q.subscriber_id FROM subscriber_lists q JOIN subscribers qs ON qs.id = q.subscriber_id WHERE q.list_id = " + Q + " AND (" +
-			"EXISTS (SELECT 1 FROM campaigns c JOIN campaign_lists cl ON cl.campaign_id = c.id WHERE cl.list_id = " + Q + " " +
-			"AND c.type = 'regular' AND c.evergreen = false AND c.status = 'finished' AND c.started_at > q.created_at AND c.started_at <= " + cutoff("90") + " " +
-			"AND (c.attribs->>'lang' IS NULL OR c.attribs->>'lang' = COALESCE(NULLIF(LOWER(LEFT(qs.attribs->>'lang', 2)), ''), 'en'))) " +
-			"OR EXISTS (SELECT 1 FROM campaign_sends s JOIN campaigns c ON c.id = s.campaign_id JOIN campaign_lists cl ON cl.campaign_id = c.id " +
-			"WHERE cl.list_id = " + Q + " AND c.evergreen = true AND s.subscriber_id = q.subscriber_id AND s.sent_at IS NOT NULL AND s.sent_at > q.created_at AND s.sent_at <= " + cutoff("90") + ")))"
-	}
-	askReceived := askReceivedOn(Q1)
+	// Decorrelated via the bs join alias since 2026-10-23 (integrations lib/sunset.ts, the win-back
+	// scale work): a bare outer `subscribers.` reference inside the IN-subquery made Postgres
+	// re-evaluate it per outer row — quadratic past ~100K subscribers.
 	decline := "subscribers.id IN (SELECT b.subscriber_id FROM subscriber_lists b JOIN subscribers bs ON bs.id = b.subscriber_id WHERE b.list_id = " + L + " AND (" +
 		"(b.status = 'unsubscribed' AND b.meta ? 'hold' AND EXISTS (SELECT 1 FROM subscriber_lists q " +
-		"WHERE q.subscriber_id = b.subscriber_id AND q.list_id IN (" + Q1 + ", " + Q2 + ") " +
+		"WHERE q.subscriber_id = b.subscriber_id AND q.list_id IN (" + Qs + ") " +
 		"AND (q.status = 'unsubscribed' OR bs.status = 'blocklisted'))) " +
 		"OR (b.meta->'hold_released'->>'to' = 'confirmed' AND EXISTS (SELECT 1 FROM subscriber_lists q " +
-		"WHERE q.subscriber_id = b.subscriber_id AND q.list_id IN (" + Q1 + ", " + Q2 + ") " +
+		"WHERE q.subscriber_id = b.subscriber_id AND q.list_id IN (" + Qs + ") " +
 		"AND q.status = 'unsubscribed' AND q.updated_at > (b.meta->'hold_released'->>'at')::timestamptz))))"
-	archive := "subscribers.status <> 'blocklisted' AND subscribers.id IN (SELECT subscriber_id FROM subscriber_lists WHERE list_id = " + L + " " +
-		"AND status = 'unsubscribed' AND meta ? 'hold' AND meta->'hold'->>'reason' = 'never-engaged' AND NOT (meta->'hold' ? 'final_at')) " +
-		"AND " + askReceivedOn(Q2)
 	rule := "subscribers.id IN (SELECT subscriber_id FROM subscription_engagement(" + L + ") " +
 		"WHERE anchor_at <= " + cutoff("180") + " AND eligible_sends >= 6 AND first_eligible_send_at >= '2026-08-31T00:00:00Z' " +
 		"AND (last_click_at IS NULL OR last_click_at <= " + cutoff("180") + ")) " +
 		"AND subscribers.id NOT IN (SELECT v.subscriber_id FROM campaign_views v JOIN campaign_lists cl ON cl.campaign_id = v.campaign_id " +
 		"WHERE cl.list_id = " + L + " AND v.client = 'gmail-proxy' AND v.subscriber_id IS NOT NULL AND v.created_at > " + cutoff("180") + ")"
 
-	// Fixtures for the evergreen arm: two held subscribers on queue 1; an evergreen on queue 1 sent
-	// to the first after its queue row was created, and to the second BEFORE (a stale send).
-	sent, _ := f.sub("sent@x", f.brandID, "confirmed")
-	stale, _ := f.sub("stale@x", f.brandID, "confirmed")
-	f.hold([]int{sent, stale}, "r1", nil, false)
-	for _, id := range []int{sent, stale} {
-		f.db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status, created_at) VALUES ($1, $2, 'confirmed', NOW() - INTERVAL '2 days')`, id, q1)
-	}
-	var ev int
-	f.db.Get(&ev, `INSERT INTO campaigns (uuid, name, subject, from_email, body, messenger, template_id, evergreen, status) VALUES (gen_random_uuid(), 'ask 1', 's', 'f@x', 'b', 'email', (SELECT id FROM templates LIMIT 1), true, 'running') RETURNING id`)
-	f.db.MustExec(`INSERT INTO campaign_lists (campaign_id, list_id, list_name) VALUES ($1, $2, 'q1')`, ev, q1)
-	f.db.MustExec(`INSERT INTO campaign_sends (campaign_id, subscriber_id, claimed_at, sent_at) VALUES ($1, $2, NOW(), NOW() - INTERVAL '1 day'), ($1, $3, NOW(), NOW() - INTERVAL '3 days')`, ev, sent, stale)
-
-	for name, pred := range map[string]string{"clickRelease": clickRelease, "viewRelease": viewRelease, "askReceived": askReceived, "decline": decline, "archive": archive, "rule": rule} {
+	for name, pred := range map[string]string{"clickRelease": clickRelease, "viewRelease": viewRelease, "decline": decline, "rule": rule} {
 		if _, _, err := f.app.core.QuerySubscribers("", pred, nil, "", models.SubscriberFilter{}, "", "", 0, 100); err != nil {
 			t.Fatalf("%s rejected: %v", name, err)
 		}
 	}
-	got, _, err := f.app.core.QuerySubscribers("", askReceived, nil, "", models.SubscriberFilter{}, "", "", 0, 100)
+
+	// F3: two held subscribers, one with an UNSUBSCRIBED queue-4 row (the confirmation email's
+	// Unsubscribe), one with a confirmed queue-4 row — only the first is a decline.
+	unsub, _ := f.sub("q4unsub@x", f.brandID, "confirmed")
+	stay, _ := f.sub("q4stay@x", f.brandID, "confirmed")
+	f.hold([]int{unsub, stay}, "r1", nil, false)
+	f.db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $3, 'unsubscribed'), ($2, $3, 'confirmed')`, unsub, stay, q4)
+	got, _, err := f.app.core.QuerySubscribers("", decline, nil, "", models.SubscriberFilter{}, "", "", 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].ID != sent {
+	if len(got) != 1 || got[0].ID != unsub {
 		ids := []int{}
 		for _, s := range got {
 			ids = append(ids, s.ID)
 		}
-		t.Fatalf("askReceived evergreen arm = %v, want [%d]", ids, sent)
+		t.Fatalf("decline on queue 4 = %v, want [%d]", ids, unsub)
 	}
 }
 

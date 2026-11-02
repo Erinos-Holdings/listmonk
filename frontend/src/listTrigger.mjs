@@ -39,13 +39,14 @@ export const POST_PURCHASE_STEP_DAYS = Object.freeze([5, 14, 30]);
 export const SERIES_WELCOME = 'welcome';
 export const SERIES_POST_PURCHASE = 'postPurchase';
 
-// USAGE-REENGAGEMENT-SPEC D6 -- the Usage pane's Re-engagement group (the two sunset queue asks)
-// and the journey guide's third series. NOT a step-trigger family: no list trigger maps to it (the
-// queues are filled by the ListmonkSunset Lambda), and the Lists form never passes it. Its days are
-// display labels (D10). Cross-repo literal (the SES_DAILY_ZONE precedent; no test spans the repos):
-// integrations lib/brand-usage.ts REENGAGEMENT_DAYS carries the same values -- change both together.
+// USAGE-REENGAGEMENT-SPEC D6 / SUNSET-V4-SPEC D7 -- the Usage pane's Re-engagement group (the four
+// sunset queue steps: 180, 270, 360, 365) and the journey guide's third series. NOT a step-trigger
+// family: no list trigger maps to it (the queues are filled by the ListmonkSunset Lambda), and the
+// Lists form never passes it. Its days are display labels (D10). Cross-repo literal (the
+// SES_DAILY_ZONE precedent; no test spans the repos): integrations lib/brand-usage.ts
+// REENGAGEMENT_DAYS (= lib/sunset.ts SUNSET_STAGE_DAYS) carries the same values -- change both together.
 export const SERIES_REENGAGEMENT = 'reengagement';
-export const REENGAGEMENT_DAYS = Object.freeze([180, 270]);
+export const REENGAGEMENT_DAYS = Object.freeze([180, 270, 360, 365]);
 
 export function seriesOfTrigger(option) {
   if (option === TRIGGER_NO_PURCHASE) return SERIES_WELCOME;

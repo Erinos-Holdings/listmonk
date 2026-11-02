@@ -132,8 +132,8 @@
       "key": "sp-asks",
       "section": "sunset-policy",
       "n": 19,
-      "since": "2026-10-31",
-      "text": "Two re-engagement emails, 90 days apart. Each ask is an automated journey, one per brand, in each language the brand's subscribers use. The first ask goes out the day someone is held; if they don't engage within 90 days, the last-chance ask follows, with another 90 days to respond. No one is suppressed without having received both asks. The Re-engagement circles above (180d, 270d) show each brand's journeys; the Sunset column shows whether sunset is set up.\n⚠ Both journeys must be running, in every language the brand's subscribers use, before its first subscriber reaches 180 days. Without them, held subscribers get no emails at all and are never suppressed: they wait until the journey starts or they come back on their own. People already waiting when a journey starts are sent the first ask by hand, planned like a win-back send; the journey asks everyone held after it starts."
+      "since": "2026-11-01",
+      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that they have been unsubscribed, with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.\nNOTE: Marketing may send a win-back broadcast to the 180d or 270d list at any time; it changes no one's schedule. Nothing is sent by hand after the last chance: the 360d list holds people for five days and the 365d list for one."
     },
     {
       "key": "sp-coming-back",
@@ -146,8 +146,8 @@
       "key": "sp-suppressed",
       "section": "sunset-policy",
       "n": 21,
-      "since": "2026-10-31",
-      "text": "360 days: suppressed from marketing. After 360 days without engagement (180, then the two 90-day re-engagement windows), the person is archived for that brand: off its re-engagement lists and out of its marketing, but never deleted or blocked. Only their own action brings them back: signing up again, opting in at checkout, or re-subscribing on the preferences page."
+      "since": "2026-11-01",
+      "text": "365 days: unsubscribed from marketing. After 365 days without engagement (180, then the re-engagement schedule), the person is unsubscribed from the brand's marketing — and sent the confirmation when the brand's day-365 automation is running — whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout."
     },
     {
       "key": "sp-safety",
@@ -162,8 +162,8 @@
       "columns": ["No engagement for", "What happens"],
       "rows": [
         ["0–180 days", "Normal sending"],
-        ["180–360 days*", "Regular sends stop; two re-engagement emails, 90 days apart"],
-        ["360+ days", "Suppressed from marketing"]
+        ["180–365 days*", "Regular sends stop; re-engagement emails at 180, 270 and 360 days"],
+        ["365+ days", "Unsubscribed from marketing, with a confirmation email"]
       ],
       "note": "*and at least 6 broadcasts received since then. Engagement means a click, a purchase, or a Gmail-confirmed open."
     }

@@ -131,8 +131,9 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   const P = ['postPurchase:0', 'postPurchase:5', 'postPurchase:14', 'postPurchase:30'];
   assert.deepEqual(WELCOME_FIELDS, W);
   assert.deepEqual(POST_PURCHASE_FIELDS, P);
-  // USAGE-REENGAGEMENT-SPEC F1: the Re-engagement group (180, 270) after Post-purchase, before sku.
-  const R = ['reengagement:180', 'reengagement:270'];
+  // USAGE-REENGAGEMENT-SPEC F1 / SUNSET-V4 D7: the Re-engagement group (180, 270, 360, 365) after
+  // Post-purchase, before sku.
+  const R = ['reengagement:180', 'reengagement:270', 'reengagement:360', 'reengagement:365'];
   assert.deepEqual(REENGAGEMENT_FIELDS, R);
   assert.deepEqual(SECTIONS.map((s) => [s.key, s.fields]), [
     ['broadcasts', ['cadence', 'lastBroadcast']],
@@ -148,7 +149,7 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   // The header: plain leaves in row 2 (rowspan 2), the sub-group labels over their leaves in row 3.
   const h = headerLayout();
   assert.deepEqual(h.row2.map((c) => (c.kind === 'group' ? `[${c.key}:${c.span}]` : c.field)), [
-    'cadence', 'lastBroadcast', '[welcome:4]', '[postPurchase:4]', '[reengagement:2]', 'sku', '[skipped:4]', 'attribution', 'sunset',
+    'cadence', 'lastBroadcast', '[welcome:4]', '[postPurchase:4]', '[reengagement:4]', 'sku', '[skipped:4]', 'attribution', 'sunset',
   ]);
   // G5 round 2: every group label takes the single-row headers' font size (small: false).
   assert.deepEqual(h.row2.filter((c) => c.kind === 'group').map((c) => [c.label, c.band, c.first, c.small]), [
@@ -159,35 +160,39 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   assert.deepEqual(h.row3.map((c) => [c.field, c.first, c.groupStart]), [
     ['welcome:0', true, true], ['welcome:2', false, false], ['welcome:5', false, false], ['welcome:10', false, false],
     ['postPurchase:0', false, true], ['postPurchase:5', false, false], ['postPurchase:14', false, false], ['postPurchase:30', false, false],
-    ['reengagement:180', false, true], ['reengagement:270', false, false],
+    ['reengagement:180', false, true], ['reengagement:270', false, false], ['reengagement:360', false, false], ['reengagement:365', false, false],
     ['skipped:fr', true, true], ['skipped:es', false, false], ['skipped:de', false, false], ['skipped:it', false, false],
   ]);
   // 2026-10-31 polish 2: the line-pad sides, the same on a header cell and its column's body cells
   // -- the side opening a rule and the side facing the next column's rule; a group takes its first
   // leaf's left and its last leaf's right; the section row pads every section's left and all but
-  // the last's right. The hugged Re-engagement pair aligns right | left; every other leaf centred.
+  // the last's right. SUNSET-V4 D7: no leaf carries an alignment (the hugged pair is gone) -- every
+  // leaf is centred.
   const pads = (c) => `${c.padLeft ? 'L' : '-'}${c.padRight ? 'R' : '-'}`;
   assert.deepEqual(h.row1.map((c) => [c.key, c.span, c.band, pads(c)]), [
-    ['broadcasts', 2, 'grey', 'LR'], ['journeys', 11, 'white', 'LR'], ['languages', 4, 'grey', 'LR'], ['configurations', 2, 'white', 'L-'],
+    ['broadcasts', 2, 'grey', 'LR'], ['journeys', 13, 'white', 'LR'], ['languages', 4, 'grey', 'LR'], ['configurations', 2, 'white', 'L-'],
   ]);
   assert.deepEqual(h.row2.map((c) => [c.kind === 'group' ? `[${c.key}]` : c.field, pads(c)]), [
     ['cadence', 'L-'], ['lastBroadcast', '-R'], ['[welcome]', 'LR'], ['[postPurchase]', 'LR'], ['[reengagement]', 'LR'], ['sku', 'LR'],
     ['[skipped]', 'LR'], ['attribution', 'L-'], ['sunset', '--'],
   ]);
-  assert.deepEqual(h.row3.map((c) => [c.field, pads(c), c.align]), [
-    ['welcome:0', 'L-', undefined], ['welcome:2', '--', undefined], ['welcome:5', '--', undefined], ['welcome:10', '-R', undefined],
-    ['postPurchase:0', 'L-', undefined], ['postPurchase:5', '--', undefined], ['postPurchase:14', '--', undefined], ['postPurchase:30', '-R', undefined],
-    ['reengagement:180', 'L-', 'right'], ['reengagement:270', '-R', 'left'],
-    ['skipped:fr', 'L-', undefined], ['skipped:es', '--', undefined], ['skipped:de', '--', undefined], ['skipped:it', '-R', undefined],
+  assert.deepEqual(h.row3.map((c) => [c.field, pads(c)]), [
+    ['welcome:0', 'L-'], ['welcome:2', '--'], ['welcome:5', '--'], ['welcome:10', '-R'],
+    ['postPurchase:0', 'L-'], ['postPurchase:5', '--'], ['postPurchase:14', '--'], ['postPurchase:30', '-R'],
+    ['reengagement:180', 'L-'], ['reengagement:270', '--'], ['reengagement:360', '--'], ['reengagement:365', '-R'],
+    ['skipped:fr', 'L-'], ['skipped:es', '--'], ['skipped:de', '--'], ['skipped:it', '-R'],
   ]);
+  h.row3.forEach((c) => assert.equal('align' in c, false, c.field));
   const body = bodyColumns();
   const bodyLeaf = (f) => body.find((c) => c.field === f);
   [...h.row2.filter((c) => c.kind === 'leaf'), ...h.row3].forEach((c) => {
     const b = bodyLeaf(c.field);
-    assert.deepEqual([b.padLeft, b.padRight, b.align], [!!c.padLeft, !!c.padRight, c.align], c.field);
+    assert.deepEqual([b.padLeft, b.padRight], [!!c.padLeft, !!c.padRight], c.field);
+    assert.equal('align' in b, false, c.field);
   });
-  assert.deepEqual(columnMeta('reengagement:180'), { label: 'dashboard.usage.npDays', params: { n: 180 }, help: 'series.reengagementDay180' });
-  assert.deepEqual(columnMeta('reengagement:270'), { label: 'dashboard.usage.npDays', params: { n: 270 }, help: 'series.reengagementDay270' });
+  REENGAGEMENT_DAYS.forEach((n) => {
+    assert.deepEqual(columnMeta(`reengagement:${n}`), { label: 'dashboard.usage.npDays', params: { n }, help: `series.reengagementDay${n}` });
+  });
   // S9: each leaf's header hover is its D5 description.
   assert.deepEqual(columnMeta('welcome:5'), { label: 'dashboard.usage.npDays', params: { n: 5 }, help: 'series.welcomeDay5' });
   assert.deepEqual(columnMeta('welcome:0'), { label: 'dashboard.usage.day0', help: 'series.welcomeDay0' });
@@ -972,9 +977,14 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
     ['reengagement', 'Re-engagement series', 'Sunset flow'],
   ]);
   assert.deepEqual(g.map((s) => s.steps.map((x) => x.days)), [SERIES_DAYS.welcome, SERIES_DAYS.postPurchase, REENGAGEMENT_DAYS]);
+  // SUNSET-V4 D7: four steps.
   assert.deepEqual(g[2].steps.map((x) => [x.title, x.quote]), [
-    ['We miss you', 'Still want to hear from us?'], ['Last chance', 'Should we stop emailing you?'],
+    ['We miss you', 'Still want to hear from us?'], ['Second reminder', 'Still want to hear from us?'],
+    ['Last chance', 'Should we stop emailing you?'], ['Unsubscribed', 'You\'ve been unsubscribed.'],
   ]);
+  // F5: the two short-dwell steps say "Send at once".
+  assert.match(g[2].steps[2].body, /Send at once: people are on this list for five days\.$/);
+  assert.match(g[2].steps[3].body, /Send at once: people are on this list for one day\.$/);
   assert.equal(SERIES_DAYS.reengagement, undefined); // never a series family
   g.flatMap((s) => s.steps).forEach((x) => {
     assert.ok(x.title && x.body, `day ${x.days}`);
