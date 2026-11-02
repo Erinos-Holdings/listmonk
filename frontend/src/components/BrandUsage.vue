@@ -36,9 +36,11 @@
                 </td>
                 <td v-if="loyalty.tail" :colspan="loyalty.tail" />
               </tr>
-              <tr v-for="m in loyaltyMonths" :key="m.key" class="bu-lr bu-lr-month" :class="{ 'bu-zma': parentRow.zma }"
+              <tr v-for="(m, mi) in loyaltyMonths" :key="m.key" class="bu-lr bu-lr-month"
+                :class="{ 'bu-zma': parentRow.zma, 'bu-lr-last': mi === loyaltyMonths.length - 1 }"
                 :data-cy="`usage-loyalty-${m.key}`">
-                <td :colspan="loyalty.lead" class="bu-lr-label">{{ m.label }}</td>
+                <!-- The label sits the EN label's vertical gap left of the EN circle (alignLoyalty). -->
+                <td :colspan="loyalty.lead" class="bu-lr-label"><span class="bu-lr-label-text" :style="labelShift">{{ m.label }}</span></td>
                 <td v-for="(lc, li) in loyalty.cells" :key="lc.lang" class="has-text-centered" :class="padClass(lc.col)">
                   <span v-for="ci in loyaltyCircles" :key="ci.color" :class="['bu-circle', 'bu-lr-circle', `bu-${ci.color}`]"
                     :style="li === 0 ? enShift : null" :title="`${lc.lang.toUpperCase()} · ${m.label}`"
@@ -297,6 +299,7 @@ export default Vue.extend({
       // right edge on the IT circle's.
       enShiftPx: 0,
       titleShiftPx: 0,
+      labelShiftPx: 0,
       loading: false,
       // BRAND-USAGE-SPEC D7 -- the sort, per browser session (sessionStorage key dashboard.usage, kept;
       // V2 D2: a fresh session is Score descending).
@@ -372,6 +375,10 @@ export default Vue.extend({
 
     titleShift() {
       return this.titleShiftPx ? { transform: `translateX(${this.titleShiftPx}px)` } : null;
+    },
+
+    labelShift() {
+      return this.labelShiftPx ? { transform: `translateX(${this.labelShiftPx}px)` } : null;
     },
 
     // V2 D5 -- the newest stored asOf's run time in Mountain time, null without a day.
@@ -659,9 +666,24 @@ export default Vue.extend({
         const r = el.getBoundingClientRect();
         return r.left + r.width / 2;
       });
-      const en = loyaltyShift(centers, this.enShiftPx);
+      const prevEn = this.enShiftPx;
+      const en = loyaltyShift(centers, prevEn);
       if (en !== this.enShiftPx) {
         this.enShiftPx = en;
+      }
+      // The month labels: right edge one gap left of the EN circle, the gap being the EN label's
+      // vertical distance to its circle (2026-11-02, user). The EN circle is measured as rendered
+      // (prevEn) and moved to its new shift; the label's own shift is taken out before measuring.
+      const enLabel = this.$el.querySelector('td.bu-lr-lang span');
+      const label = first.querySelector('.bu-lr-label-text');
+      if (enLabel && label) {
+        const enBox = cs[0].getBoundingClientRect();
+        const gap = Math.max(0, enBox.top - enLabel.getBoundingClientRect().bottom);
+        const enLeft = enBox.left + (en - prevEn);
+        const shift = Math.round((enLeft - gap - (label.getBoundingClientRect().right - this.labelShiftPx)) * 10) / 10;
+        if (shift !== this.labelShiftPx) {
+          this.labelShiftPx = shift;
+        }
       }
       const text = this.$el.querySelector('.bu-lr-title-text');
       if (text) {

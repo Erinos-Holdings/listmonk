@@ -1219,8 +1219,11 @@ section.dashboard (which reopens after them). */
       text-align: right;
       padding-right: 0.75em;
     }
-    .bu-lr-title-text, td.bu-lr-lang span {
+    .bu-lr-title-text, .bu-lr-label-text, td.bu-lr-lang span {
       display: inline-block;
+    }
+    tr.bu-lr-last td {
+      padding-bottom: 0.6em;
     }
     tr.bu-parent td {
       border-top: 0;
