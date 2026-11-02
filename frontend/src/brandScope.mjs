@@ -65,6 +65,22 @@ export function rosterFrom(lists, brands) {
   return { brands: out, none };
 }
 
+// Fork (2026-11-02, user): the parent brand. Presentation only -- it orders the selector (All
+// brands, the parent, a divider, the rest by display name, No brand) and gets its own band above
+// the Brands › Usage header; it is never a scope or a permission (the lists store already holds
+// only the user's permitted lists, so a user without the parent's lists sees neither).
+export const PARENT_BRAND = 'curated';
+
+// The selector's brand options from the offered roster's brands: { parent, rest } -- the parent
+// brand's entry (null when not offered) and every other brand in roster order.
+export function selectorBrands(brands) {
+  const list = (Array.isArray(brands) ? brands : []).filter((b) => b && typeof b.slug === 'string');
+  return {
+    parent: list.find((b) => b.slug === PARENT_BRAND) || null,
+    rest: list.filter((b) => b.slug !== PARENT_BRAND),
+  };
+}
+
 function isValidSelection(s) {
   if (!s || typeof s !== 'object') {
     return false;

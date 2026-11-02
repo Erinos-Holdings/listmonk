@@ -15,7 +15,9 @@
 // DASHBOARDS-POLISH2-SPEC D2: the Journeys and broadcast links filter to the BRAND's active lists --
 // a list-id set built here from the lists store the Dashboard already holds (fork-owned list data
 // rendered, not a health rule).
-import { brandLabelOf, matchesLaunch, storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
+import {
+  PARENT_BRAND, brandLabelOf, matchesLaunch, storeLists,
+} from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { healthDocs } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   POST_PURCHASE_STEP_DAYS, REENGAGEMENT_DAYS, SERIES_POST_PURCHASE, SERIES_REENGAGEMENT, SERIES_WELCOME, WELCOME_STEP_DAYS,
@@ -220,6 +222,65 @@ export const SORT_FIELDS = Object.freeze(['score', 'brand', ...SECTIONS.flatMap(
 // The stoplight columns (V2 D3) -- one circle per state. LIFECYCLE-SERIES-SPEC S9: the series
 // leaves, then (USAGE-REENGAGEMENT-SPEC D6) the Re-engagement leaves, then the SKU column.
 export const CIRCLE_FIELDS = Object.freeze([...WELCOME_FIELDS, ...POST_PURCHASE_FIELDS, ...REENGAGEMENT_FIELDS, 'sku']);
+
+// 2026-11-02 (user): the parent brand's band above the header -- its row (out of the sort) under a
+// Loyalty Rewards block: per language, this month's and next month's campaign readiness. Loyalty
+// Rewards is an EXPECTED campaign, so a language with none is a red 0 (the journey-cell rule
+// below), never '—'. Not wired yet: every circle is the placeholder red 0 until the Loyalty
+// journeys exist. EN sits over the SKU column (the table has no EN column), FR..IT over their
+// Skipped columns.
+export const LOYALTY_LANGS = Object.freeze(['en', ...SKIPPED_LANGS]);
+export const LOYALTY_PLACEHOLDER = Object.freeze([Object.freeze({ color: 'red', n: 0 })]);
+
+// The block's placement over bodyColumns(): { lead, cells, tail } -- lead the columns before EN
+// (Score and Brand included), cells one { lang, col } per LOYALTY_LANGS (col carries the body
+// column's flags, so a cell pads exactly as the column below it), tail the columns after IT.
+// null when SKU and the Skipped leaves are not adjacent in that order (the block would misalign).
+export function loyaltyLayout(columns) {
+  const fields = ['sku', ...SKIPPED_FIELDS];
+  const at = Array.isArray(columns) ? columns.findIndex((c) => c.field === 'sku') : -1;
+  if (at < 0 || fields.some((f, i) => !columns[at + i] || columns[at + i].field !== f)) {
+    return null;
+  }
+  return {
+    lead: 2 + at,
+    cells: LOYALTY_LANGS.map((lang, i) => ({ lang, col: columns[at + i] })),
+    tail: columns.length - at - fields.length,
+  };
+}
+
+// The two months the block shows -- the current month and the next in Mountain time (the rest of
+// the pane's day boundary), each { key: 'YYYY-MM', label } with label e.g. "Nov 2026".
+export function loyaltyMonths(now = new Date(), locale = 'en') {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', year: 'numeric', month: 'numeric' })
+    .formatToParts(now);
+  const y = Number(parts.find((p) => p.type === 'year').value);
+  const m = Number(parts.find((p) => p.type === 'month').value);
+  const fmt = new Intl.DateTimeFormat(locale, { timeZone: 'UTC', month: 'short', year: 'numeric' });
+  return [0, 1].map((k) => {
+    const d = new Date(Date.UTC(y, m - 1 + k, 15));
+    return { key: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`, label: fmt.format(d) };
+  });
+}
+
+// The EN circle's horizontal shift (px) that puts it one Loyalty step left of FR: `centers` are
+// the five circles' measured centers (EN first) with `current` the shift already applied to EN.
+// The step is the mean FR..IT spacing; 0 when there are too few circles to measure.
+export function loyaltyShift(centers, current = 0) {
+  if (!Array.isArray(centers) || centers.length < 3 || centers.some((c) => typeof c !== 'number' || !Number.isFinite(c))) {
+    return 0;
+  }
+  const rest = centers.slice(1);
+  const step = (rest[rest.length - 1] - rest[0]) / (rest.length - 1);
+  const natural = centers[0] - current;
+  return Math.round((rest[0] - step - natural) * 10) / 10;
+}
+
+// Split the shaped rows into the parent brand's row (null when absent) and the rest.
+export function splitParent(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  return { parent: list.find((r) => r && r.brand === PARENT_BRAND) || null, rest: list.filter((r) => r && r.brand !== PARENT_BRAND) };
+}
 
 // POLISH3 D4/D5: the header layout over SECTIONS (the band alternates grey/white by section). Row
 // 1 holds the section labels (colspan = the section's leaves); row 2 every plain leaf (rowspan 2)

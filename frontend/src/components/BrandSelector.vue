@@ -13,8 +13,12 @@
         <option v-if="!brandScope.locked" value="all">{{ $t('brand.selector.all') }}</option>
         <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D5) -- the roster the launch filter
              leaves offered; locked/hidden stay the full roster's (brandScope). -->
-        <option v-for="b in offeredRoster.brands" :key="b.slug" :value="`brand:${b.slug}`">{{ b.label }}</option>
-        <option v-if="offeredRoster.none && !brandScope.locked" value="none">{{ $t('brand.selector.none') }}</option>
+        <!-- 2026-11-02 (user): the parent brand first, then a grey divider, then the rest by display
+             name (brandScope.mjs::selectorBrands); No brand stays last. -->
+        <option v-if="options.parent" :value="`brand:${options.parent.slug}`">{{ options.parent.label }}</option>
+        <option v-if="divider" value="-" disabled class="brand-divider" aria-hidden="true">──────────</option>
+        <option v-for="b in options.rest" :key="b.slug" :value="`brand:${b.slug}`">{{ b.label }}</option>
+        <option v-if="showNone" value="none">{{ $t('brand.selector.none') }}</option>
       </template>
     </b-select>
   </div>
@@ -23,12 +27,26 @@
 <script>
 import Vue from 'vue';
 import { mapGetters } from 'vuex';
+import { selectorBrands } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   name: 'BrandSelector',
 
   computed: {
     ...mapGetters(['brandScope', 'offeredRoster']),
+
+    options() {
+      return selectorBrands(this.offeredRoster.brands);
+    },
+
+    showNone() {
+      return this.offeredRoster.none && !this.brandScope.locked;
+    },
+
+    // The divider only between the parent and something below it.
+    divider() {
+      return !!this.options.parent && (this.options.rest.length > 0 || this.showNone);
+    },
 
     value() {
       if (this.brandScope.pending) {

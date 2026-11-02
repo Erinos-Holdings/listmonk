@@ -686,6 +686,7 @@
     "dashboard.usage.postPurchaseHelp": "The Post-purchase series by day: Day 0 is the brand's first-order list, then the 5, 14 and 30-day steps. Each step scores 5 when active and 2 when idle.",
     "dashboard.usage.day0": "Day 0",
     "dashboard.usage.legacyChip": "{n}d",
+    "dashboard.usage.loyaltyRewards": "Loyalty Rewards",
     "dashboard.usage.partWelcomeSeries": "No-purchase series",
     "dashboard.usage.partPostPurchaseSeries": "Post-purchase series",
     "dashboard.usage.seriesMissing": "Not computed yet — the next daily brand health run fills the series in",

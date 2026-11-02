@@ -1188,6 +1188,50 @@ section.dashboard (which reopens after them). */
     tr.bu-zma td {
       opacity: 0.55;
     }
+    /* 2026-11-02 (user): the Skipped cells' one minimum width (three digits or a circle), so the
+    Loyalty circles above them sit evenly spaced -- the only change to the table's own cells. */
+    td.bu-sk > a, td.bu-sk > span {
+      display: inline-block;
+      min-width: max(1.45rem, 3ch);
+    }
+    /* The parent brand's band above the header: the Loyalty Rewards block (no rules, no bands --
+    title, language labels and month labels one size), the parent's row with a heavier rule under
+    it, then a gap before the header. */
+    tr.bu-lr td {
+      border: 0;
+      background: transparent;
+    }
+    td.bu-lr-title, td.bu-lr-lang, td.bu-lr-label {
+      font-size: 0.8rem;
+      font-weight: bold;
+    }
+    td.bu-lr-title {
+      text-align: right;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding-bottom: 0.75em;
+    }
+    td.bu-lr-lang {
+      color: $grey;
+      padding-bottom: 0.15em;
+    }
+    td.bu-lr-label {
+      text-align: right;
+      padding-right: 0.75em;
+    }
+    .bu-lr-title-text, td.bu-lr-lang span {
+      display: inline-block;
+    }
+    tr.bu-parent td {
+      border-top: 0;
+      border-bottom: 2px solid #b5bac1;
+    }
+    tr.bu-parent-gap td {
+      height: 0.75rem;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
     .bu-circles {
       display: inline-flex;
       gap: 3px;

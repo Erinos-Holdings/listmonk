@@ -13,6 +13,43 @@
       <table class="table is-hoverable is-narrow bu-table" data-cy="usage-table"
         :style="{ '--bu-line-pad': `${linePadPx}px` }">
         <thead>
+          <!-- 2026-11-02 (user): the parent brand's band, above the header and out of the sort --
+               the Loyalty Rewards block (this month and next, per language: EN over SKU, FR..IT over
+               their Skipped columns; brandUsage.mjs::loyaltyLayout), the parent's row (the same
+               BrandUsageRow as the body), then a gap. Shown on every brand selection the user's
+               lists permit (fetchParent). Placeholder red 0s until the Loyalty journeys exist. -->
+          <template v-if="parentRow">
+            <template v-if="loyalty">
+              <tr class="bu-lr" data-cy="usage-loyalty">
+                <td :colspan="loyalty.lead" />
+                <!-- Right-justified to the IT circle's right edge (alignLoyalty measures it). -->
+                <td :colspan="loyalty.cells.length" class="bu-lr-title" :class="lrTitlePad">
+                  <span class="bu-lr-title-text" :style="titleShift">{{ $t('dashboard.usage.loyaltyRewards') }}</span>
+                </td>
+                <td v-if="loyalty.tail" :colspan="loyalty.tail" />
+              </tr>
+              <tr class="bu-lr">
+                <td :colspan="loyalty.lead" />
+                <td v-for="(lc, li) in loyalty.cells" :key="lc.lang" class="has-text-centered bu-lr-lang"
+                  :class="padClass(lc.col)">
+                  <span :style="li === 0 ? enShift : null">{{ lc.lang.toUpperCase() }}</span>
+                </td>
+                <td v-if="loyalty.tail" :colspan="loyalty.tail" />
+              </tr>
+              <tr v-for="m in loyaltyMonths" :key="m.key" class="bu-lr bu-lr-month" :class="{ 'bu-zma': parentRow.zma }"
+                :data-cy="`usage-loyalty-${m.key}`">
+                <td :colspan="loyalty.lead" class="bu-lr-label">{{ m.label }}</td>
+                <td v-for="(lc, li) in loyalty.cells" :key="lc.lang" class="has-text-centered" :class="padClass(lc.col)">
+                  <span v-for="ci in loyaltyCircles" :key="ci.color" :class="['bu-circle', 'bu-lr-circle', `bu-${ci.color}`]"
+                    :style="li === 0 ? enShift : null" :title="`${lc.lang.toUpperCase()} · ${m.label}`"
+                    :aria-label="`${lc.lang.toUpperCase()} ${m.label}: ${circleAria(ci)}`">{{ ci.n }}</span>
+                </td>
+                <td v-if="loyalty.tail" :colspan="loyalty.tail" />
+              </tr>
+            </template>
+            <brand-usage-row :row="parentRow" :columns="columns" :sort-field="usage.sort.field" class="bu-parent" />
+            <tr class="bu-parent-gap"><td :colspan="2 + columns.length" /></tr>
+          </template>
           <!-- 2026-10-31 polish 2: every header cell carries the same --bu-line-pad sides as the
                body cells of its column(s) (brandUsage.mjs::headerLayout padLeft/padRight, the
                bu-pad-l / bu-pad-r classes), so each header stays centred over its content. -->
@@ -59,58 +96,9 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in tableRows" :key="row.brand" :class="{ 'bu-zma': row.zma }">
-            <td class="has-text-centered bu-score" :class="buTd('score')">
-              <span :title="cell(row, 'score').tooltip || null" :data-cy="`usage-score-${row.brand}`">
-                {{ cell(row, 'score').text }}</span>
-            </td>
-            <td class="bu-pad-r" :class="buTd('brand')">
-              <span :data-cy="`usage-brand-${row.brand}`">{{ row.label }}</span>
-              <b-tag v-if="row.zma" size="is-small" class="ml-1" :title="$t('dashboard.usage.zmaHelp')">
-                {{ $t('dashboard.usage.zma') }}
-              </b-tag>
-            </td>
-            <td v-for="c in columns" :key="c.field" class="has-text-centered"
-              :class="[buTd(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide }]">
-              <!-- V2 D3: one circle per state, the stored count inside. 2026-10-30: EACH circle links
-                   what it counts (brandUsage.mjs::circleLink) -- green the running campaigns / clean
-                   steps, amber the rest; red never links; each carries its own accessible name. -->
-              <span v-if="cell(row, c.field).circles.length" class="bu-circles" :data-cy="`usage-${c.field}-${row.brand}`">
-                <component v-for="ci in cell(row, c.field).circles" :key="ci.color"
-                  :is="circleTo(row, c.field, ci.color) ? 'router-link' : 'span'"
-                  :to="circleTo(row, c.field, ci.color) ? { name: 'campaigns', query: circleTo(row, c.field, ci.color) } : null"
-                  :class="['bu-circle', `bu-${ci.color}`]" :title="cell(row, c.field).tooltip"
-                  :aria-label="circleAria(ci)" :data-cy="`usage-${c.field}-${row.brand}-${ci.color}`">{{ ci.n }}</component>
-              </span>
-              <!-- DASHBOARDS-POLISH2-SPEC D2: the Cadence / Last broadcast text links the brand's
-                   lists in the Broadcasts scope (brandUsage.mjs::cellLink); '—' never links.
-                   POLISH3 D2/D5: the broadcast links carry status=finished; a Skipped count > 0
-                   is red and links its skipping lists in the All scope. MATRIX-POLISH-SPEC D10.3:
-                   Last broadcast links the last send's campaigns (?id=…, All) when the doc carries
-                   broadcasts.lastIds. -->
-              <component v-else :is="link(row, c.field) ? 'router-link' : 'span'"
-                :to="link(row, c.field) ? { name: 'campaigns', query: link(row, c.field) } : null"
-                :class="cell(row, c.field).cls" :title="title(row, c.field)"
-                :data-cy="`usage-${c.field}-${row.brand}`">
-                <span>{{ cell(row, c.field).text }}</span>
-              </component>
-              <!-- LIFECYCLE-SERIES-SPEC S9 -- after a series group's last leaf: one grey "Nd legacy"
-                   chip per off-standard step (does not count toward the score), and one amber ⚠
-                   per step with no parseable days (POLISH3 stage 2 F5); the hover carries the
-                   legacy description or the parser error (brandUsage.mjs::cellBadges). -->
-              <!-- USAGE-DECISIONS-SPEC D7: a legacy chip with stored campaigns opens them
-                   (b.link, the Day 0 circle's { id, evergreen: 'all' } shape). -->
-              <component v-for="(b, bi) in badges(row, c.field)" :key="`w-${bi}`"
-                :is="b.link ? 'router-link' : 'span'"
-                :to="b.link ? { name: 'campaigns', query: b.link } : null"
-                :class="b.kind === 'legacy' ? 'tag is-light is-small bu-legacy ml-1' : 'bu-warn has-text-warning-dark ml-1'"
-                :title="b.tooltip" :aria-label="b.tooltip"
-                :data-cy="b.kind === 'legacy' ? `usage-legacy-${row.brand}` : `usage-npwarn-${row.brand}`">
-                <span>{{ b.glyph }}</span>
-              </component>
-            </td>
-          </tr>
-          <tr v-if="!loading && !tableRows.length">
+          <brand-usage-row v-for="row in tableRows" :key="row.brand" :row="row" :columns="columns"
+            :sort-field="usage.sort.field" />
+          <tr v-if="!loading && !tableRows.length && !parentSelected">
             <td :colspan="2 + columns.length">
               <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
             </td>
@@ -278,9 +266,12 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, cell as cellOf, cellBadges, cellLink, circleLink, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad, pageWidth,
-  linkTip, loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
+  GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad, pageWidth,
+  loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
+  LOYALTY_PLACEHOLDER, brandListIds, loyaltyLayout, loyaltyMonths, loyaltyShift, splitParent,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
+import { PARENT_BRAND } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import BrandUsageRow from './BrandUsageRow.vue';
 import {
   SECTION_SUNSET_POLICY, approverText, canSubmitReject, choicesOf as decisionChoices, columnsOf, decisionBody,
   historyOf as decisionHistory, isStale, itemNumber, publishedText, replaceItem, selectedChoice, showControls, stateLine,
@@ -294,9 +285,18 @@ export default Vue.extend({
   // and renders off its own brand-matrix fetch.
   mixins: [brandScopeMixin],
 
+  components: { BrandUsageRow },
+
   data() {
     return {
       apiRows: [],
+      // 2026-11-02 (user): the parent brand's API row when the selection scopes it out of apiRows
+      // (fetchParent); null otherwise.
+      parentApiRow: null,
+      // The Loyalty block's measured shifts (alignLoyalty): EN one step left of FR, the title's
+      // right edge on the IT circle's.
+      enShiftPx: 0,
+      titleShiftPx: 0,
       loading: false,
       // BRAND-USAGE-SPEC D7 -- the sort, per browser session (sessionStorage key dashboard.usage, kept;
       // V2 D2: a fresh session is Score descending).
@@ -325,11 +325,53 @@ export default Vue.extend({
 
     // D2/D7 -- the matrix rows (same launch filter and display names), sorted. DASHBOARDS-POLISH2-SPEC
     // D2 -- the lists store (active, permitted lists) gives each row its brand list-id set.
+    // 2026-11-02 (user): the parent brand's row is out of the sort (it renders in the band above
+    // the header, parentRow).
     tableRows() {
       const rows = shapeRows(this.apiRows, {
         brands: this.brandRows, launch: this.launch, lists: this.$store.state.lists,
       });
-      return sortRows(rows, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en');
+      return sortRows(splitParent(rows).rest, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en');
+    },
+
+    // The parent brand's row on every selection, whatever the launch filter: from apiRows when the
+    // selection includes it, else the separate fetch. null when the user's lists hold none of it.
+    parentRow() {
+      const source = this.apiRows.find((r) => r && r.brand === PARENT_BRAND) || this.parentApiRow;
+      if (!source) {
+        return null;
+      }
+      return shapeRows([source], { brands: this.brandRows, launch: 'all', lists: this.$store.state.lists })[0] || null;
+    },
+
+    parentSelected() {
+      return this.brandSelection.kind === 'brand' && this.brandSelection.slug === PARENT_BRAND;
+    },
+
+    loyalty() {
+      return loyaltyLayout(this.columns);
+    },
+
+    loyaltyMonths() {
+      return loyaltyMonths(new Date(), (this.$i18n && this.$i18n.locale) || 'en');
+    },
+
+    loyaltyCircles() {
+      return LOYALTY_PLACEHOLDER;
+    },
+
+    // The title cell pads like EN's left and IT's right, so its text box ends on IT's content box.
+    lrTitlePad() {
+      const c = this.loyalty.cells;
+      return { 'bu-pad-l': !!c[0].col.padLeft, 'bu-pad-r': !!c[c.length - 1].col.padRight };
+    },
+
+    enShift() {
+      return this.enShiftPx ? { transform: `translateX(${this.enShiftPx}px)` } : null;
+    },
+
+    titleShift() {
+      return this.titleShiftPx ? { transform: `translateX(${this.titleShiftPx}px)` } : null;
     },
 
     // V2 D5 -- the newest stored asOf's run time in Mountain time, null without a day.
@@ -415,6 +457,24 @@ export default Vue.extend({
         this.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
       }).finally(() => {
         this.loading = false;
+      });
+      this.fetchParent();
+    },
+
+    // 2026-11-02 (user): the parent brand's row when the selection scopes it out -- the same
+    // endpoint narrowed to the parent's lists in the user's (permission-filtered) lists store; none
+    // there, no band. Under All brands, or with the parent selected, apiRows carries it.
+    fetchParent() {
+      const ids = brandListIds(this.$store.state.lists, PARENT_BRAND);
+      if (!this.scopeListIds || this.parentSelected || !ids.length) {
+        this.parentApiRow = null;
+        return;
+      }
+      this.$api.getDashboardBrandMatrix({ list_id: ids }).then((data) => {
+        const rows = (data && Array.isArray(data.rows)) ? data.rows : [];
+        this.parentApiRow = rows.find((r) => r && r.brand === PARENT_BRAND) || null;
+      }).catch(() => {
+        this.parentApiRow = null;
       });
     },
 
@@ -511,14 +571,6 @@ export default Vue.extend({
       saveState(sessionStore(window), { sort: this.usage.sort });
     },
 
-    cell(row, field) {
-      return cellOf(row, field, (k, p) => this.$t(k, p));
-    },
-
-    badges(row, field) {
-      return cellBadges(row, field, (k, p) => this.$t(k, p));
-    },
-
     meta(field) {
       return columnMeta(field);
     },
@@ -528,23 +580,9 @@ export default Vue.extend({
       return m.text !== undefined ? m.text : this.$t(m.label, m.params);
     },
 
-    link(row, field) {
-      return cellLink(row, field);
-    },
-
-    circleTo(row, field, color) {
-      return circleLink(row, field, color);
-    },
-
-    // Each circle's own accessible name (its part, not the whole cell's tooltip). A Re-engagement
-    // circle carries its own (brandUsage.mjs::reCircleName, USAGE-REENGAGEMENT-SPEC D3).
+    // The Loyalty placeholder circles' accessible name (the rows' own live in BrandUsageRow).
     circleAria(ci) {
       return ci.name || circleName(ci.color, ci.n, (k, p) => this.$t(k, p));
-    },
-
-    title(row, field) {
-      const parts = [this.cell(row, field).tooltip, linkTip(row, field, (k, p) => this.$t(k, p))];
-      return parts.filter(Boolean).join('\n') || null;
     },
 
     // 2026-10-31 polish 2: the line-pad sides, header and body alike
@@ -559,10 +597,6 @@ export default Vue.extend({
 
     buTh(field) {
       return ['bm-sort', { 'bu-sorted': this.buSorted(field) }];
-    },
-
-    buTd(field) {
-      return { 'bu-sorted': this.buSorted(field) };
     },
 
     buArrow(field) {
@@ -586,11 +620,13 @@ export default Vue.extend({
 
     fitTable(pass) {
       const table = this.$el && this.$el.querySelector('table.bu-table');
-      const row = table && table.querySelector('tbody tr');
+      // 2026-11-02: any brand row -- the parent band's row carries the same cells as the body's.
+      const row = table && table.querySelector('tr.bu-row');
       if (!table || !row) {
         this.guideSplit = false;
         this.linePadPx = 0;
         this.fitWidthPx = 0;
+        this.$nextTick(() => this.alignLoyalty());
         return;
       }
       const lines = row.querySelectorAll('td.bu-start, td.bu-substart').length;
@@ -604,6 +640,36 @@ export default Vue.extend({
       if (next !== this.linePadPx && pass < 3) {
         this.linePadPx = next;
         this.$nextTick(() => this.fitTable(pass + 1));
+        return;
+      }
+      this.$nextTick(() => this.alignLoyalty());
+    },
+
+    // 2026-11-02 (user): the Loyalty block's two measured placements, after the table's widths
+    // settle -- EN one even step left of FR (brandUsage.mjs::loyaltyShift; the SKU column it sits
+    // over is wider and padded differently from the Skipped columns), and the title's right edge on
+    // the IT circle's. Transforms only: no column width changes.
+    alignLoyalty() {
+      const first = this.$el && this.$el.querySelector('tr.bu-lr-month');
+      const cs = first ? Array.from(first.querySelectorAll('.bu-lr-circle')) : [];
+      if (cs.length < 3) {
+        return;
+      }
+      const centers = cs.map((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left + r.width / 2;
+      });
+      const en = loyaltyShift(centers, this.enShiftPx);
+      if (en !== this.enShiftPx) {
+        this.enShiftPx = en;
+      }
+      const text = this.$el.querySelector('.bu-lr-title-text');
+      if (text) {
+        const itRight = cs[cs.length - 1].getBoundingClientRect().right;
+        const shift = Math.round((itRight - (text.getBoundingClientRect().right - this.titleShiftPx)) * 10) / 10;
+        if (shift !== this.titleShiftPx) {
+          this.titleShiftPx = shift;
+        }
       }
     },
 
@@ -640,6 +706,10 @@ export default Vue.extend({
 
     // The column widths follow the rows' content, so the divider is re-measured after each render.
     tableRows() {
+      this.queueMeasure();
+    },
+
+    parentRow() {
       this.queueMeasure();
     },
   },
