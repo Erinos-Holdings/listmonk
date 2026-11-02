@@ -175,6 +175,8 @@ func (a *App) UpdateList(c echo.Context) error {
 	}
 	// Fork (BRAND-PICKER-SPEC D2) -- reserved tags refused; brand absent keeps the current
 	// projection (merged in the update-list statement), "" clears it, a slug projects its row.
+	// Fork (FINAL-QUEUE-GUARD-SPEC D2) -- the list's current reengage: queue tags are merged back
+	// in the same statement whatever these tags carry: they key the final-queue campaign refusal.
 	tags, keepReserved, err := a.listTagsFor(r)
 	if err != nil {
 		return err

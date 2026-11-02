@@ -191,7 +191,7 @@ func TestGetCarriesTables(t *testing.T) {
 			}
 		}
 	}
-	if n != 8 || len(resp.Data.Items) != 22 {
+	if n != 9 || len(resp.Data.Items) != 23 {
 		t.Fatalf("%d sunset-policy items of %d", n, len(resp.Data.Items))
 	}
 }

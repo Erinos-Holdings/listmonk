@@ -141,9 +141,13 @@ WITH l AS (
         -- Fork (BRAND-PICKER-SPEC D2) -- $6 is the free tags plus, when the request named a
         -- brand, its projection. $8 true (brand absent) keeps the list's CURRENT reserved tags,
         -- merged here in the one statement so a concurrent brand re-projection is never lost.
+        -- Fork (FINAL-QUEUE-GUARD-SPEC D2) -- the list's CURRENT reengage: queue tags are kept
+        -- whatever $6 carries (not repeated when $6 already has them); a new one in $6 is added.
         tags=$6::VARCHAR(100)[] || (CASE WHEN $8::BOOLEAN THEN ARRAY(
             SELECT t FROM UNNEST(lists.tags) AS t WHERE t LIKE 'brand:%' OR t LIKE 'from:%' OR t LIKE 'site:%'
-        ) ELSE '{}' END)::VARCHAR(100)[],
+        ) ELSE '{}' END)::VARCHAR(100)[] || ARRAY(
+            SELECT t FROM UNNEST(lists.tags) AS t WHERE t LIKE 'reengage:%' AND t <> ALL(COALESCE($6::VARCHAR(100)[], '{}'))
+        )::VARCHAR(100)[],
         description=(CASE WHEN $7 != '' THEN $7 ELSE description END),
         updated_at=NOW()
     WHERE id = $1

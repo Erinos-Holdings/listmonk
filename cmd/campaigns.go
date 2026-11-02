@@ -341,6 +341,11 @@ func (a *App) CreateCampaign(c echo.Context) error {
 	} else {
 		o = c
 	}
+	// Fork (FINAL-QUEUE-GUARD-SPEC D1) -- beside the field validation, not inside it: the test
+	// send also runs validateCampaignFields and must stay untouched.
+	if err := a.refuseFinalQueue(o.Evergreen, o.ListIDs); err != nil {
+		return err
+	}
 
 	if o.ArchiveTemplateID.Valid && o.ArchiveTemplateID.Int != 0 {
 		o.ArchiveTemplateID = o.TemplateID
@@ -405,6 +410,11 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	} else {
 		o = c
+	}
+	// Fork (FINAL-QUEUE-GUARD-SPEC D1) -- the incoming evergreen flag and lists (the bind starts
+	// from the stored row, so an absent flag keeps the stored one).
+	if err := a.refuseFinalQueue(o.Evergreen, o.ListIDs); err != nil {
+		return err
 	}
 
 	// Fork (evergreen) -- once a campaign has started, its evergreen flag and its lists
@@ -484,6 +494,11 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		}
 		if core.LangRequiredForStatus(cm, req.Status) {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.langRequired"))
+		}
+		// Fork (FINAL-QUEUE-GUARD-SPEC D1) -- the STORED campaign's lists, so a campaign saved
+		// before the guard, or whose list was tagged later, is refused here. Before the DB write.
+		if err := a.refuseFinalQueue(cm.Evergreen, core.CampaignListIDs(cm)); err != nil {
+			return err
 		}
 	}
 
@@ -1204,6 +1219,39 @@ func (a *App) footerGuardOnStatus(id int, next string) error {
 	}
 
 	return a.footerGuard(camp)
+}
+
+// reFinalQueueTag is a final re-engagement queue's tag (integrations FINAL-QUEUE-GUARD-SPEC D1):
+// reengage:<brand list id>:3 (last chance) or :4 (unsubscribe confirmation). Queues 1 and 2 never
+// match.
+var reFinalQueueTag = regexp.MustCompile(`^reengage:\d+:[34]$`)
+
+// isFinalQueueTag reports whether a stored list tag marks a final re-engagement queue.
+func isFinalQueueTag(tag string) bool {
+	return reFinalQueueTag.MatchString(tag)
+}
+
+// refuseFinalQueue returns the 400 campaigns.finalQueueNoBroadcast when a non-evergreen campaign
+// targets a list carrying a final-queue tag (FINAL-QUEUE-GUARD-SPEC D1). Evergreens are never
+// refused and read nothing. A list read failure is returned as is (never a misleading 400).
+func (a *App) refuseFinalQueue(evergreen bool, listIDs []int) error {
+	if evergreen || len(listIDs) == 0 {
+		return nil
+	}
+	// An empty optin type matches every list: "these lists by id", tags included (as
+	// resolveBrandMappingWith reads them).
+	lists, err := a.core.GetListsByOptin(listIDs, "")
+	if err != nil {
+		return err
+	}
+	for _, l := range lists {
+		for _, t := range l.Tags {
+			if isFinalQueueTag(t) {
+				return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("campaigns.finalQueueNoBroadcast", "list", l.Name))
+			}
+		}
+	}
+	return nil
 }
 
 // footerGuardOnEdit applies the blocking footer guard to the INCOMING campaign of an
