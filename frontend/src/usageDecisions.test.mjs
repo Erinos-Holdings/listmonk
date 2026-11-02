@@ -126,7 +126,7 @@ test('D5: header from the GET, columns by section, numbers, item replace', () =>
 test('F6: columnsOf returns sunsetPolicy; tableOf returns the stored table or null', () => {
   const table = {
     columns: ['No engagement for', 'What happens'],
-    rows: [['0–180 days', 'Normal sending'], ['180–360 days*', 'Regular sends stop'], ['360+ days', 'Suppressed from marketing']],
+    rows: [['0–180 days', 'Normal sending'], ['180–365 days*', 'Regular sends stop'], ['365+ days', 'Unsubscribed from marketing']],
     note: '*and at least 6 broadcasts.',
   };
   const view = {
