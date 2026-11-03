@@ -189,7 +189,8 @@ test('textLines: the first sentence and the Recommended:/NOTE: labels are the bo
 test('D5: the pane renders decisions through interpolation only (no v-html) and every key is in en.json', () => {
   const vue = readFileSync(new URL('./components/BrandUsage.vue', import.meta.url), 'utf8');
   assert.ok(!vue.includes('v-html'), 'BrandUsage.vue uses v-html');
-  ['decisions.title', 'decisions.published', 'decisions.approvedBy', 'decisions.pendingBy', 'decisions.pending', 'decisions.both', 'decisions.accept', 'decisions.reject', 'decisions.submit', 'decisions.cancel',
+  ['decisions.title', 'decisions.published', 'decisions.approvedBy', 'decisions.pendingBy', 'decisions.pending',
+    'decisions.both', 'decisions.accept', 'decisions.reject', 'decisions.submit', 'decisions.cancel',
     'decisions.notePlaceholder', 'decisions.accepted', 'decisions.rejected', 'decisions.awaiting', 'decisions.history',
     'decisions.voided', 'decisions.stale'].forEach((k) => assert.equal(typeof en[k], 'string', k));
 });
