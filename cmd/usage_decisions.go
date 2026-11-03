@@ -67,6 +67,8 @@ var decideGate = canDecide
 type usageDecisionStore interface {
 	UsageDecisions() ([]decisions.Row, error)
 	InsertUsageDecision(r decisions.Row) error
+	// UsageApprovers is the names of the role holders of brands:decide (display only).
+	UsageApprovers() ([]string, error)
 }
 
 // dbDecisionStore is the production store over queries/brands.sql.
@@ -87,6 +89,14 @@ func (s dbDecisionStore) InsertUsageDecision(r decisions.Row) error {
 	return s.q.InsertUsageDecision.Get(&id, r.ItemKey, r.TextHash, r.Decision, r.Note, r.UserID, r.UserName)
 }
 
+func (s dbDecisionStore) UsageApprovers() ([]string, error) {
+	var out []string
+	if err := s.q.GetUsageApprovers.Select(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GetUsageDecisions returns every lifecycle item with its current state and history.
 func (a *App) GetUsageDecisions(c echo.Context) error {
 	rows, err := a.usageDecisions.UsageDecisions()
@@ -95,7 +105,15 @@ func (a *App) GetUsageDecisions(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, a.i18n.Ts("globals.messages.errorFetching", "name", "decisions", "error", err.Error()))
 	}
 	u := auth.GetUser(c)
-	return c.JSON(http.StatusOK, okResp{decisions.Build(a.decisionDoc, rows, decideGate(u))})
+	v := decisions.Build(a.decisionDoc, rows, decideGate(u))
+	// 2026-11-03 polish: the approver is whoever holds the role now, never lifecycle.json's typed
+	// name. A failed read leaves it empty ("Pending approval") and never fails the GET.
+	names, err := a.usageDecisions.UsageApprovers()
+	if err != nil {
+		a.log.Printf("decisions: approvers read failed: %v", err)
+	}
+	v.Approver = strings.Join(names, ", ")
+	return c.JSON(http.StatusOK, okResp{v})
 }
 
 // PostUsageDecision appends one decision. Body: {hash, decision, note}. Every refusal writes

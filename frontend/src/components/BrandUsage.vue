@@ -258,7 +258,6 @@
           </li>
         </ul>
       </div>
-      <p class="bu-decisions-meta bu-decisions-approver" data-cy="usage-decisions-approver">{{ decisionsApprover }}</p>
     </div>
   </section>
 </template>
@@ -275,7 +274,7 @@ import {
 import { PARENT_BRAND } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import BrandUsageRow from './BrandUsageRow.vue';
 import {
-  SECTION_SUNSET_POLICY, approverText, canSubmitReject, choicesOf as decisionChoices, columnsOf, decisionBody,
+  SECTION_SUNSET_POLICY, canSubmitReject, choicesOf as decisionChoices, columnsOf, decisionBody,
   historyOf as decisionHistory, isStale, itemNumber, publishedText, replaceItem, selectedChoice, showControls, stateLine,
   tableOf, textLines,
 } from '../usageDecisions.mjs'; // eslint-disable-line import/extensions
@@ -409,10 +408,6 @@ export default Vue.extend({
     // width), and whether to show Accept / Reject (the server's can_decide only).
     decisionsPublished() {
       return publishedText(this.decisionView, (k, p) => this.$t(k, p));
-    },
-
-    decisionsApprover() {
-      return approverText(this.decisionView, (k, p) => this.$t(k, p));
     },
 
     decisionColumns() {

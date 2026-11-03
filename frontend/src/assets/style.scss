@@ -1514,8 +1514,7 @@ section.dashboard (which reopens after them). */
     display: grid;
     gap: 1.5rem;
     .bu-decisions-col,
-    .bu-decisions-head,
-    .bu-decisions-approver {
+    .bu-decisions-head {
       max-width: 32rem;
       width: 100%;
     }
@@ -1549,13 +1548,9 @@ section.dashboard (which reopens after them). */
         grid-row: 2 / span 2;
         border-left: 1px solid #dbdee2;
       }
-      .bu-decisions-head,
-      .bu-decisions-approver {
+      .bu-decisions-head {
         grid-column: 1 / -1;
         max-width: none;
-      }
-      .bu-decisions-approver {
-        grid-row: 4;
       }
     }
   }

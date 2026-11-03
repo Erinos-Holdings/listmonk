@@ -210,6 +210,7 @@ type Queries struct {
 	// only: the table is append-only (TestNoMutatingQueries, and the v6.2.29 trigger).
 	InsertUsageDecision *sqlx.Stmt `query:"insert-usage-decision"`
 	GetUsageDecisions   *sqlx.Stmt `query:"get-usage-decisions"`
+	GetUsageApprovers   *sqlx.Stmt `query:"get-usage-approvers"`
 
 	// Fork (system health) -- queries/system.sql, SES-HEALTH-SPEC D6.
 	UpsertSystemHealth     *sqlx.Stmt `query:"upsert-system-health"`

@@ -88,3 +88,11 @@ INSERT INTO usage_decisions (item_key, text_hash, decision, note, user_id, user_
 -- Every stored decision, newest first (the table holds one row per click; the GET folds them per item).
 SELECT id, item_key, text_hash, decision, note, user_id, user_name, created_at
     FROM usage_decisions ORDER BY id DESC;
+
+-- name: get-usage-approvers
+-- The lifecycle approvers' names (2026-11-03 polish): enabled user-type accounts whose role holds
+-- brands:decide, Super Admin excluded (it may decide, but is not Marketing's approver). Display only
+-- -- the "Pending approval by <name>" line; canDecide stays the one gate.
+SELECT u.name FROM users u JOIN roles r ON r.id = u.user_role_id
+    WHERE u.type = 'user' AND u.status = 'enabled' AND r.id <> 1 AND r.permissions @> '{brands:decide}'
+    ORDER BY u.name;

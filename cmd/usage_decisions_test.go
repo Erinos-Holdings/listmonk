@@ -48,6 +48,10 @@ func (f *fakeDecisionStore) InsertUsageDecision(r decisions.Row) error {
 	return nil
 }
 
+func (f *fakeDecisionStore) UsageApprovers() ([]string, error) {
+	return []string{"Ana Farias"}, nil
+}
+
 // decisionUser is a user as core.setupUserFields leaves it: the role in UserRole.ID, UserRoleID 0.
 func decisionUser(typ string, roleID int, perms ...string) auth.User {
 	u := auth.User{Type: typ, Name: "Kaylinn Brophy", Username: "kbrophy"}
@@ -176,6 +180,9 @@ func TestGetCarriesTables(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(body), &resp); err != nil {
 		t.Fatal(err)
+	}
+	if resp.Data.Approver != "Ana Farias" {
+		t.Fatalf("approver = %q, want the role holder from the store", resp.Data.Approver)
 	}
 	tb, ok := resp.Data.Tables[decisions.SectionSunsetPolicy]
 	want := a.decisionDoc.Tables[decisions.SectionSunsetPolicy]

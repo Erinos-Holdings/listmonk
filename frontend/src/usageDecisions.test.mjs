@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  approverText, canSubmitReject, choicesOf, columnsOf, decisionBody, denverDay, historyOf, isStale, itemNumber,
+  canSubmitReject, choicesOf, columnsOf, decisionBody, denverDay, historyOf, isStale, itemNumber,
   publishedText, replaceItem, selectedChoice, showControls, stateLine, textLines, tableOf, SECTION_SUNSET_POLICY,
 } from './usageDecisions.mjs'; // eslint-disable-line import/extensions
 
@@ -107,8 +107,7 @@ test('D5: header from the GET, columns by section, numbers, item replace', () =>
     can_decide: false,
     items: [item(), item({ key: 'pp-entry', section: 'post-purchase', n: 8 }), item({ key: 'both-language', section: 'both', n: null })],
   };
-  assert.equal(publishedText(view, t), 'Spec published 2026-10-30');
-  assert.equal(approverText(view, t), 'Approver: Kaylinn Brophy');
+  assert.equal(publishedText(view, t), 'Spec published 2026-10-30 · Pending approval by Kaylinn Brophy');
   const cols = columnsOf(view);
   assert.deepEqual([cols.noPurchase, cols.postPurchase, cols.both].map((c) => c.map((i) => i.key)), [['np-entry'], ['pp-entry'], ['both-language']]);
   assert.equal(itemNumber(view.items[1]), '8');
@@ -119,6 +118,21 @@ test('D5: header from the GET, columns by section, numbers, item replace', () =>
   assert.deepEqual(columnsOf(null), {
     noPurchase: [], postPurchase: [], both: [], sunsetPolicy: [],
   });
+});
+
+test('2026-11-03: the published line names whoever made the most recent decision, on its Denver day', () => {
+  const view = {
+    approver: 'Kaylinn Brophy',
+    published: '2026-10-30',
+    items: [
+      item({ current: row('accept', '2026-10-31T18:00:00Z') }),
+      item({ key: 'pp-entry', section: 'post-purchase', current: row('reject', '2026-11-04T04:30:00Z', { user_name: 'Ana Farias', note: 'x' }) }),
+      item({ key: 'both-language', section: 'both', n: null }),
+    ],
+  };
+  assert.equal(publishedText(view, t), 'Spec published 2026-10-30 · Approved by Ana Farias 2026-11-03');
+  assert.equal(publishedText({ published: '2026-10-30', approver: 'Ana Farias', items: [item()] }, t), 'Spec published 2026-10-30 · Pending approval by Ana Farias');
+  assert.equal(publishedText({ published: '2026-10-30', items: [item()] }, t), 'Spec published 2026-10-30 · Pending approval');
 });
 
 // USAGE-REENGAGEMENT-SPEC F6 -- the Curated Sunset Policy block: columnsOf returns its items;
@@ -175,7 +189,7 @@ test('textLines: the first sentence and the Recommended:/NOTE: labels are the bo
 test('D5: the pane renders decisions through interpolation only (no v-html) and every key is in en.json', () => {
   const vue = readFileSync(new URL('./components/BrandUsage.vue', import.meta.url), 'utf8');
   assert.ok(!vue.includes('v-html'), 'BrandUsage.vue uses v-html');
-  ['decisions.title', 'decisions.published', 'decisions.approver', 'decisions.both', 'decisions.accept', 'decisions.reject', 'decisions.submit', 'decisions.cancel',
+  ['decisions.title', 'decisions.published', 'decisions.approvedBy', 'decisions.pendingBy', 'decisions.pending', 'decisions.both', 'decisions.accept', 'decisions.reject', 'decisions.submit', 'decisions.cancel',
     'decisions.notePlaceholder', 'decisions.accepted', 'decisions.rejected', 'decisions.awaiting', 'decisions.history',
     'decisions.voided', 'decisions.stale'].forEach((k) => assert.equal(typeof en[k], 'string', k));
 });

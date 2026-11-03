@@ -32,16 +32,39 @@ export function denverDay(iso) {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
-// The section's framing lines (2026-10-30 polish): "Spec published <published>" under the centered
-// title, and "Approver: <approver>" at the bottom -- both from the GET.
-export function publishedText(view, t = (k) => k) {
-  const v = isObj(view) ? view : {};
-  return t('decisions.published', { published: String(v.published || '') });
+// The most recent current decision across every item (2026-11-03 polish): the row whose created_at
+// is latest, or null while nothing is decided. A reject counts -- it is a recorded click too.
+export function latestDecision(view) {
+  const items = isObj(view) && Array.isArray(view.items) ? view.items.filter(isObj) : [];
+  let best = null;
+  let bestAt = -Infinity;
+  items.forEach((i) => {
+    const at = isObj(i.current) ? new Date(i.current.created_at).getTime() : NaN;
+    if (!Number.isNaN(at) && at > bestAt) {
+      best = i.current;
+      bestAt = at;
+    }
+  });
+  return best;
 }
 
-export function approverText(view, t = (k) => k) {
+// The section's one framing line under the centered title (2026-11-03 polish): "Spec published
+// <published> · " then "Approved by <name> <date>" -- whoever recorded the most recent decision and
+// that decision's Denver day -- or, while nothing is decided, "Pending approval by <approver>"
+// (the GET's `approver`: the current brands:decide role holders), "Pending approval" when none.
+export function publishedText(view, t = (k) => k) {
   const v = isObj(view) ? view : {};
-  return t('decisions.approver', { approver: String(v.approver || '') });
+  const published = t('decisions.published', { published: String(v.published || '') });
+  const last = latestDecision(v);
+  let status;
+  if (last) {
+    status = t('decisions.approvedBy', { name: String(last.user_name || ''), date: denverDay(last.created_at) });
+  } else if (v.approver) {
+    status = t('decisions.pendingBy', { approver: String(v.approver) });
+  } else {
+    status = t('decisions.pending');
+  }
+  return `${published} · ${status}`;
 }
 
 // The labels set in bold at the start of a later line ("Recommended:", "NOTE:").
