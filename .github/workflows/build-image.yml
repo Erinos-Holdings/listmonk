@@ -2,7 +2,8 @@
 # publishes it to GHCR. The host is too small to build on — 2 vCPU / 2 GB running
 # Postgres, listmonk and Caddy — so the build has to happen here.
 #
-# See "The fork" in integrations/listmonk/LISTMONK-RUNBOOK.md.
+# See "The fork" in integrations/listmonk/LISTMONK-RUNBOOK.md. The yarn cache and the
+# fail-fast frontend lint + unit-test step: integrations/listmonk/LISTMONK-RELEASE-SPEC.md (D6).
 name: Build arm64 image
 
 on:
@@ -37,6 +38,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: yarn
+          cache-dependency-path: |
+            frontend/yarn.lock
+            frontend/email-builder/yarn.lock
 
       # yarn 1.22.x is pinned via "packageManager" in the frontend package.json.
       - name: Enable corepack
@@ -46,6 +51,12 @@ jobs:
       # GOARCH is switched to arm64 for the listmonk binary itself.
       - name: Install stuffbin
         run: go install github.com/knadh/stuffbin/...@latest
+
+      # Fail fast: the admin-UI lint (otherwise first run as `prebuild` inside Build
+      # frontend, minutes in) and the frontend/src/*.test.mjs unit tests (node --test),
+      # before any Go test. LISTMONK-RELEASE-SPEC D6.
+      - name: Frontend lint + unit tests
+        run: yarn --cwd frontend install --frozen-lockfile && yarn --cwd frontend lint && yarn --cwd frontend test
 
       # Backend Go tests (fork deltas: the media upload optimizer, the dark-mode
       # classifier, and the cmd/ originals-retention and reprocess tests -- cmd/ is
