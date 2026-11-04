@@ -149,3 +149,24 @@ func TestVerdictStructureBlocks(t *testing.T) {
 		t.Fatalf("ItemKeys = %+v", keys)
 	}
 }
+
+// Integrations REVIEW-TRIM-SPEC D7 (fork half): ItemKeys carries an item's `override` permission
+// per key (empty when the item names none); the verdict ignores it -- a D2.15 fail blocks like any
+// D fail and an accept of its key passes the gate (who may record that accept is core's check).
+func TestItemKeysOverride(t *testing.T) {
+	r := json.RawMessage(`{"v": 1, "status": "complete", "ai": {"status": "ok"}, "items": [
+		{"id": "D2.15", "tier": "D", "verdict": "fail", "acceptable": true, "override": "campaigns:review_structure", "findings": [{"key": "D2.15#aa"}]},
+		{"id": "D2.3", "tier": "D", "verdict": "fail", "acceptable": true, "findings": [{"key": "D2.3#bb"}]}]}`)
+	keys, err := ItemKeys(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := keys["D2.15#aa"]; k.ID != "D2.15" || !k.Acceptable || k.Override != "campaigns:review_structure" {
+		t.Fatalf("D2.15 key = %+v", k)
+	}
+	if k := keys["D2.3#bb"]; k.Override != "" {
+		t.Fatalf("D2.3 key = %+v, want no override", k)
+	}
+	mustVerdict(t, Verdict(r, nil), VerdictBlocked, 2)
+	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp("D2.15#aa", "accept", 1), disp("D2.3#bb", "accept", 2)}), VerdictPass, 0)
+}

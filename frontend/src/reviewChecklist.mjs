@@ -22,18 +22,17 @@ export function sectionOf(item, finding) {
   return 'advisory';
 }
 
-// The campaign-context rule (polish pass 2, 2026-10-06): its findings are decided inside the
-// Context section, never as a card -- like the structure key.
-export const CONTEXT_RULE = 'D7.1';
-export const isContextItem = (item) => !!item && item.id === CONTEXT_RULE;
+// Integrations REVIEW-TRIM-SPEC D3: the campaign-context rule (D7.1) is retired -- context lines
+// carry a `note` and are never decided. (A stored report's D7.1 warn item renders as an ordinary
+// advisory card until the Lambda deploys -- harmless under the Done rule below, spec D9.)
 
 // Every open finding of a report's (or a progress's) items with its section: pass and n/a items
-// are skipped, and the structure key (R#…, R) and the campaign-context rule (D7.1) are excluded
-// exactly as the window's `entries` excludes them -- each is decided in its own section only.
+// are skipped, and the structure key (R#…, R) is excluded exactly as the window's `entries`
+// excludes it -- it is decided in the Structure section only.
 export function openEntries(items) {
   const out = [];
   (Array.isArray(items) ? items : []).forEach((item) => {
-    if (!item || item.verdict === 'pass' || item.verdict === 'n/a' || isContextItem(item)) return;
+    if (!item || item.verdict === 'pass' || item.verdict === 'n/a') return;
     (item.findings || []).filter((f) => f && !isStructureKey(f.key)).forEach((finding) => {
       out.push({
         key: finding.key, item, finding, section: sectionOf(item, finding),
@@ -41,6 +40,46 @@ export function openEntries(items) {
     });
   });
   return out;
+}
+
+// Integrations REVIEW-TRIM-SPEC D8 -- the Done rule, pure: Done when the verdict is pass, or when
+// every BLOCKER and NEEDS-ACKNOWLEDGEMENT entry is decided (recorded or staged), plus -- for a
+// structure admin (`structureAcknowledge`) -- D4.2's structure finding (excluded from `entries`; its
+// Acknowledge lives in the Structure section). Advisory entries never gate Done (warn, medium and
+// low never blocked the server verdict either). `decided(key)` is the window's recorded-or-staged
+// check; `entries` are `{key, item, finding}`.
+export function isReviewDone({
+  running = false, report, verdict, entries, decided, structureAcknowledge = false, structureKey = null,
+}) {
+  if (running || !report) return false;
+  if (verdict === 'pass') return true;
+  if (structureAcknowledge && structureKey && !decided(structureKey)) return false;
+  return (Array.isArray(entries) ? entries : [])
+    .filter((e) => sectionOf(e.item, e.finding) !== 'advisory')
+    .every((e) => decided(e.key));
+}
+
+// Integrations REVIEW-TRIM-SPEC D6: the Structure section's Acknowledge label -- "Acknowledge
+// (author fix expected)" when D4.2's coverage has nothing to render (plan available, `next` null:
+// every unverified item is fixed in the editor, SB2); else "Acknowledge". The permission and the
+// key are unchanged. Returns the i18n key.
+export function structureAcknowledgeLabel(coverage) {
+  const plan = coverage && coverage.plan;
+  if (coverage && !coverage.verified && plan && plan.available !== false && plan.next === null) {
+    return 'campaigns.review.acknowledgeAuthorFix';
+  }
+  return 'campaigns.review.acknowledge';
+}
+
+// Integrations REVIEW-TRIM-SPEC D7: whether this user may stage an `accept` on an item's finding --
+// `cannot` (acceptable:false), `override` (the item names a permission the user lacks: the window
+// shows the review-admin tooltip and never stages it; the server refuses it with 403 anyway), or
+// `ok`. `can(perm)` is the window's `$can`.
+export function acceptState(item, can) {
+  if (!item || item.acceptable === false) return 'cannot';
+  const perm = typeof item.override === 'string' ? item.override.trim() : '';
+  if (perm && !(typeof can === 'function' && can(perm))) return 'override';
+  return 'ok';
 }
 
 // { blockers, acknowledge, advisory } counts over `items`.
@@ -242,7 +281,7 @@ const PILL_TYPE = { ok: 'is-success', warn: 'is-warning', fail: 'is-danger' };
 
 // A context line is a concern when its value is not `ok`, not `none` and not a number ("issues",
 // "warn", "unknown", a list of running broadcasts …); a count may carry a parenthesised note
-// ("1204 (listmonk's cached count)"). The review Lambda's D7.1 uses the same rule
+// ("1204 (listmonk's cached count)"). The review Lambda's context-note rule uses the same rule
 // (integrations lib/campaign-review/d-tier.ts::isContextConcern) -- keep them equal.
 export function isContextConcern(value) {
   const v = String(value ?? '').trim().toLowerCase();

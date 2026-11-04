@@ -47,7 +47,11 @@ type reportView struct {
 		Tier       string `json:"tier"`
 		Verdict    string `json:"verdict"`
 		Acceptable *bool  `json:"acceptable"`
-		Findings   []struct {
+		// Integrations REVIEW-TRIM-SPEC D7: the permission an `accept` of this item's findings needs
+		// (D2.15 names campaigns:review_structure). Read only so ItemKeys can carry it; the verdict
+		// ignores it.
+		Override string `json:"override"`
+		Findings []struct {
 			Key      string `json:"key"`
 			Severity string `json:"severity"`
 		} `json:"findings"`
@@ -149,33 +153,29 @@ func Verdict(report json.RawMessage, dispositions []models.ReviewDisposition) Ve
 	return VerdictResult{Verdict: VerdictPass, Blockers: blockers}
 }
 
-// ItemKeys returns every disposition key the report carries (finding keys, an empty-findings
-// failed D item's `<id>#`) plus the two pseudo-keys -- what a disposition may name (I4).
-func ItemKeys(report json.RawMessage) (map[string]struct {
+// ItemKey is what a disposition key maps to: its rubric id, whether an accept is allowed at all,
+// and (integrations REVIEW-TRIM-SPEC D7) the permission an accept needs -- empty for any reviewer.
+type ItemKey struct {
 	ID         string
 	Acceptable bool
-}, error) {
+	Override   string
+}
+
+// ItemKeys returns every disposition key the report carries (finding keys, an empty-findings
+// failed D item's `<id>#`) plus the two pseudo-keys -- what a disposition may name (I4).
+func ItemKeys(report json.RawMessage) (map[string]ItemKey, error) {
 	var r reportView
 	if err := json.Unmarshal(report, &r); err != nil {
 		return nil, err
 	}
-	out := map[string]struct {
-		ID         string
-		Acceptable bool
-	}{}
+	out := map[string]ItemKey{}
 	for _, it := range r.Items {
-		acceptable := it.Acceptable == nil || *it.Acceptable
+		k := ItemKey{ID: it.ID, Acceptable: it.Acceptable == nil || *it.Acceptable, Override: it.Override}
 		for _, f := range it.Findings {
-			out[f.Key] = struct {
-				ID         string
-				Acceptable bool
-			}{it.ID, acceptable}
+			out[f.Key] = k
 		}
 		if len(it.Findings) == 0 && it.Verdict == "fail" {
-			out[it.ID+"#"] = struct {
-				ID         string
-				Acceptable bool
-			}{it.ID, acceptable}
+			out[it.ID+"#"] = k
 		}
 	}
 	return out, nil

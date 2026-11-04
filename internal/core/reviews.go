@@ -347,7 +347,12 @@ func (c *Core) CompleteReview(campID int, jobID, status string, report json.RawM
 // finding 3). It refuses (400) an `accept` of an item the report marks acceptable:false, and any key
 // the report does not carry except the pseudo-keys A (the AI-unavailable override) and R (the
 // declined rendering-matrix offer). Rows are only ever inserted -- the log is append-only (I4).
-func (c *Core) AddDispositions(cm models.Campaign, userID int, username string, items []DispositionIn) ([]models.ReviewDisposition, error) {
+//
+// Integrations REVIEW-TRIM-SPEC D7: an `accept` of a key whose item names an `override` permission
+// (D2.15: campaigns:review_structure) is refused with 403 unless `hasPerm` grants it -- and one
+// such key refuses the whole batch (nothing is written). `hasPerm` is the user's permission check
+// (the handler passes auth.User.HasPerm); nil grants nothing.
+func (c *Core) AddDispositions(cm models.Campaign, userID int, username string, items []DispositionIn, hasPerm func(perm string) bool) ([]models.ReviewDisposition, error) {
 	campID := cm.ID
 	if len(items) == 0 {
 		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.Ts("globals.messages.invalidFields", "name", "items"))
@@ -385,6 +390,9 @@ func (c *Core) AddDispositions(cm models.Campaign, userID int, username string, 
 		}
 		if it.Action == models.DispositionAccept && !k.Acceptable {
 			return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.Ts("campaigns.reviewNotAcceptable", "id", k.ID))
+		}
+		if it.Action == models.DispositionAccept && k.Override != "" && (hasPerm == nil || !hasPerm(k.Override)) {
+			return nil, echo.NewHTTPError(http.StatusForbidden, c.i18n.Ts("campaigns.reviewOverrideOnly", "id", k.ID, "perm", k.Override))
 		}
 	}
 

@@ -56,7 +56,7 @@ func TestReviewGateRowAndDispositionsAgainstIt(t *testing.T) {
 	}
 
 	// The newest row is failed: the accept is still validated against the gate's report.
-	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 1, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "accept"}}); err != nil {
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 1, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "accept"}}, nil); err != nil {
 		t.Fatalf("accept under a newer failed row: %v", err)
 	}
 	state, _ = h.app.core.GetLatestReview(freshCampaign(t, h, camp.ID))
@@ -70,7 +70,7 @@ func TestReviewGateRowAndDispositionsAgainstIt(t *testing.T) {
 	if state.Gate != nil {
 		t.Fatal("a changed hash must have no gate row")
 	}
-	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 1, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "fixed"}}); err != nil {
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 1, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "fixed"}}, nil); err != nil {
 		t.Fatalf("disposition after a fix changed the hash: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func TestReviewDispositionsLog(t *testing.T) {
 	hash := currentHash(t, h, camp.ID)
 
 	// No completed inspection yet: nothing can be decided.
-	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 0, "robbie", []core.DispositionIn{{Key: "A", Action: "accept"}}); err == nil {
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 0, "robbie", []core.DispositionIn{{Key: "A", Action: "accept"}}, nil); err == nil {
 		t.Fatal("a disposition without a completed report must be refused")
 	}
 
@@ -105,7 +105,7 @@ func TestReviewDispositionsLog(t *testing.T) {
 		"bad action":                      {{Key: "D2.3#aa", Action: "ignore"}},
 		"one bad row refuses the batch":   {{Key: "D2.3#aa", Action: "accept"}, {Key: "D2.6#nope", Action: "accept"}},
 	} {
-		if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 0, "robbie", in); err == nil {
+		if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 0, "robbie", in, nil); err == nil {
 			t.Fatalf("%s: want a refusal", name)
 		}
 	}
@@ -123,7 +123,7 @@ func TestReviewDispositionsLog(t *testing.T) {
 		{Key: "R", Action: "accept"},
 		{Key: "A1.1#cc", RubricID: "spoofed", Action: "accept"},
 	} {
-		if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 7, "robbie", []core.DispositionIn{in}); err != nil {
+		if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 7, "robbie", []core.DispositionIn{in}, nil); err != nil {
 			t.Fatalf("%s: %v", in.Key, err)
 		}
 	}
@@ -135,7 +135,7 @@ func TestReviewDispositionsLog(t *testing.T) {
 	}
 
 	// Append-only: a later fixme adds a row; the accept row is untouched and the latest wins.
-	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 7, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "fixme"}}); err != nil {
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 7, "robbie", []core.DispositionIn{{Key: "D2.3#aa", Action: "fixme"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var actions []string

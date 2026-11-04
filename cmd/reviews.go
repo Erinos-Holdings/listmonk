@@ -238,7 +238,9 @@ func (a *App) PostReviewDispositions(c echo.Context) error {
 			}
 		}
 	}
-	out, err := a.core.AddDispositions(cm, user.ID, user.Username, req.Items)
+	// REVIEW-TRIM-SPEC D7: the item-level override (D2.15's campaigns:review_structure) is enforced
+	// in core, where the report is at hand; the user's permission check goes in with the batch.
+	out, err := a.core.AddDispositions(cm, user.ID, user.Username, req.Items, user.HasPerm)
 	if err != nil {
 		return err
 	}

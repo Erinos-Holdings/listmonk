@@ -156,8 +156,13 @@
               @click="stage(e.key, e.item.id, 'fixme')">
               {{ $t('campaigns.review.illFixIt') }}
             </b-button>
-            <b-tooltip v-if="!e.item.acceptable" :label="$t('campaigns.review.cannotAccept')" type="is-dark">
+            <b-tooltip v-if="acceptStateOf(e.item) === 'cannot'" :label="$t('campaigns.review.cannotAccept')" type="is-dark">
               <b-button size="is-small" disabled>{{ $t('campaigns.review.acceptRisk') }}</b-button>
+            </b-tooltip>
+            <!-- REVIEW-TRIM-SPEC D7: an item naming an override permission the user lacks (D2.15) is
+                 never staged here; the server refuses it with 403 anyway. -->
+            <b-tooltip v-else-if="acceptStateOf(e.item) === 'override'" :label="$t('campaigns.review.overrideAdminOnly')" type="is-dark" multilined>
+              <b-button size="is-small" disabled data-cy="btn-accept-override">{{ $t('campaigns.review.acceptRisk') }}</b-button>
             </b-tooltip>
             <b-button v-else size="is-small" data-cy="btn-accept" :type="stagedAction(e.key) === 'accept' ? 'is-primary' : ''"
               @click="stage(e.key, e.item.id, 'accept')">
@@ -218,29 +223,16 @@
             </h5>
           </template>
           <!-- Polish pass 2: the card font size; a concern line bold on a warning band (contrast: never
-               yellow text). Under it, the campaign-context rule's (D7.1) instruction, the page that
-               helps, and the three buttons for that finding -- Acknowledge is the only enabled one. -->
+               yellow text). REVIEW-TRIM-SPEC D3: under a line, the Lambda's advice `note` in plain
+               text (no buttons -- context is never decided) and, on a concern line, the page that helps. -->
           <ul class="context-list" data-cy="context-list">
             <li v-for="c in contextLines" :key="c.index" class="context-line"
-              :class="{ 'is-concern has-background-warning-light': s.highlight.has(c.index) || !!c.finding }">
+              :class="{ 'is-concern has-background-warning-light': s.highlight.has(c.index) }">
               <strong>{{ c.label }}</strong>: {{ c.value }}
               <span v-if="c.asOf" class="has-text-grey">({{ c.asOf }})</span>
-              <ul v-if="c.finding" class="context-advice" data-cy="context-advice">
-                <li>
-                  {{ c.finding.todo }}
-                  <a v-if="c.href" :href="c.href" target="_blank" rel="noopener" class="ml-1" data-cy="context-open">
-                    {{ $t('campaigns.review.contextOpen', { page: $t(`campaigns.review.contextPage.${c.page}`) }) }}</a>
-                  <p v-if="decided(c.finding.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(c.finding.key)) }}</p>
-                  <div class="buttons mt-1">
-                    <b-button size="is-small" disabled data-cy="btn-fix-for-me">{{ $t('campaigns.review.fixForMe') }}</b-button>
-                    <b-button size="is-small" disabled data-cy="btn-ill-fix-it">{{ $t('campaigns.review.illFixIt') }}</b-button>
-                    <b-button size="is-small" data-cy="btn-accept" :type="stagedAction(c.finding.key) === 'accept' ? 'is-primary' : ''"
-                      @click="stage(c.finding.key, 'D7.1', 'accept')">
-                      {{ $t('campaigns.review.acknowledge') }}
-                    </b-button>
-                  </div>
-                </li>
-              </ul>
+              <a v-if="c.concern && c.href" :href="c.href" target="_blank" rel="noopener" class="ml-1" data-cy="context-open">
+                {{ $t('campaigns.review.contextOpen', { page: $t(`campaigns.review.contextPage.${c.page}`) }) }}</a>
+              <p v-if="c.note" class="context-note" data-cy="context-note">{{ c.note }}</p>
             </li>
           </ul>
         </b-collapse>
@@ -321,7 +313,7 @@
               <b-button size="is-small" data-cy="btn-structure-acknowledge"
                 :type="stagedAction(structure.finding.key) === 'accept' ? 'is-primary' : ''"
                 @click="stage(structure.finding.key, 'D4.2', 'accept')">
-                {{ $t('campaigns.review.acknowledge') }}
+                {{ $t(structureAckLabel) }}
               </b-button>
             </b-tooltip>
             <span v-if="structure.finding && decided(structure.finding.key)" class="ml-2 has-text-grey">
@@ -417,9 +409,10 @@ import {
   buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 import {
-  altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isContextItem, sectionCounts, sectionOf, withAltsStep,
+  acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isReviewDone, sectionCounts, sectionOf,
+  structureAcknowledgeLabel, withAltsStep,
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
-import { contextKeys, contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
+import { contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
   ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, acceptAck, acceptOpener, afterAckWait, clickDecision, fallbackUrl, fallbackWindowName,
   isFinalResult, newToken, referenceLine, resultToast, selectMessage, standardLinks,
@@ -576,8 +569,7 @@ export default Vue.extend({
       }
       const out = [];
       this.report.items.forEach((item) => {
-        // Polish pass 2: the campaign-context rule (D7.1) is decided inside the Context section.
-        if (item.verdict === 'pass' || item.verdict === 'n/a' || isContextItem(item)) {
+        if (item.verdict === 'pass' || item.verdict === 'n/a') {
           return;
         }
         // INSPECT-SCOPE-SPEC §2.5: the structure key (R#…) is decided ONLY in the Structure
@@ -601,8 +593,7 @@ export default Vue.extend({
       return structureOf(this.report);
     },
 
-    // Polish pass 2: the Context lines with D7.1's finding per concern line and the page that helps
-    // (contextAdvice.mjs).
+    // The Context lines with each line's advice note and the page that helps (contextAdvice.mjs).
     contextLines() {
       return contextRows(this.report, this.$router.options.base || '');
     },
@@ -633,24 +624,26 @@ export default Vue.extend({
       return Object.values(this.staged).filter((s) => s.action === 'fixed' && s.fix);
     },
 
-    // Done when the verdict is pass, or nothing is left that THIS user can decide here: every open
-    // entry has a decision (recorded or staged), and -- for a structure admin -- so does D4.2's
-    // structure finding (excluded from `entries`; its Acknowledge lives in the Structure section).
-    // A user without the permission cannot act on it, so it never holds their Done hostage.
+    // REVIEW-TRIM-SPEC D6: "Acknowledge (author fix expected)" when nothing can be rendered.
+    structureAckLabel() {
+      return structureAcknowledgeLabel(this.structure && this.structure.coverage);
+    },
+
+    // REVIEW-TRIM-SPEC D8: the Done rule is reviewChecklist.mjs `isReviewDone` -- the blockers and
+    // acknowledgements decided (recorded or staged), and for a structure admin D4.2's structure
+    // finding; advisory entries never gate Done. A user without the permission cannot act on the
+    // structure finding, so it never holds their Done hostage.
     isDone() {
-      if (this.isRunning || !this.report) {
-        return false;
-      }
-      if (this.verdictName === 'pass') {
-        return true;
-      }
       const decided = (key) => !!(this.staged[key] || this.latest[key]);
-      if (this.structureUi.acknowledge && this.structure && this.structure.finding
-        && !decided(this.structure.finding.key)) {
-        return false;
-      }
-      // Polish pass 2: D7.1's findings (decided in the Context section) count like any entry.
-      return this.entries.every((e) => decided(e.key)) && contextKeys(this.report).every(decided);
+      return isReviewDone({
+        running: this.isRunning,
+        report: this.report,
+        verdict: this.verdictName,
+        entries: this.entries,
+        decided,
+        structureAcknowledge: this.structureUi.acknowledge,
+        structureKey: this.structure && this.structure.finding ? this.structure.finding.key : null,
+      });
     },
   },
 
@@ -691,6 +684,12 @@ export default Vue.extend({
 
     stagedAction(key) {
       return this.staged[key] ? this.staged[key].action : null;
+    },
+
+    // REVIEW-TRIM-SPEC D7 (reviewChecklist.mjs acceptState): cannot | override | ok, by the SERVER
+    // profile's permission.
+    acceptStateOf(item) {
+      return acceptState(item, (perm) => this.$can(perm));
     },
 
     decided(key) {
@@ -1156,10 +1155,9 @@ export default Vue.extend({
   font-weight: bold;
   border-left-color: #ffe08a;
 }
-.context-advice {
+.context-note {
   font-weight: normal;
-  margin: 0.25rem 0 0.4rem 1.25rem;
-  list-style: disc;
+  margin: 0.25rem 0 0.4rem 0;
 }
 .aux-intro {
   margin-bottom: 1rem;

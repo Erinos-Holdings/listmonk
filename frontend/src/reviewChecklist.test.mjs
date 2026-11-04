@@ -5,8 +5,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as checklistModule from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import {
-  STAGES, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isContextConcern, openEntries, sectionCounts, sectionOf, withAltsStep,
+  STAGES, acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isContextConcern, isReviewDone, openEntries,
+  sectionCounts, sectionOf, structureAcknowledgeLabel, withAltsStep,
 } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 
 const t = (k, p) => (p ? `${k} ${JSON.stringify(p)}` : k);
@@ -28,7 +30,7 @@ const DITEMS = [
   D('D5.1', 'n/a'),
 ];
 const REPORT = {
-  items: [...DITEMS, A('A1.1', 'critical'), A('A2.4', 'high'), A('A4.5', 'medium')],
+  items: [...DITEMS, A('A1.1', 'critical'), A('A2.4', 'high'), A('A4.3', 'medium')],
   ai: { status: 'ok', calls: [{}, {}, {}, {}] },
   provenance: { screenshots: 4 },
 };
@@ -282,16 +284,83 @@ test('checklist: "Running N checks" from the first PATCH; the AI row names the q
   assert.equal(rows({ stage: 'writing', questions: 29, ai: { calls: 4, status: 'partial' } })[3].label, `${K}aiStatus {"status":"partial"}`);
 });
 
-test('D7.1 (campaign context) is excluded from the sections, their counts and the early list', () => {
+// Integrations REVIEW-TRIM-SPEC D3/D9: the campaign-context rule is retired -- no special case; a
+// stored report's D7.1 warn item (the interim between the fork and Lambda deploys) is an ordinary
+// advisory entry, which never gates Done (D8).
+test('D7.1 is no longer special: an older report\'s D7.1 warn item is an ordinary advisory entry', () => {
+  assert.equal(checklistModule.CONTEXT_RULE, undefined);
+  assert.equal(checklistModule.isContextItem, undefined);
   const d71 = D('D7.1', 'warn', [f('D7.1', 1)]);
-  assert.ok(openEntries([...DITEMS, d71]).every((e) => e.item.id !== 'D7.1'));
-  assert.deepEqual(sectionCounts([...DITEMS, d71]), sectionCounts(DITEMS));
-  assert.ok(earlyEntries({ progress: { stage: 'screenshots', items: [...DITEMS, d71] }, phase: 'running' }).every((e) => e.item.id !== 'D7.1'));
+  const e = openEntries([...DITEMS, d71]).filter((x) => x.item.id === 'D7.1');
+  assert.equal(e.length, 1);
+  assert.equal(e[0].section, 'advisory');
   assert.equal(isContextConcern("1204 (listmonk's cached count)"), false);
   assert.equal(isContextConcern('88 Fall drop'), true);
 });
 
-test('the window: a proposal box with Copy in both card templates; the context list at card size and D7.1 in it; AI glyphs in Passed', () => {
+// Integrations REVIEW-TRIM-SPEC I10 (D8): the Done rule, pure.
+test('I10: advisory entries do not gate Done; blockers, acknowledgements and the structure term do', () => {
+  const entries = openEntries(REPORT.items);
+  const keysOf = (section) => entries.filter((x) => x.section === section).map((x) => x.key);
+  const advisory = keysOf('advisory');
+  const gating = [...keysOf('blockers'), ...keysOf('acknowledge')];
+  assert.ok(advisory.length > 0 && gating.length > 0);
+  const done = (decidedKeys, extra = {}) => isReviewDone({
+    report: REPORT, verdict: 'blocked', entries, decided: (k) => decidedKeys.includes(k), ...extra,
+  });
+  // Every gating entry decided, no advisory one: Done.
+  assert.equal(done(gating), true);
+  // An advisory entry left undecided never holds Done; a blocker or an acknowledgement does.
+  assert.equal(done([...gating.slice(1)]), false);
+  assert.equal(done(advisory), false);
+  // The structure term: a structure admin must decide D4.2's structure finding; others are not held.
+  assert.equal(done(gating, { structureAcknowledge: true, structureKey: 'R#abc' }), false);
+  assert.equal(done([...gating, 'R#abc'], { structureAcknowledge: true, structureKey: 'R#abc' }), true);
+  assert.equal(done(gating, { structureAcknowledge: false, structureKey: 'R#abc' }), true);
+  // A pass verdict is Done; a running review or no report never is.
+  assert.equal(done([], { verdict: 'pass' }), true);
+  assert.equal(done(gating, { running: true }), false);
+  assert.equal(isReviewDone({
+    report: null, verdict: 'pass', entries: [], decided: () => true,
+  }), false);
+});
+
+test('I10: the author-fix D4.2 button label; any other structure state reads Acknowledge', () => {
+  const plan = (next, available = true) => ({ available, next, stages: { 1: [], 2: [] } });
+  assert.equal(structureAcknowledgeLabel({ verified: false, plan: plan(null) }), 'campaigns.review.acknowledgeAuthorFix');
+  assert.equal(structureAcknowledgeLabel({ verified: false, plan: plan(1) }), 'campaigns.review.acknowledge');
+  assert.equal(structureAcknowledgeLabel({ verified: false, plan: plan(null, false) }), 'campaigns.review.acknowledge');
+  assert.equal(structureAcknowledgeLabel({ verified: true, plan: plan(null) }), 'campaigns.review.acknowledge');
+  assert.equal(structureAcknowledgeLabel(null), 'campaigns.review.acknowledge');
+  const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
+  const ack = /data-cy="btn-structure-acknowledge"[\s\S]*?<\/b-button>/.exec(tpl)[0];
+  assert.match(ack, /\{\{ \$t\(structureAckLabel\) \}\}/);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en['campaigns.review.acknowledgeAuthorFix'], 'Acknowledge (author fix expected)');
+});
+
+// Integrations REVIEW-TRIM-SPEC D7: an item's `override` permission.
+test('D7: acceptState -- cannot, override (a permission the user lacks), ok; the window never stages an override accept', () => {
+  const can = (perms) => (p) => perms.includes(p);
+  const d215 = { ...D('D2.15', 'fail', [f('D2.15', 1)]), override: 'campaigns:review_structure' };
+  assert.equal(acceptState(d215, can([])), 'override');
+  assert.equal(acceptState(d215, can(['campaigns:review_structure'])), 'ok');
+  assert.equal(acceptState({ ...d215, acceptable: false }, can(['campaigns:review_structure'])), 'cannot');
+  assert.equal(acceptState(D('D2.3', 'fail'), can([])), 'ok');
+  assert.equal(acceptState(d215, undefined), 'override');
+  const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
+  const reportList = /<section v-for="sec in sections"([\s\S]*?)<\/section>/.exec(tpl)[1];
+  const tip = /<b-tooltip v-else-if="acceptStateOf\(e\.item\) === 'override'" :label="\$t\('campaigns\.review\.overrideAdminOnly'\)"[\s\S]*?<\/b-tooltip>/.exec(reportList);
+  assert.ok(tip, 'the override tooltip');
+  assert.match(tip[0], /<b-button size="is-small" disabled data-cy="btn-accept-override">/);
+  assert.doesNotMatch(tip[0], /stage\(/);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en['campaigns.review.overrideAdminOnly'], 'Only a review admin (campaigns:review_structure) can override a missing shop-link attribution.');
+});
+
+test('the window: a proposal box with Copy in both card templates; the context list at card size; AI glyphs in Passed', () => {
   const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
   const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
   const early = /<!-- EARLY FINDINGS -->([\s\S]*?)<!-- \/EARLY FINDINGS -->/.exec(tpl)[1];
@@ -315,14 +384,13 @@ test('the window: a proposal box with Copy in both card templates; the context l
   const list = /<ul class="context-list"[^>]*>/.exec(context)[0];
   assert.doesNotMatch(list, /is-size-7/);
   assert.doesNotMatch(context, /has-text-warning\b/, 'never yellow text');
-  assert.match(context, /stage\(c\.finding\.key, 'D7\.1', 'accept'\)/);
-  assert.match(context, /<b-button size="is-small" disabled data-cy="btn-fix-for-me">/);
-  assert.match(context, /<b-button size="is-small" disabled data-cy="btn-ill-fix-it">/);
+  // REVIEW-TRIM-SPEC D3: no buttons in the Context section; the Open link stays.
+  assert.doesNotMatch(context, /<b-button/);
   assert.match(context, /target="_blank" rel="noopener"/);
-  // D7.1 out of the cards; its keys in Done.
+  // REVIEW-TRIM-SPEC D8: the window's Done is the pure rule.
   const entries = /entries\(\) \{([\s\S]*?)\n {4}\},/.exec(src)[1];
-  assert.match(entries, /isContextItem\(item\)/);
-  assert.match(src, /contextKeys\(this\.report\)\.every\(decided\)/);
+  assert.doesNotMatch(entries, /isContextItem/);
+  assert.match(src, /return isReviewDone\(\{/);
   // Passed: the count in a green tag; an A item carries the AI glyph, a D item none.
   const passed = /data-cy="section-passed"([\s\S]*?)<\/b-collapse>/.exec(tpl)[1];
   assert.match(passed, /<b-tag type="is-success">\{\{ passed\.length \}\}<\/b-tag>/);

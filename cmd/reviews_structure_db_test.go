@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/internal/review"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
@@ -162,6 +163,79 @@ func TestStructureAcceptIsAdminOnly(t *testing.T) {
 	h.db.Get(&stored, `SELECT COUNT(*) FROM campaign_structure_records`)
 	if stored != 1 {
 		t.Fatalf("%d records stored, want only the one valid PUT", stored)
+	}
+}
+
+// Integrations REVIEW-TRIM-SPEC I9 (D7): an `accept` of a finding whose item names an `override`
+// permission (D2.15 → campaigns:review_structure) is 403 for a user without it and 200 with it
+// (Super Admin implicitly); a key not in the report stays 400; a batch holding one such key is
+// refused whole (nothing written); a non-accept on it is any reviewer's.
+func TestOverrideAcceptNeedsThePermission(t *testing.T) {
+	h := newLinkHarness(t)
+	ensureReviewManager(h)
+	var list int
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Acme', 'public', 'single', '{brand:acme,"from:Acme <hello@acme.test>"}') RETURNING id`)
+	camp := newReviewCampaign(t, h, models.CampaignTypeRegular, list)
+	hash := currentHash(t, h, camp.ID)
+	items := `{"id": "D2.15", "tier": "D", "verdict": "fail", "acceptable": true, "override": "campaigns:review_structure", "findings": [{"key": "D2.15#aa"}]},
+		{"id": "D2.3", "tier": "D", "verdict": "fail", "acceptable": true, "findings": [{"key": "D2.3#bb"}]}`
+	insertReview(t, h, camp.ID, hash, "complete", reviewReport(hash, items), 1)
+
+	marketing := withPerms("kbrophy", 5)                               // no campaigns:review_structure
+	admin := withPerms("robbie", 5, auth.PermCampaignsReviewStructure) // holds it
+	superAdmin := withPerms("root", auth.SuperAdminRoleID)             // implicit
+	post := func(u auth.User, body string) (int, string) {
+		return callAs(t, h, h.app.PostReviewDispositions, http.MethodPost, camp.ID, body, u)
+	}
+	count := func() int {
+		var n int
+		h.db.Get(&n, `SELECT COUNT(*) FROM campaign_review_dispositions`)
+		return n
+	}
+
+	// A key not in the report: 400, as before.
+	if code, msg := post(admin, `{"items": [{"key": "D2.15#zz", "action": "accept"}]}`); code != http.StatusBadRequest {
+		t.Fatalf("unknown key: want 400, got %d %s", code, msg)
+	}
+	// Without the permission: 403, and one such key refuses the whole batch.
+	for _, body := range []string{
+		`{"items": [{"key": "D2.15#aa", "action": "accept"}]}`,
+		`{"items": [{"key": "D2.3#bb", "action": "accept"}, {"key": "D2.15#aa", "action": "accept"}]}`,
+	} {
+		if code, msg := post(marketing, body); code != http.StatusForbidden {
+			t.Fatalf("marketing %s: want 403, got %d %s", body, code, msg)
+		}
+	}
+	if n := count(); n != 0 {
+		t.Fatalf("refused batches wrote %d rows", n)
+	}
+	// A non-accept on the override key, and an accept of an ordinary key, are anyone's.
+	for _, body := range []string{
+		`{"items": [{"key": "D2.15#aa", "action": "fixme"}]}`,
+		`{"items": [{"key": "D2.3#bb", "action": "accept"}]}`,
+	} {
+		if code, msg := post(marketing, body); code != http.StatusOK {
+			t.Fatalf("marketing %s: want 200, got %d %s", body, code, msg)
+		}
+	}
+	state, _ := h.app.core.GetLatestReview(freshCampaign(t, h, camp.ID))
+	if state.Gate == nil || state.Gate.Verdict.Verdict != review.VerdictBlocked {
+		t.Fatalf("verdict before the override accept = %+v", state.Gate)
+	}
+	// With the permission: 200 -- a role holding it, and Super Admin implicitly.
+	if code, msg := post(admin, `{"items": [{"key": "D2.15#aa", "action": "accept", "note": "brand page by design"}]}`); code != http.StatusOK {
+		t.Fatalf("admin accept: %d %s", code, msg)
+	}
+	if code, msg := post(superAdmin, `{"items": [{"key": "D2.15#aa", "action": "accept"}]}`); code != http.StatusOK {
+		t.Fatalf("super admin accept: %d %s", code, msg)
+	}
+	state, _ = h.app.core.GetLatestReview(freshCampaign(t, h, camp.ID))
+	if state.Gate == nil || state.Gate.Verdict.Verdict != review.VerdictPass {
+		t.Fatalf("verdict after the override accept = %+v", state.Gate)
+	}
+	// Core directly: a nil permission check grants nothing.
+	if _, err := h.app.core.AddDispositions(freshCampaign(t, h, camp.ID), 1, "x", []core.DispositionIn{{Key: "D2.15#aa", Action: "accept"}}, nil); err == nil {
+		t.Fatal("a nil permission check must refuse an override accept")
 	}
 }
 
