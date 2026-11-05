@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/internal/core"
 	"github.com/knadh/listmonk/internal/review"
 	"github.com/knadh/listmonk/models"
@@ -315,10 +316,77 @@ func TestReviewDispositionsAgainstShownJob(t *testing.T) {
 	if code, _ := post(`{` + items + `, "job_id": "not-a-uuid"}`); code != http.StatusBadRequest {
 		t.Fatalf("a malformed job_id: %d, want 400", code)
 	}
+	// (ii) `fixme` via the older job is recorded too.
+	if code, msg := post(`{"items": [{"key": "D2.15#aa", "rubric_id": "D2.15", "action": "fixme"}], "job_id": "` + jobA + `"}`); code != http.StatusOK {
+		t.Fatalf("fixme via the older job: %d %s", code, msg)
+	}
 	// A running (not complete) row of this campaign is refused too.
 	const jobRunning = "bbbbbbbb-0000-4000-8000-00000000000b"
 	h.db.MustExec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status) VALUES ($1, 'r', $2, 'running')`, camp.ID, jobRunning)
 	if code, _ := post(`{` + items + `, "job_id": "` + jobRunning + `"}`); code != http.StatusBadRequest {
 		t.Fatalf("a running job: %d, want 400", code)
+	}
+}
+
+// Re-review F1/F4 (2026-11-05): naming an older job never skips a check today's report imposes --
+// for a key both carry, the stricter entry wins (acceptable, override) -- and an accept recorded via
+// the older job satisfies the gate exactly as one via the gate row would (the log folds by key).
+func TestReviewDispositionsShownJobStricterWins(t *testing.T) {
+	h := newLinkHarness(t)
+	ensureReviewManager(h)
+	var list int
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Acme', 'public', 'single', '{brand:acme,"from:Acme <hello@acme.test>"}') RETURNING id`)
+	camp := newReviewCampaign(t, h, models.CampaignTypeRegular, list)
+	hash := currentHash(t, h, camp.ID)
+	const jobA = "aaaaaaaa-0000-4000-8000-0000000000a1"
+	// A (older, another hash): D2.15 WITHOUT override, D2.6 not acceptable, D2.3 acceptable.
+	itemsA := `{"id": "D2.15", "tier": "D", "verdict": "fail", "acceptable": true, "findings": [{"key": "D2.15#aa"}]},
+		{"id": "D2.6", "tier": "D", "verdict": "fail", "acceptable": false, "findings": [{"key": "D2.6#nope"}]},
+		{"id": "D2.3", "tier": "D", "verdict": "fail", "acceptable": true, "findings": [{"key": "D2.3#bb"}]}`
+	h.db.MustExec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status, report, requested_at)
+		VALUES ($1, 'old', $2, 'complete', $3, NOW() - INTERVAL '10 minutes')`, camp.ID, jobA, reviewReport("old", itemsA))
+	// B (the gate, current hash): the same D2.15 key WITH override (a warn, so only D2.3 blocks), and D2.3.
+	itemsB := `{"id": "D2.15", "tier": "D", "verdict": "warn", "acceptable": true, "override": "campaigns:review_structure", "findings": [{"key": "D2.15#aa"}]},
+		{"id": "D2.3", "tier": "D", "verdict": "fail", "acceptable": true, "findings": [{"key": "D2.3#bb"}]}`
+	insertReview(t, h, camp.ID, hash, "complete", reviewReport(hash, itemsB), 1)
+
+	plain := withPerms("marketer", 0)
+	admin := withPerms("admin", 0, auth.PermCampaignsReviewStructure)
+	post := func(u auth.User, items string) (int, string) {
+		return callAs(t, h, h.app.PostReviewDispositions, http.MethodPost, camp.ID, `{"items": [`+items+`], "job_id": "`+jobA+`"}`, u)
+	}
+
+	// F1: the gate's override applies though A's entry has none.
+	if code, msg := post(plain, `{"key": "D2.15#aa", "rubric_id": "D2.15", "action": "accept"}`); code != http.StatusForbidden {
+		t.Fatalf("accept via the older job without the permission: %d %s, want 403", code, msg)
+	}
+	if code, msg := post(admin, `{"key": "D2.15#aa", "rubric_id": "D2.15", "action": "accept"}`); code != http.StatusOK {
+		t.Fatalf("accept via the older job with the permission: %d %s, want 200", code, msg)
+	}
+	// (iii) acceptable:false in the named report → 400.
+	if code, msg := post(admin, `{"key": "D2.6#nope", "rubric_id": "D2.6", "action": "accept"}`); code != http.StatusBadRequest {
+		t.Fatalf("accept of a non-acceptable item via the named job: %d %s, want 400", code, msg)
+	}
+	// (iv) the pseudo-keys behave as without job_id: A is accepted by anyone; R needs the structure admin.
+	if code, msg := post(plain, `{"key": "A", "rubric_id": "A", "action": "accept"}`); code != http.StatusOK {
+		t.Fatalf("A with job_id: %d %s", code, msg)
+	}
+	if code, _ := post(plain, `{"key": "R", "rubric_id": "R", "action": "accept"}`); code != http.StatusForbidden {
+		t.Fatalf("R with job_id by a non-admin: %d, want 403", code)
+	}
+	if code, msg := post(admin, `{"key": "R", "rubric_id": "R", "action": "accept"}`); code != http.StatusOK {
+		t.Fatalf("R with job_id by the admin: %d %s", code, msg)
+	}
+	// (i) before: the gate blocks on D2.3; an accept via the OLDER job satisfies it.
+	state, err := h.app.core.GetLatestReview(freshCampaign(t, h, camp.ID))
+	if err != nil || state.Gate == nil || state.Gate.Verdict.Verdict != review.VerdictBlocked {
+		t.Fatalf("gate before = %+v %v, want blocked", state.Gate, err)
+	}
+	if code, msg := post(plain, `{"key": "D2.3#bb", "rubric_id": "D2.3", "action": "accept"}`); code != http.StatusOK {
+		t.Fatalf("accept D2.3 via the older job: %d %s", code, msg)
+	}
+	state, _ = h.app.core.GetLatestReview(freshCampaign(t, h, camp.ID))
+	if state.Gate == nil || state.Gate.Verdict.Verdict != review.VerdictPass {
+		t.Fatalf("gate after = %+v, want pass", state.Gate)
 	}
 }

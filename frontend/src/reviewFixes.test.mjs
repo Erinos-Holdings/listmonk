@@ -511,12 +511,24 @@ test('pruneStaged keeps the shown report\'s finding keys and A/R; drops the rest
 
 test('the window prunes on load and posts its dispositions with the shown report\'s job id; a refused POST after applied fixes still re-inspects', () => {
   const win = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
-  assert.match(win, /postReviewDispositions\(this\.id, items, this\.report \? this\.report\.jobId : null\)/);
   assert.match(win, /pruneStaged\(this\.staged, this\.report\)/);
   const submit = /async submit\(withFixes\) \{([\s\S]*?)\n {4}\},/.exec(win);
   assert.ok(submit, 'submit()');
-  assert.match(submit[1], /catch \(e\) \{\s*if \(!applied\.length\) \{\s*throw e;/);
-  assert.ok(submit[1].indexOf('postReviewDispositions') < submit[1].indexOf('startCampaignReview'));
+  const body = submit[1];
+  // Re-review F2: the shown job and the staged decisions are captured before the fixes apply, and
+  // the post and the fixes are built from those captures (never re-read after an await).
+  const captureJob = body.indexOf('const shownJob = this.report ? this.report.jobId : null;');
+  const captureStaged = body.indexOf('const stagedEntries = Object.entries(this.staged);');
+  assert.ok(captureJob >= 0 && captureStaged >= 0, 'captures');
+  assert.ok(captureJob < body.indexOf('applyStagedFixes') && captureStaged < body.indexOf('applyStagedFixes'));
+  assert.match(body, /postReviewDispositions\(this\.id, items, shownJob\)/);
+  assert.match(body, /dispositionsAfterFixes\(stagedList, applied\)/);
+  assert.match(body, /applyStagedFixes\(fixes\)/);
+  assert.equal(body.slice(body.indexOf('applyStagedFixes')).includes('this.staged)'), false, 'no re-read of staged after the apply');
+  assert.match(body, /catch \(e\) \{\s*if \(!applied\.length\) \{\s*throw e;/);
+  assert.ok(body.indexOf('postReviewDispositions') < body.indexOf('startCampaignReview'));
+  // Re-review F3: a refused post keeps the non-fix decisions.
+  assert.match(body, /this\.staged = refused \? Object\.fromEntries\(stagedEntries\.filter\(\(\[, s\]\) => s\.action !== 'fixed'\)\) : \{\};/);
   const api = readFileSync(new URL('./api/index.js', import.meta.url), 'utf8');
   assert.match(api, /postReviewDispositions = async \(id, items, jobId\) =>/);
   assert.match(api, /\{ items, \.\.\.\(jobId \? \{ job_id: jobId \} : \{\}\) \}/);

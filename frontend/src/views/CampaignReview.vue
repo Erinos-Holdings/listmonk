@@ -933,14 +933,15 @@ export default Vue.extend({
 
     // Apply the staged fixes to the SAVED campaign, recompile a visual body, PUT it. Returns the fix
     // objects that were applied AND saved (empty when nothing could be).
-    async applyStagedFixes() {
+    // `fixes` (re-review F2): the fix objects submit() captured; absent, the staged ones now.
+    async applyStagedFixes(fixes = this.stagedFixes.map((s) => s.fix)) {
       const raw = await this.$api.getCampaignRaw(this.id);
       // REVIEW-TRIM-2-SPEC D9: campaign.resave / footer.official apply only while the stored body /
       // design is the inspected one (sha256 equality).
       const digests = await campaignDigests(raw).catch(() => ({}));
       const {
         campaign, applied, skipped, recompile,
-      } = applyFixes(raw, this.stagedFixes.map((s) => s.fix), digests);
+      } = applyFixes(raw, fixes, digests);
       if (skipped.length) {
         this.$utils.toast(this.$t('campaigns.review.fixesSkipped', { n: skipped.length }), 'is-warning');
       }
@@ -975,26 +976,37 @@ export default Vue.extend({
     // `fixme` for the ones that could not be, then re-inspect.
     async submit(withFixes) {
       this.busy = true;
+      // Re-review F2 (2026-11-05): the shown job and the staged decisions are captured BEFORE the
+      // fixes are applied -- a poll load() that lands after the fix's PUT may re-point `report` to an
+      // older gate row and prune `staged`; the post is built from what the user decided on.
+      const shownJob = this.report ? this.report.jobId : null;
+      const stagedEntries = Object.entries(this.staged);
+      const stagedList = stagedEntries.map(([, s]) => s);
       try {
         let applied = [];
-        if (withFixes && this.stagedFixes.length) {
-          applied = await this.applyStagedFixes();
+        const fixes = stagedList.filter((s) => s.action === 'fixed' && s.fix).map((s) => s.fix);
+        if (withFixes && fixes.length) {
+          applied = await this.applyStagedFixes(fixes);
         }
-        const items = dispositionsAfterFixes(Object.values(this.staged), applied);
+        const items = dispositionsAfterFixes(stagedList, applied);
+        let refused = false;
         if (items.length) {
           // Integrations REVIEW-TRIM-2 post-release fix (2026-11-05): the keys are validated against
           // the report this window SHOWS (its job id), not the gate row. When fixes were applied and
           // saved, a refused POST must not strand them: the re-inspection still starts (the API
-          // layer has already shown the error toast) and the stale selection is cleared.
+          // layer has already shown the error toast).
           try {
-            await this.$api.postReviewDispositions(this.id, items, this.report ? this.report.jobId : null);
+            await this.$api.postReviewDispositions(this.id, items, shownJob);
           } catch (e) {
             if (!applied.length) {
               throw e;
             }
+            refused = true;
           }
         }
-        this.staged = {};
+        // Re-review F3: a refused batch wrote nothing -- keep the non-fix decisions (the next load()'s
+        // prune drops any the new report no longer carries); the applied fixes are not re-staged.
+        this.staged = refused ? Object.fromEntries(stagedEntries.filter(([, s]) => s.action !== 'fixed')) : {};
         if (applied.length > 0) {
           await this.$api.startCampaignReview(this.id);
         }

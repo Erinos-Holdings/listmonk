@@ -367,7 +367,26 @@ func (c *Core) AddDispositionsAt(cm models.Campaign, jobID string, userID int, u
 	if len(items) == 0 {
 		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.Ts("globals.messages.invalidFields", "name", "items"))
 	}
+	// Today's row: the gate (newest complete at the current hash), else the newest complete row.
+	current, err := c.GetReviewByHash(campID, CampaignBundleHash(cm))
+	if err != nil {
+		return nil, err
+	}
+	if current == nil {
+		var latest models.CampaignReview
+		if err := c.q.GetCampaignReviewLatestDone.Get(&latest, campID); err == nil {
+			current = &latest
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return nil, c.reviewErr(err, "fetching")
+		}
+	}
+
 	var row models.CampaignReview
+	// Re-review F1 (2026-11-05): with a job id, the keys must be items of the NAMED report, and an
+	// `accept` must also pass the acceptable/override checks of TODAY's report for a key it carries
+	// too -- the stricter wins, so naming an older report can never skip a check the gate imposes
+	// (the verdict folds the log by key and does not re-check `override`).
+	var strict map[string]review.ItemKey
 	if jobID != "" {
 		r, err := c.GetReviewByJob(campID, jobID)
 		if err != nil {
@@ -377,15 +396,15 @@ func (c *Core) AddDispositionsAt(cm models.Campaign, jobID string, userID int, u
 			return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.reviewUnknownJob"))
 		}
 		row = *r
-	} else if gate, err := c.GetReviewByHash(campID, CampaignBundleHash(cm)); err != nil {
-		return nil, err
-	} else if gate != nil {
-		row = *gate
-	} else if err := c.q.GetCampaignReviewLatestDone.Get(&row, campID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.reviewNoReport"))
+		if current != nil && current.JobID != r.JobID {
+			if k, err := review.ItemKeys(json.RawMessage(current.Report)); err == nil {
+				strict = k
+			}
 		}
-		return nil, c.reviewErr(err, "fetching")
+	} else if current != nil {
+		row = *current
+	} else {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.reviewNoReport"))
 	}
 	keys, err := review.ItemKeys(json.RawMessage(row.Report))
 	if err != nil {
@@ -410,6 +429,14 @@ func (c *Core) AddDispositionsAt(cm models.Campaign, jobID string, userID int, u
 		}
 		if it.Action == models.DispositionAccept && k.Override != "" && (hasPerm == nil || !hasPerm(k.Override)) {
 			return nil, echo.NewHTTPError(http.StatusForbidden, c.i18n.Ts("campaigns.reviewOverrideOnly", "id", k.ID, "perm", k.Override))
+		}
+		if s, ok := strict[it.Key]; ok && it.Action == models.DispositionAccept {
+			if !s.Acceptable {
+				return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.Ts("campaigns.reviewNotAcceptable", "id", s.ID))
+			}
+			if s.Override != "" && (hasPerm == nil || !hasPerm(s.Override)) {
+				return nil, echo.NewHTTPError(http.StatusForbidden, c.i18n.Ts("campaigns.reviewOverrideOnly", "id", s.ID, "perm", s.Override))
+			}
 		}
 	}
 
