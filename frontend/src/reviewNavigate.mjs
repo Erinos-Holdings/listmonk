@@ -228,6 +228,19 @@ export function runFromQuery(query) {
   return typeof v === 'string' && RUN_TOKEN.test(v) ? v : null;
 }
 
+// Post-release fix (2026-11-05): the run's BASE job id travels in the URL too (`?base=<job id>` or
+// `base=none`), read synchronously at first render -- the campaign page knows the latest job id
+// when it clicks. Capturing it at the window's first load raced the start: alt generation can
+// return in under a second, so the first load already saw the NEW job and the window waited for a
+// different one until the 90 s bound. `undefined` = no `base` param (an older page): the window
+// falls back to the first-load capture.
+export function runBaseFromQuery(query) {
+  const v = query && query.base;
+  if (typeof v !== 'string' || !v) return undefined;
+  if (v === 'none') return null;
+  return RUN_TOKEN.test(v) ? v : undefined;
+}
+
 export function runMessage(campaignId, run, phase = 'failed') {
   return {
     type: MSG_RUN, campaignId, run, phase,

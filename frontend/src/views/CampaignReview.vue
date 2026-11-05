@@ -425,7 +425,7 @@ import {
 import { contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
   ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, RUN_FALLBACK_MS, acceptAck, acceptOpener, acceptRun, afterAckWait, clickDecision, fallbackUrl,
-  fallbackWindowName, isFinalResult, newToken, referenceLine, resultToast, runFromQuery, runView, selectMessage, standardLinks,
+  fallbackWindowName, isFinalResult, newToken, referenceLine, resultToast, runBaseFromQuery, runFromQuery, runView, selectMessage, standardLinks,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
 const BUILDER_CACHE_BUST = Date.now();
@@ -449,7 +449,9 @@ export default Vue.extend({
       // token (null: not opened by Inspect), the latest job id at the first load (undefined until
       // then), the run's `failed` message, and the time since mount once the 90 s bound passes.
       run: runFromQuery(this.$route.query),
-      runBaseJob: undefined,
+      // Post-release fix (2026-11-05): the base job id from the URL when the page sent one (the
+      // first-load capture below raced the start); undefined keeps the capture for an older page.
+      runBaseJob: runBaseFromQuery(this.$route.query),
       runFailed: false,
       runElapsed: 0,
     };
@@ -1053,7 +1055,8 @@ export default Vue.extend({
 
     // Polish pass 2: Fix for me is light green when a fix exists, green when staged, grey (disabled) without one.
     fixType(e) {
-      if (this.stagedAction(e.key) === 'fixed') return 'is-success';
+      // User, 2026-11-05: a staged Fix for me reads like any other staged choice -- blue (is-primary).
+      if (this.stagedAction(e.key) === 'fixed') return 'is-primary';
       return e.finding.fix ? 'is-success is-light' : '';
     },
 

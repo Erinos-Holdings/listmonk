@@ -481,7 +481,8 @@ test('A1-I4: a newer live run supersedes a shown older report, until a report of
 });
 
 test('A1-I4: live phases -- done with 0 is "No images need alt tags", a done with rejected > 0 and a failed are the warning state', () => {
-  assert.equal(step({ live: live('done'), report: null }).label, `${K}altsNone`);
+  // Post-release fix (2026-11-05): 0 APPLIED in the live phase is "reviewed", never "no images".
+  assert.equal(step({ live: live('done'), report: null }).label, `${K}altsReviewed`);
   const rej = step({ live: live('done', { alts: ['a'], rejected: 2 }), report: null });
   assert.equal(rej.state, 'warn');
   assert.equal(rej.checked, false);
@@ -516,6 +517,7 @@ test('REVIEW-TRIM-2-SPEC I6: no live message -- a running job has no step; from 
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   assert.equal(en[`${K}altsDone`], '{n} alt tags generated/reviewed');
   assert.equal(en[`${K}altsNone`], 'No images need alt tags');
+  assert.equal(en[`${K}altsReviewed`], 'Alt tags reviewed');
   assert.equal(en[`${K}altsChecked`], undefined);
   assert.equal(r(null), null);
   assert.equal(step({ live: null, report: null }), null);

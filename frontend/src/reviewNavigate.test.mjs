@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   ACK_TIMEOUT_MS, MSG_ACK, MSG_OPENER, MSG_RUN, MSG_SELECT, RESULT_TIMEOUT_MS, RUN_FALLBACK_MS,
-  acceptRun, runFromQuery, runMessage, runView,
+  acceptRun, runBaseFromQuery, runFromQuery, runMessage, runView,
   acceptAck, acceptOpener, acceptSelect, ackMessage, afterAckWait, campaignLocation, clickDecision,
   fallbackUrl, fallbackWindowName, isFinalResult, isImageUrl, isValidBlockId, newToken, openerMessage, openerReachable,
   pushFailureResult, receiverRoute, referenceLine, resultToast, selectFromQuery, selectMessage,
@@ -251,6 +251,15 @@ test('REVIEW-TRIM-2-SPEC I12: the run param, the run message and its acceptance'
   assert.equal(runFromQuery({ run }), run);
   [undefined, '', 'a b', '<x>', 'x'.repeat(65), 7].forEach((bad) => assert.equal(runFromQuery({ run: bad }), null, String(bad)));
   assert.equal(runFromQuery(null), null);
+  // Post-release fix (2026-11-05): the base job id rides in the URL -- a job id, `none` (null), or
+  // undefined when the page sent nothing (the window then captures it at first load).
+  assert.equal(runBaseFromQuery({ base: 'fd2b4f4c-f9ed-4170-b3eb-4395adcc99dc' }), 'fd2b4f4c-f9ed-4170-b3eb-4395adcc99dc');
+  assert.equal(runBaseFromQuery({ base: 'none' }), null);
+  [undefined, '', 'a b', '<x>', 7].forEach((bad) => assert.equal(runBaseFromQuery({ base: bad }), undefined, String(bad)));
+  assert.equal(runBaseFromQuery(null), undefined);
+  // The race the fix closes: a window that learns the base from the URL renders the new job at once.
+  assert.equal(runView({ run, baseJob: 'old-job', row: { job_id: 'new-job', status: 'complete' } }).mode, 'latest');
+  assert.equal(runView({ run, baseJob: null, row: { job_id: 'new-job', status: 'complete' } }).mode, 'latest');
   assert.deepEqual(runMessage(7, run), {
     type: MSG_RUN, campaignId: 7, run, phase: 'failed',
   });
@@ -300,7 +309,9 @@ test('REVIEW-TRIM-2-SPEC I12: runView -- starting until the run\'s job, never th
 
 test('REVIEW-TRIM-2-SPEC I12: Campaign.vue opens the window with ?run= and posts the failed message on a start failure', () => {
   const src = readFileSync(new URL('./views/Campaign.vue', import.meta.url), 'utf8');
-  assert.match(src, /query: \{ run \}/);
+  // Post-release fix (2026-11-05): the base job id travels with the run token.
+  assert.match(src, /query: \{ run, base \}/);
+  assert.match(src, /reviewState\.review\.job_id\) \|\| 'none'/);
   assert.match(src, /runMessage\(id, run, 'failed'\)/);
   const win = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
   assert.match(win, /runFromQuery\(/);

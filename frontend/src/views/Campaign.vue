@@ -2106,7 +2106,10 @@ export default Vue.extend({
     async inspectCampaign() {
       const { id } = this.data;
       const run = newToken();
-      const { href } = this.$router.resolve({ name: 'campaignReview', params: { id }, query: { run } });
+      // Post-release fix (2026-11-05): the base job id the window must NOT treat as this run's,
+      // known here synchronously (reviewState) -- `none` when no review exists yet.
+      const base = (this.reviewState && this.reviewState.review && this.reviewState.review.job_id) || 'none';
+      const { href } = this.$router.resolve({ name: 'campaignReview', params: { id }, query: { run, base } });
       const win = window.open(href, `lm-review-${id}`);
       if (!win) {
         this.$utils.toast(this.$t('campaigns.review.windowBlocked'), 'is-danger');

@@ -463,6 +463,7 @@
     "campaigns.review.checklist.altsRunning": "Generating alt tags",
     "campaigns.review.checklist.altsDone": "{n} alt tags generated/reviewed",
     "campaigns.review.checklist.altsNone": "No images need alt tags",
+    "campaigns.review.checklist.altsReviewed": "Alt tags reviewed",
     "campaigns.review.checklist.starting": "Starting inspection",
     "campaigns.review.run.failed": "The inspection could not be started.",
     "campaigns.review.run.timeout": "No new inspection started.",

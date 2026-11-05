@@ -225,7 +225,11 @@ export function altsStep({
     if (live.phase === 'failed') return warn(0);
     const rejected = nonNeg(live.rejected);
     if (rejected > 0) return warn(rejected);
-    return done(Array.isArray(live.alts) ? live.alts.length : 0);
+    // Post-release fix (2026-11-05): the live count is what the generation APPLIED, not the
+    // campaign's alt count -- 0 applied means "nothing to change", never "no images"; the report's
+    // row count replaces it seconds later. "No images need alt tags" is the report's zero only.
+    const applied = Array.isArray(live.alts) ? live.alts.length : 0;
+    return applied > 0 ? done(applied) : row('done', tr('altsReviewed'));
   }
   if (running) return null;
   const alts = report && report.alts && typeof report.alts === 'object' ? report.alts : null;
