@@ -734,6 +734,7 @@
     "dashboard.usage.guideDay": "Day",
     "dashboard.usage.guideReengagement": "Re-engagement series",
     "dashboard.usage.guideSunset": "Sunset flow",
+    "dashboard.usage.guideSources": "Sources",
     "journeyPreview.title": "Journey preview",
     "journeyPreview.brand": "Brand",
     "journeyPreview.empty": "No journey step previews yet. A draft campaign tagged journey:<series>:<day> on a brand's list previews that step.",

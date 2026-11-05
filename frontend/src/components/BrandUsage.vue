@@ -156,6 +156,14 @@
         </ol>
       </div>
     </div>
+    <!-- 2026-11-05 (user): the guide's evidence brief -- a static page under /admin/static (the
+         emoji-data convention, served with a content ETag), opened in a new tab. Figures on it are
+         point-in-time; refreshing them is a fork release. -->
+    <p class="bu-guide-sources" :style="guideSplit && fitWidthPx ? { width: `${fitWidthPx}px` } : null">
+      <a href="/admin/static/lifecycle-sources.html" target="_blank" rel="noopener" data-cy="usage-guide-sources">
+        {{ $t('dashboard.usage.guideSources') }}
+      </a>
+    </p>
     <!-- Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D5) -- Marketing's decision record
          on the lifecycle items, under the guide's three columns: No-purchase and Post-purchase items
          under their series, the Curated Sunset Policy under the Re-engagement series, Both series
