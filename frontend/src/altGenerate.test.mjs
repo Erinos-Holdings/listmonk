@@ -117,7 +117,8 @@ test('I9: no fixes -> done with no save; rejected > 0 is not "none needed"', asy
     live: altsRowState(null, altsMessage(7, 'r', 2, m), null), report: null, reportJob: null, running: false, t,
   });
   assert.equal(step(none.notes[1]).state, 'done');
-  assert.equal(step(none.notes[1]).label, 'campaigns.review.checklist.altsChecked');
+  // integrations REVIEW-TRIM-2-SPEC D5: "Alt tags checked" is retired -- a zero count reads "No images need alt tags".
+  assert.equal(step(none.notes[1]).label, 'campaigns.review.checklist.altsNone');
 
   const rejAnswer = {
     status: 'ok', fixes: [], keep: {}, rejected: 2,

@@ -14,8 +14,8 @@
           <span v-if="report && report.provenance">· {{ $t('campaigns.review.sectionProvenance') }}: {{ report.rubricVersion }}</span>
         </p>
       </div>
-      <div class="verdict-banner" :class="`is-${verdictName}`" data-cy="review-verdict">
-        <template v-if="isRunning">{{ $t('campaigns.review.running') }}</template>
+      <div class="verdict-banner" :class="`is-${runStarting ? 'none' : verdictName}`" data-cy="review-verdict">
+        <template v-if="isRunning || runStarting">{{ $t('campaigns.review.running') }}</template>
         <template v-else-if="verdictName === 'pass'">{{ $t('campaigns.review.verdictPass') }}</template>
         <template v-else-if="verdictName === 'blocked'">
           {{ $t('campaigns.review.verdictBlocked', { n: blockers.length }) }}
@@ -40,15 +40,20 @@
       </li>
     </ul>
 
-    <b-message v-if="row && row.status === 'failed'" type="is-danger" data-cy="review-failed">
+    <!-- integrations REVIEW-TRIM-2-SPEC D4: a run that started no job ends on the latest report with
+         this line (reviewNavigate.mjs runView). -->
+    <b-message v-if="runLine" type="is-warning" data-cy="review-run-line">{{ $t(runLine) }}</b-message>
+
+    <!-- The starting state shows no banner of the previous job (runStarting). -->
+    <b-message v-if="!runStarting && row && row.status === 'failed'" type="is-danger" data-cy="review-failed">
       {{ $t('campaigns.review.failed') }}
       <b-button size="is-small" class="ml-2" @click="reinspect" :loading="busy">{{ $t('campaigns.review.retry') }}</b-button>
     </b-message>
-    <b-message v-else-if="row && row.status === 'stale'" type="is-warning">
+    <b-message v-else-if="!runStarting && row && row.status === 'stale'" type="is-warning">
       {{ $t('campaigns.review.stale') }}
       <b-button size="is-small" class="ml-2" @click="reinspect" :loading="busy">{{ $t('campaigns.review.reinspect') }}</b-button>
     </b-message>
-    <b-message v-else-if="isEdited" type="is-warning" data-cy="review-edited">
+    <b-message v-else-if="!runStarting && isEdited" type="is-warning" data-cy="review-edited">
       {{ $t('campaigns.review.edited') }}
     </b-message>
 
@@ -95,7 +100,7 @@
     </template>
     <!-- /EARLY FINDINGS -->
 
-    <template v-if="report && !isRunning">
+    <template v-if="report && !isRunning && !runStarting">
       <!-- AI unavailable / partial: the user override (pseudo-key A). -->
       <b-message v-if="report.ai && report.ai.status !== 'ok'" type="is-warning" data-cy="review-ai">
         {{ $t('campaigns.review.aiUnavailable', { status: report.ai.status }) }}
@@ -148,10 +153,14 @@
           </p>
           <p v-if="decided(e.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(e.key)) }}</p>
           <div class="buttons mt-2">
-            <b-button size="is-small" :disabled="!e.finding.fix" data-cy="btn-fix-for-me"
-              :type="fixType(e)" @click="stage(e.key, e.item.id, 'fixed', e.finding.fix)">
-              {{ $t('campaigns.review.fixForMe') }}
-            </b-button>
+            <!-- integrations REVIEW-TRIM-2-SPEC D9: a finding with nothing to replace keeps the button
+                 disabled; its tooltip says why in one line (the planner's reason, else the todo). -->
+            <b-tooltip :active="!e.finding.fix" :label="fixTooltip(e)" type="is-dark" multilined>
+              <b-button size="is-small" :disabled="!e.finding.fix" data-cy="btn-fix-for-me"
+                :type="fixType(e)" @click="stage(e.key, e.item.id, 'fixed', e.finding.fix)">
+                {{ $t('campaigns.review.fixForMe') }}
+              </b-button>
+            </b-tooltip>
             <b-button size="is-small" data-cy="btn-ill-fix-it" :type="stagedAction(e.key) === 'fixme' ? 'is-primary' : ''"
               @click="stage(e.key, e.item.id, 'fixme')">
               {{ $t('campaigns.review.illFixIt') }}
@@ -402,7 +411,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import {
-  applyFixes, compileCampaignBody, dispositionsAfterFixes, loadFrameBuilder, reviewPayload,
+  applyFixes, campaignDigests, compileCampaignBody, dispositionsAfterFixes, loadFrameBuilder, reviewPayload,
 } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { acceptAlts, altsRowState } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
 import {
@@ -414,8 +423,8 @@ import {
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
-  ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, acceptAck, acceptOpener, afterAckWait, clickDecision, fallbackUrl, fallbackWindowName,
-  isFinalResult, newToken, referenceLine, resultToast, selectMessage, standardLinks,
+  ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, RUN_FALLBACK_MS, acceptAck, acceptOpener, acceptRun, afterAckWait, clickDecision, fallbackUrl,
+  fallbackWindowName, isFinalResult, newToken, referenceLine, resultToast, runFromQuery, runView, selectMessage, standardLinks,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
 const BUILDER_CACHE_BUST = Date.now();
@@ -435,6 +444,13 @@ export default Vue.extend({
       // integrations ALT-AUTOGEN-SPEC A1.1: the live generation state (altGenerate.mjs altsRowState)
       // that drives the checklist's alt step (reviewChecklist.mjs altsStep).
       altsRow: null,
+      // integrations REVIEW-TRIM-2-SPEC D4 (reviewNavigate.mjs runView): the Inspect click's `?run=`
+      // token (null: not opened by Inspect), the latest job id at the first load (undefined until
+      // then), the run's `failed` message, and the time since mount once the 90 s bound passes.
+      run: runFromQuery(this.$route.query),
+      runBaseJob: undefined,
+      runFailed: false,
+      runElapsed: 0,
     };
   },
 
@@ -519,18 +535,42 @@ export default Vue.extend({
       return (this.row && this.row.progress) || null;
     },
 
+    // REVIEW-TRIM-2-SPEC D4 / I12: the run's view -- `starting` (no report, no banners), `latest`, or
+    // `failed` / `timeout` (the latest report with `line` above it).
+    runState() {
+      return runView({
+        run: this.run, baseJob: this.runBaseJob, row: this.row, failed: this.runFailed, elapsedMs: this.runElapsed,
+      });
+    },
+
+    runStarting() {
+      return this.runState.mode === 'starting';
+    },
+
+    runLine() {
+      return this.runState.line || null;
+    },
+
     // ALT-AUTOGEN-SPEC A1.1: the checklist's first row (informational; a missed message hides nothing).
+    // REVIEW-TRIM-2-SPEC D4: in the starting state only the live run drives it (never the old report).
     altsStepRow() {
       return altsStep({
         live: this.altsRow,
-        report: this.report,
-        reportJob: this.report ? this.report.jobId : null,
-        running: this.isRunning,
+        report: this.runStarting ? null : this.report,
+        reportJob: this.runStarting || !this.report ? null : this.report.jobId,
+        running: this.runStarting ? false : this.isRunning,
         t: (k, p) => this.$t(k, p),
       });
     },
 
     checklistRows() {
+      // REVIEW-TRIM-2-SPEC D4: the starting state -- "Starting inspection" first, then the live alts row.
+      if (this.runStarting) {
+        const starting = {
+          key: 'starting', state: 'current', checked: false, spinner: true, label: this.$t('campaigns.review.checklist.starting'),
+        };
+        return [starting, ...(this.altsStepRow ? [this.altsStepRow] : [])];
+      }
       const rows = this.checklistPhase ? checklist({
         progress: this.checklistProgress,
         report: this.report,
@@ -656,14 +696,23 @@ export default Vue.extend({
         if (first && this.altsRow && this.altsRow.baseJob === undefined) {
           this.altsRow = { ...this.altsRow, baseJob: this.report ? this.report.jobId : null };
         }
+        // REVIEW-TRIM-2-SPEC D4: the run's base -- the latest job id at the first load.
+        if (first && this.run && this.runBaseJob === undefined) {
+          this.runBaseJob = (d && d.review && d.review.job_id) || null;
+        }
         this.schedulePoll();
       }).catch(() => this.schedulePoll());
     },
 
-    // 2 s while running, 5 s otherwise (D11).
+    // 2 s while running (or while a run is starting), 5 s otherwise (D11).
     schedulePoll() {
       clearTimeout(this.pollID);
-      this.pollID = setTimeout(this.load, this.isRunning ? 2000 : 5000);
+      this.pollID = setTimeout(this.load, this.isRunning || this.runStarting ? 2000 : 5000);
+    },
+
+    // REVIEW-TRIM-2-SPEC D9: the disabled Fix-for-me button's one line -- the planner's reason, else the todo.
+    fixTooltip(e) {
+      return (e.finding && (e.finding.fixNote || e.finding.todo)) || '';
     },
 
     loadCampaign() {
@@ -818,6 +867,13 @@ export default Vue.extend({
         this.currentOpener = ev.source;
         return;
       }
+      // REVIEW-TRIM-2-SPEC D4: the campaign page's `failed` -- no job follows this run.
+      if (acceptRun({
+        origin: ev.origin, ourOrigin: origin, source: ev.source, opener: this.openerWindow(), data: ev.data, campaignId: this.id, run: this.run,
+      })) {
+        this.runFailed = true;
+        return;
+      }
       // ALT-AUTOGEN-SPEC D9 / A1.1: the campaign page's generation messages -- from this window's
       // opener only, de-duplicated by token (the page re-posts each message on the opener schedule).
       // A new run records the shown report's job (undefined until the review state has loaded).
@@ -869,9 +925,12 @@ export default Vue.extend({
     // objects that were applied AND saved (empty when nothing could be).
     async applyStagedFixes() {
       const raw = await this.$api.getCampaignRaw(this.id);
+      // REVIEW-TRIM-2-SPEC D9: campaign.resave / footer.official apply only while the stored body /
+      // design is the inspected one (sha256 equality).
+      const digests = await campaignDigests(raw).catch(() => ({}));
       const {
         campaign, applied, skipped, recompile,
-      } = applyFixes(raw, this.stagedFixes.map((s) => s.fix));
+      } = applyFixes(raw, this.stagedFixes.map((s) => s.fix), digests);
       if (skipped.length) {
         this.$utils.toast(this.$t('campaigns.review.fixesSkipped', { n: skipped.length }), 'is-warning');
       }
@@ -1010,14 +1069,31 @@ export default Vue.extend({
     },
   },
 
+  watch: {
+    // REVIEW-TRIM-2-SPEC D4: once the run is over (its job is shown, or it ended with a line), the
+    // `run` token leaves the URL -- through history.replaceState, never the router (the root
+    // <router-view> is keyed on fullPath) -- so a reload shows the latest report as today.
+    'runState.mode': function onRunMode(mode) {
+      if (this.run && mode !== 'starting') {
+        const { pathname, hash } = window.location;
+        window.history.replaceState(window.history.state, '', `${pathname}${hash}`);
+      }
+    },
+  },
+
   mounted() {
     this.loadCampaign();
     this.load();
     window.addEventListener('message', this.onMessage);
+    // REVIEW-TRIM-2-SPEC D4: absent any message, the 90 s bound ends the starting state.
+    if (this.run) {
+      this.runTimer = setTimeout(() => { this.runElapsed = RUN_FALLBACK_MS; }, RUN_FALLBACK_MS);
+    }
   },
 
   beforeDestroy() {
     clearTimeout(this.pollID);
+    clearTimeout(this.runTimer);
     window.removeEventListener('message', this.onMessage);
     this.clearNav();
   },

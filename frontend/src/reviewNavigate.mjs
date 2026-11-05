@@ -203,6 +203,69 @@ export function selectFromQuery(query) {
   return isValidBlockId(v) ? v : null;
 }
 
+// ------------------------------------------------------------------ the Inspect run (integrations
+// REVIEW-TRIM-2-SPEC D4, I12): a window opened by Inspect starts clean.
+//
+// Inspect opens the window with `?run=<token>` (the click's token -- the same one its alts messages
+// carry). The signal travels in the URL, synchronously: a postMessage routinely lands on the
+// outgoing document. A window whose URL carries `run`:
+//   - renders the STARTING state at first render (the checklist with "Starting inspection" and the
+//     live alts row) and never a report whose job is older than the run: it records the latest
+//     job id at its first load as `baseJob`, and renders the first latest row whose job id differs
+//     from `baseJob` or whose status is `running`;
+//   - ends on the latest report with a line when no job follows: the campaign page's `failed`
+//     message (a POST /reviews failure, 409/503 included) -> "The inspection could not be started.";
+//     no message within RUN_FALLBACK_MS -> "No new inspection started.". Nothing spins forever.
+// A window without `run` (the Review link, a reload once the run is over) renders the latest report.
+//   campaign page -> Inspect window  {type: 'lm-review:run', campaignId, run, phase: 'failed'}
+export const MSG_RUN = 'lm-review:run';
+export const RUN_FALLBACK_MS = 90000;
+const RUN_TOKEN = /^[A-Za-z0-9-]{1,64}$/;
+
+// The window's one-time read of `?run=` (a valid token or null).
+export function runFromQuery(query) {
+  const v = query && query.run;
+  return typeof v === 'string' && RUN_TOKEN.test(v) ? v : null;
+}
+
+export function runMessage(campaignId, run, phase = 'failed') {
+  return {
+    type: MSG_RUN, campaignId, run, phase,
+  };
+}
+
+// The window takes an `lm-review:run` only from our origin, from its opener, for its own campaign
+// and its own run.
+export function acceptRun({
+  origin, ourOrigin, source, opener, data, campaignId, run,
+}) {
+  if (!ourOrigin || origin !== ourOrigin) return false;
+  if (!source || !opener || source !== opener) return false;
+  if (!data || typeof data !== 'object' || data.type !== MSG_RUN) return false;
+  if (data.campaignId !== campaignId || !run || data.run !== run) return false;
+  return data.phase === 'failed';
+}
+
+// The pure state rule (I12). `run` is runFromQuery's token (null: not opened by Inspect); `baseJob`
+// the latest row's job id at the first load (null: no row; undefined: not loaded yet); `row` the
+// latest review row ({job_id, status}); `failed` whether the run's `failed` message arrived;
+// `elapsedMs` since the window mounted. Returns {mode, line?}:
+//   latest   -- render the latest state as today (no run, or the run's job is here);
+//   starting -- the starting state: no report, no early findings, no banners;
+//   failed / timeout -- the latest report, with `line` (an i18n key) above it.
+export function runView({
+  run, baseJob, row, failed = false, elapsedMs = 0,
+}) {
+  if (!run) return { mode: 'latest' };
+  if (baseJob !== undefined && row && typeof row === 'object') {
+    const jobId = typeof row.job_id === 'string' && row.job_id ? row.job_id : null;
+    if (row.status === 'running' || jobId !== baseJob) return { mode: 'latest' };
+  }
+  if (failed) return { mode: 'failed', line: 'campaigns.review.run.failed' };
+  if (elapsedMs >= RUN_FALLBACK_MS) return { mode: 'timeout', line: 'campaigns.review.run.timeout' };
+  return { mode: 'starting' };
+}
+
 // ------------------------------------------------------------------ the finding (§4.1-§4.3)
 
 // Only this listmonk host's own uploads render as a thumbnail (Stage 4 finding 17 of

@@ -50,38 +50,68 @@ test('the section rule, and the structure key excluded from entries and counts',
   assert.deepEqual(sectionCounts(REPORT.items), { blockers: 3, acknowledge: 1, advisory: 2 });
 });
 
-test('§4.6: the rows fill in stage by stage, from the cumulative progress', () => {
+// integrations REVIEW-TRIM-2-SPEC D1: the current Lambda's progress -- no `screenshots` stage or key,
+// so no Screenshots row; the D items arrive on the `ai` PATCH.
+test('§4.6: the rows fill in stage by stage, from the cumulative progress (no Screenshots row)', () => {
   const rows = (progress) => checklist({
     progress, report: null, phase: 'running', t,
   });
   let r = rows({ stage: 'reading', at: 'x' });
-  assert.deepEqual(r.map((x) => x.state), ['current', 'pending', 'pending', 'pending', 'pending']);
+  assert.deepEqual(r.map((x) => x.key), ['reading', 'deterministic', 'ai', 'writing']);
+  assert.deepEqual(r.map((x) => x.state), ['current', 'pending', 'pending', 'pending']);
   assert.equal(r[0].spinner, true);
   assert.equal(r[1].label, `${K}checksUnknown`);
   r = rows({ stage: 'deterministic', at: 'x', checks: 55 });
-  assert.deepEqual(r.map((x) => x.state), ['done', 'current', 'pending', 'pending', 'pending']);
+  assert.deepEqual(r.map((x) => x.state), ['done', 'current', 'pending', 'pending']);
   assert.equal(r[0].label, `${K}readingDone`);
   assert.equal(r[1].label, `${K}deterministic {"checks":55}`);
   r = rows({
-    stage: 'screenshots', at: 'x', checks: 55, items: DITEMS,
+    stage: 'ai', at: 'x', checks: 55, items: DITEMS,
   });
+  assert.deepEqual(r.map((x) => x.state), ['done', 'done', 'current', 'pending']);
   assert.equal(r[1].checked, true);
   assert.equal(r[1].label, `${K}deterministicDone {"checks":55,"b":2,"a":1}`);
   r = rows({
-    stage: 'ai', at: 'x', checks: 55, items: DITEMS, screenshots: 4,
+    stage: 'writing', at: 'x', checks: 55, items: DITEMS, ai: { calls: 3, status: 'ok' },
   });
-  assert.equal(r[2].label, `${K}screenshotsDone {"n":4}`);
+  assert.equal(r[2].label, `${K}aiDone {"calls":3}`);
+  assert.equal(r[3].state, 'current');
   assert.equal(rows({
-    stage: 'ai', at: 'x', checks: 55, items: DITEMS, screenshots: 0,
-  })[2].label, `${K}screenshotsNone`);
-  r = rows({
-    stage: 'writing', at: 'x', checks: 55, items: DITEMS, screenshots: 4, ai: { calls: 4, status: 'ok' },
+    stage: 'writing', at: 'x', ai: { calls: 3, status: 'partial' },
+  })[2].label, `${K}aiStatus {"status":"partial"}`);
+});
+
+// REVIEW-TRIM-2-SPEC I4: no Screenshots row when the progress/report carries no `screenshots`; the
+// row still renders for an older progress or report that does.
+test('REVIEW-TRIM-2-SPEC I4: the Screenshots row only where a `screenshots` key is carried', () => {
+  const keysOf = (args) => checklist({ t, ...args }).map((x) => x.key);
+  const NEW_REPORT = { ...REPORT, provenance: { images: { footerExcluded: 1 }, placement: { unplaced: [] } } };
+  assert.ok(!keysOf({ progress: { stage: 'ai', checks: 5, items: DITEMS }, phase: 'running' }).includes('screenshots'));
+  assert.ok(!keysOf({ progress: { stage: 'writing' }, report: NEW_REPORT, phase: 'complete' }).includes('screenshots'));
+  // An older Lambda: the `ai` PATCH carries `screenshots`, and its report's provenance does.
+  const old = checklist({
+    progress: {
+      stage: 'ai', at: 'x', checks: 55, items: DITEMS, screenshots: 4,
+    },
+    report: null,
+    phase: 'running',
+    t,
   });
-  assert.equal(r[3].label, `${K}aiDone {"calls":4}`);
-  assert.equal(r[4].state, 'current');
-  assert.equal(rows({
-    stage: 'writing', at: 'x', ai: { calls: 4, status: 'partial' },
-  })[3].label, `${K}aiStatus {"status":"partial"}`);
+  assert.equal(old.find((x) => x.key === 'screenshots').label, `${K}screenshotsDone {"n":4}`);
+  assert.equal(checklist({
+    progress: {
+      stage: 'ai', at: 'x', checks: 55, items: DITEMS, screenshots: 0,
+    },
+    report: null,
+    phase: 'running',
+    t,
+  }).find((x) => x.key === 'screenshots').label, `${K}screenshotsNone`);
+  assert.ok(keysOf({ progress: { stage: 'writing' }, report: REPORT, phase: 'complete' }).includes('screenshots'));
+  // An older halted progress at `stage: 'screenshots'` still indexes (legacy STAGES key): the rows before it are done.
+  const halted = checklist({
+    progress: { stage: 'screenshots', checks: 55, items: DITEMS }, report: null, phase: 'halted', t,
+  });
+  assert.deepEqual(halted.map((x) => [x.key, x.state]), [['reading', 'done'], ['deterministic', 'done'], ['ai', 'pending'], ['writing', 'pending']]);
 });
 
 test('§4.6: complete -> every row checked, the writing row counts the report with the window\'s rule', () => {
@@ -113,15 +143,15 @@ test('I14: an older Lambda\'s {stage, at} (and no progress at all) renders, neve
     const r = checklist({
       progress, report: null, phase: 'running', t,
     });
-    assert.equal(r.length, 5);
+    // REVIEW-TRIM-2-SPEC D1: no `screenshots` key carried → no Screenshots row.
+    assert.equal(r.length, 4);
     assert.ok(r.every((x) => typeof x.label === 'string' && x.label));
   });
   const old = checklist({
     progress: { stage: 'ai', at: 'x' }, report: null, phase: 'running', t,
   });
-  assert.deepEqual(old.map((x) => x.state), ['done', 'done', 'done', 'current', 'pending']);
+  assert.deepEqual(old.map((x) => x.state), ['done', 'done', 'current', 'pending']);
   assert.equal(old[1].label, `${K}checksUnknown`, 'pending label when the count is unknown');
-  assert.equal(old[2].label, `${K}screenshots`);
   // A complete report from an older Lambda: the final counts from the report itself.
   const done = checklist({
     progress: { stage: 'writing', at: 'x' }, report: REPORT, phase: 'complete', t,
@@ -132,19 +162,22 @@ test('I14: an older Lambda\'s {stage, at} (and no progress at all) renders, neve
   assert.equal(done[4].label, `${K}writingDone {"b":3,"ack":1,"adv":2}`);
   assert.equal(checklist({
     progress: null, report: { items: 'nope' }, phase: 'complete', t,
-  }).length, 5);
+  }).length, 4);
 });
 
 test('halted (failed/stale): the rows stay as at the last PATCH and nothing spins', () => {
   const r = checklist({
-    progress: { stage: 'screenshots', checks: 55, items: DITEMS }, report: REPORT, phase: 'halted', t,
+    progress: { stage: 'ai', checks: 55, items: DITEMS }, report: REPORT, phase: 'halted', t,
   });
-  assert.deepEqual(r.map((x) => x.state), ['done', 'done', 'current', 'pending', 'pending']);
+  assert.deepEqual(r.map((x) => x.state), ['done', 'done', 'current', 'pending']);
   assert.ok(r.every((x) => !x.spinner));
 });
 
-test('I5: the early list is the progress D items only, from screenshots on, every entry undecidable', () => {
-  assert.deepEqual(earlyEntries({ progress: { stage: 'deterministic', items: DITEMS }, phase: 'running' }), []);
+// REVIEW-TRIM-2-SPEC D1 (Stage 2 F12): the early list keys on the D items being present, not on a
+// stage index (the current Lambda sends them on `ai`, an older one on `screenshots`).
+test('I5: the early list is the progress D items only, once they are present, every entry undecidable', () => {
+  assert.deepEqual(earlyEntries({ progress: { stage: 'deterministic' }, phase: 'running' }), []);
+  assert.equal(earlyEntries({ progress: { stage: 'ai', items: DITEMS }, phase: 'running' }).length, 3);
   const early = earlyEntries({ progress: { stage: 'screenshots', items: [...DITEMS, A('A1.1', 'critical')] }, phase: 'running' });
   assert.deepEqual(early.map((e) => e.key), ['D2.4#1', 'D2.4#2', 'D4.6#1'], 'D only, structure key excluded');
   assert.ok(early.every((e) => e.decidable === false));
@@ -264,24 +297,29 @@ test('the item templates: no Evidence line; every btn-goto-block is an <a> wrapp
 // ------------------------------------------------------------------ polish pass 2 (2026-10-06)
 
 test('checklist: "Running N checks" from the first PATCH; the AI row names the questions when known', () => {
-  const rows = (progress, phase = 'running', report = null) => checklist({
-    progress, report, phase, t,
-  });
-  assert.equal(rows({ stage: 'reading', checks: 69 })[1].label, `${K}deterministic {"checks":69}`);
+  // REVIEW-TRIM-2-SPEC D1: rows are read by key (the Screenshots row is present only with the key).
+  const rows = (progress, phase = 'running', report = null) => {
+    const list = checklist({
+      progress, report, phase, t,
+    });
+    const by = Object.fromEntries(list.map((x) => [x.key, x]));
+    return by;
+  };
+  assert.equal(rows({ stage: 'reading', checks: 69 }).deterministic.label, `${K}deterministic {"checks":69}`);
   // `questions` arrives with `checks` on the first PATCH: the AI row names them from the start.
-  assert.equal(rows({ stage: 'reading', checks: 69, questions: 29 })[3].label, `${K}aiQuestions {"questions":29}`);
+  assert.equal(rows({ stage: 'reading', checks: 69, questions: 29 }).ai.label, `${K}aiQuestions {"questions":29}`);
   const ai = rows({
-    stage: 'ai', checks: 69, items: DITEMS, screenshots: 4, questions: 29,
+    stage: 'ai', checks: 69, items: DITEMS, questions: 29,
   });
-  assert.equal(ai[3].label, `${K}aiQuestions {"questions":29}`);
+  assert.equal(ai.ai.label, `${K}aiQuestions {"questions":29}`);
   const done = rows({
-    stage: 'writing', checks: 69, items: DITEMS, screenshots: 4, questions: 29, ai: { calls: 4, status: 'ok' },
+    stage: 'writing', checks: 69, items: DITEMS, questions: 29, ai: { calls: 3, status: 'ok' },
   });
-  assert.equal(done[3].label, `${K}aiQuestionsDone {"questions":29,"calls":4}`);
+  assert.equal(done.ai.label, `${K}aiQuestionsDone {"questions":29,"calls":3}`);
   // An older Lambda (no `questions`): today's labels.
-  assert.equal(rows({ stage: 'ai', checks: 55 })[3].label, `${K}ai`);
-  assert.equal(rows({ stage: 'writing', ai: { calls: 4, status: 'ok' } })[3].label, `${K}aiDone {"calls":4}`);
-  assert.equal(rows({ stage: 'writing', questions: 29, ai: { calls: 4, status: 'partial' } })[3].label, `${K}aiStatus {"status":"partial"}`);
+  assert.equal(rows({ stage: 'ai', checks: 55 }).ai.label, `${K}ai`);
+  assert.equal(rows({ stage: 'writing', ai: { calls: 4, status: 'ok' } }).ai.label, `${K}aiDone {"calls":4}`);
+  assert.equal(rows({ stage: 'writing', questions: 29, ai: { calls: 4, status: 'partial' } }).ai.label, `${K}aiStatus {"status":"partial"}`);
 });
 
 // Integrations REVIEW-TRIM-SPEC D3/D9: the campaign-context rule is retired -- no special case; a
@@ -427,17 +465,23 @@ test('A1-I4: a newer live run supersedes a shown older report, until a report of
     live: live('done', { alts: ['a'] }), report: null, reportJob: null, running: true,
   });
   assert.equal(running.label, `${K}altsDone {"n":1}`);
-  // The new job's report arrives: the report decides (rule 3).
+  // The new job's report arrives: the report decides (rule 3) -- N = its alts section row count
+  // (integrations REVIEW-TRIM-2-SPEC D5: Approved + Modified + Generated).
   const fresh = withAlts('job-new', {
-    items: [], approved: 4, modified: 1, generated: 0, unfixed: 0, thisInspect: 1,
+    items: [altItem('a', 'approved', 'A'), altItem('m', 'modified', 'M', 'm'), altItem('g', 'generated', 'G')],
+    approved: 1,
+    modified: 1,
+    generated: 1,
+    unfixed: 0,
+    thisInspect: 1,
   });
-  assert.equal(step({ live: live('done', { alts: [] }), report: fresh, reportJob: 'job-new' }).label, `${K}altsDone {"n":1}`);
+  assert.equal(step({ live: live('done', { alts: [] }), report: fresh, reportJob: 'job-new' }).label, `${K}altsDone {"n":3}`);
   // A run whose base was not known yet (the window had not loaded): the live run applies.
   assert.equal(step({ live: live('generating', { baseJob: undefined }), report: fresh, reportJob: 'job-new' }).state, 'current');
 });
 
-test('A1-I4: live phases -- done with 0 is "checked", a done with rejected > 0 and a failed are the warning state', () => {
-  assert.equal(step({ live: live('done'), report: null }).label, `${K}altsChecked`);
+test('A1-I4: live phases -- done with 0 is "No images need alt tags", a done with rejected > 0 and a failed are the warning state', () => {
+  assert.equal(step({ live: live('done'), report: null }).label, `${K}altsNone`);
   const rej = step({ live: live('done', { alts: ['a'], rejected: 2 }), report: null });
   assert.equal(rej.state, 'warn');
   assert.equal(rej.checked, false);
@@ -447,18 +491,32 @@ test('A1-I4: live phases -- done with 0 is "checked", a done with rejected > 0 a
   });
 });
 
-test('A1-I4: no live message -- a running job is "checked"; from a report, failed iff unfixed > 0, else N = thisInspect; no step without alts', () => {
-  assert.equal(step({ live: null, report: null, running: true }).label, `${K}altsChecked`);
+// integrations REVIEW-TRIM-2-SPEC I6: the alt row reads "{n} alt tags generated/reviewed" with n =
+// the report's alts row count; zero reads "No images need alt tags"; a running job with no live
+// message shows no step (no count is known -- "Alt tags checked" is retired).
+test('REVIEW-TRIM-2-SPEC I6: no live message -- a running job has no step; from a report, failed iff unfixed > 0, else N = the alts row count; no step without alts', () => {
+  assert.equal(step({ live: null, report: null, running: true }), null);
   const r = (alts) => step({ live: null, report: withAlts('j', alts), reportJob: 'j' });
   assert.equal(r({
     items: [], approved: 1, modified: 0, generated: 0, unfixed: 1, thisInspect: 0,
   }).label, `${K}altsFailed · ${K}altsStillNeed {"n":1}`);
+  // thisInspect (1) is not the count: the rows are (2 approved + 1 modified + 1 generated; unfixed never a row).
   assert.equal(r({
-    items: [], approved: 1, modified: 1, generated: 2, unfixed: 0, thisInspect: 3,
-  }).label, `${K}altsDone {"n":3}`);
+    items: [altItem('a', 'approved', 'A'), altItem('b', 'approved', 'B'), altItem('m', 'modified', 'M', 'x'), altItem('g', 'generated', 'G'), altItem('u', 'unfixed', '')],
+    approved: 2,
+    modified: 1,
+    generated: 1,
+    unfixed: 0,
+    thisInspect: 1,
+  }).label, `${K}altsDone {"n":4}`);
   assert.equal(r({
-    items: [], approved: 1, modified: 0, generated: 0, unfixed: 0, thisInspect: 0,
-  }).label, `${K}altsChecked`);
+    items: [], approved: 0, modified: 0, generated: 0, unfixed: 0, thisInspect: 0,
+  }).label, `${K}altsNone`);
+  // The label itself: one string for both phases.
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en[`${K}altsDone`], '{n} alt tags generated/reviewed');
+  assert.equal(en[`${K}altsNone`], 'No images need alt tags');
+  assert.equal(en[`${K}altsChecked`], undefined);
   assert.equal(r(null), null);
   assert.equal(step({ live: null, report: null }), null);
   // A locked campaign (sent, scheduled… or a render sheet): done, never "Inspect again", even with unfixed alts.
@@ -472,9 +530,11 @@ test('A1-I4: no live message -- a running job is "checked"; from a report, faile
 test('A1-I4: the step is first in the list; alone before the job exists', () => {
   const rows = checklist({ progress: { stage: 'reading' }, report: null, t });
   const s = step({ live: live('generating'), report: null });
-  assert.deepEqual(withAltsStep(s, rows).map((x) => x.key), ['alts', ...STAGES]);
+  // REVIEW-TRIM-2-SPEC D1: no Screenshots row without the key.
+  const shown = STAGES.filter((k) => k !== 'screenshots');
+  assert.deepEqual(withAltsStep(s, rows).map((x) => x.key), ['alts', ...shown]);
   assert.deepEqual(withAltsStep(s, []).map((x) => x.key), ['alts']);
-  assert.deepEqual(withAltsStep(null, rows).map((x) => x.key), STAGES);
+  assert.deepEqual(withAltsStep(null, rows).map((x) => x.key), shown);
 });
 
 test('A1-I5: auxLayout puts alts directly before passed; none without alts', () => {

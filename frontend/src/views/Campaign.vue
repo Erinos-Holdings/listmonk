@@ -618,7 +618,7 @@ import {
 } from '../langs';
 import { audienceBox, hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import {
-  OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, selectFromQuery,
+  OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, runMessage, selectFromQuery,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import { altsMessage, generateAndApply } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
 import { compileCampaignBody, loadFrameBuilder } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
@@ -2100,9 +2100,13 @@ export default Vue.extend({
     // (integrations ALT-AUTOGEN-SPEC D1/D5: altGenerate.mjs, applied and saved before the hash is
     // taken), and start the inspection ONCE. The window shows the generation row (D9) and polls the job.
     // Generation never stops the inspection; a blocked pop-up still gets both.
+    // integrations REVIEW-TRIM-2-SPEC D4: the window is opened with `?run=<token>` (the click's
+    // token, also its alts messages' run) so it renders the starting state at first render and never
+    // the previous report; a start failure (409/503 included) posts the run's `failed` message.
     async inspectCampaign() {
       const { id } = this.data;
-      const { href } = this.$router.resolve({ name: 'campaignReview', params: { id } });
+      const run = newToken();
+      const { href } = this.$router.resolve({ name: 'campaignReview', params: { id }, query: { run } });
       const win = window.open(href, `lm-review-${id}`);
       if (!win) {
         this.$utils.toast(this.$t('campaigns.review.windowBlocked'), 'is-danger');
@@ -2125,7 +2129,6 @@ export default Vue.extend({
           this.reviewWindow = null;
           return;
         }
-        const run = newToken();
         let seq = 0;
         const gen = await generateAndApply({
           id,
@@ -2143,7 +2146,11 @@ export default Vue.extend({
         if (gen.saved) {
           await this.reloadAfterAlts().catch(() => {});
         }
-        await this.$api.startCampaignReview(id).then(() => this.loadReview(), () => this.loadReview());
+        await this.$api.startCampaignReview(id).then(() => this.loadReview(), () => {
+          // REVIEW-TRIM-2-SPEC D4: no job follows -- the window ends on the latest report with the line.
+          this.postToReviewWindow(win, runMessage(id, run, 'failed'));
+          return this.loadReview();
+        });
       } finally {
         this.inspecting = false;
         this.syncReviewPoll();

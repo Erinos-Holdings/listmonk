@@ -9,7 +9,13 @@
 // (I5); the window's `entries` reads the report only.
 import { isStructureKey } from './structureBrief.mjs'; // eslint-disable-line import/extensions
 
+// integrations REVIEW-TRIM-2-SPEC D1 (Stage 2 F12): the Lambda no longer has a `screenshots` stage.
+// It stays here as a LEGACY key so an older halted progress at `stage: 'screenshots'` still indexes;
+// its row renders only when the progress or the report carries a `screenshots` key (an older
+// Lambda's report or `ai` PATCH).
 export const STAGES = ['reading', 'deterministic', 'screenshots', 'ai', 'writing'];
+
+const has = (o, k) => !!o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
 
 // The window's section rule for one finding of one item: a D fail is a blocker, any other D
 // verdict advisory; an A critical a blocker, an A high needs acknowledgement, the rest advisory.
@@ -163,6 +169,8 @@ export function checklist({
     done.writing = tr('writingDone', { b: c.blockers, ack: c.acknowledge, adv: c.advisory });
   }
 
+  // REVIEW-TRIM-2-SPEC D1: the Screenshots row only for a progress or report that carries the key.
+  const showShots = has(p, 'screenshots') || (!!rep && has(rep.provenance, 'screenshots'));
   return STAGES.map((key, i) => {
     let state = 'pending';
     if (i < current) state = 'done';
@@ -171,7 +179,7 @@ export function checklist({
     return {
       key, state, checked: state === 'done', spinner: state === 'current' && phase === 'running', label,
     };
-  });
+  }).filter((r) => r.key !== 'screenshots' || showShots);
 }
 
 // ------------------------------------------------------------------ the alt step (integrations
@@ -180,16 +188,25 @@ export function checklist({
 // (A1-S2-5):
 //   1. A live message (altGenerate.mjs altsRowState) from a run started after the shown report's job
 //      supersedes that report, until a report of a later job is shown: `generating` -> running;
-//      `done` -> done, N = applied ("N alt tags generated", or "Alt tags checked" when 0), or the
-//      warning state with the note when `rejected > 0`; `failed` -> the warning state.
-//   2. No live message, while a job runs: done, "Alt tags checked" (a job cannot start before its
-//      generation returns).
+//      `done` -> done, N = applied, or the warning state with the note when `rejected > 0`;
+//      `failed` -> the warning state.
+//   2. No live message, while a job runs: no step (null) -- no count is known yet; the report's
+//      row replaces it (integrations REVIEW-TRIM-2-SPEC D5: "Alt tags checked" is retired).
 //   3. From a report with `alts`: the warning state iff `alts.unfixed > 0` (with the note), else done
-//      with N = `alts.thisInspect`.
+//      with N = the report's alts section row count (Approved + Modified + Generated).
 //   4. From a report without `alts` (an older one): no step (null).
+// REVIEW-TRIM-2-SPEC D5: a done row reads "{n} alt tags generated/reviewed" (one label for both
+// phases); N = 0 reads "No images need alt tags" -- never "0 alt tags".
 // `live.baseJob` is the shown report's job id when the run began (null: none; undefined: not known
 // yet -- the live run applies). `t(key, params)` is i18n.
 const nonNeg = (n) => (Number.isInteger(n) && n > 0 ? n : 0);
+
+// REVIEW-TRIM-2-SPEC D5: the report's alts section row count -- Approved + Modified + Generated
+// (altsSection's total; unfixed is never a row).
+export function altsRowCount(alts) {
+  const items = alts && Array.isArray(alts.items) ? alts.items : [];
+  return items.filter((i) => i && ['approved', 'modified', 'generated'].includes(i.category)).length;
+}
 
 export function altsStep({
   live, report, reportJob, running, t,
@@ -198,7 +215,7 @@ export function altsStep({
   const row = (state, label) => ({
     key: 'alts', state, checked: state === 'done', spinner: state === 'current', label,
   });
-  const done = (n) => row('done', n > 0 ? tr('altsDone', { n }) : tr('altsChecked'));
+  const done = (n) => row('done', n > 0 ? tr('altsDone', { n }) : tr('altsNone'));
   const warn = (n) => row('warn', n > 0 ? `${tr('altsFailed')} · ${tr('altsStillNeed', { n })}` : tr('altsFailed'));
 
   const shownJob = report ? (reportJob ?? null) : null;
@@ -210,14 +227,14 @@ export function altsStep({
     if (rejected > 0) return warn(rejected);
     return done(Array.isArray(live.alts) ? live.alts.length : 0);
   }
-  if (running) return done(0);
+  if (running) return null;
   const alts = report && report.alts && typeof report.alts === 'object' ? report.alts : null;
   if (!alts) return null;
   // A campaign generation does not touch (sent, scheduled… or a render sheet): no "Inspect again".
   if (alts.locked === true) return row('done', tr('altsLocked'));
   const unfixed = nonNeg(alts.unfixed);
   if (unfixed > 0) return warn(unfixed);
-  return done(nonNeg(alts.thisInspect));
+  return done(altsRowCount(alts));
 }
 
 // A1.1: the alt step first, then the other rows ("before the job exists, the list shows the alt step alone").
@@ -263,12 +280,13 @@ export function auxLayout(aux, hasAlts) {
   return [...notOk, ...(hasAlts ? [{ key: 'alts' }] : []), { key: 'passed' }, ...ok];
 }
 
-// The read-only early findings: from the `screenshots` stage on, while the review runs, the D items
-// in progress.items by section. Every entry is `decidable: false` -- no button renders and nothing
-// can be staged against it. The report replaces them when it arrives (phase `complete` -> none).
+// The read-only early findings: once progress carries the D items (REVIEW-TRIM-2-SPEC D1: keyed on
+// the items being present, not on a stage index -- the Lambda sends them on its `ai` PATCH, an older
+// one on `screenshots`), while the review runs, the D items by section. Every entry is
+// `decidable: false` -- no button renders and nothing can be staged against it. The report replaces
+// them when it arrives (phase `complete` -> none).
 export function earlyEntries({ progress, phase = 'running' }) {
   if (phase !== 'running' || !progress || !Array.isArray(progress.items)) return [];
-  if (STAGES.indexOf(progress.stage) < STAGES.indexOf('screenshots')) return [];
   return openEntries(dItems(progress.items)).map((e) => ({ ...e, decidable: false }));
 }
 

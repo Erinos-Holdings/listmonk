@@ -4,8 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
-  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes, compileCampaignBody,
+  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes, compileCampaignBody, campaignDigests,
 } from './reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { campaignPayload, CAMPAIGN_UPDATE_KEYS } from './officialSweep.mjs'; // eslint-disable-line import/extensions
 
@@ -132,8 +133,132 @@ test('I13: unknown kinds are skipped and nothing changes', () => {
   assert.equal(skipped[0].reason, 'unknown kind');
   assert.deepEqual(campaign, before);
   // integrations ALT-AUTOGEN-SPEC I8: every report.ts FIX_KINDS entry is here; alt.stripPrefix is retired,
-  // alt.set stays (the generation's apply).
-  assert.deepEqual(FIX_KINDS, ['subject.trim', 'preheader.trim', 'link.collapseScheme', 'alt.set']);
+  // alt.set stays (the generation's apply). REVIEW-TRIM-2-SPEC D9: the closed catalogue.
+  assert.deepEqual(FIX_KINDS, [
+    'subject.trim', 'preheader.trim', 'link.collapseScheme', 'link.set', 'text.replace', 'campaign.resave', 'footer.official', 'alt.set',
+  ]);
+});
+
+// ------------------------------------------------------------------ integrations REVIEW-TRIM-2-SPEC
+// I10: each new kind's applier refuses a stale `from` (sha mismatch for campaign.resave /
+// footer.official, text/href mismatch otherwise) and changes nothing outside its target. I11 (the
+// fork half): footer.official applies by sha equality.
+const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
+const t2Doc = {
+  root: { type: 'EmailLayout', data: { childrenIds: ['btn', 'img', 'txt', 'head'] } },
+  btn: { type: 'Button', data: { style: {}, props: { text: 'Shop now', url: 'https://ruzepouches.com/' } } },
+  img: { type: 'Image', data: { style: {}, props: { url: 'https://e/a.png', alt: 'A', linkHref: 'https://ruzepouches.com/p/x?utm_source=z' } } },
+  txt: { type: 'Text', data: { style: {}, props: { text: 'Hi {{ .Subscriber.FirstName }}, see [this](https://ruzepouches.com/y).' } } },
+  head: { type: 'Heading', data: { style: {}, props: { text: 'Pouchs are here, pouchs!' } } },
+};
+const t2 = () => ({
+  ...visual(), subject: 'Big sale', attribs: { lang: 'en', preheader: 'Pouchs on sale' }, body_source: JSON.stringify(t2Doc),
+});
+const docOf = (c) => JSON.parse(c.body_source);
+const others = (before, after, id) => Object.keys(before).filter((k) => k !== id).forEach((k) => assert.deepEqual(after[k], before[k], k));
+// A fix object: `target` is {block}, {index} or {field}.
+const mkFix = (kind, target, from, to) => ({
+  kind, ...target, from, to,
+});
+
+test('REVIEW-TRIM-2-SPEC I10: link.set on a Button, an Image linkHref, a Text markdown href and the n-th <a>; a stale from is skipped', () => {
+  const shop = '{{ .Subscriber.Attribs.shop_links.ruze.url }}';
+  const {
+    campaign, applied, skipped, recompile,
+  } = applyFixes(t2(), [
+    mkFix('link.set', { block: 'btn' }, 'https://ruzepouches.com/', shop),
+    mkFix('link.set', { block: 'img' }, 'https://ruzepouches.com/p/x?utm_source=z', 'https://ruzepouches.com/p/x'),
+    mkFix('link.set', { block: 'txt' }, 'https://ruzepouches.com/y', shop),
+    mkFix('link.set', { block: 'head' }, 'https://nowhere.com/', shop),
+  ]);
+  assert.equal(applied.length, 3);
+  assert.equal(skipped.length, 1);
+  assert.equal(skipped[0].reason, 'the link changed since the inspection');
+  assert.equal(recompile, true);
+  const d = docOf(campaign);
+  assert.equal(d.btn.data.props.url, shop);
+  assert.equal(d.img.data.props.linkHref, 'https://ruzepouches.com/p/x');
+  assert.equal(d.txt.data.props.text, `Hi {{ .Subscriber.FirstName }}, see [this](${shop}).`);
+  assert.deepEqual(d.head, t2Doc.head);
+  assert.deepEqual(d.root, t2Doc.root);
+  assert.equal(campaign.subject, 'Big sale');
+  // Non-visual: the n-th <a>.
+  const h = applyFixes(html(), [mkFix('link.set', { index: 0 }, 'https://ok.com/', 'https://ok.com/new')]);
+  assert.equal(h.applied.length, 1);
+  assert.ok(h.campaign.body.startsWith('<a href="https://ok.com/new">a</a><a href="https://https://ok.com/b">'));
+});
+
+test('REVIEW-TRIM-2-SPEC I10: text.replace replaces the one occurrence in a block or a field; zero or two occurrences are skipped', () => {
+  const before = t2();
+  const { campaign, applied, skipped } = applyFixes(before, [
+    mkFix('text.replace', { block: 'txt' }, '{{ .Subscriber.FirstName }}', '{{ or .Subscriber.FirstName "there" }}'),
+    mkFix('text.replace', { field: 'subject' }, 'Big sale', 'Grosse Aktion'),
+    mkFix('text.replace', { field: 'preheader' }, 'Pouchs', 'Pouches'),
+    mkFix('text.replace', { block: 'head' }, 'ouchs', 'ouches'), // twice in the heading
+    mkFix('text.replace', { block: 'btn' }, 'missing', 'x'),
+    mkFix('text.replace', { block: 'img' }, 'A', 'B'), // not a text block
+  ]);
+  assert.equal(applied.length, 3);
+  assert.deepEqual(skipped.map((s) => s.reason), ['the text changed since the inspection', 'the text changed since the inspection', 'the block no longer exists']);
+  const d = docOf(campaign);
+  assert.equal(d.txt.data.props.text, 'Hi {{ or .Subscriber.FirstName "there" }}, see [this](https://ruzepouches.com/y).');
+  assert.equal(campaign.subject, 'Grosse Aktion');
+  assert.equal(campaign.attribs.preheader, 'Pouches on sale');
+  assert.equal(campaign.attribs.lang, 'en');
+  others(t2Doc, d, 'txt');
+  // A changed field is skipped, never forced.
+  const stale = applyFixes(before, [mkFix('text.replace', { field: 'subject' }, 'Old sale', 'x')]);
+  assert.equal(stale.skipped[0].reason, 'the subject changed since the inspection');
+  assert.equal(stale.campaign.subject, 'Big sale');
+});
+
+test('REVIEW-TRIM-2-SPEC I10: campaign.resave asks for the recompile only while the stored body\'s sha matches', async () => {
+  const before = t2();
+  const digests = await campaignDigests(before);
+  assert.equal(digests.body, sha(before.body));
+  assert.equal(digests.body_source, sha(before.body_source));
+  const ok = applyFixes(before, [{ kind: 'campaign.resave', from: sha(before.body), to: '' }], digests);
+  assert.equal(ok.applied.length, 1);
+  assert.equal(ok.recompile, true);
+  assert.deepEqual(docOf(ok.campaign), t2Doc); // the design is unchanged; only the compile is redone
+  const stale = applyFixes(before, [{ kind: 'campaign.resave', from: sha('another body'), to: '' }], digests);
+  assert.equal(stale.applied.length, 0);
+  assert.equal(stale.skipped[0].reason, 'the email changed since the inspection');
+  assert.equal(stale.recompile, false);
+  // No digests (an older caller) → skipped, never forced; non-visual → skipped.
+  assert.equal(applyFixes(before, [{ kind: 'campaign.resave', from: sha(before.body), to: '' }]).applied.length, 0);
+  assert.equal(applyFixes(html(), [{ kind: 'campaign.resave', from: sha(html().body), to: '' }], await campaignDigests(html())).skipped[0].reason, 'the campaign has no visual document');
+});
+
+test('REVIEW-TRIM-2-SPEC I11: footer.official applies by sha equality, replacing the design with the planned document; applied first', async () => {
+  const before = t2();
+  const repaired = JSON.parse(JSON.stringify(t2Doc));
+  repaired['block-official-brand'] = { type: 'OfficialFooter', data: { props: { kind: 'brand' } } };
+  repaired['block-official-corporate'] = { type: 'OfficialFooter', data: { props: { kind: 'corporate' } } };
+  repaired.root.data.childrenIds = [...repaired.root.data.childrenIds, 'block-official-brand', 'block-official-corporate'];
+  const fix = { kind: 'footer.official', from: sha(before.body_source), to: JSON.stringify(repaired) };
+  const digests = await campaignDigests(before);
+  // A block fix listed BEFORE the footer still applies — the footer goes first and keeps the block.
+  const {
+    campaign, applied, skipped, recompile,
+  } = applyFixes(before, [
+    mkFix('link.set', { block: 'btn' }, 'https://ruzepouches.com/', 'https://ruzepouches.com/new'),
+    fix,
+    fix, // the same fix on D2.6 and D2.7: applied once, counted for both
+  ], digests);
+  assert.deepEqual(skipped, []);
+  assert.equal(applied.length, 3);
+  assert.equal(recompile, true);
+  const d = docOf(campaign);
+  assert.deepEqual(d.root.data.childrenIds.slice(-2), ['block-official-brand', 'block-official-corporate']);
+  assert.equal(d.btn.data.props.url, 'https://ruzepouches.com/new');
+  others(repaired, d, 'btn');
+  // A stale design (sha mismatch) is skipped; nothing changes.
+  const stale = applyFixes(before, [{ ...fix, from: sha('{"root":{}}') }], digests);
+  assert.equal(stale.skipped[0].reason, 'the design changed since the inspection');
+  assert.equal(stale.campaign.body_source, before.body_source);
+  // A `to` that is not a builder document is refused.
+  assert.equal(applyFixes(before, [{ ...fix, to: '{"nope":1}' }], digests).skipped[0].reason, 'malformed fix');
 });
 
 // ALT-TEXT-SPEC I8: alt.set on an Image block and on the n-th <img>; identical fixes apply once.

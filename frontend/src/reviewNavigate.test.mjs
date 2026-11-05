@@ -4,8 +4,10 @@
 // never a link) and I10 (a thumbnail or `where.image` renders only from this host's /uploads/).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-  ACK_TIMEOUT_MS, MSG_ACK, MSG_OPENER, MSG_SELECT, RESULT_TIMEOUT_MS,
+  ACK_TIMEOUT_MS, MSG_ACK, MSG_OPENER, MSG_RUN, MSG_SELECT, RESULT_TIMEOUT_MS, RUN_FALLBACK_MS,
+  acceptRun, runFromQuery, runMessage, runView,
   acceptAck, acceptOpener, acceptSelect, ackMessage, afterAckWait, campaignLocation, clickDecision,
   fallbackUrl, fallbackWindowName, isFinalResult, isImageUrl, isValidBlockId, newToken, openerMessage, openerReachable,
   pushFailureResult, receiverRoute, referenceLine, resultToast, selectFromQuery, selectMessage,
@@ -237,4 +239,71 @@ test('§4.3: standards links, https only', () => {
   assert.deepEqual(standardLinks(item), [{ label: 'WCAG 1.4.3', url: 'https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html' }]);
   assert.deepEqual(standardLinks({}), []);
   assert.deepEqual(standardLinks(null), []);
+});
+
+// ------------------------------------------------------------------ integrations REVIEW-TRIM-2-SPEC I12
+// D4: a window URL carrying `run` renders the starting state and no report whose job id equals
+// `baseJob`; a `failed` message or the 90 s bound ends it on the latest report with the stated line;
+// a URL without `run` renders the latest report.
+test('REVIEW-TRIM-2-SPEC I12: the run param, the run message and its acceptance', () => {
+  assert.equal(RUN_FALLBACK_MS, 90000);
+  const run = newToken();
+  assert.equal(runFromQuery({ run }), run);
+  [undefined, '', 'a b', '<x>', 'x'.repeat(65), 7].forEach((bad) => assert.equal(runFromQuery({ run: bad }), null, String(bad)));
+  assert.equal(runFromQuery(null), null);
+  assert.deepEqual(runMessage(7, run), {
+    type: MSG_RUN, campaignId: 7, run, phase: 'failed',
+  });
+  const opener = topWin();
+  const ok = {
+    origin: ORIGIN, ourOrigin: ORIGIN, source: opener, opener, data: runMessage(7, run), campaignId: 7, run,
+  };
+  assert.equal(acceptRun(ok), true);
+  assert.equal(acceptRun({ ...ok, origin: 'https://evil.example' }), false);
+  assert.equal(acceptRun({ ...ok, source: topWin() }), false);
+  assert.equal(acceptRun({ ...ok, data: runMessage(8, run) }), false);
+  assert.equal(acceptRun({ ...ok, data: runMessage(7, 'another-run') }), false);
+  assert.equal(acceptRun({ ...ok, run: null }), false);
+  assert.equal(acceptRun({ ...ok, data: { ...runMessage(7, run), phase: 'done' } }), false);
+});
+
+test('REVIEW-TRIM-2-SPEC I12: runView -- starting until the run\'s job, never the baseJob report; failed and the 90 s bound end on the latest', () => {
+  const run = 'r-1';
+  const old = { job_id: 'job-old', status: 'complete' };
+  // No run: the latest, whatever the rows.
+  assert.deepEqual(runView({ run: null, baseJob: undefined, row: old }), { mode: 'latest' });
+  // With a run: starting before the first load, and while the latest row is the baseJob's.
+  assert.equal(runView({ run, baseJob: undefined, row: null }).mode, 'starting');
+  assert.equal(runView({ run, baseJob: undefined, row: old }).mode, 'starting');
+  assert.equal(runView({ run, baseJob: 'job-old', row: old }).mode, 'starting');
+  assert.equal(runView({ run, baseJob: 'job-old', row: { job_id: 'job-old', status: 'failed' } }).mode, 'starting');
+  // The run's job appears (a new id, or running): the latest renders.
+  assert.equal(runView({ run, baseJob: 'job-old', row: { job_id: 'job-new', status: 'running' } }).mode, 'latest');
+  assert.equal(runView({ run, baseJob: 'job-old', row: { job_id: 'job-new', status: 'complete' } }).mode, 'latest');
+  assert.equal(runView({ run, baseJob: null, row: { job_id: 'job-1', status: 'running' } }).mode, 'latest');
+  assert.equal(runView({ run, baseJob: null, row: null }).mode, 'starting');
+  // No job follows: the failed message, else the 90 s bound -- each with its line, on the latest report.
+  assert.deepEqual(runView({
+    run, baseJob: 'job-old', row: old, failed: true,
+  }), { mode: 'failed', line: 'campaigns.review.run.failed' });
+  assert.deepEqual(runView({
+    run, baseJob: 'job-old', row: old, elapsedMs: RUN_FALLBACK_MS - 1,
+  }), { mode: 'starting' });
+  assert.deepEqual(runView({
+    run, baseJob: 'job-old', row: old, elapsedMs: RUN_FALLBACK_MS,
+  }), { mode: 'timeout', line: 'campaigns.review.run.timeout' });
+  // A job that follows even after the failure line still replaces it.
+  assert.equal(runView({
+    run, baseJob: 'job-old', row: { job_id: 'job-new', status: 'running' }, failed: true, elapsedMs: RUN_FALLBACK_MS,
+  }).mode, 'latest');
+});
+
+test('REVIEW-TRIM-2-SPEC I12: Campaign.vue opens the window with ?run= and posts the failed message on a start failure', () => {
+  const src = readFileSync(new URL('./views/Campaign.vue', import.meta.url), 'utf8');
+  assert.match(src, /query: \{ run \}/);
+  assert.match(src, /runMessage\(id, run, 'failed'\)/);
+  const win = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  assert.match(win, /runFromQuery\(/);
+  assert.match(win, /runView\(/);
+  assert.match(win, /acceptRun\(/);
 });

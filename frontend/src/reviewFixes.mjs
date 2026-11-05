@@ -4,8 +4,9 @@
 // fixes here, recompiles a visual body through EmailBuilder.compileDocument (the sweep's compile,
 // OFFICIAL-FOOTER D11), PUTs `reviewPayload` and starts a new inspection.
 //
-// Every fix names its target exactly -- a block id in `body_source` (visual) or the n-th <a>/<img>
-// of the stored body (non-visual) -- and carries the value it expects to find (`from`). A fix whose
+// Every fix names its target exactly -- a block id in `body_source` (visual), the n-th <a>/<img>
+// of the stored body (non-visual), a field, or (campaign.resave / footer.official) the whole stored
+// body / design by its sha256 -- and carries the value it expects to find (`from`). A fix whose
 // `from` no longer matches (the author edited it since the inspection) is SKIPPED, never forced.
 // Nothing outside the named target changes. Nothing else auto-fixes in this release.
 
@@ -15,7 +16,58 @@ import { campaignPayload, deriveContext, isOfficialName } from './officialSweep.
 // ALT-AUTOGEN-SPEC D8 no report finding carries an alt fix: `alt.stripPrefix` is retired and
 // `alt.set` is applied only by Inspect's generation (altGenerate.mjs). The agreement rule: every
 // integrations lib/campaign-review/report.ts FIX_KINDS entry is in this list.
-export const FIX_KINDS = Object.freeze(['subject.trim', 'preheader.trim', 'link.collapseScheme', 'alt.set']);
+//
+// integrations REVIEW-TRIM-2-SPEC D9: Fix for me on every finding with a replacement --
+//   link.set         a block's href (Button url, Image linkHref, a Text/Heading/Html href) or the
+//                    n-th <a> of a stored body: the authored value `from` -> `to`;
+//   text.replace     a Text/Heading/Button block's text, or the subject / preheader (`field`):
+//                    `from` must occur EXACTLY ONCE in the target, and that one occurrence is replaced;
+//   campaign.resave  `from` = sha256 of the stored `body`: the visual body is recompiled and saved;
+//   footer.official  `from` = sha256 of the stored `body_source`, `to` = the repaired document
+//                    (planned by the review Lambda): body_source is replaced, recompiled, saved.
+// The two sha kinds compare against `digests` (campaignDigests below -- Web Crypto is async, this
+// module's apply is not).
+export const FIX_KINDS = Object.freeze([
+  'subject.trim', 'preheader.trim', 'link.collapseScheme', 'link.set', 'text.replace', 'campaign.resave', 'footer.official', 'alt.set',
+]);
+
+// Non-overlapping occurrences of `needle` in `hay`.
+function occurrences(hay, needle) {
+  if (typeof hay !== 'string' || typeof needle !== 'string' || needle === '') {
+    return 0;
+  }
+  let n = 0;
+  let at = hay.indexOf(needle);
+  while (at >= 0) {
+    n += 1;
+    at = hay.indexOf(needle, at + needle.length);
+  }
+  return n;
+}
+
+// `hay` with its one occurrence of `from` replaced, or null when `from` is not there exactly once.
+function replaceOnce(hay, from, to) {
+  if (occurrences(hay, from) !== 1) {
+    return null;
+  }
+  const at = hay.indexOf(from);
+  return hay.slice(0, at) + to + hay.slice(at + from.length);
+}
+
+const hex = (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+
+// REVIEW-TRIM-2-SPEC D9: the sha256 (hex, UTF-8) of the stored `body` and `body_source` -- what a
+// `campaign.resave` / `footer.official` fix's `from` is compared with. `subtle` is Web Crypto's
+// SubtleCrypto (the browser's, or Node's globalThis.crypto.subtle in the tests).
+// eslint-disable-next-line no-undef
+export async function campaignDigests(campaign, subtle = (globalThis.crypto && globalThis.crypto.subtle)) {
+  if (!subtle || !campaign) {
+    return {};
+  }
+  const enc = new TextEncoder();
+  const one = async (s) => hex(await subtle.digest('SHA-256', enc.encode(typeof s === 'string' ? s : '')));
+  return { body: await one(campaign.body), body_source: await one(campaign.body_source) };
+}
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -94,10 +146,12 @@ function insertAltInNthImg(html, n, to) {
 
 // ALT-TEXT-SPEC D7: the same alt is attached to several findings on one image (D4); a fix with the
 // same kind, target and `to` as one already applied counts as applied (dispositions record `fixed`).
-const sameFix = (a, b) => a.kind === b.kind && a.block === b.block && a.index === b.index && a.to === b.to;
+const sameFix = (a, b) => a.kind === b.kind && a.block === b.block && a.index === b.index && a.field === b.field && a.to === b.to;
+
+const TEXT_BLOCK_TYPES = ['Text', 'Heading', 'Button'];
 
 // Apply one fix to the working copy. Returns a skip reason, or null when applied.
-function applyOne(c, docRef, fix) {
+function applyOne(c, docRef, fix, digests) {
   if (!fix || !FIX_KINDS.includes(fix.kind)) {
     // A Lambda shipped before this fork emits kinds the window cannot apply (ALT-TEXT-SPEC D8).
     return 'unknown kind';
@@ -125,6 +179,80 @@ function applyOne(c, docRef, fix) {
     return null;
   }
 
+  // REVIEW-TRIM-2-SPEC D9: the visual body recompiled through the served bundle (hazard 55's
+  // re-save) -- only while the stored body is the one inspected (sha256 equality).
+  if (fix.kind === 'campaign.resave') {
+    if (!docRef.doc) {
+      return 'the campaign has no visual document';
+    }
+    if (!digests || typeof digests.body !== 'string' || digests.body !== fix.from) {
+      return 'the email changed since the inspection';
+    }
+    // eslint-disable-next-line no-param-reassign
+    docRef.changed = true;
+    return null;
+  }
+
+  // REVIEW-TRIM-2-SPEC D9: the Lambda-planned official footer -- the whole repaired document, only
+  // while the stored design is the one planned from (sha256 equality) and nothing else in this batch
+  // has edited it yet (applyFixes applies it first).
+  if (fix.kind === 'footer.official') {
+    if (!docRef.doc) {
+      return 'the campaign has no visual document';
+    }
+    if (docRef.changed || !digests || typeof digests.body_source !== 'string' || digests.body_source !== fix.from) {
+      return 'the design changed since the inspection';
+    }
+    const next = parseDoc(fix.to);
+    if (!next || !next.root || next.root.type !== 'EmailLayout') {
+      return 'malformed fix';
+    }
+    // eslint-disable-next-line no-param-reassign
+    docRef.doc = next;
+    // eslint-disable-next-line no-param-reassign
+    docRef.changed = true;
+    return null;
+  }
+
+  // REVIEW-TRIM-2-SPEC D9: one occurrence of `from` in a field or a Text/Heading/Button block's text.
+  if (fix.kind === 'text.replace') {
+    if (fix.field === 'subject' || fix.field === 'preheader') {
+      const current = fix.field === 'subject' ? (c.subject || '') : ((c.attribs || {}).preheader || '');
+      const next = replaceOnce(current, fix.from, fix.to);
+      if (next === null) {
+        return `the ${fix.field} changed since the inspection`;
+      }
+      if (fix.field === 'subject') {
+        // eslint-disable-next-line no-param-reassign
+        c.subject = next;
+      } else {
+        // eslint-disable-next-line no-param-reassign
+        c.attribs = { ...(c.attribs || {}), preheader: next };
+      }
+      return null;
+    }
+    if (!fix.block) {
+      return 'the fix names no target';
+    }
+    if (!docRef.doc) {
+      return 'the campaign has no visual document';
+    }
+    const b = docRef.doc[fix.block];
+    if (!b || !b.data || !TEXT_BLOCK_TYPES.includes(b.type)) {
+      return 'the block no longer exists';
+    }
+    const p = b.data.props || {};
+    const next = replaceOnce(typeof p.text === 'string' ? p.text : '', fix.from, fix.to);
+    if (next === null) {
+      return 'the text changed since the inspection';
+    }
+    p.text = next;
+    b.data.props = p;
+    // eslint-disable-next-line no-param-reassign
+    docRef.changed = true;
+    return null;
+  }
+
   // Link and alt fixes: a block in the visual document, or the n-th tag of a stored body.
   if (fix.block) {
     if (!docRef.doc) {
@@ -147,7 +275,7 @@ function applyOne(c, docRef, fix) {
       docRef.changed = true;
       return null;
     }
-    // link.collapseScheme
+    // link.collapseScheme and link.set (REVIEW-TRIM-2-SPEC D9): the same targets, the same `from` guard.
     if (b.type === 'Button' && p.url === fix.from) {
       p.url = fix.to;
     } else if (b.type === 'Image' && p.linkHref === fix.from) {
@@ -183,20 +311,28 @@ function applyOne(c, docRef, fix) {
   return 'the fix names no target';
 }
 
-// applyFixes(campaign, fixes) -> { campaign, applied, skipped, recompile }. `campaign` is the raw
-// (snake_case) API row and is never mutated. `recompile` is true when the visual document changed:
-// the caller must recompile the body through the builder before saving.
-export function applyFixes(campaign, fixes) {
+// applyFixes(campaign, fixes, digests?) -> { campaign, applied, skipped, recompile }. `campaign` is the
+// raw (snake_case) API row and is never mutated. `recompile` is true when the visual document changed
+// (or a `campaign.resave` asked for it): the caller must recompile the body through the builder
+// before saving. `digests` is campaignDigests(campaign) -- without it the two sha kinds are skipped.
+// A `footer.official` fix is applied first (it replaces the whole document; the block fixes after it
+// still find their blocks, which the repair keeps).
+export function applyFixes(campaign, fixes, digests = {}) {
   const c = clone(campaign);
   const docRef = { doc: c.content_type === 'visual' ? parseDoc(c.body_source) : null, changed: false };
   const applied = [];
   const skipped = [];
-  (fixes || []).forEach((fix) => {
+  const list = Array.isArray(fixes) ? fixes : [];
+  const ordered = [
+    ...list.filter((f) => f && f.kind === 'footer.official'),
+    ...list.filter((f) => !(f && f.kind === 'footer.official')),
+  ];
+  ordered.forEach((fix) => {
     if (fix && applied.some((a) => sameFix(a, fix))) {
       applied.push(fix);
       return;
     }
-    const why = applyOne(c, docRef, fix);
+    const why = applyOne(c, docRef, fix, digests);
     if (why) {
       skipped.push({ fix, reason: why });
     } else {
