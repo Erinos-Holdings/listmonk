@@ -388,8 +388,9 @@
       </b-modal>
     </template>
 
-    <!-- Submit bar. -->
-    <footer class="review-submit">
+    <!-- Submit bar. integrations REVIEW-TRIM-2-SPEC Stage 4 F4: none in the starting state (a
+         Re-inspect there would start a job before the Inspect click's alt-generation save). -->
+    <footer v-if="!runStarting" class="review-submit">
       <b-button v-if="stagedFixes.length" type="is-primary" :loading="busy" data-cy="btn-apply-fixes" @click="submit(true)">
         {{ $t('campaigns.review.applyFixes', { n: stagedFixes.length }) }}
       </b-button>
@@ -675,8 +676,9 @@ export default Vue.extend({
     // structure finding, so it never holds their Done hostage.
     isDone() {
       const decided = (key) => !!(this.staged[key] || this.latest[key]);
+      // REVIEW-TRIM-2-SPEC Stage 4 F4: never Done while a run is starting (the shown report is the old one).
       return isReviewDone({
-        running: this.isRunning,
+        running: this.isRunning || this.runStarting,
         report: this.report,
         verdict: this.verdictName,
         entries: this.entries,

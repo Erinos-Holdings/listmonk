@@ -146,9 +146,15 @@ function insertAltInNthImg(html, n, to) {
 
 // ALT-TEXT-SPEC D7: the same alt is attached to several findings on one image (D4); a fix with the
 // same kind, target and `to` as one already applied counts as applied (dispositions record `fixed`).
-const sameFix = (a, b) => a.kind === b.kind && a.block === b.block && a.index === b.index && a.field === b.field && a.to === b.to;
+// integrations REVIEW-TRIM-2-SPEC Stage 4 F1: `from` is part of the identity -- two link.set /
+// text.replace fixes on one block with the same `to` but different `from` are two edits, not one.
+const sameFix = (a, b) => a.kind === b.kind && a.block === b.block && a.index === b.index && a.field === b.field && a.from === b.from && a.to === b.to;
 
 const TEXT_BLOCK_TYPES = ['Text', 'Heading', 'Button'];
+
+// REVIEW-TRIM-2-SPEC Stage 4 F6: the skip reason when the sha of the stored body / design could not
+// be computed (distinct from "changed since the inspection").
+export const UNVERIFIED = 'the stored body could not be verified';
 
 // Apply one fix to the working copy. Returns a skip reason, or null when applied.
 function applyOne(c, docRef, fix, digests) {
@@ -185,7 +191,11 @@ function applyOne(c, docRef, fix, digests) {
     if (!docRef.doc) {
       return 'the campaign has no visual document';
     }
-    if (!digests || typeof digests.body !== 'string' || digests.body !== fix.from) {
+    // Stage 4 F6: no digest (Web Crypto absent, or the read failed) is not an edit.
+    if (!digests || typeof digests.body !== 'string') {
+      return UNVERIFIED;
+    }
+    if (digests.body !== fix.from) {
       return 'the email changed since the inspection';
     }
     // eslint-disable-next-line no-param-reassign
@@ -200,7 +210,10 @@ function applyOne(c, docRef, fix, digests) {
     if (!docRef.doc) {
       return 'the campaign has no visual document';
     }
-    if (docRef.changed || !digests || typeof digests.body_source !== 'string' || digests.body_source !== fix.from) {
+    if (!digests || typeof digests.body_source !== 'string') {
+      return UNVERIFIED;
+    }
+    if (docRef.changed || digests.body_source !== fix.from) {
       return 'the design changed since the inspection';
     }
     const next = parseDoc(fix.to);

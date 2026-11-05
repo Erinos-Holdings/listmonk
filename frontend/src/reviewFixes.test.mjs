@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import {
-  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes, compileCampaignBody, campaignDigests,
+  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes, compileCampaignBody, campaignDigests, UNVERIFIED,
 } from './reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { campaignPayload, CAMPAIGN_UPDATE_KEYS } from './officialSweep.mjs'; // eslint-disable-line import/extensions
 
@@ -226,8 +226,37 @@ test('REVIEW-TRIM-2-SPEC I10: campaign.resave asks for the recompile only while 
   assert.equal(stale.skipped[0].reason, 'the email changed since the inspection');
   assert.equal(stale.recompile, false);
   // No digests (an older caller) → skipped, never forced; non-visual → skipped.
-  assert.equal(applyFixes(before, [{ kind: 'campaign.resave', from: sha(before.body), to: '' }]).applied.length, 0);
+  const noDigest = applyFixes(before, [{ kind: 'campaign.resave', from: sha(before.body), to: '' }]);
+  assert.equal(noDigest.applied.length, 0);
+  // Stage 4 F6: a missing digest is not an edit -- its own reason.
+  assert.equal(noDigest.skipped[0].reason, UNVERIFIED);
+  assert.equal(UNVERIFIED, 'the stored body could not be verified');
+  assert.equal(applyFixes(before, [mkFix('footer.official', {}, sha(before.body_source), JSON.stringify(t2Doc))], { body: 'x' }).skipped[0].reason, UNVERIFIED);
   assert.equal(applyFixes(html(), [{ kind: 'campaign.resave', from: sha(html().body), to: '' }], await campaignDigests(html())).skipped[0].reason, 'the campaign has no visual document');
+});
+
+// Stage 4 F1: the batch dedupe includes `from` -- two link.set (or text.replace) fixes on one block
+// with the same `to` and different `from` are both applied, never one recorded without being made.
+test('REVIEW-TRIM-2-SPEC Stage 4 F1: two fixes on one block with the same `to` and different `from` both apply', () => {
+  const shop = '{{ .Subscriber.Attribs.shop_links.ruze.url }}';
+  const doc2 = {
+    root: { type: 'EmailLayout', data: { childrenIds: ['txt'] } },
+    txt: { type: 'Text', data: { style: {}, props: { text: 'See [a](https://ruzepouches.com/) and [b](https://ruzepouches.com/products/x). Pouchs and pouchss.' } } },
+  };
+  const c = { ...visual(), body_source: JSON.stringify(doc2) };
+  const links = applyFixes(c, [
+    mkFix('link.set', { block: 'txt' }, 'https://ruzepouches.com/', shop),
+    mkFix('link.set', { block: 'txt' }, 'https://ruzepouches.com/products/x', shop),
+  ]);
+  assert.equal(links.applied.length, 2);
+  assert.deepEqual(links.skipped, []);
+  assert.equal(docOf(links.campaign).txt.data.props.text, `See [a](${shop}) and [b](${shop}). Pouchs and pouchss.`);
+  const words = applyFixes(c, [
+    mkFix('text.replace', { block: 'txt' }, 'Pouchs', 'Pouches'),
+    mkFix('text.replace', { block: 'txt' }, 'pouchss', 'Pouches'),
+  ]);
+  assert.equal(words.applied.length, 2);
+  assert.match(docOf(words.campaign).txt.data.props.text, /Pouches and Pouches\.$/);
 });
 
 test('REVIEW-TRIM-2-SPEC I11: footer.official applies by sha equality, replacing the design with the planned document; applied first', async () => {
