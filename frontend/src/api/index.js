@@ -525,9 +525,11 @@ export const getCampaignReview = async (id, quiet = false) => http.get(
   quiet ? { camelCase: false, disableToast: true } : { loading: models.reviews, camelCase: false },
 );
 
-export const postReviewDispositions = async (id, items) => http.post(
+// Fork (campaign review): `jobId` is the job of the report the window shows -- the server validates
+// the keys against that review (integrations REVIEW-TRIM-2 post-release fix, 2026-11-05).
+export const postReviewDispositions = async (id, items, jobId) => http.post(
   `/api/campaigns/${id}/reviews/dispositions`,
-  { items },
+  { items, ...(jobId ? { job_id: jobId } : {}) },
   { loading: models.reviews, camelCase: false },
 );
 

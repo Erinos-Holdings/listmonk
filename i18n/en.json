@@ -348,6 +348,7 @@
     "campaigns.reviewNotRunning": "This inspection is no longer running.",
     "campaigns.reviewNoReport": "There is no completed inspection to record a decision against.",
     "campaigns.reviewUnknownKey": "{key} is not an item of the latest inspection.",
+    "campaigns.reviewUnknownJob": "That inspection is not a completed inspection of this campaign. Reload the window and decide again.",
     "campaigns.reviewReasonNotInspected": "not inspected",
     "campaigns.reviewReasonEdited": "edited since the last inspection",
     "campaigns.reviewReasonRunning": "inspection running",

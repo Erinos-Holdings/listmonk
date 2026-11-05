@@ -353,16 +353,33 @@ func (c *Core) CompleteReview(campID int, jobID, status string, report json.RawM
 // such key refuses the whole batch (nothing is written). `hasPerm` is the user's permission check
 // (the handler passes auth.User.HasPerm); nil grants nothing.
 func (c *Core) AddDispositions(cm models.Campaign, userID int, username string, items []DispositionIn, hasPerm func(perm string) bool) ([]models.ReviewDisposition, error) {
+	return c.AddDispositionsAt(cm, "", userID, username, items, hasPerm)
+}
+
+// AddDispositionsAt is AddDispositions against an explicit review: when `jobID` is set (the window
+// posts the job id of the report it SHOWS), the keys are validated against that row -- the
+// campaign's own, complete -- and a job of another campaign, or one not complete, is a 400. Without
+// it (an older window) the gate/latest rule above applies. A fix that restores a body inspected
+// earlier makes the gate row an OLDER report that never carried the key, which refused the fix's
+// `fixed` disposition (campaign 258, 2026-11-05). The verdict still reads the gate row.
+func (c *Core) AddDispositionsAt(cm models.Campaign, jobID string, userID int, username string, items []DispositionIn, hasPerm func(perm string) bool) ([]models.ReviewDisposition, error) {
 	campID := cm.ID
 	if len(items) == 0 {
 		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.Ts("globals.messages.invalidFields", "name", "items"))
 	}
-	gate, err := c.GetReviewByHash(campID, CampaignBundleHash(cm))
-	if err != nil {
-		return nil, err
-	}
 	var row models.CampaignReview
-	if gate != nil {
+	if jobID != "" {
+		r, err := c.GetReviewByJob(campID, jobID)
+		if err != nil {
+			return nil, err
+		}
+		if r == nil || r.Status != models.ReviewStatusComplete {
+			return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.reviewUnknownJob"))
+		}
+		row = *r
+	} else if gate, err := c.GetReviewByHash(campID, CampaignBundleHash(cm)); err != nil {
+		return nil, err
+	} else if gate != nil {
 		row = *gate
 	} else if err := c.q.GetCampaignReviewLatestDone.Get(&row, campID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

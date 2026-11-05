@@ -275,3 +275,50 @@ func TestReviewStartAndWriteBack(t *testing.T) {
 		t.Fatalf("structure: %+v %v", sv, err)
 	}
 }
+
+// Integrations REVIEW-TRIM-2 (post-release, 2026-11-05, campaign 258): the window posts the job id of
+// the report it SHOWS, and the keys are validated against that review -- not against the gate row,
+// which a fix restoring an earlier-inspected body turns into an OLDER report without the key.
+// Review A (this job) carries the key; a later complete review B at a different hash does not.
+func TestReviewDispositionsAgainstShownJob(t *testing.T) {
+	h := newLinkHarness(t)
+	ensureReviewManager(h)
+	var list int
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), 'Acme', 'public', 'single', '{brand:acme,"from:Acme <hello@acme.test>"}') RETURNING id`)
+	camp := newReviewCampaign(t, h, models.CampaignTypeRegular, list)
+	other := newReviewCampaign(t, h, models.CampaignTypeRegular, list)
+	hash := currentHash(t, h, camp.ID)
+	const jobA = "aaaaaaaa-0000-4000-8000-00000000000a"
+	const jobOther = "cccccccc-0000-4000-8000-00000000000c"
+	withKey := `{"id": "D2.15", "tier": "D", "verdict": "fail", "acceptable": true, "findings": [{"key": "D2.15#aa"}]}`
+	h.db.MustExec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status, report, requested_at)
+		VALUES ($1, $2, $3, 'complete', $4, NOW() - INTERVAL '10 minutes')`, camp.ID, "0000old", jobA, reviewReport("0000old", withKey))
+	// B: newer, complete, at the campaign's CURRENT hash (the gate row) -- without the key.
+	insertReview(t, h, camp.ID, hash, "complete", reviewReport(hash, passItems), 1)
+	h.db.MustExec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status, report)
+		VALUES ($1, 'x', $2, 'complete', $3)`, other.ID, jobOther, reviewReport("x", withKey))
+
+	post := func(body string) (int, string) {
+		return callCampaignHandler(t, h, h.app.PostReviewDispositions, http.MethodPost, camp.ID, body)
+	}
+	items := `"items": [{"key": "D2.15#aa", "rubric_id": "D2.15", "action": "fixed"}]`
+
+	if code, msg := post(`{` + items + `, "job_id": "` + jobA + `"}`); code != http.StatusOK {
+		t.Fatalf("with the shown job: %d %s", code, msg)
+	}
+	if code, msg := post(`{` + items + `}`); code != http.StatusBadRequest || !strings.Contains(msg, "D2.15#aa") {
+		t.Fatalf("without job_id (the gate row lacks the key): %d %s, want 400", code, msg)
+	}
+	if code, msg := post(`{` + items + `, "job_id": "` + jobOther + `"}`); code != http.StatusBadRequest {
+		t.Fatalf("a job of another campaign: %d %s, want 400", code, msg)
+	}
+	if code, _ := post(`{` + items + `, "job_id": "not-a-uuid"}`); code != http.StatusBadRequest {
+		t.Fatalf("a malformed job_id: %d, want 400", code)
+	}
+	// A running (not complete) row of this campaign is refused too.
+	const jobRunning = "bbbbbbbb-0000-4000-8000-00000000000b"
+	h.db.MustExec(`INSERT INTO campaign_reviews (campaign_id, bundle_hash, job_id, status) VALUES ($1, 'r', $2, 'running')`, camp.ID, jobRunning)
+	if code, _ := post(`{` + items + `, "job_id": "` + jobRunning + `"}`); code != http.StatusBadRequest {
+		t.Fatalf("a running job: %d, want 400", code)
+	}
+}

@@ -402,6 +402,28 @@ export function loadFrameBuilder(frame, cacheBust) {
   });
 }
 
+// Integrations REVIEW-TRIM-2 post-release fix (2026-11-05): the staged decisions a window may keep
+// after a load -- only those whose key is a finding key of the SHOWN report, plus the pseudo-keys A
+// (the AI-unavailable override) and R (the legacy structure record). A key a re-inspection dropped
+// would be refused by the server on every later Save. Returns `staged` itself when nothing is
+// dropped (and when no report with items is shown -- nothing to prune against).
+export const PSEUDO_KEYS = Object.freeze(['A', 'R']);
+
+export function pruneStaged(staged, report) {
+  if (!staged || typeof staged !== 'object' || !report || !Array.isArray(report.items)) {
+    return staged;
+  }
+  const keys = new Set(PSEUDO_KEYS);
+  report.items.forEach((item) => (item && Array.isArray(item.findings) ? item.findings : []).forEach((f) => {
+    if (f && typeof f.key === 'string') keys.add(f.key);
+  }));
+  const kept = Object.keys(staged).filter((k) => keys.has(k));
+  if (kept.length === Object.keys(staged).length) {
+    return staged;
+  }
+  return Object.fromEntries(kept.map((k) => [k, staged[k]]));
+}
+
 // Stage 4 finding 6: the dispositions to record AFTER the fixes ran. A "Fix for me" whose fix was
 // applied is `fixed`; one that could not be applied (the text changed, the builder was unavailable)
 // is recorded as `fixme` -- the log never claims a fix that did not happen. Other decisions pass

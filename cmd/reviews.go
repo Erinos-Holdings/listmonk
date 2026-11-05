@@ -217,11 +217,18 @@ func (a *App) PostReviewDispositions(c echo.Context) error {
 	if err := a.checkCampaignPerm(auth.PermTypeManage, id, c); err != nil {
 		return err
 	}
+	// Integrations REVIEW-TRIM-2 (post-release, 2026-11-05): an optional `job_id` -- the job of the
+	// report the window shows -- names the review the keys are validated against (core
+	// AddDispositionsAt); absent (an older window), the gate/latest rule applies.
 	var req struct {
 		Items []core.DispositionIn `json:"items"`
+		JobID string               `json:"job_id"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "items"))
+	}
+	if req.JobID != "" && !reReviewJobID.MatchString(req.JobID) {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "job_id"))
 	}
 	cm, err := a.core.GetCampaign(id, "", "")
 	if err != nil {
@@ -240,7 +247,7 @@ func (a *App) PostReviewDispositions(c echo.Context) error {
 	}
 	// REVIEW-TRIM-SPEC D7: the item-level override (D2.15's campaigns:review_structure) is enforced
 	// in core, where the report is at hand; the user's permission check goes in with the batch.
-	out, err := a.core.AddDispositions(cm, user.ID, user.Username, req.Items, user.HasPerm)
+	out, err := a.core.AddDispositionsAt(cm, req.JobID, user.ID, user.Username, req.Items, user.HasPerm)
 	if err != nil {
 		return err
 	}

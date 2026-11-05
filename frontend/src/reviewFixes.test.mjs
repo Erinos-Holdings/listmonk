@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import {
-  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes, compileCampaignBody, campaignDigests, UNVERIFIED,
+  applyFixes, reviewPayload, FIX_KINDS, dispositionsAfterFixes, compileCampaignBody, campaignDigests, UNVERIFIED, pruneStaged,
 } from './reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { campaignPayload, CAMPAIGN_UPDATE_KEYS } from './officialSweep.mjs'; // eslint-disable-line import/extensions
 
@@ -481,4 +481,43 @@ test('compileCampaignBody: the Official_ visual templates are the refs, the cont
   assert.equal(seen[0].ctx.lang, 'en');
   assert.deepEqual(seen[0].d, doc);
   assert.throws(() => compileCampaignBody(null, visual(), templates, lists), /builder unavailable/);
+});
+
+// Integrations REVIEW-TRIM-2 post-release fix (2026-11-05): a staged key the shown report no longer
+// carries is pruned on load; the pseudo-keys A and R are kept; nothing shown → nothing pruned.
+test('pruneStaged keeps the shown report\'s finding keys and A/R; drops the rest', () => {
+  const s = (key) => ({ key, rubric_id: key.split('#')[0], action: 'fixed' });
+  const staged = {
+    'D2.15#aa': s('D2.15#aa'), 'D2.3#gone': s('D2.3#gone'), A: s('A'), R: s('R'), 'R#abc': s('R#abc'),
+  };
+  const report = {
+    jobId: 'j',
+    items: [
+      { id: 'D2.15', findings: [{ key: 'D2.15#aa' }] },
+      { id: 'D4.2', findings: [{ key: 'R#abc' }] },
+      { id: 'D1.1', findings: [] },
+    ],
+  };
+  const out = pruneStaged(staged, report);
+  assert.deepEqual(Object.keys(out).sort(), ['A', 'D2.15#aa', 'R', 'R#abc']);
+  assert.equal(out['D2.15#aa'], staged['D2.15#aa']);
+  // Nothing dropped → the same object (no reactive churn); no report → unchanged.
+  const clean = { 'D2.15#aa': staged['D2.15#aa'] };
+  assert.equal(pruneStaged(clean, report), clean);
+  assert.equal(pruneStaged(staged, null), staged);
+  assert.equal(pruneStaged(staged, { items: 'nope' }), staged);
+  assert.deepEqual(pruneStaged({ 'D2.3#gone': s('D2.3#gone') }, report), {});
+});
+
+test('the window prunes on load and posts its dispositions with the shown report\'s job id; a refused POST after applied fixes still re-inspects', () => {
+  const win = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  assert.match(win, /postReviewDispositions\(this\.id, items, this\.report \? this\.report\.jobId : null\)/);
+  assert.match(win, /pruneStaged\(this\.staged, this\.report\)/);
+  const submit = /async submit\(withFixes\) \{([\s\S]*?)\n {4}\},/.exec(win);
+  assert.ok(submit, 'submit()');
+  assert.match(submit[1], /catch \(e\) \{\s*if \(!applied\.length\) \{\s*throw e;/);
+  assert.ok(submit[1].indexOf('postReviewDispositions') < submit[1].indexOf('startCampaignReview'));
+  const api = readFileSync(new URL('./api/index.js', import.meta.url), 'utf8');
+  assert.match(api, /postReviewDispositions = async \(id, items, jobId\) =>/);
+  assert.match(api, /\{ items, \.\.\.\(jobId \? \{ job_id: jobId \} : \{\}\) \}/);
 });

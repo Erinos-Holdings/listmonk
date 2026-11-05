@@ -412,7 +412,7 @@
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import {
-  applyFixes, campaignDigests, compileCampaignBody, dispositionsAfterFixes, loadFrameBuilder, reviewPayload,
+  applyFixes, campaignDigests, compileCampaignBody, dispositionsAfterFixes, loadFrameBuilder, pruneStaged, reviewPayload,
 } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { acceptAlts, altsRowState } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
 import {
@@ -700,6 +700,12 @@ export default Vue.extend({
         if (first && this.altsRow && this.altsRow.baseJob === undefined) {
           this.altsRow = { ...this.altsRow, baseJob: this.report ? this.report.jobId : null };
         }
+        // Post-release fix (2026-11-05): a staged key the shown report no longer carries (a
+        // re-inspection dropped it) is pruned, so it can never be re-posted and refused again.
+        const pruned = pruneStaged(this.staged, this.report);
+        if (pruned !== this.staged) {
+          this.staged = pruned;
+        }
         // REVIEW-TRIM-2-SPEC D4: the run's base -- the latest job id at the first load.
         if (first && this.run && this.runBaseJob === undefined) {
           this.runBaseJob = (d && d.review && d.review.job_id) || null;
@@ -976,7 +982,17 @@ export default Vue.extend({
         }
         const items = dispositionsAfterFixes(Object.values(this.staged), applied);
         if (items.length) {
-          await this.$api.postReviewDispositions(this.id, items);
+          // Integrations REVIEW-TRIM-2 post-release fix (2026-11-05): the keys are validated against
+          // the report this window SHOWS (its job id), not the gate row. When fixes were applied and
+          // saved, a refused POST must not strand them: the re-inspection still starts (the API
+          // layer has already shown the error toast) and the stale selection is cleared.
+          try {
+            await this.$api.postReviewDispositions(this.id, items, this.report ? this.report.jobId : null);
+          } catch (e) {
+            if (!applied.length) {
+              throw e;
+            }
+          }
         }
         this.staged = {};
         if (applied.length > 0) {
