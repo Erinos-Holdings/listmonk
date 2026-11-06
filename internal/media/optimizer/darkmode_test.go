@@ -43,7 +43,7 @@ func extOf(name string) string {
 
 // colouredLogoOnWhite: a few flat brand colours on an opaque white ground. Monochrome fails
 // (it is coloured) and the distinct-colour count stays well under the photo threshold, so it
-// is the white-background case -- warn, never key.
+// is the white-background case -- a note, never repaired.
 func colouredLogoOnWhite() image.Image {
 	img := image.NewNRGBA(image.Rect(0, 0, 300, 120))
 	for y := 0; y < 120; y++ {
@@ -195,10 +195,10 @@ func TestClassifyFixtures(t *testing.T) {
 			"monochrome dark ink on transparency; invisible on every inverting dark client -- recoloured to the mid grey"},
 		{"Asset-2RUZE.png", ClassMonoOnTransparent,
 			"the RUZE wordmark: the same shape, two colours, 54% transparent"},
-		{"exclusively_on_curated_logo.png", ClassMonoOnWhite,
-			"opaque white, no alpha; a white slab on a dark ground"},
-		{"curated_logo3.png", ClassMonoOnWhite,
-			"the same defect, fixed by hand on 2026-09-07"},
+		{"exclusively_on_curated_logo.png", ClassWhiteBackground,
+			"opaque white, no alpha: kept as uploaded, a white panel on a dark ground (WHITE-BACKGROUND-SPEC D1)"},
+		{"curated_logo3.png", ClassWhiteBackground,
+			"the same shape: a dark mono mark on opaque white is the author's choice, never repaired"},
 		{"curated_logo3_grey.png", ClassOK,
 			"the 2026-09-07 repair: #777 mark on transparency, a mid-tone that reads either way"},
 		{"shala_hero2.jpg", ClassPhoto, "photographic JPEG"},
@@ -219,6 +219,15 @@ func TestClassifyFixtures(t *testing.T) {
 			}
 			if v.Version != ClassifierVersion {
 				t.Fatalf("verdict version %d, want %d", v.Version, ClassifierVersion)
+			}
+			// I2: white-background is a note, never a warning.
+			if c.want == ClassWhiteBackground {
+				if len(v.Notes) != 1 || v.Notes[0] != NoteWhiteBackground {
+					t.Fatalf("notes %v, want [%s]", v.Notes, NoteWhiteBackground)
+				}
+				if len(v.Warnings) != 0 {
+					t.Fatalf("warnings %v, want none", v.Warnings)
+				}
 			}
 		})
 	}
@@ -297,8 +306,11 @@ func TestClassifyFixtures(t *testing.T) {
 		if v.Class != ClassWhiteBackground {
 			t.Fatalf("classified %q, want %q", v.Class, ClassWhiteBackground)
 		}
-		if len(v.Warnings) != 1 || v.Warnings[0] != WarnWhiteBackground {
-			t.Fatalf("warnings %v, want [%s]", v.Warnings, WarnWhiteBackground)
+		if len(v.Notes) != 1 || v.Notes[0] != NoteWhiteBackground {
+			t.Fatalf("notes %v, want [%s]", v.Notes, NoteWhiteBackground)
+		}
+		if len(v.Warnings) != 0 {
+			t.Fatalf("warnings %v, want none", v.Warnings)
 		}
 	})
 
@@ -344,8 +356,8 @@ func TestClassifyWarningCodes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(ok.Warnings) != 0 {
-			t.Fatalf("%s carries warnings %v", f, ok.Warnings)
+		if len(ok.Warnings) != 0 || len(ok.Notes) != 0 {
+			t.Fatalf("%s carries warnings %v / notes %v", f, ok.Warnings, ok.Notes)
 		}
 	}
 }
@@ -374,7 +386,7 @@ func pixelsEqual(a, b image.Image) bool {
 }
 
 func TestRepairIdempotent(t *testing.T) {
-	for _, f := range []string{"social-curated-email.png", "exclusively_on_curated_logo.png", "curated_logo3.png", "shala_hero.png", "Asset-2RUZE.png"} {
+	for _, f := range []string{"social-curated-email.png", "shala_hero.png", "Asset-2RUZE.png"} {
 		t.Run(f, func(t *testing.T) {
 			img, v, err := ClassifyRaw(fixture(t, f), extOf(f))
 			if err != nil {
@@ -522,41 +534,6 @@ func TestRepairMonoOnTransparentKeepsAlpha(t *testing.T) {
 	}
 }
 
-func TestRepairMonoOnWhiteIsCoverageNotAKey(t *testing.T) {
-	img, v, err := ClassifyRaw(fixture(t, "curated_logo3.png"), "png")
-	if err != nil {
-		t.Fatal(err)
-	}
-	out, _ := Repair(img, v)
-
-	b := out.Bounds()
-	var opaque, partial int
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			r, g, bl, a := out.At(x, y).RGBA()
-			if a == 0 {
-				continue
-			}
-			if a == 0xffff {
-				opaque++
-				// Every opaque mark pixel is the repair grey, premultiplied by a=1.
-				if r>>8 != 0x77 || g>>8 != 0x77 || bl>>8 != 0x77 {
-					t.Fatalf("opaque mark pixel is %v,%v,%v -- want #777777", r>>8, g>>8, bl>>8)
-				}
-			} else {
-				partial++
-			}
-		}
-	}
-	if opaque == 0 {
-		t.Fatal("the mark disappeared entirely")
-	}
-	// Anti-aliased edges must survive as partial coverage, not a hard fringe.
-	if partial == 0 {
-		t.Fatal("no partially transparent pixels -- the repair hard-keyed instead of using coverage")
-	}
-}
-
 // ---- I4d ------------------------------------------------------------------------------
 
 func TestRepairNoopForPhoto(t *testing.T) {
@@ -592,15 +569,34 @@ func TestRepairNoopForPhoto(t *testing.T) {
 		})
 	}
 
-	// A white-background logo is warn-only for the same reason: keying it would leave dark
-	// coloured ink on transparency, the very shape this spec eliminates.
-	img, v, err := ClassifyRaw(encodeSyntheticPNG(t, colouredLogoOnWhite()), "png")
-	if err != nil {
-		t.Fatal(err)
+	// I1: an opaque image with a white border is kept as uploaded, whatever its ink
+	// (WHITE-BACKGROUND-SPEC D1) -- the synthetic coloured logo and the two live mono logos
+	// alike.
+	whites := []struct {
+		name string
+		raw  []byte
+	}{
+		{"synthetic coloured logo on white", encodeSyntheticPNG(t, colouredLogoOnWhite())},
+		{"exclusively_on_curated_logo.png", fixture(t, "exclusively_on_curated_logo.png")},
+		{"curated_logo3.png", fixture(t, "curated_logo3.png")},
 	}
-	out, changed := Repair(img, v)
-	if changed || !pixelsEqual(img, out) {
-		t.Fatal("a white-background logo was repaired; it must only warn")
+	for _, c := range whites {
+		t.Run(c.name, func(t *testing.T) {
+			img, v, err := ClassifyRaw(c.raw, "png")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Class != ClassWhiteBackground {
+				t.Fatalf("classified %q, want %q", v.Class, ClassWhiteBackground)
+			}
+			if Repairable(v.Class) {
+				t.Fatal("white-background must never be repairable")
+			}
+			out, changed := Repair(img, v)
+			if changed || !pixelsEqual(img, out) {
+				t.Fatal("a white-background image was repaired; it must be kept as uploaded")
+			}
+		})
 	}
 }
 

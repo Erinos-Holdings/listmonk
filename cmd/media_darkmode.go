@@ -16,7 +16,7 @@ import (
 
 // Dark-mode classification, originals retention, and reprocessing (DARK-MODE-SPEC D4/D5).
 //
-// Every raster upload gets a verdict stamped into meta.darkmode, and the two classes with a
+// Every raster upload gets a verdict stamped into meta.darkmode, and the classes with a
 // safe repair are repaired on the way in. The untouched upload is kept under the FLAT key
 // `orig_<filename>` -- flat, mirroring `thumb_`, because the filesystem provider Puts
 // join(dir, filename) with no MkdirAll, so an `originals/` prefix breaks the dev suite.
@@ -33,18 +33,22 @@ const (
 // verdictMeta renders a verdict as the JSON object stored in meta.darkmode and returned on
 // the upload/reprocess responses.
 func verdictMeta(v optimizer.Verdict, fixed bool) models.JSON {
-	warnings := v.Warnings
-	if warnings == nil {
-		warnings = []string{}
-	}
-
 	return models.JSON{
 		"class":    v.Class,
 		"fixed":    fixed,
-		"warnings": warnings,
+		"warnings": nonNil(v.Warnings),
+		"notes":    nonNil(v.Notes),
 		"version":  v.Version,
 		"at":       time.Now().UTC().Format(time.RFC3339),
 	}
+}
+
+// nonNil renders a nil code list as [], so a row with none carries an empty array.
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // classifyAndRepair runs the classifier over an upload's bytes and applies the class's
@@ -123,6 +127,12 @@ var ErrVerdictCurrent = errors.New("dark-mode verdict is already current")
 //
 // It ALWAYS classifies and repairs from the original when one exists, and never overwrites
 // an existing original.
+//
+// Reprocess never un-repairs (WHITE-BACKGROUND-SPEC D4): a row stamped fixed whose original
+// now classifies to a class with no repair (a mono-on-white logo repaired before 2026-11-06
+// is white-background today) keeps its object, thumbnail and stored verdict. The verdict is
+// only re-stamped at the current version with a fresh `at`, so the row reads current, and
+// the response reports kept: true.
 func reprocessStored(s media.Store, m mediaLike, force bool) (models.JSON, map[string]any, error) {
 	ext := rasterExt(m.Filename)
 	if ext == "" {
@@ -145,6 +155,10 @@ func reprocessStored(s media.Store, m mediaLike, force bool) (models.JSON, map[s
 	out, outExt, v, fixed, err := classifyAndRepair(raw, ext)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if stored := storedVerdict(m.Meta); stored != nil && stored["fixed"] == true && !optimizer.Repairable(v.Class) {
+		return keptVerdict(m, stored)
 	}
 
 	meta := models.JSON{darkmodeMetaKey: verdictMeta(v, fixed)}
@@ -188,7 +202,34 @@ func reprocessStored(s media.Store, m mediaLike, force bool) (models.JSON, map[s
 
 	return meta, map[string]any{
 		"id": m.ID, "filename": m.Filename, "class": v.Class, "fixed": fixed,
-		"warnings": v.Warnings, "version": v.Version,
+		"warnings": nonNil(v.Warnings), "notes": nonNil(v.Notes), "version": v.Version,
+	}, nil
+}
+
+// keptVerdict is reprocessStored's never-un-repair path (WHITE-BACKGROUND-SPEC D4): nothing
+// is written to the store, and the stored verdict is returned for the meta merge unchanged
+// except for `version` (the current ClassifierVersion) and a fresh `at`.
+func keptVerdict(m mediaLike, stored map[string]any) (models.JSON, map[string]any, error) {
+	kept := make(models.JSON, len(stored)+2)
+	for k, val := range stored {
+		kept[k] = val
+	}
+	kept["version"] = optimizer.ClassifierVersion
+	kept["at"] = time.Now().UTC().Format(time.RFC3339)
+
+	warnings, ok := kept["warnings"]
+	if !ok {
+		warnings = []string{}
+	}
+	notes, ok := kept["notes"]
+	if !ok {
+		notes = []string{}
+	}
+
+	return models.JSON{darkmodeMetaKey: kept}, map[string]any{
+		"id": m.ID, "filename": m.Filename, "class": kept["class"], "fixed": kept["fixed"],
+		"warnings": warnings, "notes": notes, "version": optimizer.ClassifierVersion,
+		"kept": true,
 	}, nil
 }
 
@@ -228,7 +269,7 @@ func (a *App) GetMediaDarkmode(c echo.Context) error {
 	if ext == "" {
 		return c.JSON(http.StatusOK, okResp{map[string]any{
 			"id": m.ID, "filename": m.Filename, "class": "n/a", "would_fix": false,
-			"warnings": []string{}, "version": optimizer.ClassifierVersion,
+			"warnings": []string{}, "notes": []string{}, "version": optimizer.ClassifierVersion,
 		}})
 	}
 
@@ -250,7 +291,8 @@ func (a *App) GetMediaDarkmode(c echo.Context) error {
 		"filename":  m.Filename,
 		"class":     v.Class,
 		"would_fix": optimizer.Repairable(v.Class),
-		"warnings":  v.Warnings,
+		"warnings":  nonNil(v.Warnings),
+		"notes":     nonNil(v.Notes),
 		"version":   v.Version,
 		"stored":    storedVerdict(m.Meta),
 	}})

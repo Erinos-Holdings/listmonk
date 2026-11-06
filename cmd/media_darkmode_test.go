@@ -138,7 +138,7 @@ func TestUploadClassificationStoresAnOriginalOnlyWhenPixelsChange(t *testing.T) 
 		file      string
 		wantFixed bool
 	}{
-		{"curated_logo3.png", true},            // mono-on-white -> keyed to #777 on alpha
+		{"curated_logo3.png", false},           // white-background -> kept as uploaded, no original (I6)
 		{"social-curated-email.png", true},     // icon-ring -> white disc filled in
 		{"social-curated-facebook.png", false}, // already fine
 		{"shala_hero.png", true},               // mono-on-transparent -> recoloured to #777, alpha kept
@@ -199,6 +199,24 @@ func TestUploadClassificationStoresAnOriginalOnlyWhenPixelsChange(t *testing.T) 
 			if d["at"] == "" {
 				t.Fatal("meta.darkmode carries no timestamp")
 			}
+
+			// I2: notes ride beside warnings, [] when there are none; white-background is a
+			// note and never a warning.
+			notes, ok := d["notes"].([]string)
+			if !ok {
+				t.Fatalf("meta.darkmode.notes is %T", d["notes"])
+			}
+			warnings, ok := d["warnings"].([]string)
+			if !ok {
+				t.Fatalf("meta.darkmode.warnings is %T", d["warnings"])
+			}
+			if v.Class == optimizer.ClassWhiteBackground {
+				if len(notes) != 1 || notes[0] != optimizer.NoteWhiteBackground || len(warnings) != 0 {
+					t.Fatalf("white-background meta: notes %v warnings %v", notes, warnings)
+				}
+			} else if len(notes) != 0 {
+				t.Fatalf("%s carries notes %v", c.file, notes)
+			}
 		})
 	}
 }
@@ -214,7 +232,7 @@ func TestClassifyPathWritesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, v, err := optimizer.ClassifyRaw(raw, "png"); err != nil || v.Class != optimizer.ClassMonoOnWhite {
+	if _, v, err := optimizer.ClassifyRaw(raw, "png"); err != nil || v.Class != optimizer.ClassWhiteBackground {
 		t.Fatalf("classify: %q %v", v.Class, err)
 	}
 
@@ -229,58 +247,146 @@ func TestClassifyPathWritesNothing(t *testing.T) {
 // ---- I5b: reprocess repairs from the original and never overwrites it ------------------
 
 func TestReprocessRepairsFromTheOriginal(t *testing.T) {
-	original := testFixture(t, "curated_logo3.png")
+	original := testFixture(t, "shala_hero.png")
 
 	s := newFakeStore()
-	s.objects["curated_logo3.png"] = original
-	row := mediaLike{ID: 7, Filename: "curated_logo3.png", ContentType: "image/png"}
+	s.objects["shala_hero.png"] = original
+	row := mediaLike{ID: 7, Filename: "shala_hero.png", ContentType: "image/png"}
 
 	meta, out, err := reprocessStored(s, row, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out["fixed"] != true || out["class"] != optimizer.ClassMonoOnWhite {
+	if out["fixed"] != true || out["class"] != optimizer.ClassMonoOnTransparent {
 		t.Fatalf("first pass: %v", out)
 	}
 	if meta[originalMetaKey] != true {
 		t.Fatalf("meta did not record the retained original: %v", meta)
 	}
-	if !contains(s.puts, "orig_curated_logo3.png") {
+	if !contains(s.puts, "orig_shala_hero.png") {
 		t.Fatalf("no original was stored: %v", s.puts)
 	}
-	if !contains(s.puts, "curated_logo3.png") || !contains(s.puts, "thumb_curated_logo3.png") {
+	if !contains(s.puts, "shala_hero.png") || !contains(s.puts, "thumb_shala_hero.png") {
 		t.Fatalf("object or thumbnail not rewritten: %v", s.puts)
 	}
-	if !bytes.Equal(s.objects["orig_curated_logo3.png"], original) {
+	if !bytes.Equal(s.objects["orig_shala_hero.png"], original) {
 		t.Fatal("the stored original is not the untouched upload")
 	}
 
-	repaired := append([]byte(nil), s.objects["curated_logo3.png"]...)
+	repaired := append([]byte(nil), s.objects["shala_hero.png"]...)
 
-	// A second reprocess with force: it must read the ORIGINAL again, so it produces the
-	// same repaired bytes rather than repairing the repair -- and must not touch orig_.
-	row.Meta = models.JSON{darkmodeMetaKey: map[string]any{"version": optimizer.ClassifierVersion}}
+	// A second reprocess with force over a row stamped fixed (what the first pass wrote): the
+	// original still classifies repairable, so it is re-repaired -- the path a future recipe
+	// change reaches already-repaired rows by (WHITE-BACKGROUND-SPEC D4). It must read the
+	// ORIGINAL again, so it produces the same repaired bytes rather than repairing the
+	// repair -- and must not touch orig_.
+	row.Meta = models.JSON{darkmodeMetaKey: map[string]any{"version": optimizer.ClassifierVersion, "fixed": true}}
 	s.puts = nil
 	if _, out2, err := reprocessStored(s, row, true); err != nil {
 		t.Fatal(err)
-	} else if out2["fixed"] != true {
+	} else if out2["fixed"] != true || out2["kept"] != nil {
 		t.Fatalf("forced pass: %v", out2)
 	}
+	if !contains(s.puts, "shala_hero.png") {
+		t.Fatalf("the forced pass did not re-repair: %v", s.puts)
+	}
 
-	if !bytes.Equal(s.objects["orig_curated_logo3.png"], original) {
+	if !bytes.Equal(s.objects["orig_shala_hero.png"], original) {
 		t.Fatal("the original's bytes changed on the second pass")
 	}
-	if !bytes.Equal(s.objects["curated_logo3.png"], repaired) {
+	if !bytes.Equal(s.objects["shala_hero.png"], repaired) {
 		t.Fatal("the second pass produced different repaired bytes (it repaired the repair)")
+	}
+}
+
+// ---- WHITE-BACKGROUND-SPEC I5: reprocess never un-repairs -----------------------------
+
+func TestReprocessNeverUnrepairs(t *testing.T) {
+	cases := []struct {
+		name    string
+		version any
+		force   bool
+	}{
+		{"current verdict, force", float64(optimizer.ClassifierVersion), true},
+		{"stale verdict, no force (the path a version bump exercises)", float64(2), false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := newFakeStore()
+			s.objects["orig_curated_logo3.png"] = testFixture(t, "curated_logo3.png")
+			s.objects["curated_logo3.png"] = []byte("repaired bytes")
+			s.objects["thumb_curated_logo3.png"] = []byte("repaired thumb")
+
+			stored := map[string]any{
+				"class":    "mono-on-white",
+				"fixed":    true,
+				"warnings": []any{},
+				"version":  c.version,
+				"at":       "2026-09-11T00:00:00Z",
+			}
+			row := mediaLike{
+				ID: 52, Filename: "curated_logo3.png", ContentType: "image/png",
+				Meta: models.JSON{darkmodeMetaKey: stored, originalMetaKey: true},
+			}
+
+			meta, out, err := reprocessStored(s, row, c.force)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// No store write at all: object, thumbnail and original untouched.
+			if len(s.puts) != 0 || len(s.deletes) != 0 {
+				t.Fatalf("a kept row wrote: puts %v deletes %v", s.puts, s.deletes)
+			}
+			if string(s.objects["curated_logo3.png"]) != "repaired bytes" ||
+				string(s.objects["thumb_curated_logo3.png"]) != "repaired thumb" {
+				t.Fatal("the repaired object or thumbnail changed")
+			}
+
+			// The stored verdict, unchanged but re-stamped at the current version.
+			d, ok := meta[darkmodeMetaKey].(models.JSON)
+			if !ok {
+				t.Fatalf("meta.darkmode is %T", meta[darkmodeMetaKey])
+			}
+			if d["class"] != "mono-on-white" || d["fixed"] != true {
+				t.Fatalf("kept verdict changed: %v", d)
+			}
+			if w, ok := d["warnings"].([]any); !ok || len(w) != 0 {
+				t.Fatalf("kept warnings changed: %v", d["warnings"])
+			}
+			if _, ok := d["notes"]; ok {
+				t.Fatalf("kept verdict gained notes: %v", d["notes"])
+			}
+			if d["version"] != optimizer.ClassifierVersion {
+				t.Fatalf("kept version %v, want %d", d["version"], optimizer.ClassifierVersion)
+			}
+			if d["at"] == "2026-09-11T00:00:00Z" || d["at"] == "" {
+				t.Fatalf("kept verdict not re-stamped: at %v", d["at"])
+			}
+			if _, ok := meta[originalMetaKey]; ok {
+				t.Fatal("the kept path rewrote meta.original")
+			}
+
+			if out["kept"] != true || out["fixed"] != true || out["class"] != "mono-on-white" {
+				t.Fatalf("response: %v", out)
+			}
+
+			// And the row now reads current: a non-force reprocess refuses it.
+			row.Meta = models.JSON{darkmodeMetaKey: map[string]any(d)}
+			if _, _, err := reprocessStored(s, row, false); !errors.Is(err, ErrVerdictCurrent) {
+				t.Fatalf("re-stamped row is not current: %v", err)
+			}
+		})
 	}
 }
 
 func TestReprocessRefusesACurrentVerdictWithoutForce(t *testing.T) {
 	s := newFakeStore()
-	s.objects["curated_logo3.png"] = testFixture(t, "curated_logo3.png")
+	s.objects["shala_hero.png"] = testFixture(t, "shala_hero.png")
 
 	row := mediaLike{
-		ID: 7, Filename: "curated_logo3.png", ContentType: "image/png",
+		ID: 7, Filename: "shala_hero.png", ContentType: "image/png",
 		Meta: models.JSON{darkmodeMetaKey: map[string]any{"version": float64(optimizer.ClassifierVersion)}},
 	}
 

@@ -68,7 +68,7 @@ func TestUploadIgnoresClientContentType(t *testing.T) {
 		key    string            // the stored filename
 		want   map[string]string // every object of the upload and its type
 	}{
-		{"repaired.png", testFixture(t, "curated_logo3.png"), "repaired.png", map[string]string{
+		{"repaired.png", testFixture(t, "shala_hero.png"), "repaired.png", map[string]string{
 			"repaired.png": "image/png", "thumb_repaired.png": "image/png", "orig_repaired.png": "image/png"}},
 		{"photo.jpg", testFixture(t, "shala_hero2.jpg"), "photo.jpg", map[string]string{
 			"photo.jpg": "image/jpeg", "thumb_photo.jpg": "image/jpeg"}},

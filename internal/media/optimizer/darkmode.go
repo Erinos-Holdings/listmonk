@@ -26,10 +26,12 @@ import (
 //
 // Those precepts existed only as runbook prose, and the three assets that broke template 29
 // were uploaded outside any spec chain. Classify puts a verdict on every raster upload, and
-// Repair fixes the two classes that have a safe, unambiguous repair. The other two are
-// warnings: keying a coloured logo off a white ground would produce the very shape this
-// file exists to eliminate, and a dark-on-transparent artwork needs an author's decision
-// (recolour, halo, or a light variant), not a guess.
+// Repair fixes the classes that have a safe, unambiguous repair -- all of them art that
+// already carries transparency. An opaque image with a white border is never repaired,
+// whatever its ink (WHITE-BACKGROUND-SPEC D1): the author chose it by the file, and it
+// stays a white panel on a dark client -- a note, not a warning. A coloured
+// dark-on-transparent artwork warns: it needs an author's decision (recolour, halo, or a
+// light variant), not a guess.
 
 // ClassifierVersion stamps every verdict. The lint helper on the integrations side
 // (lib/listmonk-media-lint.ts) compares against it to find stale rows, so the two constants
@@ -41,25 +43,25 @@ const (
 	ClassPhoto             = "photo"
 	ClassAnimated          = "animated"
 	ClassIconRing          = "icon-ring"
-	ClassMonoOnWhite       = "mono-on-white"
 	ClassWhiteBackground   = "white-background"
 	ClassMonoOnTransparent = "mono-on-transparent"
 	ClassDarkOnTransparent = "dark-on-transparent"
 	ClassOK                = "ok"
 )
 
-// Warning codes carried on a Verdict. They are the class name for the two classes that
-// warn, so a consumer never has to map one to the other.
+// Warning and note codes carried on a Verdict. Each is its class name, so a consumer never
+// has to map one to the other. A warning needs an author's decision; a note records one
+// already made (WHITE-BACKGROUND-SPEC D2).
 const (
-	WarnWhiteBackground   = ClassWhiteBackground
 	WarnDarkOnTransparent = ClassDarkOnTransparent
+	NoteWhiteBackground   = ClassWhiteBackground
 )
 
 // Classification thresholds. Every luminance here is gamma-space luma (see lumaAt).
 const (
 	// monochrome: this share of opaque pixels must be near-grey. A distinct-colour count
-	// cannot stand in for it -- anti-aliasing gives the live exclusively_on_curated_logo.png
-	// and curated_logo3.png 32 quantised colours each.
+	// cannot stand in for it -- anti-aliasing gives a mono logo dozens of quantised colours
+	// (the live curated_logo3.png reads 32).
 	monoChannelSpread = 16
 	monoFraction      = 0.99
 
@@ -99,7 +101,7 @@ const (
 	alphaOpaque = 0x8000
 )
 
-// repairInk is the grey every mono-on-white mark is recoloured to: the 2026-09-07
+// repairInk is the grey every mono-on-transparent mark is recoloured to: the 2026-09-07
 // curated_logo3_grey recipe, and the accepted Curated-furniture aesthetic. It reads as a
 // mid-tone on both a white and a dark ground, which is the whole point -- a #000 mark keyed
 // to transparency would simply move the defect to the dark clients.
@@ -111,6 +113,7 @@ type Verdict struct {
 	Class    string   `json:"class"`
 	Fixed    bool     `json:"fixed"`
 	Warnings []string `json:"warnings"`
+	Notes    []string `json:"notes"`
 	Version  int      `json:"version"`
 }
 
@@ -234,9 +237,8 @@ func measure(img image.Image) stats {
 	}
 
 	// "Ink" is the mark, not the ground: the mean over opaque pixels BELOW near-white. A
-	// mean over every opaque pixel is dominated by the white ground (the live
-	// curated_logo3.png reads 0.672 that way -- "light" -- while its mark is 0.052), which
-	// would make mono-on-white unreachable for exactly the files it exists for.
+	// mean over every opaque pixel is dominated by any light ground or backing (the live
+	// curated_logo3.png reads 0.672 that way -- "light" -- while its mark is 0.052).
 	switch {
 	case inkN > 0:
 		s.inkLuma = inkSum / float64(inkN)
@@ -367,7 +369,7 @@ func enclosedTransparent(trans []bool, w, h int) int {
 //
 // Classes are evaluated in the documented order; the first match wins.
 func Classify(img image.Image, ext string) Verdict {
-	v := Verdict{Class: ClassOK, Warnings: []string{}, Version: ClassifierVersion}
+	v := Verdict{Class: ClassOK, Warnings: []string{}, Notes: []string{}, Version: ClassifierVersion}
 	if img == nil {
 		return v
 	}
@@ -390,12 +392,11 @@ func Classify(img image.Image, ext string) Verdict {
 	case hasAlpha && s.w <= iconMaxDim && s.h <= iconMaxDim && mono && dark && s.enclosedFrac >= iconEnclosed:
 		v.Class = ClassIconRing
 
-	case !hasAlpha && whiteBorder && mono && dark:
-		v.Class = ClassMonoOnWhite
-
-	case !hasAlpha && whiteBorder && !mono:
+	// An opaque image with a white border is kept as uploaded, whatever its ink
+	// (WHITE-BACKGROUND-SPEC D1): the author's choice by the file.
+	case !hasAlpha && whiteBorder:
 		v.Class = ClassWhiteBackground
-		v.Warnings = append(v.Warnings, WarnWhiteBackground)
+		v.Notes = append(v.Notes, NoteWhiteBackground)
 
 	case hasAlpha && dark && mono && bareRim && !backedDisc:
 		v.Class = ClassMonoOnTransparent
@@ -411,12 +412,12 @@ func Classify(img image.Image, ext string) Verdict {
 // ClassifyAnimated is the verdict for an animated GIF. Animations are refused, never
 // repaired (the existing budget rule), so they are classified and left alone.
 func ClassifyAnimated() Verdict {
-	return Verdict{Class: ClassAnimated, Warnings: []string{}, Version: ClassifierVersion}
+	return Verdict{Class: ClassAnimated, Warnings: []string{}, Notes: []string{}, Version: ClassifierVersion}
 }
 
 // Repairable reports whether a class has an automatic pixel repair.
 func Repairable(class string) bool {
-	return class == ClassIconRing || class == ClassMonoOnWhite || class == ClassMonoOnTransparent
+	return class == ClassIconRing || class == ClassMonoOnTransparent
 }
 
 // Repair applies the class's fix and reports whether pixels changed. An image whose class
@@ -426,8 +427,6 @@ func Repair(img image.Image, v Verdict) (image.Image, bool) {
 	switch v.Class {
 	case ClassIconRing:
 		return discBacked(img), true
-	case ClassMonoOnWhite:
-		return keyWhiteToAlpha(img), true
 	case ClassMonoOnTransparent:
 		return recolorInk(img), true
 	}
@@ -435,8 +434,7 @@ func Repair(img image.Image, v Verdict) (image.Image, bool) {
 }
 
 // recolorInk flattens a monochrome mark's RGB to repairInk and leaves its alpha exactly as
-// it is: the same recipe keyWhiteToAlpha ends with, for art that already carries its own
-// coverage. A black wordmark on transparency vanishes on every inverting dark client; the
+// it is, for art that already carries its own coverage. A black wordmark on transparency vanishes on every inverting dark client; the
 // mid grey reads on a white page and a dark one alike (the curated_logo3_grey precedent).
 // Coloured art is never recoloured -- that stays an author's decision (dark-on-transparent).
 func recolorInk(img image.Image) image.Image {
@@ -551,36 +549,8 @@ func (b *bbox) empty() bool { return !b.set }
 func (b *bbox) w() int      { return b.maxX - b.minX + 1 }
 func (b *bbox) h() int      { return b.maxY - b.minY + 1 }
 
-// keyWhiteToAlpha turns a dark mark on an opaque white ground into a #777777 mark on
-// transparency.
-//
-// Alpha is COVERAGE (1 - luma), not a hard key: a 0.95 threshold leaves a jagged opaque
-// fringe on every anti-aliased edge, which is worse than the slab it replaces. The RGB is
-// flattened to repairInk so the mark reads on a white ground and on a dark one alike.
-func keyWhiteToAlpha(img image.Image) image.Image {
-	b := img.Bounds()
-	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	for y := 0; y < b.Dy(); y++ {
-		for x := 0; x < b.Dx(); x++ {
-			r, g, bl, a := img.At(b.Min.X+x, b.Min.Y+y).RGBA()
-			if a < alphaOpaque {
-				continue // already transparent; leave it so
-			}
-			cov := 1 - lumaAt(r, g, bl)
-			if cov < 0 {
-				cov = 0
-			}
-			out.SetNRGBA(x, y, color.NRGBA{
-				R: repairInk.R, G: repairInk.G, B: repairInk.B,
-				A: uint8(cov*255 + 0.5),
-			})
-		}
-	}
-	return out
-}
-
-// EncodePNG re-encodes a repaired image. Repairs always produce PNG: both of them create or
-// preserve an alpha channel, which JPEG cannot carry.
+// EncodePNG re-encodes a repaired image. Repairs always produce PNG: each of them creates or
+// preserves an alpha channel, which JPEG cannot carry.
 func EncodePNG(img image.Image) ([]byte, error) {
 	var out bytes.Buffer
 	enc := png.Encoder{CompressionLevel: png.BestCompression}

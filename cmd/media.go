@@ -74,11 +74,12 @@ func (a *App) UploadMedia(c echo.Context) error {
 	}
 
 	// Fork (dark-mode readiness) -- DARK-MODE-SPEC D4. Classify every raster upload and
-	// repair the two classes that have a safe, unambiguous fix (a ring glyph's transparent
-	// interior; a dark monochrome mark on an opaque white ground). This runs on the UPLOAD
-	// ITSELF, before the optimizer: the optimizer may re-encode an opaque logo as a JPEG,
-	// and the classifier treats JPEG input as photographic by construction, so classifying
-	// the optimized bytes would let a mono-on-white logo slip past as a "photo". A repair
+	// repair the classes that have a safe, unambiguous fix (a ring glyph's transparent
+	// interior; a dark monochrome mark on transparency). An opaque white-background image is
+	// kept as uploaded (WHITE-BACKGROUND-SPEC D1). This runs on the UPLOAD ITSELF, before the
+	// optimizer: the optimizer may re-encode an opaque logo as a JPEG, and the classifier
+	// treats JPEG input as photographic by construction, so classifying the optimized bytes
+	// would misread a white-background logo as a "photo". A repair
 	// always encodes PNG (alpha), and is then optimized like any other upload. The untouched
 	// upload bytes are kept under orig_<filename> whenever pixels changed.
 	var (

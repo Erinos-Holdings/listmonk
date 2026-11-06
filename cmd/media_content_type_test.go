@@ -9,7 +9,7 @@ import (
 	"go/parser"
 	"go/token"
 	"image"
-	"image/color/palette"
+	"image/color"
 	"image/draw"
 	"image/gif"
 	iofs "io/fs"
@@ -52,18 +52,28 @@ func TestMediaContentType(t *testing.T) {
 
 // ---- K3: a reprocess never trusts the row's content_type --------------------------------
 
-// stillGIF is curated_logo3.png (mono-on-white, repairable) re-encoded as a one-frame GIF.
+// stillGIF is shala_hero.png (mono-on-transparent, repairable) re-encoded as a one-frame GIF.
+// The palette is a grey ramp plus a transparent entry: a GIF's transparency is a palette
+// index, and without one the transparent ground would flatten opaque and the fixture would
+// stop being repairable (WHITE-BACKGROUND-SPEC §4). The class is asserted before use.
 func stillGIF(t *testing.T) []byte {
 	t.Helper()
-	img, err := optimizer.DecodeStill(testFixture(t, "curated_logo3.png"))
+	img, err := optimizer.DecodeStill(testFixture(t, "shala_hero.png"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	pal := image.NewPaletted(img.Bounds(), palette.Plan9)
+	ramp := color.Palette{color.Transparent}
+	for i := 0; i < 255; i++ {
+		ramp = append(ramp, color.Gray{Y: uint8(i)})
+	}
+	pal := image.NewPaletted(img.Bounds(), ramp)
 	draw.Draw(pal, img.Bounds(), img, image.Point{}, draw.Src)
 	var buf bytes.Buffer
 	if err := gif.Encode(&buf, pal, nil); err != nil {
 		t.Fatal(err)
+	}
+	if _, v, err := optimizer.ClassifyRaw(buf.Bytes(), "gif"); err != nil || v.Class != optimizer.ClassMonoOnTransparent {
+		t.Fatalf("stillGIF fixture classifies %q (%v), want %q", v.Class, err, optimizer.ClassMonoOnTransparent)
 	}
 	return buf.Bytes()
 }
@@ -74,7 +84,7 @@ func TestReprocessIgnoresRowContentType(t *testing.T) {
 		raw      func(*testing.T) []byte
 		wantOrig string
 	}{
-		{"logo.png", func(t *testing.T) []byte { return testFixture(t, "curated_logo3.png") }, "image/png"},
+		{"logo.png", func(t *testing.T) []byte { return testFixture(t, "shala_hero.png") }, "image/png"},
 		{"logo.gif", stillGIF, "image/gif"},
 	}
 

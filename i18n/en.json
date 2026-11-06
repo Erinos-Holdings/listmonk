@@ -1109,6 +1109,7 @@
     "media.animatedGIFTooLarge": "This animated GIF is {size}. Animations must be under {limit} so they load quickly for recipients. Please re-export it with fewer frames or smaller dimensions.",
     "media.darkmodeAlreadyCurrent": "This item already has a current dark-mode verdict (classifier version {version}). Pass force=true to reprocess it anyway.",
     "media.darkmodeFixed": "Dark-mode: repaired on upload ({class}).",
+    "media.darkmodeNote": "Kept as uploaded: an opaque white background stays a white panel for dark-mode readers. Upload a PNG with a transparent background if you want it adapted.",
     "media.darkmodeOk": "Dark-mode: no problem found ({class}).",
     "media.darkmodeTileHelp": "Shown over a light and a dark ground. Mail clients never recolor large images, so the dark half is what a dark-mode recipient sees \u2014 except small dark-on-transparent glyphs, which Gmail Android may recolor.",
     "media.darkmodeWarn": "Dark-mode warning ({class}): {codes}",

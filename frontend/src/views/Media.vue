@@ -401,6 +401,15 @@ export default Vue.extend({
           title: this.$t('media.darkmodeWarn', { codes: warnings.join(', '), class: d.class }),
         };
       }
+      // WHITE-BACKGROUND-SPEC D2: a note records a decision the author made by the file (an
+      // opaque white background is kept as uploaded). `note` is the discriminator, never the
+      // label string or the kind (is-light is shared with ok).
+      const notes = d.notes || [];
+      if (notes.length > 0) {
+        return {
+          kind: 'is-light', label: 'note', note: true, title: this.$t('media.darkmodeNote'),
+        };
+      }
       if (d.fixed) {
         return { kind: 'is-success', label: 'fixed', title: this.$t('media.darkmodeFixed', { class: d.class }) };
       }
@@ -433,11 +442,14 @@ export default Vue.extend({
         params.set('file', this.form.files[i]);
         this.$api.uploadMedia(params, tags).then((m) => {
           // Fork (dark-mode readiness) -- DARK-MODE-SPEC D4. The uploader repairs what it
-          // safely can; the two classes it deliberately does NOT touch surface here, once,
-          // non-blocking. The tile badge (D3) is the durable record.
+          // safely can; what it deliberately does NOT touch surfaces here, once,
+          // non-blocking: a warning, or a note (WHITE-BACKGROUND-SPEC D2 -- an opaque white
+          // image kept as uploaded). The tile badge (D3) is the durable record.
           const v = this.darkVerdict(m);
           if (v && v.kind === 'is-warning') {
             this.$utils.toast(`${m.filename}: ${v.title}`, 'is-warning', 5000);
+          } else if (v && v.note) {
+            this.$utils.toast(`${m.filename}: ${v.title}`, 'is-info', 5000);
           }
           this.onUploaded();
         }, () => {
