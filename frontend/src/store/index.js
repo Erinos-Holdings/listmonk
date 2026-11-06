@@ -110,6 +110,16 @@ export default new Vuex.Store({
         return rows;
       }).catch(() => commit('setBrandHealthLoaded'));
     },
+
+    // Fork (hourly health, HOURLY-HEALTH-SPEC D4; stage 4 F1) -- the quiet twin for background
+    // re-reads (the navbar sync indicator): commits on success, swallows a failure (the stored rows
+    // stay as they were) and resolves to the rows or null.
+    loadBrandHealthQuiet({ commit }) {
+      return Vue.prototype.$api.getBrandsHealthQuiet().then((rows) => {
+        commit('setBrandHealth', rows);
+        return rows;
+      }).catch(() => null);
+    },
   },
 
   getters: {

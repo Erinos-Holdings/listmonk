@@ -233,6 +233,14 @@ export const getBrandsHealth = async () => http.get(
   { loading: models.brands, camelCase: false },
 );
 
+// Fork (hourly health, integrations HOURLY-HEALTH-SPEC D4; stage 4 F1) -- the same read, quiet: no
+// loading flag and no toast, for the navbar sync indicator's hourly re-read and recompute poll (the
+// getSystemHealthQuiet precedent) -- a background read must not flicker the Brands page or toast.
+export const getBrandsHealthQuiet = async () => http.get(
+  '/api/brands/health',
+  { camelCase: false, disableToast: true },
+);
+
 export const getBrandHealthHistory = async (brand, days) => http.get(
   `/api/brands/health/${encodeURIComponent(brand)}`,
   { params: { days }, camelCase: false },

@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import {
   CIRCLE_FIELDS, DEFAULT_STATE, MISSING, SCORE_PARTS, SECTIONS, SORT_FIELDS, SERIES_DAYS, STORAGE_KEY,
   boolCell, broadcastTip, cell, cellBadges, cellLink, circlesOf, circleWords, clickSort, columnMeta, defaultOrder,
-  computedAtText, headerLayout, latestAsOf, loadState, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
+  computedAtText, headerLayout, loadState, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
   GUIDE_COLUMN_REM, GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, pageWidth, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
   REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName,
@@ -529,18 +529,6 @@ test('I6: a ZMA row never renders a red broadcast or welcome cell; registry fact
   assert.ok(cell(zma, 'welcome:0', t).circles.length >= 1);
   assert.deepEqual(cell(zma, 'postPurchase:0', t).circles, [{ color: 'amber', n: 1 }]);
   assert.equal(cell(zma, 'sunset', t).text, '✓');
-});
-
-test('D1: the note date is the newest asOf among the rendered rows; none carries one -> null', () => {
-  const rows = shapeRows([
-    { brand: 'a', usage: usage({ asOf: '2026-10-23' }) },
-    { brand: 'b', usage: usage({ asOf: '2026-10-24' }) },
-    { brand: 'c', usage: usage({ asOf: 'garbage' }) },
-    { brand: 'd' },
-  ]);
-  assert.equal(latestAsOf(rows), '2026-10-24');
-  assert.equal(latestAsOf(shapeRows([{ brand: 'd' }, { brand: 'e', usage: usage() }])), null);
-  assert.equal(latestAsOf([]), null);
 });
 
 test('HOURLY-HEALTH D5 / I5: the note time is the newest stored computedAt, in Mountain time (date + time)', () => {

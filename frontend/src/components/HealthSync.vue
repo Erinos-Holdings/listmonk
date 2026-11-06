@@ -69,16 +69,19 @@ export default Vue.extend({
   },
 
   methods: {
+    // page.refresh: the loud read (the user asked for it).
     reload() {
       this.now = Date.now();
       return this.$store.dispatch('loadBrandHealth');
     },
 
-    // One setTimeout chain: REREAD_DELAY_MS after each top of the hour, re-read the documents.
+    // One setTimeout chain: REREAD_DELAY_MS after each top of the hour, re-read the documents
+    // quietly (stage 4 F1: no loading flag, no toast).
     schedule() {
       this.timer = setTimeout(() => {
         this.timer = null;
-        this.reload();
+        this.now = Date.now();
+        this.$store.dispatch('loadBrandHealthQuiet');
         this.schedule();
       }, rereadDelay(Date.now()));
     },
@@ -100,7 +103,7 @@ export default Vue.extend({
     // done once the newest computedAt moves past the click's baseline.
     this.refresher = createRefresh({
       start: () => this.$api.refreshSystemHealth(),
-      read: () => this.$store.dispatch('loadBrandHealth').then((rows) => ({ computedAt: newestComputedAt(rows) })),
+      read: () => this.$store.dispatch('loadBrandHealthQuiet').then((rows) => ({ computedAt: newestComputedAt(rows) })),
       onState: (state) => {
         this.refreshState = state;
       },

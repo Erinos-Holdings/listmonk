@@ -1011,19 +1011,6 @@ export function cell(row, field, t = (k) => k) {
   }
 }
 
-// D1: the pane note's date -- the newest stored `asOf` (YYYY-MM-DD) among the rendered rows'
-// usage objects, or null when no row carries one (the Vue then shows the dateless note).
-export function latestAsOf(rows) {
-  let best = null;
-  (Array.isArray(rows) ? rows : []).forEach((r) => {
-    const d = r && r.usage && r.usage.asOf;
-    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && (best === null || d > best)) {
-      best = d;
-    }
-  });
-  return best;
-}
-
 // HOURLY-HEALTH-SPEC D5 (replaces V2 D5's fixed run time): the pane note's time is the newest
 // stored `computedAt` among the rendered rows -- when THIS document was computed -- formatted in
 // Mountain time (date + time) through mountainTime.mjs; null when no row carries one (the Vue
