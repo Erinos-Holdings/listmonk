@@ -275,8 +275,8 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, circleName, clickSort, columnMeta, guideColumnsFit, headerLayout, latestAsOf, linePad, pageWidth,
-  loadState, mountainRunTime, saveState, seriesGuide, shapeRows, sortRows,
+  GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, circleName, clickSort, columnMeta, computedAtText, guideColumnsFit, headerLayout, linePad, pageWidth,
+  loadState, saveState, seriesGuide, shapeRows, sortRows,
   LOYALTY_PLACEHOLDER, brandListIds, loyaltyLayout, loyaltyMonths, loyaltyShift, splitParent,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PARENT_BRAND } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -388,9 +388,9 @@ export default Vue.extend({
       return this.labelShiftPx ? { transform: `translateX(${this.labelShiftPx}px)` } : null;
     },
 
-    // V2 D5 -- the newest stored asOf's run time in Mountain time, null without a day.
+    // HOURLY-HEALTH-SPEC D5 -- the newest stored computedAt in Mountain time, null without one.
     runTime() {
-      return mountainRunTime(latestAsOf(this.tableRows));
+      return computedAtText(this.tableRows);
     },
 
     // The body columns with the header's flags (band, section start, the in-section rule).

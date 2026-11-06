@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import {
   CIRCLE_FIELDS, DEFAULT_STATE, MISSING, SCORE_PARTS, SECTIONS, SORT_FIELDS, SERIES_DAYS, STORAGE_KEY,
   boolCell, broadcastTip, cell, cellBadges, cellLink, circlesOf, circleWords, clickSort, columnMeta, defaultOrder,
-  headerLayout, latestAsOf, loadState, mountainRunTime, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
+  computedAtText, headerLayout, latestAsOf, loadState, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
   GUIDE_COLUMN_REM, GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, pageWidth, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
   REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName,
@@ -543,17 +543,26 @@ test('D1: the note date is the newest asOf among the rendered rows; none carries
   assert.equal(latestAsOf([]), null);
 });
 
-test('V2 D5 / I4: the run time in Mountain time via Intl America/Denver -- 8:30 MST in winter, 9:30 MDT in summer', () => {
-  const winter = mountainRunTime('2026-01-15');
-  const summer = mountainRunTime('2026-07-15');
-  assert.match(winter, /Jan 15, 2026/);
-  assert.match(winter, /8:30\s?AM/u);
-  assert.match(winter, /MST/);
-  assert.match(summer, /Jul 15, 2026/);
-  assert.match(summer, /9:30\s?AM/u);
-  assert.match(summer, /MDT/);
-  assert.equal(mountainRunTime('garbage'), null);
-  assert.equal(mountainRunTime(null), null);
+test('HOURLY-HEALTH D5 / I5: the note time is the newest stored computedAt, in Mountain time (date + time)', () => {
+  const rows = shapeRows([
+    { brand: 'a', computedAt: '2026-11-06T20:00:21Z', usage: usage() },
+    { brand: 'b', computedAt: '2026-11-06T21:00:19Z', usage: usage() },
+    { brand: 'c', computedAt: 'garbage', usage: usage() },
+    { brand: 'd' },
+  ]);
+  assert.equal(rows[1].computedAt, '2026-11-06T21:00:19Z');
+  // 21:00Z on Nov 6 is 2:00 PM MST; 15:00Z on Jul 15 is 9:00 AM MDT -- DST-correct, no zone text.
+  assert.equal(computedAtText(rows), 'Nov 6, 2026, 2:00 PM');
+  assert.equal(computedAtText(shapeRows([{ brand: 'x', computedAt: '2026-07-15T15:00:00Z' }])), 'Jul 15, 2026, 9:00 AM');
+  assert.equal(computedAtText(shapeRows([{ brand: 'd' }, { brand: 'e', usage: usage() }])), null);
+  assert.equal(computedAtText([]), null);
+});
+
+test('HOURLY-HEALTH I5: the fixed run-time literal is gone from the fork frontend', () => {
+  const src = readFileSync(new URL('./brandUsage.mjs', import.meta.url), 'utf8');
+  // Assembled so that the I5 grep over frontend/src for the old constant's name stays empty.
+  assert.ok(!src.includes(['RUN', 'TIME', 'UTC'].join('_')));
+  assert.ok(!src.includes(['mountain', 'RunTime'].join('')));
 });
 
 // POLISH3 D5 (stage 2 F7) narrows this: the Skipped leaves render from the row's live `skipped`,

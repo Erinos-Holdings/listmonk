@@ -1,7 +1,8 @@
 <template>
   <!-- Fork (campaign matrix, integrations listmonk/CAMPAIGN-MATRIX-SPEC D3-D10). The Matrix pane of
-       Campaigns > Analytics: one row per campaign in scope with activity in the Brand Matrix's window
-       (the 60 Mountain days ending yesterday), in the Brand Matrix's grouped-header style. The server
+       Campaigns > Analytics: one row per campaign in scope with activity in the window (the Mountain
+       days from 60 days back through TODAY -- HOURLY-HEALTH-SPEC D1; the Brand Matrix still ends
+       yesterday), in the Brand Matrix's grouped-header style, with a Status column (D2). The server
        (GET /api/analytics/campaigns/matrix) scopes and counts; every rate, header, sort and
        missing-value rule is campaignMatrix.mjs. The brand selector reaches the server as list_id;
        the navbar launch filter narrows here by each row's brand. Fork (matrix polish, integrations
@@ -82,6 +83,10 @@
             <td :class="bmTd('date')">
               <span :title="dateTip(row)">{{ dateText(row) }}</span>
             </td>
+            <!-- HOURLY-HEALTH-SPEC D2: the Campaigns page's status tag; empty on the totals row. -->
+            <td :class="bmTd('status')" :data-cy="`cm-status-${row.totals ? 'totals' : row.id}`">
+              <b-tag v-if="statusOf(row)" :class="statusOf(row).status">{{ $t(statusOf(row).label) }}</b-tag>
+            </td>
             <td class="has-text-right" :class="bmTd('sent')">{{ cell(row, 'sent') }}</td>
             <td v-for="c in midCols" :key="c.field" class="has-text-right" :class="[bmTd(c.field), c.group]"
               :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
@@ -111,9 +116,10 @@ import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   CONVERSION_FIELDS, cellText, clickSort, conversionValue, dateCell, filterByName, gpClass, gpTip, groupHeaders,
-  loadState, midColumns, nameCell, saveState, shapeRows, showBrandColumn, tableRows,
+  leftColumns, loadState, midColumns, nameCell, saveState, shapeRows, showBrandColumn, statusCell, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
-import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
+import { conversionTooltip, normalizeMeta, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
+import { mountainDay } from '../mountainTime.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -159,14 +165,9 @@ export default Vue.extend({
       return { slug: s.slug, label: brandLabelOf(s.slug, this.brandRows) };
     },
 
+    // HOURLY-HEALTH-SPEC D2: Campaign, Brand, Date, Status, Sent (campaignMatrix.mjs::leftColumns).
     leftCols() {
-      const cols = [
-        { field: 'name', label: 'analytics.matrix.campaign' },
-        { field: 'brand', label: 'dashboard.matrix.brand' },
-        { field: 'date', label: 'analytics.matrix.date' },
-        { field: 'sent', label: 'dashboard.matrix.sent' },
-      ];
-      return this.showBrand ? cols : cols.filter((c) => c.field !== 'brand');
+      return leftColumns(this.showBrand);
     },
 
     // D5 / MATRIX-POLISH-SPEC D3-D5: Views, Clicks, Shop Link Attribution (Founder, Self, Creator,
@@ -192,12 +193,15 @@ export default Vue.extend({
   },
 
   methods: {
-    // The Conversions group names its cut-off date: the matrix counts orders through yesterday,
-    // so it trails the Campaign pane's card, whose date range can include today.
+    // The Conversions group names its cut-off date. HOURLY-HEALTH-SPEC D1: the window now ends
+    // today, so the header names the conversions document's own cut-off (its asOf, as a Mountain
+    // day) rather than the window's end; no document -> the plain title.
     groupLabel(g) {
       if (!g.label) return '';
-      if (g.label === 'analytics.conversions.title' && this.period.to) {
-        return this.$t('analytics.matrix.conversionsThrough', { to: this.period.to });
+      if (g.label === 'analytics.conversions.title') {
+        const meta = normalizeMeta(this.conversions);
+        const to = meta ? mountainDay(meta.asOf) : '';
+        return to ? this.$t('analytics.matrix.conversionsThrough', { to }) : this.$t(g.label);
       }
       return this.$t(g.label);
     },
@@ -295,6 +299,10 @@ export default Vue.extend({
 
     dateText(row) {
       return dateCell(row).text;
+    },
+
+    statusOf(row) {
+      return statusCell(row);
     },
 
     dateTip(row) {

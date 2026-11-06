@@ -9,7 +9,8 @@ package main
 // picker's own answer for that user); list_id only narrows; analytics-only users see started
 // campaigns only; GP is null for a campaigns:get_analytics-only caller and present with brands:get.
 // I2: broadcasts in/out by started_at (and sent > 0), journeys by campaign_send_hours with Sent the
-// window sum, the kind filter.
+// window sum, the kind filter. HOURLY-HEALTH-SPEC D1/I1: the window ends TODAY (Mountain) -- a
+// broadcast started today and a journey's today sends are in; tomorrow (at or after t1) is out.
 // I3: Views = distinct subscribers; the journey first-view-in-window rule; Clicks likewise.
 // I4: hard / soft / complaint bounces by type; conversions NULL when not covered, window-limited for
 // journeys.
@@ -150,8 +151,9 @@ func TestCampaignMatrixDB(t *testing.T) {
 	}
 	hours(jIn, 5, dayAt(70))  // before the window
 	hours(jIn, 7, dayAt(30))  // in
-	hours(jIn, 4, dayAt(3))   // in, the last sent
-	hours(jIn, 9, dayAt(0))   // Denver-today (out)
+	hours(jIn, 4, dayAt(3))   // in
+	hours(jIn, 9, dayAt(0))   // Denver-today: in (HOURLY-HEALTH-SPEC D1), the last sent
+	hours(jIn, 6, dayAt(-1))  // Denver-tomorrow (at or after t1): out
 	hours(jOut, 5, dayAt(70)) // only before the window: no row
 	hours(jNull, 2, dayAt(4))
 	hours(bIn, 100, dayAt(10)) // a broadcast's hours never matter: its Sent is campaigns.sent
@@ -165,7 +167,7 @@ func TestCampaignMatrixDB(t *testing.T) {
 			c, sub, client, ts(at))
 	}
 	// bIn: s1 three times from one client and once from another, s2 once, a NULL subscriber, an
-	// Unknown-client view, and one Denver-today view (at or after t1: out).
+	// Unknown-client view, and one Denver-tomorrow view (at or after t1: out).
 	for i := 0; i < 3; i++ {
 		view(bIn, s1, "outlook-windows", dayAt(9))
 	}
@@ -173,12 +175,12 @@ func TestCampaignMatrixDB(t *testing.T) {
 	view(bIn, s2, "apple-mail", dayAt(8))
 	view(bIn, s2, "", dayAt(7))
 	view(bIn, 0, "gmail-proxy", dayAt(8))
-	view(bIn, s3, "outlook-windows", dayAt(0))
-	// jIn: s1's first view is before the window (never recounted), s2's is in it, s3's is today.
+	view(bIn, s3, "outlook-windows", dayAt(-1))
+	// jIn: s1's first view is before the window (never recounted), s2's is in it, s3's is tomorrow.
 	view(jIn, s1, "automation", dayAt(70))
 	view(jIn, s1, "automation", dayAt(5))
 	view(jIn, s2, "yahoo", dayAt(5))
-	view(jIn, s3, "yahoo", dayAt(0))
+	view(jIn, s3, "yahoo", dayAt(-1))
 
 	var link, shopLink int
 	if err := h.db.Get(&link, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), 'https://cm.test') RETURNING id`); err != nil {
@@ -202,7 +204,7 @@ func TestCampaignMatrixDB(t *testing.T) {
 	clickOn(shopLink, bIn, s1, dayAt(9)) // frozen founder
 	clickOn(shopLink, bIn, s1, dayAt(8))
 	clickOn(shopLink, bIn, s2, dayAt(8))  // no frozen row: self, held now
-	clickOn(shopLink, bIn, s3, dayAt(0))  // today: out
+	clickOn(shopLink, bIn, s3, dayAt(-1)) // tomorrow: out
 	clickOn(shopLink, jIn, s1, dayAt(70)) // s1's first click is before the window: never counted (TRUE)
 	clickOn(shopLink, jIn, s1, dayAt(5))
 	clickOn(link, jIn, s2, dayAt(5))
@@ -216,7 +218,7 @@ func TestCampaignMatrixDB(t *testing.T) {
 	bounce(bIn, "hard", dayAt(9))
 	bounce(bIn, "soft", dayAt(9))
 	bounce(bIn, "complaint", dayAt(8))
-	bounce(bIn, "hard", dayAt(0)) // today: out
+	bounce(bIn, "hard", dayAt(-1)) // tomorrow: out
 	bounce(jIn, "hard", dayAt(70))
 	bounce(jIn, "soft", dayAt(5))
 
@@ -238,7 +240,7 @@ func TestCampaignMatrixDB(t *testing.T) {
 	conv("tracked", bIn, dayAt(9), 10)
 	conv("tracked", bIn, dayAt(8), 5.5)
 	conv("matched", bIn, dayAt(8), 7)
-	conv("tracked", bIn, dayAt(0), 99)  // today: out
+	conv("tracked", bIn, dayAt(-1), 99) // tomorrow: out
 	conv("tracked", jIn, dayAt(70), 50) // before the window: a journey counts only in-window orders
 	conv("tracked", jIn, dayAt(5), 20)
 	conv("matched", jIn, dayAt(5), 20) // not covered by the latest doc: null, not 20
@@ -297,10 +299,10 @@ func TestCampaignMatrixDB(t *testing.T) {
 	alphaGP := baUser([]string{auth.PermCampaignsGetAnalytics, "brands:get"}, listA)           // + brands:get
 	alphaGet := baUser([]string{auth.PermCampaignsGet, auth.PermCampaignsGetAnalytics}, listA) // not analytics-only
 
-	allIn := sortedInts(bIn, bB, bAB, bLow, jIn, jNull)
-	alphaIn := sortedInts(bIn, bAB, jIn) // listA's campaigns, started only
+	// HOURLY-HEALTH-SPEC D1: the window ends today, so a broadcast started today is a row.
+	allIn := sortedInts(bIn, bToday, bB, bAB, bLow, jIn, jNull)
+	alphaIn := sortedInts(bIn, bToday, bAB, jIn) // listA's campaigns, started only
 	_ = bOut
-	_ = bToday
 	_ = bZero
 
 	str := func(s string) *string { return &s }
@@ -321,12 +323,12 @@ func TestCampaignMatrixDB(t *testing.T) {
 		}{
 			{"admin, all kinds", admin, url.Values{}, allIn},
 			{"admin, kind=all", admin, url.Values{"kind": {"all"}}, allIn},
-			{"admin, broadcasts", admin, url.Values{"kind": {"broadcasts"}}, sortedInts(bIn, bB, bAB, bLow)},
+			{"admin, broadcasts", admin, url.Values{"kind": {"broadcasts"}}, sortedInts(bIn, bToday, bB, bAB, bLow)},
 			{"admin, automations", admin, url.Values{"kind": {"automations"}}, sortedInts(jIn, jNull)},
 			{"admin, list_id = bravo", admin, url.Values{"list_id": {fmt.Sprint(listB)}}, sortedInts(bB, bAB)},
 			{"alpha analytics-only", alphaOnly, url.Values{}, alphaIn},
 			{"alpha analytics-only, list_id = bravo narrows, never widens", alphaOnly, url.Values{"list_id": {fmt.Sprint(listB)}}, sortedInts(bAB)},
-			{"alpha campaigns:get sees the unstarted journey", alphaGet, url.Values{}, sortedInts(bIn, bAB, jIn, jNull)},
+			{"alpha campaigns:get sees the unstarted journey", alphaGet, url.Values{}, sortedInts(bIn, bToday, bAB, jIn, jNull)},
 		}
 		for _, tc := range cases {
 			code, got, body := matrix(tc.u, tc.q)
@@ -399,7 +401,7 @@ func TestCampaignMatrixDB(t *testing.T) {
 		if !tracking {
 			wantViews, wantClicks, wantCreator = 2, 3, 1
 		}
-		wantJ := cmRow{ID: jIn, Evergreen: true, LastSent: str(day(3)), Brand: str("alpha"), Sent: ip(11),
+		wantJ := cmRow{ID: jIn, Evergreen: true, LastSent: str(day(0)), Brand: str("alpha"), Sent: ip(20),
 			Views: wantViews, Clicks: wantClicks, SoftBounces: 1,
 			ShopFounder: ip(0), ShopSelf: ip(0), ShopCreator: ip(wantCreator), ShopCorp: ip(1),
 			Tracked: &cmMeasure{1, 20}}

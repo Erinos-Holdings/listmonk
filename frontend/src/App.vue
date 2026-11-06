@@ -26,6 +26,10 @@
         <navigation v-if="isMobile" :is-mobile="isMobile" :active-item="activeItem" :active-group="activeGroup"
           @toggleGroup="toggleGroup" @doLogout="doLogout" />
 
+        <!-- Fork (hourly health, integrations HOURLY-HEALTH-SPEC D4) -- the brand-health sync
+             indicator, left of Refresh, for a user who can read brand health. -->
+        <health-sync v-if="$can('brands:get')" />
+
         <b-navbar-item tag="a" href="#" @click.prevent="emitPageRefresh" data-cy="btn-refresh"
           :aria-label="$t('globals.buttons.refresh')">
           <b-tooltip :label="$t('globals.buttons.refresh')" type="is-dark" position="is-bottom">
@@ -136,6 +140,7 @@ import stepUp, { stepUpError } from './stepUp';
 import Navigation from './components/Navigation.vue';
 import BrandSelector from './components/BrandSelector.vue';
 import LaunchFilter from './components/LaunchFilter.vue';
+import HealthSync from './components/HealthSync.vue';
 
 export default Vue.extend({
   name: 'App',
@@ -144,6 +149,7 @@ export default Vue.extend({
     Navigation,
     BrandSelector,
     LaunchFilter,
+    HealthSync,
   },
 
   data() {

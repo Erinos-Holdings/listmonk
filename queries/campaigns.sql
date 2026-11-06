@@ -718,8 +718,10 @@ SELECT JSON_BUILD_OBJECT(
 --   $5 evergreen (NULL = every kind; the Campaigns page's kind pill, D4); $6 compute GP (the caller
 --      holds the brands get permission, D7; otherwise the GP fields are NULL). No comment line here
 --      may carry a colon (goyesql would read it as a tag).
---   window = the Brand Matrix's, the 60 America/Denver calendar days ending yesterday, [t0, t1). The
---     zone is the ONE literal in the zone CTE below and MUST equal get-dashboard-brand-matrix's.
+--   window = the America/Denver calendar days from 60 days back through TODAY, [t0, t1) with t1 the
+--     next Mountain midnight (integrations HOURLY-HEALTH-SPEC D1 -- a broadcast started today is a
+--     row; the Brand Matrix still ends yesterday). The zone is the ONE literal in the zone CTE below
+--     and MUST equal get-dashboard-brand-matrix's.
 --   a broadcast (NOT evergreen) is in when started_at is in [t0, t1) and sent > 0; its numbers are
 --     everything recorded for it before t1 (lo = -infinity). Its Sent is campaigns.sent.
 --   a journey (evergreen) is in when a campaign_send_hours row has its hour in [t0, t1); its Sent is
@@ -749,7 +751,7 @@ WITH zone AS (
     SELECT 'America/Denver'::TEXT AS tz
 ),
 win AS (
-    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE - 1 AS d1 FROM zone
+    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE AS d1 FROM zone
 ),
 bounds AS (
     SELECT tz, d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win

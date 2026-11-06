@@ -25,7 +25,38 @@ export const COUNT_FIELDS = Object.freeze(['views', 'clicks', ...SHOP_FIELDS, 'h
 // D9: Tracked / Matched -- sales in %/$ mode, orders in # mode; null = not covered.
 export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
 
-export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'sent', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate']);
+export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'sent', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate']);
+
+// HOURLY-HEALTH-SPEC D2: the Status column's ascending order -- still moving first (running,
+// paused, scheduled, draft, finished, cancelled); an unknown status ranks after every known one.
+export const STATUS_ORDER = Object.freeze(['running', 'paused', 'scheduled', 'draft', 'finished', 'cancelled']);
+
+export function statusRank(status) {
+  const i = STATUS_ORDER.indexOf(status);
+  return i === -1 ? STATUS_ORDER.length : i;
+}
+
+// The left columns, in order: Campaign, Brand (unless one brand is selected, MATRIX-POLISH D6),
+// Date, Status (HOURLY-HEALTH D2), Sent.
+export function leftColumns(showBrand = true) {
+  const cols = [
+    { field: 'name', label: 'analytics.matrix.campaign' },
+    { field: 'brand', label: 'dashboard.matrix.brand' },
+    { field: 'date', label: 'analytics.matrix.date' },
+    { field: 'status', label: 'analytics.matrix.status' },
+    { field: 'sent', label: 'dashboard.matrix.sent' },
+  ];
+  return showBrand ? cols : cols.filter((c) => c.field !== 'brand');
+}
+
+// The Status cell: the campaign's status as the Campaigns page's tag ({ status, label } with the
+// campaigns.status.<status> key); the totals row's cell is empty (null).
+export function statusCell(row) {
+  if (!row || row.totals || !row.status) {
+    return null;
+  }
+  return { status: row.status, label: `campaigns.status.${row.status}` };
+}
 
 export const MODES = Object.freeze(['pct', 'num']);
 
@@ -206,6 +237,7 @@ export function shapeRow(r, brandLabel = (s) => s) {
   const out = {
     id: r.id,
     name: str(r.name),
+    status: str(r.status),
     evergreen: r.evergreen === true,
     brand,
     label: brand ? brandLabel(brand) : '',
@@ -258,6 +290,7 @@ export function totalsRow(rows, label = 'Total') {
   const out = {
     id: null,
     name: label,
+    status: '',
     evergreen: false,
     brand: '',
     label: '',
@@ -403,9 +436,10 @@ export function dateCell(row) {
   return { text: row.date || MISSING, tip: null };
 }
 
-// The first-click direction: text columns ascending, every other descending.
+// The first-click direction: text columns and Status (still moving first) ascending, every other
+// descending.
 export function defaultOrder(field) {
-  return field === 'name' || field === 'brand' ? 'asc' : 'desc';
+  return field === 'name' || field === 'brand' || field === 'status' ? 'asc' : 'desc';
 }
 
 // clickSort: a NEW column takes its default direction, the current column toggles, an unknown field
@@ -448,6 +482,16 @@ export function sortRows(rows, sort = DEFAULT_STATE.sort, mode = DEFAULT_STATE.m
         return missingLast(va, vb) || tie(a, b);
       }
       return (cmpText(va, vb, locale) * dir) || tie(a, b);
+    }
+    if (field === 'status') {
+      // HOURLY-HEALTH D2: by the fixed rank; an unknown status ranks last in BOTH orders.
+      const ra = statusRank(a.status);
+      const rb = statusRank(b.status);
+      const unknown = STATUS_ORDER.length;
+      if (ra === unknown || rb === unknown) {
+        return missingLast(ra === unknown ? null : ra, rb === unknown ? null : rb) || tie(a, b);
+      }
+      return ((ra - rb) * dir) || tie(a, b);
     }
     if (field === 'date') {
       if (a.evergreen !== b.evergreen) {

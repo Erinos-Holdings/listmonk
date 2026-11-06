@@ -9,9 +9,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  COUNT_FIELDS, DEFAULT_STATE, MISSING, NAME_MAX, SHOP_FIELDS, STORAGE_KEY, cellText, clickSort, conversionValue,
-  dateCell, displayValue, filterByLaunch, filterByName, gpClass, gpLevel, gpTip, groupHeaders, loadState, midColumns,
-  nameCell, saveState, shapeRow, shapeRows, showBrandColumn, sortRows, stripBrand, tableRows, totalsRow,
+  COUNT_FIELDS, DEFAULT_STATE, MISSING, NAME_MAX, SHOP_FIELDS, STATUS_ORDER, STORAGE_KEY, cellText, clickSort,
+  conversionValue, dateCell, displayValue, filterByLaunch, filterByName, gpClass, gpLevel, gpTip, groupHeaders,
+  leftColumns, loadState, midColumns, nameCell, normalizeState, saveState, shapeRow, shapeRows, showBrandColumn,
+  sortRows, statusCell, statusRank, stripBrand, tableRows, totalsRow,
 } from './campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { scopedCell } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
@@ -346,4 +347,46 @@ test('state: the session state round-trips and anything unreadable is the defaul
   const throwing = { getItem: () => { throw new Error('x'); }, setItem: () => { throw new Error('x'); } };
   assert.deepEqual(loadState(throwing).mode, 'pct');
   assert.equal(saveState(throwing, {}), false);
+});
+
+// HOURLY-HEALTH-SPEC I2 -- the Status column.
+test('HOURLY-HEALTH I2: Status sorts running, paused, scheduled, draft, finished, cancelled, unknown last', () => {
+  assert.deepEqual([...STATUS_ORDER], ['running', 'paused', 'scheduled', 'draft', 'finished', 'cancelled']);
+  assert.equal(statusRank('running'), 0);
+  assert.equal(statusRank('cancelled'), 5);
+  assert.equal(statusRank('weird'), 6);
+  const statuses = ['finished', 'weird', 'draft', 'running', 'cancelled', 'scheduled', 'paused', ''];
+  const rows = statuses.map((s, i) => shapeRow({
+    ...api[0], id: i + 1, name: `C${i}`, status: s,
+  }));
+  const asc = sortRows(rows, { field: 'status', order: 'asc' }).map((r) => r.status);
+  assert.deepEqual(asc.slice(0, 6), ['running', 'paused', 'scheduled', 'draft', 'finished', 'cancelled']);
+  assert.deepEqual([...asc.slice(6)].sort(), ['', 'weird']);
+  const desc = sortRows(rows, { field: 'status', order: 'desc' }).map((r) => r.status);
+  assert.deepEqual(desc.slice(0, 6), ['cancelled', 'finished', 'draft', 'scheduled', 'paused', 'running']);
+  assert.deepEqual([...desc.slice(6)].sort(), ['', 'weird']);
+  // First click is ascending (still moving first).
+  assert.deepEqual(clickSort({ field: 'date', order: 'desc' }, 'status'), { field: 'status', order: 'asc' });
+});
+
+test('HOURLY-HEALTH I2: the Status column after Date, before Sent; the header and cell texts; the totals cell empty', () => {
+  assert.deepEqual(leftColumns(true).map((c) => c.field), ['name', 'brand', 'date', 'status', 'sent']);
+  assert.deepEqual(leftColumns(false).map((c) => c.field), ['name', 'date', 'status', 'sent']);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en['analytics.matrix.status'], 'Status');
+  leftColumns(true).forEach((c) => assert.ok(en[c.label], c.label));
+  const row = shapeRow({ ...api[0], status: 'running' });
+  assert.equal(row.status, 'running');
+  assert.deepEqual(statusCell(row), { status: 'running', label: 'campaigns.status.running' });
+  STATUS_ORDER.forEach((s) => assert.ok(en[`campaigns.status.${s}`], s));
+  assert.equal(statusCell(totalsRow([row, row])), null);
+  assert.equal(statusCell(shapeRow({ ...api[0] })), null);
+});
+
+test('HOURLY-HEALTH I2: status round-trips normalizeState', () => {
+  const s = {
+    sort: { field: 'status', order: 'asc' }, mode: 'num', kind: 'broadcasts',
+  };
+  assert.deepEqual(normalizeState(s), s);
+  assert.deepEqual(normalizeState(JSON.parse(JSON.stringify(normalizeState(s)))), s);
 });

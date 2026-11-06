@@ -19,6 +19,8 @@ import {
   PARENT_BRAND, brandLabelOf, matchesLaunch, storeLists,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { healthDocs } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
+import { newestComputedAt } from './healthSync.mjs'; // eslint-disable-line import/extensions
+import { formatMountain } from './mountainTime.mjs'; // eslint-disable-line import/extensions
 import {
   POST_PURCHASE_STEP_DAYS, REENGAGEMENT_DAYS, SERIES_POST_PURCHASE, SERIES_REENGAGEMENT, SERIES_WELCOME, WELCOME_STEP_DAYS,
   seriesStepKey,
@@ -459,6 +461,7 @@ export function shapeRow(r, brands, lists = []) {
     brand: r.brand,
     label: brandLabelOf(r.brand, brands),
     usage,
+    computedAt: typeof (r && r.computedAt) === 'string' ? r.computedAt : null,
     zma: !!usage && usage.channel === 'zma',
     listIds: brandListIds(lists, r.brand),
     skipped: isObj(r && r.skipped) ? r.skipped : null,
@@ -1021,35 +1024,13 @@ export function latestAsOf(rows) {
   return best;
 }
 
-// V2 D5/I4: the run's time as Mountain time, DST-correct. RUN_TIME_UTC mirrors the BrandHealth
-// Lambda's daily schedule (integrations cdk/ BrandHealth rule, 15:30 UTC -- a comment there names
-// this constant; no test spans the repos). Formatted through Intl with the America/Denver zone,
-// never a hardcoded offset (8:30 AM MST in winter, 9:30 AM MDT in summer). null when asOf is not
-// a YYYY-MM-DD day or Intl refuses.
-export const RUN_TIME_UTC = '15:30:00Z';
-export const MOUNTAIN_ZONE = 'America/Denver';
-
-export function mountainRunTime(asOf, locale = 'en-US') {
-  if (typeof asOf !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
-    return null;
-  }
-  const d = new Date(`${asOf}T${RUN_TIME_UTC}`);
-  if (Number.isNaN(d.getTime())) {
-    return null;
-  }
-  try {
-    return new Intl.DateTimeFormat(locale, {
-      timeZone: MOUNTAIN_ZONE,
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    }).format(d);
-  } catch {
-    return null;
-  }
+// HOURLY-HEALTH-SPEC D5 (replaces V2 D5's fixed run time): the pane note's time is the newest
+// stored `computedAt` among the rendered rows -- when THIS document was computed -- formatted in
+// Mountain time (date + time) through mountainTime.mjs; null when no row carries one (the Vue
+// then shows the dateless note). The schedule literal lives only in healthSync.mjs.
+export function computedAtText(rows) {
+  const at = newestComputedAt(rows);
+  return (at && formatMountain(at)) || null;
 }
 
 // The default direction of a column on its first click: Brand ascending; Score and the date
