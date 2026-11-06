@@ -1062,6 +1062,17 @@ section.dashboard (which reopens after them). */
       border-top: 2px solid $grey-lighter;
     }
   }
+  /* 2026-11-06: the Campaign Matrix's name column shows the name (brand stripped under one brand,
+  60 characters) at a smaller size so more of it fits; the name filter input takes the width the
+  Campaigns page's search has. */
+  .campaign-matrix {
+    td.cm-name {
+      font-size: 0.875rem;
+    }
+    .cm-name-filter {
+      width: 20rem;
+    }
+  }
 
   /* Fork (brand usage, integrations BRAND-USAGE-SPEC D7; BRAND-USAGE-V2-SPEC D2/D3) -- the Brand
   Usage pane. A ZMA brand's row is dimmed (its sends live in ZMA, so it is not scored here). The

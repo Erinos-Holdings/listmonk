@@ -174,8 +174,11 @@
               data-cy="lang-chip" :title="langChipTitle(props.row)">
               {{ props.row.attribs && props.row.attribs.lang ? langChip(props.row.attribs.lang) : $t('campaigns.langAll') }}
             </b-tag>
-            <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
-              {{ props.row.name }}
+            <!-- 2026-11-06: under a single-brand selection the brand's name is stripped from the shown
+                 text (campaignMatrix.mjs::stripBrand, as the Campaign Matrix does); the stored name is
+                 the hover and the copy. -->
+            <router-link :to="{ name: 'campaign', params: { id: props.row.id } }" :title="props.row.name">
+              {{ shownName(props.row.name) }}
               <copy-text :text="props.row.name" hide-text />
             </router-link>
           </p>
@@ -413,7 +416,8 @@ import { isSendPlus, sendLangCode } from '../langs';
 import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
-import { filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { brandLabelOf, filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { stripBrand } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
 import {
   LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KIND_PREF, afterBrandChange, campaignsRouteQuery, canSelectAll,
@@ -510,6 +514,10 @@ export default Vue.extend({
   },
 
   methods: {
+    shownName(name) {
+      return this.stripBrandOf ? stripBrand(name, this.stripBrandOf) : name;
+    },
+
     // Fork (langs.js, the "+" convention). The chip names a send audience: EN+.
     langChip(lang) {
       return sendLangCode(lang);
@@ -908,6 +916,15 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['campaigns', 'lists', 'loading', 'serverConfig']),
+
+    // The brand whose name shownName strips: the navbar's single-brand selection, else none.
+    stripBrandOf() {
+      const sel = this.brandSelection;
+      if (!sel || sel.kind !== 'brand') {
+        return null;
+      }
+      return { slug: sel.slug, label: brandLabelOf(sel.slug, this.brandRows) };
+    },
 
     // Fork (evergreen) -- New from the Automations scope pre-enables the evergreen
     // toggle on the create form (Campaign.vue reads the query param).

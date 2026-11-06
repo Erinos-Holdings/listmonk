@@ -9,31 +9,39 @@
        Matched headers, no Brand column under a single-brand selection, names truncated. -->
   <section class="campaign-matrix relative" data-cy="campaign-matrix">
     <b-loading v-if="loading" active :is-full-page="false" />
-    <div class="is-flex is-align-items-center mb-3">
-      <!-- D4: the Campaigns page's kinds and labels; own session state, All by default. -->
-      <b-field class="mb-0 mr-5">
-        <b-radio-button v-model="state.kind" native-value="all" size="is-small" type="is-primary"
+    <div class="cm-toolbar is-flex is-align-items-center mb-3">
+      <!-- D4: the Campaigns page's kinds and labels; own session state, All by default. The pills are
+           the Campaigns page's .segmented toggle at its normal size, so the name filter's input
+           (the Campaigns page's search height) sits level with them. -->
+      <b-field class="segmented mb-0 mr-4">
+        <b-radio-button v-model="state.kind" native-value="all" type="is-primary"
           data-cy="cm-kind-all" @input="onKind">
           {{ $t('globals.terms.all') }}
         </b-radio-button>
-        <b-radio-button v-model="state.kind" native-value="broadcasts" size="is-small" type="is-primary"
+        <b-radio-button v-model="state.kind" native-value="broadcasts" type="is-primary"
           data-cy="cm-kind-broadcasts" @input="onKind">
           {{ $t('campaigns.typeBroadcasts') }}
         </b-radio-button>
-        <b-radio-button v-model="state.kind" native-value="automations" size="is-small" type="is-primary"
+        <b-radio-button v-model="state.kind" native-value="automations" type="is-primary"
           data-cy="cm-kind-automations" @input="onKind">
           {{ $t('campaigns.typeAutomations') }}
         </b-radio-button>
       </b-field>
-      <b-field class="mb-0">
-        <b-radio-button v-model="state.mode" native-value="pct" size="is-small" type="is-primary"
+      <b-field class="segmented mb-0 mr-4">
+        <b-radio-button v-model="state.mode" native-value="pct" type="is-primary"
           data-cy="cm-mode-pct" @input="saveState">
           {{ $t('dashboard.matrix.pctUsd') }}
         </b-radio-button>
-        <b-radio-button v-model="state.mode" native-value="num" size="is-small" type="is-primary"
+        <b-radio-button v-model="state.mode" native-value="num" type="is-primary"
           data-cy="cm-mode-num" @input="saveState">
           {{ $t('dashboard.matrix.num') }}
         </b-radio-button>
+      </b-field>
+      <!-- The name filter: a client-side substring of the stored name (campaignMatrix.mjs::filterByName),
+           applied as you type; not sticky, like the Campaigns page's search. -->
+      <b-field class="mb-0 cm-name-filter">
+        <b-input v-model="nameQuery" name="name" icon="magnify" :placeholder="$t('analytics.matrix.nameFilter')"
+          data-cy="cm-name-filter" />
       </b-field>
     </div>
     <div class="table-container">
@@ -59,9 +67,10 @@
         </thead>
         <tbody>
           <tr v-for="row in tableRows" :key="row.totals ? 'totals' : row.id" :class="row.totals ? 'bm-totals' : ''">
-            <td :class="bmTd('name')">
+            <td :class="bmTd('name')" class="cm-name">
               <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended).
-                   MATRIX-POLISH-SPEC D7: the first 25 characters, then '…'; the full name on hover. -->
+                   MATRIX-POLISH-SPEC D7 (widened 2026-11-06): the first NAME_MAX characters, then '…',
+                   the brand's name stripped under a single-brand selection; the stored name on hover. -->
               <router-link v-if="!row.totals" :to="{ name: 'campaignAnalytics', query: { id: row.id } }"
                 :title="nameOf(row).title" :data-cy="`cm-name-${row.id}`">
 {{ nameOf(row).text }}
@@ -101,8 +110,8 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  CONVERSION_FIELDS, cellText, clickSort, conversionValue, dateCell, gpClass, gpTip, groupHeaders, loadState,
-  midColumns, nameCell, saveState, shapeRows, showBrandColumn, tableRows,
+  CONVERSION_FIELDS, cellText, clickSort, conversionValue, dateCell, filterByName, gpClass, gpTip, groupHeaders,
+  loadState, midColumns, nameCell, saveState, shapeRows, showBrandColumn, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -120,6 +129,8 @@ export default Vue.extend({
       // The server's window ({ from, to } Mountain dates) for the note.
       period: {},
       loading: false,
+      // The name filter's text (never persisted).
+      nameQuery: '',
       // Sort, %/$ | # mode and kind, per browser session (sessionStorage key analytics.matrix).
       state: loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
     };
@@ -137,6 +148,15 @@ export default Vue.extend({
     // MATRIX-POLISH-SPEC D6: the Brand column unless the navbar selection is one brand.
     showBrand() {
       return showBrandColumn(this.brandSelection);
+    },
+
+    // The brand whose name the name cell strips: the navbar's single-brand selection, else none.
+    stripBrand() {
+      const s = this.brandSelection;
+      if (!s || s.kind !== 'brand') {
+        return null;
+      }
+      return { slug: s.slug, label: brandLabelOf(s.slug, this.brandRows) };
     },
 
     leftCols() {
@@ -164,7 +184,7 @@ export default Vue.extend({
       const rows = shapeRows(this.apiRows, {
         launch: this.launch, docs: this.healthDocs, brandLabel: (s) => brandLabelOf(s, brands),
       });
-      return tableRows(rows, this.state.sort, this.state.mode, {
+      return tableRows(filterByName(rows, this.nameQuery), this.state.sort, this.state.mode, {
         locale: (this.$i18n && this.$i18n.locale) || 'en',
         totalsLabel: this.$t('dashboard.matrix.total'),
       });
@@ -250,7 +270,7 @@ export default Vue.extend({
     },
 
     nameOf(row) {
-      return nameCell(row.name);
+      return nameCell(row.name, this.stripBrand);
     },
 
     // D9: the cell reuses conversionCells.mjs::scopedCell -- whole-dollar sales under %/$, orders

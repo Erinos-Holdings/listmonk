@@ -49,15 +49,94 @@ const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' ? v : '');
 
-// MATRIX-POLISH D7: the name cell shows at most NAME_MAX characters, then '…' when longer; the full
-// name is the hover. Counted in characters (code points), so a surrogate pair is never split.
-export const NAME_MAX = 25;
+// MATRIX-POLISH D7 (widened 2026-11-06): the name cell shows at most NAME_MAX characters, then '…'
+// when longer; the full name is the hover. Counted in characters (code points), so a surrogate pair
+// is never split. `brand` ({ label, slug }, the navbar's single-brand selection) strips the brand's
+// name from the shown text (stripBrand); the hover title is always the stored name.
+export const NAME_MAX = 60;
 
-export function nameCell(name) {
+// The separators campaign names are assembled with (110526_JoyBelle_Festive Flame_IT,
+// Younique Active - Nov 5th, Thirsty Girl journey — Re-engagement series).
+const HARD_SEP = '_\\-—–:|';
+const SEP_RUN = new RegExp(`^[\\s${HARD_SEP}]+`);
+const SEP_RUN_END = new RegExp(`[\\s${HARD_SEP}]+$`);
+const HARD_RE = new RegExp(`[${HARD_SEP}]`);
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// stripBrand removes the brand's name from a campaign name shown under a single-brand selection
+// (it is redundant there): the brand's display name or slug as a whole segment bounded by the start,
+// the end, whitespace or a separator (Younique Active - Nov 5th -> Active - Nov 5th); or a shorter
+// word-prefix of the display name of 4+ characters (RUZE for "Ruze Pouches", BNKD for "BNKD
+// Wellness") only when bounded by a HARD separator or the start/end, so a prefix that is also an
+// ordinary word (High) never eats a plain phrase. Case-insensitive; the first match wins; a name that
+// would become empty is left as it is. The separators around the removed name: at the start the
+// following run goes; elsewhere the weaker run goes (whitespace beside a hard separator -- so
+// 101926_Thirsty Girl Is Live_EN keeps its underscore), both when a plain space precedes a hard
+// separator (Copy of Younique - Winback -> Copy of Winback), else the preceding run.
+export function stripBrand(name, brand) {
   const full = str(name);
-  const chars = Array.from(full);
+  const label = str(brand && brand.label).trim();
+  const slug = str(brand && brand.slug).trim();
+  if (!full || (!label && !slug)) {
+    return full;
+  }
+  const words = label.split(/\s+/).filter(Boolean);
+  const candidates = [];
+  if (label) candidates.push({ text: label, hard: false });
+  if (slug && slug.toLowerCase() !== label.toLowerCase()) candidates.push({ text: slug, hard: false });
+  for (let n = words.length - 1; n >= 1; n -= 1) {
+    const prefix = words.slice(0, n).join(' ');
+    if (prefix.length >= 4) candidates.push({ text: prefix, hard: true });
+  }
+  const matchOf = (c) => {
+    const bound = c.hard ? `[${HARD_SEP}]` : `[\\s${HARD_SEP}]`;
+    const re = new RegExp(`(^|${bound}|\\s(?=[${HARD_SEP}]))\\s*${escapeRe(c.text)}(?=$|${c.hard ? `\\s*[${HARD_SEP}]` : bound})`, 'iu');
+    return re.exec(full);
+  };
+  let m = null;
+  candidates.find((c) => {
+    m = matchOf(c);
+    return !!m;
+  });
+  if (m) {
+    const start = m.index + m[1].length;
+    const end = m.index + m[0].length;
+    const before = full.slice(0, start);
+    const after = full.slice(end);
+    const pre = (SEP_RUN_END.exec(before) || [''])[0];
+    const post = (SEP_RUN.exec(after) || [''])[0];
+    const hard = (run) => HARD_RE.test(run);
+    let out;
+    if (before.trim() === '') {
+      out = after.slice(post.length);
+    } else if (!hard(pre) && hard(post)) {
+      out = `${before.slice(0, before.length - pre.length)} ${after.slice(post.length)}`;
+    } else if (hard(pre) && !hard(post)) {
+      out = before + after.slice(post.length);
+    } else {
+      out = before.slice(0, before.length - pre.length) + after;
+    }
+    out = out.trim();
+    return out === '' ? full : out;
+  }
+  return full;
+}
+
+// The name filter beside the %/$ | # toggle: a case-insensitive substring of the STORED name (the
+// brand-stripped text is display only); blank keeps every row. Applied before the totals row, so the
+// totals are the rows shown.
+export function filterByName(rows, query) {
+  const q = str(query).trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter((r) => str(r.name).toLowerCase().includes(q));
+}
+
+export function nameCell(name, brand = null) {
+  const full = str(name);
+  const shown = brand ? stripBrand(full, brand) : full;
+  const chars = Array.from(shown);
   if (chars.length <= NAME_MAX) {
-    return { text: full, title: full };
+    return { text: shown, title: full };
   }
   return { text: `${chars.slice(0, NAME_MAX).join('')}…`, title: full };
 }
