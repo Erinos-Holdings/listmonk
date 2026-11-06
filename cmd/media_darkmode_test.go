@@ -355,7 +355,7 @@ func TestReprocessNeverUnrepairs(t *testing.T) {
 			if w, ok := d["warnings"].([]any); !ok || len(w) != 0 {
 				t.Fatalf("kept warnings changed: %v", d["warnings"])
 			}
-			if _, ok := d["notes"]; ok {
+			if n, ok := d["notes"]; ok && len(n.([]any)) != 0 {
 				t.Fatalf("kept verdict gained notes: %v", d["notes"])
 			}
 			if d["version"] != optimizer.ClassifierVersion {

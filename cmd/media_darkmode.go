@@ -129,7 +129,7 @@ var ErrVerdictCurrent = errors.New("dark-mode verdict is already current")
 // an existing original.
 //
 // Reprocess never un-repairs (WHITE-BACKGROUND-SPEC D4): a row stamped fixed whose original
-// now classifies to a class with no repair (a mono-on-white logo repaired before 2026-11-06
+// now classifies to a class with no repair (a mono-on-white logo repaired before WHITE-BACKGROUND-SPEC shipped
 // is white-background today) keeps its object, thumbnail and stored verdict. The verdict is
 // only re-stamped at the current version with a fresh `at`, so the row reads current, and
 // the response reports kept: true.
