@@ -127,8 +127,12 @@ export default Vue.extend({
       }, rereadDelay(Date.now()));
     },
 
+    // Stage-4 F5: re-read the conversions meta before capturing the baseline, so a failed
+    // creation-time read (null baseline) cannot make the first poll count conversions as advanced.
     recompute() {
-      this.refresher.begin(syncStamps(this.brandHealth, this.conversionsMeta));
+      this.loadConversionsMeta().then(() => {
+        this.refresher.begin(syncStamps(this.brandHealth, this.conversionsMeta));
+      });
     },
   },
 
