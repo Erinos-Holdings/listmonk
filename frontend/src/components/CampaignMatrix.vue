@@ -43,7 +43,7 @@
                SHOP LINK ATTRIBUTION after Clicks (campaignMatrix.mjs::groupHeaders). -->
           <tr class="bm-groups">
             <th :colspan="leftCols.length" />
-            <th v-for="(g, i) in groupCols" :key="i" :colspan="g.span" :class="g.cls">{{ g.label ? $t(g.label) : '' }}</th>
+            <th v-for="(g, i) in groupCols" :key="i" :colspan="g.span" :class="g.cls">{{ groupLabel(g) }}</th>
           </tr>
           <tr>
             <th v-for="c in leftCols" :key="c.field" :class="[bmTh(c.field), { 'has-text-right': c.field === 'sent' }]"
@@ -172,6 +172,16 @@ export default Vue.extend({
   },
 
   methods: {
+    // The Conversions group names its cut-off date: the matrix counts orders through yesterday,
+    // so it trails the Campaign pane's card, whose date range can include today.
+    groupLabel(g) {
+      if (!g.label) return '';
+      if (g.label === 'analytics.conversions.title' && this.period.to) {
+        return this.$t('analytics.matrix.conversionsThrough', { to: this.period.to });
+      }
+      return this.$t(g.label);
+    },
+
     params() {
       const p = { kind: this.state.kind };
       if (this.scopeListIds) {
