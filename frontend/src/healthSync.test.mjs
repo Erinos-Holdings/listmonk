@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  HEALTH_SYNC_MINUTE, MISSING, REREAD_DELAY_MS, newestComputedAt, nextSyncAt, rereadDelay, syncLines, syncText,
+  HEALTH_SYNC_MINUTE, MISSING, REREAD_DELAY_MS, conversionsAsOf, newestComputedAt, nextSyncAt, olderStamp, rereadDelay,
+  syncLines, syncStamps, syncText,
 } from './healthSync.mjs'; // eslint-disable-line import/extensions
 import { formatMountainClock, formatMountainShortDate, mountainDay } from './mountainTime.mjs'; // eslint-disable-line import/extensions
 
@@ -59,10 +60,40 @@ test('I3: times are Mountain h:mm am/pm; the date only when the day is not today
   assert.equal(syncText('garbage', now), MISSING);
 });
 
-test('I3: syncLines combines the two', () => {
+test('I3: syncLines combines the two (brand health alone, the conversions job left out)', () => {
   const now = at('2026-11-06T21:14:05Z');
-  assert.deepEqual(syncLines([{ computedAt: '2026-11-06T21:00:19Z' }], now), { last: '2:00 pm', next: '3:00 pm' });
-  assert.deepEqual(syncLines([], now), { last: MISSING, next: '3:00 pm' });
+  const BH = ['brandHealth'];
+  assert.deepEqual(syncLines([{ computedAt: '2026-11-06T21:00:19Z' }], now, null, BH), { last: '2:00 pm', next: '3:00 pm', jobs: { brandHealth: '2:00 pm' } });
+  assert.deepEqual(syncLines([], now, null, BH), { last: MISSING, next: '3:00 pm', jobs: { brandHealth: MISSING } });
+});
+
+test('SYNC-ALL I4: conversionsAsOf reads as_of in either key style; null when none or unparsable', () => {
+  assert.equal(conversionsAsOf({ as_of: '2026-11-06T21:01:05Z', tracked_stale: false }), '2026-11-06T21:01:05Z');
+  assert.equal(conversionsAsOf({ asOf: '2026-11-06T21:01:05Z' }), '2026-11-06T21:01:05Z');
+  assert.equal(conversionsAsOf({}), null);
+  assert.equal(conversionsAsOf(null), null);
+  assert.equal(conversionsAsOf({ as_of: null }), null);
+  assert.equal(conversionsAsOf({ as_of: 'garbage' }), null);
+});
+
+test('SYNC-ALL I4: Last = the OLDER of the two stamps; "—" when either is missing; the hover lists each', () => {
+  const now = at('2026-11-06T21:14:05Z');
+  const docs = [{ computedAt: '2026-11-06T21:00:19Z' }, { computedAt: '2026-11-06T20:00:20Z' }];
+  // Both within the hour: the older (conversions 2:01 pm vs brand health 2:00 pm -> 2:00 pm).
+  assert.deepEqual(syncLines(docs, now, { as_of: '2026-11-06T21:01:05Z' }), {
+    last: '2:00 pm', next: '3:00 pm', jobs: { brandHealth: '2:00 pm', conversions: '2:01 pm' },
+  });
+  // A failed conversions job: Last shows the stale one (yesterday, date-prefixed).
+  assert.deepEqual(syncLines(docs, now, { as_of: '2026-11-05T21:45:00Z' }), {
+    last: 'Nov 5, 2:45 pm', next: '3:00 pm', jobs: { brandHealth: '2:00 pm', conversions: 'Nov 5, 2:45 pm' },
+  });
+  // Either missing -> '—', the other still listed in the hover.
+  assert.deepEqual(syncLines(docs, now, {}), { last: MISSING, next: '3:00 pm', jobs: { brandHealth: '2:00 pm', conversions: MISSING } });
+  assert.deepEqual(syncLines([], now, { as_of: '2026-11-06T21:01:05Z' }), { last: MISSING, next: '3:00 pm', jobs: { brandHealth: MISSING, conversions: '2:01 pm' } });
+  assert.deepEqual(syncStamps(docs, { as_of: '2026-11-06T21:01:05Z' }), { brandHealth: '2026-11-06T21:00:19Z', conversions: '2026-11-06T21:01:05Z' });
+  assert.equal(olderStamp({ brandHealth: '2026-11-06T21:00:19Z', conversions: '2026-11-06T21:01:05Z' }), '2026-11-06T21:00:19Z');
+  assert.equal(olderStamp({ brandHealth: '2026-11-06T21:00:19Z', conversions: null }), null);
+  assert.equal(olderStamp({ brandHealth: '2026-11-06T21:00:19Z', conversions: null }, ['brandHealth']), '2026-11-06T21:00:19Z');
 });
 
 test('mountainTime helpers: clock, short date and day in America/Denver, DST-correct', () => {

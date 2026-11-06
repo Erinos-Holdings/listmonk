@@ -560,3 +560,62 @@ func TestCampaignConversionsDashboards(t *testing.T) {
 		t.Fatalf("charts bravo: matched %d/%v, want 1/50 (b1)", mO, mS)
 	}
 }
+
+// TestCampaignConversionsMetaRoute (integrations SYNC-ALL-SPEC I3, the registration half; no
+// database): GET /api/campaigns/conversions is the meta read under campaigns:get_analytics.
+func TestCampaignConversionsMetaRoute(t *testing.T) {
+	b, err := os.ReadFile("handlers.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`g\.GET\("/api/campaigns/conversions", pm\(a\.GetCampaignConversionsMeta, "campaigns:get_analytics"\)\)`).Match(b) {
+		t.Fatal(`handlers.go does not register GET /api/campaigns/conversions as pm(a.GetCampaignConversionsMeta, "campaigns:get_analytics")`)
+	}
+}
+
+// TestCampaignConversionsMeta (integrations SYNC-ALL-SPEC I3): the meta read returns {} with 200
+// when no doc is stored, then exactly {as_of, tracked_floor, matched_floor, tracked_stale} of the
+// LATEST doc -- never the coverage arrays or any per-person field -- and is refused without
+// campaigns:get_analytics.
+func TestCampaignConversionsMeta(t *testing.T) {
+	h := newLinkHarness(t)
+	h.app.auth = &auth.Auth{}
+	reader := baUser([]string{auth.PermCampaignsGetAnalytics})
+	get := func(u auth.User) (int, map[string]json.RawMessage) {
+		t.Helper()
+		code, body := convCall(t, u, http.MethodGet, "/api/campaigns/conversions", "", h.app.auth.Perm(h.app.GetCampaignConversionsMeta, "campaigns:get_analytics"))
+		if code != http.StatusOK {
+			return code, nil
+		}
+		var resp struct {
+			Data map[string]json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("decode %s: %v", body, err)
+		}
+		return code, resp.Data
+	}
+
+	code, data := get(reader)
+	if code != http.StatusOK || data == nil || len(data) != 0 {
+		t.Fatalf("no doc: %d %v, want 200 {}", code, data)
+	}
+
+	h.db.MustExec(`INSERT INTO system_health (kind, day, status, doc) VALUES ('conversions', CURRENT_DATE - 1, 'ok', $1::JSONB)`,
+		`{"v":1,"kind":"conversions","asOf":"2026-11-05T14:45:00Z","trackedFloor":"2026-04-01","matchedFloor":"2026-08-31T00:00:00Z","trackedStale":true,"trackedCampaigns":[1],"matchedCampaigns":[1]}`)
+	h.db.MustExec(`INSERT INTO system_health (kind, day, status, doc) VALUES ('conversions', CURRENT_DATE, 'ok', $1::JSONB)`,
+		`{"v":1,"kind":"conversions","asOf":"2026-11-06T20:00:00Z","trackedFloor":"2026-04-01","matchedFloor":"2026-08-31T00:00:00Z","trackedStale":false,"trackedCampaigns":[1,2],"matchedCampaigns":[1,2]}`)
+	_, data = get(reader)
+	keys := []string{}
+	for k := range data {
+		keys = append(keys, k)
+	}
+	if len(data) != 4 || string(data["as_of"]) != `"2026-11-06T20:00:00Z"` || string(data["tracked_floor"]) != `"2026-04-01"` ||
+		string(data["matched_floor"]) != `"2026-08-31T00:00:00Z"` || string(data["tracked_stale"]) != `false` {
+		t.Fatalf("meta: keys %v data %v, want the latest doc's four meta fields only", keys, data)
+	}
+
+	if code, _ := get(baUser([]string{"brands:get", "subscribers:get_all"})); code != http.StatusForbidden {
+		t.Fatalf("without campaigns:get_analytics: %d, want 403", code)
+	}
+}

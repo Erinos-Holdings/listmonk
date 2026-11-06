@@ -241,6 +241,14 @@ export const getBrandsHealthQuiet = async () => http.get(
   { camelCase: false, disableToast: true },
 );
 
+// Fork (integrations SYNC-ALL-SPEC D3/D4) -- the stored conversions doc's meta only ({as_of,
+// tracked_floor, matched_floor, tracked_stale}, {} when none), quiet like the read above: the navbar
+// sync indicator's second stamp. campaigns:get_analytics.
+export const getConversionsMetaQuiet = async () => http.get(
+  '/api/campaigns/conversions',
+  { camelCase: false, disableToast: true },
+);
+
 export const getBrandHealthHistory = async (brand, days) => http.get(
   `/api/brands/health/${encodeURIComponent(brand)}`,
   { params: { days }, camelCase: false },

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MISSING, analyticsCells, aovText, conversionCell, conversionTooltip, formatUsd, normalizeMeta, scopedCell, sumCovered,
+  MISSING, analyticsCells, aovText, conversionCell, conversionTooltip, conversionsComputedLabel, formatUsd, normalizeMeta, scopedCell, sumCovered,
 } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
 const META = {
@@ -75,13 +75,29 @@ test('normalizeMeta reads both key styles', () => {
   assert.equal(normalizeMeta(null), null);
 });
 
-test('tooltip: definition with its floor, as-of, and the stale note on Tracked only', () => {
+test('tooltip: definition with its floor, the computed time, and the stale note on Tracked only', () => {
   const t = (k, p) => `${k}${p ? JSON.stringify(p) : ''}`;
   const stale = { ...META, tracked_stale: true };
-  const asOf = 'analytics.conversions.asOf{"asOf":"2026-10-28T14:45:00Z"}';
-  const wantTracked = `analytics.conversions.trackedHelp{"floor":"2026-04-01"} ${asOf} analytics.conversions.stale`;
-  const wantMatched = `analytics.conversions.matchedHelp{"floor":"2026-08-31"} ${asOf}`;
-  assert.equal(conversionTooltip('tracked', stale, t), wantTracked);
-  assert.equal(conversionTooltip('matched', stale, t), wantMatched);
-  assert.equal(conversionTooltip('matched', null, t), 'analytics.conversions.matchedHelp{"floor":""} analytics.conversions.none');
+  // asOf 2026-10-28T14:45Z = 8:45 am MDT on Oct 28; `now` the same Mountain day -> no date prefix.
+  const now = Date.parse('2026-10-28T20:00:00Z');
+  const computed = 'analytics.matrix.conversionsComputed{"time":"8:45 am"}';
+  const wantTracked = `analytics.conversions.trackedHelp{"floor":"2026-04-01"} ${computed} analytics.conversions.stale`;
+  const wantMatched = `analytics.conversions.matchedHelp{"floor":"2026-08-31"} ${computed}`;
+  assert.equal(conversionTooltip('tracked', stale, t, now), wantTracked);
+  assert.equal(conversionTooltip('matched', stale, t, now), wantMatched);
+  assert.equal(conversionTooltip('matched', null, t, now), 'analytics.conversions.matchedHelp{"floor":""} analytics.conversions.none');
+});
+
+// integrations SYNC-ALL-SPEC I5: the Matrix's Conversions header is the asOf as a Mountain clock
+// time, date-prefixed when not today -- never a "through <day>".
+test('SYNC-ALL I5: conversionsComputedLabel -- Mountain clock time, date only when not today, never "through"', () => {
+  const t = (k, p) => `${k}${p ? JSON.stringify(p) : ''}`;
+  const meta = { as_of: '2026-11-06T21:01:05Z' }; // 2:01 pm MST
+  assert.equal(conversionsComputedLabel(meta, t, Date.parse('2026-11-06T21:14:05Z')), 'analytics.matrix.conversionsComputed{"time":"2:01 pm"}');
+  assert.equal(conversionsComputedLabel(meta, t, Date.parse('2026-11-07T16:00:00Z')), 'analytics.matrix.conversionsComputed{"time":"Nov 6, 2:01 pm"}');
+  assert.equal(conversionsComputedLabel({ asOf: '2026-11-06T21:01:05Z' }, t, Date.parse('2026-11-06T21:14:05Z')), 'analytics.matrix.conversionsComputed{"time":"2:01 pm"}');
+  assert.equal(conversionsComputedLabel(null, t), '');
+  assert.equal(conversionsComputedLabel({}, t), '');
+  assert.equal(conversionsComputedLabel({ as_of: 'garbage' }, t), '');
+  assert.doesNotMatch(conversionsComputedLabel(meta, t, Date.parse('2026-11-07T16:00:00Z')), /through/i);
 });

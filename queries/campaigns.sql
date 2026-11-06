@@ -663,6 +663,16 @@ SELECT COALESCE(JSON_AGG(r), '[]') FROM (
     LIMIT 5000
 ) r;
 
+-- name: get-campaign-conversions-meta
+-- Fork (integrations SYNC-ALL-SPEC D3) -- the latest conversions doc's meta ONLY (asOf, the two
+-- floors, trackedStale), the same projection get-campaign-conversions carries, for the navbar sync
+-- indicator. An empty object when no doc is stored. No per-campaign or per-person field.
+SELECT COALESCE((
+    SELECT JSON_BUILD_OBJECT('as_of', doc->'asOf', 'tracked_floor', doc->'trackedFloor',
+        'matched_floor', doc->'matchedFloor', 'tracked_stale', doc->'trackedStale')
+    FROM system_health WHERE kind = 'conversions' ORDER BY day DESC LIMIT 1
+), '{}'::JSON);
+
 -- name: get-campaign-conversions
 -- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7/D8) -- per requested campaign,
 -- the Tracked and Matched orders and sales with purchased_at in [$2, $3], NULL for a measure the latest

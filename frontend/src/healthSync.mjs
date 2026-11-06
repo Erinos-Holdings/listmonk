@@ -74,11 +74,57 @@ export function syncText(instant, now) {
   return `${formatMountainShortDate(instant)}, ${clock}`;
 }
 
-// syncLines is the indicator's two times: { last, next } -- last from the documents' newest
-// computedAt, next the next scheduled run after `now`.
-export function syncLines(docs, now) {
+// Fork (integrations SYNC-ALL-SPEC D4): the sync is BOTH display-feeding jobs -- BrandHealth
+// (the documents' newest computedAt) and CampaignConversions (its stored doc's as_of, read from
+// GET /api/campaigns/conversions). `conversionsMeta` is that read's body (snake_case or camelCase
+// as_of), or null/{} when none is stored.
+
+// conversionsAsOf is the meta's as_of (a parsable ISO string, returned as stored), or null.
+export function conversionsAsOf(meta) {
+  if (!meta || typeof meta !== 'object') {
+    return null;
+  }
+  const v = meta.as_of !== undefined ? meta.as_of : meta.asOf;
+  return Number.isNaN(ms(v)) ? null : v;
+}
+
+// syncStamps is each job's own stamp: { brandHealth, conversions } (ISO strings or null).
+export function syncStamps(docs, conversionsMeta) {
+  return { brandHealth: newestComputedAt(docs), conversions: conversionsAsOf(conversionsMeta) };
+}
+
+// olderStamp is the OLDER of the jobs' stamps (the weakest link), or null when either is missing.
+// `jobs` names the jobs that count (default both); a job left out is ignored.
+export function olderStamp(stamps, jobs = ['brandHealth', 'conversions']) {
+  let worst = null;
+  let worstMs = Infinity;
+  for (let i = 0; i < jobs.length; i += 1) {
+    const v = stamps ? stamps[jobs[i]] : null;
+    const t = ms(v);
+    if (Number.isNaN(t)) {
+      return null;
+    }
+    if (t < worstMs) {
+      worst = v;
+      worstMs = t;
+    }
+  }
+  return worst;
+}
+
+// syncLines is the indicator's two times: { last, next, jobs } -- last the OLDER of the jobs'
+// stamps ('—' when either is missing), next the next scheduled run after `now`, jobs each job's
+// own time for the hover ({ brandHealth, conversions }). With `jobs` = ['brandHealth'] (a user
+// who cannot read the conversions meta) the conversions stamp is left out.
+export function syncLines(docs, now, conversionsMeta = null, jobs = ['brandHealth', 'conversions']) {
+  const stamps = syncStamps(docs, conversionsMeta);
+  const each = {};
+  jobs.forEach((j) => {
+    each[j] = syncText(stamps[j], now);
+  });
   return {
-    last: syncText(newestComputedAt(docs), now),
+    last: syncText(olderStamp(stamps, jobs), now),
     next: syncText(nextSyncAt(now), now),
+    jobs: each,
   };
 }

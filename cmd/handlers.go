@@ -209,6 +209,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// (brands:manage, listmonk_health); the static segment resolves before PUT /api/campaigns/:id.
 		g.GET("/api/campaigns/analytics/clicks/export", pm(a.ExportConversionClicks, "subscribers:get_all"))
 		g.PUT("/api/campaigns/conversions", pm(a.PutCampaignConversions, "brands:manage"))
+		// integrations SYNC-ALL-SPEC D3: the stored conversions doc's meta only (no per-person
+		// field) for the navbar sync indicator -- an analytics read. Static, so it resolves before
+		// GET /api/campaigns/:id.
+		g.GET("/api/campaigns/conversions", pm(a.GetCampaignConversionsMeta, "campaigns:get_analytics"))
 		// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker, list-scoped.
 		g.GET("/api/analytics/campaigns", pm(a.GetAnalyticsCampaigns, "campaigns:get_analytics"))
 		// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D10) -- the Campaign Matrix pane,

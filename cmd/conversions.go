@@ -17,6 +17,8 @@ import (
 // clicks it matches on, and sums the rows for display. It computes no attribution and holds no rule.
 //
 //   PUT /api/campaigns/conversions             brands:manage (the listmonk_health writer)
+//   GET /api/campaigns/conversions             campaigns:get_analytics -- the stored doc's meta only
+//       (integrations SYNC-ALL-SPEC D3; no per-person field)
 //   GET /api/campaigns/analytics/clicks/export subscribers:get_all -- SUBSCRIBER DATA, never gated on
 //       campaigns:get_analytics: the external listmonk_bi token holds analytics reads and is
 //       deliberately denied subscriber data. Its own static route, NOT the maintenance export,
@@ -142,6 +144,18 @@ func (a *App) PutCampaignConversions(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, okResp{map[string]int64{"rows": n}})
+}
+
+// GetCampaignConversionsMeta is the conversions doc's meta only (integrations SYNC-ALL-SPEC D3):
+// {as_of, tracked_floor, matched_floor, tracked_stale}, or {} when none is stored. The navbar sync
+// indicator's cheap read. It carries no per-campaign or per-person field, so it is an analytics
+// read (campaigns:get_analytics) -- unlike the click export, which is subscriber data.
+func (a *App) GetCampaignConversionsMeta(c echo.Context) error {
+	out, err := a.core.GetCampaignConversionsMeta()
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, okResp{out})
 }
 
 // ExportConversionClicks is the keyset click export (D7):

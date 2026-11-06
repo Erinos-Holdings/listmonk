@@ -37,6 +37,14 @@ export function advanced(baseline, doc) {
   return Number.isNaN(was) ? true : now > was;
 }
 
+// Fork (integrations SYNC-ALL-SPEC D4): the navbar glyph's done test -- EVERY job's stamp has
+// advanced past its click baseline (`advanced`'s rule per job: strictly later, or the first
+// appearance when the baseline was null). `baselines` and `stamps` map a job name to an ISO stamp
+// (or null); `jobs` names the jobs that count.
+export function advancedAll(baselines, stamps, jobs = ['brandHealth', 'conversions']) {
+  return jobs.length > 0 && jobs.every((j) => advanced(baselines ? baselines[j] : null, { computedAt: stamps ? stamps[j] : null }));
+}
+
 // The i18n key of each state's line; idle has none.
 export const STATE_MESSAGE = Object.freeze({
   idle: '',
@@ -57,6 +65,8 @@ export function isActive(state) {
 //   start()  -> Promise<{started, busy}>   POST /api/system/health/refresh
 //   read()   -> Promise<doc|null>          the newest ses document (a quiet read)
 //   onState(state, doc)                    every transition; `doc` on done
+//   isDone(baseline, doc)                  optional done test (default `advanced`); the navbar
+//                                          passes `advancedAll` over both jobs' stamps (SYNC-ALL D4)
 //   now(), setTimer(fn, ms), clearTimer(id) injectable for tests.
 // begin(baseline) starts; stop() abandons the poll (component destroyed). A start error is
 // `failed`; a read error is retried at the next tick (the cap still applies).
@@ -64,6 +74,7 @@ export function createRefresh(opts) {
   const now = opts.now || (() => Date.now());
   const setTimer = opts.setTimer || ((fn, t) => setTimeout(fn, t));
   const clearTimer = opts.clearTimer || ((id) => clearTimeout(id));
+  const isDone = opts.isDone || advanced;
   let state = 'idle';
   let timer = null;
   let gen = 0;
@@ -98,7 +109,7 @@ export function createRefresh(opts) {
       if (my !== gen) {
         return;
       }
-      if (advanced(baseline, doc)) {
+      if (isDone(baseline, doc)) {
         set('done', doc);
         return;
       }

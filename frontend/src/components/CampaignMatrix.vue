@@ -118,8 +118,7 @@ import {
   CONVERSION_FIELDS, cellText, clickSort, conversionValue, dateCell, filterByName, gpClass, gpTip, groupHeaders,
   leftColumns, loadState, midColumns, nameCell, saveState, shapeRows, showBrandColumn, statusCell, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
-import { conversionTooltip, normalizeMeta, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
-import { mountainDay } from '../mountainTime.mjs'; // eslint-disable-line import/extensions
+import { conversionTooltip, conversionsComputedLabel, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -193,15 +192,14 @@ export default Vue.extend({
   },
 
   methods: {
-    // The Conversions group names its cut-off date. HOURLY-HEALTH-SPEC D1: the window now ends
-    // today, so the header names the conversions document's own cut-off (its asOf, as a Mountain
-    // day) rather than the window's end; no document -> the plain title.
+    // The Conversions group names when the conversions document was computed (integrations
+    // SYNC-ALL-SPEC D5): "Conversions computed <Mountain clock time>", date-prefixed when not today
+    // (conversionCells.mjs::conversionsComputedLabel) -- never a "through <day>", which overstated
+    // coverage. No document -> the plain title.
     groupLabel(g) {
       if (!g.label) return '';
       if (g.label === 'analytics.conversions.title') {
-        const meta = normalizeMeta(this.conversions);
-        const to = meta ? mountainDay(meta.asOf) : '';
-        return to ? this.$t('analytics.matrix.conversionsThrough', { to }) : this.$t(g.label);
+        return conversionsComputedLabel(this.conversions, (k, p) => this.$t(k, p)) || this.$t(g.label);
       }
       return this.$t(g.label);
     },

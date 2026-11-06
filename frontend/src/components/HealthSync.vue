@@ -7,9 +7,13 @@
        brands:manage (healthRefresh.mjs::canRefresh, the SES pane's rule), and a click runs the SES
        pane's start-then-poll flow (healthRefresh.mjs::createRefresh). The glyph is an inline SVG of
        the mdi heart-pulse path (frontend/fontello/config.json) because the subset icon font does
-       not carry it. -->
+       not carry it.
+       integrations SYNC-ALL-SPEC D4: the sync is both display-feeding jobs -- brand health and
+       campaign conversions (GET /api/campaigns/conversions' as_of, read only by a
+       campaigns:get_analytics holder). "Last" is the OLDER of the two stamps; the hover lists each
+       job's own time; a glyph click is done when BOTH stamps advance. -->
   <b-navbar-item tag="div" class="health-sync is-hidden-mobile" data-cy="health-sync">
-    <b-tooltip :label="$t('health.sync.tip')" type="is-dark" position="is-bottom" multilined>
+    <b-tooltip :label="tooltip" type="is-dark" position="is-bottom" multilined>
       <span class="health-sync-inner">
         <a v-if="canClick" href="#" class="health-sync-glyph" :class="{ 'is-spinning': spinning }" role="button"
           :aria-label="$t('dashboard.ses.refresh')" data-cy="health-sync-refresh" @click.prevent="recompute">
@@ -30,8 +34,10 @@
 <script>
 import Vue from 'vue';
 import { mapState } from 'vuex';
-import { newestComputedAt, rereadDelay, syncLines } from '../healthSync.mjs'; // eslint-disable-line import/extensions
-import { canRefresh, createRefresh, isActive } from '../healthRefresh.mjs'; // eslint-disable-line import/extensions
+import { rereadDelay, syncLines, syncStamps } from '../healthSync.mjs'; // eslint-disable-line import/extensions
+import {
+  advancedAll, canRefresh, createRefresh, isActive,
+} from '../healthRefresh.mjs'; // eslint-disable-line import/extensions
 
 // mdi heart-pulse (Apache-2.0), in the 1000-unit box frontend/fontello/config.json stores it in.
 const HEART_PULSE = [
@@ -49,14 +55,30 @@ export default Vue.extend({
       now: Date.now(),
       refreshState: 'idle',
       glyphPath: HEART_PULSE,
+      // The conversions doc's meta (GET /api/campaigns/conversions), null until read.
+      conversionsMeta: null,
     };
   },
 
   computed: {
     ...mapState(['serverConfig', 'brandHealth']),
 
+    // The jobs this user's indicator tracks: conversions only for a campaigns:get_analytics holder
+    // (the meta read's permission); otherwise brand health alone, as before.
+    jobs() {
+      return this.$can('campaigns:get_analytics') ? ['brandHealth', 'conversions'] : ['brandHealth'];
+    },
+
     lines() {
-      return syncLines(this.brandHealth, this.now);
+      return syncLines(this.brandHealth, this.now, this.conversionsMeta, this.jobs);
+    },
+
+    tooltip() {
+      const j = this.lines.jobs;
+      const each = this.jobs.length > 1
+        ? this.$t('health.sync.jobs', { health: j.brandHealth, conversions: j.conversions })
+        : this.$t('health.sync.jobHealth', { health: j.brandHealth });
+      return `${each}. ${this.$t('health.sync.tip')}`;
     },
 
     canClick() {
@@ -72,22 +94,41 @@ export default Vue.extend({
     // page.refresh: the loud read (the user asked for it).
     reload() {
       this.now = Date.now();
+      this.loadConversionsMeta();
       return this.$store.dispatch('loadBrandHealth');
     },
 
-    // One setTimeout chain: REREAD_DELAY_MS after each top of the hour, re-read the documents
+    // The conversions stamp's quiet read (SYNC-ALL-SPEC D3/D4); resolves to the meta, or the last
+    // known one when the read fails. Skipped for a user who cannot read it.
+    loadConversionsMeta() {
+      if (!this.jobs.includes('conversions')) {
+        return Promise.resolve(null);
+      }
+      return this.$api.getConversionsMetaQuiet().then((meta) => {
+        this.conversionsMeta = meta || {};
+        return this.conversionsMeta;
+      }).catch(() => this.conversionsMeta);
+    },
+
+    // Both stamps, read quietly: { brandHealth, conversions }.
+    readStamps() {
+      return Promise.all([this.$store.dispatch('loadBrandHealthQuiet'), this.loadConversionsMeta()])
+        .then(([rows, meta]) => syncStamps(rows, meta));
+    },
+
+    // One setTimeout chain: REREAD_DELAY_MS after each top of the hour, re-read both stamps
     // quietly (stage 4 F1: no loading flag, no toast).
     schedule() {
       this.timer = setTimeout(() => {
         this.timer = null;
         this.now = Date.now();
-        this.$store.dispatch('loadBrandHealthQuiet');
+        this.readStamps();
         this.schedule();
       }, rereadDelay(Date.now()));
     },
 
     recompute() {
-      this.refresher.begin(newestComputedAt(this.brandHealth));
+      this.refresher.begin(syncStamps(this.brandHealth, this.conversionsMeta));
     },
   },
 
@@ -95,19 +136,26 @@ export default Vue.extend({
     brandHealth() {
       this.now = Date.now();
     },
+
+    conversionsMeta() {
+      this.now = Date.now();
+    },
   },
 
   created() {
     this.$root.$on('page.refresh', this.reload);
-    // The SES pane's flow, its poll reading the brand-health documents (the indicator's own read):
-    // done once the newest computedAt moves past the click's baseline.
+    // The SES pane's flow, its poll reading both stamps (the indicator's own reads): done once
+    // EVERY tracked job's stamp moves past the click's baseline (SYNC-ALL-SPEC D4; the Function URL
+    // starts both jobs, which run in parallel within the unchanged 3-minute cap).
     this.refresher = createRefresh({
       start: () => this.$api.refreshSystemHealth(),
-      read: () => this.$store.dispatch('loadBrandHealthQuiet').then((rows) => ({ computedAt: newestComputedAt(rows) })),
+      read: () => this.readStamps(),
+      isDone: (baseline, stamps) => advancedAll(baseline, stamps, this.jobs),
       onState: (state) => {
         this.refreshState = state;
       },
     });
+    this.loadConversionsMeta();
     this.schedule();
   },
 

@@ -100,6 +100,19 @@ func (c *Core) GetCampaignConversionOrders(campIDs []int, fromDate, toDate strin
 	return out, nil
 }
 
+// GetCampaignConversionsMeta returns the latest conversions doc's meta only -- {as_of,
+// tracked_floor, matched_floor, tracked_stale} -- or {} when none is stored (integrations
+// SYNC-ALL-SPEC D3, the navbar sync indicator's cheap read).
+func (c *Core) GetCampaignConversionsMeta() (types.JSONText, error) {
+	var out types.JSONText
+	if err := c.q.GetCampaignConversionsMeta.Get(&out); err != nil {
+		c.log.Printf("error fetching campaign conversions meta: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
 // GetCampaignAnalyticsConversions returns, per requested campaign, the Tracked and Matched orders and
 // sales with purchased_at in [from, to] (NULL for a measure the latest conversions doc does not
 // cover), with the doc's asOf, floors and trackedStale. The dates are validated by the caller.

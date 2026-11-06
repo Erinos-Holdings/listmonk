@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CAP_MS, POLL_MS, STATE_MESSAGE, advanced, baselineOf, canRefresh, createRefresh, isActive,
+  CAP_MS, POLL_MS, STATE_MESSAGE, advanced, advancedAll, baselineOf, canRefresh, createRefresh, isActive,
 } from './healthRefresh.mjs'; // eslint-disable-line import/extensions
 
 // A fake clock: setTimer queues, tick() advances to the next timer and runs it.
@@ -184,4 +184,48 @@ test('every state has its message key; idle has none', () => {
     assert.match(STATE_MESSAGE[s], /^dashboard\.ses\.refresh/);
   });
   assert.equal(STATE_MESSAGE.idle, '');
+});
+
+// integrations SYNC-ALL-SPEC I4: the navbar glyph is done only when BOTH jobs' stamps advance.
+test('SYNC-ALL I4: advancedAll -- every job advanced past its own baseline; a null baseline = first appearance', () => {
+  const base = { brandHealth: '2026-11-06T21:00:19Z', conversions: '2026-11-06T21:01:05Z' };
+  assert.equal(advancedAll(base, { brandHealth: '2026-11-06T21:20:10Z', conversions: '2026-11-06T21:20:50Z' }), true);
+  assert.equal(advancedAll(base, { brandHealth: '2026-11-06T21:20:10Z', conversions: '2026-11-06T21:01:05Z' }), false);
+  assert.equal(advancedAll(base, { brandHealth: '2026-11-06T21:00:19Z', conversions: '2026-11-06T21:20:50Z' }), false);
+  assert.equal(advancedAll(base, { brandHealth: '2026-11-06T21:20:10Z', conversions: null }), false);
+  assert.equal(advancedAll({ brandHealth: '2026-11-06T21:00:19Z', conversions: null }, { brandHealth: '2026-11-06T21:20:10Z', conversions: '2026-11-06T21:20:50Z' }), true);
+  assert.equal(advancedAll(base, null), false);
+  // A job left out does not count (a user who cannot read the conversions meta).
+  assert.equal(advancedAll(base, { brandHealth: '2026-11-06T21:20:10Z', conversions: null }, ['brandHealth']), true);
+  assert.equal(advancedAll(base, base, []), false);
+});
+
+test('SYNC-ALL I4: with isDone = advancedAll the flow polls until BOTH stamps advance', async () => {
+  const c = clock();
+  const states = [];
+  const base = { brandHealth: '2026-11-06T21:00:19Z', conversions: '2026-11-06T21:01:05Z' };
+  const seq = [
+    base,
+    { brandHealth: '2026-11-06T21:20:10Z', conversions: '2026-11-06T21:01:05Z' }, // brand health first (~25 s)
+    { brandHealth: '2026-11-06T21:20:10Z', conversions: '2026-11-06T21:20:50Z' }, // then conversions (~50 s)
+  ];
+  let reads = 0;
+  const r = createRefresh({
+    start: async () => ({ started: true, jobs: ['brandHealth', 'campaignConversions'] }),
+    read: async () => { const d = seq[Math.min(reads, seq.length - 1)]; reads += 1; return d; },
+    isDone: advancedAll,
+    onState: (s) => states.push(s),
+    now: c.now,
+    setTimer: c.setTimer,
+    clearTimer: c.clearTimer,
+  });
+  await r.begin(base);
+  await c.tick();
+  await c.tick();
+  assert.deepEqual(states, ['starting', 'running'], 'one stamp advanced is not done');
+  await c.tick();
+  assert.deepEqual(states, ['starting', 'running', 'done']);
+  assert.equal(c.pending(), 0);
+  // The cap is unchanged: 3 minutes.
+  assert.equal(CAP_MS, 3 * 60 * 1000);
 });

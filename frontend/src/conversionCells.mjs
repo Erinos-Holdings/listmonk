@@ -8,6 +8,7 @@
 //   uncovered (null) -> '—'          (a missing campaign is not zero)
 //   covered, no rows -> 0 / $0        (a real zero)
 //   no conversions doc at all -> '—' everywhere
+import { MISSING as SYNC_MISSING, syncText } from './healthSync.mjs'; // eslint-disable-line import/extensions
 
 export const MEASURES = Object.freeze(['tracked', 'matched']);
 
@@ -99,19 +100,33 @@ export function scopedCell(value, meta, fmt) {
   return conversionCell(normalizeMeta(meta) ? value : null, fmt);
 }
 
-// The tooltip's i18n keys: the measure's definition (with its floor), then "As of", then the
+// The tooltip's i18n keys: the measure's definition (with its floor), then "Conversions computed
+// <time>" (integrations SYNC-ALL-SPEC D5 -- the run instant, never a "through <day>"), then the
 // stale note when Tracked is from an earlier snapshot.
 export const TOOLTIP_KEYS = Object.freeze({
   tracked: 'analytics.conversions.trackedHelp',
   matched: 'analytics.conversions.matchedHelp',
-  asOf: 'analytics.conversions.asOf',
+  computed: 'analytics.matrix.conversionsComputed',
   stale: 'analytics.conversions.stale',
   none: 'analytics.conversions.none',
 });
 
+// conversionsComputedLabel is "Conversions computed {time}" for the conversions doc's asOf -- a
+// Mountain clock time, date-prefixed when its Mountain day is not `now`'s (healthSync.mjs::syncText,
+// the navbar's rule) -- or '' when there is no doc (SYNC-ALL-SPEC D5). The Campaign Matrix's
+// Conversions header and every conversions tooltip use it.
+export function conversionsComputedLabel(meta, t, now = Date.now()) {
+  const m = normalizeMeta(meta);
+  if (!m) {
+    return '';
+  }
+  const time = syncText(m.asOf, now);
+  return time === SYNC_MISSING ? '' : t(TOOLTIP_KEYS.computed, { time });
+}
+
 // conversionTooltip is the tooltip text for a measure. t is the i18n function ($t). With no doc it
 // is the definition plus the "not computed yet" line.
-export function conversionTooltip(measure, meta, t) {
+export function conversionTooltip(measure, meta, t, now = Date.now()) {
   const m = normalizeMeta(meta);
   const floor = m ? (measure === 'tracked' ? m.trackedFloor : m.matchedFloor).slice(0, 10) : '';
   const parts = [t(TOOLTIP_KEYS[measure], { floor })];
@@ -119,7 +134,10 @@ export function conversionTooltip(measure, meta, t) {
     parts.push(t(TOOLTIP_KEYS.none));
     return parts.join(' ');
   }
-  parts.push(t(TOOLTIP_KEYS.asOf, { asOf: m.asOf }));
+  const computed = conversionsComputedLabel(m, t, now);
+  if (computed) {
+    parts.push(computed);
+  }
   if (measure === 'tracked' && m.trackedStale) {
     parts.push(t(TOOLTIP_KEYS.stale));
   }
