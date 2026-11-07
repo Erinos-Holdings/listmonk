@@ -9,9 +9,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  COUNT_FIELDS, DEFAULT_STATE, MISSING, NAME_MAX, SHOP_FIELDS, SORT_FIELDS, STATUS_ORDER, STORAGE_KEY, cellText, clickSort,
-  conversionValue, dateCell, displayValue, filterByLaunch, filterByName, gapClass, gapTip, gpClass, gpLevel, gpTip, groupHeaders,
-  leftColumns, loadState, midColumns, nameCell, normalizeState, saveState, shapeRow, shapeRows, showBrandColumn,
+  COUNT_FIELDS, DEFAULT_STATE, GAP_FAILED, GAP_PENDING, MISSING, NAME_MAX, PENDING_MARK, SHOP_FIELDS, SORT_FIELDS,
+  STATUS_ORDER, STORAGE_KEY, cellText, clickSort, conversionValue, dateCell, displayValue, filterByLaunch, filterByName,
+  gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
+  midColumns, nameCell, normalizeState, saveState, shapeRow, shapeRows, showBrandColumn,
   sortRows, statusCell, statusRank, stripBrand, tableRows, totalsRow,
 } from './campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { scopedCell } from './conversionCells.mjs'; // eslint-disable-line import/extensions
@@ -491,5 +492,73 @@ test('GMAIL-GAP I2: the gap columns sort with a missing value last in both order
   // The i18n keys the group reads exist.
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   ['gmailGap', 'gmail', 'yahoo', 'gap', 'gmailHelp', 'yahooHelp', 'gapHelp', 'gmailTip', 'yahooTip', 'gapJourney',
-    'gapFloor', 'gapNoYahoo', 'gapNoYahooOpens', 'gapNoGmail'].forEach((k) => assert.ok(en[`analytics.matrix.${k}`], k));
+    'gapFloor', 'gapNoYahoo', 'gapNoYahooOpens', 'gapNoGmail', 'gapLoading'].forEach((k) => assert.ok(en[`analytics.matrix.${k}`], k));
+  assert.equal(en['analytics.matrix.gapLoading'], 'Loading the Gmail gap…');
+});
+
+// --- the Matrix's second request (gmail_gap) -- merge and the pending / failed cell states ---
+
+const bareApi = () => [
+  { ...api[0], id: 21, name: 'B1' },
+  { ...api[0], id: 22, name: 'B2' },
+  {
+    ...api[2], id: 23, name: 'J', evergreen: true,
+  },
+];
+const gapRow = (id, gmail, gp, yahoo, yp) => ({
+  campaign_id: id, gmail, gmail_proxy: gp, yahoo, yahoo_proxy: yp,
+});
+
+test('mergeGapCounts: by id, unknown ids ignored, journeys untouched, thresholds returned', () => {
+  const rows = bareApi();
+  assert.deepEqual(gapRequestIds(rows), [21, 22], 'journeys are never asked for');
+  const t = mergeGapCounts(rows, {
+    rows: [gapRow(21, 1000, 100, 400, 40), gapRow(99, 5, 5, 5, 5), gapRow(23, 7, 7, 7, 7)],
+    gap_thresholds: GAP_T,
+  });
+  assert.deepEqual(t, GAP_T);
+  assert.deepEqual([rows[0].gmail, rows[0].gmail_proxy, rows[0].yahoo, rows[0].yahoo_proxy], [1000, 100, 400, 40]);
+  assert.equal(rows[1].gmail, undefined, 'a row the response did not carry stays without counts');
+  assert.equal(rows[2].gmail, undefined, 'a journey is never written');
+  assert.equal(rows.length, 3);
+  assert.equal(mergeGapCounts(bareApi(), { rows: [] }), null, 'no stored line -> null');
+  assert.equal(mergeGapCounts(bareApi(), null), null);
+  // After the merge the cells, totals and coloring compute from the counts.
+  const shaped = shapeRows(rows, { gapThresholds: t });
+  assert.equal(cellText(shaped[0], 'gmail_gap', 'pct'), '1.00');
+  assert.equal(cellText(totalsRow(shaped), 'gmail_gap', 'pct'), '1.00');
+  assert.equal(gapClass(shaped[0]), '');
+});
+
+test('the pending state: broadcast gap cells read …, hover the loading text, sort as missing', () => {
+  const rows = shapeRows(bareApi(), { gapState: GAP_PENDING });
+  const [b1, , j] = rows;
+  ['gmail_open', 'yahoo_open', 'gmail_gap'].forEach((f) => {
+    ['pct', 'num'].forEach((m) => assert.equal(cellText(b1, f, m), PENDING_MARK, `${f} ${m}`));
+    assert.deepEqual(gapTip(b1, f), { key: 'analytics.matrix.gapLoading', params: {} });
+    // A journey never waits.
+    assert.equal(cellText(j, f, 'pct'), MISSING);
+    assert.equal(gapTip(j, f).key, 'analytics.matrix.gapJourney');
+  });
+  const t = totalsRow(rows);
+  assert.equal(cellText(t, 'gmail_gap', 'pct'), PENDING_MARK);
+  assert.equal(gapTip(t, 'gmail_gap').key, 'analytics.matrix.gapLoading');
+  assert.equal(displayValue(b1, 'gmail_gap', 'pct'), null, 'sorts as missing');
+  assert.equal(gapClass(b1), '');
+  // Pending rows sort by the tie rule (name), missing last in both orders.
+  assert.deepEqual(sortRows(rows, { field: 'gmail_gap', order: 'desc' }, 'pct').map((r) => r.id), [21, 22, 23]);
+});
+
+test('the failed state: broadcast gap cells read — with the unavailable wording, never the journey one', () => {
+  const rows = shapeRows(bareApi(), { gapState: GAP_FAILED });
+  const [b1, , j] = rows;
+  ['gmail_open', 'yahoo_open', 'gmail_gap'].forEach((f) => {
+    assert.equal(cellText(b1, f, 'pct'), MISSING);
+    assert.deepEqual(gapTip(b1, f), { key: 'analytics.gmailGapUnavailable', params: {} });
+    assert.equal(gapTip(j, f).key, 'analytics.matrix.gapJourney');
+  });
+  assert.equal(gapTip(totalsRow(rows), 'gmail_gap').key, 'analytics.gmailGapUnavailable');
+  assert.equal(gapClass(b1), '');
+  // An unknown state is ready.
+  assert.equal(shapeRows(bareApi(), { gapState: 'x' })[0].gapState, 'ready');
 });

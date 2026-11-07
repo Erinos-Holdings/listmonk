@@ -646,6 +646,14 @@ export const getCampaignGmailGap = async (params) => http.get(
   { params, loading: models.campaigns, camelCase: false },
 );
 
+// The Matrix's second request (GMAIL-GAP-SPEC D2): the same read with no loading flag and no
+// toast (the getSystemHealthQuiet precedent) -- the rendered table must not flicker or alert while
+// the gap cells fill in; a failure is the cells' own '—' state.
+export const getCampaignGmailGapQuiet = async (params) => http.get(
+  '/api/campaigns/analytics/gmail_gap',
+  { params, camelCase: false, disableToast: true },
+);
+
 // Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7) -- per campaign, the stored
 // Tracked and Matched orders and sales (null = not covered), with the doc's as_of and floors.
 export const getCampaignConversions = async (params) => http.get(

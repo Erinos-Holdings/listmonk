@@ -78,6 +78,7 @@
     "analytics.matrix.gapNoYahoo": "No Yahoo/AOL recipients, so no control rate.",
     "analytics.matrix.gapNoYahooOpens": "No Yahoo/AOL recipient has opened through Yahoo's proxy yet, so no control rate.",
     "analytics.matrix.gapNoGmail": "No Gmail recipients.",
+    "analytics.matrix.gapLoading": "Loading the Gmail gap…",
     "analytics.matrix.note":"Campaigns with activity in the Mountain days from 60 days ago through today ({from} to {to}). A broadcast is listed when it started in that window, with everything recorded for it so far; a journey is listed when it sent in the window, with its sends and activity in the window only (each person counted once, on their first view or click). GP S% trails by a day or more, so today's rows show — there until it arrives; conversions are recomputed hourly (Tracked as fresh as the latest UTM export). %/$ shows every count over the row's Sent and conversions as sales; # shows counts and orders. Views are inflated by auto-opens (Apple MPP). Shop link attribution counts shop-link clickers by their shop-link kind (— = no shop link in the campaign). The Gmail gap is the Gmail proxy open rate over the Yahoo proxy open rate among the campaign's recipients (— for a journey); its rates accrue for about two days.",
     "analytics.gmailGap": "Gmail gap",
     "analytics.gmailGapOpens": "Gmail open {gmailRate} ({gmailOpeners} of {gmail}) · Yahoo open {yahooRate} ({yahooOpeners} of {yahoo})",

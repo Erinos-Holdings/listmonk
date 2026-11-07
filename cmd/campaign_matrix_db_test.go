@@ -64,17 +64,11 @@ type cmRow struct {
 	Matched      *cmMeasure      `json:"matched"`
 	GPRate       *float64        `json:"gp_rate"`
 	GPThresholds json.RawMessage `json:"gp_thresholds"`
-	// GMAIL-GAP-SPEC D2 -- NULL in all four for a journey.
-	Gmail      *int `json:"gmail"`
-	GmailProxy *int `json:"gmail_proxy"`
-	Yahoo      *int `json:"yahoo"`
-	YahooProxy *int `json:"yahoo_proxy"`
 }
 
 type cmResp struct {
-	GP            bool            `json:"gp"`
-	Rows          []cmRow         `json:"rows"`
-	GapThresholds json.RawMessage `json:"gap_thresholds"`
+	GP   bool    `json:"gp"`
+	Rows []cmRow `json:"rows"`
 }
 
 // TestCampaignMatrixPerm is D10's gate: the route is registered behind campaigns:get_analytics
@@ -392,9 +386,7 @@ func TestCampaignMatrixDB(t *testing.T) {
 			Views: wantViews, Clicks: wantClicks, HardBounces: 2, SoftBounces: 1, Complaints: 1,
 			ShopFounder: ip(wantFounder), ShopSelf: ip(1), ShopCreator: ip(0), ShopCorp: ip(0),
 			Tracked: &cmMeasure{2, 15.5}, Matched: &cmMeasure{1, 7}, GPRate: fp(0.004),
-			GPThresholds: json.RawMessage(`{"issues":0.003,"warn":0.002}`), // compactJSON sorts keys
-			// GMAIL-GAP-SPEC D2 -- a broadcast with no Gmail or Yahoo recipient reads 0, not null.
-			Gmail: ip(0), GmailProxy: ip(0), Yahoo: ip(0), YahooProxy: ip(0)}
+			GPThresholds: json.RawMessage(`{"issues":0.003,"warn":0.002}`)} // compactJSON sorts keys
 		gotB := rows[bIn]
 		gotB.GPThresholds = compactJSON(t, gotB.GPThresholds)
 		if !reflect.DeepEqual(gotB, wantB) {
@@ -458,14 +450,14 @@ func TestCampaignMatrixDB(t *testing.T) {
 	}
 }
 
-// TestCampaignGmailGapDB is integrations GMAIL-GAP-SPEC I1 (and I4's SQL half): the matrix row's
-// gmail / gmail_proxy / yahoo / yahoo_proxy are the send predicate (single and double opt-in lists,
-// not blocklisted, the campaign's language by the send expression) bounded by last_subscriber_id,
-// with openers the DISTINCT recipients holding a gmail-proxy (resp. yahoo) view before t1 in BOTH
-// tracking modes; NULL on a journey; gap_thresholds the gmailGap of the newest ses document that
-// carries one, verbatim (a newer document without it never nulls it).
-// The gmail_gap analytics type returns the same recipients (not date-bounded) with openers bounded
-// by [from, to]. The threshold numbers here are fixtures, never the live values.
+// TestCampaignGmailGapDB is integrations GMAIL-GAP-SPEC I1 (and I4's SQL half), through the gmail_gap
+// analytics type -- the one statement both the Campaign pane and the Campaign Matrix's second request
+// call: gmail / gmail_proxy / yahoo / yahoo_proxy are the send predicate (single and double opt-in
+// lists, not blocklisted, the campaign's language by the send expression) bounded by
+// last_subscriber_id (not date-bounded), with openers the DISTINCT recipients holding a gmail-proxy
+// (resp. yahoo) view in [from, to] in BOTH tracking modes; NULL on a journey; gap_thresholds the
+// gmailGap of the newest ses document that carries one, verbatim (a newer document without it never
+// nulls it). The threshold numbers here are fixtures, never the live values.
 func TestCampaignGmailGapDB(t *testing.T) {
 	h := newLinkHarness(t)
 	t.Cleanup(func() { ko.Set("privacy.individual_tracking", true) })
@@ -551,25 +543,11 @@ func TestCampaignGmailGapDB(t *testing.T) {
 		Yahoo      *int `json:"yahoo"`
 		YahooProxy *int `json:"yahoo_proxy"`
 	}
-	// Gmail recipients g1, g2, g3 (g1 opened); Yahoo recipients y1, y2, y3, y5 (y1 and y5 opened
-	// before t1; y2's view is tomorrow).
+	// The Campaign Matrix's second request (an open-ended from, to = now): Gmail recipients g1, g2, g3
+	// (g1 opened); Yahoo recipients y1, y2, y3, y5 (y1 and y5 opened; y2's view is tomorrow).
 	wantMatrix := counts{ip(3), ip(1), ip(4), ip(2)}
 
 	admin := baUser([]string{auth.PermCampaignsGetAll, auth.PermCampaignsGetAnalytics, auth.PermListGetAll})
-	matrix := func() cmResp {
-		t.Helper()
-		code, body := baCall(t, admin, "/api/analytics/campaigns/matrix", h.app.auth.Perm(h.app.GetCampaignMatrix, "campaigns:get_analytics"))
-		if code != http.StatusOK {
-			t.Fatalf("matrix: %d %s", code, body)
-		}
-		var resp struct {
-			Data cmResp `json:"data"`
-		}
-		if err := json.Unmarshal([]byte(body), &resp); err != nil {
-			t.Fatalf("matrix: %s: %v", body, err)
-		}
-		return resp.Data
-	}
 	type gapResp struct {
 		Rows []struct {
 			CampaignID int `json:"campaign_id"`
@@ -593,39 +571,29 @@ func TestCampaignGmailGapDB(t *testing.T) {
 		}
 		return resp.Data
 	}
-	countsOf := func(r cmRow) counts { return counts{r.Gmail, r.GmailProxy, r.Yahoo, r.YahooProxy} }
-
 	for _, tracking := range []bool{true, false} {
 		ko.Set("privacy.individual_tracking", tracking)
 		h.app.core = core.New(&core.Opt{Queries: prepareQueries(loadQueryMap(t), h.db, ko), DB: h.db, I18n: h.app.i18n, Log: h.app.log}, &core.Hooks{})
 		name := func(s string) string { return fmt.Sprintf("tracking=%v %s", tracking, s) }
 
-		got := matrix()
-		var bRow, jRow *cmRow
-		for i := range got.Rows {
-			switch got.Rows[i].ID {
-			case bG:
-				bRow = &got.Rows[i]
-			case jG:
-				jRow = &got.Rows[i]
-			}
+		// The Matrix's request (CampaignMatrix.vue) -- from the epoch to now.
+		g := gapType(time.Unix(0, 0).UTC(), time.Now())
+		if len(g.Rows) != 2 || g.Rows[0].CampaignID != bG || g.Rows[1].CampaignID != jG {
+			t.Fatalf("%s: gmail_gap rows %s, want [bG, jG]", name("matrix request"), baJSON(g.Rows))
 		}
-		if bRow == nil || jRow == nil {
-			t.Fatalf("%s: rows %s, want the broadcast and the journey", name("matrix"), baJSON(got.Rows))
+		if !reflect.DeepEqual(g.Rows[0].counts, wantMatrix) {
+			t.Fatalf("%s: broadcast counts %s, want %s", name("matrix request"), baJSON(g.Rows[0].counts), baJSON(wantMatrix))
 		}
-		if c := countsOf(*bRow); !reflect.DeepEqual(c, wantMatrix) {
-			t.Fatalf("%s: broadcast counts %s, want %s", name("matrix"), baJSON(c), baJSON(wantMatrix))
+		if g.Rows[1].counts != (counts{}) {
+			t.Fatalf("%s: journey counts %s, want all null", name("matrix request"), baJSON(g.Rows[1].counts))
 		}
-		if c := countsOf(*jRow); c != (counts{}) {
-			t.Fatalf("%s: journey counts %s, want all null", name("matrix"), baJSON(c))
-		}
-		if compactJSON(t, got.GapThresholds) != nil {
-			t.Fatalf("%s: gap_thresholds %s with no ses document, want null", name("matrix"), got.GapThresholds)
+		if compactJSON(t, g.GapThresholds) != nil {
+			t.Fatalf("%s: gap_thresholds %s with no ses document, want null", name("matrix request"), g.GapThresholds)
 		}
 
 		// The analytics type over [start(3), now]: g1's day-2 view is in (one opener), y1's day-2
 		// view is in, y5's day-4 view is out; recipients are not date-bounded.
-		g := gapType(start(3), time.Now())
+		g = gapType(start(3), time.Now())
 		if len(g.Rows) != 2 || g.Rows[0].CampaignID != bG || g.Rows[1].CampaignID != jG {
 			t.Fatalf("%s: gmail_gap rows %s, want [bG, jG]", name("gmail_gap"), baJSON(g.Rows))
 		}
@@ -642,24 +610,18 @@ func TestCampaignGmailGapDB(t *testing.T) {
 		}
 	}
 
-	// gap_thresholds = the NEWEST ses document's campaignThresholds.gmailGap, verbatim, in both.
+	// gap_thresholds = the NEWEST ses document's campaignThresholds.gmailGap, verbatim.
 	ses := func(day string, doc string) {
 		h.db.MustExec(`INSERT INTO system_health (kind, day, status, doc) VALUES ('ses', $1::DATE, 'ok', $2::JSONB)`, day, doc)
 	}
 	ses(start(3).Format("2006-01-02"), `{"campaignThresholds": {"gmailGap": {"warn": 0.7, "red": 0.3, "minControl": 50}}}`)
 	ses(start(1).Format("2006-01-02"), `{"campaignThresholds": {"hardBounce": {"warn": 0.01, "red": 0.02}, "gmailGap": {"warn": 0.8, "red": 0.4, "minControl": 150}}}`)
 	want := json.RawMessage(`{"minControl":150,"red":0.4,"warn":0.8}`)
-	if got := compactJSON(t, matrix().GapThresholds); string(got) != string(want) {
-		t.Fatalf("matrix gap_thresholds %s, want %s", got, want)
-	}
 	if got := compactJSON(t, gapType(start(3), time.Now()).GapThresholds); string(got) != string(want) {
 		t.Fatalf("gmail_gap gap_thresholds %s, want %s", got, want)
 	}
 	// A newer document without gmailGap never nulls it: the newest document CARRYING the key wins.
 	ses(start(0).Format("2006-01-02"), `{"campaignThresholds": {"hardBounce": {"warn": 0.01, "red": 0.02}}}`)
-	if got := compactJSON(t, matrix().GapThresholds); string(got) != string(want) {
-		t.Fatalf("matrix gap_thresholds %s under a newest doc without gmailGap, want %s", got, want)
-	}
 	if got := compactJSON(t, gapType(start(3), time.Now()).GapThresholds); string(got) != string(want) {
 		t.Fatalf("gmail_gap gap_thresholds %s under a newest doc without gmailGap, want %s", got, want)
 	}

@@ -13,8 +13,9 @@
 // link), Tracked / Matched headers, the Brand column hidden under a single-brand selection, the
 // name truncated to 25 characters.
 // Fork (integrations GMAIL-GAP-SPEC D2-D4) -- the GMAIL GAP group (Gmail, Yahoo, Gap) from the
-// row's gmail / gmail_proxy / yahoo / yahoo_proxy counts and the response's top-level
-// gap_thresholds (the stored line); the arithmetic is gmailGap.mjs's, the fork holds no value.
+// gmail / gmail_proxy / yahoo / yahoo_proxy counts and gap_thresholds (the stored line) of a SECOND
+// request, GET /api/campaigns/analytics/gmail_gap over the broadcast rows, merged in by
+// mergeGapCounts after the matrix renders; the arithmetic is gmailGap.mjs's, the fork holds no value.
 import { matchesLaunch, normalizeLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { normalizeMeasure } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 import {
@@ -38,6 +39,13 @@ export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
 export const GAP_FIELDS = Object.freeze(['gmail_open', 'yahoo_open', 'gmail_gap']);
 
 export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'sent', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
+
+// The Matrix's second request (gmail_gap) states; PENDING_MARK is a gap cell while it is in flight.
+export const GAP_PENDING = 'pending';
+export const GAP_READY = 'ready';
+export const GAP_FAILED = 'failed';
+export const GAP_STATES = Object.freeze([GAP_PENDING, GAP_READY, GAP_FAILED]);
+export const PENDING_MARK = '…';
 
 // HOURLY-HEALTH-SPEC D2: the Status column's ascending order -- still moving first (running,
 // paused, scheduled, draft, finished, cancelled); an unknown status ranks after every known one.
@@ -258,8 +266,10 @@ export function groupHeaders(showGp) {
 // shapeRow flattens one API row. A missing Sent is null; an uncovered conversion measure is null;
 // a campaign with no shop link has null shop-link kinds (MATRIX-POLISH D5). GMAIL-GAP-SPEC D2: the
 // four Gmail-gap counts as `gap` (null for a journey) and the response's stored line, validated, as
-// `gapThresholds` (null when absent -- the floor is then unknown and nothing is colored).
-export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null) {
+// `gapThresholds` (null when absent -- the floor is then unknown and nothing is colored). The counts
+// and the line arrive in the Matrix's SECOND request (mergeGapCounts); `gapState` is that request's
+// state -- 'pending' (the gap cells read '…'), 'failed' ('—', the unavailable wording) or 'ready'.
+export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null, gapState = GAP_READY) {
   const brand = str(r && r.brand);
   const out = {
     id: r.id,
@@ -282,6 +292,7 @@ export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null) {
     gpThresholds: isObj(r.gp_thresholds) ? r.gp_thresholds : null,
     gap: r.evergreen === true ? null : gapCounts(r),
     gapThresholds: parseGapThresholds(gapThresholds),
+    gapState: GAP_STATES.includes(gapState) ? gapState : GAP_READY,
     totals: false,
   };
   SHOP_FIELDS.forEach((k) => { out[k] = numOrNull(r[k]); });
@@ -302,10 +313,38 @@ export function filterByLaunch(rows, launch, docs) {
 // shapeRows is the API rows flattened, then narrowed by the launch filter. The server has applied
 // the permission scope, the brand selector (list_id) and the kind.
 export function shapeRows(apiRows, {
-  launch = 'all', docs = [], brandLabel, gapThresholds = null,
+  launch = 'all', docs = [], brandLabel, gapThresholds = null, gapState = GAP_READY,
 } = {}) {
   const rows = (Array.isArray(apiRows) ? apiRows : []).filter((r) => r && typeof r.id === 'number');
-  return filterByLaunch(rows.map((r) => shapeRow(r, brandLabel, gapThresholds)), launch, docs);
+  return filterByLaunch(rows.map((r) => shapeRow(r, brandLabel, gapThresholds, gapState)), launch, docs);
+}
+
+// GMAIL-GAP-SPEC D2 (the Matrix's second request, 2026-11-06) -- the broadcast ids to ask
+// GET /api/campaigns/analytics/gmail_gap for (journeys are never sent: their counts stay null).
+export function gapRequestIds(apiRows) {
+  return (Array.isArray(apiRows) ? apiRows : [])
+    .filter((r) => r && typeof r.id === 'number' && r.evergreen !== true)
+    .map((r) => r.id);
+}
+
+// mergeGapCounts writes the gmail_gap response's four counts onto the matching API rows (by id;
+// unknown ids are ignored, journey rows are never touched) and returns its gap_thresholds (null when
+// absent). It mutates `rows` -- the caller passes a fresh copy and assigns it.
+export function mergeGapCounts(rows, resp) {
+  const byId = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((r) => {
+    if (r && typeof r.id === 'number' && r.evergreen !== true) {
+      byId.set(r.id, r);
+    }
+  });
+  const got = resp && Array.isArray(resp.rows) ? resp.rows : [];
+  got.forEach((g) => {
+    const r = g && byId.get(g.campaign_id);
+    if (r) {
+      ['gmail', 'gmail_proxy', 'yahoo', 'yahoo_proxy'].forEach((k) => { r[k] = g[k]; });
+    }
+  });
+  return resp && isObj(resp.gap_thresholds) ? resp.gap_thresholds : null;
 }
 
 // D5: the totals row (two or more rows, as the Brand Matrix): per count column the sum over the rows
@@ -333,6 +372,7 @@ export function totalsRow(rows, label = 'Total') {
     // totals show the pooled rates and the pooled gap; the stored line is the response's one.
     gap: poolCounts(r.map((x) => x.gap)),
     gapThresholds: r[0].gapThresholds || null,
+    gapState: r[0].gapState || GAP_READY,
     totals: true,
     colSent: {},
   };
@@ -421,10 +461,21 @@ export function conversionValue(row, field) {
 
 const pct = (v) => `${(v * 100).toFixed(RATE_DIGITS)}%`;
 
+// gapPending: a gap cell of a broadcast (or the totals row) whose counts are still in flight. A
+// journey's gap cells never wait (its counts are null by definition).
+export function gapPending(row, field = 'gmail_gap') {
+  return !!row && GAP_FIELDS.includes(field) && !row.evergreen && row.gapState === GAP_PENDING;
+}
+
 // cellText is a numeric cell's text: '—' for a missing value, a rate as a percentage, a count
 // through fmt, a sales figure through usd. The conversion cells also have conversionCells.mjs's
 // scopedCell for the '—'-with-no-doc rule; this is the same rule over the shaped (normalized) value.
+// A broadcast's gap cell reads PENDING_MARK while the second request is in flight (it sorts as
+// missing: its value is null until the counts arrive).
 export function cellText(row, field, mode, fmt = (n) => String(n), usd = (n) => `$${n}`) {
+  if (gapPending(row, field)) {
+    return PENDING_MARK;
+  }
   const v = displayValue(row, field, mode);
   if (v === null) {
     return MISSING;
@@ -497,14 +548,22 @@ export function gapClass(row) {
 // GMAIL-GAP-SPEC D3: a Gmail-gap cell's hover as { key, params } (i18n). Gmail / Yahoo name the
 // fraction (fmt formats the counts); Gap names the rule, or why it is '—' (journey, a Yahoo base
 // under the stored floor, no Yahoo recipients or opens, no Gmail recipients). A journey's Gmail and
-// Yahoo cells carry the journey reason.
+// Yahoo cells carry the journey reason. A broadcast's cells while the second request is in flight
+// name the loading; after a failed request (or a broadcast the response did not carry) the neutral
+// unavailable wording -- never the journey one.
 export function gapTip(row, field, fmt = (n) => String(n)) {
   if (!row) {
     return null;
   }
+  if (gapPending(row, field)) {
+    return { key: 'analytics.matrix.gapLoading', params: {} };
+  }
   const c = row.gap;
   if (!c) {
-    return gapReasonTip('journey', null);
+    if (row.evergreen || (row.totals && row.gapState !== GAP_FAILED)) {
+      return gapReasonTip('journey', null);
+    }
+    return { key: 'analytics.gmailGapUnavailable', params: {} };
   }
   if (field === 'gmail_open') {
     return { key: 'analytics.matrix.gmailTip', params: { n: fmt(c.gmail_proxy), of: fmt(c.gmail) } };

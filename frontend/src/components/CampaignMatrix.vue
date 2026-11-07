@@ -119,9 +119,9 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  CONVERSION_FIELDS, GAP_FIELDS, cellText, clickSort, conversionValue, dateCell, filterByName, gapClass, gapTip,
-  gpClass, gpTip, groupHeaders, leftColumns, loadState, midColumns, nameCell, saveState, shapeRows, showBrandColumn,
-  statusCell, tableRows,
+  CONVERSION_FIELDS, GAP_FAILED, GAP_FIELDS, GAP_PENDING, GAP_READY, cellText, clickSort, conversionValue, dateCell,
+  filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
+  midColumns, nameCell, saveState, shapeRows, showBrandColumn, statusCell, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, conversionsComputedLabel, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -136,8 +136,12 @@ export default Vue.extend({
     return {
       apiRows: [],
       conversions: null,
-      // GMAIL-GAP-SPEC D2: the response's gap_thresholds (the ses document's stored line), or null.
+      // GMAIL-GAP-SPEC D2: the gmail_gap response's gap_thresholds (the ses document's stored line),
+      // or null; that second request's state (pending | ready | failed); the matrix fetch counter
+      // that drops a stale response.
       gapThresholds: null,
+      gapState: GAP_READY,
+      fetchSeq: 0,
       // The server's window ({ from, to } Mountain dates) for the note.
       period: {},
       loading: false,
@@ -190,7 +194,11 @@ export default Vue.extend({
     tableRows() {
       const brands = this.brandRows;
       const rows = shapeRows(this.apiRows, {
-        launch: this.launch, docs: this.healthDocs, brandLabel: (s) => brandLabelOf(s, brands), gapThresholds: this.gapThresholds,
+        launch: this.launch,
+        docs: this.healthDocs,
+        brandLabel: (s) => brandLabelOf(s, brands),
+        gapThresholds: this.gapThresholds,
+        gapState: this.gapState,
       });
       return tableRows(filterByName(rows, this.nameQuery), this.state.sort, this.state.mode, {
         locale: (this.$i18n && this.$i18n.locale) || 'en',
@@ -222,13 +230,42 @@ export default Vue.extend({
 
     fetchRows() {
       this.loading = true;
+      this.fetchSeq += 1;
+      const seq = this.fetchSeq;
       this.$api.getCampaignMatrix(this.params()).then((data) => {
+        if (seq !== this.fetchSeq) return;
         this.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
         this.conversions = (data && data.conversions) || null;
-        this.gapThresholds = (data && data.gap_thresholds) || null;
         this.period = (data && data.window) || {};
+        this.fetchGap(seq);
       }).finally(() => {
         this.loading = false;
+      });
+    },
+
+    // GMAIL-GAP-SPEC D2 (2026-11-06) -- the GMAIL GAP counts are a SECOND request, made after the
+    // matrix renders: gmail_gap over the broadcast rows (journeys are never sent and keep null
+    // counts), with an open-ended from (a broadcast's matrix numbers are everything recorded for it)
+    // and to = now. The gap cells read '…' meanwhile and '—' (unavailable) on failure; the stored
+    // line comes from this response only. A response for an older matrix fetch is dropped.
+    fetchGap(seq) {
+      this.gapThresholds = null;
+      const ids = gapRequestIds(this.apiRows);
+      if (!ids.length) {
+        this.gapState = GAP_READY;
+        return;
+      }
+      this.gapState = GAP_PENDING;
+      // Quiet: no loading overlay over the table already on screen, no toast on failure.
+      this.$api.getCampaignGmailGapQuiet({ id: ids, from: '1970-01-01T00:00:00Z', to: new Date().toISOString() }).then((resp) => {
+        if (seq !== this.fetchSeq) return;
+        const rows = this.apiRows.map((r) => ({ ...r }));
+        this.gapThresholds = mergeGapCounts(rows, resp);
+        this.apiRows = rows;
+        this.gapState = GAP_READY;
+      }).catch(() => {
+        if (seq !== this.fetchSeq) return;
+        this.gapState = GAP_FAILED;
       });
     },
 

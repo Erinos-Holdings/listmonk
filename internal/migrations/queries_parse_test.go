@@ -394,11 +394,12 @@ func TestCampaignAnalyticsZoneAgreement(t *testing.T) {
 	}
 }
 
-// Fork (integrations GMAIL-GAP-SPEC D1/I1) -- the Campaign Matrix and the gmail_gap analytics type
-// count the SAME recipients: their glists / lmem / grecip CTEs are byte-identical; lmem carries the
-// spec's provider regexes byte-for-byte, the send path's language expression and the blocklist rule;
-// grecip the opt-in rule, the language match and the checkpoint bound. The analytics statement is
-// not interpolated (no percent sign, no tag).
+// Fork (integrations GMAIL-GAP-SPEC D1/I1) -- get-campaign-gmail-gap is the ONE statement that counts
+// the Gmail gap (the Campaign pane and the Campaign Matrix's second request both call it; the matrix
+// statement carries no gap counts): its lmem carries the spec's provider regexes byte-for-byte, the
+// send path's language expression and the blocklist rule; grecip the opt-in rule, the language
+// match, the checkpoint bound and the journey exclusion; the thresholds come from the newest ses
+// document carrying gmailGap. It is not interpolated (no percent sign, no tag).
 func TestGmailGapRecipientsAgree(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -425,17 +426,8 @@ func TestGmailGapRecipientsAgree(t *testing.T) {
 		}
 		return q.Query[i:j]
 	}
-	// The whole recipient block (glists, lmem, grecip) is byte-identical in both statements.
-	m, g := cte("get-campaign-matrix", "glists", "gcnt"), cte("get-campaign-gmail-gap", "glists", "gcnt")
-	if m != g {
-		t.Errorf("glists/lmem/grecip differ between get-campaign-matrix and get-campaign-gmail-gap\n matrix  %s\n gap     %s", m, g)
-	}
-	for _, part := range []struct{ from, to string }{{"glists", "lmem"}, {"lmem", "grecip"}, {"grecip", "gcnt"}} {
-		if a, b := cte("get-campaign-matrix", part.from, part.to), cte("get-campaign-gmail-gap", part.from, part.to); a != b {
-			t.Errorf("%s differs between the two statements", part.from)
-		}
-	}
-	lmem := cte("get-campaign-matrix", "lmem", "grecip")
+	const gap = "get-campaign-gmail-gap"
+	lmem := cte(gap, "lmem", "grecip")
 	for _, want := range []string{
 		`s.email ~* '@(gmail|googlemail)\.com$'`,
 		`s.email ~* '@(yahoo|aol|ymail|rocketmail)\.'`,
@@ -446,7 +438,7 @@ func TestGmailGapRecipientsAgree(t *testing.T) {
 			t.Errorf("lmem lacks %s", want)
 		}
 	}
-	grecip := cte("get-campaign-matrix", "grecip", "gcnt")
+	grecip := cte(gap, "grecip", "gcnt")
 	for _, want := range []string{
 		`m.subscriber_id <= c.last_subscriber_id`,
 		`c.attribs->>'lang' IS NULL OR m.lang2 = c.attribs->>'lang'`,
@@ -463,7 +455,19 @@ func TestGmailGapRecipientsAgree(t *testing.T) {
 	if !strings.Contains(qs["next-campaign-subscribers"].Query, `COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en')`) {
 		t.Error("next-campaign-subscribers no longer carries the language expression grecip copies")
 	}
-	gq := qs["get-campaign-gmail-gap"]
+	gq := qs[gap]
+	if !strings.Contains(gq.Query, `kind = 'ses' AND doc->'campaignThresholds' ? 'gmailGap'`) {
+		t.Error("get-campaign-gmail-gap does not read the newest ses document carrying gmailGap")
+	}
+	if !strings.Contains(cte(gap, "glists", "lmem"), "NOT k.evergreen") {
+		t.Error("glists does not exclude journeys")
+	}
+	// The matrix statement carries no gap counts any more (the Matrix's second request does).
+	for _, gone := range []string{"grecip AS (", "lmem AS (", "'gmail_proxy'", "gap_thresholds"} {
+		if strings.Contains(qs["get-campaign-matrix"].Query, gone) {
+			t.Errorf("get-campaign-matrix still carries %s", gone)
+		}
+	}
 	if strings.Contains(gq.Query, "%") {
 		t.Error("get-campaign-gmail-gap carries a percent sign")
 	}
