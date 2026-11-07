@@ -375,8 +375,9 @@ test('HOURLY-HEALTH I2: Status sorts running, paused, scheduled, draft, finished
 });
 
 test('HOURLY-HEALTH I2: the Status column after Date, before Sent; the header and cell texts; the totals cell empty', () => {
-  assert.deepEqual(leftColumns(true).map((c) => c.field), ['name', 'brand', 'date', 'status', 'sent']);
-  assert.deepEqual(leftColumns(false).map((c) => c.field), ['name', 'date', 'status', 'sent']);
+  // Integrations SMART-SENDING-SPEC D5: Skipped follows Sent.
+  assert.deepEqual(leftColumns(true).map((c) => c.field), ['name', 'brand', 'date', 'status', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(false).map((c) => c.field), ['name', 'date', 'status', 'sent', 'skipped']);
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   assert.equal(en['analytics.matrix.status'], 'Status');
   leftColumns(true).forEach((c) => assert.ok(en[c.label], c.label));
@@ -561,4 +562,39 @@ test('the failed state: broadcast gap cells read — with the unavailable wordin
   assert.equal(gapClass(b1), '');
   // An unknown state is ready.
   assert.equal(shapeRows(bareApi(), { gapState: 'x' })[0].gapState, 'ready');
+});
+
+// --- integrations SMART-SENDING-SPEC I8 ---
+
+test('SMART-SENDING I8: Skipped shows the count, "off" for a bypass, — for a journey; sortable, totals summed', () => {
+  const rows = shapeRows([
+    {
+      ...api[0], id: 31, name: 'Ruled', skipped: 12, smart_off: false,
+    },
+    {
+      ...api[0], id: 32, name: 'Launch', skipped: 0, smart_off: true,
+    },
+    {
+      ...api[0], id: 33, name: 'Welcome', evergreen: true, skipped: null, smart_off: false, last_sent: '2026-10-26',
+    },
+    {
+      ...api[0], id: 34, name: 'Quiet', skipped: 0, smart_off: false,
+    },
+  ]);
+  const [ruled, launch, journey, quiet] = rows;
+  const fmt = (n) => String(n);
+  assert.equal(cellText(ruled, 'skipped', 'pct', fmt), '12', 'a count in %/$ mode, never a rate');
+  assert.equal(cellText(ruled, 'skipped', 'num', fmt), '12');
+  assert.equal(cellText(launch, 'skipped', 'pct', fmt), 'off');
+  assert.equal(cellText(journey, 'skipped', 'pct', fmt), MISSING);
+  assert.equal(cellText(quiet, 'skipped', 'num', fmt), '0');
+  // A journey's smart_off is never set, even if the server sent one.
+  assert.equal(shapeRow({ ...api[0], evergreen: true, smart_off: true }).smartOff, false);
+  assert.ok(SORT_FIELDS.includes('skipped'));
+  assert.deepEqual(sortRows(rows, { field: 'skipped', order: 'desc' }).map((r) => r.id), [31, 32, 34, 33]);
+  assert.deepEqual(sortRows(rows, { field: 'skipped', order: 'asc' }).map((r) => r.id), [32, 34, 31, 33]);
+  const t = totalsRow(rows);
+  assert.equal(cellText(t, 'skipped', 'pct', fmt), '12');
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['analytics.matrix.skipped', 'analytics.matrix.skippedHelp'].forEach((k) => assert.ok(en[k], k));
 });

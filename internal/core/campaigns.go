@@ -174,16 +174,21 @@ func (c *Core) FillAudience(cm *models.Campaign) {
 			cm.SentNoLang = null.IntFrom(row.NoLang)
 		}
 	}
+	// Fork (smart sending, SMART-SENDING-SPEC D5) -- the attrib's effective value, on every served
+	// campaign JSON.
+	cm.SmartSendingOn = cm.SmartSending()
 	if !wantsAudience(*cm) {
 		return
 	}
-	n, noLang, err := c.CampaignLangAudience(cm.ID)
+	a, err := c.CampaignLangAudience(cm.ID)
 	if err != nil {
 		c.log.Printf("error counting campaign audience (%d): %v", cm.ID, err)
 		return
 	}
-	cm.Audience = null.IntFrom(n)
-	cm.AudienceNoLang = null.IntFrom(noLang)
+	cm.Audience = null.IntFrom(a.Total)
+	cm.AudienceNoLang = null.IntFrom(a.NoLang)
+	// D3 -- null exactly when Audience is: both come from the one row.
+	cm.AudienceSkipped = null.IntFrom(a.Skipped)
 }
 
 // wantsSentNoLang (fork, campaign-page audience box) reports whether cm carries the
@@ -505,15 +510,21 @@ func wantsAudience(cm models.Campaign) bool {
 // next-campaigns uses for to_send -- and how many of them carry no language (the rows an
 // English send reaches by COALESCE-EN; zero for any other language). Used for the
 // zero-audience warning at start and the To send count in the UI.
-func (c *Core) CampaignLangAudience(id int) (total int, noLang int, err error) {
-	var row struct {
-		Total  int `db:"total"`
-		NoLang int `db:"no_lang"`
-	}
+// Fork (smart sending, SMART-SENDING-SPEC D3) -- and Skipped: how many of Total Smart Sending would
+// skip if the campaign went out now (brand_journey_sends_24h over the same join, one scan).
+func (c *Core) CampaignLangAudience(id int) (LangAudience, error) {
+	var row LangAudience
 	if err := c.q.GetCampaignLangAudience.Get(&row, id); err != nil {
-		return 0, 0, err
+		return LangAudience{}, err
 	}
-	return row.Total, row.NoLang, nil
+	return row, nil
+}
+
+// LangAudience is one get-campaign-lang-audience row.
+type LangAudience struct {
+	Total   int `db:"total"`
+	NoLang  int `db:"no_lang"`
+	Skipped int `db:"skipped"`
 }
 
 // CampaignUnreachableLang (fork, LIST-GRID-SPEC D13) counts the ACTIVE subscribers on a

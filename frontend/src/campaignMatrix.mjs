@@ -38,7 +38,11 @@ export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
 // (gmailGap.mjs); null counts = a journey.
 export const GAP_FIELDS = Object.freeze(['gmail_open', 'yahoo_open', 'gmail_gap']);
 
-export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'sent', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
+export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'sent', 'skipped', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
+
+// Integrations SMART-SENDING-SPEC D5 -- the Skipped cell's text on a broadcast that switched Smart
+// Sending off (its count is 0 by construction and still sorts as one).
+export const SMART_OFF = 'off';
 
 // The Matrix's second request (gmail_gap) states; PENDING_MARK is a gap cell while it is in flight.
 export const GAP_PENDING = 'pending';
@@ -57,7 +61,8 @@ export function statusRank(status) {
 }
 
 // The left columns, in order: Campaign, Brand (unless one brand is selected, MATRIX-POLISH D6),
-// Date, Status (HOURLY-HEALTH D2), Sent.
+// Date, Status (HOURLY-HEALTH D2), Sent, Skipped (integrations SMART-SENDING-SPEC D5 -- a count, not
+// a rate over Sent).
 export function leftColumns(showBrand = true) {
   const cols = [
     { field: 'name', label: 'analytics.matrix.campaign' },
@@ -65,6 +70,7 @@ export function leftColumns(showBrand = true) {
     { field: 'date', label: 'analytics.matrix.date' },
     { field: 'status', label: 'analytics.matrix.status' },
     { field: 'sent', label: 'dashboard.matrix.sent' },
+    { field: 'skipped', label: 'analytics.matrix.skipped', help: 'analytics.matrix.skippedHelp' },
   ];
   return showBrand ? cols : cols.filter((c) => c.field !== 'brand');
 }
@@ -283,6 +289,9 @@ export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null, gapStat
     date: r.evergreen === true ? null : (str(r.send_day) || null),
     lastSent: str(r.last_sent) || null,
     sent: numOrNull(r.sent),
+    // SMART-SENDING-SPEC D5: a broadcast's recorded skips (null for a journey -- '—') and its bypass.
+    skipped: r.evergreen === true ? null : numOrNull(r.skipped),
+    smartOff: r.evergreen !== true && r.smart_off === true,
     views: num(r.views),
     clicks: num(r.clicks),
     hard_bounces: num(r.hard_bounces),
@@ -378,6 +387,10 @@ export function totalsRow(rows, label = 'Total') {
   };
   const sends = r.map((x) => x.sent).filter((v) => typeof v === 'number');
   out.sent = sends.length ? sends.reduce((t, v) => t + v, 0) : null;
+  // SMART-SENDING-SPEC D5: the skips summed over the broadcasts carrying a count.
+  const skips = r.map((x) => x.skipped).filter((v) => typeof v === 'number');
+  out.skipped = skips.length ? skips.reduce((t, v) => t + v, 0) : null;
+  out.smartOff = false;
   COUNT_FIELDS.forEach((k) => {
     const valued = r.filter((x) => typeof x[k] === 'number');
     out[k] = valued.length ? valued.reduce((t, x) => t + x[k], 0) : null;
@@ -443,7 +456,7 @@ export function displayValue(row, field, mode = DEFAULT_STATE.mode) {
     }
     return mode === 'num' ? m.orders : m.sales;
   }
-  if (field === 'sent' || field === 'gp_rate') {
+  if (field === 'sent' || field === 'skipped' || field === 'gp_rate') {
     return numOrNull(row[field]);
   }
   if (GAP_FIELDS.includes(field)) {
@@ -475,6 +488,9 @@ export function gapPending(row, field = 'gmail_gap') {
 export function cellText(row, field, mode, fmt = (n) => String(n), usd = (n) => `$${n}`) {
   if (gapPending(row, field)) {
     return PENDING_MARK;
+  }
+  if (field === 'skipped' && row && row.smartOff && !row.totals) {
+    return SMART_OFF;
   }
   const v = displayValue(row, field, mode);
   if (v === null) {

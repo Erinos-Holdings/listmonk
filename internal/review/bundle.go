@@ -36,6 +36,8 @@ import (
 //   - null/"" -> "" for altbody, body_source, archive_slug; null/{} -> {} for attribs and
 //     archive_meta; null headers -> [] (the Vue save round-trip must reproduce the hash of an
 //     unedited campaign);
+//   - attribs without its smart_sending key (fork, SMART-SENDING-SPEC D4 -- the TS twin must drop it
+//     too, or a switched-off campaign's Inspect reads stale);
 //   - lists = the target list ids, sorted.
 func BundleHash(camp models.Campaign, listIDs []int) string {
 	ids := append([]int(nil), listIDs...)
@@ -45,9 +47,16 @@ func BundleHash(camp models.Campaign, listIDs []int) string {
 		idsAny[i] = id
 	}
 
-	var attribs any = map[string]any{}
-	if camp.Attribs != nil {
-		attribs = map[string]any(camp.Attribs)
+	// Fork (smart sending, integrations SMART-SENDING-SPEC D4) -- attribs.smart_sending is dropped
+	// before hashing: it changes who receives, not what was inspected, and reviewGuardOnEdit refuses
+	// a scheduled campaign's save whose hash changes -- so without this the switch could not be
+	// flipped on the scheduled launch it exists for. A copy: the campaign's map is never mutated.
+	attribs := map[string]any{}
+	for k, v := range camp.Attribs {
+		if k == models.SmartSendingAttrib {
+			continue
+		}
+		attribs[k] = v
 	}
 
 	var archiveMeta any = map[string]any{}

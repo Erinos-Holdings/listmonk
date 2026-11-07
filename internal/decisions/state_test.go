@@ -150,16 +150,17 @@ func TestModified(t *testing.T) {
 		}
 	}
 
-	// The shipped file: items 1, 9, 13 read "approved as modified" by Kaylinn on 2026-11-06 for a
-	// decision on their concept text; items 3, 5, 11 do not.
+	// The shipped file: items 1 and 9 read "approved as modified" by Kaylinn on 2026-11-06 for a
+	// decision on their concept text, item 13 on 2026-11-07 (her relayed Smart Sending request,
+	// integrations SMART-SENDING-SPEC D9); items 3, 5, 11 do not.
 	d, err := Lifecycle()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for key, want := range map[string]bool{"np-entry": true, "pp-delivery-clock": true, "both-per-brand": true, "np-same-day-double": false, "np-no-restarts": false, "pp-returning-thanks": false} {
+	for key, want := range map[string]string{"np-entry": "2026-11-06", "pp-delivery-clock": "2026-11-06", "both-per-brand": "2026-11-07", "np-same-day-double": "", "np-no-restarts": "", "pp-returning-thanks": ""} {
 		it, _ := d.Find(key)
 		m := Modified(it, Concept(it).Hash)
-		if (m != nil) != want || (m != nil && (m.Who != "Kaylinn Brophy" || m.Date != "2026-11-06")) {
+		if (m != nil) != (want != "") || (m != nil && (m.Who != "Kaylinn Brophy" || m.Date != want)) {
 			t.Errorf("%s: modified %+v", key, m)
 		}
 	}

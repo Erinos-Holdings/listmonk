@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  canSubmitReject, choicesOf, columnsOf, decisionBody, denverDay, historyOf, isStale, itemNumber,
+  calloutOf, canSubmitReject, choicesOf, columnsOf, decisionBody, denverDay, historyOf, isStale, itemNumber,
   publishedText, replaceItem, selectedChoice, showControls, stateLine, textLines, tableOf, SECTION_SUNSET_POLICY,
 } from './usageDecisions.mjs'; // eslint-disable-line import/extensions
 
@@ -275,4 +275,20 @@ test('D5: the pane renders decisions through interpolation only (no v-html) and 
     'decisions.both', 'decisions.accept', 'decisions.reject', 'decisions.submit', 'decisions.cancel',
     'decisions.notePlaceholder', 'decisions.accepted', 'decisions.rejected', 'decisions.awaiting', 'decisions.history',
     'decisions.voided', 'decisions.stale'].forEach((k) => assert.equal(typeof en[k], 'string', k));
+});
+
+// Integrations SMART-SENDING-SPEC I10 -- the callout shows from the LAST changelog entry only; an
+// earlier entry's callout is ignored; a missing or blank one is no note.
+test('SMART-SENDING I10: calloutOf reads the last changelog entry only', () => {
+  const e = (over = {}) => ({
+    date: '2026-11-07', source: 'page', line: 'l', reapprove: false, ...over,
+  });
+  assert.equal(calloutOf(item({ changelog: [e({ reapprove: true }), e({ callout: 'See the History.' })] })), 'See the History.');
+  assert.equal(calloutOf(item({ changelog: [e({ callout: 'Old note.' }), e()] })), '');
+  assert.equal(calloutOf(item({ changelog: [e({ callout: 'Old.' }), e({ callout: '  ' })] })), '');
+  assert.equal(calloutOf(item({ changelog: [] })), '');
+  assert.equal(calloutOf(item()), '');
+  assert.equal(calloutOf(null), '');
+  assert.equal(calloutOf(item({ changelog: [e({ callout: 7 })] })), '');
+  assert.equal(typeof en['decisions.calloutLead'], 'string');
 });

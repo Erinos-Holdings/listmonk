@@ -92,6 +92,46 @@ func TestBundleHashPairs(t *testing.T) {
 	}
 }
 
+// Integrations SMART-SENDING-SPEC I13 -- toggling attribs.smart_sending (absent / false / true) leaves
+// the bundle hash unchanged (the switch must be flippable on a scheduled, inspected campaign under
+// reviewGuardOnEdit); any other attrib change still moves it; the campaign's own attribs map is not
+// mutated by hashing. Go-only (the shared fixture is the TS twin's copy and is not edited here).
+func TestBundleHashIgnoresSmartSending(t *testing.T) {
+	fx := loadHashFixture(t)
+	var attribs map[string]any
+	if err := json.Unmarshal(fx.Campaign["attribs"], &attribs); err != nil {
+		t.Fatal(err)
+	}
+	with := func(extra map[string]any) map[string]json.RawMessage {
+		m := map[string]any{}
+		for k, v := range attribs {
+			m[k] = v
+		}
+		for k, v := range extra {
+			m[k] = v
+		}
+		b, _ := json.Marshal(m)
+		return map[string]json.RawMessage{"attribs": b}
+	}
+	absent := hashOf(t, fx.Campaign, nil)
+	if absent != pinnedHash {
+		t.Fatalf("the key-absent hash moved: %s", absent)
+	}
+	for _, v := range []any{false, true} {
+		if got := hashOf(t, fx.Campaign, with(map[string]any{"smart_sending": v})); got != absent {
+			t.Fatalf("smart_sending=%v changed the hash: %s vs %s", v, got, absent)
+		}
+	}
+	if got := hashOf(t, fx.Campaign, with(map[string]any{"smart_sending": false, "preheader": "other"})); got == absent {
+		t.Fatal("another attrib change beside smart_sending left the hash unchanged")
+	}
+	camp := models.Campaign{Attribs: models.JSON{"smart_sending": false, "lang": "en"}}
+	BundleHash(camp, nil)
+	if _, ok := camp.Attribs["smart_sending"]; !ok || len(camp.Attribs) != 2 {
+		t.Fatalf("hashing mutated the campaign's attribs: %v", camp.Attribs)
+	}
+}
+
 func TestCanonicalJSON(t *testing.T) {
 	got := string(CanonicalJSON(map[string]any{"b": 1, "a": "<&>", "é": 2, "Z": []any{true, nil}}))
 	if want := `{"Z":[true,null],"a":"<&>","b":1,"é":2}`; got != want {

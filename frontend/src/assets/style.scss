@@ -1692,6 +1692,13 @@ section.dashboard (which reopens after them). */
   .bu-decision-n {
     margin-right: 0.35rem;
   }
+  /* Integrations SMART-SENDING-SPEC D11: the last changelog entry's callout under the state line --
+  one small line in the .bu-decision-recommended red. */
+  .bu-decision-callout {
+    margin-top: 0.2rem !important;
+    font-size: 0.8rem;
+    color: #cc0f35;
+  }
   .bu-decision-state {
     margin-top: 0.3rem !important;
     font-size: 0.8rem;

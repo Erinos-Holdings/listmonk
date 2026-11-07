@@ -255,6 +255,15 @@ export function historyOf(item, t = (k) => k) {
   return { summary: t('decisions.history', { n: out.length }), rows: out };
 }
 
+// Integrations SMART-SENDING-SPEC D11 -- the red note under an item's state line: the `callout` of
+// the item's LAST changelog entry when it is a non-empty string, else '' (no note). An earlier
+// entry's callout is only what the note said then, so the next entry clears it.
+export function calloutOf(item) {
+  const cl = isObj(item) && Array.isArray(item.changelog) ? item.changelog : [];
+  const last = cl.length ? cl[cl.length - 1] : null;
+  return isObj(last) && typeof last.callout === 'string' ? last.callout.trim() : '';
+}
+
 // The decision toggles show only when the server says this user may decide.
 export function showControls(view) {
   return isObj(view) && view.can_decide === true;

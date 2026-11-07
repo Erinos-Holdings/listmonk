@@ -2,7 +2,9 @@
 // (node --test src/audience-box.test.mjs). No dependency: Node's built-in runner.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { audienceBox, hasEnSplit, enSplit } from './audience-box.mjs'; // eslint-disable-line import/extensions
+import {
+  audienceBox, hasEnSplit, enSplit, toSendOf,
+} from './audience-box.mjs'; // eslint-disable-line import/extensions
 
 test('no box for a new campaign or an estimate the server could not make', () => {
   assert.equal(audienceBox(null), null);
@@ -17,13 +19,32 @@ test('draft and scheduled broadcasts show the live audience: green with somebody
   assert.deepEqual(audienceBox({
     id: 1, status: 'draft', evergreen: false, audience: 1353, audienceNoLang: 1247, sent: 0,
   }), {
-    kind: 'audience', tone: 'success', count: 1353, noLang: 1247,
+    kind: 'audience', tone: 'success', count: 1353, noLang: 1247, skipped: 0, total: 1353,
   });
   assert.deepEqual(audienceBox({
     id: 1, status: 'scheduled', evergreen: false, audience: 0, audienceNoLang: 0, sent: 0,
   }), {
-    kind: 'audience', tone: 'danger', count: 0, noLang: 0,
+    kind: 'audience', tone: 'danger', count: 0, noLang: 0, skipped: 0, total: 0,
   });
+});
+
+// Integrations SMART-SENDING-SPEC I7 -- the box and the list show audience - audience_skipped, and
+// carry both numbers for the hover; all skipped is red; a skipped above the audience never goes
+// negative.
+test('Smart Sending: the count is the audience minus the would-be skips', () => {
+  assert.deepEqual(audienceBox({
+    id: 1, status: 'draft', evergreen: false, audience: 1353, audienceNoLang: 0, audienceSkipped: 53,
+  }), {
+    kind: 'audience', tone: 'success', count: 1300, noLang: 0, skipped: 53, total: 1353,
+  });
+  assert.equal(audienceBox({
+    id: 1, status: 'scheduled', evergreen: false, audience: 4, audienceSkipped: 4,
+  }).tone, 'danger');
+  assert.deepEqual(toSendOf({ audience: 10, audienceSkipped: 3 }), { count: 7, skipped: 3, total: 10 });
+  assert.deepEqual(toSendOf({ audience: 2, audienceSkipped: 9 }), { count: 0, skipped: 2, total: 2 });
+  assert.deepEqual(toSendOf({ audience: 5, audienceSkipped: null }), { count: 5, skipped: 0, total: 5 });
+  assert.equal(toSendOf({ audience: null, audienceSkipped: 3 }), null);
+  assert.equal(toSendOf(null), null);
 });
 
 test('running and paused broadcasts show sent so far in blue', () => {

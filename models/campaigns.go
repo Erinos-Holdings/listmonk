@@ -115,6 +115,11 @@ type Campaign struct {
 	// gate's own verdict on the row's current bundle. Absent everywhere else; a courtesy for the
 	// list glyph, never a control (the status PUT re-runs the gate).
 	ReviewPassed *bool `db:"-" json:"review_passed,omitempty"`
+
+	// SmartSendingOn (fork, smart sending, SMART-SENDING-SPEC D5) is the effective value of
+	// attribs.smart_sending (SmartSending) wherever the campaign JSON is served (core.FillAudience).
+	// Never stored: the attrib is the one record.
+	SmartSendingOn bool `db:"-" json:"smart_sending"`
 }
 
 // CampaignMeta contains fields tracking a campaign's progress.
@@ -127,6 +132,9 @@ type CampaignMeta struct {
 	// type hard and complaint (the Campaigns page's H. Bounces / Complaints); Bounces stays combined.
 	HardBounces int `db:"hard_bounces" json:"hard_bounces"`
 	Complaints  int `db:"complaints" json:"complaints"`
+	// Fork (smart sending, integrations SMART-SENDING-SPEC D5) -- the recipients the campaign's claim
+	// recorded as Smart Sending skips (campaign_smart_skips rows); 0 when none.
+	Skipped int `db:"skipped" json:"skipped"`
 
 	// This is a list of {list_id, name} pairs unlike Subscriber.Lists[]
 	// because lists can be deleted after a campaign is finished, resulting
@@ -150,6 +158,10 @@ type CampaignMeta struct {
 	// non-English campaign), null exactly when Audience is.
 	Audience       null.Int `db:"-" json:"audience"`
 	AudienceNoLang null.Int `db:"-" json:"audience_no_lang"`
+	// AudienceSkipped (fork, smart sending, SMART-SENDING-SPEC D3) is how many of Audience Smart
+	// Sending would skip if the campaign went out now (same function, same audience join as the
+	// claim); null exactly when Audience is. The page shows Audience - AudienceSkipped.
+	AudienceSkipped null.Int `db:"-" json:"audience_skipped"`
 	// SentEn / SentNoLang: on a not-done ENGLISH evergreen only, how many of the subscribers
 	// it has sent to carry English / no language today (get-evergreen-sent-split) -- the
 	// split shown under its sent count. Null everywhere else.
@@ -214,6 +226,7 @@ func (camps Campaigns) LoadStats(stmt *sqlx.Stmt) error {
 			camps[i].Bounces = c.Bounces
 			camps[i].HardBounces = c.HardBounces
 			camps[i].Complaints = c.Complaints
+			camps[i].Skipped = c.Skipped
 			camps[i].Media = c.Media
 		}
 	}
@@ -543,6 +556,30 @@ func SendLangCode(lang string) string {
 		code += "+"
 	}
 	return code
+}
+
+// SmartSendingAttrib (fork, smart sending, integrations SMART-SENDING-SPEC D4) is the campaign
+// attribs key that switches Smart Sending off for one broadcast: absent or true = on, false = off.
+const SmartSendingAttrib = "smart_sending"
+
+// SmartSending reports whether Smart Sending applies to the campaign as far as its attribs go: off
+// only when attribs.smart_sending is exactly the boolean false (the SQL rule's twin --
+// brand_journey_sends_24h reads attribs->'smart_sending' = false as JSONB). Whether the rule can
+// skip anyone also needs a regular, non-evergreen campaign with a tagged list (the function decides).
+func (c *Campaign) SmartSending() bool {
+	v, ok := c.Attribs[SmartSendingAttrib].(bool)
+	return !ok || v
+}
+
+// ValidSmartSending (fork, smart sending, D4) reports whether attribs.smart_sending is absent or a
+// boolean -- the API refuses any other value (the SQL treats any other value as on, never raising).
+func ValidSmartSending(attribs JSON) bool {
+	v, present := attribs[SmartSendingAttrib]
+	if !present {
+		return true
+	}
+	_, ok := v.(bool)
+	return ok
 }
 
 // Lang returns the campaign's language code from attribs.lang, or "" for everyone.

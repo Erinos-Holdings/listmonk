@@ -896,3 +896,56 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE TRIGGER usage_decisions_append_only
     BEFORE UPDATE OR DELETE OR TRUNCATE ON usage_decisions
     FOR EACH STATEMENT EXECUTE FUNCTION usage_decisions_append_only();
+
+-- Fork (smart sending, integrations listmonk/SMART-SENDING-SPEC D1/D2/D7) -- per-brand Smart Sending
+-- on broadcasts. campaign_smart_skips is the skip set a broadcast's claim (next-campaigns) decided and
+-- recorded: one row per subscriber it withheld, with the journey send that caused it. No FK on
+-- subscriber_id or journey_campaign_id (the campaign_sends precedent: a deleted journey must not take
+-- the record with it); nothing updates or deletes a row except the campaign's deletion cascade.
+-- brand_journey_sends_24h is the ONE definition of the rule (brand and window only; every caller
+-- joins it to the campaign's audience). Mirrored in internal/migrations/v6.2.31.go (everything after
+-- the DROP; keep the two identical).
+DROP TABLE IF EXISTS campaign_smart_skips CASCADE;
+CREATE TABLE IF NOT EXISTS campaign_smart_skips (
+    campaign_id         INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    subscriber_id       INTEGER NOT NULL,
+    journey_campaign_id INTEGER NOT NULL,
+    journey_sent_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (campaign_id, subscriber_id)
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_sends_sent_at ON campaign_sends (sent_at) WHERE sent_at IS NOT NULL;
+-- For campaign camp_id: one row per subscriber (the NEWEST such send) who has a sent campaign_sends
+-- row inside the window (the one INTERVAL literal below) on an EVERGREEN campaign of this campaign's
+-- brand. A campaign's brand, on
+-- both sides, is the single non-NULL list_brand_tag over its lists (MIN -- the backend allows at most
+-- one; an untagged list contributes nothing). No rows when the campaign is evergreen, is not
+-- 'regular', has no tagged list, or is switched off -- off iff attribs->'smart_sending' is the JSONB
+-- false (compared as JSONB, never cast, so no stored value can raise inside the claim).
+CREATE OR REPLACE FUNCTION brand_journey_sends_24h(camp_id INT)
+RETURNS TABLE (subscriber_id INT, journey_campaign_id INT, journey_sent_at TIMESTAMP WITH TIME ZONE) AS $$
+    WITH camp AS (
+        SELECT (
+            SELECT MIN(list_brand_tag(l.tags)) FROM campaign_lists cl
+            JOIN lists l ON (l.id = cl.list_id)
+            WHERE cl.campaign_id = c.id
+        ) AS brand
+        FROM campaigns c
+        WHERE c.id = camp_id AND NOT c.evergreen AND c.type = 'regular'
+            AND (c.attribs->'smart_sending') IS DISTINCT FROM 'false'::JSONB
+    ),
+    journeys AS (
+        SELECT e.id FROM campaigns e, camp
+        WHERE e.evergreen AND camp.brand IS NOT NULL
+            AND (
+                SELECT MIN(list_brand_tag(l.tags)) FROM campaign_lists cl
+                JOIN lists l ON (l.id = cl.list_id)
+                WHERE cl.campaign_id = e.id
+            ) = camp.brand
+    )
+    SELECT DISTINCT ON (cs.subscriber_id) cs.subscriber_id, cs.campaign_id, cs.sent_at
+    FROM campaign_sends cs
+    JOIN journeys j ON (j.id = cs.campaign_id)
+    WHERE cs.sent_at IS NOT NULL AND cs.sent_at >= NOW() - INTERVAL '24 hours'
+    ORDER BY cs.subscriber_id, cs.sent_at DESC;
+$$ LANGUAGE sql STABLE;

@@ -102,10 +102,12 @@ func TestLangBroadcastPredicate(t *testing.T) {
 		camp := h.campaign("bc-"+c.lang, false, 0, L)
 		h.setCampLang(camp, c.lang)
 
-		// The statement returns total and no_lang (the audience box's EN+ split, 0ecfa27e).
+		// The statement returns total and no_lang (the audience box's EN+ split, 0ecfa27e), and
+		// skipped (integrations SMART-SENDING-SPEC D3; 0 here, no journey sends).
 		var aud struct {
-			Total  int `db:"total"`
-			NoLang int `db:"no_lang"`
+			Total   int `db:"total"`
+			NoLang  int `db:"no_lang"`
+			Skipped int `db:"skipped"`
 		}
 		if err := audience.Get(&aud, camp); err != nil {
 			t.Fatalf("audience %q: %v", c.lang, err)

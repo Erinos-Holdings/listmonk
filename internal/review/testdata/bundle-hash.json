@@ -367,6 +367,21 @@
    },
    "b": {},
    "same": false
+  },
+  {
+   "name": "attribs.smart_sending is not hashed (SMART-SENDING-SPEC D4)",
+   "a": {
+    "attribs": {
+     "lang": "en",
+     "smart_sending": false
+    }
+   },
+   "b": {
+    "attribs": {
+     "lang": "en"
+    }
+   },
+   "same": true
   }
  ]
 }

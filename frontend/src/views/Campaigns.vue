@@ -233,9 +233,11 @@
                stored to_send, which stays 0 until the send-time claim. Zero is a warning. -->
           <p v-if="hasAudience(props.row)" data-cy="stat-to-send">
             <label for="#">{{ $t('campaigns.toSend') }}</label>
+            <!-- Fork (smart sending, SMART-SENDING-SPEC D3) -- audience minus the would-be Smart
+                 Sending skips (audience-box.mjs::toSendOf). -->
             <b-tooltip :label="toSendHelp(props.row)" type="is-dark" multilined>
-              <span :class="{ 'has-text-danger has-text-weight-bold': props.row.audience === 0 }">
-                {{ $utils.formatNumber(props.row.audience) }}
+              <span :class="{ 'has-text-danger has-text-weight-bold': toSendCount(props.row) === 0 }">
+                {{ $utils.formatNumber(toSendCount(props.row)) }}
               </span>
             </b-tooltip>
           </p>
@@ -248,6 +250,16 @@
               {{ $utils.formatNumber(stats.sent) }} /
               {{ $utils.formatNumber(stats.toSend) }}
             </span>
+          </p>
+          <!-- Fork (smart sending, SMART-SENDING-SPEC D5) -- the recorded skips, and a bypass. -->
+          <p v-if="props.row.skipped > 0" data-cy="stat-skipped">
+            <label for="#">{{ $t('campaigns.skipped') }}</label>
+            <b-tooltip :label="$t('campaigns.skippedHelp')" type="is-dark" multilined>
+              <span>{{ $utils.formatNumber(props.row.skipped) }}</span>
+            </b-tooltip>
+          </p>
+          <p v-if="isSmartOff(props.row)" data-cy="stat-smart-off">
+            <b-tag size="is-small" class="smart-off">{{ $t('campaigns.smartSendingOff') }}</b-tag>
           </p>
           <!-- Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5-D7) -- Views, Clicks and Bounces
                show the rate over Sent (props.row.sent, the same fetch as the counts) with the
@@ -413,7 +425,7 @@ import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus, sendLangCode } from '../langs';
-import { hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
+import { hasEnSplit, enSplit, toSendOf } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf, filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -597,16 +609,32 @@ export default Vue.extend({
 
     // An English audience with no-language rows hovers as the Lists grid's EN+ split
     // ("n en + m no language"); every other campaign keeps the plain To send text.
+    // Fork (smart sending, SMART-SENDING-SPEC D3) -- the hover appends the Smart Sending sentence
+    // when somebody would be skipped; the EN+ split partitions the raw audience.
     toSendHelp(c) {
       const lang = (c.attribs && c.attribs.lang) || '';
+      let base = this.$t('campaigns.toSendHelp');
       if (hasEnSplit(lang, 'audience', c.audienceNoLang)) {
         const parts = enSplit(c.audience, c.audienceNoLang);
-        return this.$t('lists.grid.enSplit', {
+        base = this.$t('lists.grid.enSplit', {
           en: this.$utils.formatNumber(parts.en),
           none: this.$utils.formatNumber(parts.none),
         });
       }
-      return this.$t('campaigns.toSendHelp');
+      const ts = toSendOf(c);
+      return ts && ts.skipped > 0 ? `${base} ${this.$t('campaigns.toSendSkipped', {
+        n: this.$utils.formatNumber(ts.skipped), total: this.$utils.formatNumber(ts.total),
+      })}` : base;
+    },
+
+    toSendCount(c) {
+      const ts = toSendOf(c);
+      return ts ? ts.count : null;
+    },
+
+    // D5 -- a broadcast whose stored attribs switch Smart Sending off (the server's smart_sending).
+    isSmartOff(c) {
+      return !c.evergreen && c.type !== 'optin' && c.smartSending === false;
     },
 
     // Fork (send retry, SEND-RETRY-SPEC D6). to_send is recomputed from live list

@@ -86,6 +86,9 @@ type Item struct {
 // approver's name when the approver originated the change (empty for an edit of ours); Line one
 // concise line; Hash the item's text hash AFTER this entry's edit (empty on an entry recording a
 // change of meaning folded into a later text edit); Reapprove the only way back to Awaiting (D3).
+// Callout (integrations SMART-SENDING-SPEC D11) is an optional one-line note the page shows under
+// the item's state line -- only the LAST entry's, so the next entry clears it (whoever appends one
+// repeats it while the matter is open). parse adds no rule for it.
 type Change struct {
 	Date      string `json:"date"`
 	Source    string `json:"source"`
@@ -93,16 +96,18 @@ type Change struct {
 	Line      string `json:"line"`
 	Hash      string `json:"hash,omitempty"`
 	Reapprove bool   `json:"reapprove,omitempty"`
+	Callout   string `json:"callout,omitempty"`
 }
 
 // ChangeView is one changelog entry as the GET shows it (D6): the hash is a file mechanism and is
-// not sent.
+// not sent. Callout is carried as stored (SMART-SENDING-SPEC D11); the page reads the last entry's.
 type ChangeView struct {
 	Date      string `json:"date"`
 	Source    string `json:"source"`
 	Who       string `json:"who,omitempty"`
 	Line      string `json:"line"`
 	Reapprove bool   `json:"reapprove"`
+	Callout   string `json:"callout,omitempty"`
 }
 
 // conceptIndex is the position of the item's newest reapprove entry, or -1 when it has none (parse
@@ -417,7 +422,7 @@ func ItemOf(it Item, rows []Row) ItemView {
 	}
 	changelog := make([]ChangeView, 0, len(it.Changelog))
 	for _, c := range it.Changelog {
-		changelog = append(changelog, ChangeView{Date: c.Date, Source: c.Source, Who: c.Who, Line: c.Line, Reapprove: c.Reapprove})
+		changelog = append(changelog, ChangeView{Date: c.Date, Source: c.Source, Who: c.Who, Line: c.Line, Reapprove: c.Reapprove, Callout: c.Callout})
 	}
 	return ItemView{Key: it.Key, Section: it.Section, N: it.N, Since: Since(it), Text: it.Text, Hash: h, Choices: Choices(it), Current: cur, History: hist, Changelog: changelog}
 }

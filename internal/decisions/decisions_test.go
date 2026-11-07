@@ -113,35 +113,113 @@ func TestItemsShape(t *testing.T) {
 	}
 }
 
-// The 2026-11-07 changelog shape (LIFECYCLE-DOCS-SPEC I7, D11-D16): the six rewritten items carry
-// a page entry (2026-11-07, the new text's hash) after their concept entry -- item 1 two (the
-// Stage 4 R3 rewording), items 1, 9 and 13 a hash-less Slack entry from Kaylinn before them; every
-// other item only its concept entry.
-var slackEdited = map[string]bool{"np-entry": true, "pp-delivery-clock": true, "both-per-brand": true}
-var pageEdited = map[string]int{"np-entry": 2, "np-same-day-double": 1, "np-no-restarts": 1, "pp-delivery-clock": 1, "pp-returning-thanks": 1, "both-per-brand": 1}
+// The shipped changelog shape (LIFECYCLE-DOCS-SPEC I7, D11-D16; generalised by integrations
+// SMART-SENDING-SPEC D10/I9). Each item's lineage after its concept entry, in file order, as one
+// token per entry: "slack" = Kaylinn's hash-less Slack 2026-11-06 entry; "relayed" = her hash-less
+// relayed 2026-11-07 entry; "page" = a hash-less page entry (a change of meaning folded into the next
+// edit); "page#" = a page entry carrying a text hash. The six items rewritten on 2026-11-07 carry a
+// page# entry (item 1 two, the Stage 4 R3 rewording); items 1, 9 and 13 the Slack entry before it;
+// item 13 (Smart Sending implemented) then the relayed request, the analysis and the implementation
+// edit. Every other item has only its concept entry. The check keys on the NEWEST HASH-BEARING entry
+// (its hash is the text's), never the last entry, so a later hash-less entry (gate G7's decision
+// entry) keeps the shape test meaningful; and it asserts what the file guarantees -- a `who` entry
+// is hash-less, a hash-bearing entry is source "page".
+var shippedLineage = map[string][]string{
+	"np-entry":            {"slack", "page#", "page#"},
+	"np-same-day-double":  {"page#"},
+	"np-no-restarts":      {"page#"},
+	"pp-delivery-clock":   {"slack", "page#"},
+	"pp-returning-thanks": {"page#"},
+	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#"},
+}
 
 func checkShippedChangelog(t *testing.T, it Item) {
 	t.Helper()
-	want := 1 + pageEdited[it.Key]
-	if slackEdited[it.Key] {
-		want++
-	}
+	want := shippedLineage[it.Key]
 	cl := it.Changelog
-	if len(cl) != want {
-		t.Errorf("%s: %d changelog entries, want %d", it.Key, len(cl), want)
+	if len(cl) != 1+len(want) {
+		t.Errorf("%s: %d changelog entries, want %d", it.Key, len(cl), 1+len(want))
 		return
 	}
 	if c := cl[0]; !c.Reapprove || c.Source != "page" || c.Line != "Published for approval" || c.Who != "" || c.Hash != pinnedHashes[it.Key] {
 		t.Errorf("%s: concept entry %+v", it.Key, c)
 	}
-	if slackEdited[it.Key] {
-		if c := cl[1]; c.Date != "2026-11-06" || c.Source != "Slack 2026-11-06" || c.Who != "Kaylinn Brophy" || c.Hash != "" || c.Reapprove || c.Line == "" {
-			t.Errorf("%s: Slack entry %+v", it.Key, c)
+	newestHashed := 0
+	for i, tok := range want {
+		c := cl[i+1]
+		if c.Reapprove || c.Line == "" {
+			t.Errorf("%s: entry %d %+v", it.Key, i+1, c)
+		}
+		// What the file guarantees for every entry: a `who` entry is hash-less; a hash-bearing entry
+		// is source "page".
+		if c.Who != "" && c.Hash != "" {
+			t.Errorf("%s: entry %d carries both who and a hash", it.Key, i+1)
+		}
+		if c.Hash != "" && c.Source != "page" {
+			t.Errorf("%s: entry %d is hash-bearing but source %q", it.Key, i+1, c.Source)
+		}
+		ok := false
+		switch tok {
+		case "slack":
+			ok = c.Date == "2026-11-06" && c.Source == "Slack 2026-11-06" && c.Who == "Kaylinn Brophy" && c.Hash == ""
+		case "relayed":
+			ok = c.Date == "2026-11-07" && c.Source == "relayed 2026-11-07" && c.Who == "Kaylinn Brophy" && c.Hash == ""
+		case "page":
+			ok = c.Date == "2026-11-07" && c.Source == "page" && c.Who == "" && c.Hash == ""
+		case "page#":
+			ok = c.Date == "2026-11-07" && c.Source == "page" && c.Who == "" && c.Hash != ""
+		}
+		if !ok {
+			t.Errorf("%s: entry %d %+v, want a %s entry", it.Key, i+1, c, tok)
+		}
+		if c.Hash != "" {
+			newestHashed = i + 1
 		}
 	}
-	if pageEdited[it.Key] > 0 {
-		if c := cl[len(cl)-1]; c.Date != "2026-11-07" || c.Source != "page" || c.Who != "" || c.Hash != Hash(it.Text) || c.Reapprove || c.Line == "" {
-			t.Errorf("%s: page entry %+v", it.Key, c)
+	if len(want) > 0 {
+		if newestHashed == 0 || cl[newestHashed].Hash != Hash(it.Text) {
+			t.Errorf("%s: the newest hash-bearing entry (%d) does not carry the text's hash", it.Key, newestHashed)
+		}
+	}
+}
+
+// Integrations SMART-SENDING-SPEC I9 -- item 13 as implemented: no "Recommended:" line (Accept |
+// Reject), the concept pin unchanged, a decision on the concept text reads "approved as modified" by
+// Kaylinn on 2026-11-07 (her relayed request is the newest `who` entry after the concept), the last
+// entry carries the callout and the newest hash-bearing entry the text's hash.
+func TestSmartSendingItem(t *testing.T) {
+	d, err := Lifecycle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	it, ok := d.Find("both-per-brand")
+	if !ok {
+		t.Fatal("no item 13")
+	}
+	if HasRecommended(it.Text) || strings.Join(Choices(it), ",") != Accept+","+Reject {
+		t.Fatalf("item 13 choices %v", Choices(it))
+	}
+	if Concept(it).Hash != pinnedHashes[it.Key] {
+		t.Fatal("item 13's concept pin moved")
+	}
+	if m := Modified(it, Concept(it).Hash); m == nil || m.Who != "Kaylinn Brophy" || m.Date != "2026-11-07" {
+		t.Fatalf("Modified(concept) = %+v", m)
+	}
+	// A row on the new text's hash sits at the last entry: nothing after it.
+	if m := Modified(it, Hash(it.Text)); m != nil {
+		t.Fatalf("Modified(current text) = %+v", m)
+	}
+	last := it.Changelog[len(it.Changelog)-1]
+	if last.Hash != Hash(it.Text) || last.Callout == "" {
+		t.Fatalf("item 13's last entry %+v", last)
+	}
+	v := ItemOf(it, nil)
+	if c := v.Changelog[len(v.Changelog)-1].Callout; c != last.Callout {
+		t.Fatalf("the GET's last entry callout = %q", c)
+	}
+	for i, c := range v.Changelog[:len(v.Changelog)-1] {
+		if c.Callout != "" {
+			t.Fatalf("entry %d carries a callout: %q", i, c.Callout)
 		}
 	}
 }
@@ -219,7 +297,8 @@ func TestItemHashesPinned(t *testing.T) {
 // 2026-10-31 polish: Choices -- Current | Recommended | Reject exactly on the items whose text has a
 // "Recommended:" line after the first; Accept | Reject on every other. The shipped items with a
 // Recommended option are pinned, so a text edit that adds or drops one is a deliberate change
-// (LIFECYCLE-DOCS-SPEC I8: items 3 and 9 lost theirs when implemented, 2026-11-07).
+// (LIFECYCLE-DOCS-SPEC I8: items 3 and 9 lost theirs when implemented, 2026-11-07; integrations
+// SMART-SENDING-SPEC D8/I9: item 13 lost its when Smart Sending was implemented, 2026-11-07).
 func TestChoices(t *testing.T) {
 	if HasRecommended("Recommended: lead line only") {
 		t.Fatal("a first-line Recommended: is the lead, not an option")
@@ -248,7 +327,7 @@ func TestChoices(t *testing.T) {
 			t.Fatalf("%s: %v", it.Key, c)
 		}
 	}
-	want := []string{"np-launch-overlap", "np-ruze-15d", "both-multi-brand", "both-per-brand"}
+	want := []string{"np-launch-overlap", "np-ruze-15d", "both-multi-brand"}
 	if strings.Join(three, ",") != strings.Join(want, ",") {
 		t.Fatalf("items with three choices %v, want %v", three, want)
 	}

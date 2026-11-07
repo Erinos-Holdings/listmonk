@@ -105,6 +105,8 @@ var migList = []migFunc{
 	{"v6.2.29", migrations.V6_2_29},
 	// Fork migration (erinos): usage decisions -- the decision CHECK widened to accept/reject/current/recommended (Current | Recommended | Reject on an item with a "Recommended:" line, 2026-10-31 polish) — see internal/migrations/v6.2.30.go.
 	{"v6.2.30", migrations.V6_2_30},
+	// Fork migration (erinos): smart sending -- the campaign_smart_skips table (the skip set a broadcast's claim records), the brand_journey_sends_24h function (the one definition of the 24-hour same-brand journey rule) and a partial index on campaign_sends.sent_at (SMART-SENDING-SPEC) — see internal/migrations/v6.2.31.go.
+	{"v6.2.31", migrations.V6_2_31},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

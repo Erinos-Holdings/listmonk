@@ -211,6 +211,13 @@ bounces AS (
     FROM bounces
     WHERE campaign_id = ANY($1)
     GROUP BY campaign_id
+),
+-- Fork (smart sending, integrations SMART-SENDING-SPEC D5) -- skipped = the recipients the campaign's
+-- claim recorded as Smart Sending skips (campaign_smart_skips rows); 0 when none.
+skips AS (
+    SELECT campaign_id, COUNT(*) AS num FROM campaign_smart_skips
+    WHERE campaign_id = ANY($1)
+    GROUP BY campaign_id
 )
 SELECT id as campaign_id,
     COALESCE(v.num, 0) AS views,
@@ -218,6 +225,7 @@ SELECT id as campaign_id,
     COALESCE(b.num, 0) AS bounces,
     COALESCE(b.hard, 0) AS hard_bounces,
     COALESCE(b.complaint, 0) AS complaints,
+    COALESCE(k.num, 0) AS skipped,
     COALESCE(l.lists, '[]') AS lists,
     COALESCE(m.media, '[]') AS media
 FROM (SELECT id FROM UNNEST($1) AS id) x
@@ -226,6 +234,7 @@ LEFT JOIN media AS m ON (m.campaign_id = id)
 LEFT JOIN views AS v ON (v.campaign_id = id)
 LEFT JOIN clicks AS c ON (c.campaign_id = id)
 LEFT JOIN bounces AS b ON (b.campaign_id = id)
+LEFT JOIN skips AS k ON (k.campaign_id = id)
 ORDER BY ARRAY_POSITION($1, id);
 
 -- name: get-campaign-for-preview
@@ -287,8 +296,10 @@ campMedia AS (
     WHERE campaign_id = ANY(SELECT id FROM camps) AND media_id IS NOT NULL
     GROUP BY campaign_id
 ),
-counts AS (
-    SELECT camps.id AS campaign_id, COUNT(DISTINCT sl.subscriber_id) AS to_send, COALESCE(MAX(sl.subscriber_id), 0) AS max_subscriber_id
+-- Fork (smart sending, integrations SMART-SENDING-SPEC D2) -- the audience join, lifted out of counts
+-- unchanged: one row per (claimed non-evergreen campaign, subscriber it would send to).
+aud AS (
+    SELECT DISTINCT camps.id AS campaign_id, sl.subscriber_id
     FROM camps
     JOIN campLists cl ON cl.campaign_id = camps.id
     JOIN subscriber_lists sl ON sl.list_id = cl.list_id
@@ -310,7 +321,42 @@ counts AS (
     -- max_subscriber_id, status and freeze are not this query's business; its
     -- started_at is stamped by update-campaign-status at the API start instead.
     WHERE NOT camps.evergreen
-    GROUP BY camps.id
+),
+-- Fork (smart sending, D1/D2) -- the skip set is decided HERE, once per claim, and recorded. skips =
+-- the audience rows brand_journey_sends_24h also returns for that campaign (the one definition of the
+-- rule), above the checkpoint: a re-claim after a pause must never record a skip for a subscriber
+-- already sent (id at or below last_subscriber_id), which would drive to_send below sent.
+jsends AS (
+    SELECT camps.id AS campaign_id, j.subscriber_id, j.journey_campaign_id, j.journey_sent_at
+    FROM camps
+    CROSS JOIN LATERAL brand_journey_sends_24h(camps.id) j
+    WHERE NOT camps.evergreen
+),
+skips AS (
+    SELECT a.campaign_id, a.subscriber_id, js.journey_campaign_id, js.journey_sent_at
+    FROM aud a
+    JOIN camps ON (camps.id = a.campaign_id)
+    JOIN jsends js ON (js.campaign_id = a.campaign_id AND js.subscriber_id = a.subscriber_id)
+    WHERE a.subscriber_id > camps.last_subscriber_id
+),
+insSkips AS (
+    INSERT INTO campaign_smart_skips (campaign_id, subscriber_id, journey_campaign_id, journey_sent_at)
+    SELECT campaign_id, subscriber_id, journey_campaign_id, journey_sent_at FROM skips
+    ON CONFLICT DO NOTHING
+),
+-- to_send = the audience minus every skip: this claim's (the skips CTE) and an earlier claim's (the
+-- table, a re-claim after a pause). A data-modifying CTE's rows are INVISIBLE to its siblings in the
+-- same statement (one snapshot), so counts reads the skips CTE, never the INSERT's effect.
+counts AS (
+    SELECT a.campaign_id,
+        COUNT(*) FILTER (WHERE NOT EXISTS (
+            SELECT 1 FROM skips k WHERE k.campaign_id = a.campaign_id AND k.subscriber_id = a.subscriber_id
+        ) AND NOT EXISTS (
+            SELECT 1 FROM campaign_smart_skips t WHERE t.campaign_id = a.campaign_id AND t.subscriber_id = a.subscriber_id
+        )) AS to_send,
+        COALESCE(MAX(a.subscriber_id), 0) AS max_subscriber_id
+    FROM aud a
+    GROUP BY a.campaign_id
 ),
 updateCounts AS (
     WITH uc (campaign_id, sent_count) AS (SELECT * FROM unnest($1::INT[], $2::INT[]))
@@ -829,6 +875,9 @@ SELECT JSON_BUILD_OBJECT(
 --     kind; FALSE = raw rows in [lo, t1)). NULL in all four when the stored body holds no shop_links
 --     expression (links has no campaign column, so the body decides); 0 for an unclicked one.
 --   hard_bounces / soft_bounces / complaints = raw bounces rows of that type in [lo, t1).
+--   skipped (integrations SMART-SENDING-SPEC D5) = a broadcast's campaign_smart_skips rows (the
+--     recipients its claim withheld), NULL for a journey; smart_off = a broadcast switched off
+--     (attribs smart_sending is the JSONB false -- the Matrix shows off).
 --   tracked / matched = campaign_conversions in [lo, t1) as orders and sales, NULL when the latest
 --     conversions doc does not cover the campaign (get-campaign-conversions' coverage rule).
 --   the GMAIL GAP group's counts are NOT here (integrations GMAIL-GAP-SPEC) -- the Matrix fills them
@@ -850,7 +899,8 @@ bounds AS (
 ),
 scoped AS (
     SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.sent,
-        POSITION('shop_links' IN c.body) > 0 AS has_shop
+        POSITION('shop_links' IN c.body) > 0 AS has_shop,
+        (NOT c.evergreen AND (c.attribs->'smart_sending') = 'false'::JSONB) AS smart_off
     FROM campaigns c
     WHERE (
         $1::BOOLEAN OR EXISTS (
@@ -872,7 +922,7 @@ jsent AS (
     GROUP BY h.campaign_id
 ),
 camps AS (
-    SELECT s.id, s.name, s.status, s.evergreen, s.started_at, s.has_shop,
+    SELECT s.id, s.name, s.status, s.evergreen, s.started_at, s.has_shop, s.smart_off,
         CASE WHEN s.evergreen THEN j.sent ELSE s.sent::BIGINT END AS sent,
         j.last_hour,
         (s.started_at AT TIME ZONE (SELECT tz FROM bounds))::DATE AS send_day,
@@ -963,6 +1013,11 @@ bnc AS (
     WHERE b.created_at >= k.lo AND b.created_at < (SELECT t1 FROM bounds)
     GROUP BY b.campaign_id
 ),
+skp AS (
+    SELECT sk.campaign_id, COUNT(*) AS n FROM campaign_smart_skips sk
+    WHERE sk.campaign_id IN (SELECT id FROM camps WHERE NOT evergreen)
+    GROUP BY sk.campaign_id
+),
 convdoc AS (
     SELECT doc FROM system_health WHERE kind = 'conversions' ORDER BY day DESC LIMIT 1
 ),
@@ -1024,6 +1079,8 @@ SELECT JSON_BUILD_OBJECT(
             'last_sent', CASE WHEN k.evergreen THEN TO_CHAR((k.last_hour AT TIME ZONE (SELECT tz FROM bounds))::DATE, 'YYYY-MM-DD') END,
             'brand', cb.brand,
             'sent', k.sent,
+            'skipped', CASE WHEN NOT k.evergreen THEN COALESCE(sk.n, 0) END,
+            'smart_off', k.smart_off,
             'views', COALESCE(v.n, 0),
             'clicks', COALESCE(c.n, 0),
             'shop_founder', CASE WHEN k.has_shop THEN COALESCE(sh.founder, 0) END,
@@ -1045,6 +1102,7 @@ SELECT JSON_BUILD_OBJECT(
         LEFT JOIN clicks c ON (c.campaign_id = k.id)
         LEFT JOIN shop sh ON (sh.campaign_id = k.id)
         LEFT JOIN bnc b ON (b.campaign_id = k.id)
+        LEFT JOIN skp sk ON (sk.campaign_id = k.id)
         LEFT JOIN conv t ON (t.campaign_id = k.id AND t.measure = 'tracked')
         LEFT JOIN conv m ON (m.campaign_id = k.id AND m.measure = 'matched')
         LEFT JOIN cbrand cb ON (cb.campaign_id = k.id)
@@ -1097,6 +1155,10 @@ subs AS (
             AND s.status != 'blocklisted'
             -- Fork (multi-language campaigns) -- same predicate as the next-campaigns count.
             AND ($7::TEXT IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = $7::TEXT)
+            -- Fork (smart sending, integrations SMART-SENDING-SPEC D2) -- never a subscriber the claim
+            -- recorded as a Smart Sending skip. The recorded set only, nothing re-evaluated per batch, so
+            -- the claim's to_send and the batches agree by construction (hazard 56, sent == to_send).
+            AND NOT EXISTS (SELECT 1 FROM campaign_smart_skips k WHERE k.campaign_id = $1 AND k.subscriber_id = s.id)
             AND (
                 -- If it's an optin campaign and the list is double-optin, only pick unconfirmed subscribers.
                 ($2 = 'optin' AND sl.status = 'unconfirmed' AND campLists.optin = 'double')
@@ -1151,9 +1213,16 @@ campLists AS (
     SELECT lists.id AS list_id, optin FROM lists
     INNER JOIN campaign_lists ON (campaign_lists.list_id = lists.id)
     WHERE campaign_lists.campaign_id = $1
+),
+-- Fork (smart sending, integrations SMART-SENDING-SPEC D3) -- the would-be Smart Sending skips (one row
+-- per subscriber, so the LEFT JOIN below never multiplies). `skipped` is how many of the audience the
+-- claim would skip if the campaign went out now -- the same function over the same join, in one scan.
+jsends AS (
+    SELECT subscriber_id FROM brand_journey_sends_24h($1)
 )
 SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
-       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE subscriber_lang(s.attribs) = 'none') AS no_lang
+       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE subscriber_lang(s.attribs) = 'none') AS no_lang,
+       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE j.subscriber_id IS NOT NULL) AS skipped
     FROM camp
     JOIN campLists cl ON TRUE
     JOIN subscriber_lists sl ON sl.list_id = cl.list_id
@@ -1165,7 +1234,8 @@ SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
             END
         )
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
-        AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang);
+        AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
+    LEFT JOIN jsends j ON (j.subscriber_id = sl.subscriber_id);
 
 -- name: get-evergreen-sent-split
 -- Fork (campaign-page audience box). Of the subscribers evergreen campaign $1 has SENT to

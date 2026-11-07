@@ -55,7 +55,9 @@
             <th v-for="(g, i) in groupCols" :key="i" :colspan="g.span" :class="g.cls">{{ groupLabel(g) }}</th>
           </tr>
           <tr>
-            <th v-for="c in leftCols" :key="c.field" :class="[bmTh(c.field), { 'has-text-right': c.field === 'sent' }]"
+            <th v-for="c in leftCols" :key="c.field"
+              :class="[bmTh(c.field), { 'has-text-right': c.field === 'sent' || c.field === 'skipped' }]"
+              :title="c.help ? $t(c.help) : null"
               :aria-sort="bmAria(c.field)" @click="onSort(c.field)" :data-cy="`cm-head-${c.field}`">
               {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
             </th>
@@ -88,6 +90,10 @@
               <b-tag v-if="statusOf(row)" :class="statusOf(row).status">{{ $t(statusOf(row).label) }}</b-tag>
             </td>
             <td class="has-text-right" :class="bmTd('sent')">{{ cell(row, 'sent') }}</td>
+            <!-- SMART-SENDING-SPEC D5: the recorded skips, "off" for a bypass, '—' for a journey. -->
+            <td class="has-text-right" :class="bmTd('skipped')" :data-cy="`cm-skipped-${row.totals ? 'totals' : row.id}`">
+              {{ cell(row, 'skipped') }}
+            </td>
             <td v-for="c in midCols" :key="c.field" class="has-text-right" :class="[bmTd(c.field), c.group]"
               :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
               <span v-if="c.field === 'gp_rate'" :class="gpClass(row) || null" :title="gpTitle(row)">

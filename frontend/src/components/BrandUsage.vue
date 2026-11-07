@@ -222,6 +222,11 @@
               {{ stateOf(it).text }}
             </p>
             <p v-if="stateOf(it).note" class="bu-decision-note">{{ stateOf(it).note }}</p>
+            <!-- Integrations SMART-SENDING-SPEC D11: the LAST changelog entry's callout, one small red
+                 line (usageDecisions.mjs::calloutOf), plain text through interpolation. -->
+            <p v-if="calloutOf(it)" class="bu-decision-callout" :data-cy="`decision-callout-${it.key}`">
+              {{ $t('decisions.calloutLead') }}{{ calloutOf(it) }}
+            </p>
             <div v-if="canDecide" class="bu-decision-controls">
               <!-- 2026-10-31 polish: one small neutral segmented toggle -- Current | Recommended |
                    Reject on an item with a "Recommended:" line, else Accept | Reject (the server's
@@ -284,7 +289,7 @@ import {
 import { PARENT_BRAND } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import BrandUsageRow from './BrandUsageRow.vue';
 import {
-  SECTION_SUNSET_POLICY, canSubmitReject, choicesOf as decisionChoices, columnsOf, decisionBody,
+  SECTION_SUNSET_POLICY, calloutOf, canSubmitReject, choicesOf as decisionChoices, columnsOf, decisionBody,
   historyOf as decisionHistory, isStale, itemNumber, publishedText, replaceItem, selectedChoice, showControls, stateLine,
   tableOf, textLines,
 } from '../usageDecisions.mjs'; // eslint-disable-line import/extensions
@@ -509,6 +514,10 @@ export default Vue.extend({
 
     stateOf(it) {
       return stateLine(it, (k, p) => this.$t(k, p));
+    },
+
+    calloutOf(it) {
+      return calloutOf(it);
     },
 
     historyOf(it) {

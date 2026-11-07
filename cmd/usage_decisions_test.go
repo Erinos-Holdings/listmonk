@@ -259,6 +259,11 @@ func TestGetChangelogAndModified(t *testing.T) {
 			}
 		}
 		want := `{"who":"Kaylinn Brophy","date":"2026-11-06"}`
+		if k == "both-per-brand" {
+			// Integrations SMART-SENDING-SPEC D9: her relayed 2026-11-07 request is item 13's newest
+			// `who` entry after the concept.
+			want = `{"who":"Kaylinn Brophy","date":"2026-11-07"}`
+		}
 		switch k {
 		case "np-entry", "pp-delivery-clock", "both-per-brand":
 			if v.Current.Modified == nil || string(*v.Current.Modified) != want {
@@ -290,7 +295,9 @@ func TestPostRefusals(t *testing.T) {
 		return string(b)
 	}
 	long := strings.Repeat("é", 2001)
-	rec, _ := a.decisionDoc.Find("both-per-brand")
+	// An item that still carries a "Recommended:" line (item 13 lost its when Smart Sending was
+	// implemented, integrations SMART-SENDING-SPEC D8).
+	rec, _ := a.decisionDoc.Find("both-multi-brand")
 	recHash := decisions.Hash(rec.Text)
 	cases := []struct {
 		name string
@@ -316,12 +323,12 @@ func TestPostRefusals(t *testing.T) {
 		{"note over 2,000 characters", approver, "np-entry", body(hash, "reject", long), 400, a.i18n.T("decisions.noteTooLong")},
 		{"malformed body", approver, "np-entry", `{`, 400, ""},
 		// 2026-10-31 polish: a decision outside the item's choices (decisions.Choices). np-entry has
-		// no "Recommended:" line (Accept | Reject); both-per-brand has one (Current | Recommended | Reject).
+		// no "Recommended:" line (Accept | Reject); both-multi-brand has one (Current | Recommended | Reject).
 		{"current on an item without a Recommended", approver, "np-entry", body(hash, "current", nil), 400, a.i18n.T("decisions.badDecision")},
 		{"recommended on an item without a Recommended", approver, "np-entry", body(hash, "recommended", nil), 400, a.i18n.T("decisions.badDecision")},
-		{"accept on an item with a Recommended", approver, "both-per-brand", body(recHash, "accept", nil), 400, a.i18n.T("decisions.badDecision")},
-		{"recommended with a note", approver, "both-per-brand", body(recHash, "recommended", "yes"), 400, a.i18n.T("decisions.acceptNote")},
-		{"current with a note", approver, "both-per-brand", body(recHash, "current", "yes"), 400, a.i18n.T("decisions.acceptNote")},
+		{"accept on an item with a Recommended", approver, "both-multi-brand", body(recHash, "accept", nil), 400, a.i18n.T("decisions.badDecision")},
+		{"recommended with a note", approver, "both-multi-brand", body(recHash, "recommended", "yes"), 400, a.i18n.T("decisions.acceptNote")},
+		{"current with a note", approver, "both-multi-brand", body(recHash, "current", "yes"), 400, a.i18n.T("decisions.acceptNote")},
 	}
 	for _, c := range cases {
 		code, msg := callDecisions(t, a, c.u, http.MethodPost, c.key, c.body)
@@ -401,7 +408,7 @@ func TestPostRefusals(t *testing.T) {
 
 	// Current and Recommended on an item with a "Recommended:" line: each appends one row, no note.
 	for i, d := range []string{decisions.Current, decisions.Recommended} {
-		code, out = callDecisions(t, a, approver, http.MethodPost, "both-per-brand", body(recHash, d, nil))
+		code, out = callDecisions(t, a, approver, http.MethodPost, "both-multi-brand", body(recHash, d, nil))
 		if code != 200 || store.inserts != 3+i || store.rows[2+i].Decision != d || store.rows[2+i].Note != nil {
 			t.Fatalf("%s: %d %s (inserts %d)", d, code, out, store.inserts)
 		}
@@ -410,7 +417,7 @@ func TestPostRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !slices.Equal(resp.Data.Choices, []string{decisions.Current, decisions.Recommended, decisions.Reject}) || resp.Data.Current.Decision != decisions.Recommended {
-		t.Fatalf("both-per-brand response: %+v", resp.Data)
+		t.Fatalf("both-multi-brand response: %+v", resp.Data)
 	}
 }
 

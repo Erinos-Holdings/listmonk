@@ -12,6 +12,15 @@
               {{ $t('campaigns.shortfall', { sent: $utils.formatNumber(data.sent), toSend: $utils.formatNumber(data.toSend) }) }}
             </b-tag>
           </b-tooltip>
+          <!-- Fork (smart sending, SMART-SENDING-SPEC D5) -- the recorded skips and a bypass. -->
+          <b-tooltip v-if="data.skipped > 0" :label="$t('campaigns.skippedHelp')" type="is-dark" multilined>
+            <b-tag class="smart-skipped" data-cy="tag-skipped">
+              {{ $t('campaigns.skipped') }} {{ $utils.formatNumber(data.skipped) }}
+            </b-tag>
+          </b-tooltip>
+          <b-tag v-if="isSmartOff" class="smart-off" data-cy="tag-smart-off">
+            {{ $t('campaigns.smartSendingOff') }}
+          </b-tag>
           <b-tag v-if="data.type === 'optin'" :class="data.type">
             {{ $t('lists.optin') }}
           </b-tag>
@@ -363,6 +372,17 @@
                         position="is-top-right" :placeholder="$t('campaigns.dateAndTime')" icon="calendar-clock"
                         :timepicker="{ hourFormat: '24' }" :datetime-formatter="formatDateTime"
                         horizontal-time-picker />
+                    </b-field>
+                  </div>
+                </div>
+                <!-- Fork (smart sending, integrations SMART-SENDING-SPEC D4) -- a non-evergreen regular
+                     campaign only (Send later's row); editable until it starts, so a scheduled launch can
+                     still be switched. Folded into attribs.smart_sending (foldAttribs). -->
+                <div class="columns" v-if="showSmartSending">
+                  <div class="column">
+                    <b-field :label="$t('campaigns.smartSending')" :message="$t('campaigns.smartSendingHelp')"
+                      data-cy="btn-smart-sending">
+                      <b-switch v-model="form.smartSending" :disabled="!canEdit" />
                     </b-field>
                   </div>
                 </div>
@@ -872,6 +892,8 @@ export default Vue.extend({
         // Parsed Date() version of send_at from the API.
         sendAtDate: null,
         sendLater: false,
+        // Fork (smart sending, SMART-SENDING-SPEC D4) -- on unless attribs.smart_sending is false.
+        smartSending: true,
         // Fork (evergreen) -- "send automatically to new subscribers", delay in days.
         evergreen: false,
         sendDelayDays: 0,
@@ -1059,6 +1081,7 @@ export default Vue.extend({
         subject: f.subject,
         preheader: f.preheader,
         lang: f.lang,
+        smartSending: f.smartSending,
         altbody: f.altbody,
         tags: f.tags,
         headersStr: f.headersStr,
@@ -1082,6 +1105,7 @@ export default Vue.extend({
         subject: c.subject,
         preheader: (c.attribs && c.attribs.preheader) || '',
         lang: (c.attribs && c.attribs.lang) || '',
+        smartSending: !(c.attribs && c.attribs.smart_sending === false),
         altbody: c.altbody,
         tags: c.tags,
         headersStr: JSON.stringify(c.headers, null, 4),
@@ -1111,6 +1135,7 @@ export default Vue.extend({
         subject: f.subject || '',
         preheader: f.preheader || '',
         lang: f.lang || '',
+        smartSending: f.smartSending !== false,
         altbody: f.altbody || null,
         tags: f.tags || [],
         headersStr: f.headersStr,
@@ -1200,6 +1225,7 @@ export default Vue.extend({
         subject: d.subject,
         preheader: d.preheader,
         lang: d.lang || '',
+        smartSending: d.smartSending !== false,
         altbody: d.altbody,
         tags: d.tags,
         headersStr: d.headersStr,
@@ -1639,6 +1665,13 @@ export default Vue.extend({
       } else if (attribs && 'lang' in attribs) {
         delete attribs.lang;
       }
+      // Fork (smart sending, SMART-SENDING-SPEC D4) -- the switch is the key's single owner: false
+      // when shown and off, otherwise omitted (on), so an API caller that never sends it stays on.
+      if (this.showSmartSending && this.form.smartSending === false) {
+        attribs = { ...(attribs || {}), smart_sending: false };
+      } else if (attribs && 'smart_sending' in attribs) {
+        delete attribs.smart_sending;
+      }
       return attribs;
     },
 
@@ -1769,6 +1802,7 @@ export default Vue.extend({
           attribsStr: data.attribs ? JSON.stringify(data.attribs, null, 4) : '{}',
           preheader: (data.attribs && data.attribs.preheader) || '',
           lang: (data.attribs && data.attribs.lang) || '',
+          smartSending: !(data.attribs && data.attribs.smart_sending === false),
           evergreen: !!data.evergreen,
           sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
           sendDelaySecs: data.sendDelaySecs || 0,
@@ -1924,6 +1958,7 @@ export default Vue.extend({
           // onSubmit compares against the right baseline on the next save.
           this.form.preheader = (d.attribs && d.attribs.preheader) || '';
           this.form.lang = (d.attribs && d.attribs.lang) || '';
+          this.form.smartSending = !(d.attribs && d.attribs.smart_sending === false);
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
           if (!suppressWarnings) {
@@ -2311,6 +2346,18 @@ export default Vue.extend({
       return !!this.data && this.data.type === 'optin';
     },
 
+    // Fork (smart sending, SMART-SENDING-SPEC D4) -- the switch shows on a non-evergreen regular
+    // campaign only, in Send later's row.
+    showSmartSending() {
+      return this.journeyUx.showSendLater && !this.form.evergreen && !this.isOptin;
+    },
+
+    // D5 -- the header's "Smart Sending off" mark: a stored bypass on a broadcast.
+    isSmartOff() {
+      const d = this.data;
+      return !!d && !d.evergreen && d.type !== 'optin' && !!d.attribs && d.attribs.smart_sending === false;
+    },
+
     storedLang() {
       return (this.data && this.data.attribs && this.data.attribs.lang) || '';
     },
@@ -2371,7 +2418,16 @@ export default Vue.extend({
       if (b.kind === 'sent') {
         return this.$t('campaigns.audienceSentHelp');
       }
-      return split || this.$t('campaigns.toSendHelp');
+      // Fork (smart sending, SMART-SENDING-SPEC D3) -- the EN+ split partitions the raw audience
+      // (b.total); the Smart Sending sentence follows only when somebody would be skipped.
+      const audSplit = hasEnSplit(this.storedLang, b.kind, b.noLang) ? this.$t('lists.grid.enSplit', {
+        en: this.$utils.formatNumber(enSplit(b.total, b.noLang).en),
+        none: this.$utils.formatNumber(enSplit(b.total, b.noLang).none),
+      }) : '';
+      const base = audSplit || this.$t('campaigns.toSendHelp');
+      return b.skipped > 0 ? `${base} ${this.$t('campaigns.toSendSkipped', {
+        n: this.$utils.formatNumber(b.skipped), total: this.$utils.formatNumber(b.total),
+      })}` : base;
     },
 
     // Fork (send retry, SEND-RETRY-SPEC D6) -- mirrors Campaigns.vue's isShortfall.

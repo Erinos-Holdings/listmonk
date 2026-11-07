@@ -554,11 +554,19 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		// Fork (multi-language campaigns) -- a language-scoped broadcast with nobody to send
 		// to would otherwise finish instantly with sent 0 and nothing saying why. Warns, never
 		// blocks. Evergreens are skipped (their audience is future joiners).
-		if lang := out.Lang(); lang != "" && !out.Evergreen {
-			if n, _, err := a.core.CampaignLangAudience(id); err != nil {
+		// Fork (smart sending, SMART-SENDING-SPEC D3) -- the same count's skipped share: a reminder
+		// toast when Smart Sending would skip anyone if it went out now (the number is also on the
+		// page). warnNoLangAudience keeps reading the raw total.
+		if !out.Evergreen {
+			if aud, err := a.core.CampaignLangAudience(id); err != nil {
 				a.log.Printf("error counting language audience for campaign %d: %v", id, err)
-			} else if n == 0 {
-				w = append(w, a.i18n.Ts("campaigns.warnNoLangAudience", "lang", models.SendLangCode(lang)))
+			} else {
+				if lang := out.Lang(); lang != "" && aud.Total == 0 {
+					w = append(w, a.i18n.Ts("campaigns.warnNoLangAudience", "lang", models.SendLangCode(lang)))
+				}
+				if aud.Skipped > 0 {
+					w = append(w, a.i18n.Ts("campaigns.warnSmartSkip", "n", strconv.Itoa(aud.Skipped)))
+				}
 			}
 		}
 		w = append(w, linkWarnings...)
@@ -1627,6 +1635,11 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 	// Fork (multi-language campaigns) -- attribs.lang is absent or one of models.CampaignLangs.
 	if !models.NormalizeLang(c.Attribs) {
 		return c, errors.New(a.i18n.Ts("campaigns.fieldInvalidLang", "langs", strings.Join(models.CampaignLangs, ", ")))
+	}
+	// Fork (smart sending, SMART-SENDING-SPEC D4) -- attribs.smart_sending is absent or a boolean. The
+	// only refusal of another value: the SQL rule reads any non-false value as on and never raises.
+	if !models.ValidSmartSending(c.Attribs) {
+		return c, errors.New(a.i18n.T("campaigns.invalidSmartSending"))
 	}
 
 	if len(c.ArchiveMeta) == 0 {

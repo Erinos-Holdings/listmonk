@@ -15,20 +15,36 @@ export const SEND_LANG_EN = 'en';
 const isDone = (c) => c.status === 'finished' || c.status === 'cancelled';
 const isNotStarted = (c) => c.status === 'draft' || c.status === 'scheduled';
 
+// Fork (smart sending, integrations SMART-SENDING-SPEC D3) -- the not-started broadcast's To send:
+// `audience` minus `audience_skipped` (the recipients Smart Sending would skip if it went out now),
+// the number it would send to now; `total` is the raw audience (the hover's "{n} of {total}", and
+// what the EN+ split partitions). null when the server sent no audience. Shared by the Campaign
+// page box and the Campaigns list's To send stat.
+export const toSendOf = (c) => {
+  if (!c || c.audience === null || c.audience === undefined) {
+    return null;
+  }
+  const total = Number(c.audience) || 0;
+  const skipped = Math.min(total, Math.max(0, Number(c.audienceSkipped) || 0));
+  return { count: total - skipped, skipped, total };
+};
+
 export const audienceBox = (c) => {
   if (!c || !c.id) {
     return null;
   }
   if (!c.evergreen && isNotStarted(c)) {
-    if (c.audience === null || c.audience === undefined) {
+    const ts = toSendOf(c);
+    if (!ts) {
       return null;
     }
-    const count = Number(c.audience) || 0;
     return {
       kind: 'audience',
-      tone: count > 0 ? 'success' : 'danger',
-      count,
+      tone: ts.count > 0 ? 'success' : 'danger',
+      count: ts.count,
       noLang: Number(c.audienceNoLang) || 0,
+      skipped: ts.skipped,
+      total: ts.total,
     };
   }
   const count = Number(c.sent) || 0;
