@@ -64,7 +64,7 @@
           </tr>
           <!-- DASHBOARDS-POLISH3-SPEC D4/D5 -- brandUsage.mjs::headerLayout: plain leaves span the
                two lower header rows; a sub-group (No-purchase series, Post-purchase series, Skipped)
-               puts its label over its leaves (Day 0 | 2d | 5d | 10d; Day 0 | 5d | 14d | 30d --
+               puts its label over its leaves (Day 0 | 2d | 5d; Day 0 | 5d | 14d | 30d --
                LIFECYCLE-SERIES-SPEC S9, each leaf's hover its D5 description; FR ES DE IT). -->
           <tr>
             <th rowspan="2" class="bu-head" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"

@@ -747,7 +747,7 @@
     "dashboard.usage.partSunset": "Sunset",
     "dashboard.usage.partWelcome": "Welcome",
     "dashboard.usage.score": "Score",
-    "dashboard.usage.scoreHelp": "How fully the brand uses the broadcast and journey machinery, a sum to sort by (maximum 110), computed by the daily brand health run. ZMA brands are not scored.",
+    "dashboard.usage.scoreHelp": "How fully the brand uses the broadcast and journey machinery, a sum to sort by (maximum 105), computed by the daily brand health run. ZMA brands are not scored.",
     "dashboard.usage.scoreMissing": "Not scored yet — the next daily brand health run scores this brand",
     "dashboard.usage.sectionBroadcasts": "Broadcasts",
     "dashboard.usage.sectionConfigurations": "Configurations",
