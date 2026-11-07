@@ -229,6 +229,22 @@ func TestDashboardBrandMatrixQueryInterpolates(t *testing.T) {
 	if len(mz) != 1 || len(cz) != 1 || mz[0][1] != cz[0][1] {
 		t.Errorf("zone literals: matrix %v, charts %v -- want exactly one each, equal", mz, cz)
 	}
+	// TODAY-SO-FAR-SPEC I5 -- the send-hour bucketing (the live splice) reads each statement's zone
+	// CTE: the captured zone value occurs exactly once in each statement's full text, in any form
+	// (a second 'America/Denver' -- cast or not -- fails).
+	if len(mz) == 1 && len(cz) == 1 {
+		zone := "'" + mz[0][1] + "'"
+		for name, text := range map[string]string{"get-dashboard-brand-matrix": got.Query, "get-dashboard-charts-scoped": charts.Query} {
+			if n := strings.Count(text, zone); n != 1 {
+				t.Errorf("%s carries the zone literal %s %d times, want exactly 1 (its zone CTE)", name, zone, n)
+			}
+		}
+		for _, frag := range []string{"campaign_send_hours", "live_from"} {
+			if !strings.Contains(got.Query, frag) || !strings.Contains(charts.Query, frag) {
+				t.Errorf("the splice (%s) is missing from a dashboard statement", frag)
+			}
+		}
+	}
 	if strings.Contains(got.Query, "'UTC'") {
 		t.Error("the matrix query buckets in UTC")
 	}

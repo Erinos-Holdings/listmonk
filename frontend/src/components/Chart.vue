@@ -203,6 +203,9 @@ export default {
     // over the type's defaults, key by key at the top level (a host passing `scales` supplies the
     // whole object), and `plugins` one level deeper so the default tooltip styling survives.
     options: { type: Object, default: null },
+    // Fork (integrations TODAY-SO-FAR-SPEC D5) -- per-instance chart.js plugins (the Dashboard
+    // charts' todayOutline, sendsClicksChart.mjs), added beside the bar charts' own, never global.
+    plugins: { type: Array, default: null },
   },
 
   mounted() {
@@ -230,8 +233,9 @@ export default {
     const conf = { ...def, options: this.mergedOptions(), data: this.$props.data };
     // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D8) -- the end-of-bar labels, per
     // instance.
-    if (def === DEFAULT_BAR) {
-      conf.plugins = [barLabels];
+    const plugins = [...(def === DEFAULT_BAR ? [barLabels] : []), ...(this.$props.plugins || [])];
+    if (plugins.length) {
+      conf.plugins = plugins;
     }
     if (this.$props.onClick) {
       conf.options.onClick = this.$props.onClick;

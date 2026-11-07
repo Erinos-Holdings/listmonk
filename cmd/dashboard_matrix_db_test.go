@@ -20,6 +20,12 @@ package main
 // value (after the transport's JSON compaction); a doc without it, or no doc, yields no usage key.
 // DASHBOARDS-POLISH-SPEC I2: likewise the latest doc's `thresholds` (the Matrix engagement warn
 // values and floors) verbatim; a doc without it, or no doc, yields no thresholds key.
+// TODAY-SO-FAR-SPEC I3/I4: the window is [today-60, today] for views, clicks and the bounce
+// columns (a today row of each counts, day -61 and tomorrow do not; tracked/matched in
+// TestCampaignConversionsDashboards), and sent = the SES days up to ses_last (the latest
+// document's newest in-window day before today, document-wide) + the brand's C send hours after it
+// through today; NULL only with neither; another brand's hours never count; a document a day
+// behind makes day -1 live; a brand whose only sends are today shows them.
 // DASHBOARDS-POLISH3-SPEC I5/I6: every row carries skipped ({count, lists} per fr/es/de/it, {0, []}
 // when nothing skips); TestDashboardSkippedLangsDB pins the per-list coverage rule.
 
@@ -142,12 +148,14 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	arcA := h.baList("Alpha old", "public", "single")
 	pubB := h.baList("Bravo", "public", "double")
 	listD := h.baList("Delta", "private", "single")
+	listE := h.baList("Echo", "private", "single")
 	listU := h.baList("Odd", "private", "single")
 	listN := h.baList("No brand", "public", "single")
 	h.db.MustExec(`UPDATE lists SET tags = '{brand:alpha,from:alpha <a@x>}' WHERE id IN ($1, $2)`, pubA, privA)
 	h.db.MustExec(`UPDATE lists SET tags = '{brand:alpha}', status = 'archived' WHERE id = $1`, arcA)
 	h.db.MustExec(`UPDATE lists SET tags = '{brand:bravo}' WHERE id = $1`, pubB)
 	h.db.MustExec(`UPDATE lists SET tags = '{brand:delta}' WHERE id = $1`, listD)
+	h.db.MustExec(`UPDATE lists SET tags = '{brand:echo}' WHERE id = $1`, listE)
 	h.db.MustExec(`UPDATE lists SET tags = '{brand:unattributed}' WHERE id = $1`, listU)
 
 	// Subscribers: on alpha's public list one per shown segment; bravo one active and one pending
@@ -168,6 +176,24 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	cB := h.baCamp("On B", "finished", 6, pubB)
 	cNone := h.baCamp("No list", "finished", 2)
 	cN := h.baCamp("On no brand", "finished", 2, listN)
+	cE := h.baCamp("On E", "finished", 4, listE)
+
+	// campaign_send_hours (TODAY-SO-FAR I4): today's hours on the brands' campaigns, on campaigns
+	// that are no brand's, day -1's (SES's while the document covers it), and tomorrow (never).
+	sendHour := func(camp int, at time.Time, n int) {
+		h.db.MustExec(`INSERT INTO campaign_send_hours (campaign_id, hour, n) VALUES ($1, $2::TIMESTAMPTZ, $3)`, camp, at.Format(time.RFC3339), n)
+	}
+	sendHour(cA, start(0), 5)                    // today's first hour
+	sendHour(cA, dayAt(0, noon), 7)              // today
+	sendHour(cPriv, dayAt(0, 2*time.Hour), 3)    // the private derivative's campaign is alpha's
+	sendHour(cArc, dayAt(0, 2*time.Hour), 1000)  // an archived list forms no brand
+	sendHour(cB, dayAt(0, 3*time.Hour), 11)      // bravo today
+	sendHour(cNone, dayAt(0, 3*time.Hour), 2000) // a campaign on no list
+	sendHour(cN, dayAt(0, 3*time.Hour), 3000)    // a campaign on an untagged list
+	sendHour(cE, dayAt(0, 4*time.Hour), 4)       // echo's only sends: today
+	sendHour(cA, start(0).Add(-time.Hour), 500)  // day -1's last hour
+	sendHour(cA, start(-1), 99)                  // tomorrow's first hour (out)
+	alphaToday, bravoToday, echoToday := 5+7+3, 11, 4
 
 	var link int
 	if err := h.db.Get(&link, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), 'https://matrix.test') RETURNING id`); err != nil {
@@ -179,20 +205,22 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 				camp, sub, link, at.Format(time.RFC3339))
 		}
 	}
-	click(cA, s1, dayAt(5, noon), 3)    // one pair, three rows
-	click(cA, s2, dayAt(65, noon), 1)   // first click before the window...
-	click(cA, s2, dayAt(10, noon), 1)   // ...so this in-window row is no first click
-	click(cA, 0, dayAt(5, noon), 2)     // NULL subscriber: raw rows only
-	click(cPriv, s1, dayAt(2, noon), 1) // the private derivative's campaign is the brand's
-	click(cArc, s3, dayAt(3, noon), 1)  // an archived list forms no brand
-	click(cB, s3, dayAt(0, noon), 1)    // Denver-today (out)...
-	click(cB, s3, endOf(1), 1)          // ...but yesterday's last moment is in, and the first click
-	click(cB, s1, endOf(61), 1)         // day -61 (out)
-	click(cNone, s1, dayAt(5, noon), 1) // a campaign on no list
-	click(cN, s1, dayAt(5, noon), 1)    // a campaign on an untagged list
+	click(cA, s1, dayAt(5, noon), 3)        // one pair, three rows
+	click(cA, s2, dayAt(65, noon), 1)       // first click before the window...
+	click(cA, s2, dayAt(10, noon), 1)       // ...so this in-window row is no first click
+	click(cA, 0, dayAt(5, noon), 2)         // NULL subscriber: raw rows only
+	click(cPriv, s1, dayAt(2, noon), 1)     // the private derivative's campaign is the brand's
+	click(cArc, s3, dayAt(3, noon), 1)      // an archived list forms no brand
+	click(cB, s3, dayAt(0, noon), 1)        // Denver-today (in, TODAY-SO-FAR I3) -- a raw row; the pair's
+	click(cB, s3, endOf(1), 1)              // first click is yesterday's last moment
+	click(cB, s2, dayAt(0, 2*time.Hour), 1) // a pair first clicked today (in)
+	click(cB, s2, start(-1), 1)             // tomorrow's first moment (out)
+	click(cB, s1, endOf(61), 1)             // day -61 (out)
+	click(cNone, s1, dayAt(5, noon), 1)     // a campaign on no list
+	click(cN, s1, dayAt(5, noon), 1)        // a campaign on an untagged list
 	wantClicks := map[bool]map[string]int{
-		true:  {"alpha": 2, "bravo": 1},
-		false: {"alpha": 7, "bravo": 1},
+		true:  {"alpha": 2, "bravo": 2},
+		false: {"alpha": 7, "bravo": 3},
 	}
 
 	// Views mirror the clicks fixture on campaign_views (same window, pair and NULL-subscriber
@@ -204,21 +232,23 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 				camp, sub, at.Format(time.RFC3339))
 		}
 	}
-	view(cA, s1, dayAt(5, noon), 3)     // one pair, three rows
-	view(cA, s2, dayAt(65, noon), 1)    // first view before the window...
-	view(cA, s2, dayAt(10, noon), 1)    // ...so this in-window row is no first view
-	view(cA, 0, dayAt(5, noon), 2)      // NULL subscriber: raw rows only
-	view(cA, sHeld, dayAt(6, noon), 1)  // the extra pair
-	view(cPriv, s1, dayAt(2, noon), 1)  // the private derivative's campaign is the brand's
-	view(cArc, s3, dayAt(3, noon), 1)   // an archived list forms no brand
-	view(cB, s3, dayAt(0, noon), 1)     // Denver-today (out)...
-	view(cB, s3, endOf(1), 1)           // ...but yesterday's last moment is in, and the first view
-	view(cB, s1, endOf(61), 1)          // day -61 (out)
-	view(cNone, s1, dayAt(5, noon), 1)  // a campaign on no list
-	view(cN, s1, dayAt(5, noon), 1)     // a campaign on an untagged list
+	view(cA, s1, dayAt(5, noon), 3)        // one pair, three rows
+	view(cA, s2, dayAt(65, noon), 1)       // first view before the window...
+	view(cA, s2, dayAt(10, noon), 1)       // ...so this in-window row is no first view
+	view(cA, 0, dayAt(5, noon), 2)         // NULL subscriber: raw rows only
+	view(cA, sHeld, dayAt(6, noon), 1)     // the extra pair
+	view(cPriv, s1, dayAt(2, noon), 1)     // the private derivative's campaign is the brand's
+	view(cArc, s3, dayAt(3, noon), 1)      // an archived list forms no brand
+	view(cB, s3, dayAt(0, noon), 1)        // Denver-today (in) -- a raw row; the pair's first
+	view(cB, s3, endOf(1), 1)              // view is yesterday's last moment
+	view(cB, s2, dayAt(0, 2*time.Hour), 1) // a pair first viewed today (in)
+	view(cB, s2, start(-1), 1)             // tomorrow's first moment (out)
+	view(cB, s1, endOf(61), 1)             // day -61 (out)
+	view(cNone, s1, dayAt(5, noon), 1)     // a campaign on no list
+	view(cN, s1, dayAt(5, noon), 1)        // a campaign on an untagged list
 	wantViews := map[bool]map[string]int{
-		true:  {"alpha": 3, "bravo": 1},
-		false: {"alpha": 8, "bravo": 1},
+		true:  {"alpha": 3, "bravo": 2},
+		false: {"alpha": 8, "bravo": 3},
 	}
 
 	// Bounces. meta carries the SES shape the block predicate reads.
@@ -239,7 +269,10 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 		{cA, "hard", "5.7.1", "General", dayAt(65, noon)},        // before the window
 		{cPriv, "hard", "5.7.1", "OnAccountSuppressionList", in}, // ses-suppressed
 		{cB, "hard", "5.7.0", "General", in},                     // block
-		{cB, "complaint", "", "", dayAt(0, noon)},                // Denver-today (out)
+		{cB, "complaint", "", "", dayAt(0, noon)},                // Denver-today (in, TODAY-SO-FAR I3)
+		{cB, "hard", "5.7.1", "General", dayAt(0, 2*time.Hour)},  // Denver-today block (in)
+		{cB, "complaint", "", "", start(-1)},                     // tomorrow (out)
+		{cB, "hard", "5.7.1", "General", endOf(61)},              // day -61 (out)
 		{cNone, "hard", "5.7.1", "General", in},                  // no list: no brand
 		{0, "hard", "5.7.1", "General", in},                      // deleted campaign
 	}
@@ -286,6 +319,11 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	for n := 52; n <= 58; n++ {
 		bravoSent += 200 + n
 	}
+	// The splice: ses_last is day -1 (alpha's; document-wide, so bravo's day-52 end changes nothing)
+	// and today is listmonk's -- the document's day-0 9000 is never read, day -1's 500 hour never.
+	alphaSESOnly := alphaSent
+	alphaSent += alphaToday
+	bravoSent += bravoToday
 
 	// brand_health: alpha's older row must lose to its newest; bravo's newest carries no spam value;
 	// a default-sender row for another brand must never reach delta (no default fallback).
@@ -376,10 +414,11 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	// skips: every row still carries skipped, each language {0, []}.
 	bravo := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "bravo", Subscribers: matrixSubs{Total: 2, Active: 1},
-			Sent: &bravoSent, Views: wantViews[tracking]["bravo"], Clicks: wantClicks[tracking]["bravo"], HardBounces: 1, Blocks: 1,
+			Sent: &bravoSent, Views: wantViews[tracking]["bravo"], Clicks: wantClicks[tracking]["bravo"], HardBounces: 2, Blocks: 2, Complaints: 1,
 			Health: matrixHealth{Status: "unknown"}, Skipped: zeroSkipped()}
 	}
-	delta := matrixRow{Brand: "delta", Skipped: zeroSkipped()}
+	delta := matrixRow{Brand: "delta", Skipped: zeroSkipped()} // neither an SES day nor a send hour: NULL
+	echo := matrixRow{Brand: "echo", Sent: &echoToday, Skipped: zeroSkipped()}
 
 	matrix := func(u auth.User, q string) matrixResp {
 		t.Helper()
@@ -410,7 +449,7 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 			want   []matrixRow
 			scoped bool
 		}{
-			{"no list_id", admin, "", []matrixRow{alpha(tracking), bravo(tracking), delta}, false},
+			{"no list_id", admin, "", []matrixRow{alpha(tracking), bravo(tracking), delta, echo}, false},
 			{"list_id = alpha", admin, fmt.Sprintf("?list_id=%d&list_id=%d", pubA, privA), []matrixRow{alpha(tracking)}, true},
 			// The archived list alone forms no brand; the unattributed and untagged lists no row.
 			{"list_id = archived alpha", admin, fmt.Sprintf("?list_id=%d", arcA), []matrixRow{}, true},
@@ -487,11 +526,34 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	}
 	_ = sPend
 
-	// No ses document with a daily series: sent is absent on every row, the rest unaffected.
+	// TODAY-SO-FAR I4 -- a document a day behind (newest day -2, the charts statement's ses_last
+	// rule): day -1 is live too, so alpha = its SES days 60..2 + day -1's 500 hour + today; bravo,
+	// whose rows end at day 52 in it, is unchanged (document-wide); delta stays NULL.
+	sentOf := func(rows []matrixRow) map[string]*int {
+		out := map[string]*int{}
+		for _, r := range rows {
+			out[r.Brand] = r.Sent
+		}
+		return out
+	}
+	sysHealth("ses", -2, map[string]any{"brands": []map[string]any{
+		{"brand": "alpha", "sends": 1, "daily": daily(100)[:60]}, // days 61..2
+		{"brand": "bravo", "sends": 1, "daily": daily(200)[3:10]},
+	}})
+	got := sentOf(matrix(admin, "").Rows)
+	if w := alphaSESOnly - 101 + 500 + alphaToday; got["alpha"] == nil || *got["alpha"] != w ||
+		got["bravo"] == nil || *got["bravo"] != bravoSent || got["delta"] != nil || got["echo"] == nil || *got["echo"] != echoToday {
+		t.Fatalf("behind document: sent %s, want alpha %d bravo %d delta null echo %d", baJSON(got), w, bravoSent, echoToday)
+	}
+
+	// No ses document with a daily series: only today's send hours (live_from = today), so a brand
+	// with today's hours reads them and one without is NULL; the rest unaffected.
 	h.db.MustExec(`DELETE FROM system_health WHERE kind = 'ses'`)
-	got := matrix(admin, "")
-	if len(got.Rows) != 3 || got.Rows[0].Sent != nil || got.Rows[1].Sent != nil || got.Rows[0].Clicks != wantClicks[false]["alpha"] {
-		t.Fatalf("no ses document: %s", baJSON(got))
+	rows := matrix(admin, "").Rows
+	got = sentOf(rows)
+	if len(rows) != 4 || got["alpha"] == nil || *got["alpha"] != alphaToday || got["bravo"] == nil || *got["bravo"] != bravoToday ||
+		got["delta"] != nil || got["echo"] == nil || *got["echo"] != echoToday || rows[0].Clicks != wantClicks[false]["alpha"] {
+		t.Fatalf("no ses document: %s", baJSON(rows))
 	}
 	ko.Set("privacy.individual_tracking", true)
 }

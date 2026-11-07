@@ -143,20 +143,30 @@ SELECT JSON_BUILD_OBJECT(
 -- Fork (brand analytics, BRAND-ANALYTICS-SPEC D7; dashboard sends, integrations
 -- DASHBOARD-SENDS-SPEC D2-D5). The ONE Dashboard charts query, live for every reader --
 -- mat_dashboard_charts is no longer read. $1/$2/$3 exactly as get-dashboard-counts-scoped ($1 = the
--- scope's list ids, $2 = campaigns get_all, $3 = unscoped). Revision 2 (R1) -- both series cover
--- the 60 Mountain (America/Denver) calendar days ending YESTERDAY there, every day bucketed in that
--- zone (DST-aware, never a fixed offset, never the session time zone). The zone is the ONE literal
--- in the zone CTE below and MUST equal SES_DAILY_ZONE in the integrations lib/ses-health.ts, which
--- buckets the Sends series (R5; no test spans the repos).
+-- scope's list ids, $2 = campaigns get_all, $3 = unscoped). Revision 2 (R1), widened by
+-- integrations TODAY-SO-FAR-SPEC D1 -- every series covers the Mountain (America/Denver) calendar
+-- days from today-60 through TODAY there (today so far, 61 days -- the Campaign Matrix's window),
+-- every day bucketed in that zone (DST-aware, never a fixed offset, never the session time zone).
+-- The zone is the ONE literal in the zone CTE below and MUST equal SES_DAILY_ZONE in the
+-- integrations lib/ses-health.ts, which buckets the SES Sends days (R5; no test spans the repos).
+-- today = the window's last day as YYYY-MM-DD, the one today every client uses (D4).
 -- clicks = link_clicks of the campaigns C per day, zero-filled. The mode is interpolated at boot
 -- (cmd/init.go, beside statsSel) as TRUE when individual tracking is ON -- each (campaign,
 -- subscriber) pair counts once, on the Mountain day of its FIRST click on that campaign (a pair
 -- clicked before the window is not counted, NULL subscribers never) -- and FALSE when OFF (raw
 -- rows). The constant prunes the other branch at plan time.
--- sends = the per-day Send of the LATEST system_health ses document that carries a daily series
--- (written by the integrations BrandHealth Lambda; a failed SES read writes none), summed over its brands rows -- every row when unscoped (unattributed
--- included), else the rows whose brand is the brand tag of a list in $1 (unattributed never).
--- Only the document's days inside the window, no zero fill (a stale document ends a day early).
+-- sends = the splice (TODAY-SO-FAR-SPEC D2-D4), each point carrying live.
+--   ses_last = the newest well-formed daily day of ANY brands row of the LATEST system_health ses
+--   document that carries a daily series (written by the integrations BrandHealth Lambda; a failed
+--   SES read writes none) inside [d0, d1 - 1], document-wide; live_from = ses_last + 1, or d1 when
+--   there is none. Days in [d0, live_from - 1] are that document's per-day sends summed over its
+--   brands rows -- every row when unscoped (unattributed included), else the rows whose brand is
+--   the brand tag of a list in $1 (unattributed never) -- live FALSE, no zero fill. Days in
+--   [live_from, d1] are listmonk's own campaign_send_hours, live TRUE, each hour on the Mountain
+--   date of its hour (Mountain offsets are whole hours), summed over every campaign when unscoped,
+--   else the campaigns on a list in $1 carrying a brand tag other than unattributed (never the
+--   get_all widening of C), zero-filled whenever that set is open in scope terms (unscoped, or a
+--   branded list in scope) and absent otherwise. The SES daily never carries the current day.
 WITH camps AS (
     SELECT c.id FROM campaigns c
     WHERE $2::BOOLEAN OR EXISTS (
@@ -167,7 +177,7 @@ zone AS (
     SELECT 'America/Denver'::TEXT AS tz
 ),
 win AS (
-    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE - 1 AS d1 FROM zone
+    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE AS d1 FROM zone
 ),
 bounds AS (
     SELECT d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win
@@ -224,9 +234,52 @@ send_days AS (
     WHERE x->>'day' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND JSONB_TYPEOF(x->'sends') = 'number'
     GROUP BY 1
 ),
+ses_last AS (
+    SELECT MAX((x->>'day')::DATE) AS d FROM sesdoc,
+        JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(doc->'brands') = 'array' THEN doc->'brands' ELSE '[]'::JSONB END) r,
+        JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(r->'daily') = 'array' THEN r->'daily' ELSE '[]'::JSONB END) x,
+        win
+    WHERE x->>'day' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND JSONB_TYPEOF(x->'sends') = 'number'
+        AND (x->>'day')::DATE BETWEEN win.d0 AND win.d1 - 1
+),
+live AS (
+    SELECT COALESCE(sl.d + 1, win.d1) AS live_from,
+        (COALESCE(sl.d + 1, win.d1)::TIMESTAMP AT TIME ZONE win.tz) AS tl
+    FROM ses_last sl, win
+),
+live_on AS (
+    SELECT $3::BOOLEAN OR EXISTS (
+        SELECT 1 FROM lists l, UNNEST(l.tags) AS t
+        WHERE l.id = ANY($1::INT[]) AND LEFT(t, 6) = 'brand:' AND SUBSTR(t, 7) <> 'unattributed'
+    ) AS is_on
+),
+live_camps AS (
+    SELECT c.id FROM campaigns c
+    WHERE $3::BOOLEAN OR EXISTS (
+        SELECT 1 FROM campaign_lists cl JOIN lists l ON (l.id = cl.list_id), UNNEST(l.tags) AS t
+        WHERE cl.campaign_id = c.id AND l.id = ANY($1::INT[])
+            AND LEFT(t, 6) = 'brand:' AND SUBSTR(t, 7) <> 'unattributed'
+    )
+),
+live_hours AS (
+    SELECT (h.hour AT TIME ZONE (SELECT tz FROM zone))::DATE AS d, SUM(h.n)::BIGINT AS n
+    FROM campaign_send_hours h
+    WHERE h.campaign_id IN (SELECT id FROM live_camps)
+        AND h.hour >= (SELECT tl FROM live) AND h.hour < (SELECT t1 FROM bounds)
+    GROUP BY 1
+),
+send_points AS (
+    SELECT sd.d, sd.n, FALSE AS is_live FROM send_days sd, win, live
+    WHERE sd.d BETWEEN win.d0 AND live.live_from - 1
+    UNION ALL
+    SELECT ld.d, COALESCE(lh.n, 0), TRUE FROM (
+        SELECT GENERATE_SERIES(live.live_from, win.d1, INTERVAL '1 day')::DATE AS d
+        FROM live, win, live_on WHERE live_on.is_on
+    ) ld LEFT JOIN live_hours lh ON (lh.d = ld.d)
+),
 sends AS (
-    SELECT JSON_AGG(JSON_BUILD_OBJECT('date', sd.d, 'count', sd.n) ORDER BY sd.d)
-    FROM send_days sd, win WHERE sd.d BETWEEN win.d0 AND win.d1
+    SELECT JSON_AGG(JSON_BUILD_OBJECT('date', sp.d, 'count', sp.n, 'live', sp.is_live) ORDER BY sp.d)
+    FROM send_points sp
 ),
 -- Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11 follow-up, the Clicks and
 -- conversions chart) -- the stored campaign_conversions rows of C per Mountain PURCHASE day over the
@@ -258,6 +311,7 @@ SELECT JSON_BUILD_OBJECT(
     'sends', COALESCE((SELECT * FROM sends), '[]'),
     'clicks', COALESCE((SELECT * FROM clicks), '[]'),
     'conversions', COALESCE((SELECT * FROM conversions), '[]'),
+    'today', (SELECT TO_CHAR(d1, 'YYYY-MM-DD') FROM win),
     'scoped', NOT $3::BOOLEAN
 ) AS data;
 
@@ -273,8 +327,9 @@ SELECT JSON_BUILD_OBJECT(
 --     segment definition), current state. total keeps the one definition (pending included).
 --   C = the brand's campaigns, any campaign_lists row on the brand's lists. A click or bounce row
 --     whose campaign_id is NULL (deleted campaign) is attributable to no brand and drops out.
---   views, clicks, hard_bounces, blocks, complaints = over C and the 60 America/Denver calendar
---     days ending yesterday there (get-dashboard-charts-scoped's window, DST-aware). The zone is the
+--   views, clicks, hard_bounces, blocks, complaints = over C and the America/Denver calendar days
+--     from today-60 through TODAY there, today so far (get-dashboard-charts-scoped's window,
+--     DST-aware; integrations TODAY-SO-FAR-SPEC D1). The zone is the
 --     ONE literal in the zone CTE below and MUST equal get-dashboard-charts-scoped's (a fork test
 --     asserts it) and SES_DAILY_ZONE in the integrations lib/ses-health.ts (no test spans the repos).
 --     views and clicks follow the charts statement's mode constant (interpolated at boot,
@@ -291,9 +346,12 @@ SELECT JSON_BUILD_OBJECT(
 --     (COALESCE(b.meta->'bounce'->'bouncedRecipients'->0->>'status', '') LIKE '5.7.%') AND NOT (COALESCE(b.meta->'bounce'->>'bounceSubType', '') = 'Suppressed' OR COALESCE(b.meta->'bounce'->>'bounceSubType', '') = 'OnAccountSuppressionList')
 --     In the statement below the LIKE pattern is written '5.7.%%' because this text goes through
 --     fmt.Sprintf at boot -- the prepared SQL carries '5.7.%' exactly (a fork test asserts it).
---   sent = the brand row's daily sends summed over the same window, from the LATEST system_health
---     ses document that carries a daily series (the charts statement's sesdoc), NULL when that
---     document has no in-window day for the brand. unattributed is never a row.
+--   sent = the charts statement's splice (TODAY-SO-FAR-SPEC D2-D4) -- the brand row's daily sends
+--     from the LATEST system_health ses document that carries a daily series (the charts
+--     statement's sesdoc) over [d0, live_from - 1], plus the campaign_send_hours of the brand's C
+--     over [live_from, d1] on each hour's Mountain date; ses_last and live_from exactly as the
+--     charts statement (document-wide). NULL only when the brand has neither an SES day in that
+--     range nor a send hour in the live range. unattributed is never a row.
 --   health = the brand's own LATEST brand_health row (no default-row fallback) -- status and
 --     inputs.spamRate.detail.value as spam_rate when it is a number; an empty object with no row.
 --     GP-SPAM-VISIBILITY-SPEC D2 -- spam_status = inputs.spamRate.status verbatim (absent when the
@@ -341,7 +399,7 @@ zone AS (
     SELECT 'America/Denver'::TEXT AS tz
 ),
 win AS (
-    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE - 1 AS d1 FROM zone
+    SELECT tz, (NOW() AT TIME ZONE tz)::DATE - 60 AS d0, (NOW() AT TIME ZONE tz)::DATE AS d1 FROM zone
 ),
 bounds AS (
     SELECT d0, d1, (d0::TIMESTAMP AT TIME ZONE tz) AS t0, ((d1 + 1)::TIMESTAMP AT TIME ZONE tz) AS t1 FROM win
@@ -409,15 +467,34 @@ sesdoc AS (
     WHERE kind = 'ses' AND JSONB_PATH_EXISTS(doc, '$.brands[*].daily[*] ? (@.day.type() == "string")')
     ORDER BY day DESC LIMIT 1
 ),
+ses_last AS (
+    SELECT MAX((x->>'day')::DATE) AS d FROM sesdoc,
+        JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(doc->'brands') = 'array' THEN doc->'brands' ELSE '[]'::JSONB END) r,
+        JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(r->'daily') = 'array' THEN r->'daily' ELSE '[]'::JSONB END) x,
+        win
+    WHERE x->>'day' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND JSONB_TYPEOF(x->'sends') = 'number'
+        AND (x->>'day')::DATE BETWEEN win.d0 AND win.d1 - 1
+),
+live AS (
+    SELECT COALESCE(sl.d + 1, win.d1) AS live_from,
+        (COALESCE(sl.d + 1, win.d1)::TIMESTAMP AT TIME ZONE win.tz) AS tl
+    FROM ses_last sl, win
+),
 ses_sent AS (
     SELECT r->>'brand' AS brand, SUM((x->>'sends')::NUMERIC)::BIGINT AS n FROM sesdoc,
         JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(doc->'brands') = 'array' THEN doc->'brands' ELSE '[]'::JSONB END) r,
         JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(r->'daily') = 'array' THEN r->'daily' ELSE '[]'::JSONB END) x,
-        win
+        win, live
     WHERE r->>'brand' <> 'unattributed'
         AND x->>'day' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND JSONB_TYPEOF(x->'sends') = 'number'
-        AND (x->>'day')::DATE BETWEEN win.d0 AND win.d1
+        AND (x->>'day')::DATE BETWEEN win.d0 AND live.live_from - 1
     GROUP BY 1
+),
+live_sent AS (
+    SELECT bc.brand, SUM(h.n)::BIGINT AS n FROM campaign_send_hours h
+    JOIN bcamps bc ON (bc.id = h.campaign_id)
+    WHERE h.hour >= (SELECT tl FROM live) AND h.hour < (SELECT t1 FROM bounds)
+    GROUP BY bc.brand
 ),
 bh AS (
     SELECT DISTINCT ON (brand) brand, status, doc FROM brand_health ORDER BY brand, day DESC
@@ -451,7 +528,7 @@ SELECT JSON_BUILD_OBJECT(
                 'unsubscribed', COALESCE(s.unsubscribed, 0),
                 'blocked', COALESCE(s.blocked, 0)
             ),
-            'sent', ss.n,
+            'sent', CASE WHEN ss.n IS NULL AND ls.n IS NULL THEN NULL ELSE COALESCE(ss.n, 0) + COALESCE(ls.n, 0) END,
             'views', COALESCE(rv.n, 0) + COALESCE(pv.n, 0),
             'clicks', COALESCE(rc.n, 0) + COALESCE(pc.n, 0),
             'hard_bounces', COALESCE(bn.hard_bounces, 0),
@@ -478,6 +555,7 @@ SELECT JSON_BUILD_OBJECT(
         LEFT JOIN pair_clicks pc ON (pc.brand = b.brand)
         LEFT JOIN bnc bn ON (bn.brand = b.brand)
         LEFT JOIN ses_sent ss ON (ss.brand = b.brand)
+        LEFT JOIN live_sent ls ON (ls.brand = b.brand)
         LEFT JOIN bh ON (bh.brand = b.brand)
         LEFT JOIN conv ct ON (ct.brand = b.brand AND ct.measure = 'tracked')
         LEFT JOIN conv cm ON (cm.brand = b.brand AND cm.measure = 'matched')

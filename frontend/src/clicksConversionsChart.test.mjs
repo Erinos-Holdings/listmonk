@@ -6,6 +6,7 @@ import {
   shapeClicksConversions, conversionsAxisMax, clicksConversionsOptions, tooltipLines, normalizeConvState,
   loadConvState, saveConvState, CLICKS_FILL, CONV_COLOR, TRACKED_FILL, CONV_STORAGE_KEY,
 } from './clicksConversionsChart.mjs'; // eslint-disable-line import/extensions
+import { CLICKS_COLOR, withAlpha, TODAY_POINT_RADIUS } from './sendsClicksChart.mjs'; // eslint-disable-line import/extensions
 
 const labels = {
   labelOf: (d) => d.slice(5), clicksLabel: 'Clicks', matchedLabel: 'Matched', trackedLabel: 'Tracked',
@@ -72,6 +73,36 @@ test('the tooltip always lists all four values, whatever is toggled; whole dolla
   assert.equal(opts.plugins.tooltip.filter({ dataset: { type: 'line' } }), false);
   assert.equal(opts.plugins.tooltip.filter({ dataset: { type: 'bar' } }), true);
   assert.equal(opts.scales.y1.ticks.callback(12509.38), '$12,509');
+});
+
+// Fork (integrations TODAY-SO-FAR-SPEC I6) -- the same partial-day treatment as the top chart,
+// through its one helper: the Clicks bar pale with the dashed outline mark (the Clicks axis color),
+// the Matched segment into today dashed and today's point hollow; the Tracked fill unchanged.
+test('today: Clicks bar 45% + outline mark, Matched dashed into today with a hollow point, Tracked fill untouched', () => {
+  const out = shapeClicksConversions(clicks, conv, { ...labels, showTracked: true, today: '2026-10-22' });
+  const b = byLabel(out, 'Clicks');
+  const m = byLabel(out, 'Matched');
+  const t = byLabel(out, 'Tracked');
+  assert.equal(b.backgroundColor({ dataIndex: 0 }), CLICKS_FILL);
+  assert.equal(b.backgroundColor({ dataIndex: 1 }), withAlpha(CLICKS_FILL, 0.45));
+  assert.deepEqual(b.todayOutline, { index: 1, color: CLICKS_COLOR });
+  assert.deepEqual(m.segment.borderDash({ p1DataIndex: 1 }), [3, 2]);
+  assert.equal(m.segment.borderDash({ p1DataIndex: 0 }), undefined);
+  assert.deepEqual([m.pointBackgroundColor({ dataIndex: 1 }), m.pointBorderColor, m.pointRadius({ dataIndex: 1 })], ['#fff', CONV_COLOR, TODAY_POINT_RADIUS]);
+  assert.deepEqual([m.pointBackgroundColor({ dataIndex: 0 }), m.pointRadius({ dataIndex: 0 })], [CONV_COLOR, 2]);
+  assert.deepEqual([t.backgroundColor, t.segment, t.todayOutline], [TRACKED_FILL, undefined, undefined]);
+});
+
+test('no today (or not drawn): the datasets exactly as before; the tooltip title marks today only', () => {
+  const plain = shapeClicksConversions(clicks, conv, labels);
+  assert.deepEqual(shapeClicksConversions(clicks, conv, { ...labels, today: '2026-10-30' }), plain);
+  assert.equal(byLabel(plain, 'Clicks').backgroundColor, CLICKS_FILL);
+  assert.equal(byLabel(plain, 'Matched').segment, undefined);
+  const opts = clicksConversionsOptions({
+    clicksLabel: 'Clicks', axisLabel: 'Sales', dates: ['2026-10-21', '2026-10-22'], today: '2026-10-22', todayFormat: (l) => `${l} — today so far`,
+  });
+  assert.equal(opts.plugins.tooltip.callbacks.title([{ label: '22 Oct', dataIndex: 1 }]), '22 Oct — today so far');
+  assert.equal(opts.plugins.tooltip.callbacks.title([{ label: '21 Oct', dataIndex: 0 }]), '21 Oct');
 });
 
 test('# mode: plain integer ticks on the right axis, its title and numbers in the line color', () => {

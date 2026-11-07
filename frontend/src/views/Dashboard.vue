@@ -236,8 +236,9 @@
             <b-loading v-if="isChartsLoading" active :is-full-page="false" />
             <!-- Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D6, revision 2 R4, and the
                  2026-10-24 follow-up): SES sends per day (BrandHealth's ses document) and clicks
-                 counted as people under individual tracking, both over the 60 Mountain days ending
-                 yesterday -- ONE full-width chart, Sends on the left axis, Clicks on the right in a
+                 counted as people under individual tracking, both from 60 Mountain days ago through
+                 today so far (TODAY-SO-FAR-SPEC; today's Sends are listmonk's own, the partial day
+                 drawn distinct) -- ONE full-width chart, Sends on the left axis, Clicks on the right in a
                  second color (sendsClicksChart.mjs), one caption under it. -->
             <article class="tile is-child notification charts">
               <div class="columns">
@@ -246,7 +247,7 @@
                     {{ $t('dashboard.sendsAndClicks') }}
                   </h3>
                   <chart type="line" v-if="sendsClicksChart" :data="sendsClicksChart" :options="sendsClicksOptions"
-                    data-cy="sends-clicks-chart" />
+                    :plugins="chartPlugins" data-cy="sends-clicks-chart" />
                 </div>
               </div>
               <p class="is-size-7 has-text-grey" data-cy="charts-note">{{ $t('dashboard.chartsNote') }}</p>
@@ -282,7 +283,7 @@
                 </div>
               </div>
               <chart type="line" :data="clicksConversionsChart" :options="clicksConversionsOptions"
-                data-cy="clicks-conversions-chart" />
+                :plugins="chartPlugins" data-cy="clicks-conversions-chart" />
               <p class="is-size-7 has-text-grey" data-cy="conversions-chart-note">{{ $t('dashboard.conversionsChart.note') }}</p>
             </article>
           </div>
@@ -391,7 +392,9 @@ import dayjs from 'dayjs';
 import Vue from 'vue';
 import { mapState } from 'vuex';
 import Chart from '../components/Chart.vue';
-import { clicksAxisMax, sendsClicksOptions, shapeSendsClicks } from '../sendsClicksChart.mjs'; // eslint-disable-line import/extensions
+import {
+  clicksAxisMax, sendsClicksOptions, shapeSendsClicks, todayOutline,
+} from '../sendsClicksChart.mjs'; // eslint-disable-line import/extensions
 import {
   clicksConversionsOptions, conversionsAxisMax, loadConvState, saveConvState, shapeClicksConversions,
 } from '../clicksConversionsChart.mjs'; // eslint-disable-line import/extensions
@@ -444,6 +447,10 @@ export default Vue.extend({
       isCountsLoading: true,
       sendsClicksChart: null,
       clicksMax: undefined,
+      // Fork (TODAY-SO-FAR-SPEC D4/D5) -- the response's Mountain today (never the browser clock)
+      // and the partial day's dashed-outline plugin, per chart instance.
+      chartToday: null,
+      chartPlugins: Object.freeze([todayOutline]), // frozen: Vue never observes the plugin
       // Fork (campaign conversions, the Clicks + conversions chart) -- the fetched daily series and
       // the chart's $|# unit and Show Tracked overlay, per browser session
       // (sessionStorage key dashboard.conversionsChart; a fresh session is $ with Tracked off).
@@ -570,6 +577,7 @@ export default Vue.extend({
 
       this.$api.getDashboardCharts(params).then((data) => {
         this.isChartsLoading = false;
+        this.chartToday = data.today || null;
         this.sendsClicksChart = this.makeSendsClicks(data);
         this.clicksMax = clicksAxisMax(data.clicks);
         this.chartClicks = data.clicks || [];
@@ -645,7 +653,13 @@ export default Vue.extend({
         labelOf: (d) => dayjs(d).format('DD MMM'),
         sendsLabel: this.$t('dashboard.sends'),
         clicksLabel: this.$t('dashboard.clicks'),
+        today: data.today,
       });
+    },
+
+    // The tooltip title on today's point: "{date} — today so far".
+    todayFormat(label) {
+      return this.$t('dashboard.today', { date: label });
     },
   },
 
@@ -656,7 +670,14 @@ export default Vue.extend({
     // max follows the fetched data (the chart re-reads options on change).
     sendsClicksOptions() {
       return sendsClicksOptions({
-        sendsLabel: this.$t('dashboard.sends'), clicksLabel: this.$t('dashboard.clicks'), clicksMax: this.clicksMax,
+        sendsLabel: this.$t('dashboard.sends'),
+        clicksLabel: this.$t('dashboard.clicks'),
+        clicksMax: this.clicksMax,
+        dates: (this.sendsClicksChart && this.sendsClicksChart.dates) || [],
+        live: (this.sendsClicksChart && this.sendsClicksChart.live) || [],
+        today: this.chartToday,
+        todayFormat: this.todayFormat,
+        liveNote: this.$t('dashboard.sendsLive'),
       });
     },
 
@@ -670,6 +691,7 @@ export default Vue.extend({
         trackedLabel: this.$t('analytics.conversions.tracked'),
         unit: this.conv.unit,
         showTracked: this.conv.showTracked,
+        today: this.chartToday,
       });
     },
 
@@ -684,6 +706,8 @@ export default Vue.extend({
         matchedLabel: this.$t('analytics.conversions.matched'),
         trackedLabel: this.$t('analytics.conversions.tracked'),
         ordersLabel: this.$t('dashboard.conversionsChart.ordersUnit'),
+        today: this.chartToday,
+        todayFormat: this.todayFormat,
       });
     },
 

@@ -13,8 +13,9 @@ package main
 //            for another brand's campaign is refused exactly as type=links is), and returns NULL for
 //            an uncovered measure, 0 for a covered campaign with no rows.
 //   T9 (I9, I12) the Brand Matrix's tracked/matched = the sum of the brand's campaigns' rows in the
-//            60 Denver days ending yesterday (from the statement's one zone CTE -- a row at 23:30
-//            Denver on the window's last day counts, 00:30 today does not), the Overview's are the
+//            Denver days from today-60 through today (from the statement's one zone CTE; widened by
+//            integrations TODAY-SO-FAR-SPEC D1/I1/I3 -- a row at 23:30 Denver yesterday and one at
+//            00:30 today both count, one second before day -60 does not), the Overview's are the
 //            lifetime sum over the scope's campaigns, and All = the sum of the brands.
 
 import (
@@ -404,12 +405,12 @@ func TestCampaignConversionsDashboards(t *testing.T) {
 		h.db.MustExec(`INSERT INTO campaign_conversions (measure, order_id, campaign_id, brand, purchased_at, sales_usd) VALUES ($1, $2, $3, $4, $5::TIMESTAMPTZ, $6)`,
 			measure, order, camp, brand, at.Format(time.RFC3339), sales)
 	}
-	lastDay := start(1).Add(23*time.Hour + 30*time.Minute) // 23:30 Denver on the window's last day: IN
+	lastDay := start(1).Add(23*time.Hour + 30*time.Minute) // 23:30 Denver yesterday: IN
 	ins("tracked", "a1", cA1, "alpha", lastDay, 10)
 	ins("tracked", "a2", cA2, "alpha", start(30), 20)
-	ins("tracked", "a3", cA1, "alpha", start(0).Add(30*time.Minute), 400)  // 00:30 Denver today: OUT
-	ins("tracked", "a4", cA1, "alpha", start(60), 1)                        // the window's first instant: IN
-	ins("tracked", "a5", cA1, "alpha", start(60).Add(-time.Second), 800)    // one second before: OUT
+	ins("tracked", "a3", cA1, "alpha", start(0).Add(30*time.Minute), 400) // 00:30 Denver today: IN (TODAY-SO-FAR I1/I3)
+	ins("tracked", "a4", cA1, "alpha", start(60), 1)                      // the window's first instant: IN
+	ins("tracked", "a5", cA1, "alpha", start(60).Add(-time.Second), 800)  // one second before: OUT
 	ins("matched", "a1", cA2, "alpha", lastDay, 3)
 	ins("matched", "b1", cB, "bravo", start(5), 50)
 	ins("matched", "b2", cB, "bravo", start(70), 9) // out of the window, in the lifetime
@@ -441,8 +442,8 @@ func TestCampaignConversionsDashboards(t *testing.T) {
 	for _, r := range mr.Data.Rows {
 		got[r.Brand] = r
 	}
-	if a := got["alpha"]; a.Tracked != (meas{3, 31}) || a.Matched != (meas{1, 3}) {
-		t.Fatalf("alpha: %+v, want tracked {3 31} (a1+a2+a4), matched {1 3}", a)
+	if a := got["alpha"]; a.Tracked != (meas{4, 431}) || a.Matched != (meas{1, 3}) {
+		t.Fatalf("alpha: %+v, want tracked {4 431} (a1+a2+a3+a4), matched {1 3}", a)
 	}
 	if b := got["bravo"]; b.Tracked != (meas{0, 0}) || b.Matched != (meas{1, 50}) {
 		t.Fatalf("bravo: %+v", b)
@@ -534,23 +535,27 @@ func TestCampaignConversionsDashboards(t *testing.T) {
 		t.Fatalf("matrix meta: %s", body)
 	}
 
-	// With a doc: 60 zero-filled purchase days, the window's sums (a1+a2+a4 tracked, a1+b1 matched;
-	// a3 today, a5 and b2 before the window are OUT), a1 on the window's last day, and the scope.
+	// With a doc: 61 zero-filled purchase days ending today, the window's sums (a1+a2+a3+a4 tracked,
+	// a1+b1 matched; a5 and b2 before the window are OUT), a3 on today's point, a1 the day before,
+	// and the scope.
 	days := chart("")
-	if len(days) != 60 {
-		t.Fatalf("charts: %d conversion days, want 60", len(days))
+	if len(days) != 61 {
+		t.Fatalf("charts: %d conversion days, want 61", len(days))
 	}
 	var tO, mO int
 	var tS, mS float64
 	for _, d := range days {
 		tO, tS, mO, mS = tO+d.Tracked.Orders, tS+d.Tracked.Sales, mO+d.Matched.Orders, mS+d.Matched.Sales
 	}
-	if tO != 3 || tS != 31 || mO != 2 || mS != 53 {
-		t.Fatalf("charts sums: tracked %d/%v matched %d/%v, want 3/31 and 2/53", tO, tS, mO, mS)
+	if tO != 4 || tS != 431 || mO != 2 || mS != 53 {
+		t.Fatalf("charts sums: tracked %d/%v matched %d/%v, want 4/431 and 2/53", tO, tS, mO, mS)
 	}
-	last := days[len(days)-1]
-	if last.Date != start(1).Format("2006-01-02") || last.Tracked.Orders != 1 || last.Matched.Orders != 1 {
-		t.Fatalf("charts last day: %+v, want %s with one tracked and one matched", last, start(1).Format("2006-01-02"))
+	last, prev := days[len(days)-1], days[len(days)-2]
+	if last.Date != start(0).Format("2006-01-02") || last.Tracked.Orders != 1 || last.Tracked.Sales != 400 || last.Matched.Orders != 0 {
+		t.Fatalf("charts today: %+v, want %s with a3 tracked only", last, start(0).Format("2006-01-02"))
+	}
+	if prev.Date != start(1).Format("2006-01-02") || prev.Tracked.Orders != 1 || prev.Matched.Orders != 1 {
+		t.Fatalf("charts yesterday: %+v, want %s with one tracked and one matched", prev, start(1).Format("2006-01-02"))
 	}
 	mO, mS = 0, 0
 	for _, d := range chart(fmt.Sprintf("?list_id=%d", pubB)) {

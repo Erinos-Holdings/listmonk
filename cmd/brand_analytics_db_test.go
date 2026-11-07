@@ -461,8 +461,8 @@ func TestBrandAnalyticsDashboardCharts(t *testing.T) {
 	h.db.Get(&link, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), 'https://ch.test') RETURNING id`)
 
 	// Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D2, revision 2 R1) -- the charts are a
-	// window of 60 Mountain days ending yesterday there, for every reader; the counting itself is
-	// TestDashboardChartsDB.
+	// window of Mountain days from today-60 through today there (61 points; integrations
+	// TODAY-SO-FAR-SPEC D1), for every reader; the counting itself is TestDashboardChartsDB.
 	// Here only the scope: clicks of C (A and A+B) count, another brand's campaign never does.
 	// Each click by its own subscriber, so it counts once in either tracking mode.
 	nSub := 0
@@ -489,7 +489,7 @@ func TestBrandAnalyticsDashboardCharts(t *testing.T) {
 
 	charts := h.app.GetDashboardCharts
 	onA := dashJSON(t, baUser([]string{auth.PermCampaignsGetAnalytics}, f.listA), "charts", charts)
-	if s, n := sumCounts(onA["clicks"]); s != 3 || n != 60 || onA["scoped"] != true {
+	if s, n := sumCounts(onA["clicks"]); s != 3 || n != 61 || onA["scoped"] != true {
 		t.Fatalf("scoped charts on A: clicks %d over %d points: %s", s, n, baJSON(onA))
 	}
 	if _, ok := onA["campaign_views"]; ok {
@@ -498,7 +498,7 @@ func TestBrandAnalyticsDashboardCharts(t *testing.T) {
 
 	// I6 charts: no permitted list -> empty sends and zero clicks, never null, never global.
 	none := dashJSON(t, baUser([]string{auth.PermCampaignsGetAnalytics}), "charts", charts)
-	if s, n := sumCounts(none["clicks"]); s != 0 || n != 60 || none["scoped"] != true || baJSON(none["sends"]) != "[]" {
+	if s, n := sumCounts(none["clicks"]); s != 0 || n != 61 || none["scoped"] != true || baJSON(none["sends"]) != "[]" {
 		t.Fatalf("no lists charts: %s", baJSON(none))
 	}
 

@@ -14,7 +14,9 @@
 // that green at low alpha. There is no legend: each axis's title and numbers wear its series'
 // color. The tooltip always lists all four values for the hovered day, whatever is toggled.
 
-import { CLICKS_COLOR, headroomAxisMax } from './sendsClicksChart.mjs'; // eslint-disable-line import/extensions
+import {
+  CLICKS_COLOR, headroomAxisMax, styleToday, todayIndexOf, todayTitle,
+} from './sendsClicksChart.mjs'; // eslint-disable-line import/extensions
 import { formatUsd } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
 export const CLICKS_FILL = '#f2c2a6';
@@ -27,9 +29,11 @@ const pick = (day, measure, unit) => num(day && day[measure] && day[measure][uni
 
 // clicks: [{date, count}]; conversions: [{date, tracked: {orders, sales}, matched: {orders, sales}}]
 // as GET /api/dashboard/charts returns them. Returns {} when there are no conversion days (no
-// conversions doc yet) -- the host renders nothing rather than a false zero line.
+// conversions doc yet) -- the host renders nothing rather than a false zero line. `today` (the
+// response's) marks the partial day on the Clicks bar and the Matched line through the top chart's
+// one helper (TODAY-SO-FAR-SPEC D5); the Tracked fill is unchanged beneath the dashed line.
 export function shapeClicksConversions(clicks, conversions, {
-  labelOf, clicksLabel, matchedLabel, trackedLabel, unit = 'usd', showTracked = false,
+  labelOf, clicksLabel, matchedLabel, trackedLabel, unit = 'usd', showTracked = false, today,
 }) {
   const conv = new Map((conversions || []).map((d) => [d.date, d]));
   if (conv.size === 0) {
@@ -80,6 +84,9 @@ export function shapeClicksConversions(clicks, conversions, {
     borderWidth: 0,
     borderRadius: 2,
   });
+  styleToday(datasets[datasets.length - 1], datasets[0], todayIndexOf(dates, today), {
+    fill: CLICKS_FILL, outline: CLICKS_COLOR, lineColor: CONV_COLOR,
+  });
   return { labels: dates.map(labelOf), dates, datasets };
 }
 
@@ -106,9 +113,11 @@ export function tooltipLines(day, { matchedLabel, trackedLabel, ordersLabel }) {
 
 // The chart.js options merged over the line defaults: no legend, Clicks on the left axis, the
 // conversions axis on the right in dollars or orders, one index tooltip whose body lists Clicks and
-// whose footer lists all four conversion values for the day (byDate: date -> conversions row).
+// whose footer lists all four conversion values for the day (byDate: date -> conversions row), and
+// whose title marks today (todayTitle, todayFormat = the "today so far" string).
 export function clicksConversionsOptions({
   clicksLabel, axisLabel, unit = 'usd', convMax, dates = [], byDate = new Map(), matchedLabel, trackedLabel, ordersLabel,
+  today, todayFormat = (l) => l,
 }) {
   const axis = (position, title, color, extra) => ({
     position,
@@ -127,6 +136,7 @@ export function clicksConversionsOptions({
         // The conversion lines are in the footer; the body keeps Clicks only.
         filter: (item) => item.dataset && item.dataset.type === 'bar',
         callbacks: {
+          title: (items) => todayTitle(items, { dates, today, format: todayFormat }),
           footer: (items) => (items.length ? tooltipLines(byDate.get(dates[items[0].dataIndex]), { matchedLabel, trackedLabel, ordersLabel }) : []),
         },
       },
