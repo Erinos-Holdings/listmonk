@@ -123,7 +123,7 @@ import {
   filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
   midColumns, nameCell, saveState, shapeRows, showBrandColumn, statusCell, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
-import { conversionTooltip, conversionsComputedLabel, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
+import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -208,16 +208,11 @@ export default Vue.extend({
   },
 
   methods: {
-    // The Conversions group names when the conversions document was computed (integrations
-    // SYNC-ALL-SPEC D5): "Conversions computed <Mountain clock time>", date-prefixed when not today
-    // (conversionCells.mjs::conversionsComputedLabel) -- never a "through <day>", which overstated
-    // coverage. No document -> the plain title.
+    // Group headers carry the plain title only (2026-11-07, user): the navbar's brand health sync
+    // indicator is the one place run times show, so no header names a computed or refresh time.
+    // The conversions tooltips still say when the document was computed.
     groupLabel(g) {
-      if (!g.label) return '';
-      if (g.label === 'analytics.conversions.title') {
-        return conversionsComputedLabel(this.conversions, (k, p) => this.$t(k, p)) || this.$t(g.label);
-      }
-      return this.$t(g.label);
+      return g.label ? this.$t(g.label) : '';
     },
 
     params() {

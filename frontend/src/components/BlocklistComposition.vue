@@ -8,7 +8,6 @@
   <div v-if="state !== 'absent'" class="box blocklist-composition" data-cy="blocklist-composition">
     <h3 class="title is-6 mb-1">
       {{ $t('composition.title') }}
-      <span v-if="composition.asOf" class="is-size-7 has-text-grey">{{ $t('composition.asOf', { date: composition.asOf }) }}</span>
     </h3>
     <p class="is-size-7 has-text-grey mb-2">
       {{ $t(scope === 'brand' ? 'composition.brandScope' : 'composition.accountScope') }}

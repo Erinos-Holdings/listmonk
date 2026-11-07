@@ -103,7 +103,6 @@
                   {{ current.domain }}
                   <template v-if="current.default"> · {{ $t('brands.defaultSender') }}</template>
                   <template v-if="current.unmapped"> · {{ $t('brands.unmapped') }}</template>
-                  · {{ $t('brands.asOf', { date: current.day }) }}
                 </p>
               </div>
             </div>

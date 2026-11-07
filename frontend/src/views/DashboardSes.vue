@@ -31,11 +31,9 @@
                 {{ $t('dashboard.ses.title') }} <health-chip :status="doc.status" />
               </h2>
               <p class="is-size-7 has-text-grey">
-                <template v-if="doc.account">{{ doc.account.region }} · {{ doc.account.configurationSet }} · </template>
-                <b-tooltip :label="$t('dashboard.ses.asOfTip')" type="is-dark" multilined data-cy="ses-as-of">
-                  {{ $t('dashboard.ses.asOf', { date: doc.day }) }}
-                  <template v-if="doc.computedAt"> · {{ $t('dashboard.ses.computedAt', { date: formatMountain(doc.computedAt) }) }}</template>
-                </b-tooltip>
+                <!-- 2026-11-07 (user): no as-of / computed stamp here -- the navbar's brand health
+                sync indicator is the one place run times show. -->
+                <template v-if="doc.account">{{ doc.account.region }} · {{ doc.account.configurationSet }}</template>
                 <!-- Fork (BRANDHEALTH-REFRESH-SPEC D3) -- brands:manage + configured only; the
                 navbar Refresh stays the cheap stored-document re-read. -->
                 <template v-if="showRefresh">
@@ -86,7 +84,6 @@
           <div class="box" :data-cy="`ses-${k}`">
             <h3 class="title is-6 mb-1">
               {{ $t(`dashboard.ses.${k}`) }} <health-chip :status="sub(k).status" :note="reasonOf(sub(k))" />
-              <span class="is-size-7 has-text-grey">{{ sub(k).asOf ? $t('dashboard.ses.asOf', { date: sub(k).asOf }) : '' }}</span>
             </h3>
             <p class="is-size-7 has-text-grey mb-3">{{ detailOf(k).scope }}</p>
             <p v-if="reasonOf(sub(k))" class="is-size-7 mb-2">{{ reasonOf(sub(k)) }}</p>
@@ -157,7 +154,6 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import HealthChip from '../components/HealthChip.vue';
 import BlocklistComposition from '../components/BlocklistComposition.vue';
-import { formatMountain } from '../mountainTime.mjs'; // eslint-disable-line import/extensions
 import {
   STATE_MESSAGE, baselineOf, canRefresh, createRefresh, isActive,
 } from '../healthRefresh.mjs'; // eslint-disable-line import/extensions
@@ -206,7 +202,6 @@ export default Vue.extend({
   },
 
   methods: {
-    formatMountain,
     sub(k) {
       return (this.doc && this.doc[k]) || { status: 'unknown' };
     },

@@ -113,8 +113,8 @@ export const TOOLTIP_KEYS = Object.freeze({
 
 // conversionsComputedLabel is "Conversions computed {time}" for the conversions doc's asOf -- a
 // Mountain clock time, date-prefixed when its Mountain day is not `now`'s (healthSync.mjs::syncText,
-// the navbar's rule) -- or '' when there is no doc (SYNC-ALL-SPEC D5). The Campaign Matrix's
-// Conversions header and every conversions tooltip use it.
+// the navbar's rule) -- or '' when there is no doc (SYNC-ALL-SPEC D5). The conversions tooltips use
+// it; no header does (2026-11-07 -- headers carry plain titles, the navbar shows run times).
 export function conversionsComputedLabel(meta, t, now = Date.now()) {
   const m = normalizeMeta(meta);
   if (!m) {
