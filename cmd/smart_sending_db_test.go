@@ -295,9 +295,10 @@ func TestSmartSendingClaim(t *testing.T) {
 	}
 	var mx struct {
 		Rows []struct {
-			ID       int  `json:"id"`
-			Skipped  *int `json:"skipped"`
-			SmartOff bool `json:"smart_off"`
+			ID      int  `json:"id"`
+			Skipped *int `json:"skipped"`
+			// A pointer, so a NULL smart_off (not a real boolean) fails the pin (Stage 4 R2).
+			SmartOff *bool `json:"smart_off"`
 		} `json:"rows"`
 	}
 	if err := json.Unmarshal(raw, &mx); err != nil {
@@ -308,17 +309,17 @@ func TestSmartSendingClaim(t *testing.T) {
 		switch r.ID {
 		case b:
 			seen++
-			if r.Skipped == nil || *r.Skipped != 2 || r.SmartOff {
-				t.Fatalf("matrix broadcast %+v", r)
+			if r.Skipped == nil || *r.Skipped != 2 || r.SmartOff == nil || *r.SmartOff {
+				t.Fatalf("matrix broadcast %+v (smart_off must be false, not null)", r)
 			}
 		case off:
 			seen++
-			if r.Skipped == nil || *r.Skipped != 0 || !r.SmartOff {
+			if r.Skipped == nil || *r.Skipped != 0 || r.SmartOff == nil || !*r.SmartOff {
 				t.Fatalf("matrix switched-off %+v", r)
 			}
 		case j:
 			seen++
-			if r.Skipped != nil || r.SmartOff {
+			if r.Skipped != nil || r.SmartOff == nil || *r.SmartOff {
 				t.Fatalf("matrix journey %+v", r)
 			}
 		}

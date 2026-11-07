@@ -900,7 +900,7 @@ bounds AS (
 scoped AS (
     SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.sent,
         POSITION('shop_links' IN c.body) > 0 AS has_shop,
-        (NOT c.evergreen AND (c.attribs->'smart_sending') = 'false'::JSONB) AS smart_off
+        (NOT c.evergreen AND (c.attribs->'smart_sending') IS NOT DISTINCT FROM 'false'::JSONB) AS smart_off
     FROM campaigns c
     WHERE (
         $1::BOOLEAN OR EXISTS (

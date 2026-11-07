@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  audienceBox, hasEnSplit, enSplit, toSendOf,
+  audienceBox, hasEnSplit, enSplit, foldSmartSending, smartSendingOf, toSendOf,
 } from './audience-box.mjs'; // eslint-disable-line import/extensions
 
 test('no box for a new campaign or an estimate the server could not make', () => {
@@ -45,6 +45,29 @@ test('Smart Sending: the count is the audience minus the would-be skips', () => 
   assert.deepEqual(toSendOf({ audience: 5, audienceSkipped: null }), { count: 5, skipped: 0, total: 5 });
   assert.equal(toSendOf({ audience: null, audienceSkipped: 3 }), null);
   assert.equal(toSendOf(null), null);
+});
+
+// Stage 4 R1 -- the round trip. The campaign reads camelCase nested keys, so a stored
+// attribs.smart_sending arrives as attribs.smartSending; the page reads the server's top-level
+// effective field instead, and the fold never posts the camelCased junk key.
+test('Smart Sending: the switch reads the top-level field, never attribs; the fold drops both keys', () => {
+  // A camelCased GET of a switched-off campaign: the top-level field is false, attribs has no
+  // smart_sending key (only the camelCased one).
+  const off = { id: 1, smartSending: false, attribs: { lang: 'en', smartSending: false } };
+  assert.equal(smartSendingOf(off), false);
+  assert.equal(smartSendingOf({ id: 1, smartSending: false, attribs: { lang: 'en' } }), false);
+  assert.equal(smartSendingOf({ id: 1, smartSending: true, attribs: { smart_sending: false } }), true, 'attribs is never read');
+  assert.equal(smartSendingOf({ id: 1, attribs: {} }), true, 'absent = on');
+  assert.equal(smartSendingOf(null), true);
+  // Off: exactly smart_sending false, the camelCased key gone, other keys kept.
+  assert.deepEqual(foldSmartSending(off.attribs, true), { lang: 'en', smart_sending: false });
+  // On: both keys removed.
+  assert.deepEqual(foldSmartSending({ lang: 'en', smartSending: false, smart_sending: false }, false), { lang: 'en' });
+  assert.deepEqual(foldSmartSending(null, true), { smart_sending: false });
+  // The input is not mutated.
+  const src = { smartSending: false };
+  foldSmartSending(src, true);
+  assert.deepEqual(src, { smartSending: false });
 });
 
 test('running and paused broadcasts show sent so far in blue', () => {

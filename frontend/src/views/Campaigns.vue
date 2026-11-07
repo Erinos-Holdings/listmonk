@@ -425,7 +425,9 @@ import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus, sendLangCode } from '../langs';
-import { hasEnSplit, enSplit, toSendOf } from '../audience-box.mjs'; // eslint-disable-line import/extensions
+import {
+  hasEnSplit, enSplit, smartSendingOf, toSendOf,
+} from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf, filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -632,9 +634,10 @@ export default Vue.extend({
       return ts ? ts.count : null;
     },
 
-    // D5 -- a broadcast whose stored attribs switch Smart Sending off (the server's smart_sending).
+    // D5 -- a broadcast whose stored attribs switch Smart Sending off (the server's smart_sending,
+    // audience-box.mjs::smartSendingOf -- the one read, shared with the Campaign page).
     isSmartOff(c) {
-      return !c.evergreen && c.type !== 'optin' && c.smartSending === false;
+      return !c.evergreen && c.type !== 'optin' && !smartSendingOf(c);
     },
 
     // Fork (send retry, SEND-RETRY-SPEC D6). to_send is recomputed from live list

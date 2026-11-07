@@ -636,7 +636,9 @@ import {
 import {
   CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
 } from '../langs';
-import { audienceBox, hasEnSplit, enSplit } from '../audience-box.mjs'; // eslint-disable-line import/extensions
+import {
+  audienceBox, hasEnSplit, enSplit, foldSmartSending, smartSendingOf,
+} from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import {
   OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, runMessage, selectFromQuery,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
@@ -1105,7 +1107,7 @@ export default Vue.extend({
         subject: c.subject,
         preheader: (c.attribs && c.attribs.preheader) || '',
         lang: (c.attribs && c.attribs.lang) || '',
-        smartSending: !(c.attribs && c.attribs.smart_sending === false),
+        smartSending: smartSendingOf(c),
         altbody: c.altbody,
         tags: c.tags,
         headersStr: JSON.stringify(c.headers, null, 4),
@@ -1667,10 +1669,13 @@ export default Vue.extend({
       }
       // Fork (smart sending, SMART-SENDING-SPEC D4) -- the switch is the key's single owner: false
       // when shown and off, otherwise omitted (on), so an API caller that never sends it stays on.
-      if (this.showSmartSending && this.form.smartSending === false) {
-        attribs = { ...(attribs || {}), smart_sending: false };
-      } else if (attribs && 'smart_sending' in attribs) {
-        delete attribs.smart_sending;
+      // Stage 4 R1: foldSmartSending removes both the stored key and the camelCased `smartSending` a
+      // round-tripped attribs JSON carries (the campaign reads camelCase nested keys).
+      // Stage 4b R4: a HIDDEN switch (a broadcast whose only list is a journey trigger list) carries
+      // the stored state instead of resetting it to on.
+      const smartOff = this.showSmartSending ? this.form.smartSending === false : !smartSendingOf(this.data);
+      if (smartOff || (attribs && ('smart_sending' in attribs || 'smartSending' in attribs))) {
+        attribs = foldSmartSending(attribs, smartOff);
       }
       return attribs;
     },
@@ -1802,7 +1807,7 @@ export default Vue.extend({
           attribsStr: data.attribs ? JSON.stringify(data.attribs, null, 4) : '{}',
           preheader: (data.attribs && data.attribs.preheader) || '',
           lang: (data.attribs && data.attribs.lang) || '',
-          smartSending: !(data.attribs && data.attribs.smart_sending === false),
+          smartSending: smartSendingOf(data),
           evergreen: !!data.evergreen,
           sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
           sendDelaySecs: data.sendDelaySecs || 0,
@@ -1958,7 +1963,7 @@ export default Vue.extend({
           // onSubmit compares against the right baseline on the next save.
           this.form.preheader = (d.attribs && d.attribs.preheader) || '';
           this.form.lang = (d.attribs && d.attribs.lang) || '';
-          this.form.smartSending = !(d.attribs && d.attribs.smart_sending === false);
+          this.form.smartSending = smartSendingOf(d);
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
           if (!suppressWarnings) {
@@ -2355,7 +2360,7 @@ export default Vue.extend({
     // D5 -- the header's "Smart Sending off" mark: a stored bypass on a broadcast.
     isSmartOff() {
       const d = this.data;
-      return !!d && !d.evergreen && d.type !== 'optin' && !!d.attribs && d.attribs.smart_sending === false;
+      return !!d && !!d.id && !d.evergreen && d.type !== 'optin' && !smartSendingOf(d);
     },
 
     storedLang() {

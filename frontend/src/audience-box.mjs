@@ -29,6 +29,27 @@ export const toSendOf = (c) => {
   return { count: total - skipped, skipped, total };
 };
 
+// Fork (smart sending, SMART-SENDING-SPEC D4/D5; Stage 4 R1) -- whether Smart Sending is on for a
+// campaign as the page reads it: the server's effective top-level field (`smart_sending`, which the
+// API client camelCases to `smartSending`), true when absent. NEVER read from `attribs`: the
+// campaign reads camelCase nested keys, so a stored `attribs.smart_sending` arrives as
+// `attribs.smartSending`.
+export const smartSendingOf = (c) => !(c && c.smartSending === false);
+
+// The owned-key fold for `attribs.smart_sending` (Stage 4 R1): `off` writes `smart_sending: false`,
+// otherwise the key is omitted (on). Either way BOTH the stored key and the camelCased `smartSending`
+// a round-tripped attribs JSON may carry are removed first, so the junk key can never be posted.
+// Returns a new object; `attribs` may be null.
+export const foldSmartSending = (attribs, off) => {
+  const out = { ...(attribs || {}) };
+  delete out.smart_sending;
+  delete out.smartSending;
+  if (off) {
+    out.smart_sending = false;
+  }
+  return out;
+};
+
 export const audienceBox = (c) => {
   if (!c || !c.id) {
     return null;
