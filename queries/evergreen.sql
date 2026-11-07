@@ -29,10 +29,14 @@
 -- (a brand's newsletter list) two rules apply, and on a private list (thank-you, step, queue)
 -- neither does. The HOLD -- the delay is at least hold_secs (600), so a checkout opt-in's
 -- first-order join has landed before the welcome is chosen. The SKIP -- a joiner with a row
--- (any status) on a first_order join_trigger list of the same brand tag, created within
--- first_order_window (the PURCHASE-CATCHUP window) either side of this join, is never selected
--- (their signup IS their first order, and the thank-you is the whole reaction). No state is
--- written for a skipped joiner. An untagged list never matches (list_brand_tag is NULL).
+-- (any status) on a PRIVATE first_order join_trigger list of the same brand tag, created from
+-- first_order_window (the PURCHASE-CATCHUP window) before this join up to hold_secs after it, is
+-- never selected (their signup IS their first order, and the thank-you is the whole reaction).
+-- The trigger list must be private, or a first_order trigger set on the newsletter list itself
+-- would match every joiner against their own row (Stage 4 R1). The upper bound is the hold, so a
+-- buyer whose first order lands after the welcome was due is an ordinary subscriber for every
+-- later automation too (Stage 4 R4). No state is written for a skipped joiner. An untagged list
+-- never matches (list_brand_tag is NULL).
 WITH camp AS (
     SELECT id, started_at, send_delay_secs, variant_group_id, attribs->>'lang' AS lang,
         600 AS hold_secs,
@@ -75,10 +79,11 @@ elig AS (
             SELECT 1 FROM subscriber_lists fo
             JOIN lists fl ON fl.id = fo.list_id
             WHERE fo.subscriber_id = sl.subscriber_id
+              AND fl.type != 'public'
               AND fl.join_trigger->>'kind' = 'first_order'
               AND list_brand_tag(fl.tags) = list_brand_tag(l.tags)
               AND fo.created_at BETWEEN sl.confirmed_at - camp.first_order_window
-                                    AND sl.confirmed_at + camp.first_order_window))
+                                    AND sl.confirmed_at + MAKE_INTERVAL(secs => camp.hold_secs)))
       AND (camp.lang IS NULL
            OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
       AND sl.confirmed_at > COALESCE(

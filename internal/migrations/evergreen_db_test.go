@@ -584,6 +584,8 @@ func TestEvergreenWelcomeSkipFirstOrder(t *testing.T) {
 	// I4 -- outside the window either side.
 	add("re-subscribe (first order 2 h before)", true, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, fo, "confirmed", false, join+7200) })
 	add("bought 2 h after", true, func(s int) { h.joinAgo(s, pub, 3*3600); h.rowAgo(s, fo, "confirmed", false, 3600) })
+	// Stage 4 R4 -- the upper bound is the hold: a first order 15 min after the join is not a skip.
+	add("bought 15 min after", true, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, fo, "confirmed", false, join-900) })
 	// I5 -- another brand's first-order list, or an untagged one.
 	add("other brand", true, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, foOther, "confirmed", false, join-120) })
 	add("untagged first-order list", true, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, foUntagged, "confirmed", false, join-120) })
@@ -603,6 +605,17 @@ func TestEvergreenWelcomeSkipFirstOrder(t *testing.T) {
 	h.rowAgo(pu, foUntagged, "confirmed", false, join-120)
 	if g := h.batch(wu, 100); !contains(g, pu) {
 		t.Errorf("untagged public + untagged first-order: not selected (batch %v)", g)
+	}
+
+	// Stage 4 R1 -- a first_order trigger set on the PUBLIC newsletter list itself never skips its
+	// own joiners (each joiner's own row would otherwise match).
+	pubFO := h.list("Beta", "public", []string{"brand:beta"}, "first_order")
+	wb := h.campaign("welcome-beta", true, 0, pubFO)
+	h.runningSince(wb)
+	pb := h.subscriber("beta@x")
+	h.joinAgo(pb, pubFO, join)
+	if g := h.batch(wb, 100); !contains(g, pb) {
+		t.Errorf("first_order trigger on the public list skipped its own joiner (batch %v)", g)
 	}
 
 	// I7 -- the thank-you on the private first-order list is never skipped by its own row.
