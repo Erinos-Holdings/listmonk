@@ -466,3 +466,149 @@ func TestEvergreenTriggerAndEligibility(t *testing.T) {
 	h.join(f, L, "confirmed")
 	eq(t, "cancelled", h.batch(welcome, 100), nil)
 }
+
+// Fork (welcome skip; integrations listmonk/WELCOME-SKIP-SPEC) -- fixtures for the public-list
+// hold and the first-order skip. Every list above is private; these are the first public ones.
+
+// list creates a list of the given type with tags and an optional join_trigger kind ("" = none).
+func (h *evergreenHarness) list(name, typ string, tags []string, triggerKind string) int {
+	var trig sql.NullString
+	if triggerKind != "" {
+		trig = sql.NullString{String: `{"kind":"` + triggerKind + `"}`, Valid: true}
+	}
+	var id int
+	if err := h.db.Get(&id, `INSERT INTO lists (uuid, name, type, optin, tags, join_trigger)
+		VALUES (gen_random_uuid(), $1, $2::list_type, 'single', $3, $4::jsonb) RETURNING id`,
+		name, typ, pq.Array(tags), trig); err != nil {
+		h.t.Fatal(err)
+	}
+	return id
+}
+
+// runningSince starts an evergreen and backdates its watermark so backdated joins count.
+func (h *evergreenHarness) runningSince(camp int) {
+	h.setStatus(camp, "running")
+	h.db.MustExec(`UPDATE campaigns SET started_at = NOW() - INTERVAL '1 day' WHERE id=$1`, camp)
+}
+
+// joinAgo joins confirmed and backdates the join (confirmed_at and created_at) by secs.
+// A direct UPDATE: the stamp trigger fires on UPDATE OF status only.
+func (h *evergreenHarness) joinAgo(sub, list int, secs int) {
+	h.join(sub, list, "confirmed")
+	h.db.MustExec(`UPDATE subscriber_lists SET confirmed_at = NOW() - MAKE_INTERVAL(secs => $3),
+		created_at = NOW() - MAKE_INTERVAL(secs => $3) WHERE subscriber_id=$1 AND list_id=$2`, sub, list, secs)
+}
+
+// rowAgo writes a row (status; backfill = written under listmonk.backfill, NULL confirmed_at)
+// and sets its created_at to secs ago.
+func (h *evergreenHarness) rowAgo(sub, list int, status string, backfill bool, secs int) {
+	tx := h.db.MustBegin()
+	if backfill {
+		tx.MustExec(`SET LOCAL listmonk.backfill = 'true'`)
+	}
+	tx.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status) VALUES ($1, $2, $3)`, sub, list, status)
+	tx.MustExec(`UPDATE subscriber_lists SET created_at = NOW() - MAKE_INTERVAL(secs => $3)
+		WHERE subscriber_id=$1 AND list_id=$2`, sub, list, secs)
+	if err := tx.Commit(); err != nil {
+		h.t.Fatal(err)
+	}
+}
+
+// I1, I2, I1a. (contains is lang_db_test.go's.)
+func TestEvergreenWelcomeHold(t *testing.T) {
+	h := newEvergreenHarness(t)
+	pub := h.list("Acme", "public", []string{"brand:acme"}, "")
+	pub2 := h.list("Acme two", "public", []string{"brand:acme"}, "")
+
+	// I1 -- a delay-0 welcome on a public list waits 600 s.
+	w := h.campaign("welcome", true, 0, pub)
+	h.runningSince(w)
+	s1 := h.subscriber("hold@x")
+	h.joinAgo(s1, pub, 300)
+	eq(t, "public delay-0 at 300 s (held)", h.batch(w, 100), nil)
+	h.joinAgo(s1, pub, 601)
+	eq(t, "public delay-0 at 601 s", h.batch(w, 100), []int{s1})
+
+	// I2 -- a delay-0 evergreen on a private list sends at once.
+	wp := h.campaign("thank-you", true, 0, h.listA)
+	h.runningSince(wp)
+	s2 := h.subscriber("private@x")
+	h.join(s2, h.listA, "confirmed")
+	eq(t, "private delay-0 at once", h.batch(wp, 100), []int{s2})
+
+	// I1a -- a delay of 900 s on a public list is unchanged by the hold.
+	w9 := h.campaign("day-900s", true, 900, pub2)
+	h.runningSince(w9)
+	s3 := h.subscriber("delay900@x")
+	h.joinAgo(s3, pub2, 700)
+	eq(t, "public delay-900 at 700 s", h.batch(w9, 100), nil)
+	h.joinAgo(s3, pub2, 901)
+	eq(t, "public delay-900 at 901 s", h.batch(w9, 100), []int{s3})
+}
+
+// I3, I4, I5, I6, I7.
+func TestEvergreenWelcomeSkipFirstOrder(t *testing.T) {
+	h := newEvergreenHarness(t)
+	pub := h.list("Acme", "public", []string{"brand:acme"}, "")
+	pubUntagged := h.list("Plain", "public", nil, "")
+	fo := h.list("Acme first order", "private", []string{"brand:acme"}, "first_order")
+	foOther := h.list("Other first order", "private", []string{"brand:other"}, "first_order")
+	foUntagged := h.list("Untagged first order", "private", nil, "first_order")
+	skus := h.list("Acme SKU", "private", []string{"brand:acme"}, "skus")
+
+	w := h.campaign("welcome", true, 0, pub)
+	h.runningSince(w)
+	wu := h.campaign("welcome-plain", true, 0, pubUntagged)
+	h.runningSince(wu)
+	wt := h.campaign("thank-you", true, 0, fo)
+	h.runningSince(wt)
+
+	const join = 1200 // every newsletter join 20 minutes ago (past the hold)
+	type tc struct {
+		name string
+		sub  int
+		want bool // selected by the welcome
+	}
+	var cases []tc
+	add := func(name string, want bool, setup func(sub int)) {
+		sub := h.subscriber(name + "@x")
+		setup(sub)
+		cases = append(cases, tc{name, sub, want})
+	}
+
+	// I3 -- the signup IS the first order.
+	add("first-order 30 s before", false, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, fo, "confirmed", false, join+30) })
+	add("first-order 2 min after", false, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, fo, "confirmed", false, join-120) })
+	add("first-order backfill row", false, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, fo, "confirmed", true, join-120) })
+	add("first-order unsubscribed row", false, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, fo, "unsubscribed", false, join-120) })
+	// I4 -- outside the window either side.
+	add("re-subscribe (first order 2 h before)", true, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, fo, "confirmed", false, join+7200) })
+	add("bought 2 h after", true, func(s int) { h.joinAgo(s, pub, 3*3600); h.rowAgo(s, fo, "confirmed", false, 3600) })
+	// I5 -- another brand's first-order list, or an untagged one.
+	add("other brand", true, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, foOther, "confirmed", false, join-120) })
+	add("untagged first-order list", true, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, foUntagged, "confirmed", false, join-120) })
+	// I6 -- a non-first-order trigger list of the same brand.
+	add("skus trigger list", true, func(s int) { h.joinAgo(s, pub, join); h.rowAgo(s, skus, "confirmed", false, join-120) })
+
+	got := h.batch(w, 100)
+	for _, c := range cases {
+		if contains(got, c.sub) != c.want {
+			t.Errorf("%s: selected=%v want %v (batch %v)", c.name, !c.want, c.want, got)
+		}
+	}
+
+	// I5 -- an untagged public list and an untagged first-order list never match.
+	pu := h.subscriber("plain@x")
+	h.joinAgo(pu, pubUntagged, join)
+	h.rowAgo(pu, foUntagged, "confirmed", false, join-120)
+	if g := h.batch(wu, 100); !contains(g, pu) {
+		t.Errorf("untagged public + untagged first-order: not selected (batch %v)", g)
+	}
+
+	// I7 -- the thank-you on the private first-order list is never skipped by its own row.
+	k := h.subscriber("buyer@x")
+	h.join(k, fo, "confirmed")
+	if g := h.batch(wt, 100); !contains(g, k) {
+		t.Errorf("private thank-you skipped its own joiner (batch %v)", g)
+	}
+}

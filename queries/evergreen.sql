@@ -25,8 +25,18 @@
 -- and no-language subscribers ONLY -- there is no English fallback for a language with no
 -- automation of its own (the siblings claim was removed 2026-10-30). The welcome language is
 -- whatever is known when the delay expires.
+-- Fork (welcome skip; integrations listmonk/WELCOME-SKIP-SPEC D1/D2) -- on a PUBLIC target list
+-- (a brand's newsletter list) two rules apply, and on a private list (thank-you, step, queue)
+-- neither does. The HOLD -- the delay is at least hold_secs (600), so a checkout opt-in's
+-- first-order join has landed before the welcome is chosen. The SKIP -- a joiner with a row
+-- (any status) on a first_order join_trigger list of the same brand tag, created within
+-- first_order_window (the PURCHASE-CATCHUP window) either side of this join, is never selected
+-- (their signup IS their first order, and the thank-you is the whole reaction). No state is
+-- written for a skipped joiner. An untagged list never matches (list_brand_tag is NULL).
 WITH camp AS (
-    SELECT id, started_at, send_delay_secs, variant_group_id, attribs->>'lang' AS lang
+    SELECT id, started_at, send_delay_secs, variant_group_id, attribs->>'lang' AS lang,
+        600 AS hold_secs,
+        INTERVAL '1 hour' AS first_order_window
     FROM campaigns
     WHERE id = $1 AND evergreen AND status = 'running'
 ),
@@ -52,11 +62,23 @@ elig AS (
     FROM subscriber_lists sl
     JOIN campaign_lists cl ON cl.list_id = sl.list_id AND cl.campaign_id = $1
     JOIN subscribers s ON s.id = sl.subscriber_id AND s.status != 'blocklisted'
+    JOIN lists l ON l.id = sl.list_id
     CROSS JOIN camp
     WHERE sl.status = 'confirmed'
       AND sl.confirmed_at IS NOT NULL
       AND sl.confirmed_at > camp.started_at
-      AND sl.confirmed_at + MAKE_INTERVAL(secs => camp.send_delay_secs) <= NOW()
+      -- the hold (public list only)
+      AND sl.confirmed_at + MAKE_INTERVAL(secs => CASE WHEN l.type = 'public'
+            THEN GREATEST(camp.send_delay_secs, camp.hold_secs) ELSE camp.send_delay_secs END) <= NOW()
+      -- the skip (public list only)
+      AND (l.type != 'public' OR NOT EXISTS (
+            SELECT 1 FROM subscriber_lists fo
+            JOIN lists fl ON fl.id = fo.list_id
+            WHERE fo.subscriber_id = sl.subscriber_id
+              AND fl.join_trigger->>'kind' = 'first_order'
+              AND list_brand_tag(fl.tags) = list_brand_tag(l.tags)
+              AND fo.created_at BETWEEN sl.confirmed_at - camp.first_order_window
+                                    AND sl.confirmed_at + camp.first_order_window))
       AND (camp.lang IS NULL
            OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
       AND sl.confirmed_at > COALESCE(

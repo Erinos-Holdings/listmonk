@@ -283,7 +283,7 @@
     "campaigns.evergreen": "Automation",
     "campaigns.evergreenHelp": "An automation runs until you cancel it. Pause to edit; subscribers who join while paused receive the updated email on resume.",
     "campaigns.evergreenDelay": "Days after joining",
-    "campaigns.evergreenDelayHelp": "0 sends on join. A higher number is a delayed follow-up, for example a tip sheet 7 days after a first purchase. On a No-purchase series or Post-purchase series step list it is always 0: the list's own days setting decides the timing.",
+    "campaigns.evergreenDelayHelp": "0 sends on join. A higher number is a delayed follow-up, for example a tip sheet 7 days after a first purchase. On a No-purchase series or Post-purchase series step list it is always 0: the list's own days setting decides the timing. A welcome on a brand's newsletter list waits at least 10 minutes, and skips anyone whose signup is their first order.",
     "campaigns.evergreenTriggerLocked": "This list fills automatically from purchases or a No-purchase series / Post-purchase series step, so its campaign is always an Automation.",
     "campaigns.reengageQueueNote": "This is a re-engagement queue list. Either way of sending counts as the sunset ask: an Automation (0 days after joining) asks each person on their own timeline as they arrive — recommended for new brands; a broadcast sends the ask in batches when you want control over timing and volume, for example to catch up a large imported queue.",
     "campaigns.evergreenOneList": "An automation must target exactly one list.",
