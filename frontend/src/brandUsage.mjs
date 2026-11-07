@@ -22,8 +22,8 @@ import { healthDocs } from './brandMatrix.mjs'; // eslint-disable-line import/ex
 import { newestComputedAt } from './healthSync.mjs'; // eslint-disable-line import/extensions
 import { formatMountain } from './mountainTime.mjs'; // eslint-disable-line import/extensions
 import {
-  POST_PURCHASE_STEP_DAYS, REENGAGEMENT_DAYS, SERIES_POST_PURCHASE, SERIES_REENGAGEMENT, SERIES_WELCOME, WELCOME_STEP_DAYS,
-  seriesStepKey,
+  ASSUMED_DELIVERY_DAYS, POST_PURCHASE_STEP_DAYS, REENGAGEMENT_DAYS, SERIES_POST_PURCHASE, SERIES_REENGAGEMENT, SERIES_WELCOME,
+  WELCOME_STEP_DAYS, seriesStepKey,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 // USAGE-REENGAGEMENT-SPEC D1/D6, SUNSET-V4-SPEC D7: the Re-engagement group's four leaves (the
@@ -83,12 +83,62 @@ export function parseStepText(text) {
   return { title, quote, body: rest };
 }
 
+// LIFECYCLE-DOCS-SPEC D20 -- the ONE "~" rule: a Post-purchase step after day 0 is timed from
+// delivery (integrations lib/post-purchase.ts::stepDueAt), so its day is approximate. Returns null
+// for every other leaf (Day 0 of either series, the No-purchase and Re-engagement steps), else
+// { offset: days after delivery, reorder: the day-30 step's reorder skip }. Every renderer of a
+// Post-purchase day label (columnMeta, seriesGuide) goes through it -- no per-cell branch, no
+// literal "~" in a template.
+export function approxClock(family, days) {
+  if (family !== SERIES_POST_PURCHASE || !(days > 0)) {
+    return null;
+  }
+  return { offset: days - ASSUMED_DELIVERY_DAYS, reorder: days === 30 };
+}
+
+// The clock sentence's i18n parts for an approximate step (D21/D23): the clock key with {n, offset},
+// then the reorder key on day 30; null when approxClock is.
+function clockParts(family, days) {
+  const c = approxClock(family, days);
+  if (c === null) {
+    return null;
+  }
+  const parts = [{ key: 'dashboard.usage.approxClock', params: { n: days, offset: c.offset } }];
+  if (c.reorder) {
+    parts.push({ key: 'dashboard.usage.approxClockReorder', params: {} });
+  }
+  return parts;
+}
+
+// The translated clock sentence of a columnMeta / clockParts `helpExtra`, or '' when there is none.
+export function clockSentence(parts, t = (k) => k) {
+  return Array.isArray(parts) ? parts.map((p) => t(p.key, p.params)).join(' ') : '';
+}
+
+// A leaf header's hover (D21): its translated help, then -- for an approximate Post-purchase step --
+// a newline and the translated clock sentence. Every other leaf's hover is its help alone.
+export function hoverText(meta, t = (k) => k) {
+  const help = meta && meta.help ? t(meta.help) : '';
+  const extra = clockSentence(meta && meta.helpExtra, t);
+  return extra ? `${help}\n${extra}` : help;
+}
+
 // seriesGuide is the guide's content: per series (GUIDE_SERIES order) its title/subtitle keys and
-// one { days, title, quote, body } per standard day, parsed from the translated D5 text.
+// one { days, label, clock, title, quote, body } per standard day, parsed from the translated D5
+// text. D22: `label` is the day badge's text ("~5" on an approximate step, else the plain number)
+// and `clock` the badge's hover (the translated clock sentence, '' when there is none).
 export function seriesGuide(t = (k) => k) {
   return GUIDE_SERIES.map((g) => ({
     ...g,
-    steps: guideDays(g.family).map((days) => ({ days, ...parseStepText(t(seriesStepKey(g.family, days))) })),
+    steps: guideDays(g.family).map((days) => {
+      const parts = clockParts(g.family, days);
+      return {
+        days,
+        label: parts ? t('dashboard.usage.approxDay', { n: days }) : String(days),
+        clock: clockSentence(parts, t),
+        ...parseStepText(t(seriesStepKey(g.family, days))),
+      };
+    }),
   }));
 }
 
@@ -379,7 +429,18 @@ export function columnMeta(field) {
   const leaf = seriesLeafOf(field);
   if (leaf !== null) {
     const help = seriesStepKey(leaf.family, leaf.days);
-    return leaf.days === 0 ? { label: 'dashboard.usage.day0', help } : { label: 'dashboard.usage.npDays', params: { n: leaf.days }, help };
+    if (leaf.days === 0) {
+      return { label: 'dashboard.usage.day0', help };
+    }
+    // LIFECYCLE-DOCS-SPEC D21: an approximate Post-purchase step reads "~5d" and its hover adds the
+    // real clock (helpExtra -- hoverText renders it).
+    const parts = clockParts(leaf.family, leaf.days);
+    if (parts) {
+      return {
+        label: 'dashboard.usage.approxDays', params: { n: leaf.days }, help, helpExtra: parts,
+      };
+    }
+    return { label: 'dashboard.usage.npDays', params: { n: leaf.days }, help };
   }
   const l = skippedLangOf(field);
   if (l !== null) {

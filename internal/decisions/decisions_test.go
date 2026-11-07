@@ -1,14 +1,18 @@
 package decisions
 
-// Fork (usage decisions) -- integrations USAGE-DECISIONS-SPEC I1/I2. I1: lifecycle.json carries
-// exactly §0's 23 keys in order (14 + the 9 Curated Sunset Policy items, USAGE-REENGAGEMENT-SPEC
-// D7), with §0's sections, numbers, since dates and header, and the sunset-policy table. I2: each
-// item's hash is pinned as a literal -- a text edit fails TestItemHashesPinned until the editor
-// bumps the item's `since` AND its pin here, the deliberate act that voids Marketing's decision on
-// that item (D2). I3 (word-for-word agreement with the spec's §0) is untestable across repos:
-// edit §0 and lifecycle.json in one change.
+// Fork (usage decisions) -- integrations USAGE-DECISIONS-SPEC I1/I2, amended by
+// LIFECYCLE-DOCS-SPEC I1-I3/I7/I8. lifecycle.json carries exactly §0's 23 keys in order (14 + the 9
+// Curated Sunset Policy items, USAGE-REENGAGEMENT-SPEC D7), with §0's sections, numbers, derived
+// since dates and header, the sunset-policy table, and each item's changelog. The acknowledgement
+// is structural (D2): parse refuses a text whose hash is not the newest hash-bearing changelog
+// entry's, and the literal pin here is each item's CONCEPT hash (its newest `reapprove` entry's) --
+// it changes only when a re-approval is requested. Word-for-word agreement with the spec's §0 is
+// untestable across repos: edit §0 and lifecycle.json in one change.
 
 import (
+	"encoding/json"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -24,9 +28,10 @@ func TestItemsShape(t *testing.T) {
 	if d.Approver != "Kaylinn Brophy" || d.Published != "2026-10-30" {
 		t.Fatalf("header = %q / %q", d.Approver, d.Published)
 	}
-	// `since` is each item's text date (D2): 2026-10-30 at publication; 2026-10-31 on the thirteen
-	// items the user's concision pass reworded (no decision existed, so nothing was voided);
-	// 2026-11-01 on item 13 and on 19/21 (SUNSET-V4 D8 — still no decision, nothing voided).
+	// `since` is each item's concept date (LIFECYCLE-DOCS-SPEC D3, Since -- the concept entry's
+	// date): 2026-10-30 at publication; 2026-10-31 on the thirteen items the user's concision pass
+	// reworded (no decision existed, so nothing was voided); 2026-11-01 on item 13 and on 19/21
+	// (SUNSET-V4 D8 — still no decision, nothing voided).
 	want := []struct {
 		key, section string
 		n            *int
@@ -51,10 +56,10 @@ func TestItemsShape(t *testing.T) {
 		{"sp-engagement", SectionSunsetPolicy, intp(16), "2026-11-02"},
 		{"sp-normal", SectionSunsetPolicy, intp(17), "2026-11-02"},
 		{"sp-hold", SectionSunsetPolicy, intp(18), "2026-10-31"},
-		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-11-02"}, // SUNSET-V4 D8; its NOTE became item 20 (2026-11-02)
-		{"sp-winback", SectionSunsetPolicy, intp(20), "2026-11-02"}, // the win-back line + the 360d/365d refusal (FINAL-QUEUE-GUARD-SPEC)
+		{"sp-asks", SectionSunsetPolicy, intp(19), "2026-11-02"},        // SUNSET-V4 D8; its NOTE became item 20 (2026-11-02)
+		{"sp-winback", SectionSunsetPolicy, intp(20), "2026-11-02"},     // the win-back line + the 360d/365d refusal (FINAL-QUEUE-GUARD-SPEC)
 		{"sp-coming-back", SectionSunsetPolicy, intp(21), "2026-11-02"}, // the journey-candidate sentence (2026-11-02)
-		{"sp-suppressed", SectionSunsetPolicy, intp(22), "2026-11-01"}, // SUNSET-V4 D8
+		{"sp-suppressed", SectionSunsetPolicy, intp(22), "2026-11-01"},  // SUNSET-V4 D8
 		{"sp-safety", SectionSunsetPolicy, intp(23), "2026-10-31"},
 	}
 	if len(d.Items) != len(want) {
@@ -68,9 +73,10 @@ func TestItemsShape(t *testing.T) {
 		if (it.N == nil) != (w.n == nil) || (it.N != nil && *it.N != *w.n) {
 			t.Errorf("%s: n = %v, want %v", it.Key, it.N, w.n)
 		}
-		if it.Since != w.since {
-			t.Errorf("%s: since = %s, want %s", it.Key, it.Since, w.since)
+		if got := Since(it); got != w.since {
+			t.Errorf("%s: since = %s, want %s", it.Key, got, w.since)
 		}
+		checkShippedChangelog(t, it)
 		// D2's canonical form: valid UTF-8, single \n separators, no blank line, no leading or
 		// trailing newline, no trailing whitespace on any line.
 		if !utf8.ValidString(it.Text) {
@@ -107,8 +113,46 @@ func TestItemsShape(t *testing.T) {
 	}
 }
 
-// pinnedHashes are the literal sha256 of each item's text (D2). Changing a text is a deliberate
-// act: bump that item's `since` to the edit date and replace its pin here in the same change.
+// The 2026-11-07 changelog shape (LIFECYCLE-DOCS-SPEC I7, D11-D16): the six rewritten items carry
+// a page entry (2026-11-07, the new text's hash) after their concept entry, items 1, 9 and 13 a
+// hash-less Slack entry from Kaylinn before it; every other item only its concept entry.
+var slackEdited = map[string]bool{"np-entry": true, "pp-delivery-clock": true, "both-per-brand": true}
+var pageEdited = map[string]bool{"np-entry": true, "np-same-day-double": true, "np-no-restarts": true, "pp-delivery-clock": true, "pp-returning-thanks": true, "both-per-brand": true}
+
+func checkShippedChangelog(t *testing.T, it Item) {
+	t.Helper()
+	want := 1
+	if pageEdited[it.Key] {
+		want++
+	}
+	if slackEdited[it.Key] {
+		want++
+	}
+	cl := it.Changelog
+	if len(cl) != want {
+		t.Errorf("%s: %d changelog entries, want %d", it.Key, len(cl), want)
+		return
+	}
+	if c := cl[0]; !c.Reapprove || c.Source != "page" || c.Line != "Published for approval" || c.Who != "" || c.Hash != pinnedHashes[it.Key] {
+		t.Errorf("%s: concept entry %+v", it.Key, c)
+	}
+	if slackEdited[it.Key] {
+		if c := cl[1]; c.Date != "2026-11-06" || c.Source != "Slack 2026-11-06" || c.Who != "Kaylinn Brophy" || c.Hash != "" || c.Reapprove || c.Line == "" {
+			t.Errorf("%s: Slack entry %+v", it.Key, c)
+		}
+	}
+	if pageEdited[it.Key] {
+		if c := cl[len(cl)-1]; c.Date != "2026-11-07" || c.Source != "page" || c.Who != "" || c.Hash != Hash(it.Text) || c.Reapprove || c.Line == "" {
+			t.Errorf("%s: page entry %+v", it.Key, c)
+		}
+	}
+}
+
+// pinnedHashes are each item's CONCEPT hash -- its newest `reapprove` entry's (LIFECYCLE-DOCS-SPEC
+// D2 (b)). An ordinary text edit needs no change here (its changelog entry is the
+// acknowledgement); requesting a re-approval -- an entry with `reapprove: true` and the new hash --
+// is the deliberate act that voids Marketing's decision, and it replaces the item's pin here in the
+// same change. The values are the item texts' hashes as Kaylinn approved them on 2026-11-05.
 var pinnedHashes = map[string]string{
 	"np-entry":             "853f6bd91015c71f5616a4d103963fa55feff23e56feeb2ae01530b46f52466f",
 	"np-exit-on-purchase":  "5b6c4ce9a2fb62225f37b22f31a10012d10eb30f8070893645fd7c9818a08d08",
@@ -149,19 +193,35 @@ func TestItemHashesPinned(t *testing.T) {
 			t.Errorf("%s: no pinned hash", it.Key)
 			continue
 		}
-		if got := Hash(it.Text); got != pin {
-			t.Errorf("%s: text hash %s != pinned %s -- a text edit voids Marketing's decision on this item: bump its since and this pin together (USAGE-DECISIONS-SPEC D2)", it.Key, got, pin)
+		if got := Concept(it).Hash; got != pin {
+			t.Errorf("%s: concept hash %s != pinned %s -- a reapprove entry voids Marketing's decision on this item: replace this pin in the same change (LIFECYCLE-DOCS-SPEC D2)", it.Key, got, pin)
+		}
+		// D4's invariant: the current text's hash is always accepted, so a fresh decision is never
+		// Awaiting.
+		if !slices.Contains(Accepted(it), Hash(it.Text)) {
+			t.Errorf("%s: the current text hash is not accepted", it.Key)
+		}
+		// The shipped file requests no re-approval: exactly one reapprove entry, the first.
+		n := 0
+		for _, c := range it.Changelog {
+			if c.Reapprove {
+				n++
+			}
+		}
+		if n != 1 || !it.Changelog[0].Reapprove {
+			t.Errorf("%s: %d reapprove entries (want exactly the first)", it.Key, n)
 		}
 	}
-	// The hash covers the text only: key, n and since are not hashed.
+	// The hash covers the text only: key, n and the changelog are not hashed.
 	if Hash("a") != "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb" {
 		t.Fatal("Hash is not lowercase hex sha256 of the text bytes")
 	}
 }
 
 // 2026-10-31 polish: Choices -- Current | Recommended | Reject exactly on the items whose text has a
-// "Recommended:" line after the first; Accept | Reject on every other. The six shipped items with a
-// Recommended option are pinned, so a text edit that adds or drops one is a deliberate change.
+// "Recommended:" line after the first; Accept | Reject on every other. The shipped items with a
+// Recommended option are pinned, so a text edit that adds or drops one is a deliberate change
+// (LIFECYCLE-DOCS-SPEC I8: items 3 and 9 lost theirs when implemented, 2026-11-07).
 func TestChoices(t *testing.T) {
 	if HasRecommended("Recommended: lead line only") {
 		t.Fatal("a first-line Recommended: is the lead, not an option")
@@ -190,36 +250,157 @@ func TestChoices(t *testing.T) {
 			t.Fatalf("%s: %v", it.Key, c)
 		}
 	}
-	want := []string{"np-same-day-double", "np-launch-overlap", "np-ruze-15d", "pp-delivery-clock", "both-multi-brand", "both-per-brand"}
+	want := []string{"np-launch-overlap", "np-ruze-15d", "both-multi-brand", "both-per-brand"}
 	if strings.Join(three, ",") != strings.Join(want, ",") {
 		t.Fatalf("items with three choices %v, want %v", three, want)
 	}
 }
 
+// Synthetic-file helpers: a changelog entry, a changelog, and a one-item file keyed "item-a".
+func entry(date, source, who, line, hash string, reapprove bool) string {
+	b, _ := json.Marshal(Change{Date: date, Source: source, Who: who, Line: line, Hash: hash, Reapprove: reapprove})
+	return string(b)
+}
+
+func changelog(entries ...string) string { return "[" + strings.Join(entries, ",") + "]" }
+
+func itemJSON(key, text, cl string) string {
+	return fmt.Sprintf(`{"key":%q,"section":"both","text":%q,"changelog":%s}`, key, text, cl)
+}
+
+func oneItem(text, cl string) string { return `{"items":[` + itemJSON("item-a", text, cl) + `]}` }
+
 func TestParseRefusesBadFiles(t *testing.T) {
+	hx, hy := Hash("x"), Hash("y")
+	concept := entry("2026-10-30", "page", "", "Published for approval", hx, true)
+	good := func(text string) string { return oneItem(text, changelog(concept)) }
 	for name, src := range map[string]string{
-		"duplicate key":   `{"items":[{"key":"a","section":"both","since":"2026-10-30","text":"x"},{"key":"a","section":"both","since":"2026-10-30","text":"y"}]}`,
-		"unknown section": `{"items":[{"key":"a","section":"other","since":"2026-10-30","text":"x"}]}`,
-		"bad since":       `{"items":[{"key":"a","section":"both","since":"30/10/2026","text":"x"}]}`,
-		"empty text":      `{"items":[{"key":"a","section":"both","since":"2026-10-30","text":""}]}`,
+		"duplicate key":   `{"items":[` + itemJSON("item-a", "x", changelog(concept)) + `,` + itemJSON("item-a", "x", changelog(concept)) + `]}`,
+		"unknown section": strings.Replace(good("x"), `"section":"both"`, `"section":"other"`, 1),
+		"empty text":      oneItem("", changelog(concept)),
 		"not json":        `{`,
 		// USAGE-REENGAGEMENT-SPEC D8: a table only on sunset-policy, never ragged.
 		"table on another section": `{"items":[],"tables":{"both":{"columns":["a","b"],"rows":[["1","2"]],"note":""}}}`,
 		"table on an unknown name": `{"items":[],"tables":{"other":{"columns":["a","b"],"rows":[],"note":""}}}`,
 		"ragged table row":         `{"items":[],"tables":{"sunset-policy":{"columns":["a","b"],"rows":[["1","2"],["3"]],"note":""}}}`,
 		"table with no columns":    `{"items":[],"tables":{"sunset-policy":{"columns":[],"rows":[],"note":""}}}`,
+		// LIFECYCLE-DOCS-SPEC D2 (a) / I1.
+		"no changelog":                    `{"items":[{"key":"item-a","section":"both","text":"x"}]}`,
+		"empty changelog":                 oneItem("x", changelog()),
+		"first entry not reapprove":       oneItem("x", changelog(entry("2026-10-30", "page", "", "Published", hx, false))),
+		"first entry without a hash":      oneItem("x", changelog(entry("2026-10-30", "page", "", "Published", "", true))),
+		"later reapprove without a hash":  oneItem("x", changelog(concept, entry("2026-10-31", "page", "", "Re-approve", "", true))),
+		"uppercase hash":                  oneItem("x", changelog(entry("2026-10-30", "page", "", "Published", strings.ToUpper(hx), true))),
+		"short hash":                      oneItem("x", changelog(concept, entry("2026-10-31", "page", "", "Edit", hy[:63], false))),
+		"unparsable date":                 oneItem("x", changelog(entry("30/10/2026", "page", "", "Published", hx, true))),
+		"decreasing date":                 oneItem("y", changelog(concept, entry("2026-10-29", "page", "", "Edit", hy, false))),
+		"empty source":                    oneItem("x", changelog(entry("2026-10-30", " ", "", "Published", hx, true))),
+		"empty line":                      oneItem("x", changelog(entry("2026-10-30", "page", "", "", hx, true))),
+		"text edit without an entry":      oneItem("y", changelog(concept)),
+		"hash-less entry after an edit":   oneItem("y", changelog(concept, entry("2026-11-06", "Slack 2026-11-06", "K", "Changed it", "", false))),
+		"newest hash is an earlier text":  oneItem("x", changelog(concept, entry("2026-10-31", "page", "", "Edit", hy, false))),
+		"reapprove carrying a stale hash": oneItem("y", changelog(concept, entry("2026-10-31", "page", "", "Edit", hy, false), entry("2026-11-01", "page", "", "Re-approve", hx, true))),
 	} {
-		if _, err := parse([]byte(src)); err == nil {
+		_, err := parse([]byte(src))
+		if err == nil {
 			t.Errorf("%s: accepted", name)
+			continue
+		}
+		// Every item refusal names the item.
+		if strings.Contains(src, "item-a") && !strings.Contains(err.Error(), "item-a") {
+			t.Errorf("%s: %v does not name the item", name, err)
+		}
+	}
+	if _, err := parse([]byte(oneItem("y", changelog(concept)))); err == nil || !strings.Contains(err.Error(), "add a changelog entry carrying the new hash") {
+		t.Errorf("an unacknowledged edit's message does not name the fix: %v", err)
+	}
+	// The controls: the base file, an edit with its entry, a hash-less Slack entry before the edit,
+	// same-day entries, and a re-approval all parse.
+	for name, src := range map[string]string{
+		"concept only":            good("x"),
+		"an edit with its entry":  oneItem("y", changelog(concept, entry("2026-10-31", "page", "", "Edit", hy, false))),
+		"Slack entry, then edit":  oneItem("y", changelog(concept, entry("2026-11-06", "Slack 2026-11-06", "K", "Changed it", "", false), entry("2026-11-07", "page", "", "Edit", hy, false))),
+		"same-day entries":        oneItem("y", changelog(concept, entry("2026-10-30", "page", "", "Edit", hy, false))),
+		"a re-approval":           oneItem("y", changelog(concept, entry("2026-11-01", "page", "", "Re-approve", hy, true))),
+		"a revert with its entry": oneItem("x", changelog(concept, entry("2026-10-31", "page", "", "Edit", hy, false), entry("2026-11-01", "page", "", "Revert", hx, false))),
+	} {
+		if _, err := parse([]byte(src)); err != nil {
+			t.Errorf("%s: refused: %v", name, err)
 		}
 	}
 	// D7: sunset-policy is an accepted section, and a well-formed table on it parses.
-	ok := `{"items":[{"key":"a","section":"sunset-policy","n":15,"since":"2026-10-30","text":"x"}],"tables":{"sunset-policy":{"columns":["a","b"],"rows":[["1","2"]],"note":"n"}}}`
+	ok := `{"items":[{"key":"a","section":"sunset-policy","n":15,"text":"x","changelog":` + changelog(concept) + `}],"tables":{"sunset-policy":{"columns":["a","b"],"rows":[["1","2"]],"note":"n"}}}`
 	d, err := parse([]byte(ok))
 	if err != nil {
 		t.Fatalf("sunset-policy refused: %v", err)
 	}
 	if d.Items[0].Section != SectionSunsetPolicy || len(d.Tables[SectionSunsetPolicy].Rows) != 1 {
 		t.Fatalf("parsed %+v", d)
+	}
+}
+
+// LIFECYCLE-DOCS-SPEC I1: the shipped file re-parsed with one item's text altered fails, naming the
+// key; with a matching changelog entry appended it parses -- and the decision on the concept text
+// is still current (D3).
+func TestUnacknowledgedEditFails(t *testing.T) {
+	var d Doc
+	if err := json.Unmarshal(lifecycleJSON, &d); err != nil {
+		t.Fatal(err)
+	}
+	const i = 5 // np-unsubscribe-stops: one entry, its concept
+	it := d.Items[i]
+	conceptHash := Hash(it.Text)
+	d.Items[i].Text = it.Text + " Edited."
+	b, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = parse(b)
+	if err == nil || !strings.Contains(err.Error(), it.Key) || !strings.Contains(err.Error(), "add a changelog entry carrying the new hash") {
+		t.Fatalf("an unacknowledged edit: %v", err)
+	}
+	d.Items[i].Changelog = append(append([]Change(nil), it.Changelog...), Change{Date: "2026-11-08", Source: "page", Line: "Edited.", Hash: Hash(d.Items[i].Text)})
+	if b, err = json.Marshal(d); err != nil {
+		t.Fatal(err)
+	}
+	got, err := parse(b)
+	if err != nil {
+		t.Fatalf("an acknowledged edit was refused: %v", err)
+	}
+	edited, _ := got.Find(it.Key)
+	cur, _ := State([]Row{{ID: 1, ItemKey: it.Key, TextHash: conceptHash, Decision: Accept}}, Accepted(edited))
+	if cur == nil {
+		t.Fatal("an acknowledged edit voided the decision")
+	}
+}
+
+// LIFECYCLE-DOCS-SPEC I3: Accepted is the concept entry's hash then every later hash-bearing
+// entry's, in order; Since is the concept entry's date; a later reapprove entry restarts both.
+func TestLineage(t *testing.T) {
+	c := func(date, who, hash string, re bool) Change {
+		return Change{Date: date, Source: "page", Who: who, Line: "l", Hash: hash, Reapprove: re}
+	}
+	for _, tc := range []struct {
+		name    string
+		cl      []Change
+		want    []string
+		since   string
+		concept string
+	}{
+		{"no edits", []Change{c("2026-10-30", "", "h0", true)}, []string{"h0"}, "2026-10-30", "h0"},
+		{"two edits", []Change{c("2026-10-30", "", "h0", true), c("2026-10-31", "", "h1", false), c("2026-11-01", "", "h2", false)}, []string{"h0", "h1", "h2"}, "2026-10-30", "h0"},
+		{"a Slack hash-less entry between", []Change{c("2026-10-30", "", "h0", true), c("2026-11-06", "K", "", false), c("2026-11-07", "", "h1", false)}, []string{"h0", "h1"}, "2026-10-30", "h0"},
+		{"a re-approval after edits", []Change{c("2026-10-30", "", "h0", true), c("2026-10-31", "", "h1", false), c("2026-11-02", "", "h2", true), c("2026-11-03", "", "h3", false)}, []string{"h2", "h3"}, "2026-11-02", "h2"},
+	} {
+		it := Item{Key: "k", Changelog: tc.cl}
+		if got := Accepted(it); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: Accepted = %v, want %v", tc.name, got, tc.want)
+		}
+		if got := Since(it); got != tc.since {
+			t.Errorf("%s: Since = %s, want %s", tc.name, got, tc.since)
+		}
+		if got := Concept(it).Hash; got != tc.concept {
+			t.Errorf("%s: Concept = %s, want %s", tc.name, got, tc.concept)
+		}
 	}
 }

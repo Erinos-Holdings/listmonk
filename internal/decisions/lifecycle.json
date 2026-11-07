@@ -6,162 +6,400 @@
       "key": "np-entry",
       "section": "no-purchase",
       "n": 1,
-      "since": "2026-10-30",
-      "text": "Entry. Anyone who joins a brand's newsletter list (site signup, checkout opt-in, or an import marked as new) gets the Day 0 welcome on joining, then the follow-up steps on their days."
+      "text": "Entry. Anyone who joins a brand's newsletter list (site signup, checkout opt-in, or an import marked as new) gets the Day 0 welcome on joining, then the day 2 and day 5 steps.",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "853f6bd91015c71f5616a4d103963fa55feff23e56feeb2ae01530b46f52466f",
+          "reapprove": true
+        },
+        {
+          "date": "2026-11-06",
+          "source": "Slack 2026-11-06",
+          "who": "Kaylinn Brophy",
+          "line": "Launch with days 0, 2 and 5; day 10 removed for now."
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "Names the steps' days (2 and 5); day 10 retired (USAGE-DAY10-SPEC).",
+          "hash": "66aa578978a6f229b025b8624778db18cc8a2b93e165c24980b919d84e83fa37"
+        }
+      ]
     },
     {
       "key": "np-exit-on-purchase",
       "section": "no-purchase",
       "n": 2,
-      "since": "2026-10-30",
-      "text": "Exit on purchase (your W01–W05 request). Any paid order of the brand, at any time, stops every remaining Welcome step. The check runs daily, so a step already sent isn't recalled."
+      "text": "Exit on purchase (your W01–W05 request). Any paid order of the brand, at any time, stops every remaining Welcome step. The check runs daily, so a step already sent isn't recalled.",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "5b6c4ce9a2fb62225f37b22f31a10012d10eb30f8070893645fd7c9818a08d08",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "np-same-day-double",
       "section": "no-purchase",
       "n": 3,
-      "since": "2026-10-30",
-      "text": "Frequency Risk: Welcome and Thank-you on the same day. Someone who opts in at checkout on their first order currently gets BOTH the welcome and the first-order thank-you (last 28 days: ~20% of Thirsty Girl & ~10% of Ruze sign-ups got both messages back-to-back).\nRecommended: Skip the Welcome and send only the Thank-you to someone whose signup IS their first order."
+      "text": "Welcome and Thank-you on the same day. A newsletter list's welcome automation waits at least 10 minutes after each join and skips anyone whose signup is their first order (a same-brand first-order list row from 1 hour before to 10 minutes after the join): they get only the Thank-you. Before 2026-11-07 both sent back-to-back to about 20% of Thirsty Girl and 10% of Ruze sign-ups.",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "c92f801864a2a20e0d2622cabf2cc9ba60f7009b31bc619b6c35c80669c3855f",
+          "reapprove": true
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "Implemented (WELCOME-SKIP-SPEC): the welcome holds 10 min and skips a first-order joiner; was \"currently gets BOTH … Recommended: skip the Welcome\".",
+          "hash": "d7de230b7e94e9d56f9bc64928f38dd7b7d7ebff99dd1bc36ec73c02e82abb03"
+        }
+      ]
     },
     {
       "key": "np-launch-overlap",
       "section": "no-purchase",
       "n": 4,
-      "since": "2026-10-31",
-      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Nothing suppresses a broadcast for someone part-way through the Welcome series; they receive both.\nRecommended: Keep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform."
+      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Nothing suppresses a broadcast for someone part-way through the Welcome series; they receive both.\nRecommended: Keep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform.",
+      "changelog": [
+        {
+          "date": "2026-10-31",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "d7ede5ae8e9efe4e5ff95f24ed8bb3d74244ff533904bda48eb8400a7218d1b3",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "np-no-restarts",
       "section": "no-purchase",
       "n": 5,
-      "since": "2026-10-30",
-      "text": "No restarts (your completion-tracking question). Every follow-up step sends once per person, ever — even if they unsubscribe and later re-subscribe. The one exception: the Day 0 welcome DOES send again on re-subscribe. That's deliberate today; confirm you want it."
+      "text": "No restarts (your completion-tracking question). Every follow-up step sends once per person, ever — even if they unsubscribe and later re-subscribe. The one exception: the Day 0 welcome DOES send again on re-subscribe. That's deliberate.",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "9939b17029272c8dccd51147c2eae5e484373939283f3cf64115a2a65b78e0c2",
+          "reapprove": true
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "The \"confirm you want it\" question dropped: accepted 2026-11-05.",
+          "hash": "4f505c5b0e31a8104d96a3d6cc5dd338012aaf8d7079c457dc82ede19c0e4702"
+        }
+      ]
     },
     {
       "key": "np-unsubscribe-stops",
       "section": "no-purchase",
       "n": 6,
-      "since": "2026-10-30",
-      "text": "Unsubscribing from the newsletter stops every remaining step of both series."
+      "text": "Unsubscribing from the newsletter stops every remaining step of both series.",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "010ae60d9a0a8ef0a920e0c465a38776a457a322be531027b7b07c642f9ebf8c",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "np-ruze-15d",
       "section": "no-purchase",
       "n": 7,
-      "since": "2026-10-31",
-      "text": "Ruze's 15-day step. Keeps sending as-is.\nRecommended: The current campaign best fits the Day 2 “Gentle conversion reminder”: retire the 15-day campaign and re-schedule it as the 2-day step, without re-sending it to anyone who already received it."
+      "text": "Ruze's 15-day step. Keeps sending as-is.\nRecommended: The current campaign best fits the Day 2 “Gentle conversion reminder”: retire the 15-day campaign and re-schedule it as the 2-day step, without re-sending it to anyone who already received it.",
+      "changelog": [
+        {
+          "date": "2026-10-31",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "4a00e902003dcfd0a30ea88c0de8857fd93cbb1d390b869e0edd23cc59fb3447",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "pp-entry",
       "section": "post-purchase",
       "n": 8,
-      "since": "2026-10-30",
-      "text": "Entry (your transition request). A customer enters on their first paid order EVER with the brand, only if they are subscribed to the newsletter at the time (ticking the checkout opt-in counts). Returning customers get no thank-you and no series. A buyer who isn't subscribed gets only the receipt — no marketing email."
+      "text": "Entry (your transition request). A customer enters on their first paid order EVER with the brand, only if they are subscribed to the newsletter at the time (ticking the checkout opt-in counts). Returning customers get no thank-you and no series. A buyer who isn't subscribed gets only the receipt — no marketing email.",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "04c9677b5342fae0df4fc80eea6cd7ff4d683c029194dedf08eeb9bcd119219a",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "pp-delivery-clock",
       "section": "post-purchase",
       "n": 9,
-      "since": "2026-10-31",
-      "text": "The clock is the order date, not delivery. The step timings assume 5-day delivery.\nRecommended: Start the clock at delivery instead. Aftership delivery confirmations would time \"Getting started\" and \"How's it going?\" to when the product actually arrives, so we never ask for a review of something still in transit. Orders with no delivery confirmation (untracked carriers, split shipments) fall back to order date plus 5 days, so nobody gets stuck."
+      "text": "The clock is delivery, not the order date. Each step is timed from the Aftership delivery confirmation of the first order and sent by the next daily run: “Getting started” the day the package is reported delivered, the day-14 and day-30 steps 9 and 25 days after it. A tracked package still in transit waits up to 10 days after the order; an order with no delivery confirmation (untracked carriers, split shipments) falls back to the order date plus 5, 14 and 30 days, so nobody gets stuck. Day 14 is “Get More From Your Purchase”, an educational email and not a review request: the sites have no review functionality yet.",
+      "changelog": [
+        {
+          "date": "2026-10-31",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "076286fe5369766d0bdd7f9088bda7beae753099ec94f055b7583c9c16db7d1c",
+          "reapprove": true
+        },
+        {
+          "date": "2026-11-06",
+          "source": "Slack 2026-11-06",
+          "who": "Kaylinn Brophy",
+          "line": "Day 14 becomes an educational \"Get More From Your Purchase\" email, not a review request (no review functionality on the sites)."
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "Implemented (DELIVERY-CLOCK-SPEC): steps timed from delivery, in-transit wait, order-date fallback; was \"The clock is the order date … Recommended: start the clock at delivery\".",
+          "hash": "bb860aa70e13a3778c9ea6eda90463d01a7fddc46483e04c22d756a8fd89ee08"
+        }
+      ]
     },
     {
       "key": "pp-final-step-skip",
       "section": "post-purchase",
       "n": 10,
-      "since": "2026-10-30",
-      "text": "Final step skipped for anyone who has ordered again since their first order. A repeat buyer never gets an earlier step late either."
+      "text": "Final step skipped for anyone who has ordered again since their first order. A repeat buyer never gets an earlier step late either.",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "3f068c366f42b25026a83d1503499af293c02791c7ca4784e4e1dc3a85b65e95",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "pp-returning-thanks",
       "section": "post-purchase",
       "n": 11,
-      "since": "2026-10-30",
-      "text": "Returning customers get no thank-you today. Do you want one?"
+      "text": "Returning customers get no thank-you.",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "96bad4eae80e5bbb49a8517ec66c8b9daae5d2458142e0bc7bc7a78fb572e64b",
+          "reapprove": true
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "The \"Do you want one?\" question dropped: answered 2026-11-05 (rejected, see the note).",
+          "hash": "f4f035fe20265f29714dae3a768d175a2a735d3c038b7e4c6a4c357ce986f5aa"
+        }
+      ]
     },
     {
       "key": "both-multi-brand",
       "section": "both",
       "n": 12,
-      "since": "2026-10-31",
-      "text": "Frequency Risk: Multiple brands. Overlap today is small: 4.7% (1,185 of 25,045 active newsletter subscribers) are on two or more brands' lists, and only 0.8% (205) on three or more. The industry pattern is a per-person cap by message class, with journeys and transactional email exempt.\nRecommended: Add a per-person cap only if overlap grows past ~15%. For broadcasts, skip, never defer: someone who already got one brand's broadcast that day is skipped from the second brand's, not pushed to the next day, with the tiebreak going to the brand they engage with more. (Klaviyo Smart Sending skips the same way: 16-hour default, per account, no cross-brand awareness.)"
+      "text": "Frequency Risk: Multiple brands. Overlap today is small: 4.7% (1,185 of 25,045 active newsletter subscribers) are on two or more brands' lists, and only 0.8% (205) on three or more. The industry pattern is a per-person cap by message class, with journeys and transactional email exempt.\nRecommended: Add a per-person cap only if overlap grows past ~15%. For broadcasts, skip, never defer: someone who already got one brand's broadcast that day is skipped from the second brand's, not pushed to the next day, with the tiebreak going to the brand they engage with more. (Klaviyo Smart Sending skips the same way: 16-hour default, per account, no cross-brand awareness.)",
+      "changelog": [
+        {
+          "date": "2026-10-31",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "cce91d6c3233d5109155fd799daa3cd573b13f283be22c296c8c9f3a6d821bd6",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "both-per-brand",
       "section": "both",
       "n": 13,
-      "since": "2026-11-01",
-      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, three No-purchase steps and every broadcast the brand sends in their first 10 days — up to seven emails in ten days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nRecommended:\n1. A \"Smart Sending\" rule, per brand, broadcasts only: skip a broadcast to anyone who received a journey email from the same brand in the last 24 hours. Journeys are exempt: one-shot and time-bound. (Klaviyo Smart Sending skips too: 16-hour default, per account, no cross-brand awareness.)\n2. Fix the same-day double (item 3): the one stack that hits every checkout opt-in.\n3. Keep sunset as the backstop, and watch complaint rates in Brand Health: fatigue shows up there first."
+      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, two No-purchase steps and every broadcast the brand sends in their first 5 days — up to five emails in five days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nRecommended:\n1. A \"Smart Sending\" rule, per brand, broadcasts only: skip a broadcast to anyone who received a journey email from the same brand in the last 24 hours. Journeys are exempt: one-shot and time-bound. (Klaviyo Smart Sending skips too: 16-hour default, per account, no cross-brand awareness.)\n2. The same-day double (item 3) is fixed: the one stack that hit every checkout opt-in.\n3. Keep sunset as the backstop, and watch complaint rates in Brand Health: fatigue shows up there first.",
+      "changelog": [
+        {
+          "date": "2026-11-01",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "fffd6054bb4f91b4c3e0e2cd09a38bdf326bc3bc4e7bed46a93fb50d0e1ae9ef",
+          "reapprove": true
+        },
+        {
+          "date": "2026-11-06",
+          "source": "Slack 2026-11-06",
+          "who": "Kaylinn Brophy",
+          "line": "Day 10 removed: two No-purchase steps, so the first-days stack is five emails in five days."
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "Counts follow days 2 and 5 (was three steps, seven emails in ten days); point 2 reads as done (WELCOME-SKIP-SPEC).",
+          "hash": "566e83cfb43eea4fdbdeaa0664230a7798c4ed88aa17930edacb8bb6367a72d6"
+        }
+      ]
     },
     {
       "key": "both-language",
       "section": "both",
       "n": 14,
-      "since": "2026-10-31",
-      "text": "Language. A campaign's language reaches that language only; English also reaches subscribers with no language on record."
+      "text": "Language. A campaign's language reaches that language only; English also reaches subscribers with no language on record.",
+      "changelog": [
+        {
+          "date": "2026-10-31",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "578c218c31eaab2268ed5b8f3fdbf306f4573c3ac4211b697f86e92392cb9d0f",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-scope",
       "section": "sunset-policy",
       "n": 15,
-      "since": "2026-10-30",
-      "text": "Who it applies to. Every brand that sends from listmonk, each brand on its own: someone who stops engaging with one brand keeps getting the others. The check runs once daily, at 9:00 am Mountain (8:00 am in winter)."
+      "text": "Who it applies to. Every brand that sends from listmonk, each brand on its own: someone who stops engaging with one brand keeps getting the others. The check runs once daily, at 9:00 am Mountain (8:00 am in winter).",
+      "changelog": [
+        {
+          "date": "2026-10-30",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "b82a9e15281891935c2c3afc621e29db5f26497c40d8988ba87f32615ba5a54b",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-engagement",
       "section": "sunset-policy",
       "n": 16,
-      "since": "2026-11-02",
-      "text": "What counts as engagement. A click on any of the brand's emails, a paid order of the brand (whether or not an email drove it), or an open we can confirm was a person — today, an open through Gmail. Automatic opens (such as Apple Mail's privacy feature) and opens we can't confirm don't count; those subscribers are judged on clicks and purchases. (Klaviyo does the same: clicks and placed orders count, and Apple privacy opens are excluded.)"
+      "text": "What counts as engagement. A click on any of the brand's emails, a paid order of the brand (whether or not an email drove it), or an open we can confirm was a person — today, an open through Gmail. Automatic opens (such as Apple Mail's privacy feature) and opens we can't confirm don't count; those subscribers are judged on clicks and purchases. (Klaviyo does the same: clicks and placed orders count, and Apple privacy opens are excluded.)",
+      "changelog": [
+        {
+          "date": "2026-11-02",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "7c179904c1332c8b4065b6b0c0f17bb0bd9b7857ef109b0c02d83fc13f2794fc",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-normal",
       "section": "sunset-policy",
       "n": 17,
-      "since": "2026-11-02",
-      "text": "0–180 days: normal sending. This is the generous end of common practice (90 to 180 days, with 90 the usual starting point), so a subscriber gets twice the usual time before any hold. The strict engagement definition (item 16) and data from the Oct 2026 Younique win-back campaign serve as justification for this expanded window. If complaint rates rise, however, we'll be obligated to shorten it out of necessity."
+      "text": "0–180 days: normal sending. This is the generous end of common practice (90 to 180 days, with 90 the usual starting point), so a subscriber gets twice the usual time before any hold. The strict engagement definition (item 16) and data from the Oct 2026 Younique win-back campaign serve as justification for this expanded window. If complaint rates rise, however, we'll be obligated to shorten it out of necessity.",
+      "changelog": [
+        {
+          "date": "2026-11-02",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "019dcdef0d1a6ca90c79b7808b27a885d03586fa7ee398dabc818cf3a0214a83",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-hold",
       "section": "sunset-policy",
       "n": 18,
-      "since": "2026-10-31",
-      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago and the brand has sent them at least 6 broadcasts since, they stop getting its regular sends. Every new engagement restarts the 180 days. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list."
+      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago and the brand has sent them at least 6 broadcasts since, they stop getting its regular sends. Every new engagement restarts the 180 days. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list.",
+      "changelog": [
+        {
+          "date": "2026-10-31",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "82038c303d156fcd91d49b849be02297ad47855fa76b036714042ba93c3d52c1",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-asks",
       "section": "sunset-policy",
       "n": 19,
-      "since": "2026-11-02",
-      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that they have been unsubscribed, with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up."
+      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that they have been unsubscribed, with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.",
+      "changelog": [
+        {
+          "date": "2026-11-02",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "3138349591e68f7ca4675f4a13a676d75b65ba92e7ef77d98126fd4943d91e8a",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-winback",
       "section": "sunset-policy",
       "n": 20,
-      "since": "2026-11-02",
-      "text": "Marketing may send a win-back broadcast to the 180d or 270d list at any time. This changes no one's schedule. The 360d and 365d lists take automations only: the system refuses any broadcast to them, win-back or promotional, so nothing but the last chance and the confirmation can reach anyone past day 360."
+      "text": "Marketing may send a win-back broadcast to the 180d or 270d list at any time. This changes no one's schedule. The 360d and 365d lists take automations only: the system refuses any broadcast to them, win-back or promotional, so nothing but the last chance and the confirmation can reach anyone past day 360.",
+      "changelog": [
+        {
+          "date": "2026-11-02",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "c18615cfff81bf60a8fa66f12dd36eaefac1278cce6a526ddc7d41ab291685e3",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-coming-back",
       "section": "sunset-policy",
       "n": 21,
-      "since": "2026-11-02",
-      "text": "Coming back. Any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email. They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out: they are never asked again."
+      "text": "Coming back. Any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email. They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out: they are never asked again.",
+      "changelog": [
+        {
+          "date": "2026-11-02",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "a618929fb8f9f59a1b92953eacf813614c1ce9e1afbdfd2f862711984bb0d86f",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-suppressed",
       "section": "sunset-policy",
       "n": 22,
-      "since": "2026-11-01",
-      "text": "365 days: unsubscribed from marketing. After 365 days without engagement (180, then the re-engagement schedule), the person is unsubscribed from the brand's marketing — and sent the confirmation when the brand's day-365 automation is running — whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout."
+      "text": "365 days: unsubscribed from marketing. After 365 days without engagement (180, then the re-engagement schedule), the person is unsubscribed from the brand's marketing — and sent the confirmation when the brand's day-365 automation is running — whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout.",
+      "changelog": [
+        {
+          "date": "2026-11-01",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "36cfe7f4776d4db972dbdba74e1639b1f784e7670f9e5fced74101f9c91fcc8e",
+          "reapprove": true
+        }
+      ]
     },
     {
       "key": "sp-safety",
       "section": "sunset-policy",
       "n": 23,
-      "since": "2026-10-31",
-      "text": "Safety check. If a brand's latest broadcast shows zero tracked opens, that day's run skips the brand: broken tracking looks exactly like nobody reading. Holds for bounce problems are handled separately and never get the re-engagement emails."
+      "text": "Safety check. If a brand's latest broadcast shows zero tracked opens, that day's run skips the brand: broken tracking looks exactly like nobody reading. Holds for bounce problems are handled separately and never get the re-engagement emails.",
+      "changelog": [
+        {
+          "date": "2026-10-31",
+          "source": "page",
+          "line": "Published for approval",
+          "hash": "0170340a622e3402a6e022dc13baa67062567c9d2cdce51af2bc1d0ebcb46dfb",
+          "reapprove": true
+        }
+      ]
     }
   ],
   "tables": {

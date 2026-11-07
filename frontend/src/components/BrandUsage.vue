@@ -82,7 +82,7 @@
                 {{ $t(c.label) }}
               </th>
               <th v-else :key="c.field" rowspan="2" class="has-text-centered bu-head bu-leafhead"
-                :class="[buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide }]" :title="$t(meta(c.field).help)"
+                :class="[buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide }]" :title="hover(c.field)"
                 :aria-sort="buAria(c.field)" @click="onSort(c.field)">
                 {{ label(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
               </th>
@@ -91,7 +91,7 @@
           <tr>
             <th v-for="c in header.row3" :key="c.field" class="bu-small has-text-centered"
               :class="[buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.groupStart }]"
-              :title="$t(meta(c.field).help)" :aria-sort="buAria(c.field)" @click="onSort(c.field)"
+              :title="hover(c.field)" :aria-sort="buAria(c.field)" @click="onSort(c.field)"
               :data-cy="`usage-head-${c.field}`">
               {{ label(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
             </th>
@@ -144,8 +144,8 @@
         </div>
         <ol class="bu-guide-steps">
           <li v-for="s in g.steps" :key="s.days" class="bu-guide-step">
-            <span class="bu-guide-day" :aria-label="`${$t('dashboard.usage.guideDay')} ${s.days}`">
-              <small>{{ $t('dashboard.usage.guideDay') }}</small>{{ s.days }}
+            <span class="bu-guide-day" :aria-label="`${$t('dashboard.usage.guideDay')} ${s.label}`" :title="s.clock || null">
+              <small>{{ $t('dashboard.usage.guideDay') }}</small>{{ s.label }}
             </span>
             <div class="bu-guide-text">
               <p class="bu-guide-step-title">{{ s.title }}</p>
@@ -275,7 +275,7 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, circleName, clickSort, columnMeta, computedAtText, guideColumnsFit, headerLayout, linePad, pageWidth,
+  GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, circleName, clickSort, columnMeta, computedAtText, guideColumnsFit, headerLayout, hoverText, linePad, pageWidth,
   loadState, saveState, seriesGuide, shapeRows, sortRows,
   LOYALTY_PLACEHOLDER, brandListIds, loyaltyLayout, loyaltyMonths, loyaltyShift, splitParent,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
@@ -588,6 +588,12 @@ export default Vue.extend({
     label(field) {
       const m = columnMeta(field);
       return m.text !== undefined ? m.text : this.$t(m.label, m.params);
+    },
+
+    // LIFECYCLE-DOCS-SPEC D21: a leaf header's hover -- the translated help, then (an approximate
+    // Post-purchase step) a newline and the real clock (brandUsage.mjs::hoverText).
+    hover(field) {
+      return hoverText(columnMeta(field), (k, p) => this.$t(k, p));
     },
 
     // The Loyalty placeholder circles' accessible name (the rows' own live in BrandUsageRow).

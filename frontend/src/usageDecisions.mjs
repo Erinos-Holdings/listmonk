@@ -156,42 +156,103 @@ export function choicesOf(item, t = (k) => k) {
 
 // The toggle shown selected (blue): a Reject being written (`pending`, its note open), else the
 // stored decision when it is one of the item's choices; null (nothing selected) while awaiting.
+// LIFECYCLE-DOCS-SPEC D9: a stored current / recommended on an item whose choices are now
+// Accept | Reject (its "Recommended:" line removed once implemented) shows Accept -- it approved the
+// text as it then read; a stored reject is always a choice; anything else selects nothing.
 export function selectedChoice(item, pending = null, t = (k) => k) {
   if (pending === 'reject') {
     return 'reject';
   }
   const cur = isObj(item) && isObj(item.current) ? item.current.decision : null;
-  return choicesOf(item, t).some((c) => c.value === cur) ? cur : null;
+  const values = choicesOf(item, t).map((c) => c.value);
+  if (values.includes(cur)) {
+    return cur;
+  }
+  if ((cur === 'current' || cur === 'recommended') && values.includes('accept')) {
+    return 'accept';
+  }
+  return null;
 }
 
 // The bullet's ONE state line: decided -> { kind: 'accepted' | 'rejected', text, note } (the note
 // only on a reject); undecided -> { kind: 'awaiting', text: "Awaiting since <since>", note: '' }.
+// LIFECYCLE-DOCS-SPEC D5: an approval whose `current.modified` is set (the approver modified the
+// concept off-page after deciding) reads "Approved as modified by <who> · <date>"; a reject keeps
+// "Rejected by …" and its note -- a reject is not an approval to modify.
 export function stateLine(item, t = (k) => k) {
   const cur = isObj(item) && isObj(item.current) ? item.current : null;
   if (!cur) {
     return { kind: 'awaiting', text: t('decisions.awaiting', { since: String((item && item.since) || '') }), note: '' };
   }
   const reject = cur.decision === 'reject';
+  const mod = !reject && isObj(cur.modified) ? cur.modified : null;
   return {
     kind: reject ? 'rejected' : 'accepted',
-    text: decisionLine(cur, t),
+    text: mod
+      ? t('decisions.approvedModified', { name: String(mod.who || ''), date: String(mod.date || '') })
+      : decisionLine(cur, t),
     note: reject && typeof cur.note === 'string' ? cur.note : '',
   };
 }
 
-// The collapsed history: every stored row as the server ordered it (newest first), each with its
-// line, its note, and the "text changed" mark on a voided row. The summary is "History (N)".
+// One changelog entry's History line (LIFECYCLE-DOCS-SPEC D7): the item's first entry is its
+// publication ("<line> · <date>"); a later reapprove entry "Re-approval requested · …"; an entry
+// with `who` "Modified by <who> · …"; any other "Edited · …". Plain text, rendered through
+// interpolation only.
+function changeLine(c, first, t) {
+  const p = {
+    who: String(c.who || ''), date: String(c.date || ''), source: String(c.source || ''), line: String(c.line || ''),
+  };
+  if (first) {
+    return t('decisions.logPublished', p);
+  }
+  if (c.reapprove === true) {
+    return t('decisions.logReapprove', p);
+  }
+  return t(c.who ? 'decisions.logModified' : 'decisions.logEdited', p);
+}
+
+// The collapsed history (LIFECYCLE-DOCS-SPEC D7): the stored decision rows and the item's
+// changelog entries interleaved, newest first by day -- a row by its Denver day (denverDay), an
+// entry by its `date`. On the same day a decision row sorts above an entry, so the publication
+// entry sits under that day's decision and a same-day Slack modification shows beneath the day's
+// decision (accepted: the entry carries a day, not a time). Within each kind the server's order is
+// kept (rows newest first; entries newest first, i.e. file order reversed). Each line is
+// { text, note, voided, mark, kind: 'decision' | 'change' }; a voided row is marked "before
+// re-approval". The summary is "History (N)", N = rows + entries.
 export function historyOf(item, t = (k) => k) {
   const rows = isObj(item) && Array.isArray(item.history) ? item.history.filter(isObj) : [];
-  return {
-    summary: t('decisions.history', { n: rows.length }),
-    rows: rows.map((r) => ({
+  const changes = isObj(item) && Array.isArray(item.changelog) ? item.changelog.filter(isObj) : [];
+  const decided = rows.map((r) => ({
+    day: denverDay(r.created_at),
+    line: {
       text: decisionLine(r, t),
       note: r.decision === 'reject' && typeof r.note === 'string' ? r.note : '',
       voided: r.voided === true,
       mark: r.voided === true ? t('decisions.voided') : '',
-    })),
-  };
+      kind: 'decision',
+    },
+  }));
+  const changed = changes.map((c, i) => ({
+    day: String(c.date || ''),
+    line: {
+      text: changeLine(c, i === 0, t), note: '', voided: false, mark: '', kind: 'change',
+    },
+  })).reverse();
+  // A stable merge of the two newest-first lists: a row goes first unless the entry's day is later.
+  const out = [];
+  let i = 0;
+  let j = 0;
+  while (i < decided.length || j < changed.length) {
+    if (j >= changed.length || (i < decided.length && decided[i].day >= changed[j].day)) {
+      out.push(decided[i].line);
+      i += 1;
+    } else {
+      out.push(changed[j].line);
+      j += 1;
+    }
+  }
+  return { summary: t('decisions.history', { n: out.length }), rows: out };
 }
 
 // The decision toggles show only when the server says this user may decide.

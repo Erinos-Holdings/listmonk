@@ -203,6 +203,80 @@ func TestGetCarriesTables(t *testing.T) {
 	}
 }
 
+// LIFECYCLE-DOCS-SPEC I6 / D5 / D6: the GET's items carry their changelog (file order, no hash) and
+// `current.modified` -- Kaylinn's off-page Slack modification on items 1, 9 and 13, none on item 3.
+func TestGetChangelogAndModified(t *testing.T) {
+	a, store := decisionsApp(t)
+	keys := []string{"np-entry", "pp-delivery-clock", "both-per-brand", "np-same-day-double", "pp-returning-thanks"}
+	note := "We don't want one."
+	for i, k := range keys {
+		it, _ := a.decisionDoc.Find(k)
+		r := decisions.Row{ID: int64(i + 1), ItemKey: k, TextHash: decisions.Concept(it).Hash, Decision: decisions.Recommended, UserName: "Kaylinn Brophy"}
+		if k == "pp-returning-thanks" {
+			r.Decision, r.Note = decisions.Reject, &note
+		}
+		store.rows = append(store.rows, r)
+	}
+	code, body := callDecisions(t, a, approver, http.MethodGet, "", "")
+	if code != 200 {
+		t.Fatalf("GET: %d %s", code, body)
+	}
+	var resp struct {
+		Data struct {
+			Items []struct {
+				Key     string `json:"key"`
+				Since   string `json:"since"`
+				Current *struct {
+					Decision string           `json:"decision"`
+					Modified *json.RawMessage `json:"modified"`
+				} `json:"current"`
+				Changelog []map[string]any `json:"changelog"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatal(err)
+	}
+	byKey := map[string]int{}
+	for i, it := range resp.Data.Items {
+		byKey[it.Key] = i
+	}
+	for _, k := range keys {
+		v := resp.Data.Items[byKey[k]]
+		it, _ := a.decisionDoc.Find(k)
+		if v.Current == nil {
+			t.Fatalf("%s: Awaiting after a text edit with its entry", k)
+		}
+		if v.Since != decisions.Since(it) || len(v.Changelog) != len(it.Changelog) {
+			t.Fatalf("%s: since %s, %d changelog entries", k, v.Since, len(v.Changelog))
+		}
+		for j, e := range v.Changelog {
+			if _, ok := e["hash"]; ok {
+				t.Fatalf("%s: changelog entry %d sends its hash", k, j)
+			}
+			if e["line"] != it.Changelog[j].Line || e["date"] != it.Changelog[j].Date || e["reapprove"] != it.Changelog[j].Reapprove {
+				t.Fatalf("%s: changelog entry %d = %v (not file order)", k, j, e)
+			}
+		}
+		want := `{"who":"Kaylinn Brophy","date":"2026-11-06"}`
+		switch k {
+		case "np-entry", "pp-delivery-clock", "both-per-brand":
+			if v.Current.Modified == nil || string(*v.Current.Modified) != want {
+				t.Fatalf("%s: modified %v, want %s", k, v.Current.Modified, want)
+			}
+		default:
+			if v.Current.Modified != nil {
+				t.Fatalf("%s: modified %s, want none", k, *v.Current.Modified)
+			}
+		}
+	}
+	// The concept hash of an edited item never reaches the wire (only its current text's hash).
+	it, _ := a.decisionDoc.Find("np-entry")
+	if strings.Contains(body, decisions.Concept(it).Hash) {
+		t.Fatal("the GET sends a changelog hash")
+	}
+}
+
 func TestPostRefusals(t *testing.T) {
 	a, store := decisionsApp(t)
 	it, _ := a.decisionDoc.Find("np-entry")
@@ -295,6 +369,35 @@ func TestPostRefusals(t *testing.T) {
 	if !slices.Equal(resp.Data.Choices, []string{decisions.Accept, decisions.Reject}) {
 		t.Fatalf("np-entry choices %v", resp.Data.Choices)
 	}
+	// LIFECYCLE-DOCS-SPEC I6: an ordinary text edit with its changelog entry keeps that decision --
+	// the GET reads it back current -- and the POST then wants the NEW text's hash.
+	for i := range a.decisionDoc.Items {
+		if a.decisionDoc.Items[i].Key == "np-entry" {
+			ed := &a.decisionDoc.Items[i]
+			ed.Text += " Edited."
+			ed.Changelog = append(append([]decisions.Change(nil), ed.Changelog...), decisions.Change{Date: "2026-11-08", Source: "page", Line: "Edited.", Hash: decisions.Hash(ed.Text)})
+		}
+	}
+	_, got := callDecisions(t, a, approver, http.MethodGet, "", "")
+	var view struct {
+		Data decisions.View `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(got), &view); err != nil {
+		t.Fatal(err)
+	}
+	if v := view.Data.Items[0]; v.Key != "np-entry" || v.Current == nil || v.Current.Decision != decisions.Accept || v.History[0].Voided {
+		t.Fatalf("after an acknowledged edit: %+v", v)
+	}
+	if code, _ := callDecisions(t, a, approver, http.MethodPost, "np-entry", body(hash, "accept", nil)); code != http.StatusConflict {
+		t.Fatalf("the old text's hash after an edit: %d, want 409", code)
+	}
+	edited, _ := a.decisionDoc.Find("np-entry")
+	if code, _ := callDecisions(t, a, approver, http.MethodPost, "np-entry", body(decisions.Hash(edited.Text), "accept", nil)); code != 200 || store.rows[len(store.rows)-1].TextHash != decisions.Hash(edited.Text) {
+		t.Fatalf("an accept on the edited text: %d", code)
+	}
+	// Reset the fixture's row count for the cases below.
+	store.rows = store.rows[:2]
+	store.inserts = 2
 
 	// Current and Recommended on an item with a "Recommended:" line: each appends one row, no note.
 	for i, d := range []string{decisions.Current, decisions.Recommended} {

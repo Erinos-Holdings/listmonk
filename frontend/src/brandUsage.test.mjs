@@ -9,7 +9,7 @@ import {
   computedAtText, headerLayout, loadState, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
   GUIDE_COLUMN_REM, GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, pageWidth, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
-  REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName,
+  REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName, approxClock, hoverText,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
@@ -199,12 +199,60 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   // S9: each leaf's header hover is its D5 description.
   assert.deepEqual(columnMeta('welcome:5'), { label: 'dashboard.usage.npDays', params: { n: 5 }, help: 'series.welcomeDay5' });
   assert.deepEqual(columnMeta('welcome:0'), { label: 'dashboard.usage.day0', help: 'series.welcomeDay0' });
-  assert.deepEqual(columnMeta('postPurchase:30'), { label: 'dashboard.usage.npDays', params: { n: 30 }, help: 'series.postPurchaseDay30' });
+  assert.deepEqual(columnMeta('welcome:2'), { label: 'dashboard.usage.npDays', params: { n: 2 }, help: 'series.welcomeDay2' });
   assert.deepEqual(columnMeta('postPurchase:0'), { label: 'dashboard.usage.day0', help: 'series.postPurchaseDay0' });
+  // LIFECYCLE-DOCS-SPEC D21 / I11: a Post-purchase step after day 0 reads "~Nd" and its hover adds
+  // the real clock -- {n, offset}, plus the reorder sentence on day 30.
+  const clock = (n, offset) => ({ key: 'dashboard.usage.approxClock', params: { n, offset } });
+  assert.deepEqual(columnMeta('postPurchase:5'), {
+    label: 'dashboard.usage.approxDays', params: { n: 5 }, help: 'series.postPurchaseDay5', helpExtra: [clock(5, 0)],
+  });
+  assert.deepEqual(columnMeta('postPurchase:14'), {
+    label: 'dashboard.usage.approxDays', params: { n: 14 }, help: 'series.postPurchaseDay14', helpExtra: [clock(14, 9)],
+  });
+  assert.deepEqual(columnMeta('postPurchase:30'), {
+    label: 'dashboard.usage.approxDays',
+    params: { n: 30 },
+    help: 'series.postPurchaseDay30',
+    helpExtra: [clock(30, 25), { key: 'dashboard.usage.approxClockReorder', params: {} }],
+  });
+  // The hover: help, a newline, the clock sentence; every other leaf's hover is its help alone.
+  assert.equal(hoverText(columnMeta('postPurchase:30'), t), 'series.postPurchaseDay30\ndashboard.usage.approxClock{"n":30,"offset":25} dashboard.usage.approxClockReorder{}');
+  assert.equal(hoverText(columnMeta('postPurchase:0'), t), 'series.postPurchaseDay0');
+  assert.equal(hoverText(columnMeta('welcome:5'), t), 'series.welcomeDay5');
+  assert.equal(hoverText(columnMeta('reengagement:180'), t), 'series.reengagementDay180');
   assert.deepEqual(columnMeta('skipped:de'), { text: 'DE', help: 'dashboard.usage.skippedHelp' });
   assert.equal(seriesLeafOf('welcome:15'), null); // off-standard: no leaf (a legacy chip)
   assert.equal(seriesLeafOf('noPurchase:3'), null); // the retired leaves
   assert.equal(skippedLangOf('skipped:en'), null); // EN has no column (recorded limitation)
+});
+
+// LIFECYCLE-DOCS-SPEC D20 / I10 / I13: the ONE "~" rule -- null for every leaf but a Post-purchase
+// step after day 0; the offset from delivery (ASSUMED_DELIVERY_DAYS 5) and the day-30 reorder skip.
+test('LIFECYCLE-DOCS I10: approxClock -- Post-purchase steps after day 0 only', () => {
+  assert.equal(approxClock('postPurchase', 0), null);
+  [0, 2, 5].forEach((n) => assert.equal(approxClock('welcome', n), null, `welcome ${n}`));
+  REENGAGEMENT_DAYS.forEach((n) => assert.equal(approxClock('reengagement', n), null, `reengagement ${n}`));
+  assert.deepEqual(approxClock('postPurchase', 5), { offset: 0, reorder: false });
+  assert.deepEqual(approxClock('postPurchase', 14), { offset: 9, reorder: false });
+  assert.deepEqual(approxClock('postPurchase', 30), { offset: 25, reorder: true });
+  // I13: the new keys, verbatim D23.
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en['dashboard.usage.approxDays'], '~{n}d');
+  assert.equal(en['dashboard.usage.approxDay'], '~{n}');
+  assert.equal(en['dashboard.usage.approxClock'], [
+    'Sent at the first daily run (8:10 am Mountain, 9:10 am in summer) after Aftership reports the first order delivered',
+    ' — within about a day of it — at delivery + {offset} days. A tracked package still in transit waits up to 10 days',
+    ' after the order; an order with no tracking sends at order date + {n} days.',
+  ].join(''));
+  assert.equal(en['dashboard.usage.approxClockReorder'], 'Skipped for anyone who has ordered again since their first order.');
+  // D20: no literal "~" day label in the templates -- every one goes through approxClock.
+  ['./components/BrandUsage.vue', './views/JourneyPreview.vue'].forEach((p) => {
+    const vue = readFileSync(new URL(p, import.meta.url), 'utf8');
+    const template = vue.slice(0, vue.indexOf('<script'));
+    assert.ok(!/~\{\{|>~|'~|"~/.test(template), `${p} carries a literal ~ day label`);
+    assert.ok(!vue.includes('v-html'), `${p} uses v-html`);
+  });
 });
 
 // LIFECYCLE-SERIES-SPEC I16 -- every series leaf's hover resolves a D5 key present in en.json, and
@@ -215,6 +263,7 @@ test('I16: every leaf help, group label and score part key is in en.json', () =>
     const m = columnMeta(f);
     assert.equal(typeof en[m.help], 'string', `${f} help ${m.help}`);
     assert.equal(typeof en[m.label], 'string', `${f} label ${m.label}`);
+    (m.helpExtra || []).forEach((p) => assert.equal(typeof en[p.key], 'string', `${f} helpExtra ${p.key}`));
   });
   headerLayout().row2.filter((c) => c.kind === 'group').forEach((c) => {
     assert.equal(typeof en[c.label], 'string', c.label);
@@ -982,7 +1031,7 @@ test('guide: parseStepText splits title / quoted subject line / guidance', () =>
 
 test('guide: seriesGuide over the real en.json -- Welcome then New Customer, every standard day, every step titled', () => {
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
-  const tt = (k) => en[k];
+  const tt = (k, p) => (en[k] === undefined ? k : en[k].replace(/\{(\w+)\}/g, (m, n) => (p && n in p ? String(p[n]) : m)));
   const g = seriesGuide(tt);
   // USAGE-REENGAGEMENT-SPEC F3: three series -- the third titled "Re-engagement series" (not the
   // group label), sublined "Sunset flow", its days REENGAGEMENT_DAYS.
@@ -1001,11 +1050,25 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   g.flatMap((s) => s.steps).forEach((x) => {
     assert.ok(x.title && x.body, `day ${x.days}`);
   });
-  // USAGE-DAY10-SPEC D1/D4 / I5: day 10 retired; day 14 is "Get More From Your Purchase" (the
-  // body's own colon is harmless -- parseStepText splits on the FIRST ": ").
+  // USAGE-DAY10-SPEC D1/D4 / I5: day 10 retired; day 14 is "Get More From Your Purchase"
+  // (parseStepText splits on the FIRST ": "); LIFECYCLE-DOCS-SPEC D19 / I12: its body is D19's.
   assert.deepEqual(g[0].steps.map((x) => x.title), ['Welcome', 'Gentle conversion reminder', 'Address purchase hesitation']);
   assert.deepEqual(g[1].steps.map((x) => x.title), ['Thank you', 'Getting started', 'Get More From Your Purchase', 'Your next favorite']);
-  assert.match(g[1].steps[2].body, /^Go beyond the basics covered in Getting started: /);
+  assert.equal(g[1].steps[2].body, 'Go beyond the basics covered in Getting started with tips to get more value from the product; not another sales pitch.');
+  assert.equal(en['series.postPurchaseDay14'], `Day 14 Get More From Your Purchase: ${g[1].steps[2].body}`);
+  // LIFECYCLE-DOCS-SPEC D22 / I12: the Post-purchase steps after day 0 carry "~N" and the real
+  // clock; day 0 and every No-purchase / Re-engagement step the plain number and no clock.
+  assert.deepEqual(g[1].steps.map((x) => x.label), ['0', '~5', '~14', '~30']);
+  g[1].steps.slice(1).forEach((x) => {
+    assert.ok(x.clock.startsWith('Sent at the first daily run') && !x.clock.includes('{'), `day ${x.days}: ${x.clock}`);
+  });
+  assert.match(g[1].steps[1].clock, /at delivery \+ 0 days\. .* order date \+ 5 days\.$/);
+  assert.match(g[1].steps[2].clock, /at delivery \+ 9 days\. .* order date \+ 14 days\.$/);
+  assert.ok(g[1].steps[3].clock.endsWith(`order date + 30 days. ${en['dashboard.usage.approxClockReorder']}`));
+  assert.equal(g[1].steps[0].clock, '');
+  [...g[0].steps, ...g[2].steps].forEach((x) => {
+    assert.deepEqual([x.label, x.clock], [String(x.days), ''], `${x.days}`);
+  });
   assert.equal(g[0].steps[1].quote, 'Still exploring? Here\'s why customers love [Brand].');
   assert.equal(g[1].steps[0].quote, '');
   assert.equal(GUIDE_SERIES.length, 3);

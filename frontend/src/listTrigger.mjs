@@ -33,6 +33,11 @@ export function isStepTrigger(option) {
 // USAGE-DAY10-SPEC D1 (2026-11-07): day 10 retired -- a stored 10 is a legacy step.
 export const WELCOME_STEP_DAYS = Object.freeze([2, 5]);
 export const POST_PURCHASE_STEP_DAYS = Object.freeze([5, 14, 30]);
+// LIFECYCLE-DOCS-SPEC D20: the days a Post-purchase step's clock assumes for delivery -- a delivered
+// order's step N sends at delivery + (N - ASSUMED_DELIVERY_DAYS) days. Cross-repo literal (no test
+// spans the repos): integrations lib/post-purchase.ts ASSUMED_DELIVERY_DAYS (DELIVERY-CLOCK-SPEC D2)
+// -- change both in one release. Read only by brandUsage.mjs::approxClock.
+export const ASSUMED_DELIVERY_DAYS = 5;
 
 // The two series (the Usage pane's groups and the Lists form's step radios): a series family per
 // step kind. Day 0 of the No-purchase series is the brand newsletter list's automation; day 0 of the

@@ -38,8 +38,8 @@
         <ol class="jp-steps">
           <li v-for="s in g.steps" :key="s.days" class="jp-step" :data-cy="`journey-${g.family}-${s.days}`">
             <div class="jp-step-head">
-              <span class="bu-guide-day" :aria-label="`${$t('dashboard.usage.guideDay')} ${s.days}`">
-                <small>{{ $t('dashboard.usage.guideDay') }}</small>{{ s.days }}
+              <span class="bu-guide-day" :aria-label="`${$t('dashboard.usage.guideDay')} ${s.label}`" :title="s.clock || null">
+                <small>{{ $t('dashboard.usage.guideDay') }}</small>{{ s.label }}
               </span>
               <p class="bu-guide-step-title">{{ s.title }}</p>
             </div>

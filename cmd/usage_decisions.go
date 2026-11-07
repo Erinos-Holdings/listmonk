@@ -142,6 +142,8 @@ func (a *App) PostUsageDecision(c echo.Context) error {
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "body"))
 	}
+	// LIFECYCLE-DOCS-SPEC D4: the POST wants the CURRENT text's hash (the page must show it) and
+	// stores it; decisions.State accepts any hash of the item's concept lineage when reading back.
 	if req.Hash != decisions.Hash(it.Text) {
 		return echo.NewHTTPError(http.StatusConflict, a.i18n.T("decisions.stale"))
 	}
