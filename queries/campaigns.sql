@@ -538,9 +538,11 @@ SELECT COALESCE(clicks.n, 0) AS "count", COALESCE(clicks.kind, aud.kind) AS kind
 -- Fork (integrations GMAIL-GAP-SPEC D5) -- the Campaign pane's Gmail gap block. Per selected
 -- campaign $1, its broadcast recipients at Gmail and at Yahoo/AOL and, of those, the DISTINCT
 -- recipients with a view of client gmail-proxy (resp. yahoo) created in [$2, $3], whatever the
--- tracking mode. The recipients are NOT date-bounded. The recipient CTE is get-campaign-matrix's
--- grecip text (the send predicate of next-campaign-subscribers bounded by last_subscriber_id); keep
--- the two identical. A journey's four counts are NULL. gap_thresholds = campaignThresholds.gmailGap
+-- tracking mode. The recipients are NOT date-bounded. The recipient CTEs glists, lmem and grecip are
+-- get-campaign-matrix's text (the send predicate of next-campaign-subscribers bounded by
+-- last_subscriber_id); keep the three identical in both. lmem computes each list's Gmail and
+-- Yahoo/AOL membership ONCE (provider flags, list status, opt-in, the send language), and grecip
+-- reuses it for every campaign on that list. A journey's four counts are NULL. gap_thresholds = campaignThresholds.gmailGap
 -- verbatim from the newest ses system_health document THAT CARRIES it (a newer document without
 -- the key never nulls it), NULL when no document does. The UI pools
 -- the rows and computes the rates and the gap. The openers come from ONE pre-aggregated pass over
@@ -558,26 +560,31 @@ gviews AS (
         AND cv.created_at >= $2 AND cv.created_at <= $3
     GROUP BY 1, 2
 ),
-grecip AS (
-    SELECT DISTINCT k.id AS campaign_id, s.id AS subscriber_id,
+glists AS (
+    SELECT DISTINCT cl.list_id FROM campaign_lists cl JOIN camps k ON (k.id = cl.campaign_id) WHERE NOT k.evergreen
+),
+lmem AS (
+    SELECT sl.list_id, sl.subscriber_id, sl.status AS sl_status, l.optin,
         s.email ~* '@(gmail|googlemail)\.com$' AS is_gmail,
-        s.email ~* '@(yahoo|aol|ymail|rocketmail)\.' AS is_yahoo
+        s.email ~* '@(yahoo|aol|ymail|rocketmail)\.' AS is_yahoo,
+        COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') AS lang2
+    FROM glists g
+    JOIN lists l ON (l.id = g.list_id)
+    JOIN subscriber_lists sl ON (sl.list_id = g.list_id)
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+    WHERE s.email ~* '@(gmail|googlemail)\.com$' OR s.email ~* '@(yahoo|aol|ymail|rocketmail)\.'
+),
+grecip AS (
+    SELECT DISTINCT k.id AS campaign_id, m.subscriber_id, m.is_gmail, m.is_yahoo
     FROM camps k
     JOIN campaigns c ON (c.id = k.id)
     JOIN campaign_lists cl ON (cl.campaign_id = k.id)
-    JOIN lists l ON (l.id = cl.list_id)
-    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
-        AND (
-            CASE
-                WHEN c.type = 'optin' THEN sl.status = 'unconfirmed' AND l.optin = 'double'
-                WHEN l.optin = 'double' THEN sl.status = 'confirmed'
-                ELSE sl.status != 'unsubscribed'
-            END
-        )
-    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
-    WHERE NOT k.evergreen AND s.id <= c.last_subscriber_id
-        AND (c.attribs->>'lang' IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = c.attribs->>'lang')
-        AND (s.email ~* '@(gmail|googlemail)\.com$' OR s.email ~* '@(yahoo|aol|ymail|rocketmail)\.')
+    JOIN lmem m ON (m.list_id = cl.list_id)
+    WHERE NOT k.evergreen AND m.subscriber_id <= c.last_subscriber_id
+        AND (CASE WHEN c.type = 'optin' THEN m.sl_status = 'unconfirmed' AND m.optin = 'double'
+                  WHEN m.optin = 'double' THEN m.sl_status = 'confirmed'
+                  ELSE m.sl_status != 'unsubscribed' END)
+        AND (c.attribs->>'lang' IS NULL OR m.lang2 = c.attribs->>'lang')
 ),
 gcnt AS (
     SELECT r.campaign_id,
@@ -828,8 +835,10 @@ SELECT JSON_BUILD_OBJECT(
 --     pre-aggregated pass over campaign_views (gviews), joined once to the recipients. Recipients are the
 --     send predicate of next-campaign-subscribers (the lists' opt-in rule, not blocklisted, the
 --     campaign language by the send path's expression) bounded by subscribers.id at or below
---     campaigns.last_subscriber_id -- the SAME text as get-campaign-gmail-gap (keep the two
---     identical; queries_parse_test pins the provider regexes and the language expression in both).
+--     campaigns.last_subscriber_id. lmem computes each list's Gmail and Yahoo/AOL membership ONCE
+--     (provider flags, list status, opt-in, the send language) and grecip reuses it for every
+--     broadcast on that list. glists, lmem and grecip are the SAME text as get-campaign-gmail-gap's
+--     (keep the three identical; queries_parse_test pins them, the regexes and the language expression).
 --     NULL in all four for a journey (the checkpoint does not bound one). The UI computes the rates
 --     and the gap; gap_thresholds (top level) = campaignThresholds.gmailGap verbatim from the newest
 --     ses system_health document THAT CARRIES it (a newer document without the key never nulls it),
@@ -973,26 +982,31 @@ gviews AS (
         AND cv.created_at >= k.lo AND cv.created_at < (SELECT t1 FROM bounds)
     GROUP BY 1, 2
 ),
-grecip AS (
-    SELECT DISTINCT k.id AS campaign_id, s.id AS subscriber_id,
+glists AS (
+    SELECT DISTINCT cl.list_id FROM campaign_lists cl JOIN camps k ON (k.id = cl.campaign_id) WHERE NOT k.evergreen
+),
+lmem AS (
+    SELECT sl.list_id, sl.subscriber_id, sl.status AS sl_status, l.optin,
         s.email ~* '@(gmail|googlemail)\.com$' AS is_gmail,
-        s.email ~* '@(yahoo|aol|ymail|rocketmail)\.' AS is_yahoo
+        s.email ~* '@(yahoo|aol|ymail|rocketmail)\.' AS is_yahoo,
+        COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') AS lang2
+    FROM glists g
+    JOIN lists l ON (l.id = g.list_id)
+    JOIN subscriber_lists sl ON (sl.list_id = g.list_id)
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+    WHERE s.email ~* '@(gmail|googlemail)\.com$' OR s.email ~* '@(yahoo|aol|ymail|rocketmail)\.'
+),
+grecip AS (
+    SELECT DISTINCT k.id AS campaign_id, m.subscriber_id, m.is_gmail, m.is_yahoo
     FROM camps k
     JOIN campaigns c ON (c.id = k.id)
     JOIN campaign_lists cl ON (cl.campaign_id = k.id)
-    JOIN lists l ON (l.id = cl.list_id)
-    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
-        AND (
-            CASE
-                WHEN c.type = 'optin' THEN sl.status = 'unconfirmed' AND l.optin = 'double'
-                WHEN l.optin = 'double' THEN sl.status = 'confirmed'
-                ELSE sl.status != 'unsubscribed'
-            END
-        )
-    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
-    WHERE NOT k.evergreen AND s.id <= c.last_subscriber_id
-        AND (c.attribs->>'lang' IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = c.attribs->>'lang')
-        AND (s.email ~* '@(gmail|googlemail)\.com$' OR s.email ~* '@(yahoo|aol|ymail|rocketmail)\.')
+    JOIN lmem m ON (m.list_id = cl.list_id)
+    WHERE NOT k.evergreen AND m.subscriber_id <= c.last_subscriber_id
+        AND (CASE WHEN c.type = 'optin' THEN m.sl_status = 'unconfirmed' AND m.optin = 'double'
+                  WHEN m.optin = 'double' THEN m.sl_status = 'confirmed'
+                  ELSE m.sl_status != 'unsubscribed' END)
+        AND (c.attribs->>'lang' IS NULL OR m.lang2 = c.attribs->>'lang')
 ),
 gcnt AS (
     SELECT r.campaign_id,
