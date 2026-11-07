@@ -311,7 +311,7 @@ export default Vue.extend({
     },
 
     cell(row, field) {
-      return cellText(row, field, this.state.mode, (n) => this.$utils.formatNumber(n));
+      return cellText(row, field, this.state.mode, (n) => this.$utils.formatNumber(n), undefined, (k) => this.$t(k));
     },
 
     isConversion(field) {

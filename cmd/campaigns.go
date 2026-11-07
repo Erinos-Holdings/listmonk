@@ -356,6 +356,11 @@ func (a *App) CreateCampaign(c echo.Context) error {
 		return err
 	}
 
+	// Fork (smart sending, SMART-SENDING-SPEC §6a item 10) -- the create response carries the same
+	// effective fields as every other served campaign (audience, audience_skipped, smart_sending);
+	// without this the zero value read as a false "off" on that one response.
+	a.core.FillAudience(&out)
+
 	return c.JSON(http.StatusOK, okResp{out})
 }
 

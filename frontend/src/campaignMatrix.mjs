@@ -42,7 +42,9 @@ export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'se
 
 // Integrations SMART-SENDING-SPEC D5 -- the Skipped cell's text on a broadcast that switched Smart
 // Sending off (its count is 0 by construction and still sorts as one).
-export const SMART_OFF = 'off';
+// The Skipped cell's text on a broadcast that switched Smart Sending off: an i18n key, resolved by
+// cellText's `t` (the page passes $t; tests a stub).
+export const SMART_OFF_KEY = 'analytics.matrix.off';
 
 // The Matrix's second request (gmail_gap) states; PENDING_MARK is a gap cell while it is in flight.
 export const GAP_PENDING = 'pending';
@@ -485,12 +487,12 @@ export function gapPending(row, field = 'gmail_gap') {
 // scopedCell for the '—'-with-no-doc rule; this is the same rule over the shaped (normalized) value.
 // A broadcast's gap cell reads PENDING_MARK while the second request is in flight (it sorts as
 // missing: its value is null until the counts arrive).
-export function cellText(row, field, mode, fmt = (n) => String(n), usd = (n) => `$${n}`) {
+export function cellText(row, field, mode, fmt = (n) => String(n), usd = (n) => `$${n}`, t = (k) => k) {
   if (gapPending(row, field)) {
     return PENDING_MARK;
   }
   if (field === 'skipped' && row && row.smartOff && !row.totals) {
-    return SMART_OFF;
+    return t(SMART_OFF_KEY);
   }
   const v = displayValue(row, field, mode);
   if (v === null) {

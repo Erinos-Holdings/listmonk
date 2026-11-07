@@ -585,7 +585,9 @@ test('SMART-SENDING I8: Skipped shows the count, "off" for a bypass, — for a j
   const fmt = (n) => String(n);
   assert.equal(cellText(ruled, 'skipped', 'pct', fmt), '12', 'a count in %/$ mode, never a rate');
   assert.equal(cellText(ruled, 'skipped', 'num', fmt), '12');
-  assert.equal(cellText(launch, 'skipped', 'pct', fmt), 'off');
+  // The off text is the i18n key analytics.matrix.off, resolved by the page's $t (a stub here).
+  assert.equal(cellText(launch, 'skipped', 'pct', fmt), 'analytics.matrix.off');
+  assert.equal(cellText(launch, 'skipped', 'pct', fmt, undefined, (k) => (k === 'analytics.matrix.off' ? 'off' : k)), 'off');
   assert.equal(cellText(journey, 'skipped', 'pct', fmt), MISSING);
   assert.equal(cellText(quiet, 'skipped', 'num', fmt), '0');
   // A journey's smart_off is never set, even if the server sent one.

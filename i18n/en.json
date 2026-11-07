@@ -65,6 +65,7 @@
     "analytics.matrix.conversionsComputed": "Conversions computed {time}",
     "analytics.matrix.status": "Status",
     "analytics.matrix.skipped": "Skipped",
+    "analytics.matrix.off": "off",
     "analytics.matrix.skippedHelp": "Recipients Smart Sending skipped at send time (a journey email from the brand in the last 24 hours); off = Smart Sending was switched off on the campaign; — for a journey.",
     "analytics.matrix.gmailGap": "Gmail gap",
     "analytics.matrix.gmail": "Gmail",
