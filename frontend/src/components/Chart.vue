@@ -269,10 +269,22 @@ export default {
   },
 
   methods: {
-    // The type's defaults with the host's `options` over them (`plugins` merged one level deeper).
+    // The type's defaults with the host's `options` over them (`plugins` merged one level deeper,
+    // and `plugins.tooltip` with its `callbacks` one more, so a host's tooltip callbacks keep the
+    // default tooltip styling -- integrations TODAY-SO-FAR-SPEC stage-4 F1).
     mergedOptions() {
       const extra = this.$props.options || {};
-      return { ...this.def.options, ...extra, plugins: { ...this.def.options.plugins, ...(extra.plugins || {}) } };
+      const defPlugins = this.def.options.plugins || {};
+      const extraPlugins = extra.plugins || {};
+      const plugins = { ...defPlugins, ...extraPlugins };
+      if (defPlugins.tooltip && extraPlugins.tooltip) {
+        plugins.tooltip = {
+          ...defPlugins.tooltip,
+          ...extraPlugins.tooltip,
+          callbacks: { ...(defPlugins.tooltip.callbacks || {}), ...(extraPlugins.tooltip.callbacks || {}) },
+        };
+      }
+      return { ...this.def.options, ...extra, plugins };
     },
   },
 
