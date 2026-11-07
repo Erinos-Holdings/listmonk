@@ -288,7 +288,7 @@
       <div class="gmail-gap mb-4" data-cy="gmail-gap">
         <h4>
           {{ $t('analytics.gmailGap') }}
-          <span :class="gapBlock.cls || null" :title="$t(gapBlock.tip.key, gapTipParams(gapBlock.tip))"
+          <span :class="gapBlock.cls || null" :title="$t(gapBlock.tip.key, gapBlock.tip.params)"
             data-cy="gmail-gap-ratio">{{ gmailGap.loading ? '' : gapBlock.text }}</span>
           <span v-if="!gmailGap.loading && gapBlock.counts" class="has-text-grey-light is-size-6" data-cy="gmail-gap-opens">
             {{ $t('analytics.gmailGapOpens', gapOpensParams) }}
@@ -879,15 +879,6 @@ export default Vue.extend({
       });
     },
 
-    // The gap hover's params, the floor formatted.
-    gapTipParams(tip) {
-      const p = { ...tip.params };
-      if (p.floor !== undefined && p.floor !== '') {
-        p.floor = this.$utils.formatNumber(p.floor);
-      }
-      return p;
-    },
-
     // Fork (campaign conversions, D7/D11) -- fetched alongside the tables, same campaigns and range.
     getConversions(camps) {
       this.conversions.loading = true;
@@ -1097,7 +1088,9 @@ export default Vue.extend({
 
     // Fork (integrations GMAIL-GAP-SPEC D5) -- the selection's pooled Gmail gap (gmailGap.mjs).
     gapBlock() {
-      return gapSummary(this.gmailGap.rows, this.gmailGap.thresholds, { failed: this.gmailGap.failed });
+      return gapSummary(this.gmailGap.rows, this.gmailGap.thresholds, {
+        failed: this.gmailGap.failed, fmt: (n) => this.$utils.formatNumber(n),
+      });
     },
 
     // The reading line: the stored red line interpolated, or the no-number wording without one.

@@ -48,7 +48,12 @@ test('gapOf: every undefined case has its reason', () => {
   [REASONS.journey, REASONS.floor, REASONS.noYahooOpens, REASONS.noGmail, REASONS.noYahoo].forEach((r) => {
     assert.ok(gapReasonTip(r, T).key.startsWith('analytics.matrix.gap'), r);
   });
-  assert.deepEqual(gapReasonTip(REASONS.floor, T), { key: 'analytics.matrix.gapFloor', params: { floor: 150 } });
+  assert.deepEqual(gapReasonTip(REASONS.floor, T), { key: 'analytics.matrix.gapFloor', params: { floor: '150' } });
+  // The caller's formatter formats {floor}, once, here (no second patch at the call sites).
+  assert.deepEqual(gapReasonTip(REASONS.floor, { ...T, minControl: 1500 }, (n) => `#${n}`).params, { floor: '#1500' });
+  assert.equal(gapReasonTip(REASONS.floor, null, (n) => `#${n}`).params.floor, '');
+  const s = gapSummary([row(1000, 100, 149, 20)], T, { fmt: (n) => `#${n}` });
+  assert.deepEqual(s.tip, { key: 'analytics.matrix.gapFloor', params: { floor: '#150' } });
   assert.equal(gapReasonTip(null, T).key, 'analytics.matrix.gapHelp');
 });
 

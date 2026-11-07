@@ -102,13 +102,14 @@ export function gapClass(gap, thresholds) {
 }
 
 // gapReasonTip is the i18n { key, params } naming why the gap is '—', or the rule when it is shown.
-export function gapReasonTip(reason, thresholds) {
+// fmt formats the {floor} number (the caller passes its number formatter; default String).
+export function gapReasonTip(reason, thresholds, fmt = String) {
   const t = parseGapThresholds(thresholds);
   switch (reason) {
     case REASONS.journey:
       return { key: 'analytics.matrix.gapJourney', params: {} };
     case REASONS.floor:
-      return { key: 'analytics.matrix.gapFloor', params: { floor: t ? t.minControl : '' } };
+      return { key: 'analytics.matrix.gapFloor', params: { floor: t ? fmt(t.minControl) : '' } };
     case REASONS.noYahoo:
       return { key: 'analytics.matrix.gapNoYahoo', params: {} };
     case REASONS.noYahooOpens:
@@ -133,8 +134,8 @@ export function gapHint(thresholds) {
 // gapSummary is the Campaign pane's block (D5): the selection's pooled counts, rates and gap, the
 // gap's text and class and its hover. An all-journey selection is '—' with the journey reason. A
 // read that failed (`failed`) or came back with no rows is '—' with the NEUTRAL unavailable hover,
-// never the journey wording (reason 'unavailable').
-export function gapSummary(rows, thresholds, { failed = false } = {}) {
+// never the journey wording (reason 'unavailable'). fmt formats the hover's {floor}.
+export function gapSummary(rows, thresholds, { failed = false, fmt = String } = {}) {
   if (failed || !Array.isArray(rows) || rows.length === 0) {
     return {
       counts: null,
@@ -154,6 +155,6 @@ export function gapSummary(rows, thresholds, { failed = false } = {}) {
     ...g,
     text: gapText(g.gap),
     cls: gapClass(g.gap, thresholds),
-    tip: gapReasonTip(g.reason, thresholds),
+    tip: gapReasonTip(g.reason, thresholds, fmt),
   };
 }

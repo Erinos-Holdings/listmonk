@@ -543,9 +543,20 @@ SELECT COALESCE(clicks.n, 0) AS "count", COALESCE(clicks.kind, aud.kind) AS kind
 -- the two identical. A journey's four counts are NULL. gap_thresholds = campaignThresholds.gmailGap
 -- verbatim from the newest ses system_health document THAT CARRIES it (a newer document without
 -- the key never nulls it), NULL when no document does. The UI pools
--- the rows and computes the rates and the gap.
+-- the rows and computes the rates and the gap. The openers come from ONE pre-aggregated pass over
+-- campaign_views (gviews, one row per campaign and subscriber with a proxy view in the range),
+-- joined once to the recipients -- a person counts once whatever the tracking mode.
 WITH camps AS (
     SELECT id, evergreen FROM campaigns WHERE id = ANY($1::INT[])
+),
+gviews AS (
+    SELECT cv.campaign_id, cv.subscriber_id,
+        BOOL_OR(cv.client = 'gmail-proxy') AS g, BOOL_OR(cv.client = 'yahoo') AS y
+    FROM campaign_views cv
+    JOIN camps k ON (k.id = cv.campaign_id)
+    WHERE NOT k.evergreen AND cv.subscriber_id IS NOT NULL AND cv.client IN ('gmail-proxy', 'yahoo')
+        AND cv.created_at >= $2 AND cv.created_at <= $3
+    GROUP BY 1, 2
 ),
 grecip AS (
     SELECT DISTINCT k.id AS campaign_id, s.id AS subscriber_id,
@@ -571,16 +582,11 @@ grecip AS (
 gcnt AS (
     SELECT r.campaign_id,
         COUNT(*) FILTER (WHERE r.is_gmail) AS gmail,
-        COUNT(*) FILTER (WHERE r.is_gmail AND EXISTS (
-            SELECT 1 FROM campaign_views cv WHERE cv.campaign_id = r.campaign_id AND cv.subscriber_id = r.subscriber_id
-                AND cv.client = 'gmail-proxy' AND cv.created_at >= $2 AND cv.created_at <= $3
-        )) AS gmail_proxy,
+        COUNT(*) FILTER (WHERE r.is_gmail AND v.g) AS gmail_proxy,
         COUNT(*) FILTER (WHERE r.is_yahoo) AS yahoo,
-        COUNT(*) FILTER (WHERE r.is_yahoo AND EXISTS (
-            SELECT 1 FROM campaign_views cv WHERE cv.campaign_id = r.campaign_id AND cv.subscriber_id = r.subscriber_id
-                AND cv.client = 'yahoo' AND cv.created_at >= $2 AND cv.created_at <= $3
-        )) AS yahoo_proxy
+        COUNT(*) FILTER (WHERE r.is_yahoo AND v.y) AS yahoo_proxy
     FROM grecip r
+    LEFT JOIN gviews v ON (v.campaign_id = r.campaign_id AND v.subscriber_id = r.subscriber_id)
     GROUP BY r.campaign_id
 )
 SELECT JSON_BUILD_OBJECT(
@@ -818,7 +824,8 @@ SELECT JSON_BUILD_OBJECT(
 --     conversions doc does not cover the campaign (get-campaign-conversions' coverage rule).
 --   gmail / gmail_proxy / yahoo / yahoo_proxy (integrations GMAIL-GAP-SPEC D1/D2) = a broadcast's
 --     recipients at Gmail and at Yahoo/AOL and, of those, the DISTINCT recipients with a view of
---     client gmail-proxy (resp. yahoo) in [lo, t1), whatever the tracking mode. Recipients are the
+--     client gmail-proxy (resp. yahoo) in [lo, t1), whatever the tracking mode -- the openers from ONE
+--     pre-aggregated pass over campaign_views (gviews), joined once to the recipients. Recipients are the
 --     send predicate of next-campaign-subscribers (the lists' opt-in rule, not blocklisted, the
 --     campaign language by the send path's expression) bounded by subscribers.id at or below
 --     campaigns.last_subscriber_id -- the SAME text as get-campaign-gmail-gap (keep the two
@@ -957,6 +964,15 @@ bnc AS (
     WHERE b.created_at >= k.lo AND b.created_at < (SELECT t1 FROM bounds)
     GROUP BY b.campaign_id
 ),
+gviews AS (
+    SELECT cv.campaign_id, cv.subscriber_id,
+        BOOL_OR(cv.client = 'gmail-proxy') AS g, BOOL_OR(cv.client = 'yahoo') AS y
+    FROM campaign_views cv
+    JOIN camps k ON (k.id = cv.campaign_id)
+    WHERE NOT k.evergreen AND cv.subscriber_id IS NOT NULL AND cv.client IN ('gmail-proxy', 'yahoo')
+        AND cv.created_at >= k.lo AND cv.created_at < (SELECT t1 FROM bounds)
+    GROUP BY 1, 2
+),
 grecip AS (
     SELECT DISTINCT k.id AS campaign_id, s.id AS subscriber_id,
         s.email ~* '@(gmail|googlemail)\.com$' AS is_gmail,
@@ -981,17 +997,11 @@ grecip AS (
 gcnt AS (
     SELECT r.campaign_id,
         COUNT(*) FILTER (WHERE r.is_gmail) AS gmail,
-        COUNT(*) FILTER (WHERE r.is_gmail AND EXISTS (
-            SELECT 1 FROM campaign_views cv WHERE cv.campaign_id = r.campaign_id AND cv.subscriber_id = r.subscriber_id
-                AND cv.client = 'gmail-proxy' AND cv.created_at >= k.lo AND cv.created_at < (SELECT t1 FROM bounds)
-        )) AS gmail_proxy,
+        COUNT(*) FILTER (WHERE r.is_gmail AND v.g) AS gmail_proxy,
         COUNT(*) FILTER (WHERE r.is_yahoo) AS yahoo,
-        COUNT(*) FILTER (WHERE r.is_yahoo AND EXISTS (
-            SELECT 1 FROM campaign_views cv WHERE cv.campaign_id = r.campaign_id AND cv.subscriber_id = r.subscriber_id
-                AND cv.client = 'yahoo' AND cv.created_at >= k.lo AND cv.created_at < (SELECT t1 FROM bounds)
-        )) AS yahoo_proxy
+        COUNT(*) FILTER (WHERE r.is_yahoo AND v.y) AS yahoo_proxy
     FROM grecip r
-    JOIN camps k ON (k.id = r.campaign_id)
+    LEFT JOIN gviews v ON (v.campaign_id = r.campaign_id AND v.subscriber_id = r.subscriber_id)
     GROUP BY r.campaign_id
 ),
 gapdoc AS (

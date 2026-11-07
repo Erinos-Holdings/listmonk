@@ -512,11 +512,7 @@ export function gapTip(row, field, fmt = (n) => String(n)) {
   if (field === 'yahoo_open') {
     return { key: 'analytics.matrix.yahooTip', params: { n: fmt(c.yahoo_proxy), of: fmt(c.yahoo) } };
   }
-  const t = gapReasonTip(gapOf(c, row.gapThresholds).reason, row.gapThresholds);
-  if (t.params.floor !== undefined && t.params.floor !== '') {
-    t.params = { ...t.params, floor: fmt(t.params.floor) };
-  }
-  return t;
+  return gapReasonTip(gapOf(c, row.gapThresholds).reason, row.gapThresholds, fmt);
 }
 
 // The Date cell: a broadcast's send date; a journey '—' with "Journey — last sent <date>".
