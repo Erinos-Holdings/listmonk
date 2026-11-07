@@ -102,12 +102,26 @@ func TestLangBroadcastPredicate(t *testing.T) {
 		camp := h.campaign("bc-"+c.lang, false, 0, L)
 		h.setCampLang(camp, c.lang)
 
-		var n int
-		if err := audience.Get(&n, camp); err != nil {
+		// The statement returns total and no_lang (the audience box's EN+ split, 0ecfa27e).
+		var aud struct {
+			Total  int `db:"total"`
+			NoLang int `db:"no_lang"`
+		}
+		if err := audience.Get(&aud, camp); err != nil {
 			t.Fatalf("audience %q: %v", c.lang, err)
 		}
+		n := aud.Total
 		if n != len(c.ids) {
 			t.Fatalf("audience %q: got %d want %d", c.lang, n, len(c.ids))
+		}
+		wantNoLang := 0
+		for _, id := range c.ids {
+			if id == none {
+				wantNoLang++
+			}
+		}
+		if aud.NoLang != wantNoLang {
+			t.Fatalf("audience %q: no_lang %d want %d", c.lang, aud.NoLang, wantNoLang)
 		}
 
 		h.setStatus(camp, "running")

@@ -297,8 +297,9 @@ func TestPresetImportIdempotent(t *testing.T) {
 	if name, a, _ := h.sub("lyss@example.test"); name != "Alyssa Freed" || !strings.Contains(a, `"lang": "fr"`) || !strings.Contains(a, `"shop_links"`) {
 		t.Errorf("fill on existing: %q %s", name, a)
 	}
-	if name, _, _ := h.sub("placeholder@example.test"); name != "Placeholder" {
-		t.Errorf("empty name -> placeholder: %q", name)
+	// An empty name stays empty -- never derived from the address (0f557224, SUBSCRIBER-NAME-SPEC).
+	if name, _, _ := h.sub("placeholder@example.test"); name != "" {
+		t.Errorf("empty name must stay empty: %q", name)
 	}
 	// I16 -- the skipped row was never created or linked.
 	var n int
