@@ -1025,6 +1025,18 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{out})
 	}
 
+	// Fork (integrations GMAIL-GAP-SPEC D5) -- per campaign, the Gmail and Yahoo/AOL recipients and
+	// proxy openers (views in [from, to]) with the stored gap thresholds, the shop_links pattern:
+	// after the permission loop and date validation, inheriting both. Counts only, no subscriber data.
+	if typ == "gmail_gap" {
+		out, err := a.core.GetCampaignAnalyticsGmailGap(ids, from, to)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7) -- per campaign, the
 	// stored Tracked and Matched orders and sales in [from, to] (NULL = not covered), the countries
 	// pattern: after the permission loop and date validation, inheriting both. Aggregates only, no

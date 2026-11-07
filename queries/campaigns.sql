@@ -534,6 +534,71 @@ SELECT COALESCE(clicks.n, 0) AS "count", COALESCE(clicks.kind, aud.kind) AS kind
     CROSS JOIN snaps
     ORDER BY "count" DESC, kind;
 
+-- name: get-campaign-gmail-gap
+-- Fork (integrations GMAIL-GAP-SPEC D5) -- the Campaign pane's Gmail gap block. Per selected
+-- campaign $1, its broadcast recipients at Gmail and at Yahoo/AOL and, of those, the DISTINCT
+-- recipients with a view of client gmail-proxy (resp. yahoo) created in [$2, $3], whatever the
+-- tracking mode. The recipients are NOT date-bounded. The recipient CTE is get-campaign-matrix's
+-- grecip text (the send predicate of next-campaign-subscribers bounded by last_subscriber_id); keep
+-- the two identical. A journey's four counts are NULL. gap_thresholds = campaignThresholds.gmailGap
+-- verbatim from the newest ses system_health document THAT CARRIES it (a newer document without
+-- the key never nulls it), NULL when no document does. The UI pools
+-- the rows and computes the rates and the gap.
+WITH camps AS (
+    SELECT id, evergreen FROM campaigns WHERE id = ANY($1::INT[])
+),
+grecip AS (
+    SELECT DISTINCT k.id AS campaign_id, s.id AS subscriber_id,
+        s.email ~* '@(gmail|googlemail)\.com$' AS is_gmail,
+        s.email ~* '@(yahoo|aol|ymail|rocketmail)\.' AS is_yahoo
+    FROM camps k
+    JOIN campaigns c ON (c.id = k.id)
+    JOIN campaign_lists cl ON (cl.campaign_id = k.id)
+    JOIN lists l ON (l.id = cl.list_id)
+    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
+        AND (
+            CASE
+                WHEN c.type = 'optin' THEN sl.status = 'unconfirmed' AND l.optin = 'double'
+                WHEN l.optin = 'double' THEN sl.status = 'confirmed'
+                ELSE sl.status != 'unsubscribed'
+            END
+        )
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+    WHERE NOT k.evergreen AND s.id <= c.last_subscriber_id
+        AND (c.attribs->>'lang' IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = c.attribs->>'lang')
+        AND (s.email ~* '@(gmail|googlemail)\.com$' OR s.email ~* '@(yahoo|aol|ymail|rocketmail)\.')
+),
+gcnt AS (
+    SELECT r.campaign_id,
+        COUNT(*) FILTER (WHERE r.is_gmail) AS gmail,
+        COUNT(*) FILTER (WHERE r.is_gmail AND EXISTS (
+            SELECT 1 FROM campaign_views cv WHERE cv.campaign_id = r.campaign_id AND cv.subscriber_id = r.subscriber_id
+                AND cv.client = 'gmail-proxy' AND cv.created_at >= $2 AND cv.created_at <= $3
+        )) AS gmail_proxy,
+        COUNT(*) FILTER (WHERE r.is_yahoo) AS yahoo,
+        COUNT(*) FILTER (WHERE r.is_yahoo AND EXISTS (
+            SELECT 1 FROM campaign_views cv WHERE cv.campaign_id = r.campaign_id AND cv.subscriber_id = r.subscriber_id
+                AND cv.client = 'yahoo' AND cv.created_at >= $2 AND cv.created_at <= $3
+        )) AS yahoo_proxy
+    FROM grecip r
+    GROUP BY r.campaign_id
+)
+SELECT JSON_BUILD_OBJECT(
+    'rows', COALESCE((
+        SELECT JSON_AGG(JSON_BUILD_OBJECT(
+            'campaign_id', k.id,
+            'gmail', CASE WHEN NOT k.evergreen THEN COALESCE(gc.gmail, 0) END,
+            'gmail_proxy', CASE WHEN NOT k.evergreen THEN COALESCE(gc.gmail_proxy, 0) END,
+            'yahoo', CASE WHEN NOT k.evergreen THEN COALESCE(gc.yahoo, 0) END,
+            'yahoo_proxy', CASE WHEN NOT k.evergreen THEN COALESCE(gc.yahoo_proxy, 0) END
+        ) ORDER BY k.id)
+        FROM camps k
+        LEFT JOIN gcnt gc ON (gc.campaign_id = k.id)
+    ), '[]'::JSON),
+    'gap_thresholds', (SELECT doc->'campaignThresholds'->'gmailGap' FROM system_health
+        WHERE kind = 'ses' AND doc->'campaignThresholds' ? 'gmailGap' ORDER BY day DESC LIMIT 1)
+) AS data;
+
 -- name: snapshot-campaign-shop-link-audience
 -- Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D1/D2/D4) -- the audience snapshot taken
 -- at claim. Campaign $1's audience under get-campaign-lang-audience's predicate (its lists' opt-in
@@ -751,6 +816,17 @@ SELECT JSON_BUILD_OBJECT(
 --   hard_bounces / soft_bounces / complaints = raw bounces rows of that type in [lo, t1).
 --   tracked / matched = campaign_conversions in [lo, t1) as orders and sales, NULL when the latest
 --     conversions doc does not cover the campaign (get-campaign-conversions' coverage rule).
+--   gmail / gmail_proxy / yahoo / yahoo_proxy (integrations GMAIL-GAP-SPEC D1/D2) = a broadcast's
+--     recipients at Gmail and at Yahoo/AOL and, of those, the DISTINCT recipients with a view of
+--     client gmail-proxy (resp. yahoo) in [lo, t1), whatever the tracking mode. Recipients are the
+--     send predicate of next-campaign-subscribers (the lists' opt-in rule, not blocklisted, the
+--     campaign language by the send path's expression) bounded by subscribers.id at or below
+--     campaigns.last_subscriber_id -- the SAME text as get-campaign-gmail-gap (keep the two
+--     identical; queries_parse_test pins the provider regexes and the language expression in both).
+--     NULL in all four for a journey (the checkpoint does not bound one). The UI computes the rates
+--     and the gap; gap_thresholds (top level) = campaignThresholds.gmailGap verbatim from the newest
+--     ses system_health document THAT CARRIES it (a newer document without the key never nulls it),
+--     NULL when no document does.
 --   brand = the ONE brand of the campaign's ACTIVE lists (list_brand_tag, unattributed excluded --
 --     the Brand Matrix's lst rule); NULL with zero or several.
 --   gp_rate / gp_thresholds (broadcasts with a brand, $6 only) = the GP point of the broadcast's
@@ -881,6 +957,47 @@ bnc AS (
     WHERE b.created_at >= k.lo AND b.created_at < (SELECT t1 FROM bounds)
     GROUP BY b.campaign_id
 ),
+grecip AS (
+    SELECT DISTINCT k.id AS campaign_id, s.id AS subscriber_id,
+        s.email ~* '@(gmail|googlemail)\.com$' AS is_gmail,
+        s.email ~* '@(yahoo|aol|ymail|rocketmail)\.' AS is_yahoo
+    FROM camps k
+    JOIN campaigns c ON (c.id = k.id)
+    JOIN campaign_lists cl ON (cl.campaign_id = k.id)
+    JOIN lists l ON (l.id = cl.list_id)
+    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
+        AND (
+            CASE
+                WHEN c.type = 'optin' THEN sl.status = 'unconfirmed' AND l.optin = 'double'
+                WHEN l.optin = 'double' THEN sl.status = 'confirmed'
+                ELSE sl.status != 'unsubscribed'
+            END
+        )
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+    WHERE NOT k.evergreen AND s.id <= c.last_subscriber_id
+        AND (c.attribs->>'lang' IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = c.attribs->>'lang')
+        AND (s.email ~* '@(gmail|googlemail)\.com$' OR s.email ~* '@(yahoo|aol|ymail|rocketmail)\.')
+),
+gcnt AS (
+    SELECT r.campaign_id,
+        COUNT(*) FILTER (WHERE r.is_gmail) AS gmail,
+        COUNT(*) FILTER (WHERE r.is_gmail AND EXISTS (
+            SELECT 1 FROM campaign_views cv WHERE cv.campaign_id = r.campaign_id AND cv.subscriber_id = r.subscriber_id
+                AND cv.client = 'gmail-proxy' AND cv.created_at >= k.lo AND cv.created_at < (SELECT t1 FROM bounds)
+        )) AS gmail_proxy,
+        COUNT(*) FILTER (WHERE r.is_yahoo) AS yahoo,
+        COUNT(*) FILTER (WHERE r.is_yahoo AND EXISTS (
+            SELECT 1 FROM campaign_views cv WHERE cv.campaign_id = r.campaign_id AND cv.subscriber_id = r.subscriber_id
+                AND cv.client = 'yahoo' AND cv.created_at >= k.lo AND cv.created_at < (SELECT t1 FROM bounds)
+        )) AS yahoo_proxy
+    FROM grecip r
+    JOIN camps k ON (k.id = r.campaign_id)
+    GROUP BY r.campaign_id
+),
+gapdoc AS (
+    SELECT doc->'campaignThresholds'->'gmailGap' AS t FROM system_health
+        WHERE kind = 'ses' AND doc->'campaignThresholds' ? 'gmailGap' ORDER BY day DESC LIMIT 1
+),
 convdoc AS (
     SELECT doc FROM system_health WHERE kind = 'conversions' ORDER BY day DESC LIMIT 1
 ),
@@ -956,7 +1073,11 @@ SELECT JSON_BUILD_OBJECT(
             'matched', CASE WHEN EXISTS (SELECT 1 FROM cov WHERE cov.matched @> TO_JSONB(k.id))
                 THEN JSON_BUILD_OBJECT('orders', COALESCE(m.orders, 0), 'sales_usd', COALESCE(m.sales, 0)) END,
             'gp_rate', g.rate,
-            'gp_thresholds', CASE WHEN g.rate IS NOT NULL THEN g.thresholds END
+            'gp_thresholds', CASE WHEN g.rate IS NOT NULL THEN g.thresholds END,
+            'gmail', CASE WHEN NOT k.evergreen THEN COALESCE(gc.gmail, 0) END,
+            'gmail_proxy', CASE WHEN NOT k.evergreen THEN COALESCE(gc.gmail_proxy, 0) END,
+            'yahoo', CASE WHEN NOT k.evergreen THEN COALESCE(gc.yahoo, 0) END,
+            'yahoo_proxy', CASE WHEN NOT k.evergreen THEN COALESCE(gc.yahoo_proxy, 0) END
         ) ORDER BY k.id)
         FROM camps k
         LEFT JOIN views v ON (v.campaign_id = k.id)
@@ -967,7 +1088,9 @@ SELECT JSON_BUILD_OBJECT(
         LEFT JOIN conv m ON (m.campaign_id = k.id AND m.measure = 'matched')
         LEFT JOIN cbrand cb ON (cb.campaign_id = k.id)
         LEFT JOIN gp g ON (g.campaign_id = k.id)
-    ), '[]'::JSON)
+        LEFT JOIN gcnt gc ON (gc.campaign_id = k.id)
+    ), '[]'::JSON),
+    'gap_thresholds', (SELECT t FROM gapdoc)
 ) AS data;
 
 -- name: get-running-campaign

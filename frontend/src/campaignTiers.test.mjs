@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  TIER_AMBER, TIER_RED, parseCampaignThresholds, thresholdsFromDocs, tierClass, tierOf,
+  TIER_AMBER, TIER_RED, gapTierOf, parseCampaignThresholds, parseGapThresholds, thresholdsFromDocs, tierClass, tierOf,
 } from './campaignTiers.mjs'; // eslint-disable-line import/extensions
 
 const T = { hardBounce: { warn: 0.02, red: 0.05 }, complaint: { warn: 0.001, red: 0.003 } };
@@ -53,6 +53,42 @@ test('a failed or forbidden fetch (no docs) and docs without the field -> null; 
   assert.equal(thresholdsFromDocs([{ kind: 'ses' }, { kind: 'ses', campaignThresholds: 'bad' }]), null);
   const older = { hardBounce: { warn: 0.03, red: 0.06 }, complaint: T.complaint };
   assert.deepEqual(thresholdsFromDocs([{ kind: 'ses' }, { campaignThresholds: T }, { campaignThresholds: older }]), T);
+});
+
+// Fork (integrations GMAIL-GAP-SPEC I3) -- the gap line: optional in the document, inverse direction,
+// compared on the displayed two-decimal value; no line -> no color. FIXTURE values.
+const G = { warn: 0.8, red: 0.4, minControl: 150 };
+
+test('GMAIL-GAP I3: gmailGap is optional -- with it parsed, without it the bounce tiers still work', () => {
+  assert.deepEqual(parseCampaignThresholds({ ...T, gmailGap: G }), { ...T, gmailGap: G });
+  assert.deepEqual(parseCampaignThresholds(T), T);
+  // A malformed gmailGap is dropped, never fatal to the bounce tiers.
+  [{ warn: 0.4, red: 0.8, minControl: 150 }, { warn: 0.8, red: 0.4 }, { warn: '0.8', red: 0.4, minControl: 1 },
+    { warn: 0.8, red: 0, minControl: 1 }, { warn: 0.8, red: 0.4, minControl: -1 }, 'x', null].forEach((bad) => {
+    assert.deepEqual(parseCampaignThresholds({ ...T, gmailGap: bad }), T, JSON.stringify(bad));
+    assert.equal(parseGapThresholds(bad), null, JSON.stringify(bad));
+  });
+  // A gmailGap alone is not a bounce threshold set.
+  assert.equal(parseCampaignThresholds({ gmailGap: G }), null);
+  assert.deepEqual(thresholdsFromDocs([{ campaignThresholds: { ...T, gmailGap: G } }]), { ...T, gmailGap: G });
+});
+
+test('GMAIL-GAP I3: red at or below red, amber at or below warn, none above -- inverse of the bounces', () => {
+  assert.equal(gapTierOf(0.1, G), TIER_RED);
+  assert.equal(gapTierOf(0.4, G), TIER_RED);
+  assert.equal(gapTierOf(0.41, G), TIER_AMBER);
+  assert.equal(gapTierOf(0.8, G), TIER_AMBER);
+  assert.equal(gapTierOf(0.81, G), null);
+  assert.equal(gapTierOf(3.5, G), null);
+  // On the displayed value: 0.4049 reads 0.40 (red), 0.8049 reads 0.80 (amber), 0.8051 reads 0.81.
+  assert.equal(gapTierOf(0.4049, G), TIER_RED);
+  assert.equal(gapTierOf(0.8049, G), TIER_AMBER);
+  assert.equal(gapTierOf(0.8051, G), null);
+  // No (valid) line or no gap -> no color.
+  assert.equal(gapTierOf(0.1, null), null);
+  assert.equal(gapTierOf(0.1, { warn: 0.8 }), null);
+  assert.equal(gapTierOf(null, G), null);
+  assert.equal(gapTierOf(Number.NaN, G), null);
 });
 
 test('tier classes; none below warn keeps today\'s styling', () => {

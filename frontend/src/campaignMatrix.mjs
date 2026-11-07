@@ -12,8 +12,15 @@
 // Proxy / Machine tiers are gone), the Shop Link Attribution group (null = the campaign has no shop
 // link), Tracked / Matched headers, the Brand column hidden under a single-brand selection, the
 // name truncated to 25 characters.
+// Fork (integrations GMAIL-GAP-SPEC D2-D4) -- the GMAIL GAP group (Gmail, Yahoo, Gap) from the
+// row's gmail / gmail_proxy / yahoo / yahoo_proxy counts and the response's top-level
+// gap_thresholds (the stored line); the arithmetic is gmailGap.mjs's, the fork holds no value.
 import { matchesLaunch, normalizeLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { normalizeMeasure } from './conversionCells.mjs'; // eslint-disable-line import/extensions
+import {
+  gapClass as gapTierClass, gapCounts, gapOf, gapReasonTip, gapText, poolCounts,
+} from './gmailGap.mjs'; // eslint-disable-line import/extensions
+import { parseGapThresholds } from './campaignTiers.mjs'; // eslint-disable-line import/extensions
 
 // MATRIX-POLISH D5: the shop-link kinds, in column order (Founder, Self, Creator, Corp). The server
 // buckets the clicks; null in all four = the campaign's body holds no shop link.
@@ -25,7 +32,12 @@ export const COUNT_FIELDS = Object.freeze(['views', 'clicks', ...SHOP_FIELDS, 'h
 // D9: Tracked / Matched -- sales in %/$ mode, orders in # mode; null = not covered.
 export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
 
-export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'sent', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate']);
+// Integrations GMAIL-GAP-SPEC D3: the GMAIL GAP group's columns -- Gmail and Yahoo (the open rate in
+// %/$ mode, the opener count in #), Gap (the ratio, both modes). Computed from the row's four counts
+// (gmailGap.mjs); null counts = a journey.
+export const GAP_FIELDS = Object.freeze(['gmail_open', 'yahoo_open', 'gmail_gap']);
+
+export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'sent', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
 
 // HOURLY-HEALTH-SPEC D2: the Status column's ascending order -- still moving first (running,
 // paused, scheduled, draft, finished, cancelled); an unknown status ranks after every known one.
@@ -215,11 +227,23 @@ export function midColumns(showGp) {
       field: 'gp_rate', label: 'dashboard.matrix.spam', help: 'analytics.matrix.gpHelp', group: 'bm-subs',
     });
   }
+  // GMAIL-GAP-SPEC D3: the right-most group, whatever the GP column.
+  cols.push(
+    {
+      field: 'gmail_open', label: 'analytics.matrix.gmail', help: 'analytics.matrix.gmailHelp', group: 'bm-gap',
+    },
+    {
+      field: 'yahoo_open', label: 'analytics.matrix.yahoo', help: 'analytics.matrix.yahooHelp', group: 'bm-gap',
+    },
+    {
+      field: 'gmail_gap', label: 'analytics.matrix.gap', help: 'analytics.matrix.gapHelp', group: 'bm-gap',
+    },
+  );
   return cols;
 }
 
 // The group header row after the left columns: { label (i18n key or ''), span, cls }. Views and
-// Clicks carry no group (an empty cell over each).
+// Clicks carry no group (an empty cell over each). GMAIL-GAP-SPEC D3: GMAIL GAP last.
 export function groupHeaders(showGp) {
   return [
     { label: '', span: 2, cls: '' },
@@ -227,12 +251,15 @@ export function groupHeaders(showGp) {
     { label: 'analytics.matrix.shopLinks', span: SHOP_FIELDS.length, cls: 'bm-shop bm-group' },
     { label: 'analytics.matrix.bounces', span: 2, cls: 'bm-subs bm-group' },
     { label: 'analytics.matrix.complaints', span: showGp ? 2 : 1, cls: 'bm-subs bm-group' },
+    { label: 'analytics.matrix.gmailGap', span: GAP_FIELDS.length, cls: 'bm-gap bm-group' },
   ];
 }
 
 // shapeRow flattens one API row. A missing Sent is null; an uncovered conversion measure is null;
-// a campaign with no shop link has null shop-link kinds (MATRIX-POLISH D5).
-export function shapeRow(r, brandLabel = (s) => s) {
+// a campaign with no shop link has null shop-link kinds (MATRIX-POLISH D5). GMAIL-GAP-SPEC D2: the
+// four Gmail-gap counts as `gap` (null for a journey) and the response's stored line, validated, as
+// `gapThresholds` (null when absent -- the floor is then unknown and nothing is colored).
+export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null) {
   const brand = str(r && r.brand);
   const out = {
     id: r.id,
@@ -253,6 +280,8 @@ export function shapeRow(r, brandLabel = (s) => s) {
     complaints: num(r.complaints),
     gp_rate: numOrNull(r.gp_rate),
     gpThresholds: isObj(r.gp_thresholds) ? r.gp_thresholds : null,
+    gap: r.evergreen === true ? null : gapCounts(r),
+    gapThresholds: parseGapThresholds(gapThresholds),
     totals: false,
   };
   SHOP_FIELDS.forEach((k) => { out[k] = numOrNull(r[k]); });
@@ -272,9 +301,11 @@ export function filterByLaunch(rows, launch, docs) {
 
 // shapeRows is the API rows flattened, then narrowed by the launch filter. The server has applied
 // the permission scope, the brand selector (list_id) and the kind.
-export function shapeRows(apiRows, { launch = 'all', docs = [], brandLabel } = {}) {
+export function shapeRows(apiRows, {
+  launch = 'all', docs = [], brandLabel, gapThresholds = null,
+} = {}) {
   const rows = (Array.isArray(apiRows) ? apiRows : []).filter((r) => r && typeof r.id === 'number');
-  return filterByLaunch(rows.map((r) => shapeRow(r, brandLabel)), launch, docs);
+  return filterByLaunch(rows.map((r) => shapeRow(r, brandLabel, gapThresholds)), launch, docs);
 }
 
 // D5: the totals row (two or more rows, as the Brand Matrix): per count column the sum over the rows
@@ -298,6 +329,10 @@ export function totalsRow(rows, label = 'Total') {
     lastSent: null,
     gp_rate: null,
     gpThresholds: null,
+    // GMAIL-GAP-SPEC D3: the four counts summed over the rows carrying them (broadcasts), so the
+    // totals show the pooled rates and the pooled gap; the stored line is the response's one.
+    gap: poolCounts(r.map((x) => x.gap)),
+    gapThresholds: r[0].gapThresholds || null,
     totals: true,
     colSent: {},
   };
@@ -336,6 +371,24 @@ export function rateOf(row, field) {
   return v / sent;
 }
 
+// GMAIL-GAP-SPEC D3: a Gmail-gap cell's displayed quantity -- Gmail / Yahoo: the open rate (%/$) or
+// the opener count (#); Gap: the ratio in both modes. null for a journey, a 0 denominator, or an
+// undefined gap.
+export function gapValue(row, field, mode = DEFAULT_STATE.mode) {
+  const c = row && row.gap;
+  if (!c) {
+    return null;
+  }
+  const g = gapOf(c, row.gapThresholds);
+  if (field === 'gmail_open') {
+    return mode === 'num' ? c.gmail_proxy : g.gmailRate;
+  }
+  if (field === 'yahoo_open') {
+    return mode === 'num' ? c.yahoo_proxy : g.yahooRate;
+  }
+  return field === 'gmail_gap' ? g.gap : null;
+}
+
 // displayValue is the DISPLAYED quantity of a cell (what it shows and sorts by): a count column's
 // rate (%/$) or count (#); a conversion's sales (%/$) or orders (#); Sent and GP as they are; null
 // when missing.
@@ -352,6 +405,9 @@ export function displayValue(row, field, mode = DEFAULT_STATE.mode) {
   }
   if (field === 'sent' || field === 'gp_rate') {
     return numOrNull(row[field]);
+  }
+  if (GAP_FIELDS.includes(field)) {
+    return gapValue(row, field, mode);
   }
   return null;
 }
@@ -373,7 +429,10 @@ export function cellText(row, field, mode, fmt = (n) => String(n), usd = (n) => 
   if (v === null) {
     return MISSING;
   }
-  if (field === 'gp_rate' || (COUNT_FIELDS.includes(field) && mode !== 'num')) {
+  if (field === 'gmail_gap') {
+    return gapText(v, MISSING);
+  }
+  if (field === 'gp_rate' || ((COUNT_FIELDS.includes(field) || GAP_FIELDS.includes(field)) && mode !== 'num')) {
     return pct(v);
   }
   if (CONVERSION_FIELDS.includes(field) && mode !== 'num') {
@@ -423,6 +482,41 @@ export function gpTip(row) {
     return { key: 'analytics.matrix.gpNone', params: { brand: row.label || row.brand, date: row.date || '' } };
   }
   return { key: 'analytics.matrix.gpHelp', params: {} };
+}
+
+// GMAIL-GAP-SPEC D4: the Gap cell's class -- the displayed gap against the line STORED on the ses
+// document (red at or below red, amber at or below warn; '' otherwise, and with no line). The
+// totals row's pooled gap is colored by the same rule.
+export function gapClass(row) {
+  if (!row || !row.gap) {
+    return '';
+  }
+  return gapTierClass(gapOf(row.gap, row.gapThresholds).gap, row.gapThresholds);
+}
+
+// GMAIL-GAP-SPEC D3: a Gmail-gap cell's hover as { key, params } (i18n). Gmail / Yahoo name the
+// fraction (fmt formats the counts); Gap names the rule, or why it is '—' (journey, a Yahoo base
+// under the stored floor, no Yahoo recipients or opens, no Gmail recipients). A journey's Gmail and
+// Yahoo cells carry the journey reason.
+export function gapTip(row, field, fmt = (n) => String(n)) {
+  if (!row) {
+    return null;
+  }
+  const c = row.gap;
+  if (!c) {
+    return gapReasonTip('journey', null);
+  }
+  if (field === 'gmail_open') {
+    return { key: 'analytics.matrix.gmailTip', params: { n: fmt(c.gmail_proxy), of: fmt(c.gmail) } };
+  }
+  if (field === 'yahoo_open') {
+    return { key: 'analytics.matrix.yahooTip', params: { n: fmt(c.yahoo_proxy), of: fmt(c.yahoo) } };
+  }
+  const t = gapReasonTip(gapOf(c, row.gapThresholds).reason, row.gapThresholds);
+  if (t.params.floor !== undefined && t.params.floor !== '') {
+    t.params = { ...t.params, floor: fmt(t.params.floor) };
+  }
+  return t;
 }
 
 // The Date cell: a broadcast's send date; a journey '—' with "Journey — last sent <date>".

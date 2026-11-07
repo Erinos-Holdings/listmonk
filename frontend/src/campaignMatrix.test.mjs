@@ -9,8 +9,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  COUNT_FIELDS, DEFAULT_STATE, MISSING, NAME_MAX, SHOP_FIELDS, STATUS_ORDER, STORAGE_KEY, cellText, clickSort,
-  conversionValue, dateCell, displayValue, filterByLaunch, filterByName, gpClass, gpLevel, gpTip, groupHeaders,
+  COUNT_FIELDS, DEFAULT_STATE, MISSING, NAME_MAX, SHOP_FIELDS, SORT_FIELDS, STATUS_ORDER, STORAGE_KEY, cellText, clickSort,
+  conversionValue, dateCell, displayValue, filterByLaunch, filterByName, gapClass, gapTip, gpClass, gpLevel, gpTip, groupHeaders,
   leftColumns, loadState, midColumns, nameCell, normalizeState, saveState, shapeRow, shapeRows, showBrandColumn,
   sortRows, statusCell, statusRank, stripBrand, tableRows, totalsRow,
 } from './campaignMatrix.mjs'; // eslint-disable-line import/extensions
@@ -137,15 +137,18 @@ test('MATRIX-POLISH I8: header texts -- one Views column, Shop Link Attribution 
   assert.deepEqual(cols.map((c) => c.field), [
     'views', 'clicks', 'tracked', 'matched',
     'shop_founder', 'shop_self', 'shop_creator', 'shop_corp', 'hard_bounces', 'soft_bounces', 'complaints',
+    'gmail_open', 'yahoo_open', 'gmail_gap',
   ]);
   assert.deepEqual(cols.map((c) => c.label), [
     'analytics.matrix.views', 'dashboard.matrix.clicks',
     'analytics.conversions.tracked', 'analytics.conversions.matched',
     'analytics.matrix.founder', 'analytics.matrix.self', 'analytics.matrix.creator', 'analytics.matrix.corp',
     'analytics.matrix.hard', 'analytics.matrix.soft', 'analytics.matrix.fbl',
+    'analytics.matrix.gmail', 'analytics.matrix.yahoo', 'analytics.matrix.gap',
   ]);
   cols.filter((c) => c.field.startsWith('shop_')).forEach((c) => assert.equal(c.group, 'bm-shop'));
-  assert.equal(midColumns(true).slice(-1)[0].field, 'gp_rate');
+  // GMAIL-GAP-SPEC D3: GP S% closes the Complaints group; the GMAIL GAP group is right-most.
+  assert.deepEqual(midColumns(true).slice(-4).map((c) => c.field), ['gp_rate', 'gmail_open', 'yahoo_open', 'gmail_gap']);
   // No tier columns, nowhere.
   ['client', 'proxy', 'machine'].forEach((f) => {
     assert.ok(!COUNT_FIELDS.includes(f), f);
@@ -155,6 +158,7 @@ test('MATRIX-POLISH I8: header texts -- one Views column, Shop Link Attribution 
   const g = groupHeaders(false);
   assert.deepEqual(g.map((x) => x.label), [
     '', 'analytics.conversions.title', 'analytics.matrix.shopLinks', 'analytics.matrix.bounces', 'analytics.matrix.complaints',
+    'analytics.matrix.gmailGap',
   ]);
   assert.equal(g.reduce((t, x) => t + x.span, 0), midColumns(false).length);
   assert.equal(groupHeaders(true).reduce((t, x) => t + x.span, 0), midColumns(true).length);
@@ -389,4 +393,103 @@ test('HOURLY-HEALTH I2: status round-trips normalizeState', () => {
   };
   assert.deepEqual(normalizeState(s), s);
   assert.deepEqual(normalizeState(JSON.parse(JSON.stringify(normalizeState(s)))), s);
+});
+
+// --- integrations GMAIL-GAP-SPEC I2 / I3 (fixture threshold values, never the live ones) ---
+
+const GAP_T = { warn: 0.8, red: 0.4, minControl: 150 };
+const gapApi = (id, name, counts, extra = {}) => ({
+  ...api[0], id, name, gmail_proxy: counts[1], gmail: counts[0], yahoo: counts[2], yahoo_proxy: counts[3], ...extra,
+});
+const gapRows = (thresholds = GAP_T) => shapeRows([
+  gapApi(11, 'Normal', [1000, 100, 400, 40]), // gap 1.00
+  gapApi(12, 'Bulked', [2000, 4, 500, 100]), // 0.002 / 0.2 -> 0.01
+  gapApi(13, 'Small Yahoo', [1000, 50, 149, 20]), // under the floor
+  gapApi(14, 'No Yahoo opens', [1000, 50, 400, 0]),
+  gapApi(15, 'Journey', [null, null, null, null], { evergreen: true, last_sent: '2026-10-26' }),
+], { gapThresholds: thresholds });
+
+test('GMAIL-GAP I2: Gmail / Yahoo are rates in %/$ and opener counts in #; Gap is the ratio in both', () => {
+  const [normal, bulked] = gapRows();
+  assert.equal(cellText(normal, 'gmail_open', 'pct'), '10.00%');
+  assert.equal(cellText(normal, 'yahoo_open', 'pct'), '10.00%');
+  assert.equal(cellText(normal, 'gmail_open', 'num', String), '100');
+  assert.equal(cellText(normal, 'yahoo_open', 'num', String), '40');
+  assert.equal(cellText(normal, 'gmail_gap', 'pct'), '1.00');
+  assert.equal(cellText(normal, 'gmail_gap', 'num'), '1.00');
+  assert.equal(cellText(bulked, 'gmail_gap', 'pct'), '0.01');
+  assert.equal(displayValue(bulked, 'gmail_gap', 'num'), 0.002 / 0.2);
+});
+
+test('GMAIL-GAP I2: — exactly for a Yahoo base under the floor, no Yahoo opens, a 0 denominator, a journey', () => {
+  const rows = gapRows();
+  const small = rows.find((r) => r.id === 13);
+  const noOpens = rows.find((r) => r.id === 14);
+  const journey = rows.find((r) => r.id === 15);
+  assert.equal(cellText(small, 'gmail_gap', 'pct'), MISSING);
+  assert.equal(cellText(small, 'yahoo_open', 'pct'), '13.42%', 'the Yahoo rate itself is still shown');
+  assert.equal(gapTip(small, 'gmail_gap').key, 'analytics.matrix.gapFloor');
+  assert.equal(gapTip(small, 'gmail_gap', (n) => `#${n}`).params.floor, '#150');
+  assert.equal(cellText(noOpens, 'gmail_gap', 'pct'), MISSING);
+  assert.equal(gapTip(noOpens, 'gmail_gap').key, 'analytics.matrix.gapNoYahooOpens');
+  ['gmail_open', 'yahoo_open', 'gmail_gap'].forEach((f) => {
+    ['pct', 'num'].forEach((m) => assert.equal(cellText(journey, f, m), MISSING, `${f} ${m}`));
+    assert.equal(gapTip(journey, f).key, 'analytics.matrix.gapJourney');
+  });
+  const zeroGmail = shapeRows([gapApi(16, 'No Gmail', [0, 0, 400, 40])], { gapThresholds: GAP_T })[0];
+  assert.equal(cellText(zeroGmail, 'gmail_open', 'pct'), MISSING);
+  assert.equal(cellText(zeroGmail, 'gmail_open', 'num', String), '0');
+  assert.equal(cellText(zeroGmail, 'gmail_gap', 'pct'), MISSING);
+  // The fraction hovers.
+  const normal = rows[0];
+  assert.deepEqual(gapTip(normal, 'gmail_open', String), { key: 'analytics.matrix.gmailTip', params: { n: '100', of: '1000' } });
+  assert.deepEqual(gapTip(normal, 'yahoo_open', String), { key: 'analytics.matrix.yahooTip', params: { n: '40', of: '400' } });
+  assert.equal(gapTip(normal, 'gmail_gap').key, 'analytics.matrix.gapHelp');
+  // Without a stored line the floor is unknown: the small-Yahoo row's gap is shown, uncolored.
+  const noLine = gapRows(null).find((r) => r.id === 13);
+  assert.equal(cellText(noLine, 'gmail_gap', 'pct'), ((50 / 1000) / (20 / 149)).toFixed(2));
+  assert.equal(gapClass(noLine), '');
+});
+
+test('GMAIL-GAP I2: the totals row pools the four counts over the broadcasts (journeys skipped)', () => {
+  const t = totalsRow(gapRows(), 'Total');
+  assert.deepEqual(t.gap, {
+    gmail: 5000, gmail_proxy: 204, yahoo: 1449, yahoo_proxy: 160,
+  });
+  assert.equal(displayValue(t, 'gmail_open', 'pct'), 204 / 5000);
+  assert.equal(cellText(t, 'yahoo_open', 'num', String), '160');
+  assert.equal(cellText(t, 'gmail_gap', 'pct'), ((204 / 5000) / (160 / 1449)).toFixed(2));
+  assert.equal(gapClass(t), 'has-text-danger', 'the pooled 0.37 is at or below the stored red');
+  // Only journeys -> no counts -> —.
+  const jt = totalsRow(gapRows().filter((r) => r.evergreen).concat(gapRows().filter((r) => r.evergreen)), 'Total');
+  assert.equal(jt.gap, null);
+  assert.equal(cellText(jt, 'gmail_gap', 'pct'), MISSING);
+});
+
+test('GMAIL-GAP I3: the Gap cell is colored from the stored line only, on the displayed value', () => {
+  const rows = gapRows();
+  assert.equal(gapClass(rows[0]), '', '1.00 is above warn');
+  assert.equal(gapClass(rows[1]), 'has-text-danger', '0.01 at or below red');
+  const amber = shapeRows([gapApi(17, 'Amber', [1000, 80, 400, 40])], { gapThresholds: GAP_T })[0];
+  assert.equal(cellText(amber, 'gmail_gap', 'pct'), '0.80');
+  assert.equal(gapClass(amber), 'has-text-warning-dark');
+  assert.equal(gapClass(gapRows(null)[1]), '', 'no stored line -> no color');
+  assert.equal(gapClass(rows.find((r) => r.evergreen)), '');
+});
+
+test('GMAIL-GAP I2: the gap columns sort with a missing value last in both orders', () => {
+  const rows = gapRows();
+  const ids = (s) => sortRows(rows, s, 'pct').map((r) => r.id);
+  assert.deepEqual(ids({ field: 'gmail_gap', order: 'desc' }), [11, 12, 15, 14, 13]);
+  assert.deepEqual(ids({ field: 'gmail_gap', order: 'asc' }), [12, 11, 15, 14, 13]);
+  // # mode sorts by the opener counts (a tie falls back to the name); the journey is last.
+  assert.deepEqual(sortRows(rows, { field: 'gmail_open', order: 'desc' }, 'num').map((r) => r.id), [11, 14, 13, 12, 15]);
+  assert.deepEqual(sortRows(rows, { field: 'yahoo_open', order: 'asc' }, 'num').map((r) => r.id), [14, 13, 11, 12, 15]);
+  assert.ok(SORT_FIELDS.includes('gmail_gap'));
+  assert.deepEqual(clickSort(DEFAULT_STATE.sort, 'gmail_gap'), { field: 'gmail_gap', order: 'desc' });
+  assert.deepEqual(normalizeState({ sort: { field: 'yahoo_open', order: 'asc' } }).sort, { field: 'yahoo_open', order: 'asc' });
+  // The i18n keys the group reads exist.
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['gmailGap', 'gmail', 'yahoo', 'gap', 'gmailHelp', 'yahooHelp', 'gapHelp', 'gmailTip', 'yahooTip', 'gapJourney',
+    'gapFloor', 'gapNoYahoo', 'gapNoYahooOpens', 'gapNoGmail'].forEach((k) => assert.ok(en[`analytics.matrix.${k}`], k));
 });

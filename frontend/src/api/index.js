@@ -639,6 +639,13 @@ export const getCampaignClientCounts = async (params) => http.get(
   { params, loading: models.campaigns },
 );
 
+// Fork (integrations GMAIL-GAP-SPEC D5) -- per campaign the Gmail and Yahoo/AOL recipients and proxy
+// openers ({ rows: [{campaign_id, gmail, gmail_proxy, yahoo, yahoo_proxy}], gap_thresholds }).
+export const getCampaignGmailGap = async (params) => http.get(
+  '/api/campaigns/analytics/gmail_gap',
+  { params, loading: models.campaigns, camelCase: false },
+);
+
 // Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7) -- per campaign, the stored
 // Tracked and Matched orders and sales (null = not covered), with the doc's as_of and floors.
 export const getCampaignConversions = async (params) => http.get(

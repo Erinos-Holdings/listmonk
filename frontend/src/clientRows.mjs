@@ -1,7 +1,7 @@
 // Fork (client stats, integrations CLIENT-STATS-SPEC D9). Row shaping for the "Email clients"
 // tables on Campaign Analytics and the Dashboard: the token's label (the token itself as the
-// fallback), the combined column (views + clicks -- presentation, not a stored fact), the Unknown
-// row and the sort order. Pure: no Vue, no DOM, tested with Node's built-in runner
+// fallback), the Unknown row and the sort order. (The Combined column -- views + clicks -- is
+// retired, integrations GMAIL-GAP-SPEC D6.) Pure: no Vue, no DOM, tested with Node's built-in runner
 // (`npm run test:clients`). The counts come from GET /api/campaigns/analytics/clients and
 // GET /api/dashboard/clients as they are.
 //
@@ -109,7 +109,7 @@ export function clientTier(token) {
 
 export const DEFAULT_SORT = Object.freeze({ field: 'views', order: 'desc' });
 
-export const SORT_FIELDS = Object.freeze(['name', 'views', 'clicks', 'combined']);
+export const SORT_FIELDS = Object.freeze(['name', 'views', 'clicks']);
 
 // clientLabel is the display label of a token, or the token itself when the map has none.
 export function clientLabel(token) {
@@ -126,13 +126,23 @@ function compareDefault(a, b, locale) {
   return (b.views - a.views) || (b.clicks - a.clicks) || compareName(a, b, locale);
 }
 
-// sortClientRows returns a new array sorted by field ('name', 'views', 'clicks' or 'combined') in
-// order ('asc' or 'desc'): Unknown always last; on the default sort "other" next-to-last; ties
-// broken by the default order.
+const TIER_ORDER = TIER_ROWS.map((t) => t.key);
+
+// sortClientRows returns a new array sorted by field ('name', 'views' or 'clicks') in
+// order ('asc' or 'desc'): Unknown always last among the clients; on the default sort "other"
+// next-to-last; ties broken by the default order. Integrations GMAIL-GAP-SPEC D6: trust-tier rows
+// (tier: true, withTierRows) follow EVERY client row in every field and direction, in their fixed
+// TIER_ROWS order.
 export function sortClientRows(rows, field = DEFAULT_SORT.field, order = DEFAULT_SORT.order, locale = 'en') {
   const dir = order === 'asc' ? 1 : -1;
   const isDefault = field === DEFAULT_SORT.field && order === DEFAULT_SORT.order;
   return [...rows].sort((a, b) => {
+    if (!!a.tier !== !!b.tier) {
+      return a.tier ? 1 : -1;
+    }
+    if (a.tier) {
+      return TIER_ORDER.indexOf(a.key) - TIER_ORDER.indexOf(b.key);
+    }
     if (a.unknown !== b.unknown) {
       return a.unknown ? 1 : -1;
     }
@@ -142,7 +152,7 @@ export function sortClientRows(rows, field = DEFAULT_SORT.field, order = DEFAULT
     let c = 0;
     if (field === 'name') {
       c = compareName(a, b, locale) * dir;
-    } else if (field === 'views' || field === 'clicks' || field === 'combined') {
+    } else if (field === 'views' || field === 'clicks') {
       c = (a[field] - b[field]) * dir;
     }
     return c || compareDefault(a, b, locale);
@@ -150,7 +160,7 @@ export function sortClientRows(rows, field = DEFAULT_SORT.field, order = DEFAULT
 }
 
 // shapeClientRows maps API rows {client, views, clicks} to table rows
-// {client, name, views, clicks, combined, unknown, other}, sorted in the default order.
+// {client, name, views, clicks, unknown, other}, sorted in the default order.
 export function shapeClientRows(rows, { locale = 'en', unknownLabel = 'Unknown' } = {}) {
   const out = (Array.isArray(rows) ? rows : []).map((r) => {
     const client = typeof r.client === 'string' ? r.client.trim() : '';
@@ -162,9 +172,6 @@ export function shapeClientRows(rows, { locale = 'en', unknownLabel = 'Unknown' 
       name: unknown ? unknownLabel : clientLabel(client),
       views,
       clicks,
-      // Rendered by Campaign Analytics only: the Dashboard's clients panel no longer shows a
-      // Combined column (integrations BRAND-USAGE-V2-SPEC D8). Kept -- Analytics renders it.
-      combined: views + clicks,
       unknown,
       other: client === OTHER,
     };
@@ -173,8 +180,7 @@ export function shapeClientRows(rows, { locale = 'en', unknownLabel = 'Unknown' 
 }
 
 // clientTierSubtotals groups a shaped table's rows by trust tier (D8), over Views and Clicks only
-// -- NOT Combined: a tier-combined figure is close to the very number D8 refuses, and the
-// Dashboard panel has no Combined column anyway (BRAND-USAGE-V2-SPEC D8).
+// -- never a views-plus-clicks figure: a tier-combined figure is close to the very number D8 refuses.
 //
 // It returns exactly the four keys {client, proxy, machine, untiered} and deliberately NO total:
 // the three tiers are rendered separately and never summed (J9).
@@ -185,7 +191,7 @@ export function clientTierSubtotals(rows) {
     machine: { views: 0, clicks: 0 },
     [UNTIERED]: { views: 0, clicks: 0 },
   };
-  (Array.isArray(rows) ? rows : []).forEach((r) => {
+  (Array.isArray(rows) ? rows : []).filter((r) => r && !r.tier).forEach((r) => {
     const client = typeof r.client === 'string' ? r.client.trim() : '';
     // Unknown (no UA, and every pre-vocabulary row) claims no tier.
     const tier = client === '' ? UNTIERED : clientTier(client);
@@ -196,11 +202,34 @@ export function clientTierSubtotals(rows) {
   return out;
 }
 
-// clientTotals sums a shaped table's columns (the denominators of each row's share).
+// clientTotals sums a shaped table's client columns (the denominators of each row's share); tier
+// rows never enter it.
 export function clientTotals(rows) {
-  return (Array.isArray(rows) ? rows : []).reduce((t, r) => ({
+  return (Array.isArray(rows) ? rows : []).filter((r) => r && !r.tier).reduce((t, r) => ({
     views: t.views + num(r.views),
     clicks: t.clicks + num(r.clicks),
-    combined: t.combined + num(r.combined),
-  }), { views: 0, clicks: 0, combined: 0 });
+  }), { views: 0, clicks: 0 });
+}
+
+// Integrations GMAIL-GAP-SPEC D6 -- withTierRows returns the shaped client rows followed by the four
+// trust-tier subtotal rows as DATA rows of the same table, in TIER_ROWS order:
+// { client: 'tier:<key>', key, name (label(i18n key)), views, clicks, tier: true, unknown: false,
+// other: false }. They carry no share, never enter clientTotals, and sortClientRows keeps them after
+// every client row. No tier rows for an empty table. Never summed into one figure (D8).
+export function withTierRows(rows, label = (k) => k) {
+  const clients = (Array.isArray(rows) ? rows : []).filter((r) => r && !r.tier);
+  if (!clients.length) {
+    return clients;
+  }
+  const sub = clientTierSubtotals(clients);
+  return clients.concat(TIER_ROWS.map(({ key, i18n }) => ({
+    client: `tier:${key}`,
+    key,
+    name: label(i18n),
+    views: sub[key].views,
+    clicks: sub[key].clicks,
+    tier: true,
+    unknown: false,
+    other: false,
+  })));
 }

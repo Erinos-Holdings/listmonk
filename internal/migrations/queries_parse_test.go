@@ -393,3 +393,62 @@ func TestCampaignAnalyticsZoneAgreement(t *testing.T) {
 		}
 	}
 }
+
+// Fork (integrations GMAIL-GAP-SPEC D1/I1) -- the Campaign Matrix and the gmail_gap analytics type
+// count the SAME recipients: their grecip CTEs are byte-identical, carry the spec's provider regexes
+// byte-for-byte, the send path's language expression and the checkpoint bound. The analytics
+// statement is not interpolated (no percent sign, no tag).
+func TestGmailGapRecipientsAgree(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "queries", "campaigns.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	qs, err := goyesql.ParseBytes(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cte := func(name string) string {
+		q, ok := qs[name]
+		if !ok {
+			t.Fatalf("%s missing after parse", name)
+		}
+		i := strings.Index(q.Query, "grecip AS (")
+		j := strings.Index(q.Query, "gcnt AS (")
+		if i < 0 || j < i {
+			t.Fatalf("%s has no grecip CTE before gcnt", name)
+		}
+		return q.Query[i:j]
+	}
+	m, g := cte("get-campaign-matrix"), cte("get-campaign-gmail-gap")
+	if m != g {
+		t.Errorf("grecip differs between get-campaign-matrix and get-campaign-gmail-gap\n matrix  %s\n gap     %s", m, g)
+	}
+	for _, want := range []string{
+		`s.email ~* '@(gmail|googlemail)\.com$'`,
+		`s.email ~* '@(yahoo|aol|ymail|rocketmail)\.'`,
+		`COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = c.attribs->>'lang'`,
+		`s.status != 'blocklisted'`,
+		`s.id <= c.last_subscriber_id`,
+	} {
+		if !strings.Contains(m, want) {
+			t.Errorf("grecip lacks %s", want)
+		}
+	}
+	// The send path's language expression, verbatim, is the one in next-campaign-subscribers.
+	if !strings.Contains(qs["next-campaign-subscribers"].Query, `COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en')`) {
+		t.Error("next-campaign-subscribers no longer carries the language expression grecip copies")
+	}
+	gq := qs["get-campaign-gmail-gap"]
+	if strings.Contains(gq.Query, "%") {
+		t.Error("get-campaign-gmail-gap carries a percent sign")
+	}
+	for k := range gq.Tags {
+		if k != "name" {
+			t.Errorf("get-campaign-gmail-gap carries a stray tag %q (a colon-bearing comment line?)", k)
+		}
+	}
+}

@@ -700,6 +700,20 @@ func (c *Core) GetCampaignAnalyticsShopLinks(campIDs []int, fromDate, toDate str
 	return out, nil
 }
 
+// GetCampaignAnalyticsGmailGap returns, per given campaign, its Gmail and Yahoo/AOL recipients and
+// proxy openers in the date range, plus the stored gap thresholds, as one JSON object (fork,
+// integrations GMAIL-GAP-SPEC D5). The dates are validated by the caller.
+func (c *Core) GetCampaignAnalyticsGmailGap(campIDs []int, fromDate, toDate string) (types.JSONText, error) {
+	var out types.JSONText
+	if err := c.q.GetCampaignGmailGap.Get(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
+		c.log.Printf("error fetching campaign gmail gap: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
 // GetCampaignAnalyticsCountries returns views and clicks per country for the given campaign IDs
 // (fork, location stats). The dates are validated by the caller.
 func (c *Core) GetCampaignAnalyticsCountries(campIDs []int, fromDate, toDate string) ([]models.CampaignAnalyticsCountry, error) {

@@ -7,7 +7,9 @@ import {
   CLIENT_TIERS,
   CLIENT_TOKENS,
   DEFAULT_SORT,
+  SORT_FIELDS,
   TIERS,
+  TIER_ROWS,
   UNTIERED_TOKENS,
   clientLabel,
   clientTier,
@@ -15,6 +17,7 @@ import {
   clientTotals,
   shapeClientRows,
   sortClientRows,
+  withTierRows,
 } from './clientRows.mjs'; // eslint-disable-line import/extensions
 
 const api = [
@@ -44,7 +47,7 @@ test('I6 the vocabulary is the D2 token set, each with a label', () => {
   assert.equal(clientLabel('bare-mozilla'), 'Unnamed client (bare Mozilla)');
 });
 
-test('I6 label fallback is the token; Unknown is labelled and flagged; combined = views + clicks', () => {
+test('I6 label fallback is the token; Unknown is labelled and flagged; no combined (GMAIL-GAP I5)', () => {
   assert.equal(clientLabel('samsung-mail'), 'samsung-mail');
   assert.equal(clientLabel('constructor'), 'constructor');
   const rows = shapeClientRows([
@@ -54,17 +57,61 @@ test('I6 label fallback is the token; Unknown is labelled and flagged; combined 
   ], { unknownLabel: 'Unknown' });
   assert.deepEqual(rows, [
     {
-      client: 'thunderbird', name: 'Thunderbird', views: 5, clicks: 6, combined: 11, unknown: false, other: false,
+      client: 'thunderbird', name: 'Thunderbird', views: 5, clicks: 6, unknown: false, other: false,
     },
     {
-      client: 'future-token', name: 'future-token', views: 0, clicks: 4, combined: 4, unknown: false, other: false,
+      client: 'future-token', name: 'future-token', views: 0, clicks: 4, unknown: false, other: false,
     },
     {
-      client: '', name: 'Unknown', views: 2, clicks: 0, combined: 2, unknown: true, other: false,
+      client: '', name: 'Unknown', views: 2, clicks: 0, unknown: true, other: false,
     },
   ]);
   assert.deepEqual(shapeClientRows(null), []);
-  assert.deepEqual(clientTotals(rows), { views: 7, clicks: 10, combined: 17 });
+  assert.deepEqual(clientTotals(rows), { views: 7, clicks: 10 });
+});
+
+// Fork (integrations GMAIL-GAP-SPEC D6/I5) -- the trust-tier rows are trailing DATA rows of the
+// clients table: appended in the fixed tier order, pinned after every client row in every sort,
+// excluded from the share denominators and from their own subtotals.
+test('GMAIL-GAP D6: withTierRows appends the four tier rows; every sort keeps them last, in tier order', () => {
+  const rows = withTierRows(shapeClientRows(api), (k) => `L:${k}`);
+  const tiers = rows.filter((r) => r.tier);
+  assert.deepEqual(tiers.map((r) => r.key), ['client', 'proxy', 'machine', 'untiered']);
+  assert.deepEqual(tiers.map((r) => r.name), TIER_ROWS.map((t) => `L:${t.i18n}`));
+  // browser-ios 0/7 + outlook-windows 10/5 = client; apple-mail + gmail-proxy + yahoo = proxy;
+  // other + Unknown = untiered.
+  assert.deepEqual(tiers.map((r) => [r.views, r.clicks]), [[10, 12], [70, 9], [0, 0], [1400, 700]]);
+  tiers.forEach((r) => assert.ok(r.tier === true && r.unknown === false && r.other === false));
+  const clientCount = shapeClientRows(api).length;
+  ['name', 'views', 'clicks', 'combined'].forEach((field) => {
+    ['asc', 'desc'].forEach((order) => {
+      const s = sortClientRows(rows, field, order);
+      assert.ok(s.slice(0, clientCount).every((r) => !r.tier), `${field} ${order}: clients first`);
+      assert.deepEqual(s.slice(clientCount).map((r) => r.key), ['client', 'proxy', 'machine', 'untiered'], `${field} ${order}`);
+      // Unknown stays the last CLIENT row.
+      assert.equal(s[clientCount - 1].client, '', `${field} ${order}: Unknown last among clients`);
+    });
+  });
+  // Tier rows never enter the denominators or the subtotals; re-applying does not duplicate them.
+  assert.deepEqual(clientTotals(rows), clientTotals(shapeClientRows(api)));
+  assert.deepEqual(clientTierSubtotals(rows), clientTierSubtotals(shapeClientRows(api)));
+  assert.equal(withTierRows(rows).filter((r) => r.tier).length, 4);
+  // An empty table gets no tier rows.
+  assert.deepEqual(withTierRows([]), []);
+  assert.deepEqual(withTierRows(null), []);
+});
+
+// Fork (integrations GMAIL-GAP-SPEC I5) -- the Combined column is retired everywhere: no sort field,
+// no field on a shaped row, no total; a 'combined' sort request is not a column sort.
+test('GMAIL-GAP I5: no combined in SORT_FIELDS, shaped rows or clientTotals', () => {
+  assert.deepEqual([...SORT_FIELDS], ['name', 'views', 'clicks']);
+  assert.ok(!SORT_FIELDS.includes('combined'));
+  const rows = shapeClientRows(api);
+  rows.forEach((r) => assert.ok(!Object.prototype.hasOwnProperty.call(r, 'combined'), r.client));
+  assert.ok(!Object.prototype.hasOwnProperty.call(clientTotals(rows), 'combined'));
+  // An unknown field is no column sort: the default comparison only (Views desc, Clicks desc, label),
+  // Unknown still last.
+  assert.deepEqual(tokens(sortClientRows(rows, 'combined', 'desc')), ['other', 'apple-mail', 'gmail-proxy', 'outlook-windows', 'yahoo', 'browser-ios', '']);
 });
 
 test('I6 default sort: Views desc, Clicks desc, label; other next-to-last and Unknown last despite the largest counts', () => {
@@ -79,7 +126,6 @@ test('I6 column sorts keep Unknown last in both directions and tie-break by the 
   const rows = shapeClientRows(api);
   assert.deepEqual(tokens(sortClientRows(rows, 'views', 'asc')), ['browser-ios', 'gmail-proxy', 'outlook-windows', 'yahoo', 'apple-mail', 'other', '']);
   assert.deepEqual(tokens(sortClientRows(rows, 'clicks', 'desc')), ['other', 'browser-ios', 'gmail-proxy', 'outlook-windows', 'apple-mail', 'yahoo', '']);
-  assert.deepEqual(tokens(sortClientRows(rows, 'combined', 'desc')), ['other', 'apple-mail', 'gmail-proxy', 'outlook-windows', 'yahoo', 'browser-ios', '']);
   // Labels: Apple Mail, Browser (iOS), Gmail, Other, Outlook desktop, Yahoo Mail.
   assert.deepEqual(tokens(sortClientRows(rows, 'name', 'asc')), ['apple-mail', 'browser-ios', 'gmail-proxy', 'other', 'outlook-windows', 'yahoo', '']);
   assert.deepEqual(tokens(sortClientRows(rows, 'name', 'desc')), ['yahoo', 'outlook-windows', 'other', 'gmail-proxy', 'browser-ios', 'apple-mail', '']);

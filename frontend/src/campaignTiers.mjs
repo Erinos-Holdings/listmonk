@@ -14,15 +14,31 @@ const pair = (p) => (p && typeof p === 'object'
   && Number.isFinite(p.warn) && Number.isFinite(p.red)
   && p.warn > 0 && p.red >= p.warn ? { warn: p.warn, red: p.red } : null);
 
+// Fork (integrations GMAIL-GAP-SPEC D4) -- the Gmail gap's stored line, `campaignThresholds.gmailGap`
+// ({ warn, red, minControl }): the INVERSE direction of the bounce tiers (a low gap is bad), so
+// 0 < red <= warn; minControl is the Yahoo-recipient floor under which the gap is undefined
+// (a finite number >= 0). null when anything is missing or out of shape. The values are never here.
+export function parseGapThresholds(p) {
+  return p && typeof p === 'object'
+    && Number.isFinite(p.warn) && Number.isFinite(p.red) && Number.isFinite(p.minControl)
+    && p.red > 0 && p.warn >= p.red && p.minControl >= 0
+    ? { warn: p.warn, red: p.red, minControl: p.minControl } : null;
+}
+
 // One threshold set from a value (the document field), or null when anything is missing or out of
-// shape -- both pairs are required, each 0 < warn <= red.
+// shape -- both pairs are required, each 0 < warn <= red. GMAIL-GAP-SPEC D4: `gmailGap` is OPTIONAL
+// -- present (parsed) only when valid, so a document without it still colors the bounce tiers.
 export function parseCampaignThresholds(v) {
   if (!v || typeof v !== 'object') {
     return null;
   }
   const hardBounce = pair(v.hardBounce);
   const complaint = pair(v.complaint);
-  return hardBounce && complaint ? { hardBounce, complaint } : null;
+  if (!hardBounce || !complaint) {
+    return null;
+  }
+  const gmailGap = parseGapThresholds(v.gmailGap);
+  return gmailGap ? { hardBounce, complaint, gmailGap } : { hardBounce, complaint };
 }
 
 // The newest document (docs are newest first, as GET /api/system/health/ses returns them) carrying
@@ -57,6 +73,24 @@ export function tierOf(count, sent, key, thresholds, digits = 2) {
     return TIER_RED;
   }
   if (at(t.warn)) {
+    return TIER_AMBER;
+  }
+  return null;
+}
+
+// GMAIL-GAP-SPEC D4 -- the Gap cell's tier: red when the gap is at or below `red`, amber at or below
+// `warn`, none above -- compared on the DISPLAYED value (rounded to `digits`, as the cell shows it,
+// the tierOf rule). null with no (valid) thresholds or no gap.
+export function gapTierOf(gap, thresholds, digits = 2) {
+  const t = parseGapThresholds(thresholds);
+  if (!t || !Number.isFinite(gap)) {
+    return null;
+  }
+  const shown = Number(gap.toFixed(digits));
+  if (shown <= t.red) {
+    return TIER_RED;
+  }
+  if (shown <= t.warn) {
     return TIER_AMBER;
   }
   return null;

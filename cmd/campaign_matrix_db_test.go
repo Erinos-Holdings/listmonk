@@ -64,11 +64,17 @@ type cmRow struct {
 	Matched      *cmMeasure      `json:"matched"`
 	GPRate       *float64        `json:"gp_rate"`
 	GPThresholds json.RawMessage `json:"gp_thresholds"`
+	// GMAIL-GAP-SPEC D2 -- NULL in all four for a journey.
+	Gmail      *int `json:"gmail"`
+	GmailProxy *int `json:"gmail_proxy"`
+	Yahoo      *int `json:"yahoo"`
+	YahooProxy *int `json:"yahoo_proxy"`
 }
 
 type cmResp struct {
-	GP   bool    `json:"gp"`
-	Rows []cmRow `json:"rows"`
+	GP            bool            `json:"gp"`
+	Rows          []cmRow         `json:"rows"`
+	GapThresholds json.RawMessage `json:"gap_thresholds"`
 }
 
 // TestCampaignMatrixPerm is D10's gate: the route is registered behind campaigns:get_analytics
@@ -386,7 +392,9 @@ func TestCampaignMatrixDB(t *testing.T) {
 			Views: wantViews, Clicks: wantClicks, HardBounces: 2, SoftBounces: 1, Complaints: 1,
 			ShopFounder: ip(wantFounder), ShopSelf: ip(1), ShopCreator: ip(0), ShopCorp: ip(0),
 			Tracked: &cmMeasure{2, 15.5}, Matched: &cmMeasure{1, 7}, GPRate: fp(0.004),
-			GPThresholds: json.RawMessage(`{"issues":0.003,"warn":0.002}`)} // compactJSON sorts keys
+			GPThresholds: json.RawMessage(`{"issues":0.003,"warn":0.002}`), // compactJSON sorts keys
+			// GMAIL-GAP-SPEC D2 -- a broadcast with no Gmail or Yahoo recipient reads 0, not null.
+			Gmail: ip(0), GmailProxy: ip(0), Yahoo: ip(0), YahooProxy: ip(0)}
 		gotB := rows[bIn]
 		gotB.GPThresholds = compactJSON(t, gotB.GPThresholds)
 		if !reflect.DeepEqual(gotB, wantB) {
@@ -448,6 +456,214 @@ func TestCampaignMatrixDB(t *testing.T) {
 			t.Fatalf("%s: alpha creator with brands:get: bIn %s", name("alphaGP"), baJSON(r))
 		}
 	}
+}
+
+// TestCampaignGmailGapDB is integrations GMAIL-GAP-SPEC I1 (and I4's SQL half): the matrix row's
+// gmail / gmail_proxy / yahoo / yahoo_proxy are the send predicate (single and double opt-in lists,
+// not blocklisted, the campaign's language by the send expression) bounded by last_subscriber_id,
+// with openers the DISTINCT recipients holding a gmail-proxy (resp. yahoo) view before t1 in BOTH
+// tracking modes; NULL on a journey; gap_thresholds the gmailGap of the newest ses document that
+// carries one, verbatim (a newer document without it never nulls it).
+// The gmail_gap analytics type returns the same recipients (not date-bounded) with openers bounded
+// by [from, to]. The threshold numbers here are fixtures, never the live values.
+func TestCampaignGmailGapDB(t *testing.T) {
+	h := newLinkHarness(t)
+	t.Cleanup(func() { ko.Set("privacy.individual_tracking", true) })
+
+	den, err := time.LoadLocation("America/Denver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var todayS string
+	if err := h.db.Get(&todayS, `SELECT TO_CHAR((NOW() AT TIME ZONE 'America/Denver')::DATE, 'YYYY-MM-DD')`); err != nil {
+		t.Fatal(err)
+	}
+	today, err := time.ParseInLocation("2006-01-02", todayS, den)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ty, tm, td := today.Date()
+	start := func(n int) time.Time { return time.Date(ty, tm, td-n, 0, 0, 0, 0, den) }
+	dayAt := func(n int) time.Time { return start(n).Add(12 * time.Hour) }
+	ts := func(t time.Time) string { return t.Format(time.RFC3339) }
+
+	listS := h.baList("Gap single", "public", "single")
+	listD := h.baList("Gap double", "private", "double")
+
+	sub := func(email, status, lang string, lists map[int]string) int {
+		id := h.baSub(email, status, lists)
+		if lang != "" {
+			h.db.MustExec(`UPDATE subscribers SET attribs = JSONB_BUILD_OBJECT('lang', $2::TEXT) WHERE id = $1`, id, lang)
+		}
+		return id
+	}
+	conf := map[int]string{listS: "confirmed"}
+	// Inside the checkpoint, in id order.
+	g1 := sub("g1@gmail.com", "enabled", "", map[int]string{listS: "confirmed", listD: "confirmed"}) // on both lists: once
+	g2 := sub("g2@googlemail.com", "enabled", "EN-us", conf)                                         // the send expression reads en
+	g3 := sub("G3@GMAIL.COM", "disabled", "en", conf)                                                // case-insensitive; disabled is not blocklisted
+	g4 := sub("g4@gmail.com", "enabled", "", map[int]string{listS: "unsubscribed"})                  // unsubscribed: out
+	g5 := sub("g5@gmail.com", "blocklisted", "", conf)                                               // blocklisted: out
+	g6 := sub("g6@gmail.com", "enabled", "fr", conf)                                                 // another language: out
+	g7 := sub("g7@gmail.co.uk", "enabled", "", conf)                                                 // not @gmail.com: neither provider
+	y1 := sub("y1@yahoo.com", "enabled", "", conf)
+	y2 := sub("y2@aol.co.uk", "enabled", "", conf)
+	y3 := sub("y3@ymail.com", "enabled", "", conf)
+	y4 := sub("y4@rocketmail.com", "enabled", "", map[int]string{listD: "unconfirmed"}) // double opt-in, unconfirmed: out
+	y5 := sub("y5@yahoo.de", "enabled", "", map[int]string{listD: "confirmed"})
+	o1 := sub("o1@example.com", "enabled", "", conf)
+	// Past the checkpoint: out.
+	g8 := sub("g8@gmail.com", "enabled", "", conf)
+	y6 := sub("y6@yahoo.com", "enabled", "", conf)
+
+	bG := h.baCamp("Gap broadcast", "paused", 10, listS, listD)
+	jG := h.baCamp("Gap journey", "running", 0, listS, listD)
+	h.db.MustExec(`UPDATE campaigns SET started_at = $2::TIMESTAMPTZ, last_subscriber_id = $3, attribs = '{"lang": "en"}' WHERE id = $1`, bG, ts(dayAt(5)), y5)
+	h.db.MustExec(`UPDATE campaigns SET evergreen = TRUE, started_at = $2::TIMESTAMPTZ, last_subscriber_id = $3 WHERE id = $1`, jG, ts(dayAt(30)), y6)
+	h.db.MustExec(`INSERT INTO campaign_send_hours (campaign_id, hour, n) VALUES ($1, DATE_TRUNC('hour', $2::TIMESTAMPTZ), 3)`, jG, ts(dayAt(2)))
+
+	view := func(c, s int, client string, at time.Time) {
+		h.db.MustExec(`INSERT INTO campaign_views (campaign_id, subscriber_id, client, created_at) VALUES ($1, NULLIF($2, 0), $3, $4::TIMESTAMPTZ)`, c, s, client, ts(at))
+	}
+	for _, c := range []int{bG, jG} {
+		view(c, g1, "gmail-proxy", dayAt(4)) // twice: one opener
+		view(c, g1, "gmail-proxy", dayAt(2))
+		view(c, g2, "browser-windows", dayAt(4)) // not the proxy: a recipient, not an opener
+		view(c, g4, "gmail-proxy", dayAt(4))     // unsubscribed
+		view(c, g5, "gmail-proxy", dayAt(4))     // blocklisted
+		view(c, g6, "gmail-proxy", dayAt(4))     // another language
+		view(c, g7, "gmail-proxy", dayAt(4))     // not a Gmail address
+		view(c, y1, "yahoo", dayAt(2))
+		view(c, y2, "yahoo", dayAt(-1))      // Denver-tomorrow, at or after t1: out of the matrix
+		view(c, y3, "gmail-proxy", dayAt(4)) // the wrong proxy for a Yahoo recipient
+		view(c, y4, "yahoo", dayAt(4))       // unconfirmed on a double opt-in list
+		view(c, y5, "yahoo", dayAt(4))
+		view(c, o1, "gmail-proxy", dayAt(4))
+		view(c, g8, "gmail-proxy", dayAt(4)) // past the checkpoint
+		view(c, y6, "yahoo", dayAt(4))
+		view(c, 0, "gmail-proxy", dayAt(4)) // no subscriber
+	}
+
+	ip := func(n int) *int { return &n }
+	type counts struct {
+		Gmail      *int `json:"gmail"`
+		GmailProxy *int `json:"gmail_proxy"`
+		Yahoo      *int `json:"yahoo"`
+		YahooProxy *int `json:"yahoo_proxy"`
+	}
+	// Gmail recipients g1, g2, g3 (g1 opened); Yahoo recipients y1, y2, y3, y5 (y1 and y5 opened
+	// before t1; y2's view is tomorrow).
+	wantMatrix := counts{ip(3), ip(1), ip(4), ip(2)}
+
+	admin := baUser([]string{auth.PermCampaignsGetAll, auth.PermCampaignsGetAnalytics, auth.PermListGetAll})
+	matrix := func() cmResp {
+		t.Helper()
+		code, body := baCall(t, admin, "/api/analytics/campaigns/matrix", h.app.auth.Perm(h.app.GetCampaignMatrix, "campaigns:get_analytics"))
+		if code != http.StatusOK {
+			t.Fatalf("matrix: %d %s", code, body)
+		}
+		var resp struct {
+			Data cmResp `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("matrix: %s: %v", body, err)
+		}
+		return resp.Data
+	}
+	type gapResp struct {
+		Rows []struct {
+			CampaignID int `json:"campaign_id"`
+			counts
+		} `json:"rows"`
+		GapThresholds json.RawMessage `json:"gap_thresholds"`
+	}
+	gapType := func(from, to time.Time) gapResp {
+		t.Helper()
+		q := url.Values{"id": {fmt.Sprint(bG), fmt.Sprint(jG)}, "from": {ts(from)}, "to": {ts(to)}}
+		code, body := baCall(t, admin, "/api/campaigns/analytics/gmail_gap?"+q.Encode(),
+			h.app.auth.Perm(h.app.GetCampaignViewAnalytics, "campaigns:get_analytics"), "type", "gmail_gap")
+		if code != http.StatusOK {
+			t.Fatalf("gmail_gap: %d %s", code, body)
+		}
+		var resp struct {
+			Data gapResp `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil {
+			t.Fatalf("gmail_gap: %s: %v", body, err)
+		}
+		return resp.Data
+	}
+	countsOf := func(r cmRow) counts { return counts{r.Gmail, r.GmailProxy, r.Yahoo, r.YahooProxy} }
+
+	for _, tracking := range []bool{true, false} {
+		ko.Set("privacy.individual_tracking", tracking)
+		h.app.core = core.New(&core.Opt{Queries: prepareQueries(loadQueryMap(t), h.db, ko), DB: h.db, I18n: h.app.i18n, Log: h.app.log}, &core.Hooks{})
+		name := func(s string) string { return fmt.Sprintf("tracking=%v %s", tracking, s) }
+
+		got := matrix()
+		var bRow, jRow *cmRow
+		for i := range got.Rows {
+			switch got.Rows[i].ID {
+			case bG:
+				bRow = &got.Rows[i]
+			case jG:
+				jRow = &got.Rows[i]
+			}
+		}
+		if bRow == nil || jRow == nil {
+			t.Fatalf("%s: rows %s, want the broadcast and the journey", name("matrix"), baJSON(got.Rows))
+		}
+		if c := countsOf(*bRow); !reflect.DeepEqual(c, wantMatrix) {
+			t.Fatalf("%s: broadcast counts %s, want %s", name("matrix"), baJSON(c), baJSON(wantMatrix))
+		}
+		if c := countsOf(*jRow); c != (counts{}) {
+			t.Fatalf("%s: journey counts %s, want all null", name("matrix"), baJSON(c))
+		}
+		if compactJSON(t, got.GapThresholds) != nil {
+			t.Fatalf("%s: gap_thresholds %s with no ses document, want null", name("matrix"), got.GapThresholds)
+		}
+
+		// The analytics type over [start(3), now]: g1's day-2 view is in (one opener), y1's day-2
+		// view is in, y5's day-4 view is out; recipients are not date-bounded.
+		g := gapType(start(3), time.Now())
+		if len(g.Rows) != 2 || g.Rows[0].CampaignID != bG || g.Rows[1].CampaignID != jG {
+			t.Fatalf("%s: gmail_gap rows %s, want [bG, jG]", name("gmail_gap"), baJSON(g.Rows))
+		}
+		if want := (counts{ip(3), ip(1), ip(4), ip(1)}); !reflect.DeepEqual(g.Rows[0].counts, want) {
+			t.Fatalf("%s: gmail_gap broadcast %s, want %s", name("gmail_gap"), baJSON(g.Rows[0].counts), baJSON(want))
+		}
+		if g.Rows[1].counts != (counts{}) {
+			t.Fatalf("%s: gmail_gap journey %s, want all null", name("gmail_gap"), baJSON(g.Rows[1].counts))
+		}
+		// A range before every view: recipients unchanged, no openers.
+		g = gapType(start(20), start(10))
+		if want := (counts{ip(3), ip(0), ip(4), ip(0)}); !reflect.DeepEqual(g.Rows[0].counts, want) {
+			t.Fatalf("%s: gmail_gap early range %s, want %s", name("gmail_gap"), baJSON(g.Rows[0].counts), baJSON(want))
+		}
+	}
+
+	// gap_thresholds = the NEWEST ses document's campaignThresholds.gmailGap, verbatim, in both.
+	ses := func(day string, doc string) {
+		h.db.MustExec(`INSERT INTO system_health (kind, day, status, doc) VALUES ('ses', $1::DATE, 'ok', $2::JSONB)`, day, doc)
+	}
+	ses(start(3).Format("2006-01-02"), `{"campaignThresholds": {"gmailGap": {"warn": 0.7, "red": 0.3, "minControl": 50}}}`)
+	ses(start(1).Format("2006-01-02"), `{"campaignThresholds": {"hardBounce": {"warn": 0.01, "red": 0.02}, "gmailGap": {"warn": 0.8, "red": 0.4, "minControl": 150}}}`)
+	want := json.RawMessage(`{"minControl":150,"red":0.4,"warn":0.8}`)
+	if got := compactJSON(t, matrix().GapThresholds); string(got) != string(want) {
+		t.Fatalf("matrix gap_thresholds %s, want %s", got, want)
+	}
+	if got := compactJSON(t, gapType(start(3), time.Now()).GapThresholds); string(got) != string(want) {
+		t.Fatalf("gmail_gap gap_thresholds %s, want %s", got, want)
+	}
+	// A newer document without gmailGap never nulls it: the newest document CARRYING the key wins.
+	ses(start(0).Format("2006-01-02"), `{"campaignThresholds": {"hardBounce": {"warn": 0.01, "red": 0.02}}}`)
+	if got := compactJSON(t, matrix().GapThresholds); string(got) != string(want) {
+		t.Fatalf("matrix gap_thresholds %s under a newest doc without gmailGap, want %s", got, want)
+	}
+	if got := compactJSON(t, gapType(start(3), time.Now()).GapThresholds); string(got) != string(want) {
+		t.Fatalf("gmail_gap gap_thresholds %s under a newest doc without gmailGap, want %s", got, want)
+	}
+	_ = g3 // a recipient with no view
 }
 
 // TestCampaignsIDFilterDB is integrations MATRIX-POLISH-SPEC I4: GET /api/campaigns?id=... lists only

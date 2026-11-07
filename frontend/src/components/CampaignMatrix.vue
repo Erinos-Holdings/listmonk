@@ -93,6 +93,10 @@
               <span v-if="c.field === 'gp_rate'" :class="gpClass(row) || null" :title="gpTitle(row)">
                 {{ row.totals ? '' : cell(row, 'gp_rate') }}</span>
               <span v-else-if="isConversion(c.field)" :title="conversionTip(c.field)">{{ conversionText(row, c.field) }}</span>
+              <!-- GMAIL-GAP-SPEC D3/D4: the fraction or the rule (or why '—') on hover; the Gap
+                   colored against the stored line (campaignMatrix.mjs::gapClass). -->
+              <span v-else-if="isGap(c.field)" :class="c.field === 'gmail_gap' ? (gapClass(row) || null) : null"
+                :title="gapTitle(row, c.field)">{{ cell(row, c.field) }}</span>
               <span v-else>{{ cell(row, c.field) }}</span>
             </td>
           </tr>
@@ -115,8 +119,9 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  CONVERSION_FIELDS, cellText, clickSort, conversionValue, dateCell, filterByName, gpClass, gpTip, groupHeaders,
-  leftColumns, loadState, midColumns, nameCell, saveState, shapeRows, showBrandColumn, statusCell, tableRows,
+  CONVERSION_FIELDS, GAP_FIELDS, cellText, clickSort, conversionValue, dateCell, filterByName, gapClass, gapTip,
+  gpClass, gpTip, groupHeaders, leftColumns, loadState, midColumns, nameCell, saveState, shapeRows, showBrandColumn,
+  statusCell, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, conversionsComputedLabel, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -131,6 +136,8 @@ export default Vue.extend({
     return {
       apiRows: [],
       conversions: null,
+      // GMAIL-GAP-SPEC D2: the response's gap_thresholds (the ses document's stored line), or null.
+      gapThresholds: null,
       // The server's window ({ from, to } Mountain dates) for the note.
       period: {},
       loading: false,
@@ -170,7 +177,8 @@ export default Vue.extend({
     },
 
     // D5 / MATRIX-POLISH-SPEC D3-D5: Views, Clicks, Shop Link Attribution (Founder, Self, Creator,
-    // Corp), Conversions (Tracked, Matched), Bounces (Hard, Soft), Complaints (FBL, GP S%).
+    // Corp), Conversions (Tracked, Matched), Bounces (Hard, Soft), Complaints (FBL, GP S%), Gmail gap
+    // (Gmail, Yahoo, Gap -- GMAIL-GAP-SPEC D3).
     midCols() {
       return midColumns(this.showGp);
     },
@@ -182,7 +190,7 @@ export default Vue.extend({
     tableRows() {
       const brands = this.brandRows;
       const rows = shapeRows(this.apiRows, {
-        launch: this.launch, docs: this.healthDocs, brandLabel: (s) => brandLabelOf(s, brands),
+        launch: this.launch, docs: this.healthDocs, brandLabel: (s) => brandLabelOf(s, brands), gapThresholds: this.gapThresholds,
       });
       return tableRows(filterByName(rows, this.nameQuery), this.state.sort, this.state.mode, {
         locale: (this.$i18n && this.$i18n.locale) || 'en',
@@ -217,6 +225,7 @@ export default Vue.extend({
       this.$api.getCampaignMatrix(this.params()).then((data) => {
         this.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
         this.conversions = (data && data.conversions) || null;
+        this.gapThresholds = (data && data.gap_thresholds) || null;
         this.period = (data && data.window) || {};
       }).finally(() => {
         this.loading = false;
@@ -292,6 +301,19 @@ export default Vue.extend({
 
     gpTitle(row) {
       const t = gpTip(row);
+      return t ? this.$t(t.key, t.params) : null;
+    },
+
+    isGap(field) {
+      return GAP_FIELDS.includes(field);
+    },
+
+    gapClass(row) {
+      return gapClass(row);
+    },
+
+    gapTitle(row, field) {
+      const t = gapTip(row, field, (n) => this.$utils.formatNumber(n));
       return t ? this.$t(t.key, t.params) : null;
     },
 

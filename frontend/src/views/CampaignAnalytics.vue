@@ -275,54 +275,50 @@
       </b-table>
     </section>
 
-    <!-- Fork (client stats, integrations CLIENT-STATS-SPEC D5/D8/D9): views, clicks and combined per
-    email client for the same campaigns and date range, the Location table's shape (clientRows.mjs
-    owns the sort: Unknown last always, Other next-to-last by default). A row's tooltip lists the
-    Inspect clients that render-verify it (clientRoster.mjs, advisory). -->
+    <!-- Fork (client stats, integrations CLIENT-STATS-SPEC D5/D8/D9): views and clicks per email
+    client for the same campaigns and date range, the Location table's shape (clientRows.mjs owns
+    the sort: Unknown last always, Other next-to-last by default). A row's tooltip lists the Inspect
+    clients that render-verify it (clientRoster.mjs, advisory). Integrations GMAIL-GAP-SPEC D6: the
+    Combined column is retired. -->
     <section v-if="clients.fetched" class="clients share-grid mt-5" data-cy="clients">
+      <!-- Fork (integrations GMAIL-GAP-SPEC D5) -- the Gmail gap of the selection (its campaigns
+           pooled as one audience; journeys skipped), above the Email clients table: the ratio,
+           colored against the stored line, then the two open rates in grey and the reading. The
+           arithmetic is gmailGap.mjs's; the server returns counts and the stored line only. -->
+      <div class="gmail-gap mb-4" data-cy="gmail-gap">
+        <h4>
+          {{ $t('analytics.gmailGap') }}
+          <span :class="gapBlock.cls || null" :title="$t(gapBlock.tip.key, gapTipParams(gapBlock.tip))"
+            data-cy="gmail-gap-ratio">{{ gmailGap.loading ? '' : gapBlock.text }}</span>
+          <span v-if="!gmailGap.loading && gapBlock.counts" class="has-text-grey-light is-size-6" data-cy="gmail-gap-opens">
+            {{ $t('analytics.gmailGapOpens', gapOpensParams) }}
+          </span>
+        </h4>
+        <p class="is-size-7 has-text-grey" data-cy="gmail-gap-hint">{{ $t(gapHintLine.key, gapHintLine.params) }}</p>
+      </div>
       <h4>{{ $t('analytics.clients') }}</h4>
-      <b-table :data="clientTableRows" :loading="clients.loading" hoverable narrowed
+      <!-- Fork (client vocabulary, integrations CLIENT-VOCABULARY-SPEC D8): the three trust-tier
+           subtotals plus the untiered remainder, over Views and Clicks ONLY, rendered separately and
+           NEVER summed into one figure. Integrations GMAIL-GAP-SPEC D6: they are trailing DATA rows
+           of this table (clientRows.mjs::withTierRows; sortClientRows keeps them last in every
+           sort), so Views and Clicks sit column-for-column under the clients' cells; a tier row has
+           no share (the empty slot) and never enters the share denominators. -->
+      <b-table :data="clientTableRows" :loading="clients.loading" hoverable narrowed :row-class="clientRowClass"
         backend-sorting :default-sort="[clients.sort.field, clients.sort.order]" @sort="onClientSort">
         <b-table-column v-slot="props" field="name" :label="$t('analytics.clientsClient')" sortable>
-          <span :class="{ 'has-text-grey': props.row.unknown }" :title="clientRosterTip(props.row.client)">{{ props.row.name }}</span>
+          <span v-if="props.row.tier" :title="$t('analytics.clientsTier')" :data-cy="`client-tier-${props.row.key}`">{{ props.row.name }}</span>
+          <span v-else :class="{ 'has-text-grey': props.row.unknown }" :title="clientRosterTip(props.row.client)">{{ props.row.name }}</span>
         </b-table-column>
         <b-table-column v-slot="props" field="views" :label="$t('campaigns.views')" numeric sortable>
-          {{ $utils.formatNumber(props.row.views) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row.views, 'views')) }}</span>
+          {{ $utils.formatNumber(props.row.views) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row, 'views')) }}</span>
         </b-table-column>
         <b-table-column v-slot="props" field="clicks" :label="$t('campaigns.clicks')" numeric sortable>
-          {{ $utils.formatNumber(props.row.clicks) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row.clicks, 'clicks')) }}</span>
-        </b-table-column>
-        <b-table-column v-slot="props" field="combined" :label="$t('analytics.clientsCombined')" numeric sortable>
-          {{ $utils.formatNumber(props.row.combined) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row.combined, 'combined')) }}</span>
+          {{ $utils.formatNumber(props.row.clicks) }}<span class="cl-share is-size-7 has-text-grey">{{ parenShare(clientShare(props.row, 'clicks')) }}</span>
         </b-table-column>
         <template #empty v-if="!clients.loading">
           <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
         </template>
       </b-table>
-      <!-- Fork (client vocabulary, integrations CLIENT-VOCABULARY-SPEC D8): the three trust-tier
-           subtotals plus the untiered remainder, as footer rows beneath the table, over Views and
-           Clicks ONLY (never Combined -- a tier-combined figure is close to the very number D8
-           refuses). Rendered separately and NEVER summed into one figure. MATRIX-POLISH-SPEC D8.1:
-           the grid's empty share slots, and an empty last column standing where the clients table
-           has Combined (no figure), so Views and Clicks sit under the clients table's own. -->
-      <table v-if="clients.rows.length" class="table is-narrow is-fullwidth client-tiers">
-        <thead>
-          <tr>
-            <th>{{ $t('analytics.clientsTier') }}</th>
-            <th class="has-text-right">{{ $t('campaigns.views') }}<span class="cl-share is-size-7" /></th>
-            <th class="has-text-right">{{ $t('campaigns.clicks') }}<span class="cl-share is-size-7" /></th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="t in clientTierRows" :key="t.key">
-            <td>{{ t.name }}</td>
-            <td class="has-text-right">{{ $utils.formatNumber(t.views) }}<span class="cl-share is-size-7" /></td>
-            <td class="has-text-right">{{ $utils.formatNumber(t.clicks) }}<span class="cl-share is-size-7" /></td>
-            <td />
-          </tr>
-        </tbody>
-      </table>
       <p class="is-size-7 has-text-grey mt-2">{{ $t('analytics.clientsHint') }}</p>
       <p v-if="clients.rows.length" class="is-size-7 has-text-grey mt-2">{{ $t('analytics.clientsTierHint') }}</p>
     </section>
@@ -340,10 +336,11 @@ import { DEFAULT_SORT, shapeCountryRows, sortCountryRows } from '../countryRows.
 import { defaultFromDate } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { rateCell } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import {
-  DEFAULT_SORT as CLIENT_DEFAULT_SORT, TIER_ROWS, clientTierSubtotals, clientTotals,
-  shapeClientRows, sortClientRows,
+  DEFAULT_SORT as CLIENT_DEFAULT_SORT, TIER_ROWS, clientTotals,
+  shapeClientRows, sortClientRows, withTierRows,
 } from '../clientRows.mjs'; // eslint-disable-line import/extensions
 import { rosterFor } from '../clientRoster.mjs'; // eslint-disable-line import/extensions
+import { gapHint, gapSummary, ratePct } from '../gmailGap.mjs'; // eslint-disable-line import/extensions
 import { metricAxisMax, sendOverlayOptions, shapeSendOverlay } from '../sendOverlay.mjs'; // eslint-disable-line import/extensions
 import { aggregateShopLinkRate, shapeShopLinkBars, totalShopLinkClicks } from '../shopLinkBars.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, contextNotice } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -539,6 +536,16 @@ export default Vue.extend({
         loading: false,
         fetched: false,
         sort: { ...CLIENT_DEFAULT_SORT },
+      },
+
+      // Fork (integrations GMAIL-GAP-SPEC D5) -- the gmail_gap rows (one per selected campaign; a
+      // journey's counts null) and the stored line (gap_thresholds), read with the clients table.
+      gmailGap: {
+        rows: [],
+        thresholds: null,
+        loading: false,
+        // A failed read: '—' with the neutral unavailable hover (gmailGap.mjs::gapSummary).
+        failed: false,
       },
 
       // Fork (campaign conversions, CAMPAIGN-CONVERSIONS-SPEC D11) -- the last conversions read
@@ -850,6 +857,37 @@ export default Vue.extend({
       this.clients.sort = { field, order };
     },
 
+    // Fork (integrations GMAIL-GAP-SPEC D5) -- fetched with the clients table, same campaigns and
+    // range (the range bounds the openers' views, not the recipients). A failed read (or one with
+    // no rows) is '—' with the neutral unavailable hover, never the journey wording.
+    getGmailGap(camps) {
+      this.gmailGap.loading = true;
+      this.gmailGap.failed = false;
+      this.$api.getCampaignGmailGap({
+        id: camps.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((data) => {
+        this.gmailGap.rows = (data && Array.isArray(data.rows)) ? data.rows : [];
+        this.gmailGap.thresholds = (data && data.gap_thresholds) || null;
+      }).catch(() => {
+        this.gmailGap.rows = [];
+        this.gmailGap.thresholds = null;
+        this.gmailGap.failed = true;
+      }).finally(() => {
+        this.gmailGap.loading = false;
+      });
+    },
+
+    // The gap hover's params, the floor formatted.
+    gapTipParams(tip) {
+      const p = { ...tip.params };
+      if (p.floor !== undefined && p.floor !== '') {
+        p.floor = this.$utils.formatNumber(p.floor);
+      }
+      return p;
+    },
+
     // Fork (campaign conversions, D7/D11) -- fetched alongside the tables, same campaigns and range.
     getConversions(camps) {
       this.conversions.loading = true;
@@ -912,9 +950,21 @@ export default Vue.extend({
       URL.revokeObjectURL(url);
     },
 
-    // A client's share of the column's own total (Unknown included), as countryShare.
-    clientShare(n, field) {
-      return rateCell(n, this.clientTotalsSum[field], 1).pct;
+    // A client's share of the column's own total (Unknown included), as countryShare. A trust-tier
+    // row has no share (GMAIL-GAP-SPEC D6): its slot stays empty.
+    clientShare(row, field) {
+      if (!row || row.tier) {
+        return '';
+      }
+      return rateCell(row[field], this.clientTotalsSum[field], 1).pct;
+    },
+
+    // GMAIL-GAP-SPEC D6 -- the tier rows' styling (a top rule on the first, muted italic text).
+    clientRowClass(row) {
+      if (!row.tier) {
+        return '';
+      }
+      return row.key === TIER_ROWS[0].key ? 'client-tier-row client-tier-first' : 'client-tier-row';
     },
 
     // Fork (matrix polish, MATRIX-POLISH-SPEC D8.1) -- the Dashboard's slot rule: a share for its
@@ -1045,18 +1095,36 @@ export default Vue.extend({
       return clientTotals(this.clients.rows);
     },
 
-    clientTableRows() {
-      const { field, order } = this.clients.sort;
-      return sortClientRows(this.clients.rows, field, order, this.locale);
+    // Fork (integrations GMAIL-GAP-SPEC D5) -- the selection's pooled Gmail gap (gmailGap.mjs).
+    gapBlock() {
+      return gapSummary(this.gmailGap.rows, this.gmailGap.thresholds, { failed: this.gmailGap.failed });
     },
 
-    // Fork (client vocabulary, D8) -- the tier footer rows. The tier map and this row order are
-    // clientRows.mjs's (the tier's single home); this only labels and formats them.
-    clientTierRows() {
-      const sub = clientTierSubtotals(this.clients.rows);
-      return TIER_ROWS.map(({ key, i18n }) => ({
-        key, name: this.$t(i18n), views: sub[key].views, clicks: sub[key].clicks,
-      }));
+    // The reading line: the stored red line interpolated, or the no-number wording without one.
+    gapHintLine() {
+      return gapHint(this.gmailGap.thresholds);
+    },
+
+    gapOpensParams() {
+      const c = this.gapBlock.counts || {};
+      const fmt = (n) => this.$utils.formatNumber(n);
+      return {
+        gmailRate: ratePct(this.gapBlock.gmailRate),
+        gmailOpeners: fmt(c.gmail_proxy || 0),
+        gmail: fmt(c.gmail || 0),
+        yahooRate: ratePct(this.gapBlock.yahooRate),
+        yahooOpeners: fmt(c.yahoo_proxy || 0),
+        yahoo: fmt(c.yahoo || 0),
+      };
+    },
+
+    // The client rows, then (GMAIL-GAP-SPEC D6) the four trust-tier rows as trailing data rows --
+    // the tier map, their order and their pinning are clientRows.mjs's (the tier's single home);
+    // this only labels them.
+    clientTableRows() {
+      const { field, order } = this.clients.sort;
+      const rows = withTierRows(this.clients.rows, (k) => this.$t(k));
+      return sortClientRows(rows, field, order, this.locale);
     },
 
     // Fork (global brand, D11) -- the distinct brands of the selected campaigns that carry a
@@ -1162,6 +1230,8 @@ export default Vue.extend({
           this.getCountries(this.form.campaigns);
           // Fork (client stats) -- the Email clients table.
           this.getClients(this.form.campaigns);
+          // Fork (integrations GMAIL-GAP-SPEC D5) -- the Gmail gap block above it.
+          this.getGmailGap(this.form.campaigns);
           // Fork (campaign conversions) -- the Tracked and Matched header cells.
           this.getConversions(this.form.campaigns);
         });

@@ -997,6 +997,15 @@ carries a third, Combined). */
   .th-wrap.is-numeric {
     padding-right: 3.75rem;
   }
+  /* Fork (integrations GMAIL-GAP-SPEC D6) -- Campaign Analytics' trust-tier rows, trailing data
+  rows of the Email clients table: a top rule over the first, muted italic text. */
+  tr.client-tier-row td {
+    font-style: italic;
+    color: $grey;
+  }
+  tr.client-tier-first td {
+    border-top: 2px solid $grey-lighter;
+  }
 }
 
 /* Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D1/D5) -- the Brand Matrix and Brand Usage
@@ -1053,6 +1062,14 @@ section.dashboard (which reopens after them). */
     }
     thead th.bm-shop {
       background-color: rgba(65, 172, 156, 0.15);
+    }
+    /* Fork (integrations GMAIL-GAP-SPEC D3) -- the Campaign Matrix's GMAIL GAP group: the same
+    translucent-tint pair, in a neutral grey so the Gap cell's amber/red reads as the only colour. */
+    th.bm-gap, td.bm-gap {
+      background-color: rgba(122, 122, 122, 0.06);
+    }
+    thead th.bm-gap {
+      background-color: rgba(122, 122, 122, 0.12);
     }
     th.bm-sorted, td.bm-sorted {
       background-image: linear-gradient(rgba(54, 54, 54, 0.07), rgba(54, 54, 54, 0.07));
