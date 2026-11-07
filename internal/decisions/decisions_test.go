@@ -114,17 +114,15 @@ func TestItemsShape(t *testing.T) {
 }
 
 // The 2026-11-07 changelog shape (LIFECYCLE-DOCS-SPEC I7, D11-D16): the six rewritten items carry
-// a page entry (2026-11-07, the new text's hash) after their concept entry, items 1, 9 and 13 a
-// hash-less Slack entry from Kaylinn before it; every other item only its concept entry.
+// a page entry (2026-11-07, the new text's hash) after their concept entry -- item 1 two (the
+// Stage 4 R3 rewording), items 1, 9 and 13 a hash-less Slack entry from Kaylinn before them; every
+// other item only its concept entry.
 var slackEdited = map[string]bool{"np-entry": true, "pp-delivery-clock": true, "both-per-brand": true}
-var pageEdited = map[string]bool{"np-entry": true, "np-same-day-double": true, "np-no-restarts": true, "pp-delivery-clock": true, "pp-returning-thanks": true, "both-per-brand": true}
+var pageEdited = map[string]int{"np-entry": 2, "np-same-day-double": 1, "np-no-restarts": 1, "pp-delivery-clock": 1, "pp-returning-thanks": 1, "both-per-brand": 1}
 
 func checkShippedChangelog(t *testing.T, it Item) {
 	t.Helper()
-	want := 1
-	if pageEdited[it.Key] {
-		want++
-	}
+	want := 1 + pageEdited[it.Key]
 	if slackEdited[it.Key] {
 		want++
 	}
@@ -141,7 +139,7 @@ func checkShippedChangelog(t *testing.T, it Item) {
 			t.Errorf("%s: Slack entry %+v", it.Key, c)
 		}
 	}
-	if pageEdited[it.Key] {
+	if pageEdited[it.Key] > 0 {
 		if c := cl[len(cl)-1]; c.Date != "2026-11-07" || c.Source != "page" || c.Who != "" || c.Hash != Hash(it.Text) || c.Reapprove || c.Line == "" {
 			t.Errorf("%s: page entry %+v", it.Key, c)
 		}

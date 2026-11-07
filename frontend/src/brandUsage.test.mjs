@@ -241,9 +241,9 @@ test('LIFECYCLE-DOCS I10: approxClock -- Post-purchase steps after day 0 only', 
   assert.equal(en['dashboard.usage.approxDays'], '~{n}d');
   assert.equal(en['dashboard.usage.approxDay'], '~{n}');
   assert.equal(en['dashboard.usage.approxClock'], [
-    'Sent at the first daily run (8:10 am Mountain, 9:10 am in summer) after Aftership reports the first order delivered',
-    ' — within about a day of it — at delivery + {offset} days. A tracked package still in transit waits up to 10 days',
-    ' after the order; an order with no tracking sends at order date + {n} days.',
+    'Sent at the first daily run (8:10 am Mountain, 9:10 am in summer) on or after delivery day + {offset}, as Aftership',
+    ' reports the first order delivered. A tracked package still in transit waits up to 10 days after the order, then',
+    ' — like an order with no tracking — sends at order date + {n} days.',
   ].join(''));
   assert.equal(en['dashboard.usage.approxClockReorder'], 'Skipped for anyone who has ordered again since their first order.');
   // D20: no literal "~" day label in the templates -- every one goes through approxClock.
@@ -1062,8 +1062,8 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   g[1].steps.slice(1).forEach((x) => {
     assert.ok(x.clock.startsWith('Sent at the first daily run') && !x.clock.includes('{'), `day ${x.days}: ${x.clock}`);
   });
-  assert.match(g[1].steps[1].clock, /at delivery \+ 0 days\. .* order date \+ 5 days\.$/);
-  assert.match(g[1].steps[2].clock, /at delivery \+ 9 days\. .* order date \+ 14 days\.$/);
+  assert.match(g[1].steps[1].clock, /after delivery day \+ 0, .* order date \+ 5 days\.$/);
+  assert.match(g[1].steps[2].clock, /after delivery day \+ 9, .* order date \+ 14 days\.$/);
   assert.ok(g[1].steps[3].clock.endsWith(`order date + 30 days. ${en['dashboard.usage.approxClockReorder']}`));
   assert.equal(g[1].steps[0].clock, '');
   [...g[0].steps, ...g[2].steps].forEach((x) => {

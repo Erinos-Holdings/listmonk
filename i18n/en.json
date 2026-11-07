@@ -735,7 +735,7 @@
     "dashboard.usage.npDays": "{n}d",
     "dashboard.usage.approxDays": "~{n}d",
     "dashboard.usage.approxDay": "~{n}",
-    "dashboard.usage.approxClock": "Sent at the first daily run (8:10 am Mountain, 9:10 am in summer) after Aftership reports the first order delivered — within about a day of it — at delivery + {offset} days. A tracked package still in transit waits up to 10 days after the order; an order with no tracking sends at order date + {n} days.",
+    "dashboard.usage.approxClock": "Sent at the first daily run (8:10 am Mountain, 9:10 am in summer) on or after delivery day + {offset}, as Aftership reports the first order delivered. A tracked package still in transit waits up to 10 days after the order, then — like an order with no tracking — sends at order date + {n} days.",
     "dashboard.usage.approxClockReorder": "Skipped for anyone who has ordered again since their first order.",
     "dashboard.usage.npInvalid": "{slug}: {error}",
     "dashboard.usage.npNoDays": "no valid delay (days)",

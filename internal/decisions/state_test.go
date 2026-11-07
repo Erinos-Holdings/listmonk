@@ -99,9 +99,10 @@ func TestModified(t *testing.T) {
 	if m := Modified(nine, "h0"); m == nil || m.Who != "Kaylinn Brophy" || m.Date != "2026-11-06" {
 		t.Fatalf("item 9 shape: %+v", m)
 	}
-	// A Who entry BEFORE the decision's position does not set it.
+	// A Who entry at or before the row's hash POSITION in the lineage does not set it (position,
+	// not time -- LIFECYCLE-DOCS-SPEC I5 / Stage 4 R1).
 	if m := Modified(nine, "h1"); m != nil {
-		t.Fatalf("a who entry before the decision: %+v", m)
+		t.Fatalf("a who entry before the row's hash position: %+v", m)
 	}
 	// Item 3's shape: no Who entry at all.
 	three := Item{Key: "k", Changelog: []Change{ch("2026-10-30", "", "h0", true), ch("2026-11-07", "", "h1", false)}}

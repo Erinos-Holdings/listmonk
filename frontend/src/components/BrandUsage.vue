@@ -254,7 +254,9 @@
                 </div>
               </template>
             </div>
-            <details v-if="historyOf(it).rows.length" class="bu-decision-history" :data-cy="`decision-history-${it.key}`">
+            <!-- LIFECYCLE-DOCS-SPEC D7: every item has at least its publication entry, so the
+                 expander always shows. -->
+            <details class="bu-decision-history" :data-cy="`decision-history-${it.key}`">
               <summary>{{ historyOf(it).summary }}</summary>
               <ol>
                 <li v-for="(h, hi) in historyOf(it).rows" :key="hi" :class="{ 'bu-decision-voided': h.voided }">

@@ -6,7 +6,7 @@
       "key": "np-entry",
       "section": "no-purchase",
       "n": 1,
-      "text": "Entry. Anyone who joins a brand's newsletter list (site signup, checkout opt-in, or an import marked as new) gets the Day 0 welcome on joining, then the day 2 and day 5 steps.",
+      "text": "Entry. Anyone who joins a brand's newsletter list (site signup, checkout opt-in, or an import marked as new) gets the Day 0 welcome about 10 minutes after joining (item 3), then the day 2 and day 5 steps.",
       "changelog": [
         {
           "date": "2026-10-30",
@@ -26,6 +26,12 @@
           "source": "page",
           "line": "Names the steps' days (2 and 5); day 10 retired (USAGE-DAY10-SPEC).",
           "hash": "66aa578978a6f229b025b8624778db18cc8a2b93e165c24980b919d84e83fa37"
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "The welcome arrives about 10 minutes after joining, not on joining (the WELCOME-SKIP-SPEC hold; review R3).",
+          "hash": "8e156f8236ae70d3e769b8096a3183d2bfd7ac8bf3d351c790ce62381cc2c898"
         }
       ]
     },
