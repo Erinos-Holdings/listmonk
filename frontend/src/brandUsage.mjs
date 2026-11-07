@@ -35,8 +35,8 @@ export { REENGAGEMENT_DAYS };
 
 // LIFECYCLE-SERIES-SPEC S9 (replacing DASHBOARDS-POLISH3-SPEC D4's provisional No purchase
 // 3d | 7d | 15d leaves and the plain Welcome / 1st purchase columns): two series groups, one leaf
-// per standard day -- the No-purchase series Day 0 | 2d | 5d | 10d and the Post-purchase series
-// Day 0 | 5d | 14d | 30d. The lib stores usage.series.<family>.steps (one {days, state, rows} per
+// per standard day -- the No-purchase series Day 0 | 2d | 5d (10d retired, USAGE-DAY10-SPEC D1) and
+// the Post-purchase series Day 0 | 5d | 14d | 30d. The lib stores usage.series.<family>.steps (one {days, state, rows} per
 // leaf) and .legacy (the off-standard step rows, a grey chip each after the group's last leaf); the
 // fork maps them and computes nothing.
 export const SERIES_DAYS = Object.freeze({
@@ -187,7 +187,7 @@ export function skippedLangOf(field) {
 // V2 D2: the columns, left to right -- Score and Brand ungrouped, then the sections. POLISH3 D4/D5:
 // a section's `items` are its leaf fields in order, a SUB-GROUP ({ group, label, help, fields })
 // standing for its leaves under one label (since LIFECYCLE-SERIES-SPEC S9 the No-purchase series over
-// Day 0 | 2d | 5d | 10d and the Post-purchase series over Day 0 | 5d | 14d | 30d; the Languages
+// Day 0 | 2d | 5d and the Post-purchase series over Day 0 | 5d | 14d | 30d; the Languages
 // section's Skipped over FR ES DE IT, between Journeys and Configurations); `fields` is the flat
 // leaf list.
 // `small` (G5): the label takes the small header font (Skipped subscribers is long); otherwise it

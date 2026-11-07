@@ -30,7 +30,8 @@ export function isStepTrigger(option) {
 // LIFECYCLE-SERIES-SPEC S7 -- the standard step days. Cross-repo literals (the SES_DAILY_ZONE
 // precedent; no test spans the repos): integrations lib/no-purchase.ts WELCOME_STEP_DAYS and
 // POST_PURCHASE_STEP_DAYS carry the same values -- change both in one release.
-export const WELCOME_STEP_DAYS = Object.freeze([2, 5, 10]);
+// USAGE-DAY10-SPEC D1 (2026-11-07): day 10 retired -- a stored 10 is a legacy step.
+export const WELCOME_STEP_DAYS = Object.freeze([2, 5]);
 export const POST_PURCHASE_STEP_DAYS = Object.freeze([5, 14, 30]);
 
 // The two series (the Usage pane's groups and the Lists form's step radios): a series family per
@@ -127,7 +128,7 @@ export function daysValid(text) {
 }
 
 // DAYS_PRESETS are the form's no_purchase (No-purchase series) days choices -- LIFECYCLE-SERIES-SPEC
-// S7 (2/5/10, replacing the provisional 3/7/15). The server still accepts 1-365 (D1); this narrows
+// S7 (2/5/10, replacing the provisional 3/7/15; 2/5 since USAGE-DAY10-SPEC D1). The server still accepts 1-365 (D1); this narrows
 // only what the form offers. POST_PURCHASE_DAYS_PRESETS are the post_purchase choices.
 export const DAYS_PRESETS = WELCOME_STEP_DAYS;
 export const POST_PURCHASE_DAYS_PRESETS = POST_PURCHASE_STEP_DAYS;

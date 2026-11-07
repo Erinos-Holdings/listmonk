@@ -96,12 +96,21 @@ test('no_purchase: option <-> document round-trip and the days field', () => {
 
 // LIFECYCLE-SERIES-SPEC I14 (rewriting the 3/7/15 pin): the No-purchase series step days are 2/5/10;
 // a stored value outside them (Ruze's grandfathered 15, D2) stays a choice.
-test('no_purchase: the days radios are 2/5/10 plus a stored value outside them', () => {
-  assert.deepEqual(DAYS_PRESETS, [2, 5, 10]);
-  assert.deepEqual(daysChoices(''), [2, 5, 10]);
-  assert.deepEqual(daysChoices('5'), [2, 5, 10]);
-  assert.deepEqual(daysChoices('15'), [2, 5, 10, 15]);
-  assert.deepEqual(daysChoices('30'), [2, 5, 10, 30]);
+// USAGE-DAY10-SPEC I4 -- day 10 retired: the presets are 2/5 and a stored 10 is a legacy radio.
+test('no_purchase: the days radios are 2/5 plus a stored value outside them', () => {
+  assert.deepEqual(WELCOME_STEP_DAYS, [2, 5]);
+  assert.deepEqual(DAYS_PRESETS, [2, 5]);
+  assert.deepEqual(daysChoices(''), [2, 5]);
+  assert.deepEqual(daysChoices('5'), [2, 5]);
+  assert.deepEqual(daysChoices('10'), [2, 5, 10]);
+  assert.deepEqual(daysChoices('15'), [2, 5, 15]);
+  assert.deepEqual(daysChoices('30'), [2, 5, 30]);
+  assert.deepEqual(daysRadios(TRIGGER_NO_PURCHASE, '10'), [
+    { days: 2, legacy: false, help: 'series.welcomeDay2' },
+    { days: 5, legacy: false, help: 'series.welcomeDay5' },
+    { days: 10, legacy: true, help: 'series.welcomeLegacy' },
+  ]);
+  assert.equal(seriesStepKey(SERIES_WELCOME, 10), 'series.welcomeLegacy');
 });
 
 // LIFECYCLE-SERIES-SPEC I14 -- post_purchase days are 5/14/30; the legacy label and hover.
@@ -112,7 +121,6 @@ test('I14: post_purchase presets 5/14/30; a stored off-pattern value is a legacy
   assert.deepEqual(daysRadios(TRIGGER_NO_PURCHASE, '15'), [
     { days: 2, legacy: false, help: 'series.welcomeDay2' },
     { days: 5, legacy: false, help: 'series.welcomeDay5' },
-    { days: 10, legacy: false, help: 'series.welcomeDay10' },
     { days: 15, legacy: true, help: 'series.welcomeLegacy' },
   ]);
   assert.deepEqual(daysRadios(TRIGGER_POST_PURCHASE, ''), [
@@ -145,7 +153,10 @@ test('I16: every series description key exists in en.json', () => {
     'lists.joinTriggerDaysPostPurchase',
   ];
   keys.forEach((k) => assert.equal(typeof en[k], 'string', k));
-  assert.equal(new Set(keys.slice(0, 8)).size, 8); // eight distinct step texts
+  assert.equal(new Set(keys.slice(0, 7)).size, 7); // seven distinct step texts (USAGE-DAY10-SPEC: day 10 retired)
+  // USAGE-DAY10-SPEC I6 -- the retired day-10 text is gone; the legacy text names 2, 5.
+  assert.equal(en['series.welcomeDay10'], undefined);
+  assert.match(en['series.welcomeLegacy'], /\(2, 5 days\)/);
   assert.equal(seriesStepKey('nope', 5), null);
   // Stage 4 F2 -- each family's legacy text names its own standard.
   assert.equal(seriesStepKey(SERIES_WELCOME, 15), 'series.welcomeLegacy');

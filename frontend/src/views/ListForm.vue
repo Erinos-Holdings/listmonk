@@ -118,7 +118,7 @@
                   <strong>{{ $t(helpFor(k.value).lead) }}</strong> {{ $t(helpFor(k.value).body) }}
                 </p>
               </div>
-              <!-- LIFECYCLE-SERIES-SPEC S7/D5: the step's days -- 2/5/10 (No-purchase series) or 5/14/30
+              <!-- LIFECYCLE-SERIES-SPEC S7/D5: the step's days -- 2/5 (No-purchase series) or 5/14/30
               (Post-purchase series), a stored off-pattern value as a "N days (legacy)" radio; each
               radio hovers with its D5 description (listTrigger.mjs::daysRadios). -->
               <b-field v-if="triggerOption === k.value" :key="`days-${k.value}`" class="trigger-days" :label="$t(k.daysLabel)"
@@ -375,7 +375,7 @@ export default Vue.extend({
       return daysValid(this.daysText);
     },
 
-    // LIFECYCLE-SERIES-SPEC S7: the selected step option's radios (2/5/10 or 5/14/30), plus the
+    // LIFECYCLE-SERIES-SPEC S7: the selected step option's radios (2/5 or 5/14/30), plus the
     // STORED value outside them when the stored trigger is that kind (not the selection, or picking
     // a preset would drop the stored choice) -- labeled legacy (D2).
     daysOptions() {

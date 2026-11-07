@@ -16,7 +16,9 @@ import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-
 const t = (k, p) => (p ? `${k}${JSON.stringify(p)}` : k);
 
 // LIFECYCLE-SERIES-SPEC S9: the parts (lib/brand-usage.ts SCORE_WEIGHTS) -- broadcasts 40, the two
-// series 20 each (4 leaves x active 5), attribution 10, sunset 10.
+// series 20 each (4 leaves x active 5), attribution 10, sunset 10. (Historical fixture values --
+// the fork renders parts verbatim, so the live maxima, e.g. welcome 15 since USAGE-DAY10-SPEC D3,
+// are not pinned here.)
 const parts = (b, w, p, a, s) => ({
   broadcasts: { points: b, max: 40 },
   welcomeSeries: { points: w, max: 20 },
@@ -122,12 +124,13 @@ test('D2: rows are the Brand Matrix rows -- the launch filter over the rows\' ow
 
 // LIFECYCLE-SERIES-SPEC S9 (replacing POLISH3 D4's No purchase 3d | 7d | 15d sub-group and the
 // plain Welcome / 1st purchase columns): Journeys is the No-purchase series group over
-// Day 0 | 2d | 5d | 10d and the Post-purchase series group over Day 0 | 5d | 14d | 30d (the
+// Day 0 | 2d | 5d (10d retired, USAGE-DAY10-SPEC) and the Post-purchase series group over Day 0 | 5d | 14d | 30d (the
 // journeys count column retired 2026-10-30 -- the Score sorts by usage).
 // The Languages section (Skipped over FR ES DE IT) still sits between Journeys and Configurations.
 test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two series groups) / Languages / Configurations', () => {
-  assert.deepEqual(SERIES_DAYS, { welcome: [0, 2, 5, 10], postPurchase: [0, 5, 14, 30] });
-  const W = ['welcome:0', 'welcome:2', 'welcome:5', 'welcome:10'];
+  // USAGE-DAY10-SPEC I5: the No-purchase series is Day 0 | 2d | 5d (day 10 retired).
+  assert.deepEqual(SERIES_DAYS, { welcome: [0, 2, 5], postPurchase: [0, 5, 14, 30] });
+  const W = ['welcome:0', 'welcome:2', 'welcome:5'];
   const P = ['postPurchase:0', 'postPurchase:5', 'postPurchase:14', 'postPurchase:30'];
   assert.deepEqual(WELCOME_FIELDS, W);
   assert.deepEqual(POST_PURCHASE_FIELDS, P);
@@ -149,7 +152,7 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   // The header: plain leaves in row 2 (rowspan 2), the sub-group labels over their leaves in row 3.
   const h = headerLayout();
   assert.deepEqual(h.row2.map((c) => (c.kind === 'group' ? `[${c.key}:${c.span}]` : c.field)), [
-    'cadence', 'lastBroadcast', '[welcome:4]', '[postPurchase:4]', '[reengagement:4]', 'sku', '[skipped:4]', 'attribution', 'sunset',
+    'cadence', 'lastBroadcast', '[welcome:3]', '[postPurchase:4]', '[reengagement:4]', 'sku', '[skipped:4]', 'attribution', 'sunset',
   ]);
   // G5 round 2: every group label takes the single-row headers' font size (small: false).
   assert.deepEqual(h.row2.filter((c) => c.kind === 'group').map((c) => [c.label, c.band, c.first, c.small]), [
@@ -158,7 +161,7 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
     ['dashboard.usage.skipped', 'grey', true, false],
   ]);
   assert.deepEqual(h.row3.map((c) => [c.field, c.first, c.groupStart]), [
-    ['welcome:0', true, true], ['welcome:2', false, false], ['welcome:5', false, false], ['welcome:10', false, false],
+    ['welcome:0', true, true], ['welcome:2', false, false], ['welcome:5', false, false],
     ['postPurchase:0', false, true], ['postPurchase:5', false, false], ['postPurchase:14', false, false], ['postPurchase:30', false, false],
     ['reengagement:180', false, true], ['reengagement:270', false, false], ['reengagement:360', false, false], ['reengagement:365', false, false],
     ['skipped:fr', true, true], ['skipped:es', false, false], ['skipped:de', false, false], ['skipped:it', false, false],
@@ -170,14 +173,14 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   // leaf is centred.
   const pads = (c) => `${c.padLeft ? 'L' : '-'}${c.padRight ? 'R' : '-'}`;
   assert.deepEqual(h.row1.map((c) => [c.key, c.span, c.band, pads(c)]), [
-    ['broadcasts', 2, 'grey', 'LR'], ['journeys', 13, 'white', 'LR'], ['languages', 4, 'grey', 'LR'], ['configurations', 2, 'white', 'L-'],
+    ['broadcasts', 2, 'grey', 'LR'], ['journeys', 12, 'white', 'LR'], ['languages', 4, 'grey', 'LR'], ['configurations', 2, 'white', 'L-'],
   ]);
   assert.deepEqual(h.row2.map((c) => [c.kind === 'group' ? `[${c.key}]` : c.field, pads(c)]), [
     ['cadence', 'L-'], ['lastBroadcast', '-R'], ['[welcome]', 'LR'], ['[postPurchase]', 'LR'], ['[reengagement]', 'LR'], ['sku', 'LR'],
     ['[skipped]', 'LR'], ['attribution', 'L-'], ['sunset', '--'],
   ]);
   assert.deepEqual(h.row3.map((c) => [c.field, pads(c)]), [
-    ['welcome:0', 'L-'], ['welcome:2', '--'], ['welcome:5', '--'], ['welcome:10', '-R'],
+    ['welcome:0', 'L-'], ['welcome:2', '--'], ['welcome:5', '-R'],
     ['postPurchase:0', 'L-'], ['postPurchase:5', '--'], ['postPurchase:14', '--'], ['postPurchase:30', '-R'],
     ['reengagement:180', 'L-'], ['reengagement:270', '--'], ['reengagement:360', '--'], ['reengagement:365', '-R'],
     ['skipped:fr', 'L-'], ['skipped:es', '--'], ['skipped:de', '--'], ['skipped:it', '-R'],
@@ -666,36 +669,44 @@ const wsRow = (rows, legacy = [], brand = 'x') => {
 };
 
 test('I15: each leaf maps the stored step at EXACTLY that day -- green running, amber idle, red 0 absent; legacy only as a chip', () => {
-  const r = wsRow([npStep(10, 40, 'running'), npStep(5, 41, 'idle')], [npStep(15, 42, 'running')]);
-  assert.deepEqual(cell(r, 'welcome:2', t).circles, [{ color: 'red', n: 0 }]);
+  // USAGE-DAY10-SPEC: the No-purchase leaves are 0/2/5 -- the chips sit after 5d.
+  const r = wsRow([npStep(2, 40, 'running'), npStep(5, 41, 'idle')], [npStep(15, 42, 'running')]);
+  assert.deepEqual(cell(r, 'welcome:2', t).circles, [{ color: 'green', n: 1 }]);
   assert.deepEqual(cell(r, 'welcome:5', t).circles, [{ color: 'amber', n: 1 }]);
-  assert.deepEqual(cell(r, 'welcome:10', t).circles, [{ color: 'green', n: 1 }]);
-  // The 15-day legacy step appears in no leaf -- it is the grey chip after 10d.
+  assert.equal(WELCOME_FIELDS.includes('welcome:10'), false); // no 10d leaf
+  assert.equal(seriesLeafOf('welcome:10'), null);
+  // The 15-day legacy step appears in no leaf -- it is the grey chip after 5d.
   WELCOME_FIELDS.forEach((f) => assert.ok(!cell(r, f, t).tooltip.includes('x-no-purchase-42'), f));
-  assert.deepEqual(cellBadges(r, 'welcome:10', t), [{
+  assert.deepEqual(cellBadges(r, 'welcome:5', t), [{
     kind: 'legacy',
     glyph: 'dashboard.usage.legacyChip{"n":15}',
     tooltip: 'series.welcomeLegacy\nx-no-purchase-42: dashboard.usage.listEvergreen{"list":42,"state":"running"}',
   }]);
   // The tooltip: the D5 description, the words, then the step's row.
   assert.equal(
-    cell(r, 'welcome:10', t).tooltip,
-    'series.welcomeDay10\ndashboard.usage.circleRunning{"n":1}\nx-no-purchase-40: dashboard.usage.listEvergreen{"list":40,"state":"running"}',
+    cell(r, 'welcome:2', t).tooltip,
+    'series.welcomeDay2\ndashboard.usage.circleRunning{"n":1}\nx-no-purchase-40: dashboard.usage.listEvergreen{"list":40,"state":"running"}',
   );
-  assert.equal(cell(r, 'welcome:2', t).tooltip, 'series.welcomeDay2\ndashboard.usage.circleNone');
+  // An absent step: red 0.
+  const gap = wsRow([npStep(5, 41, 'idle')]);
+  assert.deepEqual(cell(gap, 'welcome:2', t).circles, [{ color: 'red', n: 0 }]);
+  assert.equal(cell(gap, 'welcome:2', t).tooltip, 'series.welcomeDay2\ndashboard.usage.circleNone');
+  // USAGE-DAY10-SPEC D2: a stored day-10 step is a legacy chip, never a leaf.
+  const ten = wsRow([], [npStep(10, 47, 'running')]);
+  assert.deepEqual(cellBadges(ten, 'welcome:5', t).map((b) => [b.kind, b.glyph]), [['legacy', 'dashboard.usage.legacyChip{"n":10}']]);
   // An invalid row WITH a standard day sits in its leaf as amber, its error in the tooltip.
   const bad = wsRow([npStep(2, 43, 'running', 'sinceAt "x" is not an ISO timestamp')]);
   assert.deepEqual(cell(bad, 'welcome:2', t).circles, [{ color: 'amber', n: 1 }]);
   assert.match(cell(bad, 'welcome:2', t).tooltip, /sinceAt "x" is not an ISO timestamp/);
   // A step without a list is amber.
   assert.deepEqual(cell(wsRow([npStep(5, null, 'none')]), 'welcome:5', t).circles, [{ color: 'amber', n: 1 }]);
-  // The Ruze shape (G7): welcome running, only the grandfathered 15d step -> Day 0 green, red 0 x3,
+  // The Ruze shape (G7): welcome running, only the grandfathered 15d step -> Day 0 green, red 0 x2,
   // one legacy chip.
   const ruze = wsRow([], [npStep(15, 56, 'running')], 'ruze');
   assert.deepEqual(WELCOME_FIELDS.map((f) => cell(ruze, f, t).circles), [
-    [{ color: 'green', n: 1 }], [{ color: 'red', n: 0 }], [{ color: 'red', n: 0 }], [{ color: 'red', n: 0 }],
+    [{ color: 'green', n: 1 }], [{ color: 'red', n: 0 }], [{ color: 'red', n: 0 }],
   ]);
-  assert.deepEqual(cellBadges(ruze, 'welcome:10', t).map((b) => b.kind), ['legacy']);
+  assert.deepEqual(cellBadges(ruze, 'welcome:5', t).map((b) => b.kind), ['legacy']);
   // The Post-purchase group maps the same way, its chips after 30d.
   const pp = shapeRows([{
     brand: 'p',
@@ -722,32 +733,32 @@ test('I12: the legacy chip reads "{n}d" and links the row\'s stored campaigns; n
   const tEn = (k, p) => (en[k] || k).replace(/\{(\w+)\}/g, (m, name) => (p && name in p ? String(p[name]) : m));
   const stored = { ...npStep(15, 56, 'running'), campaigns: [{ id: 231, status: 'paused' }, { id: 229, status: 'running' }, { id: 229, status: 'running' }] };
   const ruze = wsRow([], [stored], 'ruze');
-  const [chip] = cellBadges(ruze, 'welcome:10', tEn);
+  const [chip] = cellBadges(ruze, 'welcome:5', tEn);
   assert.equal(chip.kind, 'legacy');
   assert.equal(chip.glyph, '15d');
   assert.deepEqual(chip.link, { id: ['229', '231'], evergreen: 'all' });
   // Empty, absent, or malformed ids -> no link key at all.
   [[], undefined, [{ id: 0 }, { id: 'x' }, null]].forEach((campaigns) => {
     const row = wsRow([], [{ ...npStep(15, 56, 'running'), ...(campaigns === undefined ? {} : { campaigns }) }], 'ruze');
-    const [b] = cellBadges(row, 'welcome:10', tEn);
+    const [b] = cellBadges(row, 'welcome:5', tEn);
     assert.equal(b.glyph, '15d');
     assert.equal('link' in b, false, JSON.stringify(campaigns));
   });
   // The warn badge carries no link even when the row stores campaigns.
   const warn = wsRow([], [{ ...npStep(null, 44, 'running', 'bad days'), campaigns: [{ id: 9, status: 'running' }] }]);
-  const [w] = cellBadges(warn, 'welcome:10', tEn);
+  const [w] = cellBadges(warn, 'welcome:5', tEn);
   assert.equal(w.kind, 'warn');
   assert.equal('link' in w, false);
 });
 
 test('I15 (POLISH3 stage 2 F5): a no-days row is an amber ⚠ badge with its parser error; a pre-release doc is — throughout', () => {
   const r = wsRow([npStep(5, 41, 'running')], [npStep(null, 44, 'none', 'days "x" is not an integer ≥ 1'), npStep(null, 45, 'none', 'days "0" is not an integer ≥ 1')]);
-  assert.deepEqual(cellBadges(r, 'welcome:10', t), [
+  assert.deepEqual(cellBadges(r, 'welcome:5', t), [
     { kind: 'warn', glyph: '⚠', tooltip: 'dashboard.usage.npInvalid{"slug":"x-no-purchase-44","error":"days \\"x\\" is not an integer ≥ 1"}' },
     { kind: 'warn', glyph: '⚠', tooltip: 'dashboard.usage.npInvalid{"slug":"x-no-purchase-45","error":"days \\"0\\" is not an integer ≥ 1"}' },
   ]);
-  // Only after the group's LAST leaf; nowhere else.
-  ['welcome:0', 'welcome:2', 'welcome:5', 'postPurchase:0', 'postPurchase:30', 'skipped:fr'].forEach((f) => assert.deepEqual(cellBadges(r, f, t), [], f));
+  // Only after the group's LAST leaf (5d since USAGE-DAY10-SPEC); nowhere else.
+  ['welcome:0', 'welcome:2', 'postPurchase:0', 'postPurchase:30', 'skipped:fr'].forEach((f) => assert.deepEqual(cellBadges(r, f, t), [], f));
   assert.deepEqual(cell(r, 'welcome:5', t).circles, [{ color: 'green', n: 1 }]);
   // A doc written before the release (no `series`; it still carries noPurchase) -> every series
   // leaf the "none" circle (a journey cell is always a circle -- user 2026-11-02; before that '—'),
@@ -763,18 +774,18 @@ test('I15 (POLISH3 stage 2 F5): a no-days row is an amber ⚠ badge with its par
     assert.equal(cellLink(pre, f), null, f);
     assert.equal(sortValue(pre, f), null, f);
   });
-  assert.deepEqual(cellBadges(pre, 'welcome:10', t), []);
+  assert.deepEqual(cellBadges(pre, 'welcome:5', t), []);
 });
 
 test('I15 / §10 A9: a leaf\'s circles link their own steps\' lists -- green the running, amber the rest', () => {
-  const r = wsRow([npStep(10, 40, 'running'), npStep(5, 41, 'idle'), npStep(5, 46, 'running')]);
-  assert.deepEqual(circleLink(r, 'welcome:10', 'green'), { list_id: ['40'], evergreen: 'true' });
+  const r = wsRow([npStep(2, 40, 'running'), npStep(5, 41, 'idle'), npStep(5, 46, 'running')]);
+  assert.deepEqual(circleLink(r, 'welcome:2', 'green'), { list_id: ['40'], evergreen: 'true' });
   // Two steps at 5d: one circle each, each linking its own.
   assert.deepEqual(cell(r, 'welcome:5', t).circles, [{ color: 'green', n: 1 }, { color: 'amber', n: 1 }]);
   assert.deepEqual(circleLink(r, 'welcome:5', 'green'), { list_id: ['46'], evergreen: 'true' });
   assert.deepEqual(circleLink(r, 'welcome:5', 'amber'), { list_id: ['41'], evergreen: 'true' });
-  assert.equal(circleLink(r, 'welcome:2', 'green'), null); // absent
-  assert.equal(circleLink(r, 'welcome:2', 'red'), null); // red never links
+  assert.equal(circleLink(r, 'welcome:2', 'amber'), null); // absent
+  assert.equal(circleLink(wsRow([]), 'welcome:2', 'red'), null); // red never links
   assert.equal(circleLink(wsRow([npStep(2, null, 'none')]), 'welcome:2', 'amber'), null); // no list
   assert.equal(circleLink(shapeRows(api).find((x) => x.brand === 'nodoc'), 'welcome:2', 'green'), null);
 });
@@ -990,8 +1001,11 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   g.flatMap((s) => s.steps).forEach((x) => {
     assert.ok(x.title && x.body, `day ${x.days}`);
   });
-  assert.deepEqual(g[0].steps.map((x) => x.title), ['Welcome', 'Gentle conversion reminder', 'Address purchase hesitation', 'Final conversion nudge']);
-  assert.deepEqual(g[1].steps.map((x) => x.title), ['Thank you', 'Getting started', 'How\'s it going?', 'Your next favorite']);
+  // USAGE-DAY10-SPEC D1/D4 / I5: day 10 retired; day 14 is "Get More From Your Purchase" (the
+  // body's own colon is harmless -- parseStepText splits on the FIRST ": ").
+  assert.deepEqual(g[0].steps.map((x) => x.title), ['Welcome', 'Gentle conversion reminder', 'Address purchase hesitation']);
+  assert.deepEqual(g[1].steps.map((x) => x.title), ['Thank you', 'Getting started', 'Get More From Your Purchase', 'Your next favorite']);
+  assert.match(g[1].steps[2].body, /^Go beyond the basics covered in Getting started: /);
   assert.equal(g[0].steps[1].quote, 'Still exploring? Here\'s why customers love [Brand].');
   assert.equal(g[1].steps[0].quote, '');
   assert.equal(GUIDE_SERIES.length, 3);
