@@ -257,7 +257,7 @@ func TestOverlapItem(t *testing.T) {
 	if last.Hash != Hash(it.Text) || last.Hash != "722f28bf2b4f6410a62749023ac971f4c3f56b1d701754d81dc92ca40a4c1054" {
 		t.Fatalf("item 12's last entry hash %q, text hash %q", last.Hash, Hash(it.Text))
 	}
-	const callout = "Monitoring is in place (2026-11-07): the hourly brand health run measures the overlap; the Dashboard's SES account pane shows it with the 12% review and 15% cap-trigger lines, and #integrations-alerts is paged the first run it reaches 15%."
+	const callout = "Monitoring is in place (2026-11-07): the hourly brand health run measures the overlap; the Dashboard's SES account pane shows it with the 12% review and 15% cap-trigger lines, and #integrations-alerts is paged when it crosses 15% from a known reading (the Dashboard shows the live figure in any case)."
 	if last.Callout != callout {
 		t.Fatalf("item 12's last entry callout %q", last.Callout)
 	}
