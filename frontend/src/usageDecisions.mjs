@@ -70,6 +70,11 @@ export function publishedText(view, t = (k) => k) {
 // The labels set in bold at the start of a later line ("Recommended:", "NOTE:").
 export const LEAD_LABELS = Object.freeze(['Recommended:', 'NOTE:']);
 
+// A later line's first sentence is a bold heading lead when it has at most this many words
+// ("Smart Sending."); longer first sentences are prose. Lines starting with a LEAD_LABELS label
+// keep the label as the lead.
+export const SHORT_LEAD_WORDS = 3;
+
 // textLines splits a bullet's text into its lines, each { lead, rest, recommended } with `lead` set
 // in bold: the FIRST line's lead is its first sentence (through the first ". ", or the whole line
 // when it has none -- "Entry.", "Exit on purchase (your W01–W05 request)."); a later line's lead is
@@ -85,7 +90,19 @@ export function textLines(text) {
     }
     const label = LEAD_LABELS.find((l) => line.startsWith(l));
     recommended = recommended || label === 'Recommended:';
-    return label ? { lead: label, rest: line.slice(label.length), recommended } : { lead: '', rest: line, recommended };
+    if (label) {
+      return { lead: label, rest: line.slice(label.length), recommended };
+    }
+    // A later line that opens with a short heading sentence -- at most SHORT_LEAD_WORDS words ending
+    // in a period, "Smart Sending." -- takes that sentence as its bold lead (user 2026-11-07). A
+    // line whose first sentence is longer is an ordinary paragraph with no lead.
+    const at = line.indexOf('. ');
+    const first = at < 0 ? line : line.slice(0, at + 1);
+    // A numbered line ("1. A rule.") is not a heading: the lead must carry a letter.
+    if (first.endsWith('.') && /[A-Za-z]/.test(first) && first.trim().split(/\s+/).length <= SHORT_LEAD_WORDS) {
+      return { lead: first, rest: line.slice(first.length), recommended };
+    }
+    return { lead: '', rest: line, recommended };
   });
 }
 

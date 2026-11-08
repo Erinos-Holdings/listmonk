@@ -140,6 +140,11 @@
           position="is-left" append-to-body>
           <p class="audience-count" tabindex="0" data-cy="audience-count">
             {{ $utils.formatNumber(audienceBox.count) }}
+            <!-- Smart Sending (SMART-SENDING-SPEC D3; user 2026-11-07): the would-be skipped
+                 count as a red badge in the box's corner; the wording stays in the hover. -->
+            <span v-if="audienceBox.skipped > 0" class="audience-skipped" data-cy="audience-skipped">
+              {{ $utils.formatNumber(audienceBox.skipped) }}
+            </span>
           </p>
         </b-tooltip>
       </div>

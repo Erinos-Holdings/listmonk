@@ -214,7 +214,7 @@
                  every line in red (2026-10-31 polish 2, user). Kept on one line: no template
                  whitespace inside a line. -->
             <p class="bu-decision-text">
-              <span v-for="(l, li) in textLines(it.text)" :key="li" :class="['bu-decision-line', { 'bu-decision-recommended': l.recommended }]"><strong
+              <span v-for="(l, li) in textLines(it.text)" :key="li" :class="['bu-decision-line', { 'bu-decision-recommended': l.recommended, 'bu-decision-lead': li > 0 && !!l.lead }]"><strong
                 v-if="li === 0 && itemNum(it)" class="bu-decision-n">{{ itemNum(it) }}.</strong><strong
                 v-if="l.lead">{{ l.lead }}</strong>{{ l.rest }}</span>
             </p>

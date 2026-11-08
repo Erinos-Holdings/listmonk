@@ -234,7 +234,7 @@
       "key": "both-per-brand",
       "section": "both",
       "n": 13,
-      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, two No-purchase steps and every broadcast the brand sends in their first 5 days — up to five emails in five days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nSmart Sending, per brand, broadcasts only: a broadcast skips anyone who received a journey email from the same brand in the last 24 hours, decided when the send starts. The campaign page shows how many it would skip before Start, and the skipped count stays on the campaign's analytics and the Campaign Matrix. Journeys are exempt: one-shot and time-bound. Marketing can switch Smart Sending off per campaign for a major launch or a time-sensitive promotion; the Matrix shows \"off\" on such a campaign. (Klaviyo Smart Sending skips the same way, with the same per-campaign switch.)\nThe same-day double (item 3) is fixed: the one stack that hit every checkout opt-in. Sunset stays the backstop; complaint rates in Brand Health show fatigue first.",
+      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, two No-purchase steps and every broadcast the brand sends in their first 5 days — up to five emails in five days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nSmart Sending. Per brand, broadcasts only: a broadcast skips anyone who received a journey email from the same brand in the last 24 hours, decided when the send starts. The campaign page shows how many it would skip before Start, and the skipped count stays on the campaign's analytics and the Campaign Matrix. Journeys are exempt: one-shot and time-bound. Marketing can switch Smart Sending off per campaign for a major launch or a time-sensitive promotion; the Matrix shows \"off\" on such a campaign. (Klaviyo Smart Sending skips the same way, with the same per-campaign switch.)\nThe same-day double (item 3) is fixed: the one stack that hit every checkout opt-in. Sunset stays the backstop; complaint rates in Brand Health show fatigue first.",
       "changelog": [
         {
           "date": "2026-11-01",
@@ -271,6 +271,13 @@
           "source": "page",
           "line": "Implemented (SMART-SENDING-SPEC): the 24-hour rule at claim, the per-campaign switch, the before-Start count, Skipped on the analytics and the Matrix; was \"Recommended: 1. A Smart Sending rule …\".",
           "hash": "b0298a4fff69aa10d50bc507084c6ad616548837fd79ed4323c0b0ec5a80cdf1",
+          "callout": "Further recommendations are in the History below (2026-11-07): a per-campaign override is built; a journey-side rule that would hold the cap on launch day waits on the first weeks of skip data."
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "\"Smart Sending.\" set as the second paragraph's bold lead (wording only).",
+          "hash": "f0ce3ee458d87d90cdcb4d594b9ad936c66f55e83d2d9716a113e2628bb38c15",
           "callout": "Further recommendations are in the History below (2026-11-07): a per-campaign override is built; a journey-side rule that would hold the cap on launch day waits on the first weeks of skip data."
         }
       ]

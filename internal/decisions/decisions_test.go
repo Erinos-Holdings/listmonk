@@ -130,7 +130,7 @@ var shippedLineage = map[string][]string{
 	"np-no-restarts":      {"page#"},
 	"pp-delivery-clock":   {"slack", "page#"},
 	"pp-returning-thanks": {"page#"},
-	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#"},
+	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#"},
 }
 
 func checkShippedChangelog(t *testing.T, it Item) {
@@ -217,9 +217,12 @@ func TestSmartSendingItem(t *testing.T) {
 	if c := v.Changelog[len(v.Changelog)-1].Callout; c != last.Callout {
 		t.Fatalf("the GET's last entry callout = %q", c)
 	}
+	// An earlier entry may carry the same callout (it is repeated on each entry while the matter is
+	// open, SMART-SENDING-SPEC D11 as amended by S5); only the last entry's is shown, and the
+	// earlier ones must be the entries that first carried it, never a different note.
 	for i, c := range v.Changelog[:len(v.Changelog)-1] {
-		if c.Callout != "" {
-			t.Fatalf("entry %d carries a callout: %q", i, c.Callout)
+		if c.Callout != "" && c.Callout != last.Callout {
+			t.Fatalf("entry %d carries a different callout: %q", i, c.Callout)
 		}
 	}
 }

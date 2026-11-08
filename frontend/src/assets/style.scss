@@ -1686,7 +1686,10 @@ section.dashboard (which reopens after them). */
   }
   /* 2026-11-01 (user): a blank row before each recommendation -- one line of space above the first
   red line, the adjacent-sibling rule so the text and its hash stay unchanged. */
-  .bu-decision-line:not(.bu-decision-recommended) + .bu-decision-line.bu-decision-recommended {
+  /* A later line with a bold lead ("Recommended:", "NOTE:", or a short heading sentence such as
+  "Smart Sending." -- usageDecisions.mjs::textLines) opens a paragraph (user 2026-11-07): one
+  family rule, which also covers the first "Recommended:" line's gap. */
+  .bu-decision-line + .bu-decision-line.bu-decision-lead {
     margin-top: 1.4em;
   }
   .bu-decision-n {
@@ -2988,11 +2991,28 @@ section.campaign {
     }
 
     .audience-count {
+      position: relative;
       font-size: $size-6;
       font-weight: 700;
       line-height: 2.5rem;
       color: $white;
       cursor: default;
+    }
+    /* Smart Sending (SMART-SENDING-SPEC D3; user 2026-11-07): the would-be skipped count as a red
+    badge in the count row's bottom-right corner; the wording stays in the hover. */
+    .audience-skipped {
+      position: absolute;
+      right: 0.35rem;
+      bottom: 0.35rem;
+      min-width: 1.6rem;
+      padding: 0 0.4rem;
+      border-radius: $radius-small;
+      background: $danger;
+      color: $white;
+      font-size: $size-7;
+      font-weight: 700;
+      line-height: 1.5rem;
+      text-align: center;
     }
 
     &.is-success {

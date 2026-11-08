@@ -263,6 +263,15 @@ test('textLines: the first sentence and the Recommended:/NOTE: labels are the bo
   ]);
   assert.equal(lines.map((l) => l.lead + l.rest).join('\n'), s);
   assert.deepEqual(textLines('Language.'), [{ lead: 'Language.', rest: '', recommended: false }]);
+  // A later line opening with a short heading sentence (≤ SHORT_LEAD_WORDS words, a letter in it)
+  // takes it as the bold lead (user 2026-11-07, item 13's "Smart Sending."); a longer first
+  // sentence, or a numbered "1.", is prose with no lead.
+  assert.deepEqual(textLines('Lead. Rest.\nSmart Sending. Per brand, broadcasts only: it skips.\nThe same-day double is fixed. Sunset stays.\n2. Second.'), [
+    { lead: 'Lead.', rest: ' Rest.', recommended: false },
+    { lead: 'Smart Sending.', rest: ' Per brand, broadcasts only: it skips.', recommended: false },
+    { lead: '', rest: 'The same-day double is fixed. Sunset stays.', recommended: false },
+    { lead: '', rest: '2. Second.', recommended: false },
+  ]);
   // A first-line "Recommended:" is the lead, not a recommendation (internal/decisions::HasRecommended agrees).
   assert.deepEqual(textLines('Recommended:'), [{ lead: 'Recommended:', rest: '', recommended: false }]);
   assert.deepEqual(textLines(null), [{ lead: '', rest: '', recommended: false }]);
