@@ -296,8 +296,9 @@ func TestPostRefusals(t *testing.T) {
 	}
 	long := strings.Repeat("é", 2001)
 	// An item that still carries a "Recommended:" line (item 13 lost its when Smart Sending was
-	// implemented, integrations SMART-SENDING-SPEC D8).
-	rec, _ := a.decisionDoc.Find("both-multi-brand")
+	// implemented, integrations SMART-SENDING-SPEC D8; item 12 when the overlap monitor shipped,
+	// BRAND-OVERLAP-SPEC D4).
+	rec, _ := a.decisionDoc.Find("np-ruze-15d")
 	recHash := decisions.Hash(rec.Text)
 	cases := []struct {
 		name string
@@ -323,12 +324,12 @@ func TestPostRefusals(t *testing.T) {
 		{"note over 2,000 characters", approver, "np-entry", body(hash, "reject", long), 400, a.i18n.T("decisions.noteTooLong")},
 		{"malformed body", approver, "np-entry", `{`, 400, ""},
 		// 2026-10-31 polish: a decision outside the item's choices (decisions.Choices). np-entry has
-		// no "Recommended:" line (Accept | Reject); both-multi-brand has one (Current | Recommended | Reject).
+		// no "Recommended:" line (Accept | Reject); np-ruze-15d has one (Current | Recommended | Reject).
 		{"current on an item without a Recommended", approver, "np-entry", body(hash, "current", nil), 400, a.i18n.T("decisions.badDecision")},
 		{"recommended on an item without a Recommended", approver, "np-entry", body(hash, "recommended", nil), 400, a.i18n.T("decisions.badDecision")},
-		{"accept on an item with a Recommended", approver, "both-multi-brand", body(recHash, "accept", nil), 400, a.i18n.T("decisions.badDecision")},
-		{"recommended with a note", approver, "both-multi-brand", body(recHash, "recommended", "yes"), 400, a.i18n.T("decisions.acceptNote")},
-		{"current with a note", approver, "both-multi-brand", body(recHash, "current", "yes"), 400, a.i18n.T("decisions.acceptNote")},
+		{"accept on an item with a Recommended", approver, "np-ruze-15d", body(recHash, "accept", nil), 400, a.i18n.T("decisions.badDecision")},
+		{"recommended with a note", approver, "np-ruze-15d", body(recHash, "recommended", "yes"), 400, a.i18n.T("decisions.acceptNote")},
+		{"current with a note", approver, "np-ruze-15d", body(recHash, "current", "yes"), 400, a.i18n.T("decisions.acceptNote")},
 	}
 	for _, c := range cases {
 		code, msg := callDecisions(t, a, c.u, http.MethodPost, c.key, c.body)
@@ -408,7 +409,7 @@ func TestPostRefusals(t *testing.T) {
 
 	// Current and Recommended on an item with a "Recommended:" line: each appends one row, no note.
 	for i, d := range []string{decisions.Current, decisions.Recommended} {
-		code, out = callDecisions(t, a, approver, http.MethodPost, "both-multi-brand", body(recHash, d, nil))
+		code, out = callDecisions(t, a, approver, http.MethodPost, "np-ruze-15d", body(recHash, d, nil))
 		if code != 200 || store.inserts != 3+i || store.rows[2+i].Decision != d || store.rows[2+i].Note != nil {
 			t.Fatalf("%s: %d %s (inserts %d)", d, code, out, store.inserts)
 		}
@@ -417,7 +418,7 @@ func TestPostRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !slices.Equal(resp.Data.Choices, []string{decisions.Current, decisions.Recommended, decisions.Reject}) || resp.Data.Current.Decision != decisions.Recommended {
-		t.Fatalf("both-multi-brand response: %+v", resp.Data)
+		t.Fatalf("np-ruze-15d response: %+v", resp.Data)
 	}
 }
 

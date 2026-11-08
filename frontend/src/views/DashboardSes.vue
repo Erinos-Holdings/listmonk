@@ -122,6 +122,27 @@
         </div>
       </div>
 
+      <!-- Fork (integrations BRAND-OVERLAP-SPEC D3) -- the multi-brand overlap, the document's
+      `overlap` sub-input verbatim: status, counts, shares and thresholds are all the document's
+      (sesOverlap.mjs formats them); nothing is computed or held here. -->
+      <div class="box" data-cy="ses-overlap">
+        <h3 class="title is-6 mb-1">
+          {{ $t('dashboard.ses.overlap') }} <health-chip :status="sub('overlap').status" :note="reasonOf(sub('overlap'))" />
+        </h3>
+        <p v-if="reasonOf(sub('overlap'))" class="is-size-7 mb-2">{{ reasonOf(sub('overlap')) }}</p>
+        <template v-if="overlap">
+          <p class="is-size-7">{{ $t('dashboard.ses.overlapLine', overlap) }}</p>
+          <p class="is-size-7 has-text-grey mb-1">
+            {{ $t('dashboard.ses.overlapThresholds', { warn: overlap.warn, issues: overlap.issues }) }}
+          </p>
+          <!-- The bar's full width is the document's issues line; the mark is its warn line. -->
+          <div class="rate-track">
+            <span :class="['rate-fill', `health-${sub('overlap').status}`]" :style="{ width: overlap.fill }" />
+            <span class="rate-mark" :style="{ left: overlap.mark }" />
+          </div>
+        </template>
+      </div>
+
       <!-- Fork (integrations BLOCKLIST-COMPOSITION-SPEC D5) -- the account-wide blocklist
       composition, the document's `composition` verbatim; nothing when the field is absent. -->
       <blocklist-composition :composition="doc.composition || null" scope="account" />
@@ -157,6 +178,7 @@ import BlocklistComposition from '../components/BlocklistComposition.vue';
 import {
   STATE_MESSAGE, baselineOf, canRefresh, createRefresh, isActive,
 } from '../healthRefresh.mjs'; // eslint-disable-line import/extensions
+import { overlapView } from '../sesOverlap.mjs'; // eslint-disable-line import/extensions
 
 const RATE_KEYS = ['accountRates', 'listmonkRates'];
 const RATES = [
@@ -190,6 +212,11 @@ export default Vue.extend({
     refreshMessage() {
       const key = STATE_MESSAGE[this.refreshState];
       return key ? this.$t(key) : '';
+    },
+
+    // BRAND-OVERLAP-SPEC D3: the box's numbers, from the stored overlap detail only.
+    overlap() {
+      return overlapView(this.detailOf('overlap'));
     },
 
     quotaWidth() {

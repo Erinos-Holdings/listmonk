@@ -131,6 +131,7 @@ var shippedLineage = map[string][]string{
 	"np-no-restarts":      {"page#"},
 	"pp-delivery-clock":   {"slack", "page#"},
 	"pp-returning-thanks": {"page#"},
+	"both-multi-brand":    {"page#"},
 	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#"},
 }
 
@@ -228,6 +229,49 @@ func TestSmartSendingItem(t *testing.T) {
 	}
 }
 
+// integrations BRAND-OVERLAP-SPEC D4/I6: item 12 (`both-multi-brand`) is the standing policy --
+// no "Recommended:" line, so Accept | Reject; its concept pin is unchanged; the newest entry
+// carries the new text's hash and the monitoring callout.
+func TestOverlapItem(t *testing.T) {
+	d, err := Lifecycle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	it, ok := d.Find("both-multi-brand")
+	if !ok {
+		t.Fatal("no item 12")
+	}
+	if it.N == nil || *it.N != 12 {
+		t.Fatalf("item 12 n = %v", it.N)
+	}
+	if HasRecommended(it.Text) || strings.Join(Choices(it), ",") != Accept+","+Reject {
+		t.Fatalf("item 12 choices %v", Choices(it))
+	}
+	if Concept(it).Hash != pinnedHashes[it.Key] {
+		t.Fatal("item 12's concept pin moved")
+	}
+	if m := Modified(it, Hash(it.Text)); m != nil {
+		t.Fatalf("Modified(current text) = %+v", m)
+	}
+	last := it.Changelog[len(it.Changelog)-1]
+	if last.Hash != Hash(it.Text) || last.Hash != "722f28bf2b4f6410a62749023ac971f4c3f56b1d701754d81dc92ca40a4c1054" {
+		t.Fatalf("item 12's last entry hash %q, text hash %q", last.Hash, Hash(it.Text))
+	}
+	const callout = "Monitoring is in place (2026-11-07): the hourly brand health run measures the overlap; the Dashboard's SES account pane shows it with the 12% review and 15% cap-trigger lines, and #integrations-alerts is paged the first run it reaches 15%."
+	if last.Callout != callout {
+		t.Fatalf("item 12's last entry callout %q", last.Callout)
+	}
+	v := ItemOf(it, nil)
+	if c := v.Changelog[len(v.Changelog)-1].Callout; c != callout {
+		t.Fatalf("the GET's last entry callout = %q", c)
+	}
+	for i, c := range v.Changelog[:len(v.Changelog)-1] {
+		if c.Callout != "" {
+			t.Fatalf("entry %d carries a callout: %q", i, c.Callout)
+		}
+	}
+}
+
 // pinnedHashes are each item's CONCEPT hash -- its newest `reapprove` entry's (LIFECYCLE-DOCS-SPEC
 // D2 (b)). An ordinary text edit needs no change here (its changelog entry is the
 // acknowledgement); requesting a re-approval -- an entry with `reapprove: true` and the new hash --
@@ -302,7 +346,8 @@ func TestItemHashesPinned(t *testing.T) {
 // "Recommended:" line after the first; Accept | Reject on every other. The shipped items with a
 // Recommended option are pinned, so a text edit that adds or drops one is a deliberate change
 // (LIFECYCLE-DOCS-SPEC I8: items 3 and 9 lost theirs when implemented, 2026-11-07; integrations
-// SMART-SENDING-SPEC D8/I9: item 13 lost its when Smart Sending was implemented, 2026-11-07).
+// SMART-SENDING-SPEC D8/I9: item 13 lost its when Smart Sending was implemented, 2026-11-07;
+// integrations BRAND-OVERLAP-SPEC D4/I6: item 12 lost its when the overlap monitor shipped, 2026-11-07).
 func TestChoices(t *testing.T) {
 	if HasRecommended("Recommended: lead line only") {
 		t.Fatal("a first-line Recommended: is the lead, not an option")
@@ -331,7 +376,7 @@ func TestChoices(t *testing.T) {
 			t.Fatalf("%s: %v", it.Key, c)
 		}
 	}
-	want := []string{"np-ruze-15d", "both-multi-brand"}
+	want := []string{"np-ruze-15d"}
 	if strings.Join(three, ",") != strings.Join(want, ",") {
 		t.Fatalf("items with three choices %v, want %v", three, want)
 	}

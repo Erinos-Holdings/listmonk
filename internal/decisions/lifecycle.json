@@ -225,7 +225,7 @@
       "key": "both-multi-brand",
       "section": "both",
       "n": 12,
-      "text": "Frequency Risk: Multiple brands. Overlap today is small: 4.7% (1,185 of 25,045 active newsletter subscribers) are on two or more brands' lists, and only 0.8% (205) on three or more. The industry pattern is a per-person cap by message class, with journeys and transactional email exempt.\nRecommended: Add a per-person cap only if overlap grows past ~15%. For broadcasts, skip, never defer: someone who already got one brand's broadcast that day is skipped from the second brand's, not pushed to the next day, with the tiebreak going to the brand they engage with more. (Klaviyo Smart Sending skips the same way: 16-hour default, per account, no cross-brand awareness.)",
+      "text": "Frequency Risk: Multiple brands. Overlap is small: about 5% of active newsletter subscribers are on two or more brands' lists and under 1% on three or more (the live figure is on the Dashboard's SES account pane). The industry pattern is a per-person cap by message class, with journeys and transactional email exempt.\nA per-person cap is added only if overlap grows past 15%. For broadcasts it will skip, never defer: someone who already got one brand's broadcast that day is skipped from the second brand's, not pushed to the next day, with the tiebreak going to the brand they engage with more. (Klaviyo Smart Sending skips the same way: 16-hour default, per account, no cross-brand awareness.)",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -233,6 +233,13 @@
           "line": "Published for approval",
           "hash": "cce91d6c3233d5109155fd799daa3cd573b13f283be22c296c8c9f3a6d821bd6",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "The policy stated as standing (no longer a recommendation); the one-off 4.7% replaced by the live measure; was \"Overlap today is small: 4.7% … Recommended: Add a per-person cap only if …\".",
+          "hash": "722f28bf2b4f6410a62749023ac971f4c3f56b1d701754d81dc92ca40a4c1054",
+          "callout": "Monitoring is in place (2026-11-07): the hourly brand health run measures the overlap; the Dashboard's SES account pane shows it with the 12% review and 15% cap-trigger lines, and #integrations-alerts is paged the first run it reaches 15%."
         }
       ]
     },
