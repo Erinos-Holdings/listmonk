@@ -1054,7 +1054,7 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   // (parseStepText splits on the FIRST ": "); LIFECYCLE-DOCS-SPEC D19 / I12: its body is D19's.
   assert.deepEqual(g[0].steps.map((x) => x.title), ['Welcome', 'Gentle conversion reminder', 'Address purchase hesitation']);
   assert.deepEqual(g[1].steps.map((x) => x.title), ['Thank you', 'Getting started', 'Get More From Your Purchase', 'Your next favorite']);
-  assert.equal(g[1].steps[2].body, 'Go beyond the basics covered in Getting started with tips to get more value from the product; not another sales pitch.');
+  assert.equal(g[1].steps[2].body, 'Go beyond the basics covered in Getting started: additional tips, techniques, routine ideas or ways to get more value from the product. Genuinely helpful, not another sales pitch, and never a review request.');
   assert.equal(en['series.postPurchaseDay14'], `Day 14 Get More From Your Purchase: ${g[1].steps[2].body}`);
   // LIFECYCLE-DOCS-SPEC D22 / I12: the Post-purchase steps after day 0 carry "~N" and the real
   // clock; day 0 and every No-purchase / Re-engagement step the plain number and no clock.
@@ -1069,7 +1069,7 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   [...g[0].steps, ...g[2].steps].forEach((x) => {
     assert.deepEqual([x.label, x.clock], [String(x.days), ''], `${x.days}`);
   });
-  assert.equal(g[0].steps[1].quote, 'Still exploring? Here\'s why customers love [Brand].');
+  assert.equal(g[0].steps[1].quote, 'Still exploring? Here\'s why [Brand] is different.');
   assert.equal(g[1].steps[0].quote, '');
   assert.equal(GUIDE_SERIES.length, 3);
   assert.equal(typeof en['dashboard.usage.guideDay'], 'string');

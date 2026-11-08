@@ -74,7 +74,7 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET(path.Join(uriAdmin, "/custom.css"), serveCustomAppearance("admin.custom_css"))
 		g.GET(path.Join(uriAdmin, "/custom.js"), serveCustomAppearance("admin.custom_js"))
 		// Fork (2026-11-08, user): the internal documentation pages linked from Brands > Usage
-		// ("Research · AI-generated Journey Campaigns · Shop Link Attribution") are served only to
+		// ("Interval Evidence Brief · AI-generated Journey Campaigns · Shop Link Attribution") are served only to
 		// a logged-in user. They live in frontend/public/docs (built to /admin/docs/ in the embedded
 		// FS), which no public route serves -- /admin/static/* is the only unauthenticated admin path.
 		g.GET(path.Join(uriAdmin, "/docs/:page"), a.AdminDoc)
