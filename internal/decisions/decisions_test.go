@@ -123,7 +123,10 @@ func TestItemsShape(t *testing.T) {
 // edit. Every other item has only its concept entry. The check keys on the NEWEST HASH-BEARING entry
 // (its hash is the text's), never the last entry, so a later hash-less entry (gate G7's decision
 // entry) keeps the shape test meaningful; and it asserts what the file guarantees -- a `who` entry
-// is hash-less, a hash-bearing entry is source "page".
+// is hash-less, a hash-bearing entry is source "page". 2026-11-08 (the inactivity-suppression
+// rename, Kaylinn's 2026-11-05 reject note on item 22 adopted): "reject-note" = her hash-less
+// entry dated 2026-11-05, source "reject note 2026-11-05"; "page#8" = a page entry carrying a text
+// hash dated 2026-11-08 (items 19 and 22).
 var shippedLineage = map[string][]string{
 	"np-entry":            {"slack", "page#", "page#"},
 	"np-same-day-double":  {"page#"},
@@ -133,6 +136,8 @@ var shippedLineage = map[string][]string{
 	"pp-returning-thanks": {"page#"},
 	"both-multi-brand":    {"page#"},
 	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#"},
+	"sp-asks":             {"page#8"},
+	"sp-suppressed":       {"reject-note", "page#8"},
 }
 
 func checkShippedChangelog(t *testing.T, it Item) {
@@ -170,6 +175,10 @@ func checkShippedChangelog(t *testing.T, it Item) {
 			ok = c.Date == "2026-11-07" && c.Source == "page" && c.Who == "" && c.Hash == ""
 		case "page#":
 			ok = c.Date == "2026-11-07" && c.Source == "page" && c.Who == "" && c.Hash != ""
+		case "reject-note":
+			ok = c.Date == "2026-11-05" && c.Source == "reject note 2026-11-05" && c.Who == "Kaylinn Brophy" && c.Hash == ""
+		case "page#8":
+			ok = c.Date == "2026-11-08" && c.Source == "page" && c.Who == "" && c.Hash != ""
 		}
 		if !ok {
 			t.Errorf("%s: entry %d %+v, want a %s entry", it.Key, i+1, c, tok)

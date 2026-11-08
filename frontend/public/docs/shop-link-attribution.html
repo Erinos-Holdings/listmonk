@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- Shop link attribution: the standard for every brand. Linked from the Brands page Usage pane's
+     journey guide ("Research · AI-generated Journey Campaigns · Shop Link Attribution",
+     BrandUsage.vue), served to a logged-in user by /admin/docs/:page (cmd/handlers.go AdminDoc).
+     A static copy of the Claude doc of the same name (Robbie Jackson, 2026-11-03), reshaped as a
+     page on 2026-11-08; refresh by editing this file and releasing the fork. -->
+<title>Shop Link Attribution</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+html,body{margin:0}
+:root{
+  --bg:#f7f6f2; --surface:#ffffff; --ink:#1c2321; --ink-2:#4a5553; --ink-3:#7a8683;
+  --line:#dcdfd9; --accent:#0e6b66; --accent-soft:#d9ecea; --warm:#a3541c; --warm-soft:#f6e4d6;
+  --good:#2a7a3b; --display:"Newsreader",Georgia,"Times New Roman",serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#151a19; --surface:#1e2524; --ink:#eef1ee; --ink-2:#b8c2bf; --ink-3:#86928f;
+  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#151a19; --surface:#1e2524; --ink:#eef1ee; --ink-2:#b8c2bf; --ink-3:#86928f;
+  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);font-weight:600;line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.2rem,5vw,3.4rem);letter-spacing:-.01em}
+h2{font-size:clamp(1.5rem,3vw,2rem);margin-top:56px;margin-bottom:8px}
+h3{font-size:1.2rem;margin-top:20px;margin-bottom:6px}
+p{margin:10px 0}
+.lede{font-size:1.15rem;color:var(--ink-2)}
+.eyebrow{font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+a{color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header{padding-top:48px;padding-bottom:28px;border-bottom:1px solid var(--line)}
+header .meta{color:var(--ink-3);font-size:.9rem;margin-top:14px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;background:var(--surface);border:1px solid var(--line);padding:0 4px;border-radius:3px;white-space:nowrap}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:16px}
+.card{background:var(--surface);border:1px solid var(--line);padding:18px;min-width:0}
+.card h3{margin-top:0;font-size:1.05rem}
+.card p{font-size:.95rem;margin:6px 0 0}
+.callout{background:var(--accent-soft);border:1px solid var(--line);padding:16px 18px;margin-top:18px}
+.callout p{margin:6px 0}
+.warn{border-left:3px solid var(--warm);padding:4px 0 4px 16px;margin:16px 0}
+.warn b{display:block}
+.warn p{margin:4px 0 0;font-size:.95rem;color:var(--ink-2)}
+.note{font-size:.88rem;color:var(--ink-3)}
+ol.flow{padding-left:0;list-style:none;counter-reset:m;margin-top:12px}
+ol.flow li{counter-increment:m;display:grid;grid-template-columns:44px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+ol.flow li::before{content:counter(m);font-family:var(--display);font-size:1.6rem;color:var(--accent);line-height:1}
+ol.flow li b{display:block}
+ol.flow li span{color:var(--ink-2);font-size:.95rem}
+ul.plain{padding-left:18px}
+ul.plain li{margin:6px 0}
+table{width:100%;border-collapse:collapse;font-size:.93rem;margin-top:14px;font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto}
+th{text-align:left;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+td:first-child{font-weight:600}
+.rank{display:inline-block;min-width:1.6em;text-align:center;font-weight:700;background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 5px}
+.kind{font-weight:700}
+.pill{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.sources{font-size:.9rem;padding-left:18px}
+.sources li{margin:6px 0}
+input[type=checkbox]{vertical-align:middle;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">Brand onboarding · Attribution · The standard</div>
+  <h1 style="margin-top:10px">Shop Link Attribution</h1>
+  <p class="lede">Every subscriber carries one shop link per brand, and it decides who gets credit for their purchases. Every brand with its own website goes on the standard below at onboarding, before its first sign-up.</p>
+  <p class="meta">Robbie Jackson · 2026-11-03 · A static copy of the working document, reshaped as a page 2026-11-08. Counts are point-in-time.</p>
+</header>
+
+<h2>Summary</h2>
+<div class="cards">
+  <div class="card"><h3>What it is</h3><p>For each brand, a subscriber holds one complete link, such as <code>https://bnkdwellness.com/?ref=arielctyson</code>. Every email and SMS uses that link exactly as stored.</p></div>
+  <div class="card"><h3>Who it credits</h3><p>The <code>?ref=</code> value is the creator who gets credit. A link with no <code>?ref=</code> credits nobody.</p></div>
+  <div class="card"><h3>Where it lives</h3><p>listmonk is the one place the link is stored. Clerk SMS copies it into the brand's <code>&lt;Brand&gt; Shop Link</code> contact field.</p></div>
+  <div class="card"><h3>The rule</h3><p>At onboarding, each brand gets three settings: its website, its founder's referral slug, and its official launch time. Without them, referrals from the brand's own site are lost. That is what happened to BNKD from July to November 2026.</p></div>
+</div>
+
+<h2>The four kinds of link</h2>
+<p>Every stored link is one of four kinds. The kind records why the link is what it is, and its rank decides whether a later sign-up can replace it.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Kind</th><th>Rank</th><th>Who gets it</th><th>The link</th></tr></thead>
+  <tbody>
+    <tr><td class="kind">Self</td><td><span class="rank">2</span> highest</td><td>A curated creator who has their own site</td><td>Brand site <code>?ref=</code> their own slug</td></tr>
+    <tr><td class="kind">Creator</td><td><span class="rank">1</span></td><td>Arrived through a creator's page or a creator's <code>?ref=</code> link</td><td>Brand site <code>?ref=</code> that creator</td></tr>
+    <tr><td class="kind">Founder</td><td><span class="rank">0</span></td><td>Signed up with no referral <b>before</b> the launch</td><td>Brand site <code>?ref=</code> the founder</td></tr>
+    <tr><td class="kind">Corporate</td><td><span class="rank">0</span></td><td>Signed up with no referral <b>after</b> the launch</td><td>The plain brand site, no <code>?ref=</code></td></tr>
+  </tbody>
+</table>
+</div>
+<p>A higher rank always wins. Founder and corporate share the lowest rank, and between those two the newer sign-up wins.</p>
+<p>A sign-up through the founder's own referral link is a <b>creator</b> link. It has the same URL as a founder grant, but one rank higher.</p>
+<p><b>Two sites, two roles.</b> The brand's own site (for example, ruzepouches.com) is the official site, and every stored link points to it. The brand's curatedfor.you store is the outlet where discounts live. A campaign may link to either one, but the person's stored link does not change.</p>
+
+<h2>How a sign-up is classified</h2>
+<p>Each sign-up runs through these checks in order, and the first one that applies decides the link.</p>
+<ol class="flow">
+  <li><div><b>The person is a curated creator with their own site</b><span>→ self, <code>?ref=</code> their own slug. Recognised when they join, and again whenever their creator record changes.</span></div></li>
+  <li><div><b>They ticked the "keep me updated" box at checkout, and the order credits a creator</b><span>→ creator, <code>?ref=</code> the order's creator (settled with Chris, Nov 3, 2026). The brand's own name is not a creator; the founder is.</span></div></li>
+  <li><div><b>They came through a creator's page</b><span>(<code>curatedfor.you/&lt;creator&gt;/…</code> or <code>komigo.me/&lt;creator&gt;/…</code>) → creator, <code>?ref=</code> that creator. The brand's own pages (<code>curatedfor.you/&lt;brand&gt;</code>, <code>/b/&lt;brand&gt;</code>) are not creator pages.</span></div></li>
+  <li><div><b>They came to the brand site with a valid <code>?ref=</code></b><span>→ creator, <code>?ref=</code> that value.</span></div></li>
+  <li><div><b>Anything else</b><span>(no referral, the brand page, a checkout with no creator on the order) → founder if the sign-up is before the launch, corporate if it is at or after the launch.</span></div></li>
+</ol>
+<p>The time of the sign-up itself decides before or after the launch, not today's date.</p>
+
+<h2>Before and after a brand's launch</h2>
+<p>The launch changes only how <b>new</b> sign-ups with no referral are credited. Nothing already stored is rewritten at the launch.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Phase</th><th>When</th><th>A sign-up with no referral gets</th><th>Referred sign-ups and creators</th></tr></thead>
+  <tbody>
+    <tr><td>Not set up</td><td>The brand's three settings are missing</td><td>The old rule: <code>?ref=</code> is dropped, so nobody is credited. Avoid this for any brand with its own site</td><td>Credited only through creator pages</td></tr>
+    <tr><td>Pre-launch</td><td>Settings in place, before the launch time</td><td>Founder: <code>?ref=&lt;founder&gt;</code></td><td>Creator or self, as usual</td></tr>
+    <tr><td>Launch moment</td><td>The exact launch time</td><td>Nothing is rewritten; founder grants made so far stay</td><td>No change</td></tr>
+    <tr><td>Post-launch</td><td>After the launch time</td><td>Corporate: the plain brand site</td><td>Creator or self, as usual</td></tr>
+  </tbody>
+</table>
+</div>
+<ul class="plain">
+  <li><b>A founder grant is not permanent.</b> A later referral (creator, rank 1) or the person becoming a creator (self, rank 2) replaces it. A later sign-up with no referral after the launch also ends it, replacing it with corporate. This is the settled rule (agreed with Chris, Oct 16, 2026).</li>
+  <li><b>The launch time is an exact instant in Mountain time.</b> BNKD's is 7:00 AM MST, Nov 5, 2026. Daylight saving time ended Nov 1, so that is 14:00 UTC.</li>
+  <li><b>Moving the launch</b> is one settings update, and it only affects sign-ups that land between the old and the new time.</li>
+</ul>
+
+<h2>What changes a stored link</h2>
+<p>Only a new sign-up, a change in creator status, or the sweep changes a stored link. Clicks, sends and purchases never take credit away from anyone.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Event</th><th>Effect on the stored link</th></tr></thead>
+  <tbody>
+    <tr><td>A new sign-up or opt-in</td><td>Replaces the link only if it ranks equal or higher; at equal rank the newer one wins. After launch, a sign-up with no referral ends a founder grant</td></tr>
+    <tr><td>A ticked checkout box with a creator on the order</td><td>Becomes creator, <code>?ref=</code> the order's creator: replaces founder, corporate and an older creator link; never replaces self</td></tr>
+    <tr><td>A purchase without ticking the box</td><td>Never changes anything</td></tr>
+    <tr><td>The person becomes a curated creator with a site</td><td>Becomes self on every brand they have a link for, straight away</td></tr>
+    <tr><td>The creator resigns</td><td>Self is removed and rebuilt from their sign-up</td></tr>
+    <tr><td>A first purchase by a subscriber with no link at all (rare)</td><td>Fills one in: founder before the launch, corporate after</td></tr>
+    <tr><td>A campaign click or a send</td><td>Never</td></tr>
+    <tr><td>The launch time passing</td><td>Never</td></tr>
+    <tr><td>A change to the brand's settings</td><td>Applies to new sign-ups within a minute; existing subscribers change at the next sweep</td></tr>
+    <tr><td>The sweep</td><td>A repair tool: brings every subscriber in line with these rules</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Email and SMS</h2>
+<p>listmonk holds the link. Email and SMS both read it from there and never build their own.</p>
+<ul class="plain">
+  <li><b>Email (listmonk).</b> Insert the shop link with the editor's attribute picker. For a product page, paste the product URL and use <b>Personalize product link</b>, which adds the subscriber's <code>?ref=</code> and strips any <code>ref</code> already on the pasted URL. Never type <code>?ref=</code> by hand: a creator's own <code>?ref=</code> copied from a browser would credit them for everyone.</li>
+  <li><b>SMS (Clerk).</b> Each SMS opt-in copies the person's link into the brand's <code>&lt;Brand&gt; Shop Link</code> contact field (<code>RUZE Shop Link</code>, <code>Thirsty Girl Shop Link</code>, <code>BNKD Shop Link</code>). When a person's link changes later, Clerk is updated straight away, and a daily check catches anything missed within 24 hours. SMS reaches US and Canadian (+1) numbers only (decided with Daryl, Nov 4, 2026): an international sign-up keeps its email link and consent record but is never sent to Clerk, and the 31 international contacts that were in Clerk were removed that day. Filter a brand's contacts on <b>Brands contains <code>&lt;Brand&gt;</code></b>.</li>
+  <li><b>A click is tracked</b>, and Campaign Analytics shows shop-link clicks by kind (Self, Creator, Founder, Corporate).</li>
+</ul>
+
+<h2>Onboarding checklist for every new brand</h2>
+<p>All of these happen before the brand's first campaign or SMS send, and ideally before its first sign-up.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Step</th><th>What</th><th>Owner</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Confirm the brand's site address, the founder's referral slug (the <code>ref</code> the brand's own links carry) and the official launch date and time in Mountain time</td><td>Brand team + Marketing</td></tr>
+    <tr><td>2</td><td>Set the three settings on the brand (site, founder, launch)</td><td>Engineering</td></tr>
+    <tr><td>3</td><td>If the brand already has subscribers: preview the sweep with the new settings, then run it</td><td>Engineering</td></tr>
+    <tr><td>4</td><td>SMS: confirm the sign-up form puts the phone field behind an unchecked SMS consent checkbox that names the brand</td><td>Marketing</td></tr>
+    <tr><td>5</td><td>SMS: create the brand's option on the <b>Brands</b> field and a <code>&lt;Brand&gt; Shop Link</code> text field in Clerk, and set the field on one test contact</td><td>Daryl</td></tr>
+    <tr><td>6</td><td>SMS: connect the brand and the field to the Clerk sync, deploy, and backfill the earlier SMS opt-ins</td><td>Engineering</td></tr>
+    <tr><td>7</td><td>Campaigns link through the attribute picker or Personalize product link, never a hand-typed <code>?ref=</code></td><td>Marketing</td></tr>
+  </tbody>
+</table>
+</div>
+<p>A brand with no site of its own (only a curatedfor.you page) skips steps 1–3. Its sign-ups arrive through creator pages, which the old rule credits correctly.</p>
+
+<h2>Keeping links current</h2>
+<p>Since November 4, 2026 attribution updates in real time, so nothing needs to run before a campaign or SMS send.</p>
+<ul class="plain">
+  <li><b>Email:</b> a creator is recognised the moment they join a list, and their links change as soon as their creator record does.</li>
+  <li><b>SMS:</b> Clerk is updated when a link changes, and a daily check at 14:00 UTC catches anything missed.</li>
+  <li><b>The sweep and the Clerk repair are now repair tools.</b> Engineering runs them after event replays, after a brand's settings change, or when something looks off. One routine use remains: after a purchase-list catch-up on a brand.</li>
+</ul>
+
+<h2>Worked example: BNKD</h2>
+<p>BNKD collected sign-ups from July 23 to November 3, 2026 without its three settings, so every brand-site referral was dropped. All of it was recovered on November 3.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>How they first signed up</th><th>People</th><th>Stored before</th><th>After the sweep, Nov 3</th></tr></thead>
+  <tbody>
+    <tr><td>On the brand site with <code>?ref=arielctyson</code></td><td>842</td><td>The plain <code>bnkdwellness.com</code> (the <code>?ref=</code> was dropped)</td><td>835 creator, <code>?ref=arielctyson</code> · 7 self (they are curated creators)</td></tr>
+    <tr><td>On the brand site with no referral, before launch</td><td>352</td><td>The plain <code>bnkdwellness.com</code></td><td>315 founder, <code>?ref=arielctyson</code> · 55 self (curated creators)</td></tr>
+    <tr><td>On BNKD's own curatedfor.you page</td><td>18</td><td>That page's link</td><td></td></tr>
+    <tr><td>No sign-up record</td><td>2</td><td>None</td><td>2 left alone</td></tr>
+    <tr><td><b>All list 14 members</b></td><td><b>1,214</b></td><td></td><td><b>835 creator · 315 founder · 62 self · 2 none</b></td></tr>
+  </tbody>
+</table>
+</div>
+<p>The founder row and its 55 self cover both the brand-site and the curatedfor.you sign-ups (352 + 18 = 370). Every person in the first two groups who is a curated creator gets their own <code>?ref=</code> (7 + 55 = 62 self).</p>
+<p>These counts are the whole list at the time of the sweep, unsubscribed members included. A campaign reaches fewer: campaign 259's 1,198 recipients hold 829 creator, 305 founder, 62 self and 2 with no link. Clerk counts only people who gave a phone (654 BNKD contacts).</p>
+<p>Settings now in place: site <code>https://bnkdwellness.com</code>, founder <code>arielctyson</code>, launch 7:00 AM MST Nov 5, 2026.</p>
+<p>On SMS, BNKD opt-ins now reach Clerk with <b>Brands = BNKD</b> and the <b>BNKD Shop Link</b> filled in. The earlier SMS opt-ins were backfilled on Nov 3: 654 contacts now carry the brand, and UK and Australian numbers were repaired on Nov 3 as well.</p>
+<p>The recovery was possible only because each subscriber's first sign-up page is kept. Setting the brand up at onboarding avoids the gap entirely: every email sent in those three months carried a link that credited nobody.</p>
+
+<h2>Open questions</h2>
+<p>One point is still undecided. Checkout opt-ins (settled Nov 3) and the every-brand Clerk repair (built Nov 4) are resolved and folded into the sections above.</p>
+<div class="warn"><b>Does anyone read "Corporate" as "came from the brand's own site"?</b><p>In these rules corporate means only that nobody is credited, and it can come from a sign-up on either site. Marketing should confirm that no report treats the Corporate bar in Shop Link Attribution as brand-site traffic.</p></div>
+
+<h2>Sources</h2>
+<ul class="sources">
+  <li><span class="pill">Internal</span> The working document "Shop Link Attribution — The Standard for Every Brand" (Robbie Jackson, 2026-11-03), of which this page is a copy.</li>
+  <li><span class="pill">Internal</span> Specs in the integrations repo: LAUNCH-ATTRIBUTION (the persisted-URL model, founder grants, the launch time), REALTIME-CREATOR (real-time self links and the Clerk convergence), CHECKOUT-ATTRIBUTION (the checkout box rule), CLERK-ATTRIBUTION and CLERK-NANP (the SMS side); the WAITLIST-RUNBOOK's "Shop link attribution" section is the operating home.</li>
+  <li><span class="pill">Internal</span> Owning code: <code>lib/shop-link.ts</code> (derivation, classification, precedence) in the integrations repo; the attribute picker and Personalize product link in this application's email builder.</li>
+</ul>
+</div>
+</body>
+</html>

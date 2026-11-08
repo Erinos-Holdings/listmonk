@@ -207,11 +207,22 @@ func TestSandboxedHTMLIsOnlyHTML(t *testing.T) {
 			len(got), strings.Join(got, "\n"))
 	}
 
-	// The other way to answer an HTML page. Its one use is the admin UI's own index.html; a
-	// second one is a new page that must be looked at.
+	// The other way to answer an HTML page. Its uses are the admin UI's own index.html (AdminPage)
+	// and, since 2026-11-08, the internal documentation pages (AdminDoc) -- both read files embedded
+	// at build time from frontend/dist, never a stored body, behind the admin session. A third one is
+	// a new page that must be looked at.
 	blob := selectorsIn(t, "HTMLBlob", 2, nil, ".")
-	if len(blob) != 1 || !strings.HasSuffix(blob[0], " in AdminPage") {
-		t.Fatalf("want exactly one c.HTMLBlob call in cmd/, inside AdminPage; found %d:\n%s",
+	allowed := map[string]bool{" in AdminPage": true, " in AdminDoc": true}
+	seen := map[string]int{}
+	for _, b := range blob {
+		for suffix := range allowed {
+			if strings.HasSuffix(b, suffix) {
+				seen[suffix]++
+			}
+		}
+	}
+	if len(blob) != 2 || seen[" in AdminPage"] != 1 || seen[" in AdminDoc"] != 1 {
+		t.Fatalf("want exactly two c.HTMLBlob calls in cmd/, one inside AdminPage and one inside AdminDoc; found %d:\n%s",
 			len(blob), strings.Join(blob, "\n"))
 	}
 }

@@ -140,24 +140,36 @@ func TestModified(t *testing.T) {
 		decision string
 		note     *string
 		want     bool
-	}{{Accept, nil, true}, {Current, nil, true}, {Recommended, nil, true}, {Reject, &note, false}} {
+	}{{Accept, nil, true}, {Current, nil, true}, {Recommended, nil, true}, {Reject, &note, true}} {
 		v := ItemOf(it, []Row{{ID: 1, ItemKey: "k", TextHash: Hash("t0"), Decision: tc.decision, Note: tc.note}})
 		if v.Current == nil || (v.Current.Modified != nil) != tc.want {
 			t.Errorf("%s: current %+v", tc.decision, v.Current)
 		}
-		if len(v.History) != 1 || v.History[0].Modified != nil {
+		// D5 amendment 2026-11-08: a reject with a `who` entry after its hash is an ADOPTED reject
+		// (its note became the text); an approval is never marked adopted.
+		if v.Current.Adopted != (tc.decision == Reject) {
+			t.Errorf("%s: adopted %v", tc.decision, v.Current.Adopted)
+		}
+		if len(v.History) != 1 || v.History[0].Modified != nil || v.History[0].Adopted {
 			t.Errorf("%s: a history row carries modified", tc.decision)
 		}
+	}
+	// A reject with no `who` entry after its hash is a plain reject: no modified, not adopted.
+	plain := Item{Key: "k", Section: SectionBoth, Text: text, Changelog: []Change{ch("2026-10-31", "", Hash("t0"), true), ch("2026-11-07", "", Hash(text), false)}}
+	if v := ItemOf(plain, []Row{{ID: 1, ItemKey: "k", TextHash: Hash("t0"), Decision: Reject, Note: &note}}); v.Current == nil || v.Current.Modified != nil || v.Current.Adopted {
+		t.Errorf("plain reject: current %+v", v.Current)
 	}
 
 	// The shipped file: items 1 and 9 read "approved as modified" by Kaylinn on 2026-11-06 for a
 	// decision on their concept text, item 13 on 2026-11-07 (her relayed Smart Sending request,
-	// integrations SMART-SENDING-SPEC D9); items 3, 5, 11 do not.
+	// integrations SMART-SENDING-SPEC D9), item 22 on 2026-11-05 (her reject note asking for
+	// "inactivity suppression", adopted 2026-11-08 -- her stored reject reads as approved as
+	// modified); items 3, 5, 11 and 19 do not (19's 2026-11-08 edit carries no `who`).
 	d, err := Lifecycle()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for key, want := range map[string]string{"np-entry": "2026-11-06", "pp-delivery-clock": "2026-11-06", "both-per-brand": "2026-11-07", "np-same-day-double": "", "np-no-restarts": "", "pp-returning-thanks": ""} {
+	for key, want := range map[string]string{"np-entry": "2026-11-06", "pp-delivery-clock": "2026-11-06", "both-per-brand": "2026-11-07", "sp-suppressed": "2026-11-05", "np-same-day-double": "", "np-no-restarts": "", "pp-returning-thanks": "", "sp-asks": ""} {
 		it, _ := d.Find(key)
 		m := Modified(it, Concept(it).Hash)
 		if (m != nil) != (want != "") || (m != nil && (m.Who != "Kaylinn Brophy" || m.Date != want)) {

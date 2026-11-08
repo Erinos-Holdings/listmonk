@@ -190,8 +190,14 @@ export function selectedChoice(item, pending = null, t = (k) => k) {
   if (pending === 'reject') {
     return 'reject';
   }
-  const cur = isObj(item) && isObj(item.current) ? item.current.decision : null;
+  const curRow = isObj(item) && isObj(item.current) ? item.current : null;
+  const cur = curRow ? curRow.decision : null;
   const values = choicesOf(item, t).map((c) => c.value);
+  // D5 amendment 2026-11-08: an adopted reject (its note became the text) reads as approved, so
+  // Accept is the selected toggle, not Reject.
+  if (cur === 'reject' && curRow.adopted === true && values.includes('accept')) {
+    return 'accept';
+  }
   if (values.includes(cur)) {
     return cur;
   }
@@ -205,14 +211,18 @@ export function selectedChoice(item, pending = null, t = (k) => k) {
 // only on a reject); undecided -> { kind: 'awaiting', text: "Awaiting since <since>", note: '' }.
 // LIFECYCLE-DOCS-SPEC D5: an approval whose `current.modified` is set (the approver modified the
 // concept off-page after deciding) reads "Approved as modified by <who> · <date>"; a reject keeps
-// "Rejected by …" and its note -- a reject is not an approval to modify.
+// "Rejected by …" and its note -- a reject is not an approval to modify -- UNLESS the server marks
+// it `adopted` (D5 amendment 2026-11-08: the reject note was adopted into the text, a `who` entry
+// naming the rejecter after the row's hash): then it reads as approved as modified by them, with
+// no note on the state line; the reject row and its note stay in History.
 export function stateLine(item, t = (k) => k) {
   const cur = isObj(item) && isObj(item.current) ? item.current : null;
   if (!cur) {
     return { kind: 'awaiting', text: t('decisions.awaiting', { since: String((item && item.since) || '') }), note: '' };
   }
-  const reject = cur.decision === 'reject';
-  const mod = !reject && isObj(cur.modified) ? cur.modified : null;
+  const modified = isObj(cur.modified) ? cur.modified : null;
+  const reject = cur.decision === 'reject' && !(cur.adopted === true && modified);
+  const mod = !reject ? modified : null;
   return {
     kind: reject ? 'rejected' : 'accepted',
     text: mod

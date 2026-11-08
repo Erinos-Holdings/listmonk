@@ -340,6 +340,11 @@ type Entry struct {
 	CreatedAt time.Time   `json:"created_at"`
 	Voided    bool        `json:"voided"`
 	Modified  *ModifiedBy `json:"modified,omitempty"`
+	// Adopted (integrations LIFECYCLE-DOCS-SPEC D5, amended 2026-11-08) marks a current REJECT
+	// whose note was adopted: the adopting edit appended a `who` entry naming the rejecter after
+	// the row's hash, so Modified is set. The page reads the item as approved as modified by
+	// them; the reject row and its note stay in History as the request that was adopted.
+	Adopted bool `json:"adopted,omitempty"`
 }
 
 // ItemView is one item of the GET.
@@ -415,10 +420,14 @@ func ItemOf(it Item, rows []Row) ItemView {
 	}
 	h := Hash(it.Text)
 	cur, hist := State(own, Accepted(it))
-	// D5: a current approval (never a reject -- it is not an approval to modify) carries the
-	// approver's off-page modification made after it.
-	if cur != nil && cur.Decision != Reject {
+	// D5: a current approval carries the approver's off-page modification made after it. A current
+	// reject carries one only when its note was adopted (a `who` entry naming the rejecter after
+	// the row's hash) -- then it is Adopted and reads as approved as modified (D5 amendment
+	// 2026-11-08: item 22, Kaylinn's inactivity-suppression note); a reject with no such entry
+	// stays a reject -- it is not an approval to modify.
+	if cur != nil {
 		cur.Modified = Modified(it, newestRow(own).TextHash)
+		cur.Adopted = cur.Decision == Reject && cur.Modified != nil
 	}
 	changelog := make([]ChangeView, 0, len(it.Changelog))
 	for _, c := range it.Changelog {

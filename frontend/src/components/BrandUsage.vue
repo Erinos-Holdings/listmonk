@@ -156,12 +156,22 @@
         </ol>
       </div>
     </div>
-    <!-- 2026-11-05 (user): the guide's evidence brief -- a static page under /admin/static (the
-         emoji-data convention, served with a content ETag), opened in a new tab. Figures on it are
-         point-in-time; refreshing them is a fork release. -->
+    <!-- 2026-11-05 (user): the guide's evidence brief; 2026-11-08 (user): two more internal
+         documentation pages beside it -- Kaylinn's AI copy direction for the journey drafts and the
+         shop-link attribution standard. Static pages in frontend/public/docs, served to a logged-in
+         user only by /admin/docs/:page (cmd/handlers.go AdminDoc), opened in a new tab. Figures on
+         them are point-in-time; refreshing them is a fork release. -->
     <p class="bu-guide-sources" :style="guideSplit && fitWidthPx ? { width: `${fitWidthPx}px` } : null">
-      <a href="/admin/static/lifecycle-sources.html" target="_blank" rel="noopener" data-cy="usage-guide-sources">
+      <a href="/admin/docs/lifecycle-sources" target="_blank" rel="noopener" data-cy="usage-guide-sources">
         {{ $t('dashboard.usage.guideSources') }}
+      </a>
+      <span class="bu-guide-sep" aria-hidden="true">·</span>
+      <a href="/admin/docs/ai-journey-campaigns" target="_blank" rel="noopener" data-cy="usage-guide-ai-journeys">
+        {{ $t('dashboard.usage.guideAiJourneys') }}
+      </a>
+      <span class="bu-guide-sep" aria-hidden="true">·</span>
+      <a href="/admin/docs/shop-link-attribution" target="_blank" rel="noopener" data-cy="usage-guide-shop-links">
+        {{ $t('dashboard.usage.guideShopLinks') }}
       </a>
     </p>
     <!-- Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D5) -- Marketing's decision record

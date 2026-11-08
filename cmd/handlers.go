@@ -73,6 +73,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET(path.Join(uriAdmin, ""), a.AdminPage)
 		g.GET(path.Join(uriAdmin, "/custom.css"), serveCustomAppearance("admin.custom_css"))
 		g.GET(path.Join(uriAdmin, "/custom.js"), serveCustomAppearance("admin.custom_js"))
+		// Fork (2026-11-08, user): the internal documentation pages linked from Brands > Usage
+		// ("Research · AI-generated Journey Campaigns · Shop Link Attribution") are served only to
+		// a logged-in user. They live in frontend/public/docs (built to /admin/docs/ in the embedded
+		// FS), which no public route serves -- /admin/static/* is the only unauthenticated admin path.
+		g.GET(path.Join(uriAdmin, "/docs/:page"), a.AdminDoc)
 		g.GET(path.Join(uriAdmin, "/*"), a.AdminPage)
 	}
 
@@ -434,6 +439,24 @@ func (a *App) AdminPage(c echo.Context) error {
 
 	b = bytes.ReplaceAll(b, []byte("asset_version"), []byte(a.cfg.AssetVersion))
 
+	return c.HTMLBlob(http.StatusOK, b)
+}
+
+// reDocPage is the shape of an internal documentation page's name: a plain slug, so the path read
+// from the embedded FS can never leave /admin/docs/.
+var reDocPage = regexp.MustCompile(`^[a-z0-9-]+$`)
+
+// AdminDoc serves one internal documentation page (frontend/public/docs/<page>.html) to an
+// authenticated user; see the route's comment. An unknown or ill-formed name is a 404.
+func (a *App) AdminDoc(c echo.Context) error {
+	name := c.Param("page")
+	if !reDocPage.MatchString(name) {
+		return echo.NewHTTPError(http.StatusNotFound, "404 page not found")
+	}
+	b, err := a.fs.Read(path.Join(uriAdmin, "/docs", name+".html"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "404 page not found")
+	}
 	return c.HTMLBlob(http.StatusOK, b)
 }
 

@@ -69,6 +69,14 @@ test('LIFECYCLE-DOCS I9: the state line -- approved as modified, the existing li
   assert.deepEqual(stateLine(item({ current: row('reject', '2026-11-05T18:00:00Z', { note: 'No.', modified }) }), t), {
     kind: 'rejected', text: 'Rejected by Kaylinn Brophy · 2026-11-05', note: 'No.',
   });
+  // D5 amendment 2026-11-08: an ADOPTED reject (the server's `adopted: true` beside `modified`)
+  // reads as approved as modified, no note on the state line, and selects Accept.
+  const adopted = item({ current: row('reject', '2026-11-05T18:00:00Z', { note: 'Record it as an inactivity suppression.', modified: { who: 'Kaylinn Brophy', date: '2026-11-05' }, adopted: true }) });
+  assert.deepEqual(stateLine(adopted, t), { kind: 'accepted', text: 'Approved as modified by Kaylinn Brophy · 2026-11-05', note: '' });
+  assert.equal(selectedChoice(adopted, null, t), 'accept');
+  assert.equal(selectedChoice(adopted, 'reject', t), 'reject');
+  // `adopted` without `modified` is not an adoption (the server never sends that shape).
+  assert.equal(stateLine(item({ current: row('reject', '2026-11-05T18:00:00Z', { note: 'No.', adopted: true }) }), t).kind, 'rejected');
   // modified absent (omitted by the server) or null: the existing lines.
   assert.equal(stateLine(item({ current: row('recommended', '2026-11-05T18:00:00Z') }), t).text, 'Recommended chosen by Kaylinn Brophy · 2026-11-05');
   assert.equal(stateLine(item({ current: row('accept', '2026-11-05T18:00:00Z', { modified: null }) }), t).text, 'Accepted by Kaylinn Brophy · 2026-11-05');

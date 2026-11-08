@@ -374,7 +374,7 @@
       "key": "sp-asks",
       "section": "sunset-policy",
       "n": 19,
-      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that they have been unsubscribed, with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.",
+      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that the brand's marketing emails have stopped (an inactivity suppression, item 22), with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.",
       "changelog": [
         {
           "date": "2026-11-02",
@@ -382,6 +382,12 @@
           "line": "Published for approval",
           "hash": "3138349591e68f7ca4675f4a13a676d75b65ba92e7ef77d98126fd4943d91e8a",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-08",
+          "source": "page",
+          "line": "Day 365 is the inactivity-suppression confirmation, not an unsubscribe (item 22, Kaylinn's 2026-11-05 note); was \"a confirmation that they have been unsubscribed\".",
+          "hash": "fa1203708be866d144920d68f27c625db05cca1144194867f5d57560a8933c28"
         }
       ]
     },
@@ -419,7 +425,7 @@
       "key": "sp-suppressed",
       "section": "sunset-policy",
       "n": 22,
-      "text": "365 days: unsubscribed from marketing. After 365 days without engagement (180, then the re-engagement schedule), the person is unsubscribed from the brand's marketing — and sent the confirmation when the brand's day-365 automation is running — whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout.",
+      "text": "365 days: inactivity suppression. After 365 days without engagement (180, then the re-engagement schedule), the brand's marketing emails to the person stop — recorded as an inactivity suppression, never as an unsubscribe, so the two are always distinguishable — and the confirmation is sent when the brand's day-365 automation is running, whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. The date rule runs regardless of the asks; Marketing's commitment is that every brand's four re-engagement automations are running before its first cohort reaches day 360 (the earliest is March 2027). Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout.",
       "changelog": [
         {
           "date": "2026-11-01",
@@ -427,6 +433,18 @@
           "line": "Published for approval",
           "hash": "36cfe7f4776d4db972dbdba74e1639b1f784e7670f9e5fced74101f9c91fcc8e",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-05",
+          "source": "reject note 2026-11-05",
+          "who": "Kaylinn Brophy",
+          "line": "Record day 365 as an inactivity suppression, not a customer unsubscribe, so the two can be distinguished; do not suppress before the re-engagement emails have been activated."
+        },
+        {
+          "date": "2026-11-08",
+          "source": "page",
+          "line": "Renamed as she asked: inactivity suppression (the industry's suppression-versus-unsubscribe distinction; the data model already kept the two apart). The date rule stays; her second ask is met as a commitment (four automations running before the first day-360 cohort, March 2027), tracked as a Gate Watch gate. Was \"365 days: unsubscribed from marketing …\".",
+          "hash": "76edd5a6cf135b2319d83697a7e423f3822c6eb523481baeb68944ff3b2c8ec2"
         }
       ]
     },
@@ -452,7 +470,7 @@
       "rows": [
         ["0–180 days", "Normal sending"],
         ["180–365 days*", "Regular sends stop; re-engagement emails at 180, 270 and 360 days"],
-        ["365+ days", "Unsubscribed from marketing, with a confirmation email"]
+        ["365+ days", "Inactivity suppression: marketing emails stop, with a confirmation email"]
       ],
       "note": "*and at least 6 broadcasts received since then. Engagement means a click, a purchase, or a Gmail-confirmed open."
     }
