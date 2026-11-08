@@ -127,6 +127,7 @@ func TestItemsShape(t *testing.T) {
 var shippedLineage = map[string][]string{
 	"np-entry":            {"slack", "page#", "page#"},
 	"np-same-day-double":  {"page#"},
+	"np-launch-overlap":   {"page#"},
 	"np-no-restarts":      {"page#"},
 	"pp-delivery-clock":   {"slack", "page#"},
 	"pp-returning-thanks": {"page#"},
@@ -330,7 +331,7 @@ func TestChoices(t *testing.T) {
 			t.Fatalf("%s: %v", it.Key, c)
 		}
 	}
-	want := []string{"np-launch-overlap", "np-ruze-15d", "both-multi-brand"}
+	want := []string{"np-ruze-15d", "both-multi-brand"}
 	if strings.Join(three, ",") != strings.Join(want, ",") {
 		t.Fatalf("items with three choices %v, want %v", three, want)
 	}

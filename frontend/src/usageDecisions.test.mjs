@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import {
   calloutOf, canSubmitReject, choicesOf, columnsOf, decisionBody, denverDay, historyOf, isStale, itemNumber,
   publishedText, replaceItem, selectedChoice, showControls, stateLine, textLines, tableOf, SECTION_SUNSET_POLICY,
+  opensParagraph,
 } from './usageDecisions.mjs'; // eslint-disable-line import/extensions
 
 const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
@@ -275,6 +276,13 @@ test('textLines: the first sentence and the Recommended:/NOTE: labels are the bo
   // A first-line "Recommended:" is the lead, not a recommendation (internal/decisions::HasRecommended agrees).
   assert.deepEqual(textLines('Recommended:'), [{ lead: 'Recommended:', rest: '', recommended: false }]);
   assert.deepEqual(textLines(null), [{ lead: '', rest: '', recommended: false }]);
+});
+
+test('opensParagraph: every later line is a paragraph except a numbered sub-point; the first line never', () => {
+  const lines = textLines('Lead. Rest.\nRecommended: Skip it.\n1. First point.\n2. Second point.\nNOTE: A note.\nSmart Sending. Per brand.');
+  assert.deepEqual(lines.map((l, i) => opensParagraph(l, i)), [false, true, false, false, true, true]);
+  assert.equal(opensParagraph(null, 1), false);
+  assert.equal(opensParagraph({ lead: '', rest: '10. Tenth.' }, 3), false);
 });
 
 test('D5: the pane renders decisions through interpolation only (no v-html) and every key is in en.json', () => {

@@ -148,6 +148,19 @@
           </p>
         </b-tooltip>
       </div>
+      <!-- Fork (smart sending, integrations SMART-SENDING-SPEC D4; user 2026-11-07) -- the switch sits
+           right under the box, where its effect shows: toggling it previews live (audience-box.mjs
+           toSendOf's `on`): off removes the red badge and the count rises to the whole audience. A
+           non-evergreen regular campaign only, editable while canEdit (a scheduled launch can still be
+           switched; a paused one applies from the re-claim). The description is the hover on the
+           label. Folded into attribs.smart_sending (foldAttribs). -->
+      <div v-if="showSmartSending" class="audience-switch" :style="audienceBoxStyle" data-cy="btn-smart-sending">
+        <b-tooltip :label="$t('campaigns.smartSendingHelp')" type="is-dark" multilined position="is-left"
+          append-to-body>
+          <span class="audience-switch-label" tabindex="0">{{ $t('campaigns.smartSending') }}</span>
+        </b-tooltip>
+        <b-switch v-model="form.smartSending" size="is-small" type="is-success" :disabled="!canEdit" />
+      </div>
     </div>
 
     <b-tabs type="is-boxed" :animated="false" v-model="activeTab" @input="onTab">
@@ -377,17 +390,6 @@
                         position="is-top-right" :placeholder="$t('campaigns.dateAndTime')" icon="calendar-clock"
                         :timepicker="{ hourFormat: '24' }" :datetime-formatter="formatDateTime"
                         horizontal-time-picker />
-                    </b-field>
-                  </div>
-                </div>
-                <!-- Fork (smart sending, integrations SMART-SENDING-SPEC D4) -- a non-evergreen regular
-                     campaign only (Send later's row); editable until it starts, so a scheduled launch can
-                     still be switched. Folded into attribs.smart_sending (foldAttribs). -->
-                <div class="columns" v-if="showSmartSending">
-                  <div class="column">
-                    <b-field :label="$t('campaigns.smartSending')" :message="$t('campaigns.smartSendingHelp')"
-                      data-cy="btn-smart-sending">
-                      <b-switch v-model="form.smartSending" :disabled="!canEdit" />
                     </b-field>
                   </div>
                 </div>
@@ -2387,7 +2389,10 @@ export default Vue.extend({
 
     // Fork (campaign-page audience box; audience-box.mjs).
     audienceBox() {
-      return this.isEditing ? audienceBox(this.data) : null;
+      // The form's switch previews live (off = nothing skipped); the server's stored value agrees
+      // after a save. Only meaningful where the switch shows; elsewhere the stored state applies.
+      const on = this.showSmartSending ? this.form.smartSending !== false : smartSendingOf(this.data);
+      return this.isEditing ? audienceBox(this.data, on) : null;
     },
 
     audienceBoxStyle() {

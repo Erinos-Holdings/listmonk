@@ -1686,10 +1686,10 @@ section.dashboard (which reopens after them). */
   }
   /* 2026-11-01 (user): a blank row before each recommendation -- one line of space above the first
   red line, the adjacent-sibling rule so the text and its hash stay unchanged. */
-  /* A later line with a bold lead ("Recommended:", "NOTE:", or a short heading sentence such as
-  "Smart Sending." -- usageDecisions.mjs::textLines) opens a paragraph (user 2026-11-07): one
-  family rule, which also covers the first "Recommended:" line's gap. */
-  .bu-decision-line + .bu-decision-line.bu-decision-lead {
+  /* Every later line of a bullet is a paragraph (user 2026-11-07) except a numbered sub-point
+  ("1. …"), which stays tight under the line above -- usageDecisions.mjs::opensParagraph, one
+  family rule; it also gives the first "Recommended:" line its gap. */
+  .bu-decision-line.bu-decision-para {
     margin-top: 1.4em;
   }
   .bu-decision-n {
@@ -2970,6 +2970,31 @@ section.campaign {
     z-index: 1;
   }
 
+  /* Smart Sending switch (SMART-SENDING-SPEC D4; user 2026-11-07): a compact row right under the
+  To-send box, the same width and right edge (the measured style), label left (its hover is the
+  description), switch right -- so the toggle sits beside the number it changes. */
+  .audience-switch {
+    position: absolute;
+    right: 0;
+    top: 2.6rem; /* the box's anchor; the box ends here, this row starts 0.35rem below it */
+    width: 12rem;
+    margin-top: 0.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid $grey-lighter;
+    border-radius: $radius;
+    background: $white;
+    font-size: $size-7;
+    font-weight: 600;
+    color: $grey-dark;
+
+    .audience-switch-label { cursor: default; }
+    .b-tooltip { display: inline-flex; }
+    .switch { margin-right: 0; }
+  }
+
   .audience-box {
     position: absolute;
     right: 0;
@@ -3049,6 +3074,11 @@ over the last tab and take its clicks), so the box drops into the flow above the
       transform: none;
       width: 100% !important;
       margin-bottom: 1rem;
+    }
+    .audience-switch {
+      position: static;
+      width: 100% !important;
+      margin: -0.65rem 0 1rem;
     }
     .evergreen-notice { width: auto; max-width: none; }
   }

@@ -137,3 +137,17 @@ test('the split arithmetic: an audience derives en, an evergreen carries it, nev
   assert.deepEqual(enSplit(3, 5), { en: 0, none: 5 });
   assert.deepEqual(enSplit(undefined, null), { en: 0, none: 0 });
 });
+
+test('the switch previews live: off = nothing skipped and the whole audience (user 2026-11-07)', () => {
+  const c = {
+    id: 9, status: 'draft', evergreen: false, audience: 2163, audienceSkipped: 6, audienceNoLang: 0,
+  };
+  assert.deepEqual(toSendOf(c), { count: 2157, skipped: 6, total: 2163 });
+  assert.deepEqual(toSendOf(c, false), { count: 2163, skipped: 0, total: 2163 });
+  assert.equal(audienceBox(c).count, 2157);
+  assert.equal(audienceBox(c).skipped, 6);
+  assert.equal(audienceBox(c, false).count, 2163);
+  assert.equal(audienceBox(c, false).skipped, 0);
+  // A sending or finished campaign ignores the flag (no preview to make).
+  assert.equal(audienceBox({ id: 9, status: 'finished', sent: 5 }, false).count, 5);
+});

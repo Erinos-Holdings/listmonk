@@ -75,7 +75,7 @@
       "key": "np-launch-overlap",
       "section": "no-purchase",
       "n": 4,
-      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Nothing suppresses a broadcast for someone part-way through the Welcome series; they receive both.\nRecommended: Keep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform.",
+      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Smart Sending (item 13) now withholds a brand's broadcast from anyone who received one of its journey emails in the last 24 hours, so someone part-way through the Welcome series no longer gets a step and a launch on the same day; on other days they receive both, by design.\nKeep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -83,6 +83,12 @@
           "line": "Published for approval",
           "hash": "d7ede5ae8e9efe4e5ff95f24ed8bb3d74244ff533904bda48eb8400a7218d1b3",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-07",
+          "source": "page",
+          "line": "The same-day stack is addressed by Smart Sending (item 13, SMART-SENDING-SPEC); the editorial instruction stays as the standing practice, no longer a recommendation; was \"Nothing suppresses a broadcast … Recommended: Keep the step emails distinct …\".",
+          "hash": "6ee6523e03dd764f744a663e1fb1e5cefc4d18b87400d5cd2a1484320b4f080f"
         }
       ]
     },

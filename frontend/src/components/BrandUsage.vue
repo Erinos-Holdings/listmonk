@@ -214,7 +214,7 @@
                  every line in red (2026-10-31 polish 2, user). Kept on one line: no template
                  whitespace inside a line. -->
             <p class="bu-decision-text">
-              <span v-for="(l, li) in textLines(it.text)" :key="li" :class="['bu-decision-line', { 'bu-decision-recommended': l.recommended, 'bu-decision-lead': li > 0 && !!l.lead }]"><strong
+              <span v-for="(l, li) in textLines(it.text)" :key="li" :class="['bu-decision-line', { 'bu-decision-recommended': l.recommended, 'bu-decision-para': paraOf(l, li) }]"><strong
                 v-if="li === 0 && itemNum(it)" class="bu-decision-n">{{ itemNum(it) }}.</strong><strong
                 v-if="l.lead">{{ l.lead }}</strong>{{ l.rest }}</span>
             </p>
@@ -291,7 +291,7 @@ import BrandUsageRow from './BrandUsageRow.vue';
 import {
   SECTION_SUNSET_POLICY, calloutOf, canSubmitReject, choicesOf as decisionChoices, columnsOf, decisionBody,
   historyOf as decisionHistory, isStale, itemNumber, publishedText, replaceItem, selectedChoice, showControls, stateLine,
-  tableOf, textLines,
+  tableOf, textLines, opensParagraph,
 } from '../usageDecisions.mjs'; // eslint-disable-line import/extensions
 import { usageTarget } from '../journeyPreview.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -510,6 +510,11 @@ export default Vue.extend({
 
     textLines(text) {
       return textLines(text);
+    },
+
+    // A later line renders as a paragraph unless it is a numbered sub-point (usageDecisions.mjs).
+    paraOf(line, index) {
+      return opensParagraph(line, index);
     },
 
     stateOf(it) {

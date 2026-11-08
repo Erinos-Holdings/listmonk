@@ -20,12 +20,15 @@ const isNotStarted = (c) => c.status === 'draft' || c.status === 'scheduled';
 // the number it would send to now; `total` is the raw audience (the hover's "{n} of {total}", and
 // what the EN+ split partitions). null when the server sent no audience. Shared by the Campaign
 // page box and the Campaigns list's To send stat.
-export const toSendOf = (c) => {
+// `on` (user 2026-11-07) is the Smart Sending switch AS THE FORM SHOWS IT, so the box previews a
+// toggle live before the save: off = nothing skipped, the count is the whole audience. The
+// server's `audienceSkipped` is computed from the STORED switch, so after a save the two agree.
+export const toSendOf = (c, on = true) => {
   if (!c || c.audience === null || c.audience === undefined) {
     return null;
   }
   const total = Number(c.audience) || 0;
-  const skipped = Math.min(total, Math.max(0, Number(c.audienceSkipped) || 0));
+  const skipped = on ? Math.min(total, Math.max(0, Number(c.audienceSkipped) || 0)) : 0;
   return { count: total - skipped, skipped, total };
 };
 
@@ -50,12 +53,12 @@ export const foldSmartSending = (attribs, off) => {
   return out;
 };
 
-export const audienceBox = (c) => {
+export const audienceBox = (c, on = true) => {
   if (!c || !c.id) {
     return null;
   }
   if (!c.evergreen && isNotStarted(c)) {
-    const ts = toSendOf(c);
+    const ts = toSendOf(c, on);
     if (!ts) {
       return null;
     }

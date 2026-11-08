@@ -75,6 +75,16 @@ export const LEAD_LABELS = Object.freeze(['Recommended:', 'NOTE:']);
 // keep the label as the lead.
 export const SHORT_LEAD_WORDS = 3;
 
+// opensParagraph (user 2026-11-07): every later line of a bullet renders as a paragraph (a gap
+// above it) except a numbered sub-point ("1. …", "2. …"), which stays tight under the line above.
+// The first line never opens one. One family rule for every item; the Vue adds the class.
+export function opensParagraph(line, index) {
+  if (!Number.isInteger(index) || index <= 0 || !line) {
+    return false;
+  }
+  return !/^\d+\.\s/.test(`${line.lead || ''}${line.rest || ''}`);
+}
+
 // textLines splits a bullet's text into its lines, each { lead, rest, recommended } with `lead` set
 // in bold: the FIRST line's lead is its first sentence (through the first ". ", or the whole line
 // when it has none -- "Entry.", "Exit on purchase (your W01–W05 request)."); a later line's lead is
