@@ -931,7 +931,9 @@ CREATE INDEX IF NOT EXISTS idx_campaign_sends_sent_at ON campaign_sends (sent_at
 -- list of a RUNNING evergreen of the campaign's brand, due (join + send_delay_secs) inside the
 -- window (the two INTERVAL literals in its win CTE -- the 2-hour grace is also the staleness rule),
 -- the subscriber's language passing that evergreen's predicate. It is a SUPERSET (no welcome-skip,
--- no exclusion set), never a send decision. Dark unless the settings row
+-- no exclusion set), never a send decision. An evergreen whose send_delay_secs is outside 0..10 years
+-- (315360000 s -- an API write of the wrong unit) is ignored, so the window arithmetic can never
+-- raise "timestamp out of range" inside the claim (Stage 4 R1). Dark unless the settings row
 -- app.smart_sending_lookahead is the JSONB true -- an uncorrelated scalar subquery at the top level
 -- (a one-time filter), so a dark look-ahead scans nothing. The key is deliberately NOT a field of the
 -- Go settings struct. brand_journey_skips = the look-back rows plus the look-ahead rows for
@@ -998,6 +1000,7 @@ RETURNS TABLE (subscriber_id INT, due_list_id INT, due_at TIMESTAMP WITH TIME ZO
         SELECT e.id, e.started_at, e.send_delay_secs, e.attribs->>'lang' AS lang
         FROM campaigns e, camp
         WHERE e.evergreen AND e.status = 'running' AND camp.brand IS NOT NULL
+            AND e.send_delay_secs BETWEEN 0 AND 315360000
             AND (
                 SELECT MIN(list_brand_tag(l.tags)) FROM campaign_lists cl
                 JOIN lists l ON (l.id = cl.list_id)

@@ -498,6 +498,13 @@ func newLAFixture(f ssFixture) laFixture {
 	f.confirmed(delayedIn, x.delayed, "70 hours")                        // due 3 d after, i.e. in 2 hours
 	f.confirmed(sub("delayed-30h@acme.test", ""), x.delayed, "42 hours") // due in 30 hours
 	f.confirmed(sub("before-start@acme.test", ""), x.late, "5 minutes")  // joined before started_at
+	// Stage 4 R1 -- an absurd send delay (an API write of microseconds for seconds) on a RUNNING
+	// same-brand evergreen must never make the function raise (timestamp out of range inside the
+	// claim would stall every broadcast of the brand); it simply contributes no row.
+	absurd := f.list("Acme absurd delay", "brand:acme")
+	f.evergreen("Acme absurd delay", "running", "10 days", 1_000_000_000_000, `{}`, absurd)
+	f.due(absurd, sub("absurd-forecast@acme.test", ""), "2 hours")
+	f.confirmed(sub("absurd-join@acme.test", ""), absurd, "5 minutes")
 	sent := sub("sent@acme.test", "")
 	f.confirmed(sent, x.welcome, "10 minutes")
 	f.send(x.welcomeEv, sent, "5 minutes") // already sent: a look-back row, not a look-ahead one

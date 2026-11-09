@@ -110,6 +110,7 @@ RETURNS TABLE (subscriber_id INT, due_list_id INT, due_at TIMESTAMP WITH TIME ZO
         SELECT e.id, e.started_at, e.send_delay_secs, e.attribs->>'lang' AS lang
         FROM campaigns e, camp
         WHERE e.evergreen AND e.status = 'running' AND camp.brand IS NOT NULL
+            AND e.send_delay_secs BETWEEN 0 AND 315360000
             AND (
                 SELECT MIN(list_brand_tag(l.tags)) FROM campaign_lists cl
                 JOIN lists l ON (l.id = cl.list_id)
