@@ -144,11 +144,11 @@
         </div>
         <ol class="bu-guide-steps">
           <li v-for="s in g.steps" :key="s.days" class="bu-guide-step">
-            <span class="bu-guide-day" :aria-label="`${$t('dashboard.usage.guideDay')} ${s.label}`" :title="s.clock || null">
+            <span class="bu-guide-day" :aria-label="`${$t('dashboard.usage.guideDay')} ${s.label}`" :title="s.hover || null">
               <small>{{ $t('dashboard.usage.guideDay') }}</small>{{ s.label }}
             </span>
             <div class="bu-guide-text">
-              <p class="bu-guide-step-title">{{ s.title }}</p>
+              <p class="bu-guide-step-title">{{ s.primary }}<span v-if="s.secondary" class="bu-guide-step-sub">{{ s.secondary }}</span></p>
               <p v-if="s.quote" class="bu-guide-quote">“{{ s.quote }}”</p>
               <p class="bu-guide-body">{{ s.body }}</p>
             </div>

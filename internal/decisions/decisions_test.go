@@ -127,21 +127,25 @@ func TestItemsShape(t *testing.T) {
 // rename, Kaylinn's 2026-11-05 reject note on item 22 adopted): "reject-note" = her hash-less
 // entry dated 2026-11-05, source "reject note 2026-11-05"; "page#8" = a page entry carrying a text
 // hash dated 2026-11-08 (items 19 and 22). 2026-11-09 (the documentation reconciliation): "page#9"
-// = a page entry carrying a text hash dated 2026-11-09 (items 4, 13, 16, 18, 19, 21, 22).
+// = a page entry carrying a text hash dated 2026-11-09 (items 4, 13, 16, 18, 19, 21, 22; the
+// same day's documentation audit added one more to items 1, 2, 5, 15, 21 and 22).
 var shippedLineage = map[string][]string{
-	"np-entry":            {"slack", "page#", "page#"},
+	"np-entry":            {"slack", "page#", "page#", "page#9"},
+	"np-exit-on-purchase": {"page#9"},
 	"np-same-day-double":  {"page#"},
 	"np-launch-overlap":   {"page#", "page#9"},
-	"np-no-restarts":      {"page#"},
+	"np-no-restarts":      {"page#", "page#9"},
+	"np-ruze-15d":         {"page#9"},
 	"pp-delivery-clock":   {"slack", "page#"},
 	"pp-returning-thanks": {"page#"},
 	"both-multi-brand":    {"page#"},
 	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#", "page#9"},
+	"sp-scope":            {"page#9"},
 	"sp-engagement":       {"page#9"},
 	"sp-hold":             {"page#9"},
 	"sp-asks":             {"page#8", "page#9"},
-	"sp-coming-back":      {"page#9"},
-	"sp-suppressed":       {"reject-note", "page#8", "page#9"},
+	"sp-coming-back":      {"page#9", "page#9"},
+	"sp-suppressed":       {"reject-note", "page#8", "page#9", "page#9"},
 }
 
 func checkShippedChangelog(t *testing.T, it Item) {

@@ -123,20 +123,49 @@ export function hoverText(meta, t = (k) => k) {
   return extra ? `${help}\n${extra}` : help;
 }
 
+// A step title's primary / secondary halves (2026-11-09, the documentation audit): the D5 title is
+// Kaylinn's whole pair ("Product Value / Why Choose Us"); the guide shows the first half as the
+// title and the second in the series subline's grey small caps. A title with no " / " has no secondary.
+export function splitStepTitle(title) {
+  const i = String(title || '').indexOf(' / ');
+  if (i < 0) {
+    return { primary: String(title || ''), secondary: '' };
+  }
+  return { primary: title.slice(0, i).trim(), secondary: title.slice(i + 3).trim() };
+}
+
+// The step's detail text (2026-11-09): `series.<family>Day<n>Detail`, the guidance moved out of the
+// at-a-glance body into the Day badge's hover; '' when the key has no translation (the translator
+// returns the key itself) or the step has no standard key.
+export function stepDetail(family, days, t = (k) => k) {
+  const key = seriesStepKey(family, days);
+  if (!key) {
+    return '';
+  }
+  const v = t(`${key}Detail`);
+  return v === `${key}Detail` ? '' : v;
+}
+
 // seriesGuide is the guide's content: per series (GUIDE_SERIES order) its title/subtitle keys and
-// one { days, label, clock, title, quote, body } per standard day, parsed from the translated D5
-// text. D22: `label` is the day badge's text ("~5" on an approximate step, else the plain number)
-// and `clock` the badge's hover (the translated clock sentence, '' when there is none).
+// one { days, label, clock, hover, title, primary, secondary, quote, body } per standard day, parsed
+// from the translated D5 text. D22: `label` is the day badge's text ("~5" on an approximate step,
+// else the plain number) and `clock` the translated clock sentence ('' when there is none); `hover`
+// is the badge's hover: the step's detail, then the clock sentence (2026-11-09: the at-a-glance
+// body keeps to two or three lines, the detail lives here).
 export function seriesGuide(t = (k) => k) {
   return GUIDE_SERIES.map((g) => ({
     ...g,
     steps: guideDays(g.family).map((days) => {
       const parts = clockParts(g.family, days);
+      const step = parseStepText(t(seriesStepKey(g.family, days)));
+      const clock = clockSentence(parts, t);
       return {
         days,
         label: parts ? t('dashboard.usage.approxDay', { n: days }) : String(days),
-        clock: clockSentence(parts, t),
-        ...parseStepText(t(seriesStepKey(g.family, days))),
+        clock,
+        hover: [stepDetail(g.family, days, t), clock].filter(Boolean).join('\n'),
+        ...step,
+        ...splitStepTitle(step.title),
       };
     }),
   }));

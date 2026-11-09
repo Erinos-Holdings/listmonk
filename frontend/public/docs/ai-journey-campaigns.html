@@ -9,7 +9,9 @@
      Journey Campaigns · Shop Link Attribution", BrandUsage.vue), served to a logged-in user by
      /admin/docs/:page (cmd/handlers.go AdminDoc). A static page: refresh by editing this file and
      releasing the fork. Direction: Kaylinn Brophy, 2026-11-07; vocabulary and the day-365 state:
-     2026-11-08. -->
+     2026-11-08; step names from her brief and the audit's corrections 2026-11-09. Where this page
+     departs from her brief the departure is a red .pushback line, so she can see each one. This page
+     is the source of truth for the drafts; her PDF was the input. -->
 <title>AI-generated Journey Campaigns</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
 <style>
@@ -17,16 +19,19 @@ html,body{margin:0}
 :root{
   --bg:#f7f6f2; --surface:#ffffff; --ink:#1c2321; --ink-2:#4a5553; --ink-3:#7a8683;
   --line:#dcdfd9; --accent:#0e6b66; --accent-soft:#d9ecea; --warm:#a3541c; --warm-soft:#f6e4d6;
-  --good:#2a7a3b; --display:"Newsreader",Georgia,"Times New Roman",serif;
+  --good:#2a7a3b; --push:#b42318; --display:"Newsreader",Georgia,"Times New Roman",serif;
   --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --bg:#151a19; --surface:#1e2524; --ink:#eef1ee; --ink-2:#b8c2bf; --ink-3:#86928f;
-  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; color-scheme:dark } }
+  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; --push:#ff8a7a; color-scheme:dark } }
 :root[data-theme="dark"]{
   --bg:#151a19; --surface:#1e2524; --ink:#eef1ee; --ink-2:#b8c2bf; --ink-3:#86928f;
-  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; color-scheme:dark }
+  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; --push:#ff8a7a; color-scheme:dark }
 *{box-sizing:border-box}
+/* A departure from Kaylinn's brief, in red so she can find each one. */
+.pushback{color:var(--push);font-weight:600}
+.pushback .lead{text-transform:uppercase;font-size:.74rem;letter-spacing:.08em;margin-right:6px}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
 .wrap{max-width:980px;margin:0 auto}
@@ -99,7 +104,7 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="eyebrow">Brand Usage · Journeys · Copy direction and requirements</div>
   <h1 style="margin-top:10px">AI-generated Journey Campaigns</h1>
   <p class="lede">Every brand gets the same eleven starter journey emails. An AI drafts them from this page, in the brand's voice, and Marketing reviews and refines every draft in the campaign builder before anything goes live.</p>
-  <p class="meta">Direction: Kaylinn Brophy (Marketing), 2026-11-07 · Vocabulary and the day-365 state settled 2026-11-08 · This page is the requirements record the drafts are built to; the <a href="/admin/docs/lifecycle-sources" target="_blank" rel="noopener">evidence brief</a> is the case for the intervals.</p>
+  <p class="meta">Direction: Kaylinn Brophy (Marketing), 2026-11-07 · Vocabulary and the day-365 state settled 2026-11-08 · Step names from her brief 2026-11-09 · This page is the requirements record the drafts are built to; the <a href="/admin/docs/lifecycle-sources" target="_blank" rel="noopener">evidence brief</a> is the case for the intervals. <span class="pushback">Where this page departs from her brief, the departure is in red.</span></p>
 </header>
 
 <h2>What the drafts are, and how they get made</h2>
@@ -123,32 +128,32 @@ td:first-child{font-weight:600;white-space:nowrap}
 
 <h2>Rules for every draft</h2>
 <ul class="rules">
-  <li><b>One objective, one primary CTA</b> per email. Each step has a distinct purpose that supports a first or a repeat purchase, or retention.</li>
+  <li><b>One objective, at most one primary CTA</b> per email (the Thank-you may have none). Each step has a distinct purpose that supports a first or a repeat purchase, or retention.</li>
   <li><b>Never repeat</b> the previous step's message. A journey read end to end should feel like a sequence, not the same email three times.</li>
   <li><b>Follow the brand's own voice and positioning.</b> Concise, engaging, easy to skim on a phone.</li>
   <li><b>Only approved claims, product information, testimonials and existing offers.</b> No invented urgency, reviews, resources, promotions or website functionality.</li>
   <li><b>Evergreen</b>: the copy must still be true in six months and must stay separate from the month's broadcasts (the evidence brief's item 4).</li>
   <li><b>Do not request a review</b> anywhere in the journey. The sites have no review functionality.</li>
-  <li><b>Do not duplicate the order confirmation.</b> AfterShip already sends it.</li>
+  <li><b>Do not duplicate the order confirmation.</b> Komigo already sends it. <span class="pushback"><span class="lead">Note to Kaylinn</span>Your brief says AfterShip handles the order confirmation. It does not: AfterShip sends only the shipping-status emails (shipped, out for delivery, delivered). The order confirmation is Komigo's.</span></li>
   <li><b>Every link is a tracked, personalised link</b> through the attribute picker or Personalize product link, never a hand-typed <code>?ref=</code> (the <a href="/admin/docs/shop-link-attribution" target="_blank" rel="noopener">shop link standard</a>).</li>
 </ul>
 
 <h2>The three series, step by step</h2>
-<p>Our names first, Marketing's labels in parentheses. The step ids in grey (W01, P02, R03) are the ids in Kaylinn's brief, kept so the two documents can be read side by side.</p>
+<p>The series names are the canonical ones (Kaylinn's brief uses the same three in its header strip). The step names are hers, whole: the same names head the journey guide on Brands › Usage and the evidence brief's tracks. The grey ids (W01, P02, R03) are her brief's, so the two can be read side by side.</p>
 
 <div class="series">
-  <div class="head"><h3>No-purchase series (Welcome series)</h3><span>newsletter join → any paid order exits the series</span></div>
-  <p class="sub">Days 0, 2 and 5. The goal of the whole series is a first purchase, without artificial urgency and without a dedicated welcome offer unless the brand already has one.</p>
+  <div class="head"><h3>No-purchase series (Welcome series)</h3><span>newsletter join → any paid order of the brand, before or after joining, exits the steps</span></div>
+  <p class="sub">Days 0, 2 and 5. The goal of the whole series is a first purchase, without artificial urgency and without a dedicated welcome offer unless the brand already has one. Someone who has ever bought from the brand is not a non-buyer: a prior customer who joins gets the Day 0 welcome and none of the steps.</p>
   <div class="track">
     <div class="pt" style="left:0%"><b>Day 0</b><i></i><small>Welcome</small></div>
-    <div class="pt" style="left:40%"><b>Day 2</b><i></i><small>Product value</small></div>
-    <div class="pt" style="left:100%"><b>Day 5</b><i></i><small>Build confidence</small></div>
+    <div class="pt" style="left:40%"><b>Day 2</b><i></i><small>Product Value</small></div>
+    <div class="pt" style="left:100%"><b>Day 5</b><i></i><small>Build Confidence</small></div>
   </div>
 
   <div class="step">
     <div class="day"><small>Day</small><b>0</b></div>
     <div>
-      <h4>Welcome <span class="id">W01 · Welcome / Brand introduction</span></h4>
+      <h4>Welcome / Brand Introduction <span class="id">W01</span></h4>
       <dl>
         <dt>Goal</dt><dd>Introduce the brand and encourage a first purchase.</dd>
         <dt>Messaging</dt><dd>What the brand offers, what makes it different, and why it is relevant to this customer. Feature hero products and lead with customer benefits rather than a long brand story. Deliver any promised signup incentive here.</dd>
@@ -161,7 +166,7 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="step">
     <div class="day"><small>Day</small><b>2</b></div>
     <div>
-      <h4>Gentle conversion reminder <span class="id">W02 · Product value / Why choose us</span></h4>
+      <h4>Product Value / Why Choose Us <span class="id">W02</span></h4>
       <dl>
         <dt>Goal</dt><dd>Build interest and give a reason to consider purchasing.</dd>
         <dt>Messaging</dt><dd>Key product benefits, differentiators, and how the products fit into everyday life. Feature one hero product or a small selection. Do not repeat the welcome.</dd>
@@ -173,10 +178,10 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="step">
     <div class="day"><small>Day</small><b>5</b></div>
     <div>
-      <h4>Address purchase hesitation <span class="id">W03 · Build confidence / Product discovery</span></h4>
+      <h4>Build Confidence / Product Discovery <span class="id">W03</span></h4>
       <dl>
         <dt>Goal</dt><dd>One more compelling reason to make the first purchase. The most conversion-focused email of the series.</dd>
-        <dt>Messaging</dt><dd>Where available, answer common purchase questions or feature approved customer feedback and product demonstrations. For a brand without established social proof, focus on product discovery (additional styles or flavours) and relevant existing offers such as free shipping or buy 4, save 20%.</dd>
+        <dt>Messaging</dt><dd>Where available, answer common purchase questions or feature approved customer feedback and product demonstrations. For a brand without established social proof, focus on product discovery (additional styles or flavours) and relevant existing offers (her examples: free shipping, buy 4 save 20%).</dd>
         <dt>CTA</dt><dd><span class="cta">FIND YOUR FAVORITES</span> or <span class="cta">SHOP NOW</span></dd>
       </dl>
       <p class="guard">No artificial urgency and no invented welcome offer. An offer appears here only if the brand already runs it.</p>
@@ -185,22 +190,22 @@ td:first-child{font-weight:600;white-space:nowrap}
 </div>
 
 <div class="series">
-  <div class="head"><h3>Post-purchase series (New customer series)</h3><span>first paid order ever with the brand, subscribed at the time</span></div>
-  <p class="sub">Day 0, then delivery-based steps. The clock is the AfterShip delivery confirmation: "Getting started" the day the package is reported delivered, the next two steps 9 and 25 days after it. With no delivery confirmation the steps fall back to the order date plus 5, 14 and 30 days, which is where the ~5d, ~14d and ~30d labels come from.</p>
+  <div class="head"><h3>Post-purchase series (New Customer series)</h3><span>first paid order ever with the brand, subscribed at the time</span></div>
+  <p class="sub">Day 0, then delivery-based steps. The clock is the AfterShip delivery confirmation: "Getting Started" the day the package is reported delivered, the next two steps 9 and 25 days after it. A tracked package still in transit waits up to 10 days after the order; after that, or with no delivery confirmation, the steps fall back to the order date plus 5, 14 and 30 days, which is where the ~5d, ~14d and ~30d labels come from.</p>
   <div class="track">
-    <div class="pt" style="left:0%"><b>Day 0</b><i></i><small>Thank you</small></div>
-    <div class="pt" style="left:16.7%"><b>Delivery</b><i></i><small>Getting started</small></div>
-    <div class="pt" style="left:46.7%"><b>~Day 14</b><i></i><small>Get more from it</small></div>
-    <div class="pt" style="left:100%"><b>~Day 30</b><i></i><small>Your next favorite</small></div>
+    <div class="pt" style="left:0%"><b>Day 0</b><i></i><small>First-Time Customer Welcome</small></div>
+    <div class="pt" style="left:16.7%"><b>Delivery</b><i></i><small>Getting Started</small></div>
+    <div class="pt" style="left:46.7%"><b>~Day 14</b><i></i><small>Get More From Your Purchase</small></div>
+    <div class="pt" style="left:100%"><b>~Day 30</b><i></i><small>Your Next Favorite</small></div>
   </div>
 
   <div class="step">
     <div class="day"><small>Day</small><b>0</b></div>
     <div>
-      <h4>Thank you <span class="id">P01 · First-time customer welcome</span></h4>
+      <h4>First-Time Customer Welcome <span class="id">P01</span></h4>
       <dl>
         <dt>Goal</dt><dd>Reinforce the purchase decision and begin the relationship.</dd>
-        <dt>Messaging</dt><dd>Thank them for choosing the brand, reinforce its value, and set positive expectations. No sales pitch. Do not duplicate the order confirmation AfterShip already sends.</dd>
+        <dt>Messaging</dt><dd>Thank them for choosing the brand, reinforce its value, and set positive expectations. No sales pitch. Do not duplicate the order confirmation Komigo already sends. <span class="pushback"><span class="lead">Note to Kaylinn</span>Komigo, not AfterShip: AfterShip sends only the shipping-status emails.</span></dd>
         <dt>CTA</dt><dd><span class="cta">EXPLORE [BRAND]</span>, only if relevant; this email may have no button.</dd>
       </dl>
     </div>
@@ -209,7 +214,7 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="step">
     <div class="day"><small>Day</small><b>~5</b></div>
     <div>
-      <h4>Getting started · delivery-based (~5d) <span class="id">P02 · Getting started</span></h4>
+      <h4>Getting Started / Delivery-Based <span class="id">P02</span></h4>
       <dl>
         <dt>Goal</dt><dd>Help the customer use their new purchase with confidence.</dd>
         <dt>Messaging</dt><dd>Two or three practical first-use tips, simple instructions, or answers to common questions. Everything in service of a great first experience.</dd>
@@ -225,7 +230,7 @@ td:first-child{font-weight:600;white-space:nowrap}
       <h4>Get More From Your Purchase <span class="id">P03 · Day 14</span></h4>
       <dl>
         <dt>Goal</dt><dd>Improve the experience and encourage continued use.</dd>
-        <dt>Messaging</dt><dd>Beyond the basics of Getting started: additional tips, techniques, routine ideas, or ways to get more value from the product. Genuinely helpful, not another pitch.</dd>
+        <dt>Messaging</dt><dd>Beyond the basics of Getting Started: additional tips, techniques, routine ideas, or ways to get more value from the product. Genuinely helpful, not another pitch.</dd>
         <dt>CTA</dt><dd><span class="cta">EXPLORE MORE TIPS</span> or <span class="cta">DISCOVER MORE</span></dd>
         <dt>By brand</dt><dd><b>JoyBelle:</b> nail care, maintaining a manicure, removal tips, preparing for the next set. <b>LIYORÁ:</b> additional styling techniques, attachment tips, creating different looks. <b>BNKD:</b> daily routine ideas, preparation variations, tips for building consistency. <b>Thirsty Girl:</b> hydration habits, different ways to enjoy the flavours, incorporating them into everyday routines. <b>RUZE:</b> usage tips, routine ideas, additional product education.</dd>
       </dl>
@@ -236,7 +241,7 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="step">
     <div class="day"><small>Day</small><b>~30</b></div>
     <div>
-      <h4>Your next favorite <span class="id">P04 · Day 30 · Second purchase</span></h4>
+      <h4>Your Next Favorite / Second Purchase <span class="id">P04 · Day 30</span></h4>
       <dl>
         <dt>Goal</dt><dd>Encourage a second purchase.</dd>
         <dt>Messaging</dt><dd>A relevant reason to shop again: replenishment, another flavour or style, a complementary product, or subscribing, depending on the brand. Reinforce existing offers where appropriate. Skipped automatically for anyone who has already ordered again.</dd>
@@ -249,18 +254,18 @@ td:first-child{font-weight:600;white-space:nowrap}
 
 <div class="series">
   <div class="head"><h3>Re-engagement series (Sunset flow)</h3><span>no click, Gmail-confirmed open or purchase for 180 days, after at least 6 broadcasts</span></div>
-  <p class="sub">Regular sends stop the day someone is held (day 180). Three asks follow on a fixed schedule from that day, then the day-365 confirmation. Each is an automation Marketing builds per brand; a step with no running automation is simply not sent, and the schedule runs regardless.</p>
+  <p class="sub">Regular sends stop the day someone is held (day 180), and the first ask goes out that same day. The second and third follow at +90 and +180 days from the hold, then the confirmation at +185 (days 270, 360 and 365 at the default window). Each is an automation Marketing builds per brand, every brand onboarded with all four; the Usage pane turns amber for a step whose automation is not running, and the date schedule runs regardless.</p>
   <div class="track">
-    <div class="pt" style="left:0%"><b>Day 180</b><i></i><small>Reconnect</small></div>
-    <div class="pt" style="left:48.6%"><b>Day 270</b><i></i><small>Another reason</small></div>
-    <div class="pt" style="left:97.3%"><b>Day 360</b><i></i><small>Last chance</small></div>
-    <div class="pt" style="left:100%"><b style="transform:translateX(26px)">Day 365</b><i></i><small style="transform:translateX(26px)">Inactivity suppression</small></div>
+    <div class="pt" style="left:0%"><b>Day 180</b><i></i><small>Reconnect With the Brand</small></div>
+    <div class="pt" style="left:48.6%"><b>Day 270</b><i></i><small>Another Reason to Reconnect</small></div>
+    <div class="pt" style="left:97.3%"><b>Day 360</b><i></i><small>Final Opportunity</small></div>
+    <div class="pt" style="left:100%"><b style="transform:translateX(26px)">Day 365</b><i></i><small style="transform:translateX(26px)">Inactivity Suppression</small></div>
   </div>
 
   <div class="step">
     <div class="day"><small>Day</small><b>180</b></div>
     <div>
-      <h4>We miss you <span class="id">R01 · Reconnect with the brand</span></h4>
+      <h4>Reconnect With the Brand <span class="id">R01</span></h4>
       <dl>
         <dt>Goal</dt><dd>Re-establish interest and encourage engagement.</dd>
         <dt>Messaging</dt><dd>Remind them what the brand offers, highlight hero products or benefits, and give a compelling reason to explore again. No generic "we miss you" copy without substance.</dd>
@@ -272,7 +277,7 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="step">
     <div class="day"><small>Day</small><b>270</b></div>
     <div>
-      <h4>Second reminder <span class="id">R02 · Another reason to reconnect</span></h4>
+      <h4>Another Reason to Reconnect <span class="id">R02</span></h4>
       <dl>
         <dt>Goal</dt><dd>A new reason to engage.</dd>
         <dt>Messaging</dt><dd>A different angle from the first ask: product variety, relevant benefits, or existing offers. Do not repeat the first message, and do not rely on a promotion that may have ended by the time the automation sends.</dd>
@@ -284,11 +289,11 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="step">
     <div class="day"><small>Day</small><b>360</b></div>
     <div>
-      <h4>Last chance <span class="id">R03 · Final opportunity to stay connected</span></h4>
+      <h4>Final Opportunity to Stay Connected <span class="id">R03</span></h4>
       <dl>
         <dt>Goal</dt><dd>One final opportunity to remain on the active marketing list.</dd>
-        <dt>Messaging</dt><dd>Clearly and respectfully: they have not engaged in some time, and unless they respond within 5 days this is the last marketing email they will receive from the brand. Explain how to stay connected.</dd>
-        <dt>CTA</dt><dd><span class="cta">STAY CONNECTED</span>, a tracked link to the brand site. <span class="cta">MANAGE PREFERENCES</span> may appear as a second route, never as the only one.</dd>
+        <dt>Messaging</dt><dd>Clearly and respectfully: they have not engaged in some time, and unless they respond within 5 days this is the last marketing email they will receive from the brand. Explain how to stay connected. <span class="pushback"><span class="lead">Note to Kaylinn</span>Your brief says they "may stop receiving marketing emails". The email states the 5-day deadline plainly: the day-365 suppression follows on a fixed date whether or not they respond (policy item 19), so a soft "may" would be untrue.</span></dd>
+        <dt>CTA</dt><dd><span class="cta">STAY CONNECTED</span>, a tracked link to the brand site. <span class="cta">MANAGE PREFERENCES</span> may appear as a second route, never as the only one. <span class="pushback"><span class="lead">Note to Kaylinn</span>Your brief lists the two CTAs as equals. They are not: a click on the Manage Preferences link is the one tracked click the system does not count as engagement (opening the page to opt out must never re-subscribe anyone), so on its own it would fail your rule that the CTA must connect to qualifying engagement. The brand-site button is the primary; Manage Preferences is the second route.</span></dd>
       </dl>
       <p class="guard">The CTA must be an action the system counts as qualifying engagement. See the next section: a click on the brand-site button qualifies on its own; the Manage Preferences link does not, and only the tick on that page does.</p>
     </div>
@@ -297,13 +302,14 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="step">
     <div class="day"><small>Day</small><b>365</b></div>
     <div>
-      <h4>Inactivity suppression <span class="id">Outside the brief · a system confirmation</span></h4>
+      <h4>Inactivity Suppression <span class="id">Outside the brief · a system confirmation</span></h4>
       <dl>
         <dt>Goal</dt><dd>Confirm, politely, that the brand's marketing emails have stopped, and leave the door open.</dd>
         <dt>Messaging</dt><dd>"We've stopped sending you marketing emails." Say that it is because of a year without engagement, that it is not an unsubscribe, and that one tap resumes them. No offers, no pitch, no guilt.</dd>
         <dt>CTA</dt><dd><span class="cta">MANAGE PREFERENCES</span>, the one place this button is the primary action.</dd>
       </dl>
       <p class="guard">Not covered by Kaylinn's direction; the state and wording were settled 2026-11-08 (below). The copy direction here is ours, and Marketing reviews it like any other draft.</p>
+      <p class="pushback"><span class="lead">Note to Kaylinn</span>Your brief stops at R03. This fourth step is the day-365 confirmation, named "Inactivity Suppression" per your 2026-11-05 note (never "unsubscribed"); it is the eleventh journey email every brand gets, and it needs your copy review like the other ten.</p>
     </div>
   </div>
 </div>
@@ -312,19 +318,20 @@ td:first-child{font-weight:600;white-space:nowrap}
 <p>Kaylinn's rule for the day-360 email is that its CTA must connect to an action the system recognises as qualifying engagement. This is what the system recognises.</p>
 <div class="tablewrap">
 <table>
-  <thead><tr><th>Action</th><th>Effect on a held subscriber</th><th>Counts on its own?</th></tr></thead>
+  <thead><tr><th>Action</th><th>Before day 365 (held)</th><th>After day 365 (suppressed)</th><th>Counts on its own?</th></tr></thead>
   <tbody>
-    <tr><td>Click on any tracked link in a re-engagement email</td><td>Releases the hold; regular sends resume the next day, with no new welcome</td><td><span class="tag t-ok">Yes</span></td></tr>
-    <tr><td>Gmail-confirmed open, or a purchase</td><td>Releases the hold the same way</td><td><span class="tag t-ok">Yes</span></td></tr>
-    <tr><td>Click on the Manage Preferences link</td><td>Nothing by itself: the one tracked link whose click is not engagement, so that opening the page to opt out never re-subscribes anyone</td><td><span class="tag t-ext">No</span></td></tr>
-    <tr><td>Ticking the brand on the Manage Preferences page</td><td>An authenticated subscribe: releases the hold, including an archived one after day 365</td><td><span class="tag t-ok">Yes</span></td></tr>
-    <tr><td>Unsubscribe link in a re-engagement email</td><td>A real opt-out; they are never asked again</td><td>n/a</td></tr>
+    <tr><td>Click on any tracked link in a re-engagement email</td><td>Releases the hold; regular sends resume the next day, with no new welcome (policy item 21)</td><td>Nothing: only the person's own action brings them back (item 22)</td><td><span class="tag t-ok">Yes</span></td></tr>
+    <tr><td>Gmail-confirmed open, or a purchase</td><td>Releases the hold the same way</td><td>Nothing on its own; a checkout opt-in does bring them back</td><td><span class="tag t-ok">Yes</span></td></tr>
+    <tr><td>Click on the Manage Preferences link</td><td colspan="2">Nothing by itself: the one tracked link whose click is not engagement, so that opening the page to opt out never re-subscribes anyone</td><td><span class="tag t-ext">No</span></td></tr>
+    <tr><td>Ticking the brand on the Manage Preferences page</td><td>An authenticated subscribe: releases the hold at once, with no new welcome (a return from a hold, not a re-subscribe)</td><td>The same tick is the way back</td><td><span class="tag t-ok">Yes</span></td></tr>
+    <tr><td>Signing up again, or opting in at checkout</td><td colspan="2">Brings them back at any stage; a new sign-up after a real opt-out is a re-subscribe and sends the Day 0 welcome again (item 5)</td><td><span class="tag t-ok">Yes</span></td></tr>
+    <tr><td>Unsubscribe link in a re-engagement email</td><td colspan="2">A real opt-out; they are never asked again</td><td>n/a</td></tr>
   </tbody>
 </table>
 </div>
 <div class="callout">
   <p><strong>So for the day-360 email:</strong> the primary button is a tracked link to the brand site (one click, done). Manage Preferences is a legitimate second route, two steps long: the page shows the brand unticked from day 180 on, and ticking it resumes sends. After day 365 the same tick is the way back.</p>
-  <p><strong>Coming next:</strong> the Manage Preferences page will show why a brand is unticked ("paused: no opens or clicks for 180 days", or "stopped" after 365) and label the tick Resume, so nobody reads a hold as an unsubscribe they never made. Until then the page shows a plain unticked box.</p>
+  <p><strong>What the page shows (since 2026-11-08):</strong> under a held brand's unticked box, a Paused note (regular sends stopped; tick the box to resume) or, after day 365, a Stopped note (a year without activity; tick the box to resume), so nobody reads a hold as an unsubscribe they never made. The tick is the resume; there is no separate button.</p>
 </div>
 
 <h2>Suppression, not unsubscribe: the day-365 state</h2>
@@ -339,21 +346,21 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="card">
     <h3>2 · Don't suppress before the re-engagement emails are activated</h3>
     <p>Met as a commitment, not a mechanism. Keying the suppression on the asks was the earlier design, retired because it left a brand with no automations holding people forever and let any hand broadcast reset the clock. The date rule stays.</p>
-    <p>What the ask protects is the person's chance to answer, and that is met in practice: the earliest day-360 cohort is <b>March 2027</b> (the September 2026 holds plus 180 days); the Usage pane turns amber for any brand whose step automation is not running; and a Gate Watch human gate holds Marketing to <b>all four automations running on every sunset-enabled brand before the first cohort reaches day 360</b>.</p>
-    <p class="note">By day 365 a person has received nothing for 185 days, so the suppression changes no deliverability outcome. It is bookkeeping plus the door back.</p>
+    <p>What the ask protects is the person's chance to answer, and that is met in practice: the earliest day-360 cohort is <b>March 2027</b> (the September 2026 holds plus 180 days); the Usage pane turns amber for any brand whose step automation is not running; and a Gate Watch human gate holds Marketing to <b>all four automations running on every brand before the first cohort reaches day 360</b> (every brand is onboarded with sunset on and the full suite of journey drafts; the Usage pane's Sunset column and Re-engagement circles show where that did not happen).</p>
+    <p class="note">By day 365 a person has had no regular sends for 185 days, only the three asks, so the suppression changes no deliverability outcome. It is bookkeeping plus the door back.</p>
   </div>
 </div>
 
 <h2>Sources</h2>
 <ul class="sources">
-  <li><span class="pill">Marketing</span> Kaylinn Brophy, "AI Copy Direction", 2026-11-07: the per-step goals, messaging and CTAs above, the general copy direction, and the per-brand Get More From Your Purchase examples.</li>
+  <li><span class="pill">Marketing</span> Kaylinn Brophy, "AI Copy Direction", 2026-11-07 (step names and ids from its v2 revision, 2026-11-09): the per-step goals, messaging and CTAs above, the general copy direction, and the per-brand Get More From Your Purchase examples. Adopted with the corrections shown in red: Komigo sends the order confirmation (not AfterShip); the day-360 email states its 5-day deadline and leads with the brand-site button; and the day-365 step, outside her brief, is named Inactivity Suppression.</li>
   <li><span class="pill">Marketing</span> Kaylinn Brophy, reject note on policy item 22, 2026-11-05: record day 365 as an inactivity suppression; do not suppress before the re-engagement emails are activated. Adopted 2026-11-08; the item reads "Approved as modified" by her, and her note stays in its History.</li>
   <li><span class="pill">Klaviyo</span> <a href="https://help.klaviyo.com/hc/en-us/articles/360017518492-Creating-a-Sunset-Flow" target="_blank" rel="noopener">Creating a sunset flow</a>: the flow tags non-responders and "does not unsubscribe or suppress them"; suppression is a separate step after the final emails.</li>
   <li><span class="pill">HubSpot</span> <a href="https://knowledge.hubspot.com/marketing-email/understanding-graymail-suppression" target="_blank" rel="noopener">Graymail suppression</a>: unengaged contacts are suppressed, not unsubscribed.</li>
   <li><span class="pill">Google</span> <a href="https://support.google.com/a/answer/81126" target="_blank" rel="noopener">Email sender guidelines</a>: "consider unsubscribing recipients who don't open or read your messages"; the hard requirements are the spam-rate ceiling, authentication and one-click unsubscribe.</li>
   <li><span class="pill">Yahoo</span> <a href="https://senders.yahooinc.com/best-practices/" target="_blank" rel="noopener">Sender best practices</a>: "consider sending a reconfirmation email to inactive subscribers periodically".</li>
   <li><span class="pill">Internal</span> Brands &gt; Usage: the journey guide, policy items 15–23 and their History; the <a href="/admin/docs/lifecycle-sources" target="_blank" rel="noopener">evidence brief</a> for the intervals; the <a href="/admin/docs/shop-link-attribution" target="_blank" rel="noopener">shop link standard</a> for every link in a draft.</li>
-  <li><span class="pill">Internal</span> Specs in the integrations repo: JOURNEY-PREVIEW (the drafts and the Preview page), LIFECYCLE-SERIES, DELIVERY-CLOCK (the delivery-based clock), USAGE-DAY10 (day 10 retired, day 14 renamed), SUNSET-V4 (the date rule), USAGE-DECISIONS and LIFECYCLE-DOCS (the decision record).</li>
+  <li><span class="pill">Internal</span> Specs in the integrations repo: JOURNEY-PREVIEW (the drafts and the Preview page), LIFECYCLE-SERIES, DELIVERY-CLOCK (the delivery-based clock), USAGE-DAY10 (day 10 retired, day 14 renamed), SUNSET-V4 (the date rule), USAGE-DECISIONS and LIFECYCLE-DOCS (the decision record).</li><!-- docs-ok -->
 </ul>
 <p class="note">Dates on this page are the days the decisions were made. The copy itself lives in the drafts; this page is what the drafts are measured against.</p>
 </div>

@@ -9,8 +9,9 @@ import {
   computedAtText, headerLayout, loadState, WELCOME_FIELDS, POST_PURCHASE_FIELDS, seriesLeafOf, saveState, scoreTip, shapeRows,
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
   GUIDE_COLUMN_REM, GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, pageWidth, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
-  REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName, approxClock, hoverText,
+  REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName, approxClock, hoverText, splitStepTitle, stepDetail,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
+import { seriesStepKey } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
 const t = (k, p) => (p ? `${k}${JSON.stringify(p)}` : k);
@@ -241,7 +242,7 @@ test('LIFECYCLE-DOCS I10: approxClock -- Post-purchase steps after day 0 only', 
   assert.equal(en['dashboard.usage.approxDays'], '~{n}d');
   assert.equal(en['dashboard.usage.approxDay'], '~{n}');
   assert.equal(en['dashboard.usage.approxClock'], [
-    'Sent at the first daily run (8:10 am Mountain, 9:10 am in summer) on or after delivery day + {offset}, as Aftership',
+    'Sent at the first daily run (15:10 UTC — 8:10 am Mountain in winter, 9:10 am in summer) on or after delivery day + {offset}, as Aftership',
     ' reports the first order delivered. A tracked package still in transit waits up to 10 days after the order, then',
     ' — like an order with no tracking — sends at order date + {n} days.',
   ].join(''));
@@ -1042,20 +1043,41 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   ]);
   assert.deepEqual(g.map((s) => s.steps.map((x) => x.days)), [SERIES_DAYS.welcome, SERIES_DAYS.postPurchase, REENGAGEMENT_DAYS]);
   // SUNSET-V4 D7: four steps.
+  // 2026-11-09 (the documentation audit): Kaylinn's step names, the whole pair, split into the
+  // primary and the grey secondary (splitStepTitle); the day-365 step is outside her brief.
   assert.deepEqual(g[2].steps.map((x) => [x.title, x.quote]), [
-    ['We miss you', 'Still want to hear from us?'], ['Second reminder', 'Your emails are paused. Here\'s what you\'ve been missing.'],
-    ['Last chance', 'Should we stop emailing you?'], ['Inactivity suppression', 'We\'ve stopped sending you marketing emails.'],
+    ['Reconnect With the Brand', 'Still want to hear from us?'], ['Another Reason to Reconnect', 'Your emails are paused. Here\'s what you\'ve been missing.'],
+    ['Final Opportunity to Stay Connected', 'Should we stop emailing you?'], ['Inactivity Suppression', 'We\'ve stopped sending you marketing emails.'],
   ]);
   assert.equal(SERIES_DAYS.reengagement, undefined); // never a series family
-  g.flatMap((s) => s.steps).forEach((x) => {
-    assert.ok(x.title && x.body, `day ${x.days}`);
-  });
+  g.forEach((s) => s.steps.forEach((x) => {
+    assert.ok(x.title && x.body && x.primary, `day ${x.days}`);
+    // The at-a-glance body: two lines, three at most, in a 32rem column (~65 characters a line).
+    assert.ok(x.body.length <= 200, `${s.family} day ${x.days} body ${x.body.length} chars`);
+    // Every standard step carries a detail for the Day badge's hover; the clock sentence follows it.
+    const detail = en[`${seriesStepKey(s.family, x.days)}Detail`];
+    assert.ok(typeof detail === 'string' && detail.length > 0 && x.hover.startsWith(detail), `${s.family} day ${x.days} hover`);
+  }));
+  assert.deepEqual(g[0].steps.map((x) => [x.primary, x.secondary]), [
+    ['Welcome', 'Brand Introduction'], ['Product Value', 'Why Choose Us'], ['Build Confidence', 'Product Discovery'],
+  ]);
+  assert.deepEqual(g[1].steps.map((x) => [x.primary, x.secondary]), [
+    ['First-Time Customer Welcome', ''], ['Getting Started', 'Delivery-Based'], ['Get More From Your Purchase', ''], ['Your Next Favorite', 'Second Purchase'],
+  ]);
+  assert.deepEqual(splitStepTitle('Product Value / Why Choose Us'), { primary: 'Product Value', secondary: 'Why Choose Us' });
+  assert.deepEqual(splitStepTitle('Thank you'), { primary: 'Thank you', secondary: '' });
+  assert.deepEqual(splitStepTitle(undefined), { primary: '', secondary: '' });
+  // A hover is detail + clock on an approximate Post-purchase step, detail alone elsewhere.
+  assert.equal(g[1].steps[1].hover, `${en['series.postPurchaseDay5Detail']}\n${g[1].steps[1].clock}`);
+  assert.equal(g[0].steps[0].hover, en['series.welcomeDay0Detail']);
+  assert.equal(stepDetail('welcome', 99, (k) => k), '');
+  assert.equal(stepDetail('welcome', 2, (k) => k), ''); // no translation: the key comes back, so no detail
   // USAGE-DAY10-SPEC D1/D4 / I5: day 10 retired; day 14 is "Get More From Your Purchase"
-  // (parseStepText splits on the FIRST ": "); LIFECYCLE-DOCS-SPEC D19 / I12: its body is D19's.
-  assert.deepEqual(g[0].steps.map((x) => x.title), ['Welcome', 'Gentle conversion reminder', 'Address purchase hesitation']);
-  assert.deepEqual(g[1].steps.map((x) => x.title), ['Thank you', 'Getting started', 'Get More From Your Purchase', 'Your next favorite']);
-  assert.equal(g[1].steps[2].body, 'Go beyond the basics covered in Getting started: additional tips, techniques, routine ideas or ways '
-    + 'to get more value from the product. Genuinely helpful, not another sales pitch, and never a review request.');
+  // (parseStepText splits on the FIRST ": "); its body is the concise form of LIFECYCLE-DOCS-SPEC D19.
+  assert.deepEqual(g[0].steps.map((x) => x.title), ['Welcome / Brand Introduction', 'Product Value / Why Choose Us', 'Build Confidence / Product Discovery']);
+  assert.deepEqual(g[1].steps.map((x) => x.title), ['First-Time Customer Welcome', 'Getting Started / Delivery-Based', 'Get More From Your Purchase', 'Your Next Favorite / Second Purchase']);
+  assert.equal(g[1].steps[2].body, 'Beyond the basics of Getting Started: more tips, techniques, routine ideas or ways to get more value from the product. '
+    + 'Genuinely helpful, never a review request.');
   assert.equal(en['series.postPurchaseDay14'], `Day 14 Get More From Your Purchase: ${g[1].steps[2].body}`);
   // LIFECYCLE-DOCS-SPEC D22 / I12: the Post-purchase steps after day 0 carry "~N" and the real
   // clock; day 0 and every No-purchase / Re-engagement step the plain number and no clock.

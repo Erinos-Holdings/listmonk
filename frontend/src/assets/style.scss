@@ -1446,6 +1446,21 @@ section.dashboard (which reopens after them). */
     font-weight: 600;
     color: #363636;
   }
+  /* 2026-11-09: the step title's secondary half (Kaylinn's "Product Value / Why Choose Us"), after a
+     middle dot in the series subline's grey small caps (brandUsage.mjs::splitStepTitle). */
+  .bu-guide-step-sub {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: $grey;
+    margin-left: 0.45rem;
+    white-space: nowrap;
+    &::before {
+      content: '· ';
+      font-weight: 400;
+    }
+  }
   .bu-guide-quote {
     margin-top: 0.3rem !important;
     padding-left: 0.6rem;

@@ -6,7 +6,7 @@
       "key": "np-entry",
       "section": "no-purchase",
       "n": 1,
-      "text": "Entry. Anyone who joins a brand's newsletter list (site signup, checkout opt-in, or an import marked as new) gets the Day 0 welcome about 10 minutes after joining (item 3), then the day 2 and day 5 steps.",
+      "text": "Entry. Anyone who joins a brand's newsletter list (site signup, checkout opt-in, or an import marked as new) gets the Day 0 welcome about 10 minutes after joining, then the day 2 and day 5 steps. The one exception: a signup that is also a first order gets the Thank-you instead of the welcome (item 3).",
       "changelog": [
         {
           "date": "2026-10-30",
@@ -32,6 +32,12 @@
           "source": "page",
           "line": "The welcome arrives about 10 minutes after joining, not on joining (the WELCOME-SKIP-SPEC hold; review R3).",
           "hash": "8e156f8236ae70d3e769b8096a3183d2bfd7ac8bf3d351c790ce62381cc2c898"
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "Names the welcome skip: a signup that is also a first order gets the Thank-you, not the welcome (item 3); was \"(item 3)\" alone, which read as every checkout opt-in getting the welcome.",
+          "hash": "72a9ff130dd33527edc89e0e5d7cfc6296aaabc0dc913917d439637a2110204c"
         }
       ]
     },
@@ -39,7 +45,7 @@
       "key": "np-exit-on-purchase",
       "section": "no-purchase",
       "n": 2,
-      "text": "Exit on purchase (your W01–W05 request). Any paid order of the brand, at any time, stops every remaining Welcome step. The check runs daily, so a step already sent isn't recalled.",
+      "text": "Exit on purchase (your W01–W05 request). Any paid order of the brand, before or after joining, stops every remaining Welcome step: someone who has ever bought from the brand is not a non-buyer, so a prior customer who joins gets the Day 0 welcome and none of the steps. The check runs daily, so a step already sent isn't recalled.",
       "changelog": [
         {
           "date": "2026-10-30",
@@ -47,6 +53,12 @@
           "line": "Published for approval",
           "hash": "5b6c4ce9a2fb62225f37b22f31a10012d10eb30f8070893645fd7c9818a08d08",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "The scope stated: any paid order before or after joining, so a prior customer who joins gets the welcome and none of the steps (the Klaviyo shape; documentation reconciliation); was \"at any time\".",
+          "hash": "fe2f01170f0ba372ea66c8fc63ff4d4c93dfb0d32d0dd1c3bc861ed78377b829"
         }
       ]
     },
@@ -102,7 +114,7 @@
       "key": "np-no-restarts",
       "section": "no-purchase",
       "n": 5,
-      "text": "No restarts (your completion-tracking question). Every follow-up step sends once per person, ever — even if they unsubscribe and later re-subscribe. The one exception: the Day 0 welcome DOES send again on re-subscribe. That's deliberate.",
+      "text": "No restarts (your completion-tracking question). Every follow-up step sends once per person, ever — even if they unsubscribe and later re-subscribe. The one exception: the Day 0 welcome DOES send again on re-subscribe. That's deliberate. A re-subscribe is a new sign-up after a real opt-out; coming back from a hold (item 21) is not one and sends no welcome.",
       "changelog": [
         {
           "date": "2026-10-30",
@@ -116,6 +128,12 @@
           "source": "page",
           "line": "The \"confirm you want it\" question dropped: accepted 2026-11-05.",
           "hash": "4f505c5b0e31a8104d96a3d6cc5dd338012aaf8d7079c457dc82ede19c0e4702"
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "A re-subscribe (a new sign-up after a real opt-out) distinguished from a return from a hold (item 21): only the first sends the welcome again.",
+          "hash": "15a974543439b0dd2cc0d71ccdadce8a7e6c46c45fbaa6e6f002a5dc824a5576"
         }
       ]
     },
@@ -138,7 +156,7 @@
       "key": "np-ruze-15d",
       "section": "no-purchase",
       "n": 7,
-      "text": "Ruze's 15-day step. Keeps sending as-is.\nRecommended: The current campaign best fits the Day 2 “Gentle conversion reminder”: retire the 15-day campaign and re-schedule it as the 2-day step, without re-sending it to anyone who already received it.",
+      "text": "Ruze's 15-day step. Keeps sending as-is.\nRecommended: The current campaign best fits the Day 2 “Product Value / Why Choose Us” step: retire the 15-day campaign and re-schedule it as the 2-day step, without re-sending it to anyone who already received it.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -146,6 +164,12 @@
           "line": "Published for approval",
           "hash": "4a00e902003dcfd0a30ea88c0de8857fd93cbb1d390b869e0edd23cc59fb3447",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "The Day 2 step named by Kaylinn's title (Product Value / Why Choose Us); was \"Gentle conversion reminder\".",
+          "hash": "67c8e1536e5b5e357b4c103e375e55801759fccf8f9e597de086a394c38052c7"
         }
       ]
     },
@@ -327,7 +351,7 @@
       "key": "sp-scope",
       "section": "sunset-policy",
       "n": 15,
-      "text": "Who it applies to. Every brand that sends from listmonk, each brand on its own: someone who stops engaging with one brand keeps getting the others. The check runs once daily, at 9:00 am Mountain (8:00 am in winter).",
+      "text": "Who it applies to. Every brand that sends from listmonk, each brand on its own: someone who stops engaging with one brand keeps getting the others. Sunset is switched on when a brand is onboarded and no brand is exempt; the Sunset column above verifies it. The check runs once daily, at 15:00 UTC (8:00 am Mountain in winter, 9:00 am in summer).",
       "changelog": [
         {
           "date": "2026-10-30",
@@ -335,6 +359,12 @@
           "line": "Published for approval",
           "hash": "b82a9e15281891935c2c3afc621e29db5f26497c40d8988ba87f32615ba5a54b",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "Stated as the onboarding expectation the Sunset column verifies (no brand is exempt); the run time anchored on 15:00 UTC with both Mountain readings.",
+          "hash": "d1cce9e3d594bfe96118849d34adc17507997b2220c890350861a33fd5add904"
         }
       ]
     },
@@ -441,7 +471,7 @@
       "key": "sp-coming-back",
       "section": "sunset-policy",
       "n": 21,
-      "text": "Coming back. Any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email; ticking the brand on the Manage Preferences page returns them at once. They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out: they are never asked again.",
+      "text": "Coming back. Before day 365, any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email; ticking the brand on the Manage Preferences page returns them at once, also with no welcome (a return from a hold, not a re-subscribe, item 5). They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out: they are never asked again.",
       "changelog": [
         {
           "date": "2026-11-02",
@@ -455,6 +485,12 @@
           "source": "page",
           "line": "Names the Manage Preferences tick as a way back.",
           "hash": "e1b6de333b15cd5ba893b595ff97340a63b698f9c9b0a5b80c335f55cfb3a855"
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "Scoped to before day 365 (after it, item 22); the Manage Preferences tick named a return from a hold, not a re-subscribe (item 5), so no welcome.",
+          "hash": "1866a86d3b28b02ec1cd191cb0e3d8c81abf10abd69ec972e99d55eab82ea7b2"
         }
       ]
     },
@@ -462,7 +498,7 @@
       "key": "sp-suppressed",
       "section": "sunset-policy",
       "n": 22,
-      "text": "365 days: inactivity suppression. 185 days after the hold (365 days without engagement at the default window), the brand's marketing emails to the person stop — recorded as an inactivity suppression, never as an unsubscribe, so the two are always distinguishable — and the confirmation is sent when the brand's day-365 automation is running, whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. The date rule runs regardless of the asks; Marketing's commitment is that every brand's four re-engagement automations are running before its first cohort reaches day 360 (the earliest is March 2027). Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout.",
+      "text": "365 days: inactivity suppression. 185 days after the hold (365 days without engagement at the default window), the brand's marketing emails to the person stop — recorded as an inactivity suppression, never as an unsubscribe, so the two are always distinguishable — and the confirmation is sent when the brand's day-365 automation is running, whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. The date rule runs regardless of the asks; Marketing's commitment is that every brand's four re-engagement automations are running before its first cohort reaches day 360 (the earliest is March 2027). Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout — after day 365 a click, an open or a purchase alone no longer does (item 21 covers the days before).",
       "changelog": [
         {
           "date": "2026-11-01",
@@ -488,6 +524,12 @@
           "source": "page",
           "line": "Timed from the hold (185 days); 365 is the default window's day; was \"After 365 days without engagement (180, then the re-engagement schedule)\".",
           "hash": "4b66fdb22ae8d2ffa10505e2c9d2e07b6b02b9744d88934dba9c5f15eaeda0f2"
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "The post-365 way back contrasted with item 21: a click, an open or a purchase alone no longer releases; only the person's own action does.",
+          "hash": "77c02fe1bdb37e833940d65fc25c8c45a6c9b310970a602b2229183d9f31ce0f"
         }
       ]
     },
