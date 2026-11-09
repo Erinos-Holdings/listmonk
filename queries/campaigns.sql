@@ -323,25 +323,29 @@ aud AS (
     WHERE NOT camps.evergreen
 ),
 -- Fork (smart sending, D1/D2) -- the skip set is decided HERE, once per claim, and recorded. skips =
--- the audience rows brand_journey_sends_24h also returns for that campaign (the one definition of the
--- rule), above the checkpoint: a re-claim after a pause must never record a skip for a subscriber
--- already sent (id at or below last_subscriber_id), which would drive to_send below sent.
+-- the audience rows brand_journey_skips also returns for that campaign (the one definition of both
+-- halves -- integrations SMART-SENDING-LOOKAHEAD-SPEC D4), above the checkpoint -- a re-claim after
+-- a pause must never record a skip for a subscriber already sent (id at or below
+-- last_subscriber_id), which would drive to_send below sent. A look-back row carries the journey
+-- pair, a look-ahead row the due pair (D5); both are written as they come.
 jsends AS (
-    SELECT camps.id AS campaign_id, j.subscriber_id, j.journey_campaign_id, j.journey_sent_at
+    SELECT camps.id AS campaign_id, j.subscriber_id, j.journey_campaign_id, j.journey_sent_at,
+        j.due_list_id, j.due_at
     FROM camps
-    CROSS JOIN LATERAL brand_journey_sends_24h(camps.id) j
+    CROSS JOIN LATERAL brand_journey_skips(camps.id) j
     WHERE NOT camps.evergreen
 ),
 skips AS (
-    SELECT a.campaign_id, a.subscriber_id, js.journey_campaign_id, js.journey_sent_at
+    SELECT a.campaign_id, a.subscriber_id, js.journey_campaign_id, js.journey_sent_at,
+        js.due_list_id, js.due_at
     FROM aud a
     JOIN camps ON (camps.id = a.campaign_id)
     JOIN jsends js ON (js.campaign_id = a.campaign_id AND js.subscriber_id = a.subscriber_id)
     WHERE a.subscriber_id > camps.last_subscriber_id
 ),
 insSkips AS (
-    INSERT INTO campaign_smart_skips (campaign_id, subscriber_id, journey_campaign_id, journey_sent_at)
-    SELECT campaign_id, subscriber_id, journey_campaign_id, journey_sent_at FROM skips
+    INSERT INTO campaign_smart_skips (campaign_id, subscriber_id, journey_campaign_id, journey_sent_at, due_list_id, due_at)
+    SELECT campaign_id, subscriber_id, journey_campaign_id, journey_sent_at, due_list_id, due_at FROM skips
     ON CONFLICT DO NOTHING
 ),
 -- to_send = the audience minus every skip: this claim's (the skips CTE) and an earlier claim's (the
@@ -765,6 +769,39 @@ INSERT INTO campaign_conversions (measure, order_id, campaign_id, brand, purchas
     SELECT $1, r->>'order_id', (r->>'campaign_id')::INT, r->>'brand', (r->>'purchased_at')::TIMESTAMPTZ,
         (r->>'sales_usd')::NUMERIC(12, 2)
     FROM JSONB_ARRAY_ELEMENTS($2::JSONB) AS r;
+
+-- name: delete-journey-due
+-- Fork (smart sending look-ahead, integrations SMART-SENDING-LOOKAHEAD-SPEC D6) -- the first half of
+-- the forecast replace (same transaction as insert-journey-due). It removes the rows of this
+-- (source, expected_at) and every row older than the retention, and leaves the other source and
+-- the other times.
+DELETE FROM journey_due
+    WHERE (source = $1 AND expected_at = $2) OR expected_at < NOW() - INTERVAL '7 days';
+
+-- name: insert-journey-due
+-- Fork (smart sending look-ahead, D6) -- the second half, the validated (list, subscriber) pairs of
+-- one feed. A repeated pair in one body is absorbed by the primary key (a retried PUT converges).
+INSERT INTO journey_due (source, list_id, subscriber_id, expected_at)
+    SELECT $1, u.list_id, u.subscriber_id, $2
+    FROM UNNEST($3::INT[], $4::INT[]) AS u(list_id, subscriber_id)
+    ON CONFLICT DO NOTHING;
+
+-- name: get-journey-due-feeds
+-- Fork (smart sending look-ahead, D6/D7) -- the dark proof and the feed-freshness read. lookahead is
+-- the switch as brand_journey_due_24h reads it (true only for the JSONB true; an absent row is
+-- false); feeds are the retained (source, expected_at) groups with their row counts. No subscriber
+-- ids.
+SELECT JSON_BUILD_OBJECT(
+    'lookahead', COALESCE((SELECT st.value = 'true'::JSONB FROM settings st WHERE st.key = 'app.smart_sending_lookahead'), FALSE),
+    'feeds', COALESCE((
+        SELECT JSON_AGG(JSON_BUILD_OBJECT('source', f.source, 'expected_at', f.expected_at,
+            'rows', f.n, 'created_at', f.created_at) ORDER BY f.expected_at, f.source)
+        FROM (
+            SELECT source, expected_at, COUNT(*) AS n, MAX(created_at) AS created_at
+            FROM journey_due GROUP BY source, expected_at
+        ) f
+    ), '[]'::JSON)
+);
 
 -- name: get-existing-campaign-ids
 SELECT id FROM campaigns WHERE id = ANY($1::INT[]);
@@ -1216,9 +1253,10 @@ campLists AS (
 ),
 -- Fork (smart sending, integrations SMART-SENDING-SPEC D3) -- the would-be Smart Sending skips (one row
 -- per subscriber, so the LEFT JOIN below never multiplies). `skipped` is how many of the audience the
--- claim would skip if the campaign went out now -- the same function over the same join, in one scan.
+-- claim would skip if the campaign went out now -- the same function over the same join, in one scan
+-- (brand_journey_skips, both halves -- integrations SMART-SENDING-LOOKAHEAD-SPEC D4).
 jsends AS (
-    SELECT subscriber_id FROM brand_journey_sends_24h($1)
+    SELECT subscriber_id FROM brand_journey_skips($1)
 )
 SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
        COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE subscriber_lang(s.attribs) = 'none') AS no_lang,

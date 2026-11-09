@@ -1075,7 +1075,9 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   // USAGE-DAY10-SPEC D1/D4 / I5: day 10 retired; day 14 is "Get More From Your Purchase"
   // (parseStepText splits on the FIRST ": "); its body is the concise form of LIFECYCLE-DOCS-SPEC D19.
   assert.deepEqual(g[0].steps.map((x) => x.title), ['Welcome / Brand Introduction', 'Product Value / Why Choose Us', 'Build Confidence / Product Discovery']);
-  assert.deepEqual(g[1].steps.map((x) => x.title), ['First-Time Customer Welcome / Thank You', 'Getting Started / Delivery-Based', 'Get More From Your Purchase', 'Your Next Favorite / Second Purchase']);
+  assert.deepEqual(g[1].steps.map((x) => x.title), [
+    'First-Time Customer Welcome / Thank You', 'Getting Started / Delivery-Based', 'Get More From Your Purchase', 'Your Next Favorite / Second Purchase',
+  ]);
   assert.equal(g[1].steps[2].body, 'Beyond the basics of Getting Started: more tips, techniques, routine ideas or ways to get more value from the product. '
     + 'Genuinely helpful, never a review request.');
   assert.equal(en['series.postPurchaseDay14'], `Day 14 Get More From Your Purchase: ${g[1].steps[2].body}`);

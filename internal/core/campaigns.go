@@ -511,7 +511,8 @@ func wantsAudience(cm models.Campaign) bool {
 // English send reaches by COALESCE-EN; zero for any other language). Used for the
 // zero-audience warning at start and the To send count in the UI.
 // Fork (smart sending, SMART-SENDING-SPEC D3) -- and Skipped: how many of Total Smart Sending would
-// skip if the campaign went out now (brand_journey_sends_24h over the same join, one scan).
+// skip if the campaign went out now (brand_journey_skips over the same join, one scan -- both
+// halves, integrations SMART-SENDING-LOOKAHEAD-SPEC D4).
 func (c *Core) CampaignLangAudience(id int) (LangAudience, error) {
 	var row LangAudience
 	if err := c.q.GetCampaignLangAudience.Get(&row, id); err != nil {

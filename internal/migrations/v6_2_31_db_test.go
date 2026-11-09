@@ -45,7 +45,9 @@ func TestSmartSendingMigration_V6_2_31(t *testing.T) {
 		}
 	}
 
-	// A v6.2.30 database: none of the three objects. The migration creates the same shape, twice.
+	// A v6.2.30 database: none of the three objects. The migration creates the same shape, twice;
+	// schema.sql is today's shape, so v6.2.32 (which alters the table and re-creates the function --
+	// SMART-SENDING-LOOKAHEAD-SPEC D3/D5) runs after it, as an upgrade would.
 	h.db.MustExec(`DROP FUNCTION brand_journey_sends_24h(INT)`)
 	h.db.MustExec(`DROP INDEX idx_campaign_sends_sent_at`)
 	h.db.MustExec(`DROP TABLE campaign_smart_skips`)
@@ -53,6 +55,9 @@ func TestSmartSendingMigration_V6_2_31(t *testing.T) {
 		if err := V6_2_31(h.db, nil, nil, lo); err != nil {
 			t.Fatalf("V6_2_31 run %d: %v", i+1, err)
 		}
+	}
+	if err := V6_2_32(h.db, nil, nil, lo); err != nil {
+		t.Fatalf("V6_2_32 after V6_2_31: %v", err)
 	}
 	if got := h.smartSendingShape(); got != fresh {
 		t.Fatalf("migration shape differs from schema.sql\n migration %s\n schema    %s", got, fresh)

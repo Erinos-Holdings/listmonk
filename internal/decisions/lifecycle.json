@@ -329,6 +329,11 @@
           "line": "The 24 hours run both ways, as intended: a step due in the next 24 hours also skips the broadcast; was \"in the last 24 hours\".",
           "hash": "edc00a9910f36944808d577e5ef5126b0b7c898c5255ec04c98ffe344bb77396",
           "callout": "Further recommendations are in the History below (2026-11-07): a per-campaign override is built; a journey-side rule that would hold the cap on launch day waits on the first weeks of skip data."
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "Decided 2026-11-09: when Marketing switches Smart Sending off for a campaign, everyone receives it and that day's journey steps still send; the same-day double is accepted and is Marketing's call. The journey-side rule (the daily sweep yielding to a scheduled broadcast) is retired and will not be built. The look-ahead half is built by SMART-SENDING-LOOKAHEAD-SPEC."
         }
       ]
     },

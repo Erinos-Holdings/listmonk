@@ -128,7 +128,9 @@ func TestItemsShape(t *testing.T) {
 // entry dated 2026-11-05, source "reject note 2026-11-05"; "page#8" = a page entry carrying a text
 // hash dated 2026-11-08 (items 19 and 22). 2026-11-09 (the documentation reconciliation): "page#9"
 // = a page entry carrying a text hash dated 2026-11-09 (items 4, 13, 16, 18, 19, 21, 22; the
-// same day's documentation audit added one more to items 1, 2, 5, 15, 21 and 22).
+// same day's documentation audit added one more to items 1, 2, 5, 15, 21 and 22). "page9" = a
+// HASH-LESS page entry dated 2026-11-09 -- item 13's decision entry (integrations
+// SMART-SENDING-LOOKAHEAD-SPEC D12: the same-day double accepted, option 2 retired).
 var shippedLineage = map[string][]string{
 	"np-entry":            {"slack", "page#", "page#", "page#9"},
 	"np-exit-on-purchase": {"page#9"},
@@ -139,7 +141,7 @@ var shippedLineage = map[string][]string{
 	"pp-delivery-clock":   {"slack", "page#"},
 	"pp-returning-thanks": {"page#"},
 	"both-multi-brand":    {"page#"},
-	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#", "page#9"},
+	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#", "page#9", "page9"},
 	"sp-scope":            {"page#9"},
 	"sp-engagement":       {"page#9"},
 	"sp-hold":             {"page#9"},
@@ -189,6 +191,8 @@ func checkShippedChangelog(t *testing.T, it Item) {
 			ok = c.Date == "2026-11-08" && c.Source == "page" && c.Who == "" && c.Hash != ""
 		case "page#9":
 			ok = c.Date == "2026-11-09" && c.Source == "page" && c.Who == "" && c.Hash != ""
+		case "page9":
+			ok = c.Date == "2026-11-09" && c.Source == "page" && c.Who == "" && c.Hash == ""
 		}
 		if !ok {
 			t.Errorf("%s: entry %d %+v, want a %s entry", it.Key, i+1, c, tok)
@@ -206,8 +210,12 @@ func checkShippedChangelog(t *testing.T, it Item) {
 
 // Integrations SMART-SENDING-SPEC I9 -- item 13 as implemented: no "Recommended:" line (Accept |
 // Reject), the concept pin unchanged, a decision on the concept text reads "approved as modified" by
-// Kaylinn on 2026-11-07 (her relayed request is the newest `who` entry after the concept), the last
-// entry carries the callout and the newest hash-bearing entry the text's hash.
+// Kaylinn on 2026-11-07 (her relayed request is the newest `who` entry after the concept), and the
+// newest hash-bearing entry carries the text's hash. Integrations SMART-SENDING-LOOKAHEAD-SPEC L15 /
+// D12 -- the last entry is the 2026-11-09 decision entry: hash-less, no who, no reapprove, no callout
+// (so the red Note under item 13 ends -- only the LAST entry's callout shows).
+const smartSendingDecisionLine = "Decided 2026-11-09: when Marketing switches Smart Sending off for a campaign, everyone receives it and that day's journey steps still send; the same-day double is accepted and is Marketing's call. The journey-side rule (the daily sweep yielding to a scheduled broadcast) is retired and will not be built. The look-ahead half is built by SMART-SENDING-LOOKAHEAD-SPEC."
+
 func TestSmartSendingItem(t *testing.T) {
 	d, err := Lifecycle()
 	if err != nil {
@@ -231,20 +239,23 @@ func TestSmartSendingItem(t *testing.T) {
 		t.Fatalf("Modified(current text) = %+v", m)
 	}
 	last := it.Changelog[len(it.Changelog)-1]
-	if last.Hash != Hash(it.Text) || last.Callout == "" {
-		t.Fatalf("item 13's last entry %+v", last)
+	if last.Date != "2026-11-09" || last.Source != "page" || last.Line != smartSendingDecisionLine ||
+		last.Hash != "" || last.Who != "" || last.Reapprove || last.Callout != "" {
+		t.Fatalf("item 13's last entry %+v, want the D12 decision entry", last)
+	}
+	// The newest hash-bearing entry still carries the text's hash (the text did not change).
+	var newest Change
+	for _, c := range it.Changelog {
+		if c.Hash != "" {
+			newest = c
+		}
+	}
+	if newest.Hash != Hash(it.Text) {
+		t.Fatalf("item 13's newest hash-bearing entry %+v does not carry the text's hash", newest)
 	}
 	v := ItemOf(it, nil)
-	if c := v.Changelog[len(v.Changelog)-1].Callout; c != last.Callout {
-		t.Fatalf("the GET's last entry callout = %q", c)
-	}
-	// An earlier entry may carry the same callout (it is repeated on each entry while the matter is
-	// open, SMART-SENDING-SPEC D11 as amended by S5); only the last entry's is shown, and the
-	// earlier ones must be the entries that first carried it, never a different note.
-	for i, c := range v.Changelog[:len(v.Changelog)-1] {
-		if c.Callout != "" && c.Callout != last.Callout {
-			t.Fatalf("entry %d carries a different callout: %q", i, c.Callout)
-		}
+	if c := v.Changelog[len(v.Changelog)-1].Callout; c != "" {
+		t.Fatalf("the GET's last entry callout = %q, want none (the Note ends)", c)
 	}
 }
 

@@ -144,6 +144,13 @@ type Queries struct {
 	// Fork (integrations SYNC-ALL-SPEC D3) -- the latest conversions doc's meta only.
 	GetCampaignConversionsMeta *sqlx.Stmt `query:"get-campaign-conversions-meta"`
 
+	// Fork (smart sending look-ahead, integrations SMART-SENDING-LOOKAHEAD-SPEC D6) -- the forecast
+	// feed's replace of one (source, expected_at) (delete + insert in one transaction) and its
+	// per-feed counts with the switch (no subscriber ids).
+	DeleteJourneyDue   *sqlx.Stmt `query:"delete-journey-due"`
+	InsertJourneyDue   *sqlx.Stmt `query:"insert-journey-due"`
+	GetJourneyDueFeeds *sqlx.Stmt `query:"get-journey-due-feeds"`
+
 	// Fork (shop-link attribution, integrations SHOP-LINK-ATTRIBUTION-SPEC D3) -- interpolated on
 	// boot with the link counts' counted expression.
 	GetCampaignShopLinkCounts *sqlx.Stmt `query:"get-campaign-shop-link-counts"`

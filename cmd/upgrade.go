@@ -107,6 +107,8 @@ var migList = []migFunc{
 	{"v6.2.30", migrations.V6_2_30},
 	// Fork migration (erinos): smart sending -- the campaign_smart_skips table (the skip set a broadcast's claim records), the brand_journey_sends_24h function (the one definition of the 24-hour same-brand journey rule) and a partial index on campaign_sends.sent_at (SMART-SENDING-SPEC) — see internal/migrations/v6.2.31.go.
 	{"v6.2.31", migrations.V6_2_31},
+	// Fork migration (erinos): smart sending look-ahead -- the journey_due forecast table, campaign_smart_skips' look-ahead pair (the journey pair made nullable), smart_sending_brand / brand_journey_due_24h / brand_journey_skips (brand_journey_sends_24h re-created over the shared applicability rule) and the app.smart_sending_lookahead switch row, inserted false (SMART-SENDING-LOOKAHEAD-SPEC) — see internal/migrations/v6.2.32.go.
+	{"v6.2.32", migrations.V6_2_32},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

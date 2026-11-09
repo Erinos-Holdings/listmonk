@@ -904,7 +904,8 @@ CREATE OR REPLACE TRIGGER usage_decisions_append_only
 -- the record with it); nothing updates or deletes a row except the campaign's deletion cascade.
 -- brand_journey_sends_24h is the ONE definition of the rule (brand and window only; every caller
 -- joins it to the campaign's audience). Mirrored in internal/migrations/v6.2.31.go (everything after
--- the DROP; keep the two identical).
+-- the DROP; keep the two identical) EXCEPT the function, which v6.2.32 re-creates -- its current body
+-- is in the look-ahead block below (one copy in this file).
 DROP TABLE IF EXISTS campaign_smart_skips CASCADE;
 CREATE TABLE IF NOT EXISTS campaign_smart_skips (
     campaign_id         INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
@@ -915,24 +916,60 @@ CREATE TABLE IF NOT EXISTS campaign_smart_skips (
     PRIMARY KEY (campaign_id, subscriber_id)
 );
 CREATE INDEX IF NOT EXISTS idx_campaign_sends_sent_at ON campaign_sends (sent_at) WHERE sent_at IS NOT NULL;
--- For campaign camp_id: one row per subscriber (the NEWEST such send) who has a sent campaign_sends
--- row inside the window (the one INTERVAL literal below) on an EVERGREEN campaign of this campaign's
--- brand. A campaign's brand, on
--- both sides, is the single non-NULL list_brand_tag over its lists (MIN -- the backend allows at most
--- one; an untagged list contributes nothing). No rows when the campaign is evergreen, is not
--- 'regular', has no tagged list, or is switched off -- off iff attribs->'smart_sending' is the JSONB
--- false (compared as JSONB, never cast, so no stored value can raise inside the claim).
+
+-- Fork (smart sending look-ahead, integrations listmonk/SMART-SENDING-LOOKAHEAD-SPEC D1-D5/D7) -- the
+-- look-ahead half. journey_due is the forecast feed the integrations NoPurchaseSweep and
+-- ListmonkSunset Lambdas write through PUT /api/journeys/due (a row means "the run at expected_at
+-- will join this subscriber to this list"; no FKs, an unknown id is inert; the fork never computes a
+-- row). campaign_smart_skips gains the look-ahead pair (due_list_id, due_at) beside the now-nullable
+-- journey pair -- NO CHECK constraint, a raise inside next-campaigns would stall every claim (S1).
+-- smart_sending_brand is the ONE applicability rule for both halves (NULL = the rule does not
+-- apply: evergreen, not regular, no tagged list, or attribs->'smart_sending' is the JSONB false);
+-- brand_journey_sends_24h above is re-created here to call it (behaviour unchanged).
+-- brand_journey_due_24h is the ONE look-ahead definition -- one row per subscriber (the EARLIEST
+-- due) with a join (a journey_due forecast row, or the fork's own confirmed join not yet sent) to a
+-- list of a RUNNING evergreen of the campaign's brand, due (join + send_delay_secs) inside the
+-- window (the two INTERVAL literals in its win CTE -- the 2-hour grace is also the staleness rule),
+-- the subscriber's language passing that evergreen's predicate. It is a SUPERSET (no welcome-skip,
+-- no exclusion set), never a send decision. Dark unless the settings row
+-- app.smart_sending_lookahead is the JSONB true -- an uncorrelated scalar subquery at the top level
+-- (a one-time filter), so a dark look-ahead scans nothing. The key is deliberately NOT a field of the
+-- Go settings struct. brand_journey_skips = the look-back rows plus the look-ahead rows for
+-- subscribers with no look-back row; the claim and the before-Start count read only it. Mirrored in
+-- internal/migrations/v6.2.32.go (everything after the DROP; keep the two identical).
+DROP TABLE IF EXISTS journey_due CASCADE;
+CREATE TABLE IF NOT EXISTS journey_due (
+    source        TEXT NOT NULL,
+    list_id       INTEGER NOT NULL,
+    subscriber_id INTEGER NOT NULL,
+    expected_at   TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source, list_id, subscriber_id, expected_at)
+);
+CREATE INDEX IF NOT EXISTS idx_journey_due_expected_at ON journey_due (expected_at);
+ALTER TABLE campaign_smart_skips ALTER COLUMN journey_campaign_id DROP NOT NULL;
+ALTER TABLE campaign_smart_skips ALTER COLUMN journey_sent_at DROP NOT NULL;
+ALTER TABLE campaign_smart_skips ADD COLUMN IF NOT EXISTS due_list_id INTEGER NULL;
+ALTER TABLE campaign_smart_skips ADD COLUMN IF NOT EXISTS due_at TIMESTAMP WITH TIME ZONE NULL;
+INSERT INTO settings (key, value) VALUES ('app.smart_sending_lookahead', 'false') ON CONFLICT DO NOTHING;
+CREATE OR REPLACE FUNCTION smart_sending_brand(camp_id INT) RETURNS TEXT AS $$
+    SELECT (
+        SELECT MIN(list_brand_tag(l.tags)) FROM campaign_lists cl
+        JOIN lists l ON (l.id = cl.list_id)
+        WHERE cl.campaign_id = c.id
+    )
+    FROM campaigns c
+    WHERE c.id = camp_id AND NOT c.evergreen AND c.type = 'regular'
+        AND (c.attribs->'smart_sending') IS DISTINCT FROM 'false'::JSONB;
+$$ LANGUAGE sql STABLE;
+-- The look-back half. For campaign camp_id -- one row per subscriber (the NEWEST such send) who has a
+-- sent campaign_sends row inside the window (the one INTERVAL literal below) on an EVERGREEN campaign
+-- of this campaign's brand. A campaign's brand, on both sides, is the single non-NULL list_brand_tag
+-- over its lists (MIN -- the backend allows at most one; an untagged list contributes nothing).
 CREATE OR REPLACE FUNCTION brand_journey_sends_24h(camp_id INT)
 RETURNS TABLE (subscriber_id INT, journey_campaign_id INT, journey_sent_at TIMESTAMP WITH TIME ZONE) AS $$
     WITH camp AS (
-        SELECT (
-            SELECT MIN(list_brand_tag(l.tags)) FROM campaign_lists cl
-            JOIN lists l ON (l.id = cl.list_id)
-            WHERE cl.campaign_id = c.id
-        ) AS brand
-        FROM campaigns c
-        WHERE c.id = camp_id AND NOT c.evergreen AND c.type = 'regular'
-            AND (c.attribs->'smart_sending') IS DISTINCT FROM 'false'::JSONB
+        SELECT smart_sending_brand(camp_id) AS brand
     ),
     journeys AS (
         SELECT e.id FROM campaigns e, camp
@@ -948,4 +985,73 @@ RETURNS TABLE (subscriber_id INT, journey_campaign_id INT, journey_sent_at TIMES
     JOIN journeys j ON (j.id = cs.campaign_id)
     WHERE cs.sent_at IS NOT NULL AND cs.sent_at >= NOW() - INTERVAL '24 hours'
     ORDER BY cs.subscriber_id, cs.sent_at DESC;
+$$ LANGUAGE sql STABLE;
+CREATE OR REPLACE FUNCTION brand_journey_due_24h(camp_id INT)
+RETURNS TABLE (subscriber_id INT, due_list_id INT, due_at TIMESTAMP WITH TIME ZONE) AS $$
+    WITH win AS (
+        SELECT NOW() - INTERVAL '2 hours' AS lo, NOW() + INTERVAL '24 hours' AS hi
+    ),
+    camp AS (
+        SELECT smart_sending_brand(camp_id) AS brand
+    ),
+    evs AS (
+        SELECT e.id, e.started_at, e.send_delay_secs, e.attribs->>'lang' AS lang
+        FROM campaigns e, camp
+        WHERE e.evergreen AND e.status = 'running' AND camp.brand IS NOT NULL
+            AND (
+                SELECT MIN(list_brand_tag(l.tags)) FROM campaign_lists cl
+                JOIN lists l ON (l.id = cl.list_id)
+                WHERE cl.campaign_id = e.id
+            ) = camp.brand
+    ),
+    evLists AS (
+        SELECT evs.id, evs.started_at, evs.send_delay_secs, evs.lang, cl.list_id
+        FROM evs JOIN campaign_lists cl ON (cl.campaign_id = evs.id)
+        WHERE cl.list_id IS NOT NULL
+    ),
+    joins AS (
+        SELECT d.subscriber_id, el.list_id, el.lang,
+            d.expected_at + MAKE_INTERVAL(secs => el.send_delay_secs) AS due
+        FROM evLists el
+        JOIN journey_due d ON (d.list_id = el.list_id)
+        CROSS JOIN win
+        WHERE d.expected_at > win.lo - MAKE_INTERVAL(secs => el.send_delay_secs)
+            AND d.expected_at <= win.hi - MAKE_INTERVAL(secs => el.send_delay_secs)
+        UNION ALL
+        SELECT sl.subscriber_id, el.list_id, el.lang,
+            sl.confirmed_at + MAKE_INTERVAL(secs => el.send_delay_secs) AS due
+        FROM evLists el
+        JOIN subscriber_lists sl ON (sl.list_id = el.list_id)
+        CROSS JOIN win
+        WHERE sl.status = 'confirmed'
+            AND sl.confirmed_at > el.started_at
+            AND sl.confirmed_at > win.lo - MAKE_INTERVAL(secs => el.send_delay_secs)
+            AND sl.confirmed_at <= win.hi - MAKE_INTERVAL(secs => el.send_delay_secs)
+            AND NOT EXISTS (
+                SELECT 1 FROM campaign_sends cs
+                WHERE cs.campaign_id = el.id AND cs.subscriber_id = sl.subscriber_id
+                    AND cs.sent_at >= sl.confirmed_at
+            )
+    )
+    SELECT DISTINCT ON (j.subscriber_id) j.subscriber_id, j.list_id, j.due
+    FROM joins j
+    JOIN subscribers s ON (s.id = j.subscriber_id)
+    WHERE (SELECT st.value FROM settings st WHERE st.key = 'app.smart_sending_lookahead') = 'true'::JSONB
+        AND (j.lang IS NULL
+           OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = j.lang)
+    ORDER BY j.subscriber_id, j.due;
+$$ LANGUAGE sql STABLE;
+CREATE OR REPLACE FUNCTION brand_journey_skips(camp_id INT)
+RETURNS TABLE (subscriber_id INT, journey_campaign_id INT, journey_sent_at TIMESTAMP WITH TIME ZONE,
+    due_list_id INT, due_at TIMESTAMP WITH TIME ZONE) AS $$
+    WITH back AS (
+        SELECT b.subscriber_id, b.journey_campaign_id, b.journey_sent_at FROM brand_journey_sends_24h(camp_id) b
+    )
+    SELECT back.subscriber_id, back.journey_campaign_id, back.journey_sent_at,
+        NULL::INT, NULL::TIMESTAMP WITH TIME ZONE
+    FROM back
+    UNION ALL
+    SELECT d.subscriber_id, NULL::INT, NULL::TIMESTAMP WITH TIME ZONE, d.due_list_id, d.due_at
+    FROM brand_journey_due_24h(camp_id) d
+    WHERE NOT EXISTS (SELECT 1 FROM back WHERE back.subscriber_id = d.subscriber_id);
 $$ LANGUAGE sql STABLE;

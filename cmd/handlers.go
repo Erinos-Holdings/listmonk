@@ -218,6 +218,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// field) for the navbar sync indicator -- an analytics read. Static, so it resolves before
 		// GET /api/campaigns/:id.
 		g.GET("/api/campaigns/conversions", pm(a.GetCampaignConversionsMeta, "campaigns:get_analytics"))
+		// Fork (smart sending look-ahead, integrations SMART-SENDING-LOOKAHEAD-SPEC D6, journeys_due.go)
+		// -- the forecast feed. The PUT is the two Lambda users' (subscribers:manage, which both hold);
+		// the GET is the switch and the per-feed counts (no subscriber ids).
+		g.PUT("/api/journeys/due", pm(a.PutJourneyDue, "subscribers:manage"))
+		g.GET("/api/journeys/due", pm(a.GetJourneyDue, "subscribers:get_all"))
 		// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker, list-scoped.
 		g.GET("/api/analytics/campaigns", pm(a.GetAnalyticsCampaigns, "campaigns:get_analytics"))
 		// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D10) -- the Campaign Matrix pane,
