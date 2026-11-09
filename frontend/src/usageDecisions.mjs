@@ -49,8 +49,8 @@ export function latestDecision(view) {
 }
 
 // The section's one framing line under the centered title (2026-11-03 polish): "Spec published
-// <published> · " then "Approved by <name> <date>" -- whoever recorded the most recent decision and
-// that decision's Denver day -- or, while nothing is decided, "Pending approval by <approver>"
+// <published> · " then "Approved by <name>" -- whoever recorded the most recent decision, with no
+// date (2026-11-09: the approval dates are per item) -- or, while nothing is decided, "Pending approval by <approver>"
 // (the GET's `approver`: the current brands:decide role holders), "Pending approval" when none.
 export function publishedText(view, t = (k) => k) {
   const v = isObj(view) ? view : {};
@@ -58,7 +58,7 @@ export function publishedText(view, t = (k) => k) {
   const last = latestDecision(v);
   let status;
   if (last) {
-    status = t('decisions.approvedBy', { name: String(last.user_name || ''), date: denverDay(last.created_at) });
+    status = t('decisions.approvedBy', { name: String(last.user_name || '') });
   } else if (v.approver) {
     status = t('decisions.pendingBy', { approver: String(v.approver) });
   } else {

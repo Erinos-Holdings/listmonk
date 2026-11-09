@@ -1043,7 +1043,7 @@ test('guide: seriesGuide over the real en.json -- Welcome then New Customer, eve
   assert.deepEqual(g.map((s) => s.steps.map((x) => x.days)), [SERIES_DAYS.welcome, SERIES_DAYS.postPurchase, REENGAGEMENT_DAYS]);
   // SUNSET-V4 D7: four steps.
   assert.deepEqual(g[2].steps.map((x) => [x.title, x.quote]), [
-    ['We miss you', 'Still want to hear from us?'], ['Second reminder', 'Still want to hear from us?'],
+    ['We miss you', 'Still want to hear from us?'], ['Second reminder', 'Your emails are paused. Here\'s what you\'ve been missing.'],
     ['Last chance', 'Should we stop emailing you?'], ['Inactivity suppression', 'We\'ve stopped sending you marketing emails.'],
   ]);
   assert.equal(SERIES_DAYS.reengagement, undefined); // never a series family

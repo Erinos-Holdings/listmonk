@@ -221,7 +221,7 @@ test('2026-11-03: the published line names whoever made the most recent decision
       item({ key: 'both-language', section: 'both', n: null }),
     ],
   };
-  assert.equal(publishedText(view, t), 'Spec published 2026-10-30 · Approved by Ana Farias 2026-11-03');
+  assert.equal(publishedText(view, t), 'Spec published 2026-10-30 · Approved by Ana Farias');
   assert.equal(publishedText({ published: '2026-10-30', approver: 'Ana Farias', items: [item()] }, t), 'Spec published 2026-10-30 · Pending approval by Ana Farias');
   assert.equal(publishedText({ published: '2026-10-30', items: [item()] }, t), 'Spec published 2026-10-30 · Pending approval');
 });

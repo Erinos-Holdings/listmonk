@@ -72,6 +72,7 @@ table{width:100%;border-collapse:collapse;font-size:.93rem;margin-top:14px;font-
 th{text-align:left;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
 td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
 td:first-child{font-weight:600;white-space:nowrap}
+td small{display:block;color:var(--ink-2);font-size:.82rem;margin-top:4px;line-height:1.35}
 .tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:3px;white-space:nowrap}
 .t-ok{background:var(--accent-soft);color:var(--accent)}
 .t-ext{background:var(--warm-soft);color:var(--warm)}
@@ -101,6 +102,9 @@ ol.mods li::before{content:counter(m);font-family:var(--display);font-size:1.6re
 ol.mods li b{display:block}
 ol.mods li span{color:var(--ink-2);font-size:.93rem}
 ol.mods li .ev{display:block;margin-top:4px;font-size:.86rem;color:var(--ink-3)}
+ol.mods li span.tag{margin-right:6px;font-size:.68rem}
+ol.mods li span.t-ok{color:var(--accent)}
+ol.mods li span.t-ext{color:var(--warm)}
 
 /* alt list */
 .alt{border-left:3px solid var(--warm);padding:4px 0 4px 16px;margin:16px 0}
@@ -123,15 +127,16 @@ ul.sources{padding-left:18px}
 <header>
   <div class="eyebrow">Brand Usage · Lifecycle series · Evidence brief</div>
   <h1 style="margin-top:10px">One Journey, Every Brand</h1>
-  <p class="lede">Proposal: one engagement journey standard on every brand (11 steps since 2026-11-06, when Marketing dropped the welcome Day 10).</p>
+  <p class="lede">The adopted standard: one engagement journey on every brand, 11 steps in three series, approved by Marketing item by item (Kaylinn Brophy, from 2026-11-05). This page is the evidence behind each interval and the record of where each proposed change ended up.</p><!-- docs-ok -->
+  <p class="meta">Related: <a href="/admin/brands" target="_blank" rel="noopener">Brands › Usage</a> (the journey guide and the Lifecycle series decisions, the approved text) · <a href="/admin/docs/ai-journey-campaigns" target="_blank" rel="noopener">AI-generated Journey Campaigns</a> (the copy direction the step drafts are built to) · <a href="/admin/docs/shop-link-attribution" target="_blank" rel="noopener">Shop Link Attribution</a> (the standard every link in a step follows)</p>
 </header>
 
 <div class="ask">
   <div>
-    <h2>The ask</h2>
-    <p>Adopt one journey skeleton for every brand, vary only the copy and the offers, and start with data-proven, industry-backed intervals. Change an interval only when a brand's own numbers prove it should change. The rest of this page is the case for that, including defensible alternatives.</p>
+    <h2>The standard</h2>
+    <p>One journey skeleton for every brand; brands vary only the copy and the offers. The intervals start on data-proven, industry-backed anchors, and an interval changes only when the numbers prove it should, for every brand at once. The rest of this page is the case for that, including the defensible alternatives and where each landed.</p>
   </div>
-  <div class="tile"><span class="big">9 of 12</span><small>intervals sit on a Klaviyo default or published recommendation; the other 3 are deliberate, stated extensions</small></div>
+  <div class="tile"><span class="big">9 of 13</span><small>rules sit on a Klaviyo default or published recommendation; the other 4 are deliberate, stated extensions</small></div>
 </div>
 
 <h2>Why one standard rather than a path per brand</h2>
@@ -156,7 +161,7 @@ ul.sources{padding-left:18px}
   <div class="card">
     <h3>Comparability is the whole point of Brand Usage</h3>
     <p>The Usage pane scores every brand on the same leaves and the Matrix compares them side by side. That only means something if Day 5 is Day 5 everywhere. With a standard, a result on one brand is a lesson for all of them; with per-brand paths, every brand is a sample of one and nothing transfers.</p>
-    <p>It is also the only way the copy stays maintainable: today's standard is already 12 steps × up to 5 languages per brand.</p>
+    <p>It is also the only way the copy stays maintainable: today's standard is already 11 steps × up to 5 languages per brand.</p>
   </div>
 </div>
 
@@ -170,29 +175,29 @@ ul.sources{padding-left:18px}
     <div class="pt" style="left:20%"><b>Day 2</b><i></i><small>Gentle reminder</small></div>
     <div class="pt" style="left:100%"><b>Day 5</b><i></i><small>Address hesitation</small></div>
   </div>
-  <p class="anchor"><strong>Klaviyo:</strong> first email immediately, three emails over about a week (its help-centre default is Day 0 · 3 · 7; its community guidance Day 0 · 2 · 4), and "three emails leads to optimal performance". Welcome-flow click rates run roughly 4–5.5% across benchmarks, with the first email strongest and each later one weaker. <strong>Verdict:</strong> aligned. This page first argued for a fourth email at Day 10; Marketing dropped it on 2026-11-06 (the first alternative below, conceded), so the series is three emails in five days.</p>
+  <p class="anchor"><strong>Klaviyo:</strong> first email immediately, three emails over about a week (its help-centre default is Day 0 · 3 · 7; its community guidance Day 0 · 2 · 4), and "three emails leads to optimal performance". Welcome-flow click rates run roughly 4–5.5% across benchmarks, with the first email strongest and each later one weaker. <strong>Verdict:</strong> aligned. This page first argued for a fourth email at Day 10; Marketing dropped it on 2026-11-06 (the first alternative below, conceded), so the series is three emails in five days.</p><!-- docs-ok -->
 </div>
 
 <div class="series">
   <div class="head"><h3>New Customer series (Post-purchase)</h3><span>first paid order ever with the brand, subscribed at the time</span></div>
   <div class="track">
     <div class="pt" style="left:0%"><b>Day 0</b><i></i><small>Thank you</small></div>
-    <div class="pt" style="left:16.7%"><b>Day 5</b><i></i><small>Getting started</small></div>
-    <div class="pt" style="left:46.7%"><b>Day 14</b><i></i><small>How's it going?</small></div>
-    <div class="pt" style="left:100%"><b>Day 30</b><i></i><small>Your next favorite</small></div>
+    <div class="pt" style="left:16.7%"><b>~Day 5</b><i></i><small>Getting started</small></div>
+    <div class="pt" style="left:46.7%"><b>~Day 14</b><i></i><small>Get More From Your Purchase</small></div>
+    <div class="pt" style="left:100%"><b>~Day 30</b><i></i><small>Your next favorite</small></div>
   </div>
-  <p class="anchor"><strong>Klaviyo:</strong> a personal thank-you first and with no delay; split first-time from returning buyers; its built-in review request defaults to <em>14 days after fulfilment</em>, chosen because fulfilment is closer to when the product arrives; cross-sell later in the sequence. <strong>Verdict:</strong> aligned on every step. Modification 4 below (start the clock at delivery) moves us onto exactly Klaviyo's trigger.</p>
+  <p class="anchor"><strong>Klaviyo:</strong> a personal thank-you first and with no delay; split first-time from returning buyers; its built-in post-purchase follow-up defaults to <em>14 days after fulfilment</em> (shipment), chosen because that is closer to when the product arrives; cross-sell later in the sequence. <strong>Verdict:</strong> aligned. We go one step further and time the steps from the delivery confirmation itself (modification 4, item 9), so ~Day 14 lands about 9 days after delivery, close to where Klaviyo's 14 days after shipment does. Day 14 is educational, not a review request: the sites have no review functionality.</p>
 </div>
 
 <div class="series">
-  <div class="head"><h3>Re-engagement series (Sunset)</h3><span>no click, Gmail-confirmed open or purchase for 180 days, after at least 6 broadcasts</span></div>
+  <div class="head"><h3>Re-engagement series (Sunset)</h3><span>no click, Gmail-confirmed open or purchase for 180 days (the default window), after at least 6 broadcasts; the steps follow the hold at +90, +180 and +185 days</span></div>
   <div class="track">
     <div class="pt" style="left:0%"><b>Day 180</b><i></i><small>We miss you (hold)</small></div>
     <div class="pt" style="left:48.6%"><b>Day 270</b><i></i><small>Second reminder</small></div>
     <div class="pt" style="left:97.3%"><b>Day 360</b><i></i><small>Last chance</small></div>
     <div class="pt" style="left:100%"><b style="transform:translateX(26px)">Day 365</b><i></i><small style="transform:translateX(26px)">Inactivity suppression</small></div>
   </div>
-  <p class="anchor"><strong>Klaviyo:</strong> 1–3 sunset emails, never more than three, then a short grace period (7–10 days for a non-daily sender) before suppression; its recommended sunset segment requires at least 5 emails received so nobody is judged who was never mailed. <strong>Verdict:</strong> structure aligned (three asks, five-day grace, six-broadcast floor). The 180-day entry is our deliberate extension of the usual 90; the next section is its defence.</p>
+  <p class="anchor"><strong>Klaviyo:</strong> 1–3 sunset emails, never more than three, then a short grace period (7–10 days for a non-daily sender) before suppression; its recommended sunset segment requires at least 5 emails received so nobody is judged who was never mailed. <strong>Verdict:</strong> the six-broadcast floor is aligned; three things are deliberate extensions, each stated in the table below: the 180-day entry (the usual is 90; the next section is its defence), a fourth email that confirms the stop, and a five-day last-chance deadline where Klaviyo allows 7–10 days of grace.</p>
 </div>
 
 <div class="tablewrap">
@@ -207,24 +212,38 @@ ul.sources{padding-left:18px}
     <tr><td>Engagement definition</td><td>Click, purchase, or Gmail-confirmed open; no automatic opens</td><td>Klaviyo: exclude Apple Privacy opens, lean on clicks and orders</td><td><span class="tag t-ok">Aligned</span></td></tr>
     <tr><td>Minimum sends before hold</td><td>6 broadcasts</td><td>Klaviyo sunset segment: ≥5 emails received</td><td><span class="tag t-ok">Aligned</span></td></tr>
     <tr><td>Inactivity before hold</td><td>180 days</td><td>Klaviyo engaged segments 30/60/90; 90 for weekly senders; 180 in its never-engaged sunset segment</td><td><span class="tag t-ext">Extended</span></td></tr>
-    <tr><td>Sunset asks</td><td>3 asks + confirmation, 5-day grace</td><td>Klaviyo: 1–3 asks, 7–10 day grace for non-daily senders</td><td><span class="tag t-ok">Aligned</span></td></tr>
-    <tr><td>Time to suppression</td><td>365 days total; recorded as an inactivity suppression, never as an unsubscribe (Kaylinn, 2026-11-05)</td><td>Return Path: 45% of win-back recipients read later mail, avg 57 days after; don't purge fast. Klaviyo, Braze and HubSpot all sunset by suppression, which the sender can lift; an unsubscribe is the person's own revoked consent</td><td><span class="tag t-ext">Extended, supported</span></td></tr>
-    <tr><td>Frequency guard</td><td>Skip a broadcast within 24 h of a journey email (proposed)</td><td>Klaviyo Smart Sending: 16 h default, skips rather than defers</td><td><span class="tag t-ok">Aligned</span></td></tr>
-    <tr><td>Complaint ceiling</td><td>Pause at 0.1% per send; Brand Health watches daily</td><td>Google: keep under 0.10%, never reach 0.30%</td><td><span class="tag t-ok">Aligned</span></td></tr>
+    <tr><td>Sunset emails</td><td>3 asks + a confirmation of the stop</td><td>Klaviyo: 1–3 sunset emails, never more than three</td><td><span class="tag t-ext">Extended</span><br><small>The asks stay at three; the fourth confirms the stop and offers the way back (item 22), not another ask.</small></td></tr>
+    <tr><td>Grace after the last ask</td><td>5 days (day 360 → 365)</td><td>Klaviyo: 7–10 day grace for non-daily senders</td><td><span class="tag t-ext">Extended</span><br><small>Shorter, because the asks are spread over six months rather than a few weeks: the grace ends a 185-day hold, not a 30-day sunset.</small></td></tr>
+    <tr><td>Time to suppression</td><td>365 days total at the default window (185 after the hold); recorded as an inactivity suppression, never as an unsubscribe (Kaylinn, 2026-11-05)</td><td>Return Path: 45% of win-back recipients read later mail, avg 57 days after; don't purge fast. Klaviyo, Braze and HubSpot all sunset by suppression, which the sender can lift; an unsubscribe is the person's own revoked consent</td><td><span class="tag t-ext">Extended, supported</span></td></tr>
+    <tr><td>Frequency guard</td><td>Smart Sending: a broadcast skips anyone with a journey email from the brand within 24 h either side, with a per-campaign switch (item 13)</td><td>Klaviyo Smart Sending: 16 h default, skips rather than defers, per-campaign switch</td><td><span class="tag t-ok">Aligned</span></td></tr>
+    <tr><td>Complaint ceiling</td><td>Each brand's complaint and spam-rate trend watched in Brand Health; the window shortens on a sustained rise, not a one-off breach (item 17)</td><td>Google: keep under 0.10%, never reach 0.30%</td><td><span class="tag t-ok">Aligned</span></td></tr>
   </tbody>
 </table>
 </div>
 
-<h2>The six recommended modifications</h2>
-<p>Each one is a frequency or timing fix, and each has a number behind it.</p>
+<h2>Where each proposed modification ended up</h2><!-- docs-ok -->
+<p>This page proposed six modifications, each a frequency or timing fix with a number behind it. The item numbers are the Lifecycle series decisions on Brands › Usage, where the approved text and its History live.</p><!-- docs-ok -->
 <ol class="mods">
-  <li><div><b>Skip the Welcome for someone whose signup is their first order; send only the Thank-you.</b><span>Item 3.</span><span class="ev">Last 28 days: about 20% of Thirsty Girl and 10% of Ruze signups got both emails back to back. Frequency is the top or second unsubscribe reason in every consumer survey (46% GetApp, 35% BlueHornet, 20% Mailgun).</span></div></li>
-  <li><div><b>Keep step emails evergreen and distinct from the month's launches.</b><span>Item 4.</span><span class="ev">Nothing suppresses a broadcast mid-series. Distinct copy means an overlap is two different emails, not a duplicate, and it is the only way the step copy stays maintainable across brands and languages.</span></div></li>
-  <li><div><b>Retire Ruze's 15-day step and re-schedule its campaign as Day 2.</b><span>Item 7.</span><span class="ev">Every Klaviyo recommendation ends the welcome inside a week; the copy already reads as the gentle reminder.</span></div></li>
-  <li><div><b>Start the post-purchase clock at delivery, order date + 5 as the fallback.</b><span>Item 9.</span><span class="ev">Klaviyo's review flow triggers on Fulfilled Order for the same reason. Never ask about a product still in transit.</span></div></li>
-  <li><div><b>No cross-brand cap yet; skip, never defer, if it is ever needed.</b><span>Item 12.</span><span class="ev">4.7% of active subscribers (1,185 of 25,045) are on two or more brands; 0.8% on three. Revisit past ~15%. Klaviyo Smart Sending has no cross-brand awareness at all.</span></div></li>
-  <li><div><b>Per-brand Smart Sending: skip a broadcast to anyone who got that brand's journey email in the last 24 h.</b><span>Item 13.</span><span class="ev">Without it a new non-buyer can get seven emails in ten days. Klaviyo's default is 16 hours and a skip. GetApp: 56% of US consumers unsubscribe at four or more messages from one company in 30 days.</span></div></li>
+  <li><div><b>Skip the Welcome for someone whose signup is their first order; send only the Thank-you.</b><span><span class="tag t-ok">Implemented 2026-11-07</span> Item 3 (WELCOME-SKIP).</span><span class="ev">Evidence: in the 28 days before, about 20% of Thirsty Girl and 10% of Ruze signups got both emails back to back. Frequency is the top or second unsubscribe reason in every consumer survey (46% GetApp, 35% BlueHornet, 20% Mailgun).</span></div></li>
+  <li><div><b>Keep step emails evergreen and distinct from the month's launches.</b><span><span class="tag t-ok">Standing practice 2026-11-07</span> Item 4.</span><span class="ev">Evidence: Smart Sending (modification 6) keeps a step and a broadcast off the same day; on other days distinct copy means an overlap is two different emails, not a duplicate, and it is the only way the step copy stays maintainable across brands and languages.</span></div></li>
+  <li><div><b>Retire Ruze's 15-day step and re-schedule its campaign as Day 2.</b><span><span class="tag t-ext">Open</span> Item 7, still a recommendation; the 15-day step keeps sending as-is.</span><span class="ev">Evidence: every Klaviyo recommendation ends the welcome inside a week; the copy already reads as the gentle reminder.</span></div></li>
+  <li><div><b>Start the post-purchase clock at delivery, order date as the fallback.</b><span><span class="tag t-ok">Implemented 2026-11-07</span> Item 9 (DELIVERY-CLOCK).</span><span class="ev">Evidence: Klaviyo times its follow-up from fulfilment for the same reason, so the email lands once the product has arrived. A tracked parcel still in transit waits up to 10 days; after that, or with no tracking, the steps fall back to the order date plus 5, 14 and 30 days.</span></div></li>
+  <li><div><b>No cross-brand cap yet; skip, never defer, if it is ever needed.</b><span><span class="tag t-ok">Standing policy 2026-11-07</span> Item 12; the live overlap is on the Dashboard's SES account pane.</span><span class="ev">Evidence: on 5 Nov, 4.7% of active subscribers (1,185 of 25,045) were on two or more brands; 0.8% on three. Revisit past 15%. Klaviyo Smart Sending has no cross-brand awareness at all.</span></div></li>
+  <li><div><b>Per-brand Smart Sending: a broadcast skips anyone with that brand's journey email within 24 h.</b><span><span class="tag t-ok">Implemented 2026-11-07</span> Item 13 (SMART-SENDING), with the per-campaign switch Marketing asked for. The 24 hours run both ways (a step due in the next 24 h also skips the broadcast); that half is approved and its code is to follow.</span><span class="ev">Evidence: without it a new non-buyer could get five emails in five days (seven in ten while Day 10 existed). Klaviyo's default is 16 hours and a skip. GetApp: 56% of US consumers unsubscribe at four or more messages from one company in 30 days.</span></div></li><!-- docs-ok -->
 </ol>
+
+<h3>Changes Marketing made</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Change</th><th>Who, when</th><th>Where it landed</th></tr></thead>
+  <tbody>
+    <tr><td>Welcome Day 10 dropped</td><td>Kaylinn Brophy, 2026-11-06</td><td>Items 1 and 13; the No-purchase series is Day 0 · 2 · 5 (the first alternative below, conceded)</td></tr><!-- docs-ok -->
+    <tr><td>Day 14 educational, never a review request</td><td>Kaylinn Brophy, 2026-11-06</td><td>Item 9; the guide's "Get More From Your Purchase"</td></tr>
+    <tr><td>Smart Sending switch per campaign</td><td>Kaylinn Brophy, 2026-11-07</td><td>Item 13: off for a major launch or a time-sensitive promotion; the Matrix shows "off"</td></tr>
+    <tr><td>Day 365 is an inactivity suppression, never an unsubscribe</td><td>Kaylinn Brophy, 2026-11-05</td><td>Items 19 and 22, the policy table and the guide's Day 365; the four re-engagement automations running before the first day-360 cohort (March 2027) is a commitment</td></tr>
+  </tbody>
+</table>
+</div>
 
 <h2>Re-engagement: why 180 days, not 90</h2>
 <p>Ninety days is the common starting point and we are not disputing it. Klaviyo's default engaged segments are 30, 60 and 90 days, and its staff advise 90 for brands that send weekly or monthly. We hold at 180 for four reasons, and we keep the ability to move back to 90 per brand without a deploy.</p>
@@ -239,24 +258,24 @@ ul.sources{padding-left:18px}
       <div><span class="num">2.8%</span><small>clicked (1,307 people)</small></div>
       <div><span class="num">0.06%</span><small>complaints overall (28)</small></div>
     </div>
-    <p>A lapsed audience still contained a reading third. It also showed the limit: once the day-4 FBL complaint rate on a tranche passed 0.1%, sending was paused the same day and the campaign cancelled, with 26,759 unreached people archived rather than mailed. Both halves of that argue for 180 with a hair trigger rather than 90 without one.</p></div>
-  <div class="card"><h3>4 · We see trouble days before Google reports it</h3><p>Postmaster Tools lags two to three days. We do not wait for it: FBL complaints and hard, soft and block-class bounces per campaign the same day; per-client view rates on every send, so a Gmail drop against a steady Yahoo is visible before Postmaster moves; daily Brand Health per brand (Postmaster compliance and spam rate, SES account reputation, blocklists), trust-tiered open counts, and a sunset run that skips a brand whose tracking looks broken. The 180-day window is a per-brand registry value: shortening one brand to 90 is a one-line change, not a release.</p></div>
+    <p>A lapsed audience still contained a reading third. It also showed the limit: once the day-4 FBL complaint rate on a tranche passed 0.1%, sending was paused the same day and the campaign cancelled, with 26,759 unreached people archived rather than mailed. Both halves of that argue for 180 watched closely rather than 90 left alone.</p></div>
+  <div class="card"><h3>4 · We see trouble days before Google reports it</h3><p>Postmaster Tools lags two to three days. We do not wait for it: FBL complaints and hard, soft and block-class bounces per campaign the same day; per-client view rates on every send, so a Gmail drop against a steady Yahoo is visible before Postmaster moves; hourly Brand Health per brand (Postmaster compliance and spam rate, SES account reputation, blocklists), trust-tiered open counts, and a sunset run that skips a brand whose tracking looks broken. The 180-day window is a per-brand registry value: shortening one brand to 90 is a one-line change, not a release, and the whole re-engagement schedule follows the hold, keeping its +90, +180 and +185-day spacing.</p></div>
 </div>
 
 <div class="callout">
-  <p><strong>Our commitment:</strong> if a brand's Gmail spam rate sits above 0.10% across two consecutive Brand Health reads, or an FBL complaint rate passes 0.1% on two broadcasts in a month, that brand's hold window drops to 90 days and we report it here. The window is liberal because the exits are fast.</p>
+  <p><strong>Our commitment (item 17):</strong> if complaint rates rise, we'll be obligated to shorten the window out of necessity. We watch each brand's trend, not one-off breaches (campaigns cross 0.1% now and then and recover): a brand developing a sustained rise that we confirm comes from its &gt;90-day cohort gets a shorter window. The window is liberal because the exits are fast.</p>
 </div>
 
 <h2>Defensible alternatives</h2>
 <p>These are the positions a well-read challenger would take. Each is reasonable; here is where we stand on each.</p>
-<div class="alt"><b>Three welcome emails, not four (Day 0 · 3 · 7). Adopted 2026-11-06.</b><p>This is Klaviyo's default and its best-supported recommendation. Our Day 10 nudge added a conversion attempt the evidence did not demand; this page called it the interval we would concede first, and Marketing conceded it: the No-purchase series is Day 0 · 2 · 5 on every brand.</p></div>
-<div class="alt"><b>Review ask timed by product category.</b><p>Several practitioners argue consumables want a 7-day ask and durable goods 14–21. We agree in principle, but it is a copy decision inside a standard step rather than a reason for per-brand intervals; a delivery-based clock (modification 4) removes most of the error.</p></div>
-<div class="alt"><b>A 90-day hold for high-frequency brands.</b><p>Klaviyo advises 30 days for daily senders and 90 for weekly. If a brand moves to several broadcasts a week, 180 is too generous for it and the registry window should come down. Nothing in the plan prevents that.</p></div>
+<div class="alt"><b>Three welcome emails, not four. Adopted 2026-11-06.</b><p>Three over about a week (Day 0 · 3 · 7) is Klaviyo's default and its best-supported recommendation. Our Day 10 nudge added a conversion attempt the evidence did not demand; this page called it the interval we would concede first, and Marketing conceded it: the No-purchase series is Day 0 · 2 · 5 on every brand.</p></div><!-- docs-ok -->
+<div class="alt"><b>Review ask timed by product category. Moot since 2026-11-06.</b><p>Several practitioners argue consumables want a 7-day ask and durable goods 14–21. The journey sends no review request (the sites have no review functionality, item 9). The same argument applies to the Day 14 educational email, and there it is a copy decision inside a standard step rather than a reason for per-brand intervals; the delivery-based clock (modification 4) removes most of the timing error.</p></div>
+<div class="alt"><b>A 90-day hold for high-frequency brands.</b><p>Klaviyo advises 30 days for daily senders and 90 for weekly. If a brand moves to several broadcasts a week, 180 is too generous for it and the registry window should come down, with the whole re-engagement schedule moving with it. Nothing in the standard prevents that.</p></div>
 <div class="alt"><b>Smart Sending that also suppresses journey steps.</b><p>Klaviyo's pre-built flows have Smart Sending on by default, so a flow email can be skipped after a campaign. We exempt journeys because each step sends once, ever, and a skipped step is a lost step. If Marketing prefers Klaviyo's behaviour, it is the same rule with journeys included.</p></div>
 <div class="alt"><b>Fewer, earlier re-engagement asks.</b><p>Some teams compress the sunset to three asks within 30 days and suppress. That is cheaper to run. We prefer spreading the asks across the back half of the year because of the Return Path finding that re-reads arrive months later, and because the 360/365 lists are locked to automations so nobody past day 360 can be promoted to by mistake.</p></div>
 
 <h2>Revising the standard</h2>
-<p>We would revise an interval, not just a copy line, on any of these: a per-brand A/B with at least 14,000 subscribers per arm showing a different step wins; a Day 10 unsubscribe share consistently above the Day 5 share; the welcome series' Day 2 or Day 5 clicks falling below the broadcast average for a quarter; or a held-at-180 cohort whose re-engagement asks draw complaints above 0.1%. Bring any of those and the standard moves for every brand at once, which is the point of having one.</p>
+<p>We would revise an interval, not just a copy line, on any of these: a per-brand A/B with at least 14,000 subscribers per arm showing a different step wins; a step's unsubscribe share consistently above the share of the step before it; the welcome series' Day 2 or Day 5 clicks falling below the broadcast average for a quarter; or a held-at-180 cohort whose re-engagement asks draw complaints above 0.1%. Bring any of those and the standard moves for every brand at once, which is the point of having one.</p>
 
 <h2>Sources</h2>
 <ul class="sources">
@@ -274,8 +293,9 @@ ul.sources{padding-left:18px}
   <li><span class="pill">Survey</span> <a href="https://www.mailgun.com/blog/email/understanding-unsubscribes/" target="_blank" rel="noopener">Mailgun/Sinch, understanding unsubscribes</a>: too many emails 19.8%, irrelevance and lost interest close behind.</li>
   <li><span class="pill">Benchmark</span> <a href="https://www.inboxally.com/blog/klaviyo-email-benchmarks" target="_blank" rel="noopener">Klaviyo benchmarks across 167,000 brands (summary)</a> and <a href="https://branvas.com/blogs/news/welcome-email-sequence-benchmarks" target="_blank" rel="noopener">welcome sequence by position</a>: flow click ≈4.7%, welcome click ≈5.5%, first email strongest. Secondary sources; treat as ranges.</li>
   <li><span class="pill">Deliverability</span> <a href="https://www.suped.com/knowledge/email-deliverability/troubleshooting/why-is-google-postmaster-tools-data-delayed" target="_blank" rel="noopener">Postmaster Tools data delay</a>: two to three days behind.</li>
-  <li><span class="pill">Internal</span> listmonk, read 5 Nov 2026: campaign 217 (Younique win-back EN) sent, distinct viewers and clickers, bounces by type; newsletter joins per brand list in the last 30 days; the published lifecycle items (approved 30 Oct 2026) for the overlap and same-day figures.</li>
-  <li><span class="pill">Internal</span> Specs: LIFECYCLE-SERIES, SUNSET-V4 (D14 pacing decision), USAGE-DECISIONS, BOUNCE-CLASSIFICATION, BRAND-HEALTH, CLIENT-VOCABULARY (trust tiers) in the integrations repo.</li>
+  <li><span class="pill">Internal</span> listmonk, read 5 Nov 2026: campaign 217 (Younique win-back EN) sent, distinct viewers and clickers, bounces by type; newsletter joins per brand list in the last 30 days; the published lifecycle items (published 30 Oct 2026; approved item by item, each item's date in its History) for the overlap and same-day figures.</li>
+  <li><span class="pill">Internal</span> Specs: LIFECYCLE-SERIES, SUNSET-V4 (D14 pacing decision), USAGE-DECISIONS, WELCOME-SKIP, DELIVERY-CLOCK, SMART-SENDING, USAGE-DAY10, BOUNCE-CLASSIFICATION, BRAND-HEALTH, CLIENT-VOCABULARY (trust tiers) in the integrations repo.</li>
+  <li><span class="pill">Internal</span> <a href="/admin/docs/ai-journey-campaigns" target="_blank" rel="noopener">AI-generated Journey Campaigns</a> (Kaylinn Brophy's copy direction, 2026-11-07) and <a href="/admin/docs/shop-link-attribution" target="_blank" rel="noopener">Shop Link Attribution</a> (the link standard).</li>
 </ul>
 <p class="note">Where a figure comes from a vendor blog rather than a primary report it is marked as a range. The internal counts above are point-in-time reads and will drift.</p>
 </div>

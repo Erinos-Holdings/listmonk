@@ -126,18 +126,22 @@ func TestItemsShape(t *testing.T) {
 // is hash-less, a hash-bearing entry is source "page". 2026-11-08 (the inactivity-suppression
 // rename, Kaylinn's 2026-11-05 reject note on item 22 adopted): "reject-note" = her hash-less
 // entry dated 2026-11-05, source "reject note 2026-11-05"; "page#8" = a page entry carrying a text
-// hash dated 2026-11-08 (items 19 and 22).
+// hash dated 2026-11-08 (items 19 and 22). 2026-11-09 (the documentation reconciliation): "page#9"
+// = a page entry carrying a text hash dated 2026-11-09 (items 4, 13, 16, 18, 19, 21, 22).
 var shippedLineage = map[string][]string{
 	"np-entry":            {"slack", "page#", "page#"},
 	"np-same-day-double":  {"page#"},
-	"np-launch-overlap":   {"page#"},
+	"np-launch-overlap":   {"page#", "page#9"},
 	"np-no-restarts":      {"page#"},
 	"pp-delivery-clock":   {"slack", "page#"},
 	"pp-returning-thanks": {"page#"},
 	"both-multi-brand":    {"page#"},
-	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#"},
-	"sp-asks":             {"page#8"},
-	"sp-suppressed":       {"reject-note", "page#8"},
+	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#", "page#9"},
+	"sp-engagement":       {"page#9"},
+	"sp-hold":             {"page#9"},
+	"sp-asks":             {"page#8", "page#9"},
+	"sp-coming-back":      {"page#9"},
+	"sp-suppressed":       {"reject-note", "page#8", "page#9"},
 }
 
 func checkShippedChangelog(t *testing.T, it Item) {
@@ -179,6 +183,8 @@ func checkShippedChangelog(t *testing.T, it Item) {
 			ok = c.Date == "2026-11-05" && c.Source == "reject note 2026-11-05" && c.Who == "Kaylinn Brophy" && c.Hash == ""
 		case "page#8":
 			ok = c.Date == "2026-11-08" && c.Source == "page" && c.Who == "" && c.Hash != ""
+		case "page#9":
+			ok = c.Date == "2026-11-09" && c.Source == "page" && c.Who == "" && c.Hash != ""
 		}
 		if !ok {
 			t.Errorf("%s: entry %d %+v, want a %s entry", it.Key, i+1, c, tok)

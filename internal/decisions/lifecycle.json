@@ -75,7 +75,7 @@
       "key": "np-launch-overlap",
       "section": "no-purchase",
       "n": 4,
-      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Smart Sending (item 13) now withholds a brand's broadcast from anyone who received one of its journey emails in the last 24 hours, so someone part-way through the Welcome series no longer gets a step and a launch on the same day; on other days they receive both, by design.\nKeep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform.",
+      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Smart Sending (item 13) withholds a brand's broadcast from anyone who received one of its journey emails in the last 24 hours or has a journey step due in the next 24 hours, so someone part-way through the Welcome series doesn't get a step and a launch on the same day; on other days they receive both, by design.\nKeep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -89,6 +89,12 @@
           "source": "page",
           "line": "The same-day stack is addressed by Smart Sending (item 13, SMART-SENDING-SPEC); the editorial instruction stays as the standing practice, no longer a recommendation; was \"Nothing suppresses a broadcast … Recommended: Keep the step emails distinct …\".",
           "hash": "6ee6523e03dd764f744a663e1fb1e5cefc4d18b87400d5cd2a1484320b4f080f"
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "The 24 hours run both ways, as intended: a step due in the next 24 hours also withholds the broadcast; was \"in the last 24 hours\".",
+          "hash": "0c23531254d632b5430175bf62f182025f43aaaa4a68eda9377854f228b5bf17"
         }
       ]
     },
@@ -247,7 +253,7 @@
       "key": "both-per-brand",
       "section": "both",
       "n": 13,
-      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, two No-purchase steps and every broadcast the brand sends in their first 5 days — up to five emails in five days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nSmart Sending. Per brand, broadcasts only: a broadcast skips anyone who received a journey email from the same brand in the last 24 hours, decided when the send starts. The campaign page shows how many it would skip before Start, and the skipped count stays on the campaign's analytics and the Campaign Matrix. Journeys are exempt: one-shot and time-bound. Marketing can switch Smart Sending off per campaign for a major launch or a time-sensitive promotion; the Matrix shows \"off\" on such a campaign. (Klaviyo Smart Sending skips the same way, with the same per-campaign switch.)\nThe same-day double (item 3) is fixed: the one stack that hit every checkout opt-in. Sunset stays the backstop; complaint rates in Brand Health show fatigue first.",
+      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, two No-purchase steps and every broadcast the brand sends in their first 5 days — up to five emails in five days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nSmart Sending. Per brand, broadcasts only: a broadcast skips anyone who received a journey email from the same brand in the last 24 hours or has a journey step due in the next 24 hours, decided when the send starts. The campaign page shows how many it would skip before Start, and the skipped count stays on the campaign's analytics and the Campaign Matrix. Journeys are exempt: one-shot and time-bound. Marketing can switch Smart Sending off per campaign for a major launch or a time-sensitive promotion; the Matrix shows \"off\" on such a campaign. (Klaviyo Smart Sending skips the same way, with the same per-campaign switch.)\nThe same-day double (item 3) is fixed: the one stack that hit every checkout opt-in. Sunset stays the backstop; complaint rates in Brand Health show fatigue first.",
       "changelog": [
         {
           "date": "2026-11-01",
@@ -292,6 +298,13 @@
           "line": "\"Smart Sending.\" set as the second paragraph's bold lead (wording only).",
           "hash": "f0ce3ee458d87d90cdcb4d594b9ad936c66f55e83d2d9716a113e2628bb38c15",
           "callout": "Further recommendations are in the History below (2026-11-07): a per-campaign override is built; a journey-side rule that would hold the cap on launch day waits on the first weeks of skip data."
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "The 24 hours run both ways, as intended: a step due in the next 24 hours also skips the broadcast; was \"in the last 24 hours\".",
+          "hash": "edc00a9910f36944808d577e5ef5126b0b7c898c5255ec04c98ffe344bb77396",
+          "callout": "Further recommendations are in the History below (2026-11-07): a per-campaign override is built; a journey-side rule that would hold the cap on launch day waits on the first weeks of skip data."
         }
       ]
     },
@@ -329,7 +342,7 @@
       "key": "sp-engagement",
       "section": "sunset-policy",
       "n": 16,
-      "text": "What counts as engagement. A click on any of the brand's emails, a paid order of the brand (whether or not an email drove it), or an open we can confirm was a person — today, an open through Gmail. Automatic opens (such as Apple Mail's privacy feature) and opens we can't confirm don't count; those subscribers are judged on clicks and purchases. (Klaviyo does the same: clicks and placed orders count, and Apple privacy opens are excluded.)",
+      "text": "What counts as engagement. A click on any of the brand's emails other than its Manage Preferences link (that click says nothing either way; only ticking a held brand on that page counts, item 21), a paid order of the brand (whether or not an email drove it), or an open we can confirm was a person — today, an open through Gmail. Automatic opens (such as Apple Mail's privacy feature) and opens we can't confirm don't count; those subscribers are judged on clicks and purchases. (Klaviyo does the same: clicks and placed orders count, and Apple privacy opens are excluded.)",
       "changelog": [
         {
           "date": "2026-11-02",
@@ -337,6 +350,12 @@
           "line": "Published for approval",
           "hash": "7c179904c1332c8b4065b6b0c0f17bb0bd9b7857ef109b0c02d83fc13f2794fc",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "A click on the Manage Preferences link is not engagement; ticking a held brand on that page is.",
+          "hash": "00f49758c47efae17bf7b8aeafe3172b8b0179f377e2bf783acc88b91b6b8b76"
         }
       ]
     },
@@ -359,7 +378,7 @@
       "key": "sp-hold",
       "section": "sunset-policy",
       "n": 18,
-      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago and the brand has sent them at least 6 broadcasts since, they stop getting its regular sends. Every new engagement restarts the 180 days. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list.",
+      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago (the default window, item 17) and the brand has sent them at least 6 broadcasts since, they stop getting its regular sends. Every new engagement restarts the window. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -367,6 +386,12 @@
           "line": "Published for approval",
           "hash": "82038c303d156fcd91d49b849be02297ad47855fa76b036714042ba93c3d52c1",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "180 named as the default window (item 17); was \"restarts the 180 days\".",
+          "hash": "801c622fe59ca236f1b0c437ad99d4e7fd130bb050a2311b6d626306b60da92d"
         }
       ]
     },
@@ -374,7 +399,7 @@
       "key": "sp-asks",
       "section": "sunset-policy",
       "n": 19,
-      "text": "Four emails on a fixed schedule from the hold: three re-engagement asks and a confirmation. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that the brand's marketing emails have stopped (an inactivity suppression, item 22), with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.",
+      "text": "Four emails on a fixed schedule from the hold (at the hold, then 90, 180 and 185 days after it): three re-engagement asks and a confirmation. The days below are those of the default 180-day window; a shorter window moves the whole schedule earlier by the same amount. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that the brand's marketing emails have stopped (an inactivity suppression, item 22), with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.",
       "changelog": [
         {
           "date": "2026-11-02",
@@ -388,6 +413,12 @@
           "source": "page",
           "line": "Day 365 is the inactivity-suppression confirmation, not an unsubscribe (item 22, Kaylinn's 2026-11-05 note); was \"a confirmation that they have been unsubscribed\".",
           "hash": "fa1203708be866d144920d68f27c625db05cca1144194867f5d57560a8933c28"
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "The schedule stated from the hold (+90, +180, +185 days); the day numbers are the default window's.",
+          "hash": "d3df73cb4c321e3f174d7a73cf4175c2f6be7476798773a27c5c3cf5279698f0"
         }
       ]
     },
@@ -410,7 +441,7 @@
       "key": "sp-coming-back",
       "section": "sunset-policy",
       "n": 21,
-      "text": "Coming back. Any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email. They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out: they are never asked again.",
+      "text": "Coming back. Any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email; ticking the brand on the Manage Preferences page returns them at once. They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out: they are never asked again.",
       "changelog": [
         {
           "date": "2026-11-02",
@@ -418,6 +449,12 @@
           "line": "Published for approval",
           "hash": "a618929fb8f9f59a1b92953eacf813614c1ce9e1afbdfd2f862711984bb0d86f",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "Names the Manage Preferences tick as a way back.",
+          "hash": "e1b6de333b15cd5ba893b595ff97340a63b698f9c9b0a5b80c335f55cfb3a855"
         }
       ]
     },
@@ -425,7 +462,7 @@
       "key": "sp-suppressed",
       "section": "sunset-policy",
       "n": 22,
-      "text": "365 days: inactivity suppression. After 365 days without engagement (180, then the re-engagement schedule), the brand's marketing emails to the person stop — recorded as an inactivity suppression, never as an unsubscribe, so the two are always distinguishable — and the confirmation is sent when the brand's day-365 automation is running, whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. The date rule runs regardless of the asks; Marketing's commitment is that every brand's four re-engagement automations are running before its first cohort reaches day 360 (the earliest is March 2027). Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout.",
+      "text": "365 days: inactivity suppression. 185 days after the hold (365 days without engagement at the default window), the brand's marketing emails to the person stop — recorded as an inactivity suppression, never as an unsubscribe, so the two are always distinguishable — and the confirmation is sent when the brand's day-365 automation is running, whether or not the earlier emails existed: off its re-engagement lists and out of its marketing, but never deleted or blocked. The date rule runs regardless of the asks; Marketing's commitment is that every brand's four re-engagement automations are running before its first cohort reaches day 360 (the earliest is March 2027). Only their own action brings them back: the Manage Preferences button, signing up again, or opting in at checkout.",
       "changelog": [
         {
           "date": "2026-11-01",
@@ -445,6 +482,12 @@
           "source": "page",
           "line": "Renamed as she asked: inactivity suppression (the industry's suppression-versus-unsubscribe distinction; the data model already kept the two apart). The date rule stays; her second ask is met as a commitment (four automations running before the first day-360 cohort, March 2027), tracked as a Gate Watch gate. Was \"365 days: unsubscribed from marketing …\".",
           "hash": "76edd5a6cf135b2319d83697a7e423f3822c6eb523481baeb68944ff3b2c8ec2"
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "Timed from the hold (185 days); 365 is the default window's day; was \"After 365 days without engagement (180, then the re-engagement schedule)\".",
+          "hash": "4b66fdb22ae8d2ffa10505e2c9d2e07b6b02b9744d88934dba9c5f15eaeda0f2"
         }
       ]
     },
@@ -472,7 +515,7 @@
         ["180–365 days*", "Regular sends stop; re-engagement emails at 180, 270 and 360 days"],
         ["365+ days", "Inactivity suppression: marketing emails stop, with a confirmation email"]
       ],
-      "note": "*and at least 6 broadcasts received since then. Engagement means a click, a purchase, or a Gmail-confirmed open."
+      "note": "*and at least 6 broadcasts received since then. Engagement means a click (other than the Manage Preferences link), a purchase, or a Gmail-confirmed open. Days are the default 180-day window's; the later steps follow the hold at +90, +180 and +185 days."
     }
   }
 }
