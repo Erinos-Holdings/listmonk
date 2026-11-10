@@ -48,6 +48,10 @@
                 <strong>{{ s.preview.campaign.subject }}</strong>
                 <template v-if="preheaderOf(s.preview.campaign)"> — {{ preheaderOf(s.preview.campaign) }}</template>
               </p>
+              <!-- Integrations JOURNEY-DRAFTS-SPEC D9: the copy's suggested visual direction. -->
+              <p v-if="visualOf(s.preview.campaign)" class="jp-meta" data-cy="journey-visual">
+                {{ $t('journeyPreview.visual', { visual: visualOf(s.preview.campaign) }) }}
+              </p>
               <p class="jp-meta">
                 <router-link :to="{ name: 'campaign', params: { id: s.preview.campaign.id } }"
                   :title="$t('journeyPreview.open')">
@@ -137,6 +141,11 @@ export default Vue.extend({
 
     preheaderOf(c) {
       return (c && c.attribs && typeof c.attribs.preheader === 'string') ? c.attribs.preheader : '';
+    },
+
+    visualOf(c) {
+      const v = c && c.attribs && c.attribs.visual_direction;
+      return (typeof v === 'string' && v.trim()) ? v.trim() : '';
     },
 
     previewSrc(id) {

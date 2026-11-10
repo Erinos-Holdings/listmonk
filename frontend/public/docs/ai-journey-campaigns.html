@@ -111,8 +111,9 @@ td:first-child{font-weight:600;white-space:nowrap}
 <div class="cards">
   <div class="card">
     <h3>Eleven drafts per brand</h3>
-    <p>One draft visual campaign per step, on the brand's newsletter list, tagged <code>journey:&lt;series&gt;:&lt;day&gt;</code>. The Preview button on Brands &gt; Usage (<kbd>F9</kbd>) renders all of them in the journey guide's layout, so the whole journey can be read as one piece before any step is switched on.</p>
-    <p class="note">Three No-purchase steps, four Post-purchase, four Re-engagement. Thirsty Girl's set was the first (2026-11-02) and is being rebuilt to this direction.</p>
+    <p>One draft automation per step, on that step's own list (never the newsletter list), tagged <code>journey:&lt;series&gt;:&lt;day&gt;</code>. The Preview button on Brands &gt; Usage (<kbd>F9</kbd>) renders all of them in the journey guide's layout, so the whole journey can be read as one piece before any step is switched on. Until Marketing starts a step's automation and switches its list's entry trigger on, the Usage pane shows the step grey: a draft whose list has no trigger yet, so nobody is joined.</p>
+    <p class="note">Three No-purchase steps, four Post-purchase, four Re-engagement. Thirsty Girl's set was the first (2026-11-02) and was rebuilt to this direction on 2026-11-10 as nine drafts.</p>
+    <p class="pushback"><span class="lead">Note to Kaylinn</span>Thirsty Girl's rebuild has nine drafts, not eleven: day 0 of both series is already your own campaign (the running Welcome and the running first-order Thank-you), so no AI draft was made for either, and the earlier day-0 drafts were deleted. That is a judgment call; say if you want AI drafts of those two as well.</p>
   </div>
   <div class="card">
     <h3>What the AI may use</h3>
@@ -347,7 +348,7 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="card">
     <h3>2 · Don't suppress before the re-engagement emails are activated</h3>
     <p>Met as a commitment, not a mechanism. Keying the suppression on the asks was the earlier design, retired because it left a brand with no automations holding people forever and let any hand broadcast reset the clock. The date rule stays.</p>
-    <p>What the ask protects is the person's chance to answer, and that is met in practice: the earliest day-360 cohort is <b>March 2027</b> (the September 2026 holds plus 180 days); the Usage pane counts each step's automations by state (green running, amber paused, grey draft or scheduled, and a red 0 where a brand has none); and a Gate Watch human gate holds Marketing to <b>all four automations running on every brand before the first cohort reaches day 360</b> (every brand is onboarded with sunset on and the full suite of journey drafts; the Usage pane's Sunset column and Re-engagement circles show where that did not happen).</p>
+    <p>What the ask protects is the person's chance to answer, and that is met in practice: the earliest day-360 cohort is <b>March 2027</b> (the September 2026 holds plus 180 days); the Usage pane counts each step's automations by state (green running, amber paused, grey draft or scheduled, and a red 0 where a brand has none); and a Gate Watch human gate holds Marketing to <b>all four automations running on every brand before the first cohort reaches day 360</b> (every brand is onboarded with sunset on; the Usage pane's Sunset column and Re-engagement circles show where that did not happen). <span class="pushback"><span class="lead">Note to Kaylinn</span>Journey drafts exist for Thirsty Girl only until the per-brand generator is built; every other brand's re-engagement automations are Marketing's to write until then.</span></p>
     <p class="note">By day 365 a person has had no regular sends for 185 days, only the three asks, so the suppression changes no deliverability outcome. It is bookkeeping plus the door back.</p>
   </div>
 </div>

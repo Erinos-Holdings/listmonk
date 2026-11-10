@@ -68,6 +68,16 @@ test('I1: two campaigns on one cell -> the later updated_at wins, others = 1 (ei
   assert.equal(stepPreviews([newer, a], lists).byBrand.thirstygirl[RE][365].campaign.id, 10);
 });
 
+test('JOURNEY-DRAFTS I9: an evergreen draft on a private brand-tagged step list groups under its step', () => {
+  const stepList = { id: 71, type: 'private', tags: ['brand:thirstygirl'] };
+  const c = {
+    ...camp(246, ['journey', `journey:${WELCOME}:2`], [71]), evergreen: true, status: 'draft', type: 'regular',
+  };
+  const r = stepPreviews([c], [...lists, stepList]);
+  assert.deepEqual(r.brands, ['thirstygirl']);
+  assert.deepEqual(r.byBrand.thirstygirl[WELCOME][2], { campaign: c, others: 0 });
+});
+
 test('I1: brands are listed once each, sorted', () => {
   const r = stepPreviews([
     camp(1, [`journey:${WELCOME}:0`], [8]),

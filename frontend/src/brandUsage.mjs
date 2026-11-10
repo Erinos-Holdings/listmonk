@@ -667,6 +667,11 @@ export function welcomeTip(w, t = (k) => k) {
 export function triggerTip(p, t = (k) => k) {
   const rows = Array.isArray(p && p.rows) ? p.rows : [];
   return rows.map((r) => {
+    // Integrations JOURNEY-DRAFTS-SPEC D3: a stored untriggered-draft row (a tagged draft automation
+    // on a step list with no registry row) -- its slug is not a registry slug and is never shown.
+    if (r.untriggered === true) {
+      return t('dashboard.usage.untriggeredDraft', { list: r.listId });
+    }
     if (typeof r.error === 'string' && r.error) {
       return `${r.slug}: ${r.error}`;
     }
