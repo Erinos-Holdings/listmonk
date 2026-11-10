@@ -1317,6 +1317,12 @@ section.dashboard (which reopens after them). */
       border-color: #c62828;
       color: #fff;
     }
+    /* Integrations DOC-ALIGNMENT-SPEC D9: draft or scheduled automations -- neutral grey, dark text. */
+    &.bu-grey {
+      background-color: #dbdbdb;
+      border-color: #b5b5b5;
+      color: #363636;
+    }
   }
   /* 2026-10-30: the journey guide below the Usage table -- each series a timeline of day badges on
   a connecting rail, NEUTRAL like the table (the stoplight circles stay the pane's only chroma).
@@ -1572,6 +1578,12 @@ section.dashboard (which reopens after them). */
     &.bu-decisions-split {
       /* The guide's rule (above): three equal columns of the width fitTable sets. */
       grid-template-columns: repeat(3, minmax(0, 1fr));
+      /* Integrations DOC-ALIGNMENT-SPEC D12 -- the Curated Sunset Policy spans rows 2 (the two
+      series) and 3 (Both series) and is taller than both; with two auto rows the grid split its
+      excess between them, leaving an empty block above Both series (measured: row 2 1580.5px for a
+      1252px column, 351px above Both series). Row 3 is flexible, so it alone absorbs the excess and
+      the gap above Both series is the plain row gap (measured after: 23px). */
+      grid-template-rows: auto auto 1fr;
       justify-content: start;
       column-gap: 0;
       .bu-decisions-col {

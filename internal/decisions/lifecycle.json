@@ -162,7 +162,7 @@
       "key": "np-ruze-15d",
       "section": "no-purchase",
       "n": 7,
-      "text": "Ruze's 15-day step. Keeps sending as-is.\nRecommended: The current campaign best fits the Day 2 “Product Value / Why Choose Us” step: retire the 15-day campaign and re-schedule it as the 2-day step, without re-sending it to anyone who already received it.",
+      "text": "Ruze's 15-day step. Done: Ruze's former 15-day campaign is now its Day 2 “Product Value / Why Choose Us” step, and nobody who already received it is sent it again.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -176,6 +176,17 @@
           "source": "page",
           "line": "The Day 2 step named by Kaylinn's title (Product Value / Why Choose Us); was \"Gentle conversion reminder\".",
           "hash": "67c8e1536e5b5e357b4c103e375e55801759fccf8f9e597de086a394c38052c7"
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "How it was done: the recommendation said retire the 15-day campaign and re-schedule it; what was done is a transition of the same list and journey, reconfigured from 15 days to 2 and renamed, which achieves \"without re-sending\" by construction (everyone who received it is still on the list, and a step sends once per person)."
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "Implemented: list 56 \"Ruze No purchase 2 days\" (the former 15-day list) and its running campaign are the Day 2 step; was \"Keeps sending as-is. Recommended: … retire the 15-day campaign and re-schedule it as the 2-day step\".",
+          "hash": "388202205ee8bfab54b97ed08d26175b71f3f39fcef20c8ebbeaf46bc9035ccd"
         }
       ]
     },
@@ -198,7 +209,7 @@
       "key": "pp-delivery-clock",
       "section": "post-purchase",
       "n": 9,
-      "text": "The clock is delivery, not the order date. Each step is timed from the Aftership delivery confirmation of the first order and sent by the next daily run: “Getting started” the day the package is reported delivered, the day-14 and day-30 steps 9 and 25 days after it. A tracked package still in transit waits up to 10 days after the order; an order with no delivery confirmation (untracked carriers, split shipments) falls back to the order date plus 5, 14 and 30 days, so nobody gets stuck. Day 14 is “Get More From Your Purchase”, an educational email and not a review request: the sites have no review functionality yet.",
+      "text": "The clock is delivery, not the order date. Each step is timed from the Aftership delivery confirmation of the first order and sent by the next daily run: “Getting started” the day the package is reported delivered, the day-14 and day-30 steps 9 and 25 days after it. A split shipment runs on the first parcel delivered. A tracked package still in transit waits up to 10 days after the order; an order with an untracked carrier, or never confirmed delivered, falls back to the order date plus 5, 14 and 30 days, so nobody gets stuck. Day 14 is “Get More From Your Purchase”, an educational email and not a review request: the sites have no review functionality yet.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -218,6 +229,12 @@
           "source": "page",
           "line": "Implemented (DELIVERY-CLOCK-SPEC): steps timed from delivery, in-transit wait, order-date fallback; was \"The clock is the order date … Recommended: start the clock at delivery\".",
           "hash": "bb860aa70e13a3778c9ea6eda90463d01a7fddc46483e04c22d756a8fd89ee08"
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "A split shipment runs on the first parcel delivered; the order-date fallback is for an untracked carrier or an order never confirmed delivered; was \"(untracked carriers, split shipments) falls back to the order date\".",
+          "hash": "74729db77b84a2f2496fdd4a65e670090a7aa674c918b957b87ccaf6c904413f"
         }
       ]
     },
@@ -362,7 +379,7 @@
       "key": "sp-scope",
       "section": "sunset-policy",
       "n": 15,
-      "text": "Who it applies to. Every brand that sends from listmonk, each brand on its own: someone who stops engaging with one brand keeps getting the others. Sunset is switched on when a brand is onboarded and no brand is exempt; the Sunset column above verifies it. The check runs once daily, at 15:00 UTC (8:00 am Mountain in winter, 9:00 am in summer).",
+      "text": "Who it applies to. Every brand that sends from listmonk, each brand on its own: someone who stops engaging with one brand keeps getting the others. Sunset is switched on when a brand is onboarded; the Sunset column above shows, for each brand, whether it is on. The check runs once daily, at 15:00 UTC (8:00 am Mountain in winter, 9:00 am in summer).",
       "changelog": [
         {
           "date": "2026-10-30",
@@ -376,6 +393,12 @@
           "source": "page",
           "line": "Stated as the onboarding expectation the Sunset column verifies (no brand is exempt); the run time anchored on 15:00 UTC with both Mountain readings.",
           "hash": "d1cce9e3d594bfe96118849d34adc17507997b2220c890350861a33fd5add904"
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "Sunset is on from onboarding and the Sunset column shows it per brand; was \"no brand is exempt; the Sunset column above verifies it\" (a policy, not an enforcement).",
+          "hash": "1c0672937031dd6c1ab699ee25f888f71baca9192940338f4fc69519cc943900"
         }
       ]
     },
@@ -419,7 +442,7 @@
       "key": "sp-hold",
       "section": "sunset-policy",
       "n": 18,
-      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago (the default window, item 17) and the brand has sent them at least 6 broadcasts since, they stop getting its regular sends. Every new engagement restarts the window. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list.",
+      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago (the default window, item 17) and the brand has sent them at least 6 broadcasts since they signed up or last returned from a hold (counted from then, not from their last engagement), they stop getting its regular sends. Every new engagement restarts the window. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -433,6 +456,12 @@
           "source": "page",
           "line": "180 named as the default window (item 17); was \"restarts the 180 days\".",
           "hash": "801c622fe59ca236f1b0c437ad99d4e7fd130bb050a2311b6d626306b60da92d"
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "The six broadcasts are counted from sign-up or the last return from a hold, as the rule counts them; was \"at least 6 broadcasts since\".",
+          "hash": "4a927e4f0278a7d14a5b384fe9db7f6e19a0bc959d44dc93eb4472270e8968af"
         }
       ]
     },
@@ -440,7 +469,7 @@
       "key": "sp-asks",
       "section": "sunset-policy",
       "n": 19,
-      "text": "Four emails on a fixed schedule from the hold (at the hold, then 90, 180 and 185 days after it): three re-engagement asks and a confirmation. The days below are those of the default 180-day window; a shorter window moves the whole schedule earlier by the same amount. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"We miss you\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that the brand's marketing emails have stopped (an inactivity suppression, item 22), with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.",
+      "text": "Four emails on a fixed schedule from the hold (at the hold, then 90, 180 and 185 days after it): three re-engagement asks and a confirmation. The days below are those of the default 180-day window; a shorter window moves the whole schedule earlier by the same amount. Each is an automation Marketing builds per brand, sending at once, in each language the brand's subscribers use: day 180 \"Reconnect With the Brand\", the day someone is held; day 270 a second reminder; day 360 a last chance, with 5 days to respond; day 365 a confirmation that the brand's marketing emails have stopped (an inactivity suppression, item 22), with a Manage Preferences button. The schedule runs whether or not a step's automation exists: a step with no running automation is simply not sent. The Re-engagement circles above show each brand's four automations; the Sunset column shows whether sunset is set up.",
       "changelog": [
         {
           "date": "2026-11-02",
@@ -460,6 +489,12 @@
           "source": "page",
           "line": "The schedule stated from the hold (+90, +180, +185 days); the day numbers are the default window's.",
           "hash": "d3df73cb4c321e3f174d7a73cf4175c2f6be7476798773a27c5c3cf5279698f0"
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "Day 180 named as the guide and Kaylinn's brief name it, \"Reconnect With the Brand\"; was \"We miss you\".",
+          "hash": "b48b88e5c2279dfc734a66fecf1214283a92469940c71577b011bdf33d63135f"
         }
       ]
     },

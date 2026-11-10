@@ -253,8 +253,8 @@ td:first-child{font-weight:600;white-space:nowrap}
 </div>
 
 <div class="series">
-  <div class="head"><h3>Re-engagement series (Sunset flow)</h3><span>no click, Gmail-confirmed open or purchase for 180 days, after at least 6 broadcasts</span></div>
-  <p class="sub">Regular sends stop the day someone is held (day 180), and the first ask goes out that same day. The second and third follow at +90 and +180 days from the hold, then the confirmation at +185 (days 270, 360 and 365 at the default window). Each is an automation Marketing builds per brand, every brand onboarded with all four; the Usage pane turns amber for a step whose automation is not running, and the date schedule runs regardless.</p>
+  <div class="head"><h3>Re-engagement series (Sunset flow)</h3><span>no click, Gmail-confirmed open or purchase for 180 days, after at least 6 broadcasts since sign-up or the last return from a hold</span></div>
+  <p class="sub">Regular sends stop the day someone is held (day 180), and the first ask goes out that same day. The second and third follow at +90 and +180 days from the hold, then the confirmation at +185 (days 270, 360 and 365 at the default window). Each is an automation Marketing builds per brand, every brand onboarded with all four; the Usage pane shows each step's automations by state (green running, amber paused, grey draft or scheduled, a red 0 for none), and the date schedule runs regardless.</p>
   <div class="track">
     <div class="pt" style="left:0%"><b>Day 180</b><i></i><small>Reconnect With the Brand</small></div>
     <div class="pt" style="left:48.6%"><b>Day 270</b><i></i><small>Another Reason to Reconnect</small></div>
@@ -280,7 +280,7 @@ td:first-child{font-weight:600;white-space:nowrap}
       <h4>Another Reason to Reconnect <span class="id">R02</span></h4>
       <dl>
         <dt>Goal</dt><dd>A new reason to engage.</dd>
-        <dt>Messaging</dt><dd>A different angle from the first ask: product variety, relevant benefits, or existing offers. Do not repeat the first message, and do not rely on a promotion that may have ended by the time the automation sends.</dd>
+        <dt>Messaging</dt><dd>A different angle from the first ask: product variety, relevant benefits, or an evergreen re-engagement offer. Do not repeat the first message, and do not rely on a promotion that may have ended by the time the automation sends. <span class="pushback"><span class="lead">Note to Kaylinn</span>Your brief says "existing offers". The automation sends on each person's own day, months after the email is written, so the offer must be one the brand keeps running for re-engagement, never a dated promotion.</span></dd>
         <dt>CTA</dt><dd><span class="cta">FIND YOUR FAVORITES</span> or <span class="cta">EXPLORE THE COLLECTION</span></dd>
       </dl>
     </div>
@@ -347,7 +347,7 @@ td:first-child{font-weight:600;white-space:nowrap}
   <div class="card">
     <h3>2 · Don't suppress before the re-engagement emails are activated</h3>
     <p>Met as a commitment, not a mechanism. Keying the suppression on the asks was the earlier design, retired because it left a brand with no automations holding people forever and let any hand broadcast reset the clock. The date rule stays.</p>
-    <p>What the ask protects is the person's chance to answer, and that is met in practice: the earliest day-360 cohort is <b>March 2027</b> (the September 2026 holds plus 180 days); the Usage pane turns amber for any brand whose step automation is not running; and a Gate Watch human gate holds Marketing to <b>all four automations running on every brand before the first cohort reaches day 360</b> (every brand is onboarded with sunset on and the full suite of journey drafts; the Usage pane's Sunset column and Re-engagement circles show where that did not happen).</p>
+    <p>What the ask protects is the person's chance to answer, and that is met in practice: the earliest day-360 cohort is <b>March 2027</b> (the September 2026 holds plus 180 days); the Usage pane counts each step's automations by state (green running, amber paused, grey draft or scheduled, and a red 0 where a brand has none); and a Gate Watch human gate holds Marketing to <b>all four automations running on every brand before the first cohort reaches day 360</b> (every brand is onboarded with sunset on and the full suite of journey drafts; the Usage pane's Sunset column and Re-engagement circles show where that did not happen).</p>
     <p class="note">By day 365 a person has had no regular sends for 185 days, only the three asks, so the suppression changes no deliverability outcome. It is bookkeeping plus the door back.</p>
   </div>
 </div>

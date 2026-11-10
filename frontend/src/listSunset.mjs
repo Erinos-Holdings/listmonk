@@ -3,9 +3,10 @@
 // computes {oldestDays, archiveInDays, asOf} each run and the server stores it (lists.sunset,
 // PUT /api/lists/:id/sunset); this module only formats it -- the fork stores and renders, never
 // computes. Since integrations SUNSET-V4-SPEC D10 every one of the four queues carries a number
-// ("oldest archives in N d" -- 185 days from the oldest hold.at on the queue) unless it is empty
-// (archiveInDays null: "oldest waiting 0 d"). A list without a sunset (every brand list) renders
-// nothing. Tested by listSunset.test.mjs.
+// ("oldest suppressed in N d" -- 185 days from the oldest hold.at on the queue; integrations
+// DOC-ALIGNMENT-SPEC D5: the screen says the day-365 state's own word, "archive" stays the
+// mechanism word in code) unless it is empty (archiveInDays null: "oldest waiting 0 d"). A list
+// without a sunset (every brand list) renders nothing. Tested by listSunset.test.mjs.
 
 const int = (v) => (Number.isInteger(v) ? v : null);
 
@@ -13,7 +14,7 @@ const int = (v) => (Number.isInteger(v) ? v : null);
 export function listSunsetItem(sunset) {
   if (!sunset || typeof sunset !== 'object' || Array.isArray(sunset)) return '';
   const archive = int(sunset.archiveInDays);
-  if (archive !== null) return `oldest archives in ${archive} d`;
+  if (archive !== null) return `oldest suppressed in ${archive} d`;
   const oldest = int(sunset.oldestDays);
   if (oldest !== null) return `oldest waiting ${oldest} d`;
   return '';

@@ -62,8 +62,8 @@ export const GUIDE_SERIES = Object.freeze([
 // journeyPreview.mjs -- integrations JOURNEY-PREVIEW-SPEC D1: a step preview's days are these).
 export const guideDays = (family) => (family === SERIES_REENGAGEMENT ? REENGAGEMENT_DAYS : SERIES_DAYS[family]);
 
-// parseStepText splits a D5 text ("Day 5 Address purchase hesitation: \"A few reasons …\" Include
-// …") into { title, quote, body }: the title between the leading "Day N " and the FIRST ": " (a
+// parseStepText splits a D5 text ("Day 5 Build Confidence / Product Discovery: \"A few reasons …\"
+// Answer …") into { title, quote, body }: the title between the leading "Day N " and the FIRST ": " (a
 // title may itself end in "?", e.g. "How's it going?"), an optional leading double-quoted example
 // subject line, and the rest as the guidance. A text without ": " is all body.
 export function parseStepText(text) {
@@ -754,9 +754,35 @@ export function storedCounts(usage, field) {
   return green === null || amber === null ? null : { green, amber };
 }
 
+// Integrations DOC-ALIGNMENT-SPEC D9: the three-key bubble counts a leaf stores -- { green, amber,
+// grey } (running / paused / draft or scheduled automations; cancelled and finished not counted, an
+// invalid trigger row none -- integrations lib/brand-usage.ts BUBBLE_OF_STATUS, the ONE rule). The
+// stored leaf object: a series leaf's step (Day 0 included), a Re-engagement step, the SKU column's
+// `sku.leaf`. null when the object does not carry the three-key shape (a doc written before D9 --
+// the cell then renders through the pre-D9 path).
+export function bubbleCounts(leafObj) {
+  const c = isObj(leafObj) && isObj(leafObj.counts) ? leafObj.counts : null;
+  if (!c) {
+    return null;
+  }
+  const green = countOrNull(c.green);
+  const amber = countOrNull(c.amber);
+  const grey = countOrNull(c.grey);
+  return green === null || amber === null || grey === null ? null : { green, amber, grey };
+}
+
+// D9 (e): a circle's link filters to the automations of its own colour. Cross-repo literal of
+// integrations lib/brand-usage.ts BUBBLE_OF_STATUS (no test spans the repos) -- used ONLY to pick
+// which stored campaigns a circle opens; every count, state and colour is the lib's.
+const BUBBLE_OF_STATUS = Object.freeze({
+  running: 'green', paused: 'amber', draft: 'grey', scheduled: 'grey',
+});
+const bubbleOf = (status) => (Object.prototype.hasOwnProperty.call(BUBBLE_OF_STATUS, status) ? BUBBLE_OF_STATUS[status] : null);
+
 // V2 D3/I3: the circles of one stoplight cell -- ONE circle per state, the stored count inside:
-// green (running/active) and amber (configured but idle), each omitted at 0; a single red circle
-// showing 0 when both are 0. Returns [{ color, n }].
+// green (running), amber (paused; on a pre-D9 doc "configured but not running") and grey (draft or
+// scheduled -- D9, three-key counts only), each omitted at 0; a single red circle showing 0 when
+// all are 0. Returns [{ color, n }].
 export function circlesOf(counts) {
   if (!counts) {
     return [];
@@ -768,11 +794,15 @@ export function circlesOf(counts) {
   if (counts.amber > 0) {
     out.push({ color: 'amber', n: counts.amber });
   }
+  if (counts.grey > 0) {
+    out.push({ color: 'grey', n: counts.grey });
+  }
   return out.length ? out : [{ color: 'red', n: 0 }];
 }
 
 // circleName (2026-10-30) is ONE circle's accessible name -- since each circle is its own link, two
-// links in a cell must not share a name: green "N running", amber "N not running", red "none in use".
+// links in a cell must not share a name: green "N running", amber "N paused", grey "N draft"
+// (D9), red "none in use".
 export function circleName(color, n, t = (k) => k) {
   if (color === 'green') {
     return t('dashboard.usage.circleRunning', { n });
@@ -780,11 +810,14 @@ export function circleName(color, n, t = (k) => k) {
   if (color === 'amber') {
     return t('dashboard.usage.circleIdle', { n });
   }
+  if (color === 'grey') {
+    return t('dashboard.usage.circleDraft', { n });
+  }
   return t('dashboard.usage.circleNone');
 }
 
 // V2 D3/I3: the words every circle of the cell carries -- color is never the only carrier:
-// "1 running, 2 not running", or "none in use".
+// "1 running, 2 paused, 1 draft", or "none in use".
 export function circleWords(counts, t = (k) => k) {
   if (!counts) {
     return '';
@@ -796,8 +829,31 @@ export function circleWords(counts, t = (k) => k) {
   if (counts.amber > 0) {
     parts.push(t('dashboard.usage.circleIdle', { n: counts.amber }));
   }
+  if (counts.grey > 0) {
+    parts.push(t('dashboard.usage.circleDraft', { n: counts.grey }));
+  }
   return parts.length ? parts.join(', ') : t('dashboard.usage.circleNone');
 }
+
+// D9: the stored leaf object of a circle field -- the series step (Day 0 included), the
+// Re-engagement step, or the SKU column's `sku.leaf`; null when absent.
+function leafObjOf(u, field) {
+  const re = reengagementLeafOf(field);
+  if (re !== null) {
+    return reStepAt(u, re.days) || null;
+  }
+  const leaf = seriesLeafOf(field);
+  if (leaf !== null) {
+    return stepAt(u, leaf.family, leaf.days);
+  }
+  if (field === 'sku') {
+    return isObj(u && u.sku) && isObj(u.sku.leaf) ? u.sku.leaf : null;
+  }
+  return null;
+}
+
+// D9: the leaf's three-key counts when the stored doc carries them, else null (pre-D9 path).
+const leafCounts = (u, field) => bubbleCounts(leafObjOf(u, field));
 
 const posInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
 
@@ -824,6 +880,46 @@ export function circleLink(row, field, color) {
   // row is informational, listmonk runs none of its journeys.
   if (!u || row.zma) {
     return null;
+  }
+  // Integrations DOC-ALIGNMENT-SPEC D9 (e): on a three-key doc each circle opens the automations of
+  // its own colour -- grey links like amber. Day 0 and Re-engagement by their stored campaign ids
+  // ({ id, evergreen: 'all' }); a row-backed leaf (series step, SKU) by the lists of its VALID rows
+  // holding such an automation ({ list_id, evergreen: 'true' }). Red: a Re-engagement step opens
+  // every campaign on its queue list (as before); any other red never links. A pre-D9 doc takes the
+  // older rules below.
+  const counts = leafCounts(u, field);
+  if (counts) {
+    const lo = leafObjOf(u, field);
+    const re3 = reengagementLeafOf(field);
+    const s3 = seriesLeafOf(field);
+    const shown = circlesOf(counts).some((c) => c.color === color);
+    if (!shown) {
+      return null;
+    }
+    const idsOf = (camps) => [...new Set((Array.isArray(camps) ? camps : []).filter(isObj)
+      .filter((x) => bubbleOf(x.status) === color).map((x) => x.id).filter(posInt))].sort((a, b) => a - b);
+    if (re3 !== null) {
+      if (!posInt(lo.listId)) {
+        return null;
+      }
+      if (color === 'red') {
+        return { list_id: [String(lo.listId)], evergreen: 'all' };
+      }
+      const ids = idsOf(lo.campaigns);
+      return ids.length ? { id: ids.map(String), evergreen: 'all' } : { list_id: [String(lo.listId)], evergreen: 'true' };
+    }
+    if (color === 'red') {
+      return null;
+    }
+    if (s3 !== null && s3.family === SERIES_WELCOME && s3.days === 0) {
+      const ids = idsOf(isObj(u.welcome) ? u.welcome.campaigns : []);
+      return ids.length ? { id: ids.map(String), evergreen: 'all' } : null;
+    }
+    const rows = s3 !== null ? stepRows(lo) : skuRows(u);
+    const lists = [...new Set(rows.filter((r) => !(typeof r.error === 'string' && r.error))
+      .filter((r) => (Array.isArray(r.campaigns) ? r.campaigns : []).some((x) => isObj(x) && bubbleOf(x.status) === color))
+      .map((r) => r.listId).filter(posInt))].sort((a, b) => a - b);
+    return lists.length ? { list_id: lists.map(String), evergreen: 'true' } : null;
   }
   // USAGE-REENGAGEMENT-SPEC D6, 2026-10-31 polish: EVERY Re-engagement circle links to its campaigns.
   // Green -- the running automations on the queue list; amber -- every automation there (none
@@ -982,6 +1078,26 @@ export function cell(row, field, t = (k) => k) {
   if (re !== null) {
     const desc = t(seriesStepKey(SERIES_REENGAGEMENT, re.days));
     const st = reStepAt(u, re.days);
+    // Integrations DOC-ALIGNMENT-SPEC D9 (c): a three-key doc renders the stored counts through the
+    // one bubble rule (circlesOf); waiting and "Not covered" stay in the hover, never a colour.
+    const c3 = bubbleCounts(st);
+    if (c3) {
+      const waiting3 = countOrNull(st.waiting);
+      const unc3 = Array.isArray(st.uncovered) ? st.uncovered.filter((l) => typeof l === 'string' && l !== '') : [];
+      const lines3 = [desc, circleWords(c3, t)];
+      if (waiting3 !== null) {
+        lines3.push(t('dashboard.usage.reWaiting', { n: waiting3 }));
+      }
+      if (unc3.length) {
+        lines3.push(t('dashboard.usage.reUncovered', { langs: unc3.map((l) => l.toUpperCase()).join(', ') }));
+      }
+      return {
+        text: '',
+        cls: '',
+        tooltip: lines3.join('\n'),
+        circles: circlesOf(c3).map((ci) => ({ ...ci, name: ci.color === 'red' ? reCircleName('red', 0, t) : circleName(ci.color, ci.n, t) })),
+      };
+    }
     const c = reCircle(st);
     if (!c) {
       const none = reCircleName(NONE_CIRCLE.color, NONE_CIRCLE.n, t);
@@ -1019,6 +1135,17 @@ export function cell(row, field, t = (k) => k) {
     }
     let counts;
     let detail;
+    // Integrations DOC-ALIGNMENT-SPEC D9: a three-key doc renders the leaf's stored counts verbatim
+    // (green running, amber paused, grey draft/scheduled, red 0 when nothing counted).
+    const c3 = leafCounts(u, field);
+    if (c3) {
+      detail = leaf.family === SERIES_WELCOME && leaf.days === 0
+        ? welcomeTip(isObj(u.welcome) ? u.welcome : {}, t)
+        : triggerTip({ rows: stepRows(stepAt(u, leaf.family, leaf.days)) }, t);
+      return {
+        text: '', cls: '', tooltip: [desc, circleWords(c3, t), detail].filter(Boolean).join('\n'), circles: circlesOf(c3),
+      };
+    }
     if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
       counts = storedCounts(u, 'welcome');
       if (!counts) {
@@ -1051,6 +1178,19 @@ export function cell(row, field, t = (k) => k) {
       // The stored counts (green running, amber idle/invalid), then each row. A brand with NO SKU
       // journey shows '—', never a red 0 (user, 2026-10-30): the journey is optional -- it may or
       // may not apply to a brand -- so its absence is not a campaign gap like the series leaves'.
+      // Integrations DOC-ALIGNMENT-SPEC D9: with SKU rows, a three-key doc renders `sku.leaf`'s
+      // counts (red 0 when none of their automations is counted); no rows stays '—'.
+      const c3 = leafCounts(u, field);
+      if (c3 && skuRows(u).length) {
+        return {
+          text: '', cls: '', tooltip: [circleWords(c3, t), triggerTip({ rows: skuRows(u) }, t)].filter(Boolean).join('\n'), circles: circlesOf(c3),
+        };
+      }
+      if (c3) {
+        return {
+          text: MISSING, cls: '', tooltip: t('dashboard.usage.skuNone'), circles: [],
+        };
+      }
       const counts = storedCounts(u, field);
       if (!counts) {
         return {
@@ -1166,6 +1306,11 @@ export function sortValue(row, field) {
   if (leaf !== null) {
     if (!seriesOf(u, leaf.family)) {
       return null;
+    }
+    // Integrations DOC-ALIGNMENT-SPEC D9: a three-key doc sorts by the leaf's stored state.
+    if (leafCounts(u, field)) {
+      const s3 = leafObjOf(u, field).state;
+      return Object.prototype.hasOwnProperty.call(BADNESS, s3) ? BADNESS[s3] : null;
     }
     if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
       const s = isObj(u.welcome) ? u.welcome.state : undefined;

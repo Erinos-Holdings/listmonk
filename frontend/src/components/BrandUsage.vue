@@ -113,6 +113,7 @@
     <p class="is-size-7 has-text-grey mt-2 bu-legend" data-cy="usage-legend">
       <span class="bu-circle bu-green">1</span> {{ $t('dashboard.usage.legendRunning') }}
       <span class="bu-circle bu-amber">1</span> {{ $t('dashboard.usage.legendIdle') }}
+      <span class="bu-circle bu-grey">1</span> {{ $t('dashboard.usage.legendDraft') }}
       <span class="bu-circle bu-red">0</span> {{ $t('dashboard.usage.legendNone') }}
       · {{ $t('dashboard.usage.legendConfig') }}
     </p>

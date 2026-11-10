@@ -1247,7 +1247,7 @@ func (a *App) footerGuardOnStatus(id int, next string) error {
 }
 
 // reFinalQueueTag is a final re-engagement queue's tag (integrations FINAL-QUEUE-GUARD-SPEC D1):
-// reengage:<brand list id>:3 (last chance) or :4 (unsubscribe confirmation). Queues 1 and 2 never
+// reengage:<brand list id>:3 (last chance) or :4 (inactivity-suppression confirmation). Queues 1 and 2 never
 // match.
 var reFinalQueueTag = regexp.MustCompile(`^reengage:\d+:[34]$`)
 

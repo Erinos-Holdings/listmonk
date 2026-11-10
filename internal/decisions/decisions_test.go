@@ -130,7 +130,11 @@ func TestItemsShape(t *testing.T) {
 // = a page entry carrying a text hash dated 2026-11-09 (items 4, 13, 16, 18, 19, 21, 22; the
 // same day's documentation audit added one more to items 1, 2, 5, 15, 21 and 22). "page9" = a
 // HASH-LESS page entry dated 2026-11-09 -- item 13's decision entry (integrations
-// SMART-SENDING-LOOKAHEAD-SPEC D12: the same-day double accepted, option 2 retired).
+// SMART-SENDING-LOOKAHEAD-SPEC D12: the same-day double accepted, option 2 retired). 2026-11-10
+// (integrations DOC-ALIGNMENT-SPEC D10/D11/D14, no reapprove): "page#10" = a page entry carrying a
+// text hash dated 2026-11-10 (items 7, 9, 15, 18, 19); "page10" = a HASH-LESS page entry dated
+// 2026-11-10 -- item 7's History clarifier (how the 15-day step was transitioned), before its
+// hash-bearing "Implemented" entry.
 var shippedLineage = map[string][]string{
 	"np-entry":            {"slack", "page#", "page#", "page#9"},
 	"np-exit-on-purchase": {"page#9"},
@@ -140,15 +144,15 @@ var shippedLineage = map[string][]string{
 	// Integrations BRAND-UNSUBSCRIBE-SPEC A13 (2026-11-09): item 6 broadened from the newsletter
 	// list to the brand, item 21's ask sentence scoped to "on that consent".
 	"np-unsubscribe-stops": {"page#9"},
-	"np-ruze-15d":          {"page#9"},
-	"pp-delivery-clock":    {"slack", "page#"},
+	"np-ruze-15d":          {"page#9", "page10", "page#10"},
+	"pp-delivery-clock":    {"slack", "page#", "page#10"},
 	"pp-returning-thanks":  {"page#"},
 	"both-multi-brand":     {"page#"},
 	"both-per-brand":       {"slack", "page#", "relayed", "page", "page#", "page#", "page#9", "page9"},
-	"sp-scope":             {"page#9"},
+	"sp-scope":             {"page#9", "page#10"},
 	"sp-engagement":        {"page#9"},
-	"sp-hold":              {"page#9"},
-	"sp-asks":              {"page#8", "page#9"},
+	"sp-hold":              {"page#9", "page#10"},
+	"sp-asks":              {"page#8", "page#9", "page#10"},
 	"sp-coming-back":       {"page#9", "page#9", "page#9"},
 	"sp-suppressed":        {"reject-note", "page#8", "page#9", "page#9"},
 }
@@ -196,6 +200,10 @@ func checkShippedChangelog(t *testing.T, it Item) {
 			ok = c.Date == "2026-11-09" && c.Source == "page" && c.Who == "" && c.Hash != ""
 		case "page9":
 			ok = c.Date == "2026-11-09" && c.Source == "page" && c.Who == "" && c.Hash == ""
+		case "page#10":
+			ok = c.Date == "2026-11-10" && c.Source == "page" && c.Who == "" && c.Hash != ""
+		case "page10":
+			ok = c.Date == "2026-11-10" && c.Source == "page" && c.Who == "" && c.Hash == ""
 		}
 		if !ok {
 			t.Errorf("%s: entry %d %+v, want a %s entry", it.Key, i+1, c, tok)
@@ -380,7 +388,9 @@ func TestItemHashesPinned(t *testing.T) {
 // Recommended option are pinned, so a text edit that adds or drops one is a deliberate change
 // (LIFECYCLE-DOCS-SPEC I8: items 3 and 9 lost theirs when implemented, 2026-11-07; integrations
 // SMART-SENDING-SPEC D8/I9: item 13 lost its when Smart Sending was implemented, 2026-11-07;
-// integrations BRAND-OVERLAP-SPEC D4/I6: item 12 lost its when the overlap monitor shipped, 2026-11-07).
+// integrations BRAND-OVERLAP-SPEC D4/I6: item 12 lost its when the overlap monitor shipped, 2026-11-07;
+// integrations DOC-ALIGNMENT-SPEC D11: item 7 lost its when Ruze's 15-day step was found done, 2026-11-10
+// -- no shipped item has a Recommended option now).
 func TestChoices(t *testing.T) {
 	if HasRecommended("Recommended: lead line only") {
 		t.Fatal("a first-line Recommended: is the lead, not an option")
@@ -409,7 +419,7 @@ func TestChoices(t *testing.T) {
 			t.Fatalf("%s: %v", it.Key, c)
 		}
 	}
-	want := []string{"np-ruze-15d"}
+	want := []string{}
 	if strings.Join(three, ",") != strings.Join(want, ",") {
 		t.Fatalf("items with three choices %v, want %v", three, want)
 	}

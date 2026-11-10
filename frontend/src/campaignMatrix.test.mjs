@@ -9,6 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  analyticsSkippedCell, analyticsSkippedRows,
   COUNT_FIELDS, DEFAULT_STATE, GAP_FAILED, GAP_PENDING, MISSING, NAME_MAX, PENDING_MARK, SHOP_FIELDS, SORT_FIELDS,
   STATUS_ORDER, STORAGE_KEY, cellText, clickSort, conversionValue, dateCell, displayValue, filterByLaunch, filterByName,
   gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
@@ -599,4 +600,40 @@ test('SMART-SENDING I8: Skipped shows the count, "off" for a bypass, — for a j
   assert.equal(cellText(t, 'skipped', 'pct', fmt), '12');
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   ['analytics.matrix.skipped', 'analytics.matrix.skippedHelp'].forEach((k) => assert.ok(en[k], k));
+});
+
+// --- integrations DOC-ALIGNMENT-SPEC D7 / I16 ---
+
+test('DOC-ALIGNMENT I16: the Campaign Analytics Skipped figure is the Matrix cell, from the campaign object', () => {
+  const fmt = (n) => `n${n}`;
+  const tt = (k) => (k === 'analytics.matrix.off' ? 'off' : k);
+  // The campaign object (GET /api/campaigns/:id): skipped, evergreen and the effective smart_sending.
+  const obj = (id, name, evergreen, skipped, smartSending) => ({
+    id, name, evergreen, skipped, smart_sending: smartSending,
+  });
+  const ruled = obj(31, '#31: Ruled', false, 12, true);
+  const off = obj(32, '#32: Launch', false, 0, false);
+  const journey = obj(33, '#33: Welcome', true, 5, false);
+  // Each equals the Matrix's own cellText over the Matrix's row for the same campaign.
+  const matrixOf = (r) => cellText(shapeRow({ ...api[0], ...r }), 'skipped', 'num', fmt, undefined, tt);
+  assert.equal(analyticsSkippedCell(ruled, fmt, tt), matrixOf({ id: 31, skipped: 12, smart_off: false }));
+  assert.equal(analyticsSkippedCell(ruled, fmt, tt), 'n12');
+  assert.equal(analyticsSkippedCell(off, fmt, tt), matrixOf({ id: 32, skipped: 0, smart_off: true }));
+  assert.equal(analyticsSkippedCell(off, fmt, tt), 'off');
+  assert.equal(analyticsSkippedCell(journey, fmt, tt), matrixOf({
+    id: 33, evergreen: true, skipped: null, smart_off: false,
+  }));
+  assert.equal(analyticsSkippedCell(journey, fmt, tt), MISSING, 'an evergreen shows none');
+  assert.equal(analyticsSkippedCell(null), null);
+  // The view's pure half: the selection's order, a campaign without an object left out.
+  const selected = [{ id: 33, name: '#33: Welcome' }, { id: 31, name: '#31: Ruled' }, { id: 99, name: '#99: Unreadable' }];
+  assert.deepEqual(analyticsSkippedRows(selected, { 31: ruled, 33: journey }, fmt, tt), [
+    { id: 33, name: '#33: Welcome', text: MISSING },
+    { id: 31, name: '#31: Ruled', text: 'n12' },
+  ]);
+  assert.deepEqual(analyticsSkippedRows(selected, {}, fmt, tt), []);
+  assert.deepEqual(analyticsSkippedRows(null, null), []);
+  // The view renders it through this helper (no second rule in the template).
+  const view = readFileSync(new URL('./views/CampaignAnalytics.vue', import.meta.url), 'utf8');
+  assert.match(view, /analyticsSkippedRows\(this\.form\.campaigns, this\.campaignObjs/);
 });

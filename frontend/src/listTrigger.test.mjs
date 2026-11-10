@@ -166,8 +166,12 @@ test('I16: every series description key exists in en.json', () => {
   assert.equal(en['campaigns.evergreen'], 'Automation');
   assert.equal(en['lists.joinTrigger'], 'Entry trigger');
   assert.equal(en['lists.joinTriggerNoPurchase'], 'No-purchase series step — days after joining the newsletter …');
-  assert.equal(en['lists.joinTriggerFirstOrder'], 'Post-purchase series day 0 — every customer\'s first order of this brand');
-  assert.equal(en['lists.joinTriggerPostPurchase'], 'Post-purchase series step — days after the first order …');
+  // Integrations DOC-ALIGNMENT-SPEC D5: the entry condition and the delivery clock are stated.
+  assert.equal(
+    en['lists.joinTriggerFirstOrder'],
+    'Post-purchase series day 0 — a customer\'s first order of this brand, if subscribed to the brand\'s newsletter at the time (a transactional list is exempt)',
+  );
+  assert.equal(en['lists.joinTriggerPostPurchase'], 'Post-purchase series step — timed from delivery …');
   // No en.json value shows a user the retired terms.
   Object.entries(en).forEach(([k, v]) => assert.equal(/still deciding|no-purchase nudge|journey automation/i.test(v), false, k));
   // LIFECYCLE-SERIES §10 A1 -- on screen the first series is the No-purchase series; the journey

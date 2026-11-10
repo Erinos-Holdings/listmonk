@@ -1016,12 +1016,12 @@ test('circleLink: Day 0 green/amber open their own campaigns; step and SKU circl
 
 // 2026-10-30: the journey guide below the table.
 test('guide: parseStepText splits title / quoted subject line / guidance', () => {
-  assert.deepEqual(parseStepText('Day 2 Gentle conversion reminder: "Still exploring? Here\'s why customers love [Brand]." Highlight bestsellers.'), {
-    title: 'Gentle conversion reminder', quote: 'Still exploring? Here\'s why customers love [Brand].', body: 'Highlight bestsellers.',
+  assert.deepEqual(parseStepText('Day 2 Product Value / Why Choose Us: "Still exploring? Here\'s why [Brand] is different." Key product benefits.'), {
+    title: 'Product Value / Why Choose Us', quote: 'Still exploring? Here\'s why [Brand] is different.', body: 'Key product benefits.',
   });
   // A title ending in "?" and a body containing ": " -- split at the FIRST ": ".
-  assert.deepEqual(parseStepText('Day 14 How\'s it going?: About a week after delivery: ask for a review.'), {
-    title: 'How\'s it going?', quote: '', body: 'About a week after delivery: ask for a review.',
+  assert.deepEqual(parseStepText('Day 14 Ready for more?: Beyond the basics: more tips and routine ideas.'), {
+    title: 'Ready for more?', quote: '', body: 'Beyond the basics: more tips and routine ideas.',
   });
   assert.deepEqual(parseStepText('Day 5 Getting started: Around delivery: how to use it.'), {
     title: 'Getting started', quote: '', body: 'Around delivery: how to use it.',
@@ -1221,4 +1221,105 @@ test('F2: Re-engagement cells render the stored circle, tooltip, link and sort; 
     'dashboard.usage.reCircleNone', 'dashboard.usage.reWaiting', 'dashboard.usage.reUncovered', 'dashboard.usage.partReengagement',
     'dashboard.usage.guideReengagement', 'dashboard.usage.guideSunset'].forEach((k) => assert.equal(typeof en[k], 'string', k));
   assert.equal(en['dashboard.usage.reengagement'], 'Re-engagement');
+});
+
+// Integrations DOC-ALIGNMENT-SPEC D9 / I18: the three-key counts render verbatim on every leaf
+// family (green running, amber paused, grey draft/scheduled, red 0 when nothing counted); a grey
+// circle links like an amber one; an old-shape document renders through the pre-D9 path.
+test('D9 / I18: three-key counts on every leaf family; grey links; an old-shape doc falls back', () => {
+  const C = (green, amber, grey) => ({ green, amber, grey });
+  const row = (days, listId, campaigns, error) => ({
+    slug: `x-${listId}`, listId, evergreen: 'idle', days, campaigns, ...(error ? { error } : {}),
+  });
+  const camp = (id, status) => ({ id, status });
+  const steps3 = (family, byDay) => SERIES_DAYS[family].map((days) => ({
+    days, state: 'none', counts: C(0, 0, 0), rows: [], ...(byDay[days] || {}),
+  }));
+  const u3 = usage({
+    welcome: {
+      state: 'active', listId: 7, campaigns: [camp(70, 'running'), camp(71, 'paused'), camp(72, 'draft'), camp(73, 'finished')], counts: { green: 1, amber: 3 },
+    },
+    series: {
+      welcome: {
+        steps: steps3('welcome', {
+          0: { state: 'active', counts: C(1, 1, 1) },
+          5: {
+            state: 'idle',
+            counts: C(0, 0, 1),
+            rows: [row(5, 50, [camp(500, 'draft')]), row(5, 51, [camp(510, 'scheduled')], 'bad row')],
+          },
+        }),
+        legacy: [],
+      },
+      postPurchase: {
+        steps: steps3('postPurchase', {
+          0: {
+            state: 'active', counts: C(1, 1, 0), rows: [row(0, 80, [camp(800, 'running')]), row(0, 81, [camp(810, 'paused'), camp(811, 'cancelled')])],
+          },
+        }),
+        legacy: [],
+      },
+    },
+    sku: {
+      rows: [row(null, 90, [camp(900, 'scheduled')])], counts: { green: 0, amber: 1 }, leaf: { state: 'idle', counts: C(0, 0, 1) },
+    },
+    reengagement: {
+      steps: [180, 270, 360, 365].map((days, i) => ({
+        days,
+        queue: i + 1,
+        listId: 48 + i,
+        state: i === 0 ? 'active' : 'none',
+        counts: i === 0 ? C(1, 0, 1) : C(0, 0, 0),
+        circle: i === 0 ? { color: 'amber', n: 1 } : { color: 'red', n: 0 },
+        campaigns: i === 0 ? [{ id: 480, status: 'running', lang: 'en' }, { id: 481, status: 'draft', lang: null }] : [],
+        waiting: i === 0 ? 7 : null,
+        byLang: i === 0 ? { en: 5, fr: 2 } : {},
+        uncovered: i === 0 ? ['fr'] : [],
+      })),
+    },
+  });
+  const [r] = shapeRows([{ brand: 'ruze', usage: u3 }]);
+  const colors = (f) => cell(r, f, t).circles.map((c) => [c.color, c.n]);
+  // Day 0: the step's three-key counts, never the legacy two-key welcome.counts.
+  assert.deepEqual(colors('welcome:0'), [['green', 1], ['amber', 1], ['grey', 1]]);
+  assert.deepEqual(colors('welcome:2'), [['red', 0]]);
+  assert.deepEqual(colors('welcome:5'), [['grey', 1]]);
+  assert.deepEqual(colors('postPurchase:0'), [['green', 1], ['amber', 1]]);
+  assert.deepEqual(colors('sku'), [['grey', 1]]);
+  // Re-engagement: the counts, not the legacy circle; "Not covered" stays in the hover only.
+  assert.deepEqual(colors('reengagement:180'), [['green', 1], ['grey', 1]]);
+  assert.deepEqual(colors('reengagement:270'), [['red', 0]]);
+  assert.match(cell(r, 'reengagement:180', t).tooltip, /reUncovered/);
+  assert.deepEqual(cell(r, 'reengagement:180', t).circles.map((c) => c.name), ['dashboard.usage.circleRunning{"n":1}', 'dashboard.usage.circleDraft{"n":1}']);
+  assert.match(cell(r, 'welcome:5', t).tooltip, /circleDraft/);
+  assert.equal(circleName('grey', 2, t), 'dashboard.usage.circleDraft{"n":2}');
+  assert.equal(circleWords(C(1, 2, 3), t), 'dashboard.usage.circleRunning{"n":1}, dashboard.usage.circleIdle{"n":2}, dashboard.usage.circleDraft{"n":3}');
+  // (e) Links: each circle opens the automations of its own colour; grey like amber.
+  assert.deepEqual(circleLink(r, 'welcome:0', 'green'), { id: ['70'], evergreen: 'all' });
+  assert.deepEqual(circleLink(r, 'welcome:0', 'amber'), { id: ['71'], evergreen: 'all' });
+  assert.deepEqual(circleLink(r, 'welcome:0', 'grey'), { id: ['72'], evergreen: 'all' });
+  assert.deepEqual(circleLink(r, 'welcome:5', 'grey'), { list_id: ['50'], evergreen: 'true' }); // the invalid row's list never
+  assert.equal(circleLink(r, 'welcome:5', 'amber'), null); // no amber circle shown
+  assert.deepEqual(circleLink(r, 'postPurchase:0', 'amber'), { list_id: ['81'], evergreen: 'true' });
+  assert.deepEqual(circleLink(r, 'sku', 'grey'), { list_id: ['90'], evergreen: 'true' });
+  assert.deepEqual(circleLink(r, 'reengagement:180', 'grey'), { id: ['481'], evergreen: 'all' });
+  assert.deepEqual(circleLink(r, 'reengagement:270', 'red'), { list_id: ['49'], evergreen: 'all' });
+  assert.equal(circleLink(r, 'welcome:2', 'red'), null);
+  // Sort by the stored leaf state.
+  assert.equal(sortValue(r, 'welcome:5'), 1);
+  assert.equal(sortValue(r, 'welcome:2'), 2);
+  assert.equal(sortValue(r, 'welcome:0'), 0);
+  // The fallback: an old-shape doc (no three-key counts) renders exactly as before D9.
+  const [old] = shapeRows([{ brand: 'ruze', usage: usage() }]);
+  assert.deepEqual(cell(old, 'welcome:0', t).circles, [{ color: 'green', n: 1 }]);
+  assert.deepEqual(cell(old, 'welcome:2', t).circles, [{ color: 'red', n: 0 }]);
+  const oldStep = {
+    days: 180, queue: 1, listId: 48, state: 'idle', circle: { color: 'amber', n: 1 }, campaigns: [], waiting: null, byLang: {}, uncovered: ['fr'],
+  };
+  const oldRe = shapeRows([{ brand: 'ruze', usage: usage({ reengagement: { steps: [oldStep] } }) }])[0];
+  assert.deepEqual(cell(oldRe, 'reengagement:180', t).circles, [{ color: 'amber', n: 1, name: 'dashboard.usage.reCircleAttention' }]);
+  // The new strings exist.
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en['dashboard.usage.circleIdle'], '{n} paused');
+  ['dashboard.usage.circleDraft', 'dashboard.usage.legendDraft'].forEach((k) => assert.equal(typeof en[k], 'string', k));
 });

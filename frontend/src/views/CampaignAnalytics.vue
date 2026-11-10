@@ -167,6 +167,14 @@
       </div>
     </section>
 
+    <!-- Integrations DOC-ALIGNMENT-SPEC D7 (lifecycle item 13: the skipped count stays on the
+         campaign's analytics) -- each selected campaign's Smart Sending skips, rendered by the
+         Campaign Matrix's own cell (a journey '—', a switched-off broadcast "off"). Display only. -->
+    <p v-if="skippedRows.length" class="is-size-7 mt-5 analytics-skipped" data-cy="analytics-skipped">
+      <span class="has-text-weight-bold" :title="$t('campaigns.skippedHelp')">{{ $t('campaigns.skipped') }}</span>
+      <span v-for="s in skippedRows" :key="s.id" class="ml-3" :data-cy="`analytics-skipped-${s.id}`">{{ s.name }}: {{ s.text }}</span>
+    </p>
+
     <section class="charts mt-5">
       <div class="chart" v-for="(v, k) in charts" :key="k">
         <div class="columns">
@@ -357,6 +365,7 @@ import {
   ANALYTICS_PANE_PREF, initialAnalyticsPane, readPane, writePane,
 } from '../paneState.mjs'; // eslint-disable-line import/extensions
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
+import { analyticsSkippedRows } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
 // Fork (shop-link header total, 2026-10-19) -- shopLinks joins the rate headers: the shop-link
@@ -410,6 +419,9 @@ export default Vue.extend({
       // read where the user may read the campaign; absent = brand underivable.
       lastQuery: null,
       prefillLists: {},
+      // Integrations DOC-ALIGNMENT-SPEC D7 -- the prefilled campaigns' GET /api/campaigns/:id
+      // objects, by id (read only where the user may read the campaign).
+      campaignObjs: {},
 
       // Data for each view.
       counts: {
@@ -986,6 +998,12 @@ export default Vue.extend({
       return (this.$i18n && this.$i18n.locale) || 'en';
     },
 
+    // Integrations DOC-ALIGNMENT-SPEC D7 -- the Skipped figure per selected campaign, through the
+    // Campaign Matrix's own cell function (campaignMatrix.mjs::analyticsSkippedRows).
+    skippedRows() {
+      return analyticsSkippedRows(this.form.campaigns, this.campaignObjs, (n) => this.$utils.formatNumber(n), (k, p) => this.$t(k, p));
+    },
+
     // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6/D7) -- the toggle's model: the only
     // writer of the analytics.shopLinksView pref; a change re-shapes the kept rows (no refetch).
     shopLinksViewModel: {
@@ -1187,6 +1205,11 @@ export default Vue.extend({
           this.form.campaigns.forEach((c) => {
             this.$api.getCampaignQuiet(c.id).then((full) => {
               this.$set(this.prefillLists, c.id, (full && full.lists) || []);
+              // Integrations DOC-ALIGNMENT-SPEC D7 -- the same read carries skipped / evergreen /
+              // smart_sending for the Skipped figure (campaignMatrix.mjs::analyticsSkippedCell).
+              if (full) {
+                this.$set(this.campaignObjs, c.id, full);
+              }
             }).catch(() => {});
           });
         }

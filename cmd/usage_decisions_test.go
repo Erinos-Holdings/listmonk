@@ -295,9 +295,18 @@ func TestPostRefusals(t *testing.T) {
 		return string(b)
 	}
 	long := strings.Repeat("é", 2001)
-	// An item that still carries a "Recommended:" line (item 13 lost its when Smart Sending was
+	// An item that carries a "Recommended:" line (item 13 lost its when Smart Sending was
 	// implemented, integrations SMART-SENDING-SPEC D8; item 12 when the overlap monitor shipped,
-	// BRAND-OVERLAP-SPEC D4).
+	// BRAND-OVERLAP-SPEC D4; item 7, the last, when Ruze's 15-day step was found done, integrations
+	// DOC-ALIGNMENT-SPEC D11). No shipped item has one now, so the three-choice path runs on item 7
+	// given one in memory, with its acknowledging changelog entry (the file is untouched).
+	for i := range a.decisionDoc.Items {
+		if a.decisionDoc.Items[i].Key == "np-ruze-15d" {
+			ed := &a.decisionDoc.Items[i]
+			ed.Text += "\nRecommended: a test-only option for the three-choice path."
+			ed.Changelog = append(append([]decisions.Change(nil), ed.Changelog...), decisions.Change{Date: "2026-11-10", Source: "page", Line: "Test only.", Hash: decisions.Hash(ed.Text)})
+		}
+	}
 	rec, _ := a.decisionDoc.Find("np-ruze-15d")
 	recHash := decisions.Hash(rec.Text)
 	cases := []struct {
