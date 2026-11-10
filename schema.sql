@@ -1127,3 +1127,93 @@ RETURNS TABLE (subscriber_id INT, last_click_at TIMESTAMPTZ, last_view_at TIMEST
     SELECT COALESCE(k.subscriber_id, v.subscriber_id), k.at, v.at
     FROM clicks k FULL OUTER JOIN views v ON (v.subscriber_id = k.subscriber_id);
 $$ LANGUAGE sql STABLE;
+
+-- Fork (hold scope, integrations listmonk/HOLD-SCOPE-SPEC D1-D3). Mirrored in
+-- internal/migrations/v6.2.35.go (keep the two identical).
+--
+-- brand_hold_rows: the ONE definition of the brand-wide hold. For campaign p_campaign_id, the
+-- (campaign list, subscriber) pairs whose row on that list does NOT qualify the subscriber because
+-- they are held (status unsubscribed + meta.hold, any reason, a final hold included) on ANY
+-- non-transactional list of the same brand tag. Only a regular, non-evergreen campaign; a
+-- transactional campaign list, an untagged one and a re-engagement queue (reengage:<id>:<1-4>) are
+-- exempt (no rows). The five audience readers (next-campaigns, next-campaign-subscribers,
+-- get-campaign-lang-audience, snapshot-campaign-shop-link-audience, get-campaign-attrib-coverage)
+-- drop a list row found here, so a subscriber still qualifying through another list of the
+-- campaign stays in. Nothing is written. Dark unless the settings row app.brand_hold_scope is the
+-- JSONB true -- an uncorrelated scalar subquery (a one-time filter), so a dark rule scans nothing.
+-- The key is deliberately NOT a field of the Go settings struct.
+INSERT INTO settings (key, value) VALUES ('app.brand_hold_scope', 'false') ON CONFLICT DO NOTHING;
+CREATE OR REPLACE FUNCTION brand_hold_rows(p_campaign_id INT)
+RETURNS TABLE (list_id INT, subscriber_id INT) AS $$
+    SELECT x.id, h.subscriber_id
+    FROM campaigns c
+    JOIN campaign_lists cl ON (cl.campaign_id = c.id)
+    JOIN lists x ON (x.id = cl.list_id)
+    JOIN lists n ON (n.transactional = FALSE AND list_brand_tag(n.tags) = list_brand_tag(x.tags))
+    JOIN subscriber_lists h ON (h.list_id = n.id AND h.status = 'unsubscribed' AND h.meta ? 'hold')
+    WHERE c.id = p_campaign_id AND c.type = 'regular' AND c.evergreen = FALSE
+        AND x.transactional = FALSE AND list_brand_tag(x.tags) IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM UNNEST(x.tags) AS t WHERE t ~ '^reengage:[0-9]+:[1-4]$')
+        AND (SELECT st.value FROM settings st WHERE st.key = 'app.brand_hold_scope') = 'true'::JSONB;
+$$ LANGUAGE sql STABLE;
+
+-- brand_eligible_sends: the six broadcasts counted as sent, across the brand. Per member of
+-- p_list_id (subscription_engagement's members and anchor exactly), the number of DISTINCT finished
+-- regular non-evergreen campaigns started after the anchor, at or above the member's id cap, in the
+-- member's language or none, with no send failure and no Smart Sending skip for the member, that
+-- went to a non-transactional list X which is p_list_id itself, or carries p_list_id's brand tag
+-- and holds a row for the member qualifying under X's opt-in rule today (confirmed; on a single
+-- opt-in list, not unsubscribed) created at or before the campaign's start. An untagged p_list_id
+-- counts its own campaigns only. first_eligible_send_at is the earliest counted start. Read by the
+-- ListmonkSunset predicates only under its SUNSET_COUNT_BRAND switch; subscription_engagement is
+-- unchanged.
+CREATE OR REPLACE FUNCTION brand_eligible_sends(p_list_id INT)
+RETURNS TABLE (subscriber_id INT, eligible_sends BIGINT, first_eligible_send_at TIMESTAMPTZ) AS $$
+    WITH members AS (
+        SELECT sl.subscriber_id, GREATEST(COALESCE(sl.confirmed_at, sl.created_at), COALESCE((sl.meta->'hold_released'->>'at')::TIMESTAMPTZ, '-infinity'::TIMESTAMPTZ)) AS anchor_at,
+            COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') AS lang
+        FROM subscriber_lists sl JOIN subscribers s ON (s.id = sl.subscriber_id)
+        WHERE sl.list_id = p_list_id AND sl.status = 'confirmed' AND s.status <> 'blocklisted'
+    ),
+    brand_lists AS (
+        SELECT x.id, x.optin FROM lists x
+        WHERE x.transactional = FALSE
+            AND (x.id = p_list_id
+                OR (list_brand_tag(x.tags) IS NOT NULL
+                    AND list_brand_tag(x.tags) = (SELECT list_brand_tag(b.tags) FROM lists b WHERE b.id = p_list_id)))
+    ),
+    camps AS (
+        SELECT c.id, c.started_at, c.max_subscriber_id, c.attribs->>'lang' AS lang, cl.list_id
+        FROM campaigns c JOIN campaign_lists cl ON (cl.campaign_id = c.id)
+        WHERE c.type = 'regular' AND c.status = 'finished' AND c.evergreen = FALSE
+            AND cl.list_id IN (SELECT id FROM brand_lists)
+    ),
+    reach AS (
+        SELECT c.id AS campaign_id, c.started_at, c.max_subscriber_id, c.lang, m.subscriber_id, m.anchor_at, m.lang AS sub_lang
+        FROM camps c JOIN members m ON (TRUE)
+        WHERE c.list_id = p_list_id
+        UNION
+        SELECT c.id, c.started_at, c.max_subscriber_id, c.lang, m.subscriber_id, m.anchor_at, m.lang
+        FROM members m
+        JOIN subscriber_lists r ON (r.subscriber_id = m.subscriber_id AND r.list_id <> p_list_id)
+        JOIN brand_lists x ON (x.id = r.list_id)
+        JOIN camps c ON (c.list_id = x.id)
+        WHERE r.created_at <= c.started_at
+            AND ((x.optin = 'double' AND r.status = 'confirmed') OR (x.optin <> 'double' AND r.status <> 'unsubscribed'))
+    ),
+    counted AS (
+        SELECT e.subscriber_id, e.campaign_id, e.started_at
+        FROM reach e
+        WHERE e.started_at > e.anchor_at
+            AND e.subscriber_id <= e.max_subscriber_id
+            AND (e.lang IS NULL OR e.sub_lang = e.lang)
+            AND NOT EXISTS (SELECT 1 FROM campaign_send_failures f
+                WHERE f.campaign_id = e.campaign_id AND f.subscriber_id = e.subscriber_id)
+            AND NOT EXISTS (SELECT 1 FROM campaign_smart_skips k
+                WHERE k.campaign_id = e.campaign_id AND k.subscriber_id = e.subscriber_id)
+    )
+    SELECT m.subscriber_id, COUNT(DISTINCT k.campaign_id), MIN(k.started_at)
+    FROM members m
+    LEFT JOIN counted k ON (k.subscriber_id = m.subscriber_id)
+    GROUP BY m.subscriber_id;
+$$ LANGUAGE sql STABLE;

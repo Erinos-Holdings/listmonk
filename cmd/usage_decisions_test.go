@@ -333,7 +333,8 @@ func TestPostRefusals(t *testing.T) {
 		{"note over 2,000 characters", approver, "np-entry", body(hash, "reject", long), 400, a.i18n.T("decisions.noteTooLong")},
 		{"malformed body", approver, "np-entry", `{`, 400, ""},
 		// 2026-10-31 polish: a decision outside the item's choices (decisions.Choices). np-entry has
-		// no "Recommended:" line (Accept | Reject); np-ruze-15d has one (Current | Recommended | Reject).
+		// no "Recommended:" line (Accept | Reject); np-ruze-15d is given one in memory above (Current |
+		// Recommended | Reject) -- the shipped item carries none.
 		{"current on an item without a Recommended", approver, "np-entry", body(hash, "current", nil), 400, a.i18n.T("decisions.badDecision")},
 		{"recommended on an item without a Recommended", approver, "np-entry", body(hash, "recommended", nil), 400, a.i18n.T("decisions.badDecision")},
 		{"accept on an item with a Recommended", approver, "np-ruze-15d", body(recHash, "accept", nil), 400, a.i18n.T("decisions.badDecision")},

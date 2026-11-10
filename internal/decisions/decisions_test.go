@@ -134,12 +134,13 @@ func TestItemsShape(t *testing.T) {
 // (integrations DOC-ALIGNMENT-SPEC D10/D11/D14, no reapprove): "page#10" = a page entry carrying a
 // text hash dated 2026-11-10 (items 7, 9, 15, 18, 19); "page10" = a HASH-LESS page entry dated
 // 2026-11-10 -- item 7's History clarifier (how the 15-day step was transitioned), before its
-// hash-bearing "Implemented" entry.
+// hash-bearing "Implemented" entry. The same day (integrations HOLD-SCOPE-SPEC D7, no reapprove)
+// one more "page#10" on items 4, 12, 13 and 18 -- item 13's after its decision entry.
 var shippedLineage = map[string][]string{
 	"np-entry":            {"slack", "page#", "page#", "page#9"},
 	"np-exit-on-purchase": {"page#9"},
 	"np-same-day-double":  {"page#"},
-	"np-launch-overlap":   {"page#", "page#9"},
+	"np-launch-overlap":   {"page#", "page#9", "page#10"},
 	"np-no-restarts":      {"page#", "page#9"},
 	// Integrations BRAND-UNSUBSCRIBE-SPEC A13 (2026-11-09): item 6 broadened from the newsletter
 	// list to the brand, item 21's ask sentence scoped to "on that consent".
@@ -147,11 +148,11 @@ var shippedLineage = map[string][]string{
 	"np-ruze-15d":          {"page#9", "page10", "page#10"},
 	"pp-delivery-clock":    {"slack", "page#", "page#10"},
 	"pp-returning-thanks":  {"page#"},
-	"both-multi-brand":     {"page#"},
-	"both-per-brand":       {"slack", "page#", "relayed", "page", "page#", "page#", "page#9", "page9"},
+	"both-multi-brand":     {"page#", "page#10"},
+	"both-per-brand":       {"slack", "page#", "relayed", "page", "page#", "page#", "page#9", "page9", "page#10"},
 	"sp-scope":             {"page#9", "page#10"},
 	"sp-engagement":        {"page#9"},
-	"sp-hold":              {"page#9", "page#10"},
+	"sp-hold":              {"page#9", "page#10", "page#10"},
 	"sp-asks":              {"page#8", "page#9", "page#10"},
 	"sp-coming-back":       {"page#9", "page#9", "page#9"},
 	"sp-suppressed":        {"reject-note", "page#8", "page#9", "page#9"},
@@ -249,12 +250,20 @@ func TestSmartSendingItem(t *testing.T) {
 	if m := Modified(it, Hash(it.Text)); m != nil {
 		t.Fatalf("Modified(current text) = %+v", m)
 	}
+	// Integrations HOLD-SCOPE-SPEC D7: the last entry is the 2026-11-10 clarification (the 2-hour
+	// grace, "off" never hiding a recorded count) -- hash-bearing, no callout, no reapprove -- and the
+	// D12 decision entry is second-to-last.
 	last := it.Changelog[len(it.Changelog)-1]
-	if last.Date != "2026-11-09" || last.Source != "page" || last.Line != smartSendingDecisionLine ||
-		last.Hash != "" || last.Who != "" || last.Reapprove || last.Callout != "" {
-		t.Fatalf("item 13's last entry %+v, want the D12 decision entry", last)
+	if last.Date != "2026-11-10" || last.Source != "page" || last.Hash != Hash(it.Text) ||
+		last.Who != "" || last.Reapprove || last.Callout != "" {
+		t.Fatalf("item 13's last entry %+v, want the HOLD-SCOPE D7 entry", last)
 	}
-	// The newest hash-bearing entry still carries the text's hash (the text did not change).
+	dec := it.Changelog[len(it.Changelog)-2]
+	if dec.Date != "2026-11-09" || dec.Source != "page" || dec.Line != smartSendingDecisionLine ||
+		dec.Hash != "" || dec.Who != "" || dec.Reapprove || dec.Callout != "" {
+		t.Fatalf("item 13's second-to-last entry %+v, want the D12 decision entry", dec)
+	}
+	// The newest hash-bearing entry carries the text's hash.
 	var newest Change
 	for _, c := range it.Changelog {
 		if c.Hash != "" {
@@ -295,21 +304,22 @@ func TestOverlapItem(t *testing.T) {
 		t.Fatalf("Modified(current text) = %+v", m)
 	}
 	last := it.Changelog[len(it.Changelog)-1]
-	if last.Hash != Hash(it.Text) || last.Hash != "722f28bf2b4f6410a62749023ac971f4c3f56b1d701754d81dc92ca40a4c1054" {
+	if last.Hash != Hash(it.Text) || last.Hash != "a7603cf7ee506600ae9041116ce1fbb0dd349eb8575ba6d20893b541e88186ae" {
 		t.Fatalf("item 12's last entry hash %q, text hash %q", last.Hash, Hash(it.Text))
 	}
-	const callout = "Monitoring is in place (2026-11-07): the hourly brand health run measures the overlap; the Dashboard's SES account pane shows it with the 12% review and 15% cap-trigger lines, and #integrations-alerts is paged when it crosses 15% from a known reading (the Dashboard shows the live figure in any case)."
-	if last.Callout != callout {
-		t.Fatalf("item 12's last entry callout %q", last.Callout)
+	// Integrations HOLD-SCOPE-SPEC D7: the 2026-11-10 entry repeats the monitoring callout with
+	// "reaches 15%" (only the newest entry's callout renders); the 2026-11-07 entry keeps its own
+	// (history is not edited).
+	const callout = "Monitoring is in place (2026-11-07): the hourly brand health run measures the overlap; the Dashboard's SES account pane shows it with the 12% review and 15% cap-trigger lines, and #integrations-alerts is paged when it reaches 15% from a known reading (the Dashboard shows the live figure in any case)."
+	if last.Callout != callout || last.Date != "2026-11-10" {
+		t.Fatalf("item 12's last entry %s callout %q", last.Date, last.Callout)
 	}
 	v := ItemOf(it, nil)
 	if c := v.Changelog[len(v.Changelog)-1].Callout; c != callout {
 		t.Fatalf("the GET's last entry callout = %q", c)
 	}
-	for i, c := range v.Changelog[:len(v.Changelog)-1] {
-		if c.Callout != "" {
-			t.Fatalf("entry %d carries a callout: %q", i, c.Callout)
-		}
+	if prev := it.Changelog[len(it.Changelog)-2]; prev.Date != "2026-11-07" || !strings.Contains(prev.Callout, "when it crosses 15%") {
+		t.Fatalf("item 12's 2026-11-07 entry %+v, want its own callout kept", prev)
 	}
 }
 

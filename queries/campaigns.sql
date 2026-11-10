@@ -326,6 +326,12 @@ aud AS (
     -- max_subscriber_id, status and freeze are not this query's business; its
     -- started_at is stamped by update-campaign-status at the API start instead.
     WHERE NOT camps.evergreen
+        -- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- a list row of a subscriber held on
+        -- any non-transactional list of that list's brand does not qualify (brand_hold_rows, the
+        -- one definition; dark unless app.brand_hold_scope is true). Not a Smart Sending skip -- no
+        -- campaign_smart_skips row, simply not in the audience.
+        AND NOT EXISTS (SELECT 1 FROM brand_hold_rows(camps.id) bh
+            WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id)
 ),
 -- Fork (smart sending, D1/D2) -- the skip set is decided HERE, once per claim, and recorded. skips =
 -- the audience rows brand_journey_skips also returns for that campaign (the one definition of both
@@ -716,6 +722,9 @@ aud AS (
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
     CROSS JOIN UNNEST($2::TEXT[]) AS b(brand)
+    -- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- the claim's brand-hold rule, so no
+    -- recipient row is written for someone the claim never sends to.
+    WHERE NOT EXISTS (SELECT 1 FROM brand_hold_rows($1::INT) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id)
 ),
 r AS (
     INSERT INTO campaign_shop_link_recipients (campaign_id, subscriber_id, brand, kind)
@@ -803,9 +812,11 @@ INSERT INTO journey_due (source, list_id, subscriber_id, expected_at)
 -- Fork (smart sending look-ahead, D6/D7) -- the dark proof and the feed-freshness read. lookahead is
 -- the switch as brand_journey_due_24h reads it (true only for the JSONB true; an absent row is
 -- false); feeds are the retained (source, expected_at) groups with their row counts. No subscriber
--- ids.
+-- ids. Fork (hold scope, integrations HOLD-SCOPE-SPEC D2) -- brand_hold is the brand-wide hold switch
+-- as brand_hold_rows reads it (true only for the JSONB true).
 SELECT JSON_BUILD_OBJECT(
     'lookahead', COALESCE((SELECT st.value = 'true'::JSONB FROM settings st WHERE st.key = 'app.smart_sending_lookahead'), FALSE),
+    'brand_hold', COALESCE((SELECT st.value = 'true'::JSONB FROM settings st WHERE st.key = 'app.brand_hold_scope'), FALSE),
     'feeds', COALESCE((
         SELECT JSON_AGG(JSON_BUILD_OBJECT('source', f.source, 'expected_at', f.expected_at,
             'rows', f.n, 'created_at', f.created_at) ORDER BY f.expected_at, f.source)
@@ -1209,6 +1220,9 @@ subs AS (
             -- recorded as a Smart Sending skip. The recorded set only, nothing re-evaluated per batch, so
             -- the claim's to_send and the batches agree by construction (hazard 56, sent == to_send).
             AND NOT EXISTS (SELECT 1 FROM campaign_smart_skips k WHERE k.campaign_id = $1 AND k.subscriber_id = s.id)
+            -- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- the claim's brand-hold rule, the
+            -- same function, per list row.
+            AND NOT EXISTS (SELECT 1 FROM brand_hold_rows($1) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = s.id)
             AND (
                 -- If it's an optin campaign and the list is double-optin, only pick unconfirmed subscribers.
                 ($2 = 'optin' AND sl.status = 'unconfirmed' AND campLists.optin = 'double')
@@ -1286,7 +1300,9 @@ SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
         )
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
-    LEFT JOIN jsends j ON (j.subscriber_id = sl.subscriber_id);
+    LEFT JOIN jsends j ON (j.subscriber_id = sl.subscriber_id)
+    -- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- the claim's brand-hold rule.
+    WHERE NOT EXISTS (SELECT 1 FROM brand_hold_rows($1) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id);
 
 -- name: get-evergreen-sent-split
 -- Fork (campaign-page audience box). Of the subscribers evergreen campaign $1 has SENT to
@@ -1331,6 +1347,8 @@ audience AS (
         )
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
+    -- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- the claim's brand-hold rule.
+    WHERE NOT EXISTS (SELECT 1 FROM brand_hold_rows($1) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id)
 )
 SELECT COUNT(*) FILTER (WHERE missing) AS missing, COUNT(*) AS total FROM audience;
 

@@ -41,7 +41,8 @@ export const GAP_FIELDS = Object.freeze(['gmail_open', 'yahoo_open', 'gmail_gap'
 export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'sent', 'skipped', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
 
 // Integrations SMART-SENDING-SPEC D5 -- the Skipped cell's text on a broadcast that switched Smart
-// Sending off (its count is 0 by construction and still sorts as one).
+// Sending off and recorded no skips (it still sorts as its count, 0); one that recorded skips before
+// it was switched off shows the count (HOLD-SCOPE-SPEC D6).
 // The Skipped cell's text on a broadcast that switched Smart Sending off: an i18n key, resolved by
 // cellText's `t` (the page passes $t; tests a stub).
 export const SMART_OFF_KEY = 'analytics.matrix.off';
@@ -491,7 +492,9 @@ export function cellText(row, field, mode, fmt = (n) => String(n), usd = (n) => 
   if (gapPending(row, field)) {
     return PENDING_MARK;
   }
-  if (field === 'skipped' && row && row.smartOff && !row.totals) {
+  // Integrations HOLD-SCOPE-SPEC D6 -- "off" only when the campaign is switched off AND recorded no
+  // skips: one switched off part-way through a send (skips recorded, paused, then off) shows its count.
+  if (field === 'skipped' && row && row.smartOff && !row.totals && !(typeof row.skipped === 'number' && row.skipped > 0)) {
     return t(SMART_OFF_KEY);
   }
   const v = displayValue(row, field, mode);

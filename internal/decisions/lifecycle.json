@@ -87,7 +87,7 @@
       "key": "np-launch-overlap",
       "section": "no-purchase",
       "n": 4,
-      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Smart Sending (item 13) withholds a brand's broadcast from anyone who received one of its journey emails in the last 24 hours or has a journey step due in the next 24 hours, so someone part-way through the Welcome series doesn't get a step and a launch on the same day; on other days they receive both, by design.\nKeep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform.",
+      "text": "Frequency Risk: Monthly launch overlap (your W04 question). Smart Sending (item 13) withholds a brand's broadcast from anyone who received one of its journey emails in the last 24 hours or has a journey step due in the next 24 hours (a step up to 2 hours overdue still counts), so someone part-way through the Welcome series doesn't get a step and a launch on the same day; on other days they receive both, by design.\nKeep the step emails distinct and evergreen (don't restate the month's launches in W04), so there is nothing to duplicate. That is the only practical way to maintain multi-brand, multi-language campaigns at this scale — for the people writing them even more than for the platform.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -107,6 +107,12 @@
           "source": "page",
           "line": "The 24 hours run both ways, as intended: a step due in the next 24 hours also withholds the broadcast; was \"in the last 24 hours\".",
           "hash": "0c23531254d632b5430175bf62f182025f43aaaa4a68eda9377854f228b5bf17"
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "The look-ahead also covers a step up to 2 hours overdue, as built.",
+          "hash": "87e56f537d07c7e0fb93ca427ad6514e673b97cc1288e4de1bb58e1ac6c73c9f"
         }
       ]
     },
@@ -278,7 +284,7 @@
       "key": "both-multi-brand",
       "section": "both",
       "n": 12,
-      "text": "Frequency Risk: Multiple brands. Overlap is small: about 5% of active newsletter subscribers are on two or more brands' lists and under 1% on three or more (the live figure is on the Dashboard's SES account pane). The industry pattern is a per-person cap by message class, with journeys and transactional email exempt.\nA per-person cap is added only if overlap grows past 15%. For broadcasts it will skip, never defer: someone who already got one brand's broadcast that day is skipped from the second brand's, not pushed to the next day, with the tiebreak going to the brand they engage with more. (Klaviyo Smart Sending skips the same way: 16-hour default, per account, no cross-brand awareness.)",
+      "text": "Frequency Risk: Multiple brands. Overlap is small: about 5% of active newsletter subscribers are on two or more brands' lists and under 1% on three or more (the live figure is on the Dashboard's SES account pane). The industry pattern is a per-person cap by message class, with journeys and transactional email exempt.\nA per-person cap is added only if overlap reaches 15%. For broadcasts it will skip, never defer: someone who already got one brand's broadcast that day is skipped from the second brand's, not pushed to the next day, with the tiebreak going to the brand they engage with more. (Klaviyo Smart Sending skips the same way: 16-hour default, per account, no cross-brand awareness.)",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -293,6 +299,13 @@
           "line": "The policy stated as standing (no longer a recommendation); the one-off 4.7% replaced by the live measure; was \"Overlap today is small: 4.7% … Recommended: Add a per-person cap only if …\".",
           "hash": "722f28bf2b4f6410a62749023ac971f4c3f56b1d701754d81dc92ca40a4c1054",
           "callout": "Monitoring is in place (2026-11-07): the hourly brand health run measures the overlap; the Dashboard's SES account pane shows it with the 12% review and 15% cap-trigger lines, and #integrations-alerts is paged when it crosses 15% from a known reading (the Dashboard shows the live figure in any case)."
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "\"Reaches 15%\", as the monitor triggers; was \"grows past 15%\".",
+          "hash": "a7603cf7ee506600ae9041116ce1fbb0dd349eb8575ba6d20893b541e88186ae",
+          "callout": "Monitoring is in place (2026-11-07): the hourly brand health run measures the overlap; the Dashboard's SES account pane shows it with the 12% review and 15% cap-trigger lines, and #integrations-alerts is paged when it reaches 15% from a known reading (the Dashboard shows the live figure in any case)."
         }
       ]
     },
@@ -300,7 +313,7 @@
       "key": "both-per-brand",
       "section": "both",
       "n": 13,
-      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, two No-purchase steps and every broadcast the brand sends in their first 5 days — up to five emails in five days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nSmart Sending. Per brand, broadcasts only: a broadcast skips anyone who received a journey email from the same brand in the last 24 hours or has a journey step due in the next 24 hours, decided when the send starts. The campaign page shows how many it would skip before Start, and the skipped count stays on the campaign's analytics and the Campaign Matrix. Journeys are exempt: one-shot and time-bound. Marketing can switch Smart Sending off per campaign for a major launch or a time-sensitive promotion; the Matrix shows \"off\" on such a campaign. (Klaviyo Smart Sending skips the same way, with the same per-campaign switch.)\nThe same-day double (item 3) is fixed: the one stack that hit every checkout opt-in. Sunset stays the backstop; complaint rates in Brand Health show fatigue first.",
+      "text": "Frequency Risk: Per brand. This is where the real frequency risk is (broadcast cadence + two series). A new non-buyer can get the welcome, two No-purchase steps and every broadcast the brand sends in their first 5 days — up to five emails in five days — and a new buyer gets the same shape from the New Customer series. Journeys alone are fine; it's journey steps stacking on broadcasts that creates the concern.\nSmart Sending. Per brand, broadcasts only: a broadcast skips anyone who received a journey email from the same brand in the last 24 hours or has a journey step due in the next 24 hours (a step up to 2 hours overdue still counts), decided when the send starts. The campaign page shows how many it would skip before Start, and the skipped count stays on the campaign's analytics and the Campaign Matrix. Journeys are exempt: one-shot and time-bound. Marketing can switch Smart Sending off per campaign for a major launch or a time-sensitive promotion; the Matrix shows \"off\" on such a campaign (or its skipped count, when it was switched off part-way through a send). (Klaviyo Smart Sending skips the same way, with the same per-campaign switch.)\nThe same-day double (item 3) is fixed: the one stack that hit every checkout opt-in. Sunset stays the backstop; complaint rates in Brand Health show fatigue first.",
       "changelog": [
         {
           "date": "2026-11-01",
@@ -357,6 +370,12 @@
           "date": "2026-11-09",
           "source": "page",
           "line": "Decided 2026-11-09: when Marketing switches Smart Sending off for a campaign, everyone receives it and that day's journey steps still send; the same-day double is accepted and is Marketing's call. The journey-side rule (the daily sweep yielding to a scheduled broadcast) is retired and will not be built. The look-ahead half is built by SMART-SENDING-LOOKAHEAD-SPEC."
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "The look-ahead also covers a step up to 2 hours overdue, as built, and \"off\" never replaces a recorded skip count.",
+          "hash": "8f6c1fa1f778dab44571b18fbd73bbe57c2b8d7877caca7cff11087f5558cfd1"
         }
       ]
     },
@@ -442,7 +461,7 @@
       "key": "sp-hold",
       "section": "sunset-policy",
       "n": 18,
-      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago (the default window, item 17) and the brand has sent them at least 6 broadcasts since they signed up or last returned from a hold (counted from then, not from their last engagement), they stop getting its regular sends. Every new engagement restarts the window. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list.",
+      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago (the default window, item 17) and the brand has sent them at least 6 broadcasts since they signed up or last returned from a hold (counted from then, not from their last engagement; a broadcast Smart Sending skipped them from is not counted), they stop getting its regular sends, on every list of the brand (its re-engagement lists aside). Every new engagement restarts the window. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list. Someone whose first counted broadcast went out before the brand's sunset start date is never held by this rule, unless they unsubscribe and later sign up again.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -462,6 +481,12 @@
           "source": "page",
           "line": "The six broadcasts are counted from sign-up or the last return from a hold, as the rule counts them; was \"at least 6 broadcasts since\".",
           "hash": "4a927e4f0278a7d14a5b384fe9db7f6e19a0bc959d44dc93eb4472270e8968af"
+        },
+        {
+          "date": "2026-11-10",
+          "source": "page",
+          "line": "States what the rule does: a hold covers every list of the brand; a broadcast Smart Sending skipped is not counted; and the sunset start-date condition.",
+          "hash": "7efa1f5c6793d8c0b79515211b3bcb177e64f0ee209dcdcc5133be48e743855e"
         }
       ]
     },

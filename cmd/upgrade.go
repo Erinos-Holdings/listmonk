@@ -113,6 +113,8 @@ var migList = []migFunc{
 	{"v6.2.33", migrations.V6_2_33},
 	// Fork migration (erinos): one engagement definition -- brand_engagement (per subscriber, the newest click, Manage Preferences links excluded, and the newest Gmail-proxy view on any campaign of any list of the brand; the ListmonkSunset brand-mode predicates' one engagement function) (DOC-ALIGNMENT-SPEC D2) — see internal/migrations/v6.2.34.go.
 	{"v6.2.34", migrations.V6_2_34},
+	// Fork migration (erinos): hold scope -- the app.brand_hold_scope switch row, inserted false; brand_hold_rows (the ONE brand-wide hold definition, read by the five broadcast audience readers while the switch is the JSONB true) and brand_eligible_sends (the sunset rule's broadcasts counted as sent across the brand, Smart Sending skips excluded; read by ListmonkSunset only under SUNSET_COUNT_BRAND) (HOLD-SCOPE-SPEC) — see internal/migrations/v6.2.35.go.
+	{"v6.2.35", migrations.V6_2_35},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

@@ -45,8 +45,10 @@ func (c *Core) ReplaceJourneyDue(source string, expectedAt time.Time, listIDs, s
 	return n, nil
 }
 
-// GetJourneyDueFeeds returns {lookahead, feeds: [{source, expected_at, rows, created_at}]} -- the
-// switch as the look-ahead function reads it, and the retained feeds' counts. No subscriber ids.
+// GetJourneyDueFeeds returns {lookahead, brand_hold, feeds: [{source, expected_at, rows, created_at}]}
+// -- the look-ahead switch as the look-ahead function reads it, the brand-wide hold switch as
+// brand_hold_rows reads it (integrations HOLD-SCOPE-SPEC D2), and the retained feeds' counts. No
+// subscriber ids.
 func (c *Core) GetJourneyDueFeeds() (types.JSONText, error) {
 	var out types.JSONText
 	if err := c.q.GetJourneyDueFeeds.Get(&out); err != nil {

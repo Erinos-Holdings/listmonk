@@ -602,6 +602,21 @@ test('SMART-SENDING I8: Skipped shows the count, "off" for a bypass, — for a j
   ['analytics.matrix.skipped', 'analytics.matrix.skippedHelp'].forEach((k) => assert.ok(en[k], k));
 });
 
+// --- integrations HOLD-SCOPE-SPEC D6 / I12 ---
+
+test('HOLD-SCOPE I12: Skipped reads "off" only with zero recorded skips; switched off with recorded skips shows the count', () => {
+  const fmt = (n) => `n${n}`;
+  const tt = (k) => (k === 'analytics.matrix.off' ? 'off' : k);
+  const offNone = shapeRow({ ...api[0], id: 41, skipped: 0, smart_off: true });
+  const offPartWay = shapeRow({ ...api[0], id: 42, skipped: 7, smart_off: true });
+  assert.equal(cellText(offNone, 'skipped', 'num', fmt, undefined, tt), 'off');
+  assert.equal(cellText(offPartWay, 'skipped', 'num', fmt, undefined, tt), 'n7');
+  assert.equal(cellText(offPartWay, 'skipped', 'pct', fmt, undefined, tt), 'n7', 'a count in %/$ mode, never a rate');
+  // Campaign Analytics uses the same cell and follows.
+  assert.equal(analyticsSkippedCell({ ...api[0], id: 42, evergreen: false, skipped: 7, smart_off: true }, fmt, tt), 'n7');
+  assert.equal(analyticsSkippedCell({ ...api[0], id: 41, evergreen: false, skipped: 0, smart_off: true }, fmt, tt), 'off');
+});
+
 // --- integrations DOC-ALIGNMENT-SPEC D7 / I16 ---
 
 test('DOC-ALIGNMENT I16: the Campaign Analytics Skipped figure is the Matrix cell, from the picker row', () => {

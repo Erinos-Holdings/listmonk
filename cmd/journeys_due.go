@@ -20,7 +20,8 @@ import (
 //       {"source": "series"|"sunset", "expected_at": "<RFC 3339>", "rows": [[list_id, subscriber_id], ...]}.
 //       Replaces exactly (source, expected_at) and drops rows past the retention, in one
 //       transaction. Idempotent.
-//   GET /api/journeys/due  subscribers:get_all -- {"lookahead": <the switch>, "feeds": [...]}, the
+//   GET /api/journeys/due  subscribers:get_all -- {"lookahead": <the switch>, "brand_hold": <the
+//       brand-wide hold switch, integrations HOLD-SCOPE-SPEC D2>, "feeds": [...]}, the
 //       dark proof and the feed-freshness read. No subscriber ids.
 
 const (

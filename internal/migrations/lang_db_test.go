@@ -2,8 +2,9 @@ package migrations
 
 // Fork (erinos multi-language campaigns) -- DB harness for the language predicates in
 // next-campaigns / next-campaign-subscribers / get-campaign-lang-audience, the evergreen
-// language rule (exact for ES/FR/DE/IT, EN = fallback for unknown and unclaimed langs,
-// paused siblings still claim), the widened exclusion set (one welcome per joiner per
+// language rule (the broadcast predicate since integrations LIFECYCLE-SERIES-SPEC D4 -- exact for
+// ES/FR/DE/IT, EN reaches en and no-language subscribers ONLY, no English fallback for any other
+// language), the widened exclusion set (one welcome per joiner per
 // list across languages, cancelled siblings keep excluding) and the lang-aware collision
 // check. Same opt-in harness as evergreen_db_test.go (LISTMONK_TEST_PG).
 

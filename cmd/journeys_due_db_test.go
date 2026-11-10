@@ -195,6 +195,41 @@ func TestJourneyDueEndpoint(t *testing.T) {
 	}
 }
 
+// integrations listmonk/HOLD-SCOPE-SPEC I2b -- GET /api/journeys/due's brand_hold equals what
+// brand_hold_rows does, for the row absent, false, true and the string "true" (the function reads a
+// non-boolean as dark). The fixture is brand_hold_db_test.go's: the segment broadcast has held
+// subscribers, so the function returns rows exactly when the switch is on.
+func TestJourneyDueBrandHold(t *testing.T) {
+	f := newBrandHoldFixture(t)
+	f.h.app.auth = &auth.Auth{}
+	reader := perms("listmonk_agent", auth.PermSubscribersGetAll)
+	for _, tc := range []struct {
+		state string
+		want  bool
+	}{{"absent", false}, {"false", false}, {"true", true}, {`"true"`, false}} {
+		f.switchTo(tc.state)
+		code, body := convCall(t, reader, http.MethodGet, "/api/journeys/due", "", f.h.app.auth.Perm(f.h.app.GetJourneyDue, "subscribers:get_all"))
+		if code != http.StatusOK {
+			t.Fatalf("%s: GET %d %s", tc.state, code, body)
+		}
+		var resp struct {
+			Data struct {
+				BrandHold *bool `json:"brand_hold"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &resp); err != nil || resp.Data.BrandHold == nil {
+			t.Fatalf("%s: no brand_hold boolean in %s (%v)", tc.state, body, err)
+		}
+		var fnOn bool
+		if err := f.h.db.Get(&fnOn, `SELECT EXISTS (SELECT 1 FROM brand_hold_rows($1))`, f.cSeg); err != nil {
+			t.Fatal(err)
+		}
+		if *resp.Data.BrandHold != fnOn || fnOn != tc.want {
+			t.Fatalf("%s: brand_hold %v, the function %v, want %v", tc.state, *resp.Data.BrandHold, fnOn, tc.want)
+		}
+	}
+}
+
 func TestLookaheadSwitchSurvivesSettingsSave(t *testing.T) {
 	h := newLinkHarness(t)
 	h.db.MustExec(`UPDATE settings SET value = 'true' WHERE key = 'app.smart_sending_lookahead'`)

@@ -693,9 +693,22 @@ func TestSunsetV2Predicates_PassTableAllowlist(t *testing.T) {
 		"WHERE anchor_at <= " + cutoff("180") + " AND eligible_sends >= 6 AND first_eligible_send_at >= '2026-08-31T00:00:00Z') " +
 		"AND subscribers.id NOT IN (SELECT subscriber_id FROM " + brandEng(cutoff("180")) + " WHERE last_click_at IS NOT NULL OR last_view_at IS NOT NULL)"
 
+	// integrations HOLD-SCOPE-SPEC D4 / I10: the COUNT-brand texts of lib/sunset.ts (count "brand",
+	// both engagement modes), copied verbatim for the same $L and run start -- brand_eligible_sends
+	// reads campaign_smart_skips, on the allowlist since v6.2.35.
+	counted := "subscribers.id IN (SELECT e.subscriber_id FROM subscription_engagement(" + L + ") e " +
+		"JOIN brand_eligible_sends(" + L + ") n ON n.subscriber_id = e.subscriber_id " +
+		"WHERE e.anchor_at <= " + cutoff("180") + " AND n.eligible_sends >= 6 AND n.first_eligible_send_at >= '2026-08-31T00:00:00Z'"
+	countRule := counted + " AND (e.last_click_at IS NULL OR e.last_click_at <= " + cutoff("180") + ")) " +
+		"AND subscribers.id NOT IN (SELECT v.subscriber_id FROM campaign_views v JOIN campaign_lists cl ON cl.campaign_id = v.campaign_id " +
+		"WHERE cl.list_id = " + L + " AND v.client = 'gmail-proxy' AND v.subscriber_id IS NOT NULL AND v.created_at > " + cutoff("180") + ")"
+	countBrandRule := counted + ") " +
+		"AND subscribers.id NOT IN (SELECT subscriber_id FROM " + brandEng(cutoff("180")) + " WHERE last_click_at IS NOT NULL OR last_view_at IS NOT NULL)"
+
 	for name, pred := range map[string]string{
 		"clickRelease": clickRelease, "viewRelease": viewRelease, "decline": decline, "rule": rule,
 		"brand clickRelease": brandRelease("last_click_at"), "brand viewRelease": brandRelease("last_view_at"), "brand rule": brandRule,
+		"count-brand rule": countRule, "count-brand brand rule": countBrandRule,
 	} {
 		if _, _, err := f.app.core.QuerySubscribers("", pred, nil, "", models.SubscriberFilter{}, "", "", 0, 100); err != nil {
 			t.Fatalf("%s rejected: %v", name, err)

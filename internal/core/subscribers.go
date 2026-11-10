@@ -34,6 +34,10 @@ var (
 		// Fork (sunset v2) -- the evergreen arm of the "ask received" predicate reads the
 		// per-recipient evergreen send log (integrations SUNSET-V2-SPEC D4, §4.3).
 		"campaign_sends": {},
+		// Fork (hold scope) -- brand_eligible_sends(list_id) excludes a Smart Sending skip, so the
+		// sunset count-brand predicate's plan reads it (integrations HOLD-SCOPE-SPEC D3). It
+		// exposes campaign id, subscriber id and the skip's journey/due pair; no content.
+		"campaign_smart_skips": {},
 	}
 )
 

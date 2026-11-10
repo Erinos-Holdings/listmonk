@@ -85,6 +85,9 @@ func TestLookaheadSwitchNotInSettingsStruct(t *testing.T) {
 	for i := 0; i < ty.NumField(); i++ {
 		if tag := strings.Split(ty.Field(i).Tag.Get("json"), ",")[0]; tag == "app.smart_sending_lookahead" {
 			t.Fatalf("models.Settings.%s carries the look-ahead switch", ty.Field(i).Name)
+		} else if tag == "app.brand_hold_scope" {
+			// integrations HOLD-SCOPE-SPEC D2 -- the brand-wide hold switch, the same rule.
+			t.Fatalf("models.Settings.%s carries the brand-hold switch", ty.Field(i).Name)
 		}
 	}
 }
