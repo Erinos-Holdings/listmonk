@@ -111,6 +111,8 @@ var migList = []migFunc{
 	{"v6.2.32", migrations.V6_2_32},
 	// Fork migration (erinos): brand unsubscribe -- brand_marketing_list_ids (the ONE definition of a brand's marketing lists: the brand tag, transactional false) and campaign_brand (the single distinct brand tag over a campaign's lists, NULL when none or several) (BRAND-UNSUBSCRIBE-SPEC) — see internal/migrations/v6.2.33.go.
 	{"v6.2.33", migrations.V6_2_33},
+	// Fork migration (erinos): one engagement definition -- brand_engagement (per subscriber, the newest click, Manage Preferences links excluded, and the newest Gmail-proxy view on any campaign of any list of the brand; the ListmonkSunset brand-mode predicates' one engagement function) (DOC-ALIGNMENT-SPEC D2) — see internal/migrations/v6.2.34.go.
+	{"v6.2.34", migrations.V6_2_34},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

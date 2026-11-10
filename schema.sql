@@ -1090,3 +1090,40 @@ CREATE OR REPLACE FUNCTION campaign_brand(camp_uuid UUID) RETURNS TEXT AS $$
     JOIN lists l ON (l.id = cl.list_id)
     WHERE c.uuid = camp_uuid AND list_brand_tag(l.tags) IS NOT NULL;
 $$ LANGUAGE sql STABLE;
+
+-- Fork (one engagement definition, integrations listmonk/DOC-ALIGNMENT-SPEC D2): per subscriber,
+-- the newest click (not on a link containing p_skip_url -- the Manage Preferences host) and the
+-- newest p_view_client view (the Gmail proxy) after p_since, on any campaign of any list carrying
+-- p_list_id's brand tag (evergreens included); a list with no brand tag yields its own campaigns.
+-- Both arms drop NULL subscriber ids (untracked sends). Read by the ListmonkSunset predicates only
+-- under its SUNSET_ENGAGEMENT_BRAND switch. Mirrored in internal/migrations/v6.2.34.go (keep the
+-- two identical).
+CREATE OR REPLACE FUNCTION brand_engagement(p_list_id INT, p_since TIMESTAMPTZ, p_skip_url TEXT, p_view_client TEXT)
+RETURNS TABLE (subscriber_id INT, last_click_at TIMESTAMPTZ, last_view_at TIMESTAMPTZ) AS $$
+    WITH brand_lists AS (
+        SELECT l.id FROM lists l
+        WHERE l.id = p_list_id
+            OR (list_brand_tag(l.tags) IS NOT NULL
+                AND list_brand_tag(l.tags) = (SELECT list_brand_tag(b.tags) FROM lists b WHERE b.id = p_list_id))
+    ),
+    brand_camps AS (
+        SELECT DISTINCT cl.campaign_id AS id FROM campaign_lists cl WHERE cl.list_id IN (SELECT id FROM brand_lists)
+    ),
+    clicks AS (
+        SELECT k.subscriber_id, MAX(k.created_at) AS at
+        FROM link_clicks k JOIN links lk ON (lk.id = k.link_id)
+        WHERE k.subscriber_id IS NOT NULL AND k.created_at > p_since
+            AND k.campaign_id IN (SELECT id FROM brand_camps)
+            AND (COALESCE(p_skip_url, '') = '' OR STRPOS(lk.url, p_skip_url) = 0)
+        GROUP BY k.subscriber_id
+    ),
+    views AS (
+        SELECT v.subscriber_id, MAX(v.created_at) AS at
+        FROM campaign_views v
+        WHERE v.subscriber_id IS NOT NULL AND v.created_at > p_since AND v.client = p_view_client
+            AND v.campaign_id IN (SELECT id FROM brand_camps)
+        GROUP BY v.subscriber_id
+    )
+    SELECT COALESCE(k.subscriber_id, v.subscriber_id), k.at, v.at
+    FROM clicks k FULL OUTER JOIN views v ON (v.subscriber_id = k.subscriber_id);
+$$ LANGUAGE sql STABLE;

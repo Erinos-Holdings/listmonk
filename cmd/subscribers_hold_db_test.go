@@ -679,7 +679,24 @@ func TestSunsetV2Predicates_PassTableAllowlist(t *testing.T) {
 		"AND subscribers.id NOT IN (SELECT v.subscriber_id FROM campaign_views v JOIN campaign_lists cl ON cl.campaign_id = v.campaign_id " +
 		"WHERE cl.list_id = " + L + " AND v.client = 'gmail-proxy' AND v.subscriber_id IS NOT NULL AND v.created_at > " + cutoff("180") + ")"
 
-	for name, pred := range map[string]string{"clickRelease": clickRelease, "viewRelease": viewRelease, "decline": decline, "rule": rule} {
+	// integrations DOC-ALIGNMENT-SPEC D2 / I7: the BRAND-mode texts of lib/sunset.ts (mode
+	// "brand"), copied verbatim for the same $L and run start; the list-mode texts above stay pinned.
+	brandEng := func(since string) string {
+		return "brand_engagement(" + L + ", " + since + ", 'manage-preferences.curatedfor.you', 'gmail-proxy')"
+	}
+	brandRelease := func(col string) string {
+		return "subscribers.id IN (SELECT e.subscriber_id FROM " + brandEng(cutoff("187")) + " e " +
+			"JOIN subscriber_lists b ON b.subscriber_id = e.subscriber_id AND b.list_id = " + L + " " +
+			"WHERE " + releasable + " AND e." + col + " > (b.meta->'hold'->>'at')::timestamptz)"
+	}
+	brandRule := "subscribers.id IN (SELECT subscriber_id FROM subscription_engagement(" + L + ") " +
+		"WHERE anchor_at <= " + cutoff("180") + " AND eligible_sends >= 6 AND first_eligible_send_at >= '2026-08-31T00:00:00Z') " +
+		"AND subscribers.id NOT IN (SELECT subscriber_id FROM " + brandEng(cutoff("180")) + " WHERE last_click_at IS NOT NULL OR last_view_at IS NOT NULL)"
+
+	for name, pred := range map[string]string{
+		"clickRelease": clickRelease, "viewRelease": viewRelease, "decline": decline, "rule": rule,
+		"brand clickRelease": brandRelease("last_click_at"), "brand viewRelease": brandRelease("last_view_at"), "brand rule": brandRule,
+	} {
 		if _, _, err := f.app.core.QuerySubscribers("", pred, nil, "", models.SubscriberFilter{}, "", "", 0, 100); err != nil {
 			t.Fatalf("%s rejected: %v", name, err)
 		}
@@ -816,4 +833,139 @@ func TestSunsetPredicate_PassesTableAllowlist(t *testing.T) {
 	if _, _, err := f.app.core.QuerySubscribers("", pred, []int{f.brandID}, "", models.SubscriberFilter{}, "", "", 0, 10); err != nil {
 		t.Fatalf("sunset predicate rejected: %v", err)
 	}
+}
+
+// TestBrandEngagement_OneDefinition -- integrations DOC-ALIGNMENT-SPEC D2 / I7: brand_engagement
+// (v6.2.34) is the ONE engagement the brand-mode hold decision and both releases read. A click or
+// a Gmail-proxy view on a step, first-order or queue campaign of the brand counts; a click on the
+// Manage Preferences link never does; another brand's engagement does not; a non-Gmail view does
+// not; engagement before p_since does not; and anonymous (NULL-subscriber) clicks and views are
+// filtered, so the hold predicate's NOT IN still selects the unengaged members.
+func TestBrandEngagement_OneDefinition(t *testing.T) {
+	f := newHoldFixture(t)
+	L := itoa(f.brandID)
+	f.db.MustExec(`UPDATE lists SET tags = '{brand:acme}' WHERE id = $1`, f.brandID)
+	list := func(name, tags string) int {
+		var id int
+		if err := f.db.Get(&id, `INSERT INTO lists (uuid, name, type, optin, tags) VALUES (gen_random_uuid(), $1, 'private', 'single', $2) RETURNING id`, name, tags); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	step := list("Acme step", "{brand:acme}")
+	first := list("Acme first order", "{brand:acme}")
+	queue := list("Acme re-engagement 1", "{brand:acme,reengage:1:1}")
+	other := list("Zeta", "{brand:zeta}")
+	camp := func(listID int) int {
+		var id int
+		if err := f.db.Get(&id, `INSERT INTO campaigns (uuid, name, subject, from_email, body, messenger, template_id) VALUES (gen_random_uuid(), 'c', 's', 'f@x', 'b', 'email', (SELECT id FROM templates LIMIT 1)) RETURNING id`); err != nil {
+			t.Fatal(err)
+		}
+		f.db.MustExec(`INSERT INTO campaign_lists (campaign_id, list_id, list_name) VALUES ($1, $2, 'x')`, id, listID)
+		return id
+	}
+	cBrand, cStep, cFirst, cQueue, cOther := camp(f.brandID), camp(step), camp(first), camp(queue), camp(other)
+	link := func(u string) int {
+		var id int
+		if err := f.db.Get(&id, `INSERT INTO links (uuid, url) VALUES (gen_random_uuid(), $1) RETURNING id`, u); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	mp := link("https://manage-preferences.curatedfor.you/?email=x&uuid=y")
+	shop := link("https://acme.example.test/products/x")
+
+	sMP, _ := f.sub("mp@x", f.brandID, "confirmed")
+	sStep, _ := f.sub("step@x", f.brandID, "confirmed")
+	sFirstView, _ := f.sub("firstview@x", f.brandID, "confirmed")
+	sQueue, _ := f.sub("queue@x", f.brandID, "confirmed")
+	sOther, _ := f.sub("other@x", f.brandID, "confirmed")
+	sAppleView, _ := f.sub("apple@x", f.brandID, "confirmed")
+	sOld, _ := f.sub("old@x", f.brandID, "confirmed")
+	sNone, _ := f.sub("none@x", f.brandID, "confirmed")
+	all := []int{sMP, sStep, sFirstView, sQueue, sOther, sAppleView, sOld, sNone}
+	// Every member held first, so engagement inserted after is later than hold.at.
+	f.hold(all, "r1", nil, false)
+
+	click := func(c, sub, l int, at string) {
+		f.db.MustExec(`INSERT INTO link_clicks (campaign_id, subscriber_id, link_id, created_at) VALUES ($1, NULLIF($2, 0), $3, `+at+`)`, c, sub, l)
+	}
+	view := func(c, sub int, client, at string) {
+		f.db.MustExec(`INSERT INTO campaign_views (campaign_id, subscriber_id, client, created_at) VALUES ($1, NULLIF($2, 0), $3, `+at+`)`, c, sub, client)
+	}
+	soon := "NOW() + INTERVAL '1 minute'"
+	click(cBrand, sMP, mp, soon)                  // the Manage Preferences link: never counts
+	click(cStep, sStep, shop, soon)               // a step campaign of the brand: counts
+	view(cFirst, sFirstView, "gmail-proxy", soon) // a Gmail open of a first-order campaign: counts
+	click(cQueue, sQueue, shop, soon)             // a queue campaign: counts
+	click(cOther, sOther, shop, soon)             // another brand: never
+	view(cBrand, sAppleView, "apple-mpp", soon)   // a non-Gmail view: never
+	click(cStep, sOld, shop, "NOW() - INTERVAL '400 days'")
+	// Anonymous (untracked) rows on the brand's campaigns: filtered, never a NULL under NOT IN.
+	click(cBrand, 0, shop, soon)
+	view(cBrand, 0, "gmail-proxy", soon)
+
+	since := "NOW() - INTERVAL '187 days'"
+	ids := func(q string) map[int]bool {
+		var got []int
+		if err := f.db.Select(&got, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+		out := map[int]bool{}
+		for _, id := range got {
+			out[id] = true
+		}
+		return out
+	}
+	want := func(name string, got map[int]bool, ids ...int) {
+		t.Helper()
+		if len(got) != len(ids) {
+			t.Fatalf("%s = %v, want %v", name, got, ids)
+		}
+		for _, id := range ids {
+			if !got[id] {
+				t.Fatalf("%s = %v, want %v", name, got, ids)
+			}
+		}
+	}
+	be := "brand_engagement(" + L + ", " + since + ", 'manage-preferences.curatedfor.you', 'gmail-proxy')"
+	want("engaged", ids("SELECT subscriber_id FROM "+be), sStep, sFirstView, sQueue)
+	var nulls int
+	f.db.Get(&nulls, "SELECT COUNT(*) FROM "+be+" WHERE subscriber_id IS NULL")
+	if nulls != 0 {
+		t.Fatalf("brand_engagement returned %d NULL subscriber rows", nulls)
+	}
+
+	// The hold decision's half: members NOT IN the engaged set (the anonymous rows present).
+	q := func(pred string) map[int]bool {
+		subs, _, err := f.app.core.QuerySubscribers("", pred, nil, "", models.SubscriberFilter{}, "", "", 0, 100)
+		if err != nil {
+			t.Fatalf("query rejected: %v\n%s", err, pred)
+		}
+		out := map[int]bool{}
+		for _, s := range subs {
+			out[s.ID] = true
+		}
+		return out
+	}
+	unengaged := "subscribers.id IN (SELECT subscriber_id FROM subscriber_lists WHERE list_id = " + L + ") " +
+		"AND subscribers.id NOT IN (SELECT subscriber_id FROM " + be + " WHERE last_click_at IS NOT NULL OR last_view_at IS NOT NULL)"
+	want("hold NOT IN", q(unengaged), sMP, sOther, sAppleView, sOld, sNone)
+
+	// The releases, as lib/sunset.ts emits them in brand mode (the same function).
+	releasable := "b.status = 'unsubscribed' AND b.meta ? 'hold' AND b.meta->'hold'->>'reason' = 'never-engaged' AND NOT (b.meta->'hold' ? 'final_at')"
+	release := func(col string) string {
+		return "subscribers.id IN (SELECT e.subscriber_id FROM " + be + " e " +
+			"JOIN subscriber_lists b ON b.subscriber_id = e.subscriber_id AND b.list_id = " + L + " " +
+			"WHERE " + releasable + " AND e." + col + " > (b.meta->'hold'->>'at')::timestamptz)"
+	}
+	want("click release", q(release("last_click_at")), sStep, sQueue)
+	want("view release", q(release("last_view_at")), sFirstView)
+
+	// A list with NO brand tag yields its own campaigns only.
+	plain := list("Plain", "{}")
+	cPlain := camp(plain)
+	sPlain, _ := f.sub("plain@x", plain, "confirmed")
+	click(cPlain, sPlain, shop, soon)
+	want("untagged list", ids("SELECT subscriber_id FROM brand_engagement("+itoa(plain)+", "+since+", 'manage-preferences.curatedfor.you', 'gmail-proxy')"), sPlain)
 }
