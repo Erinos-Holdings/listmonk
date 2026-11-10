@@ -1217,3 +1217,12 @@ RETURNS TABLE (subscriber_id INT, eligible_sends BIGINT, first_eligible_send_at 
     LEFT JOIN counted k ON (k.subscriber_id = m.subscriber_id)
     GROUP BY m.subscriber_id;
 $$ LANGUAGE sql STABLE;
+
+-- Fork (journey lists, integrations JOURNEY-LISTS-SPEC D1): the list's Active switch beside its
+-- join trigger -- a list's joins are live only while trigger_active is true; the stamps record
+-- the last change either way. Mirrored in internal/migrations/v6.2.36.go (the activation of the
+-- existing triggered lists and the lists:journeys grant need nothing here: a fresh install has
+-- no triggered list and no role rows).
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active_at TIMESTAMP WITH TIME ZONE NULL;
+ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active_by TEXT NULL;

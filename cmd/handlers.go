@@ -190,6 +190,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D6) -- the reconciler's write-back;
 		// lists:manage_all (its own user, never a per-list role), also checked in the handler.
 		g.PUT("/api/lists/:id/trigger-sync", pm(hasID(a.PutListTriggerSync), "lists:manage_all"))
+		// Fork (journey lists, JOURNEY-LISTS-SPEC D2) -- the list's Active switch; the list's
+		// manage permission, checked in the handler (the UpdateList posture).
+		g.PUT("/api/lists/:id/active", hasID(a.PutListActive))
 		g.DELETE("/api/lists", a.DeleteLists)
 		g.DELETE("/api/lists/:id", hasID(a.DeleteList))
 

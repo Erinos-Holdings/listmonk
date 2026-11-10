@@ -213,12 +213,16 @@ func (c *Core) UpdateListSunset(id int, sunset []byte) error {
 // with the audit stamp user (fork, list join triggers -- LIST-JOIN-TRIGGER-SPEC D4; the caller
 // has validated and normalized the trigger). One statement that no-ops when neither differs from
 // the stored row; changed reports whether it wrote.
-func (c *Core) UpdateListTrigger(id int, joinTrigger []byte, transactional bool, setBy string) (bool, error) {
+//
+// Fork (journey lists, integrations JOURNEY-LISTS-SPEC D3) -- brandChanged is "the request changed
+// the list's brand": with a join_trigger or transactional change it turns an active list's Active
+// switch off in the same statement.
+func (c *Core) UpdateListTrigger(id int, joinTrigger []byte, transactional bool, setBy string, brandChanged bool) (bool, error) {
 	var jt any
 	if len(joinTrigger) > 0 {
 		jt = string(joinTrigger)
 	}
-	res, err := c.q.UpdateListTrigger.Exec(id, jt, transactional, setBy)
+	res, err := c.q.UpdateListTrigger.Exec(id, jt, transactional, setBy, brandChanged)
 	if err != nil {
 		c.log.Printf("error updating list trigger: %v", err)
 		return false, echo.NewHTTPError(http.StatusInternalServerError,
@@ -226,6 +230,31 @@ func (c *Core) UpdateListTrigger(id int, joinTrigger []byte, transactional bool,
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+// UpdateListActive writes a list's Active switch with its two stamps (fork, journey lists --
+// integrations JOURNEY-LISTS-SPEC D2.4). changed is false when the value was already stored.
+func (c *Core) UpdateListActive(id int, active bool, by string) (bool, error) {
+	res, err := c.q.UpdateListActive.Exec(id, active, by)
+	if err != nil {
+		c.log.Printf("error updating list active: %v", err)
+		return false, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.list}", "error", pqErrMsg(err)))
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// ListHasRunningEvergreen reports whether a running evergreen campaign targets the list -- the ONE
+// definition of "a running automation on this list" (JOURNEY-LISTS-SPEC D2.3/D2a).
+func (c *Core) ListHasRunningEvergreen(id int) (bool, error) {
+	var ok bool
+	if err := c.q.GetListRunningEvergreen.Get(&ok, id); err != nil {
+		c.log.Printf("error reading list running evergreen: %v", err)
+		return false, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))
+	}
+	return ok, nil
 }
 
 // UpdateListTriggerSync stores the reconciler's write-back verbatim (fork, list join triggers --
@@ -311,6 +340,18 @@ func (c *Core) StepListAdd(existing, listIDs []int) (id int, name string, found 
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
 	}
 	return row.ID, row.Name, true, nil
+}
+
+// GetSubscriberListIDs returns every list the subscriber has a membership row on, any status
+// (fork, journey lists -- integrations JOURNEY-LISTS-SPEC D7 M2/M3).
+func (c *Core) GetSubscriberListIDs(subID int) ([]int, error) {
+	out := []int{}
+	if err := c.q.GetSubscriberListIDs.Select(&out, subID); err != nil {
+		c.log.Printf("error reading subscriber lists: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
+	}
+	return out, nil
 }
 
 // CountListsByName returns how many lists carry exactly this name.

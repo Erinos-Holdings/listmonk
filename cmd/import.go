@@ -40,6 +40,13 @@ func (a *App) ImportSubscribers(c echo.Context) error {
 	if err := a.refuseStepListAdd(user, nil, opt.ListIDs); err != nil {
 		return err
 	}
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D7 M6) -- a subscribe-mode import into a standard
+	// journey list needs lists:journeys; blocklist mode writes no membership and stays open.
+	if opt.Mode != subimporter.ModeBlocklist {
+		if err := a.refuseJourneyLocked(user, opt.ListIDs...); err != nil {
+			return err
+		}
+	}
 
 	if len(opt.ListIDs) == 0 && opt.Mode != subimporter.ModeBlocklist {
 		return echo.NewHTTPError(http.StatusForbidden,
@@ -272,6 +279,10 @@ func (a *App) ImportPresetStart(c echo.Context) error {
 	// Fork (integrations JOURNEY-UX-SPEC A1.1) -- a resolved step-list target is refused before
 	// the session starts. A list PrepareImport created or tagged just now carries no trigger.
 	if err := a.refuseStepListAdd(user, nil, []int{prep.List.ID}); err != nil {
+		return err
+	}
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D7 M7) -- the M6 rule on the preset's target list.
+	if err := a.refuseJourneyLocked(user, prep.List.ID); err != nil {
 		return err
 	}
 	if err := a.importer.RunPreset(p, name, prep.List.ID, prep.Parsed.Subs); err != nil {

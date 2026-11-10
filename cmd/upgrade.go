@@ -115,6 +115,8 @@ var migList = []migFunc{
 	{"v6.2.34", migrations.V6_2_34},
 	// Fork migration (erinos): hold scope -- the app.brand_hold_scope switch row, inserted false; brand_hold_rows (the ONE brand-wide hold definition, read by the five broadcast audience readers while the switch is the JSONB true) and brand_eligible_sends (the sunset rule's broadcasts counted as sent across the brand, Smart Sending skips excluded; read by ListmonkSunset only under SUNSET_COUNT_BRAND) (HOLD-SCOPE-SPEC) — see internal/migrations/v6.2.35.go.
 	{"v6.2.35", migrations.V6_2_35},
+	// Fork migration (erinos): journey lists -- lists.trigger_active/trigger_active_at/trigger_active_by (the list's Active switch), every list already carrying a join_trigger activated (only when the column is new), and lists:journeys granted to roles 1, 4, 7 and 13 by id (JOURNEY-LISTS-SPEC) — see internal/migrations/v6.2.36.go.
+	{"v6.2.36", migrations.V6_2_36},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

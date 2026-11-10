@@ -76,6 +76,24 @@ type List struct {
 	TriggerSetAt  *time.Time `db:"trigger_set_at" json:"trigger_set_at,omitempty"`
 	TriggerSync   ListJSON   `db:"trigger_sync" json:"trigger_sync,omitempty"`
 
+	// Fork (journey lists, integrations JOURNEY-LISTS-SPEC D1/D2) -- the list's Active switch, a
+	// column beside the trigger (v6.2.36), written only by PUT /api/lists/:id/active and turned
+	// off by a trigger, brand or transactional change (update-list-trigger). Meaningful only while
+	// JoinTrigger is non-null. TriggerActiveAt is the instant of the LAST change either way (the
+	// reconciler's no-backfill start date while on); NULL on the lists the migration activated.
+	// TriggerActive is always present (the reconciler refuses a triggered list without it, D4a).
+	TriggerActive   bool       `db:"trigger_active" json:"trigger_active"`
+	TriggerActiveAt *time.Time `db:"trigger_active_at" json:"trigger_active_at,omitempty"`
+	TriggerActiveBy *string    `db:"trigger_active_by" json:"trigger_active_by,omitempty"`
+
+	// JourneyLocked (JOURNEY-LISTS-SPEC D6) is cmd's isJourneyLockedList(list), set on every list
+	// API response so the form mirrors the server; never read from the database.
+	JourneyLocked bool `db:"-" json:"journey_locked"`
+
+	// RunningAutomation (D2a) is set by GET /api/lists/:id only (one query per list); nil and
+	// omitted on the multi-list responses.
+	RunningAutomation *bool `db:"-" json:"running_automation,omitempty"`
+
 	// This is only relevant when querying the lists of a subscriber.
 	SubscriptionStatus    string    `db:"subscription_status" json:"subscription_status,omitempty"`
 	SubscriptionCreatedAt null.Time `db:"subscription_created_at" json:"subscription_created_at,omitempty"`

@@ -5,7 +5,8 @@
         [
             "lists:get_all",
             "lists:manage_all",
-            "lists:transactional"
+            "lists:transactional",
+            "lists:journeys"
         ]
     },
     {

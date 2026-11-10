@@ -26,9 +26,15 @@
         <b-notification v-if="locked" type="is-warning" :closable="false" data-cy="list-locked">
           {{ $t('lists.lockedList', { name: data.name }) }}
         </b-notification>
+        <!-- Fork (journey lists, integrations JOURNEY-LISTS-SPEC D12): a standard journey list
+        (journey_locked, the server's one definition) is read-only without lists:journeys; the
+        Active switch below stays Marketing's. The server refuses the edit with 403 regardless. -->
+        <b-notification v-if="journeyReadOnly" type="is-info" :closable="false" data-cy="list-journey-locked">
+          {{ $t('lists.journeyLockedNotice') }}
+        </b-notification>
         <b-field :label="$t('globals.fields.name')" label-position="on-border">
           <b-input :maxlength="200" :ref="'focus'" v-model="form.name" name="name"
-            :placeholder="$t('globals.fields.name')" required :disabled="locked" />
+            :placeholder="$t('globals.fields.name')" required :disabled="readOnly" />
         </b-field>
 
         <!-- BRAND-PICKER-SPEC D3: the brand is chosen, never typed; the server writes the
@@ -40,7 +46,7 @@
         <b-field :label="$t('lists.brand')" label-position="on-border" :message="$t('lists.brandHelp')"
           :class="{ 'mb-0': !!chosenBrand }">
           <b-select v-model="brand" name="brand" :placeholder="$t('lists.brand')" :required="!locked" expanded
-            :disabled="locked || brandLocked" data-cy="list-brand">
+            :disabled="readOnly || brandLocked" data-cy="list-brand">
             <option v-for="b in brands" :key="b.slug" :value="b.slug">
               {{ brandLabel(b) }}
             </option>
@@ -63,12 +69,26 @@
               {{ triggerBadgeText }}
             </b-tag>
           </p>
+          <!-- Fork (journey lists, JOURNEY-LISTS-SPEC D2/D12): the Active switch on any list with a
+          STORED trigger, for a user with the list's manage permission, locked or not. It saves on
+          its own (PUT /api/lists/:id/active), never with the form. Turning on needs a running
+          automation (the server refuses otherwise). -->
+          <div v-if="activeState.show" class="list-active-switch mb-3" data-cy="list-active">
+            <b-field :message="$t('lists.activeHelp')">
+              <b-switch :value="activeState.active" :disabled="activeBusy || (!activeState.active && !activeState.canTurnOn)"
+                type="is-success" data-cy="list-active-switch" @input="onActiveToggle">
+                {{ $t('lists.activeSwitch') }}
+              </b-switch>
+            </b-field>
+            <p v-if="activeState.hintKey" class="help is-warning" data-cy="list-active-hint">{{ $t(activeState.hintKey) }}</p>
+            <p v-if="activeState.warningKey" class="help is-danger" data-cy="list-active-warning">{{ $t(activeState.warningKey) }}</p>
+          </div>
           <!-- JOURNEY-UX-SPEC A1.4: the help follows the selection (listTypeHelpKey). -->
           <b-field :message="$t(listTypeHelpKey(listType))" data-cy="list-campaign-type">
-            <b-radio-button v-model="listType" native-value="broadcast" type="is-primary" :disabled="locked">
+            <b-radio-button v-model="listType" native-value="broadcast" type="is-primary" :disabled="readOnly">
               {{ $t('lists.campaignTypeBroadcast') }}
             </b-radio-button>
-            <b-radio-button v-model="listType" native-value="journey" type="is-primary" :disabled="locked">
+            <b-radio-button v-model="listType" native-value="journey" type="is-primary" :disabled="readOnly">
               {{ $t('lists.campaignTypeJourney') }}
             </b-radio-button>
           </b-field>
@@ -78,9 +98,14 @@
           re-read a slot that appears or disappears after mount, which is why the slot version
           showed only the first time and never for SKUs (the G-H2 finding). -->
           <div v-if="listType === 'journey'" class="list-journey-pane" data-cy="list-journey-pane">
+            <!-- JOURNEY-LISTS-SPEC D12: the standard options are admin-only (lists:journeys). -->
+            <p v-if="!canJourneys" class="help mb-2" data-cy="list-journey-admin-only">
+              {{ $t('lists.journeyStandardAdminOnly') }}
+            </p>
             <div class="trigger-option">
               <b-field>
-                <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger" :disabled="locked">
+                <b-radio v-model="triggerOption" native-value="first_order" name="join_trigger"
+                  :disabled="readOnly || optionDisabled('first_order')">
                   {{ $t('lists.joinTriggerFirstOrder') }}
                 </b-radio>
               </b-field>
@@ -90,7 +115,7 @@
             </div>
             <div class="trigger-option">
               <b-field>
-                <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="locked">
+                <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="readOnly">
                   {{ $t('lists.joinTriggerSkus') }}
                 </b-radio>
               </b-field>
@@ -99,7 +124,7 @@
               </p>
             </div>
             <b-field v-if="triggerOption === 'skus'" :message="$t('lists.joinTriggerSkusHelp')">
-              <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="locked"
+              <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="readOnly"
                 data-cy="list-trigger-skus" />
             </b-field>
             <!-- The two series step kinds (NO-PURCHASE-STEPS-SPEC D7: a No-purchase series step,
@@ -109,8 +134,8 @@
             <template v-for="k in stepKinds">
               <div :key="`opt-${k.value}`" class="trigger-option">
                 <b-field>
-                  <b-radio v-model="triggerOption" :native-value="k.value" name="join_trigger" :disabled="locked"
-                    :data-cy="k.cy">
+                  <b-radio v-model="triggerOption" :native-value="k.value" name="join_trigger"
+                    :disabled="readOnly || optionDisabled(k.value)" :data-cy="k.cy">
                     {{ $t(k.label) }}
                   </b-radio>
                 </b-field>
@@ -124,7 +149,7 @@
               <b-field v-if="triggerOption === k.value" :key="`days-${k.value}`" class="trigger-days" :label="$t(k.daysLabel)"
                 :type="daysText === '' || daysOk ? '' : 'is-danger'" data-cy="list-trigger-days">
                 <b-radio v-for="r in daysOptions" :key="r.days" v-model="daysText" :native-value="String(r.days)"
-                  name="join_trigger_days" :disabled="locked" :title="$t(r.help)" :data-cy="`list-trigger-days-${r.days}`">
+                  name="join_trigger_days" :disabled="readOnly" :title="$t(r.help)" :data-cy="`list-trigger-days-${r.days}`">
                   {{ r.legacy ? $t('lists.joinTriggerDaysLegacy', { n: r.days }) : $tc('lists.joinTriggerDaysOption', r.days, { n: r.days }) }}
                 </b-radio>
               </b-field>
@@ -142,7 +167,7 @@
         Description; Type and Opt-in demoted (defaults private/single), side by side. -->
         <hr class="form-divider" />
         <b-field v-if="canTransactional" :message="$t('lists.transactionalHelp')">
-          <b-checkbox v-model="transactional" name="transactional" :disabled="locked" data-cy="list-transactional">
+          <b-checkbox v-model="transactional" name="transactional" :disabled="readOnly" data-cy="list-transactional">
             {{ $t('lists.transactional') }}
           </b-checkbox>
         </b-field>
@@ -150,13 +175,13 @@
         <b-field :label="$t('globals.terms.tags')" label-position="on-border" :message="$t('lists.tagsHelp')"
           :type="tagError ? 'is-danger' : ''">
           <b-taginput v-model="form.tags" name="tags" ellipsis icon="tag-outline"
-            :placeholder="$t('globals.terms.tags')" :before-adding="beforeAddingTag" :disabled="locked" />
+            :placeholder="$t('globals.terms.tags')" :before-adding="beforeAddingTag" :disabled="readOnly" />
         </b-field>
         <p v-if="tagError" class="help is-danger">{{ tagError }}</p>
 
         <b-field :label="$t('globals.fields.description')" label-position="on-border">
           <b-input :maxlength="2000" v-model="form.description" name="description" type="textarea"
-            :placeholder="$t('globals.fields.description')" :disabled="locked" />
+            :placeholder="$t('globals.fields.description')" :disabled="readOnly" />
         </b-field>
 
         <hr class="form-divider" />
@@ -164,7 +189,7 @@
           <div class="column is-6">
             <b-field :label="$t('lists.type')" label-position="on-border" :message="$t('lists.typeHelp')">
               <b-select v-model="form.type" name="type" :placeholder="$t('lists.typeHelp')" required expanded
-                :disabled="locked">
+                :disabled="readOnly">
                 <option value="private">
                   {{ $t('lists.types.private') }}
                 </option>
@@ -176,7 +201,7 @@
           </div>
           <div class="column is-6">
             <b-field :label="$t('lists.optin')" label-position="on-border" :message="$t('lists.optinHelp')">
-              <b-select v-model="form.optin" name="optin" placeholder="Opt-in type" required expanded :disabled="locked">
+              <b-select v-model="form.optin" name="optin" placeholder="Opt-in type" required expanded :disabled="readOnly">
                 <option value="single">
                   {{ $t('lists.optins.single') }}
                 </option>
@@ -189,15 +214,20 @@
         </div>
 
         <b-field :message="$t('lists.archivedHelp')" :label="$t('lists.archived')" class="mt-5">
-          <b-switch v-model="isArchived" name="status" :disabled="locked" />
+          <b-switch v-model="isArchived" name="status" :disabled="readOnly" />
         </b-field>
       </section>
       <footer class="modal-card-foot has-text-right">
+        <!-- JOURNEY-LISTS-SPEC D3/D12: saving a changed trigger, brand or transactional on an
+        active list turns it off -- said before Save. -->
+        <p v-if="turnsOffNotice" class="help is-warning mr-3" data-cy="list-active-turns-off">
+          {{ $t('lists.activeTurnsOff') }}
+        </p>
         <b-button @click="$parent.close()">
           {{ $t('globals.buttons.close') }}
         </b-button>
-        <b-button v-if="!locked && ($can('lists:manage_all') || $canList(data.id, 'list:manage'))" native-type="submit"
-          type="is-primary" :loading="loading.lists" data-cy="btn-save">
+        <b-button v-if="!readOnly && ($can('lists:manage_all') || $canList(data.id, 'list:manage'))" native-type="submit"
+          type="is-primary" :loading="loading.lists" :disabled="saveBlocked" data-cy="btn-save">
           {{ $t('globals.buttons.save') }}
         </b-button>
       </footer>
@@ -216,7 +246,8 @@ import {
 import {
   buildListFormRequest, buildListTypeTrigger, daysRadios, daysValid, journeyOption, listTypeHelpKey, listTypeOf,
   skusToText, storedDays, storedTrigger, storedTriggerSync, triggerBadge, triggerHelpKeys, triggerOption as triggerOptionOf,
-  LIST_TYPE_BROADCAST,
+  LIST_TYPE_BROADCAST, activeSwitchState, formReadOnly, journeyOptionDisabled, journeySaveBlocked,
+  triggerChangeTurnsOff,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -255,13 +286,18 @@ export default Vue.extend({
 
       // JOURNEY-UX-SPEC D8: Broadcast | Journey (Broadcast on a new list).
       listType: LIST_TYPE_BROADCAST,
-      // LIST-JOIN-TRIGGER-SPEC D7: the Journey pane's radio (always a kind, F4), the SKU textarea
-      // and the checkbox.
-      triggerOption: 'first_order',
+      // LIST-JOIN-TRIGGER-SPEC D7: the Journey pane's radio, the SKU textarea and the checkbox.
+      // JOURNEY-LISTS-SPEC D12: no radio is preselected ('') on an untriggered list.
+      triggerOption: '',
       skusText: '',
       // NO-PURCHASE-STEPS-SPEC D7: the no_purchase step's days input.
       daysText: '',
       transactional: false,
+
+      // JOURNEY-LISTS-SPEC D2a/D12: the list as GET /api/lists/:id returns it (running_automation
+      // is on that response only), refreshed after an Active switch; null until read.
+      fresh: null,
+      activeBusy: false,
     };
   },
 
@@ -285,8 +321,24 @@ export default Vue.extend({
       return true;
     },
 
+    // JOURNEY-LISTS-SPEC D12: a standard radio is disabled without lists:journeys.
+    optionDisabled(option) {
+      return journeyOptionDisabled(option, this.canJourneys);
+    },
+
+    // JOURNEY-LISTS-SPEC D2: the switch saves on its own route; the form re-reads the list.
+    onActiveToggle(on) {
+      this.activeBusy = true;
+      this.$api.putListActive(this.data.id, !!on).then((row) => {
+        this.fresh = row;
+        this.$emit('finished');
+      }).finally(() => {
+        this.activeBusy = false;
+      });
+    },
+
     onSubmit() {
-      if (this.locked) {
+      if (this.readOnly || this.saveBlocked) {
         return;
       }
       if (this.isEditing) {
@@ -418,6 +470,46 @@ export default Vue.extend({
       return this.isEditing && isLockedList(this.data);
     },
 
+    // JOURNEY-LISTS-SPEC D6/D12 -- lists:journeys; the stored row (the fresh GET when read).
+    canJourneys() {
+      return this.$can('lists:journeys');
+    },
+
+    row() {
+      return this.fresh || this.$props.data;
+    },
+
+    // A standard journey list without lists:journeys: read-only, no Save.
+    journeyReadOnly() {
+      return this.isEditing && formReadOnly(this.row, this.canJourneys);
+    },
+
+    // Every form control follows readOnly (the render-catalog lock or the journey lock).
+    readOnly() {
+      return this.locked || this.journeyReadOnly;
+    },
+
+    // D12: Save stays disabled while Journey has no radio chosen.
+    saveBlocked() {
+      return journeySaveBlocked(this.listType, this.triggerOption);
+    },
+
+    // D12: the Active switch (edit only -- a new list has no stored trigger).
+    activeState() {
+      const canManage = this.$can('lists:manage_all') || this.$canList(this.data.id, 'list:manage');
+      return activeSwitchState(this.isEditing ? this.row : {}, canManage);
+    },
+
+    // D3/D12: "Saving turns Active off" when the form's trigger, brand or transactional differ.
+    turnsOffNotice() {
+      if (!this.isEditing || this.readOnly || this.saveBlocked) return false;
+      return triggerChangeTurnsOff(this.row, {
+        joinTrigger: buildListTypeTrigger(this.listType, this.triggerOption, this.skusText, this.daysText),
+        brand: this.brand || '',
+        transactional: this.canTransactional ? this.transactional : undefined,
+      });
+    },
+
     isArchived: {
       get() {
         return this.form.status === 'archived';
@@ -459,6 +551,12 @@ export default Vue.extend({
     this.$api.getBrands().then((data) => {
       this.brands = Array.isArray(data) ? data : [];
     });
+    // JOURNEY-LISTS-SPEC D2a: running_automation is on the single-list GET only.
+    if (this.isEditing && this.$props.data.id) {
+      this.$api.getList(this.$props.data.id).then((row) => {
+        this.fresh = row;
+      });
+    }
 
     this.$nextTick(() => {
       this.$refs.focus.focus();

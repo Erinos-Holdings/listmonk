@@ -93,12 +93,18 @@ type Queries struct {
 	// reconciler's write-back.
 	UpdateListTrigger     *sqlx.Stmt `query:"update-list-trigger"`
 	UpdateListTriggerSync *sqlx.Stmt `query:"update-list-trigger-sync"`
+	// Fork (journey lists, integrations JOURNEY-LISTS-SPEC D2) -- the Active switch and its one
+	// running-automation definition.
+	UpdateListActive        *sqlx.Stmt `query:"update-list-active"`
+	GetListRunningEvergreen *sqlx.Stmt `query:"get-list-running-evergreen"`
 	// Fork (BRAND-PICKER-SPEC D4) -- the locked-list checks.
 	GetLockedLists    *sqlx.Stmt `query:"get-locked-lists"`
 	CountListsByName  *sqlx.Stmt `query:"count-lists-by-name"`
 	GetDeleteListsByQ *sqlx.Stmt `query:"get-delete-lists-by-query"`
 	// Fork (integrations JOURNEY-UX-SPEC A1.1) -- the step-list membership-add check.
 	GetStepListAdd *sqlx.Stmt `query:"get-step-list-add"`
+	// Fork (journey lists, integrations JOURNEY-LISTS-SPEC D7) -- the subscriber's lists, for the lock.
+	GetSubscriberListIDs *sqlx.Stmt `query:"get-subscriber-list-ids"`
 
 	CreateCampaign        *sqlx.Stmt `query:"create-campaign"`
 	QueryCampaigns        string     `query:"query-campaigns"`

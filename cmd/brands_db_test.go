@@ -34,9 +34,10 @@ func newBPFixture(t *testing.T) *bpFixture {
 		PageParam: "page", PerPageParam: "per_page", AllowAll: true})
 	// The harness seeds the Super Admin role with no permissions; the router's pm() passes it by
 	// role id, but the handlers' list checks read the permission map, as on a real install whose
-	// Super Admin role carries every permission.
+	// Super Admin role carries every permission. Fork (journey lists, JOURNEY-LISTS-SPEC D11) --
+	// lists:journeys included: v6.2.36 grants it to role 1.
 	h.db.MustExec(`UPDATE roles SET permissions = $2 WHERE id = $1`, auth.SuperAdminRoleID,
-		pq.StringArray{auth.PermListGetAll, auth.PermListManageAll, "brands:get", "brands:manage"})
+		pq.StringArray{auth.PermListGetAll, auth.PermListManageAll, auth.PermListJourneys, "brands:get", "brands:manage"})
 	f := &bpFixture{h: h}
 	f.boss = h.user("boss", auth.SuperAdminRoleID)
 	if _, err := cacheUsers(h.app.core, h.app.auth); err != nil {

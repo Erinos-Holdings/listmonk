@@ -11,6 +11,8 @@ import {
   listTypeHelpKey, triggerHelpKeys, DAYS_PRESETS, POST_PURCHASE_DAYS_PRESETS, daysRadios, seriesStepKey,
   SERIES_WELCOME, SERIES_POST_PURCHASE, WELCOME_STEP_DAYS, POST_PURCHASE_STEP_DAYS,
   SERIES_REENGAGEMENT, REENGAGEMENT_DAYS, STEP_TRIGGERS, seriesOfTrigger,
+  journeySaveBlocked, STANDARD_TRIGGERS, isStandardTrigger, journeyOptionDisabled, journeyLockedOf, formReadOnly,
+  activeSwitchState, triggerChangeTurnsOff,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 // JOURNEY-UX-SPEC IA4 -- the selector's help follows the value (A1.4); A1.3's bold lead + prose.
@@ -28,7 +30,8 @@ test('IA4: type help per selector value; the Sends lead and prose per trigger ra
 test('I7: stored trigger <-> selector value and the Journey pane radio', () => {
   [null, undefined, { kind: 'nope' }, []].forEach((jt) => {
     assert.equal(listTypeOf(jt), LIST_TYPE_BROADCAST, JSON.stringify(jt));
-    assert.equal(journeyOption(jt), TRIGGER_FIRST_ORDER, JSON.stringify(jt));
+    // JOURNEY-LISTS-SPEC D12 / I13 -- no radio is preselected on an untriggered list.
+    assert.equal(journeyOption(jt), '', JSON.stringify(jt));
   });
   [{ kind: 'first_order' }, { kind: 'skus', skus: ['a'] }, { kind: 'no_purchase', days: 7 }].forEach((jt) => {
     assert.equal(listTypeOf(jt), LIST_TYPE_JOURNEY, jt.kind);
@@ -48,10 +51,12 @@ test('I7: Broadcast sends null; Journey builds today\'s documents and never null
     assert.deepEqual(got, jt, jt.kind);
     assert.deepEqual(got, buildJoinTrigger(triggerOption(jt), skusToText(jt.skus), storedDays(jt)), jt.kind);
   });
-  // F4: Journey on a list with no stored trigger preselects first_order; no radio still emits a kind.
-  assert.deepEqual(buildListTypeTrigger(LIST_TYPE_JOURNEY, journeyOption(null), '', ''), { kind: 'first_order' });
+  // JOURNEY-LISTS-SPEC D12 (replacing JOURNEY-UX F4's first_order default): Journey on a list with
+  // no stored trigger preselects nothing, and a Journey save with no radio chosen is refused --
+  // never a silent first_order.
+  assert.throws(() => buildListTypeTrigger(LIST_TYPE_JOURNEY, journeyOption(null), '', ''), /lists\.journeyPickOption/);
   [undefined, null, '', TRIGGER_NONE, 'nope'].forEach((opt) => {
-    assert.deepEqual(buildListTypeTrigger(LIST_TYPE_JOURNEY, opt, '', ''), { kind: 'first_order' }, String(opt));
+    assert.throws(() => buildListTypeTrigger(LIST_TYPE_JOURNEY, opt, '', ''), /lists\.journeyPickOption/, String(opt));
   });
   assert.deepEqual(buildListTypeTrigger(LIST_TYPE_JOURNEY, TRIGGER_NO_PURCHASE, '', ' 14 '), { kind: 'no_purchase', days: 14 });
 });
@@ -198,17 +203,19 @@ test('reengagement family: seriesStepKey on REENGAGEMENT_DAYS only', () => {
 test('no_purchase: picker label and sub-line item (LIFECYCLE-SERIES-SPEC S10 phrases)', () => {
   const l = { name: 'Ruze Still Deciding', join_trigger: { kind: 'no_purchase', days: 7 } };
   assert.equal(pickerLabel(l), 'Ruze Still Deciding — No-purchase series day 7');
-  assert.equal(listTriggerItem(l), 'No-purchase series day 7 · pending sync');
-  const live = { ...l, trigger_sync: { state: 'live', slug: 'ruze-no-purchase-56' } };
-  assert.equal(listTriggerItem(live), 'No-purchase series day 7 · live');
-  assert.equal(withTriggerItem('#56 · Ruze', live), '#56 · Ruze · No-purchase series day 7 · live');
+  assert.equal(listTriggerItem(l), 'No-purchase series day 7 · pending sync · Inactive');
+  const live = { ...l, trigger_sync: { state: 'live', slug: 'ruze-no-purchase-56' }, trigger_active: true };
+  assert.equal(listTriggerItem(live), 'No-purchase series day 7 · live · Active');
+  assert.equal(withTriggerItem('#56 · Ruze', live), '#56 · Ruze · No-purchase series day 7 · live · Active');
   const pp = { name: 'Ruze day 14', join_trigger: { kind: 'post_purchase', days: 14 } };
   assert.equal(pickerLabel(pp), 'Ruze day 14 — Post-purchase series day 14');
-  assert.equal(listTriggerItem(pp), 'Post-purchase series day 14 · pending sync');
+  assert.equal(listTriggerItem(pp), 'Post-purchase series day 14 · pending sync · Inactive');
   // The camel-cased browser row reads the same.
-  const camel = { name: 'Step 2', joinTrigger: { kind: 'no_purchase', days: 14 }, triggerSync: { state: 'invalid', error: 'x' } };
+  const camel = {
+    name: 'Step 2', joinTrigger: { kind: 'no_purchase', days: 14 }, triggerSync: { state: 'invalid', error: 'x' }, triggerActive: true,
+  };
   assert.equal(pickerLabel(camel), 'Step 2 — No-purchase series day 14');
-  assert.equal(listTriggerItem(camel), 'No-purchase series day 14 · invalid');
+  assert.equal(listTriggerItem(camel), 'No-purchase series day 14 · invalid · Active');
   assert.deepEqual(triggerBadge(storedTrigger(camel), storedTriggerSync(camel)), { state: 'invalid', key: 'lists.triggerSyncInvalid', params: { error: 'x' } });
 });
 
@@ -234,12 +241,13 @@ test('badge per trigger_sync state', () => {
 test('sub-line item: the kind and the state word, never the error text', () => {
   assert.equal(listTriggerItem({}), '');
   assert.equal(listTriggerItem(null), '');
-  assert.equal(listTriggerItem({ join_trigger: { kind: 'first_order' } }), 'Post-purchase series day 0 · pending sync');
-  assert.equal(listTriggerItem({ join_trigger: { kind: 'skus', skus: ['a'] }, trigger_sync: { state: 'live', slug: 's' } }), 'joins on SKU purchase · live');
+  assert.equal(listTriggerItem({ join_trigger: { kind: 'first_order' } }), 'Post-purchase series day 0 · pending sync · Inactive');
+  assert.equal(listTriggerItem({ join_trigger: { kind: 'skus', skus: ['a'] }, trigger_sync: { state: 'live', slug: 's' }, trigger_active: true }), 'joins on SKU purchase · live · Active');
   const inv = listTriggerItem({ join_trigger: { kind: 'first_order' }, trigger_sync: { state: 'invalid', error: 'secret detail' } });
-  assert.equal(inv, 'Post-purchase series day 0 · invalid');
+  assert.equal(inv, 'Post-purchase series day 0 · invalid · Inactive');
   assert.equal(inv.includes('secret'), false);
-  assert.equal(withTriggerItem('#7 · Acme', { join_trigger: { kind: 'first_order' }, trigger_sync: { state: 'live' } }), '#7 · Acme · Post-purchase series day 0 · live');
+  const activeFo = { join_trigger: { kind: 'first_order' }, trigger_sync: { state: 'live' }, trigger_active: true };
+  assert.equal(withTriggerItem('#7 · Acme', activeFo), '#7 · Acme · Post-purchase series day 0 · live · Active');
   assert.equal(withTriggerItem('#5', { name: 'x' }), '#5');
 });
 
@@ -252,7 +260,8 @@ test('readers accept the camel-cased row the browser actually holds', () => {
   assert.deepEqual(storedTriggerSync(row), { state: 'live', syncedAt: '2026-10-17T06:10:38Z' });
   assert.equal(triggerOption(storedTrigger(row)), TRIGGER_FIRST_ORDER);
   assert.equal(triggerBadge(storedTrigger(row), storedTriggerSync(row)).params.time, '2026-10-17T06:10:38Z');
-  assert.equal(listTriggerItem(row), 'Post-purchase series day 0 · live');
+  assert.equal(listTriggerItem(row), 'Post-purchase series day 0 · live · Inactive');
+  assert.equal(listTriggerItem({ ...row, triggerActive: true }), 'Post-purchase series day 0 · live · Active');
   assert.equal(pickerLabel(row), 'Acme first order — Post-purchase series day 0');
   // The wire spelling still wins when both are present, and an absent trigger is none either way.
   assert.deepEqual(storedTrigger({ join_trigger: null, joinTrigger: { kind: 'skus' } }), null);
@@ -313,4 +322,78 @@ test('the request built from a FULL GET row carries only the allow-listed keys (
 
   // The brand is still required.
   assert.throws(() => buildListFormRequest(row, ''), /brand is required/);
+});
+
+// JOURNEY-LISTS-SPEC D12 / I13 -- no preselected trigger; Save blocked until a radio is chosen; the
+// standard radios disabled without lists:journeys; a locked list read-only without it.
+test('I13: no preselected trigger, Save blocked, standard radios and locked lists by permission', () => {
+  assert.equal(journeyOption(null), '');
+  assert.equal(journeySaveBlocked(LIST_TYPE_JOURNEY, journeyOption(null)), true);
+  assert.equal(journeySaveBlocked(LIST_TYPE_JOURNEY, TRIGGER_SKUS), false);
+  assert.equal(journeySaveBlocked(LIST_TYPE_BROADCAST, ''), false);
+  assert.equal(journeyOption({ kind: 'first_order' }), TRIGGER_FIRST_ORDER, 'a stored trigger opens selected');
+
+  STANDARD_TRIGGERS.forEach((opt) => {
+    assert.equal(isStandardTrigger(opt), true, opt);
+    assert.equal(journeyOptionDisabled(opt, false), true, opt);
+    assert.equal(journeyOptionDisabled(opt, true), false, opt);
+  });
+  assert.equal(journeyOptionDisabled(TRIGGER_SKUS, false), false, 'SKUs stay enabled');
+  assert.deepEqual([...STANDARD_TRIGGERS].sort(), ['first_order', 'no_purchase', 'post_purchase']);
+
+  // journey_locked is the server's field (never re-derived): read under either spelling.
+  const locked = { journey_locked: true, join_trigger: { kind: 'skus', skus: ['a'] } };
+  assert.equal(journeyLockedOf(locked), true);
+  assert.equal(journeyLockedOf({ journeyLocked: true }), true);
+  assert.equal(journeyLockedOf({ join_trigger: { kind: 'first_order' } }), false, 'the client never derives the lock');
+  assert.equal(formReadOnly(locked, false), true);
+  assert.equal(formReadOnly(locked, true), false);
+  assert.equal(formReadOnly({ journey_locked: false }, false), false);
+});
+
+test('D12: the Active switch state', () => {
+  const fo = { join_trigger: { kind: 'first_order' } };
+  // No trigger, or no manage permission: hidden.
+  assert.equal(activeSwitchState({}).show, false);
+  assert.equal(activeSwitchState(fo, false).show, false);
+  // Inactive, no running automation: on is disabled with the hint.
+  let s = activeSwitchState({ ...fo, running_automation: false });
+  assert.deepEqual(s, {
+    show: true, active: false, canTurnOn: false, canTurnOff: false, hintKey: 'lists.activeNeedsRunning', warningKey: '',
+  });
+  // Unknown running state (a multi-list row) is treated as not running.
+  assert.equal(activeSwitchState(fo).canTurnOn, false);
+  // Inactive with a running automation: on is allowed, and the warning shows.
+  s = activeSwitchState({ ...fo, runningAutomation: true });
+  assert.equal(s.canTurnOn, true);
+  assert.equal(s.warningKey, 'lists.activeRunningNotActive');
+  assert.equal(s.hintKey, '');
+  // Active: off always allowed, no warning.
+  s = activeSwitchState({ ...fo, triggerActive: true, runningAutomation: false });
+  assert.equal(s.active, true);
+  assert.equal(s.canTurnOff, true);
+  assert.equal(s.warningKey, '');
+  // A locked list shows the switch too (Marketing's).
+  assert.equal(activeSwitchState({ ...fo, journey_locked: true }).show, true);
+
+  // Every key the form renders exists in en.json.
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['lists.activeNeedsRunning', 'lists.activeRunningNotActive', 'lists.activeTurnsOff', 'lists.journeyLockedNotice',
+    'lists.journeyStandardAdminOnly', 'lists.activeSwitch', 'lists.activeHelp', 'lists.journeyPickOption', 'lists.journeyLocked',
+  ].forEach((k) => assert.equal(typeof en[k], 'string', k));
+});
+
+test('D12/D3: the "Saving turns Active off" notice', () => {
+  const stored = {
+    join_trigger: { kind: 'skus', skus: ['widget'] }, brand: 'acme', transactional: false, trigger_active: true,
+  };
+  assert.equal(triggerChangeTurnsOff(stored, { joinTrigger: { kind: 'skus', skus: [' WIDGET '] }, brand: 'acme', transactional: false }), false, 'by value');
+  assert.equal(triggerChangeTurnsOff(stored, { joinTrigger: { kind: 'skus', skus: ['other'] } }), true);
+  assert.equal(triggerChangeTurnsOff(stored, { joinTrigger: null }), true, 'clearing');
+  assert.equal(triggerChangeTurnsOff(stored, { brand: 'beta' }), true);
+  assert.equal(triggerChangeTurnsOff(stored, { transactional: true }), true);
+  assert.equal(triggerChangeTurnsOff(stored, {}), false, 'absent keys are not changes');
+  assert.equal(triggerChangeTurnsOff({ ...stored, trigger_active: false }, { brand: 'beta' }), false, 'an inactive list');
+  const step = { joinTrigger: { kind: 'no_purchase', days: 2 }, triggerActive: true };
+  assert.equal(triggerChangeTurnsOff(step, { joinTrigger: { kind: 'no_purchase', days: 5 } }), true);
 });

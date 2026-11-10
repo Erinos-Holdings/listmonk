@@ -197,19 +197,122 @@ export function listTypeOf(joinTrigger) {
   return triggerOption(joinTrigger) === TRIGGER_NONE ? LIST_TYPE_BROADCAST : LIST_TYPE_JOURNEY;
 }
 
-// journeyOption is the Journey pane's radio for a stored join_trigger: its kind, else first_order.
+// journeyOption is the Journey pane's radio for a stored join_trigger: its kind, else '' -- no
+// radio is preselected on an untriggered list (integrations JOURNEY-LISTS-SPEC D12: a preselected
+// "first order" was one Save from a wrong trigger).
 export function journeyOption(joinTrigger) {
   const opt = triggerOption(joinTrigger);
-  return opt === TRIGGER_NONE ? TRIGGER_FIRST_ORDER : opt;
+  return opt === TRIGGER_NONE ? '' : opt;
 }
 
+// JOURNEY_OPTIONS are the Journey pane's radio values.
+export const JOURNEY_OPTIONS = Object.freeze([TRIGGER_FIRST_ORDER, TRIGGER_SKUS, ...STEP_TRIGGERS]);
+
 // buildListTypeTrigger is the join_trigger the form sends for the selector value and the Journey
-// pane's values: null for Broadcast; for Journey the buildJoinTrigger document, a missing or none
-// radio reading first_order -- never null.
+// pane's values: null for Broadcast; for Journey the buildJoinTrigger document -- never null. A
+// Journey with no option chosen ('' or unknown) THROWS (JOURNEY-LISTS-SPEC D12): the form keeps
+// Save disabled until a radio is picked (journeySaveBlocked), so this is the backstop.
 export function buildListTypeTrigger(listType, option, skusText, daysText) {
   if (listType !== LIST_TYPE_JOURNEY) return null;
-  const opt = [TRIGGER_FIRST_ORDER, TRIGGER_SKUS, ...STEP_TRIGGERS].includes(option) ? option : TRIGGER_FIRST_ORDER;
-  return buildJoinTrigger(opt, skusText, daysText);
+  if (!JOURNEY_OPTIONS.includes(option)) throw new Error('lists.journeyPickOption');
+  return buildJoinTrigger(option, skusText, daysText);
+}
+
+// journeySaveBlocked is true while the form's Journey selector has no radio chosen.
+export function journeySaveBlocked(listType, option) {
+  return listType === LIST_TYPE_JOURNEY && !JOURNEY_OPTIONS.includes(option);
+}
+
+// Fork (journey lists, integrations JOURNEY-LISTS-SPEC D6/D12). The STANDARD journey kinds -- a
+// list carrying one is a standard journey list (the server's isJourneyLockedList, which also
+// counts the reengage: queue tags). Setting one needs lists:journeys; SKUs stay Marketing's.
+export const STANDARD_TRIGGERS = Object.freeze([TRIGGER_FIRST_ORDER, ...STEP_TRIGGERS]);
+
+export function isStandardTrigger(option) {
+  return STANDARD_TRIGGERS.includes(option);
+}
+
+// journeyOptionDisabled: a standard radio is rendered disabled for a user without lists:journeys.
+export function journeyOptionDisabled(option, canJourneys) {
+  return !canJourneys && isStandardTrigger(option);
+}
+
+// The three server fields, read under either key spelling (the API client camel-cases responses).
+const either = (list, wire, camel) => {
+  const l = list || {};
+  return l[wire] !== undefined ? l[wire] : l[camel];
+};
+
+// journeyLockedOf is the server's journey_locked (never re-derived here: the server is the one
+// definition, isJourneyLockedList).
+export function journeyLockedOf(list) {
+  return either(list, 'journey_locked', 'journeyLocked') === true;
+}
+
+export function triggerActiveOf(list) {
+  return either(list, 'trigger_active', 'triggerActive') === true;
+}
+
+// runningAutomationOf is GET /api/lists/:id's running_automation: true, false, or undefined when
+// the row came from a multi-list response (which never carries it).
+export function runningAutomationOf(list) {
+  const v = either(list, 'running_automation', 'runningAutomation');
+  return typeof v === 'boolean' ? v : undefined;
+}
+
+// formReadOnly: a standard journey list opens with every field read-only (and no Save) for a user
+// without lists:journeys. The Active switch is separate (activeSwitchState).
+export function formReadOnly(list, canJourneys) {
+  return journeyLockedOf(list) && !canJourneys;
+}
+
+// activeSwitchState is the form's Active switch (D12): shown on any list with a STORED trigger for
+// a user with the list's manage permission, locked or not. Turning on is disabled (with the
+// "Start this list's automation first" hint) unless running_automation is true -- the server
+// refuses anyway (D2.3); off is always allowed. A running automation on an inactive list warns.
+export function activeSwitchState(list, canManage = true) {
+  const show = !!canManage && triggerOption(storedTrigger(list)) !== TRIGGER_NONE;
+  const active = triggerActiveOf(list);
+  const running = runningAutomationOf(list) === true;
+  return {
+    show,
+    active,
+    canTurnOn: show && !active && running,
+    canTurnOff: show && active,
+    hintKey: show && !active && !running ? 'lists.activeNeedsRunning' : '',
+    warningKey: show && !active && running ? 'lists.activeRunningNotActive' : '',
+  };
+}
+
+// normalizedTrigger is a join_trigger in the server's stored form, for comparison only (D3's
+// "by value"): SKUs trimmed, lower-cased, de-duplicated in order; null for none.
+function normalizedTrigger(jt) {
+  const opt = triggerOption(jt);
+  if (opt === TRIGGER_NONE) return null;
+  if (opt === TRIGGER_SKUS) {
+    const seen = [];
+    (Array.isArray(jt.skus) ? jt.skus : []).forEach((s) => {
+      const v = String(s).trim().toLowerCase();
+      if (v && !seen.includes(v)) seen.push(v);
+    });
+    return { kind: opt, skus: seen };
+  }
+  if (isStepTrigger(opt)) return { kind: opt, days: jt.days };
+  return { kind: opt };
+}
+
+// triggerChangeTurnsOff (D3/D12) is true when saving the form would turn an ACTIVE list's switch
+// off: its trigger, brand or transactional differs from the stored values. form is {joinTrigger,
+// brand, transactional}; a key left undefined is not sent and so not a change.
+export function triggerChangeTurnsOff(stored, form) {
+  if (!triggerActiveOf(stored)) return false;
+  const f = form || {};
+  const s = stored || {};
+  if (f.joinTrigger !== undefined
+    && JSON.stringify(normalizedTrigger(f.joinTrigger)) !== JSON.stringify(normalizedTrigger(storedTrigger(s)))) return true;
+  if (f.brand !== undefined && String(f.brand || '').trim() !== String(s.brand || '')) return true;
+  if (f.transactional !== undefined && !!f.transactional !== !!s.transactional) return true;
+  return false;
 }
 
 // Fork (integrations JOURNEY-UX-SPEC A1.4) -- the selector's help follows the selection: one
@@ -269,14 +372,14 @@ export function triggerBadge(joinTrigger, triggerSync) {
 }
 
 // listTriggerItem is the Lists page sub-line item, or '' for a list without a trigger. The state
-// word only -- never the error text.
+// word only -- never the error text -- then the Active switch's state (JOURNEY-LISTS-SPEC D12).
 export function listTriggerItem(list) {
   const opt = triggerOption(storedTrigger(list));
   if (opt === TRIGGER_NONE) return '';
   const what = triggerWhat(storedTrigger(list));
   const badge = triggerBadge(storedTrigger(list), storedTriggerSync(list));
   const state = { pending: 'pending sync', live: 'live', invalid: 'invalid' }[badge.state];
-  return `${what} · ${state}`;
+  return `${what} · ${state} · ${triggerActiveOf(list) ? 'Active' : 'Inactive'}`;
 }
 
 // withTriggerItem appends the item to the sub-line text with the page's ' · ' separator, or

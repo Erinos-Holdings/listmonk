@@ -91,6 +91,12 @@ const (
 	// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D5) -- set or change a list's transactional
 	// flag, and change the join trigger or brand of a list whose stored flag is true.
 	PermListTransactional = "lists:transactional"
+
+	// Fork (journey lists, integrations JOURNEY-LISTS-SPEC D6) -- edit, delete or hand-manage the
+	// membership of a standard journey list (cmd isJourneyLockedList), set a standard trigger kind,
+	// create a list carrying a reengage: tag. Held by Super Admin and the three system API roles
+	// (granted by id in v6.2.36); the Active switch does not need it.
+	PermListJourneys = "lists:journeys"
 )
 
 // Base holds common fields shared across models.

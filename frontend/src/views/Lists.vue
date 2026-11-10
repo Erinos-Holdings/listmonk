@@ -251,7 +251,7 @@
             </b-tooltip>
           </router-link>
 
-          <a v-if="canEditList(props.row)" href="#"
+          <a v-if="canDeleteList(props.row)" href="#"
             @click.prevent="deleteList(props.row)" data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
             <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
               <b-icon icon="trash-can-outline" size="is-small" />
@@ -291,7 +291,7 @@ import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-dis
 import { isLockedList } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf, listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { withSunsetItem } from '../listSunset.mjs'; // eslint-disable-line import/extensions
-import { withTriggerItem } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
+import { journeyLockedOf, withTriggerItem } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 // Fork (list grid; dashboard counts, integrations DASHBOARD-COUNTS-SPEC D7) -- the one lines rule,
 // shared with the Dashboard.
 import { gridLines } from '../gridLines.mjs'; // eslint-disable-line import/extensions
@@ -410,6 +410,13 @@ export default Vue.extend({
     // control (the server refuses both with 409 regardless).
     canEditList(row) {
       return this.canManageList(row.id) && !isLockedList(row);
+    },
+
+    // Fork (journey lists, integrations JOURNEY-LISTS-SPEC D12) -- a standard journey list
+    // (journey_locked, the server's definition) offers no delete without lists:journeys; its edit
+    // form still opens (read-only, with the Active switch). The server refuses with 403 regardless.
+    canDeleteList(row) {
+      return this.canEditList(row) && !(journeyLockedOf(row) && !this.$can('lists:journeys'));
     },
 
     // Fork: `#<id> · <brand display name>`, the brand omitted for a brandless list and under a

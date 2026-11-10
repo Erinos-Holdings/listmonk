@@ -372,14 +372,22 @@ test('D7: the trigger tooltip lists each stored row with its error or its list',
     ],
   }, t);
   assert.equal(tip, 'a: trigger is missing\nb: dashboard.usage.noList\nc: dashboard.usage.listEvergreen{"list":5,"state":"idle"}');
-  // Integrations JOURNEY-DRAFTS-SPEC I9: an untriggered-draft row gives the untriggered text, no slug line.
-  const draftTip = triggerTip({
-    rows: [{
-      slug: 'draft-71', listId: 71, evergreen: 'idle', days: 2, campaigns: [{ id: 246, status: 'draft' }], untriggered: true,
-    }],
+  // Integrations JOURNEY-LISTS-SPEC D13 / I10 (retiring JOURNEY-DRAFTS-SPEC I9's untriggered-draft
+  // line): an inactive stored row is named "saved, not Active" after its list line; an active row
+  // is unchanged.
+  const inactiveTip = triggerTip({
+    rows: [
+      {
+        slug: 'thirstygirl-no-purchase-75', listId: 75, evergreen: 'idle', days: 2, campaigns: [{ id: 246, status: 'draft' }], inactive: true,
+      },
+      { slug: 'thirstygirl-first-order', listId: 54, evergreen: 'running' },
+    ],
   }, t);
-  assert.equal(draftTip, 'dashboard.usage.untriggeredDraft{"list":71}');
-  assert.ok(!draftTip.includes('draft-71'));
+  assert.equal(inactiveTip, 'thirstygirl-no-purchase-75: dashboard.usage.listEvergreen{"list":75,"state":"idle"} · dashboard.usage.inactiveRow{"list":75}\n'
+    + 'thirstygirl-first-order: dashboard.usage.listEvergreen{"list":54,"state":"running"}');
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(typeof en['dashboard.usage.inactiveRow'], 'string');
+  assert.equal(en['dashboard.usage.untriggeredDraft'], undefined, 'the untriggered-draft key is retired');
   assert.equal(broadcastTip({ cadenceDays: null, ratio: 2.8216, windowCount: 1 }, t), 'dashboard.usage.broadcastHelp{"cadence":"—","ratio":"2.82","count":1}');
   const row = shapeRows([{
     brand: 'x',

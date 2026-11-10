@@ -169,13 +169,40 @@ UPDATE lists SET sunset=$2::JSONB WHERE id = $1;
 -- carries its current value). Nothing changes, and the stamps stay, unless either differs, and
 -- trigger_sync is nulled only when join_trigger changed (SET expressions read the old row).
 -- RowsAffected tells the caller whether anything changed.
+-- Fork (journey lists, integrations JOURNEY-LISTS-SPEC D3) -- $5 is "the request changed the list's
+-- brand". A change of join_trigger, transactional or the brand turns an ACTIVE list's Active switch
+-- off (stamped with $4); a brand-only change of an active list satisfies the guard through $5, and
+-- the trigger stamps then stay (they record trigger/transactional changes only). An inactive or
+-- untriggered list's brand-only change still no-ops.
 UPDATE lists SET
     trigger_sync = (CASE WHEN join_trigger IS DISTINCT FROM $2::JSONB THEN NULL ELSE trigger_sync END),
+    trigger_active = (CASE WHEN trigger_active AND (join_trigger IS DISTINCT FROM $2::JSONB OR transactional IS DISTINCT FROM $3 OR $5::BOOLEAN)
+        THEN false ELSE trigger_active END),
+    trigger_active_at = (CASE WHEN trigger_active AND (join_trigger IS DISTINCT FROM $2::JSONB OR transactional IS DISTINCT FROM $3 OR $5::BOOLEAN)
+        THEN NOW() ELSE trigger_active_at END),
+    trigger_active_by = (CASE WHEN trigger_active AND (join_trigger IS DISTINCT FROM $2::JSONB OR transactional IS DISTINCT FROM $3 OR $5::BOOLEAN)
+        THEN $4 ELSE trigger_active_by END),
     join_trigger = $2::JSONB,
     transactional = $3,
-    trigger_set_by = $4,
-    trigger_set_at = NOW()
-WHERE id = $1 AND (join_trigger IS DISTINCT FROM $2::JSONB OR transactional IS DISTINCT FROM $3);
+    trigger_set_by = (CASE WHEN join_trigger IS DISTINCT FROM $2::JSONB OR transactional IS DISTINCT FROM $3 THEN $4 ELSE trigger_set_by END),
+    trigger_set_at = (CASE WHEN join_trigger IS DISTINCT FROM $2::JSONB OR transactional IS DISTINCT FROM $3 THEN NOW() ELSE trigger_set_at END)
+WHERE id = $1 AND (join_trigger IS DISTINCT FROM $2::JSONB OR transactional IS DISTINCT FROM $3 OR ($5::BOOLEAN AND trigger_active));
+
+-- name: update-list-active
+-- Fork (journey lists, integrations JOURNEY-LISTS-SPEC D2.4) -- the Active switch, one statement:
+-- the flag and both stamps. updated_at is left alone (the trigger-sync posture: not an edit of the
+-- list's content). A no-op (0 rows) when the value is already stored or the list carries no trigger.
+UPDATE lists SET trigger_active = $2, trigger_active_at = NOW(), trigger_active_by = $3
+WHERE id = $1 AND join_trigger IS NOT NULL AND trigger_active IS DISTINCT FROM $2;
+
+-- name: get-list-running-evergreen
+-- Fork (journey lists, integrations JOURNEY-LISTS-SPEC D2.3/D2a) -- the ONE definition of "a running
+-- automation on this list": a campaign with evergreen = true and status running whose campaign_lists
+-- include the list. Turning a list Active needs it; GET /api/lists/:id reports it.
+SELECT EXISTS (
+    SELECT 1 FROM campaigns c JOIN campaign_lists cl ON cl.campaign_id = c.id
+    WHERE cl.list_id = $1 AND c.evergreen = true AND c.status = 'running'
+);
 
 -- name: update-list-trigger-sync
 -- Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D6) -- stores the reconciler's write-back $2
@@ -218,6 +245,11 @@ WHERE l.id = ANY($2::INT[]) AND l.join_trigger->>'kind' IN ('no_purchase', 'post
   ))
 ORDER BY l.id
 LIMIT 1;
+
+-- name: get-subscriber-list-ids
+-- Fork (journey lists, integrations JOURNEY-LISTS-SPEC D7 M2/M3) -- every list a subscriber has a
+-- membership row on, any status: the before-set the lock compares a replacing update against.
+SELECT list_id FROM subscriber_lists WHERE subscriber_id = $1 ORDER BY list_id;
 
 -- name: get-delete-lists-by-query
 -- Fork (BRAND-PICKER-SPEC D4) -- the ids and names delete-lists would remove for a by-query

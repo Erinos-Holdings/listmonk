@@ -29,6 +29,8 @@ func (a *App) GetLists(c echo.Context) error {
 		if len(res) == 0 {
 			return c.JSON(http.StatusOK, okResp{[]struct{}{}})
 		}
+		// Fork (journey lists, JOURNEY-LISTS-SPEC D6) -- journey_locked on every list response.
+		markJourneyLocked(res)
 
 		// Meta.
 		total := len(res)
@@ -63,6 +65,7 @@ func (a *App) GetLists(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+	markJourneyLocked(res)
 
 	out := models.PageResults{
 		Query:   query,
@@ -92,8 +95,25 @@ func (a *App) GetList(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := a.decorateList(&out, true); err != nil {
+		return err
+	}
 
 	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// decorateList sets the computed response fields (fork, journey lists -- JOURNEY-LISTS-SPEC D6,
+// D2a): journey_locked always, running_automation when running (the single-list GET only).
+func (a *App) decorateList(l *models.List, running bool) error {
+	l.JourneyLocked = isJourneyLockedList(*l)
+	if running {
+		ok, err := a.core.ListHasRunningEvergreen(l.ID)
+		if err != nil {
+			return err
+		}
+		l.RunningAutomation = &ok
+	}
+	return nil
 }
 
 // CreateList handles list creation.
@@ -115,6 +135,16 @@ func (a *App) CreateList(c echo.Context) error {
 		return err
 	}
 	l.Tags = tags
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D6/D7 L3) -- a list carrying a reengage: tag (a
+	// sunset queue, a standard journey list) is created only by a holder of lists:journeys. POST
+	// ignores join_trigger and trigger_active, so no other create can mint a locked list.
+	if !canManageJourneys(auth.GetUser(c)) {
+		for _, t := range l.Tags {
+			if strings.HasPrefix(strings.TrimSpace(t), reengageTagPrefix) {
+				return a.journeyLockedErr(l.Name)
+			}
+		}
+	}
 	// Fork (BRAND-PICKER-SPEC D4) -- a second list of a locked name is refused (the route's
 	// lists:manage_all check has already run).
 	if err := a.refuseSecondLocked(l.Name); err != nil {
@@ -123,6 +153,9 @@ func (a *App) CreateList(c echo.Context) error {
 
 	out, err := a.core.CreateList(l)
 	if err != nil {
+		return err
+	}
+	if err := a.decorateList(&out, false); err != nil {
 		return err
 	}
 
@@ -148,17 +181,29 @@ func (a *App) UpdateList(c echo.Context) error {
 	}
 	l := r.List
 
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D6/D7 L1/L2) -- the stored list is always read: the
+	// standard-journey-list lock runs FIRST, on the STORED list (so a request that would clear a
+	// locked list's trigger is refused too), and a request setting a standard kind on any list
+	// needs lists:journeys. A refused request applies nothing.
+	cur, err := a.core.GetList(id, "")
+	if err != nil {
+		return err
+	}
+	if !canManageJourneys(user) {
+		if isJourneyLockedList(cur) {
+			return a.journeyLockedErr(cur.Name)
+		}
+		if r.JoinTrigger != nil && !isJSONNull(r.JoinTrigger) && isStandardTriggerKind(joinTriggerKind(r.JoinTrigger)) {
+			return a.journeyLockedErr(cur.Name)
+		}
+	}
+
 	// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D5) -- the transactional permission check
-	// runs FIRST: a refused request applies nothing (name, tags, brand, join_trigger included).
-	// The current row is read only when the request carries a field the trigger rules read.
-	var cur models.List
+	// runs before anything is applied (name, tags, brand, join_trigger included), when the request
+	// carries a field the trigger rules read.
 	// JOURNEY-UX-SPEC A1.1b: a type of public is judged against the stored trigger too.
 	needCur := listTriggerCarried(r) || r.Brand != nil || r.Type == models.ListTypePublic
 	if needCur {
-		var err error
-		if cur, err = a.core.GetList(id, ""); err != nil {
-			return err
-		}
 		if err := a.checkListTriggerPerm(user, r, cur); err != nil {
 			return err
 		}
@@ -186,13 +231,7 @@ func (a *App) UpdateList(c echo.Context) error {
 		if !strings.HasPrefix(strings.TrimSpace(t), reengageTagPrefix) {
 			continue
 		}
-		stored := cur // read above only when needCur; needCur itself is left alone (it gates the trigger plan)
-		if !needCur {
-			if stored, err = a.core.GetList(id, ""); err != nil {
-				return err
-			}
-		}
-		if nt := newReengageTag(r.Tags, stored.Tags); nt != "" {
+		if nt := newReengageTag(r.Tags, cur.Tags); nt != "" {
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("lists.reservedTag", "tag", nt))
 		}
 		break
@@ -214,6 +253,14 @@ func (a *App) UpdateList(c echo.Context) error {
 			return err
 		}
 	}
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D3, review F1) -- a brand change turns an active
+	// list's Active switch off through the trigger statement, so it is a trigger write too (the
+	// test checkListTriggerPerm makes). planListTrigger ran (r.Brand != nil is in needCur), so tp
+	// carries the resulting trigger and transactional.
+	brandChanged := r.Brand != nil && strings.TrimSpace(*r.Brand) != cur.Brand
+	if brandChanged {
+		tp.write = true
+	}
 
 	// Update the list in the DB.
 	out, err := a.core.UpdateList(id, l, keepReserved)
@@ -225,7 +272,7 @@ func (a *App) UpdateList(c echo.Context) error {
 	// atomic with it: an error here leaves the main update applied and is returned; a retry
 	// converges). It no-ops, stamps included, when nothing differs from the stored row.
 	if tp.write {
-		changed, err := a.core.UpdateListTrigger(id, tp.joinTrigger, tp.transactional, user.Username)
+		changed, err := a.core.UpdateListTrigger(id, tp.joinTrigger, tp.transactional, user.Username, brandChanged)
 		if err != nil {
 			return err
 		}
@@ -234,6 +281,9 @@ func (a *App) UpdateList(c echo.Context) error {
 				return err
 			}
 		}
+	}
+	if err := a.decorateList(&out, false); err != nil {
+		return err
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})
@@ -250,6 +300,10 @@ func (a *App) DeleteList(c echo.Context) error {
 	}
 	// Fork (BRAND-PICKER-SPEC D4) -- after the permission check.
 	if err := a.refuseLocked(id); err != nil {
+		return err
+	}
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D7 L4) -- a standard journey list needs lists:journeys.
+	if err := a.refuseJourneyLocked(user, id); err != nil {
 		return err
 	}
 
@@ -301,6 +355,11 @@ func (a *App) DeleteLists(c echo.Context) error {
 		if err := a.refuseLocked(ids...); err != nil {
 			return err
 		}
+		// Fork (journey lists, JOURNEY-LISTS-SPEC D7 L5) -- refused whole when any is a standard
+		// journey list and the caller lacks lists:journeys.
+		if err := a.refuseJourneyLocked(user, ids...); err != nil {
+			return err
+		}
 
 		// Delete the lists from the DB.
 		// Pass getAll=true since we've already verified permissions above.
@@ -322,6 +381,11 @@ func (a *App) DeleteLists(c echo.Context) error {
 			if models.IsLockedListName(n) {
 				return a.lockedListErr(n)
 			}
+		}
+		// Fork (journey lists, JOURNEY-LISTS-SPEC D7 L5) -- the matched set first, then refused
+		// whole when any of it is a standard journey list (the refuseLocked pattern).
+		if err := a.refuseJourneyLocked(user, matched...); err != nil {
+			return err
 		}
 		if len(matched) > 0 {
 			if err := a.core.DeleteLists(matched, "", true, nil); err != nil {

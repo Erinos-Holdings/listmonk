@@ -118,9 +118,12 @@ func newTriggerHarness(t *testing.T) (*triggerHarness, int, int) {
 	return &triggerHarness{t: t, h: h}, branded, untagged
 }
 
+// Fork (journey lists, JOURNEY-LISTS-SPEC D6) -- both hold lists:journeys: these tests exercise
+// the trigger rules (shape, stamps, brand, lists:transactional) on first_order lists, which are
+// standard journey lists since that spec. The lock itself is lists_journey_lock_test.go's.
 var (
-	marketer = perms("marketer", auth.PermListGetAll, auth.PermListManageAll)
-	admin    = perms("admin", auth.PermListGetAll, auth.PermListManageAll, auth.PermListTransactional)
+	marketer = perms("marketer", auth.PermListGetAll, auth.PermListManageAll, auth.PermListJourneys)
+	admin    = perms("admin", auth.PermListGetAll, auth.PermListManageAll, auth.PermListTransactional, auth.PermListJourneys)
 )
 
 // I4 -- tri-state join_trigger with normalization and refusals; GET returns the five fields.
@@ -419,8 +422,9 @@ func TestListTriggerTransactionalPermission(t *testing.T) {
 	if r := th.row(list); r.Name != "Renamed" || r.SetBy != nil {
 		t.Fatalf("round-trip: %+v", r)
 	}
-	// A per-list manager (list:manage on this list only) may switch a journey on (D5).
-	perList := auth.User{Username: "creator", PermissionsMap: map[string]struct{}{},
+	// A per-list manager (list:manage on this list only) may switch a journey on (D5). Fork
+	// (journey lists) -- a first_order trigger also needs lists:journeys (JOURNEY-LISTS-SPEC D6).
+	perList := auth.User{Username: "creator", PermissionsMap: map[string]struct{}{auth.PermListJourneys: {}},
 		ListPermissionsMap: map[int]map[string]struct{}{list: {auth.PermListGet: {}, auth.PermListManage: {}}}}
 	if code, _ := th.put(list, `{"name":"Renamed","join_trigger":{"kind":"first_order"}}`, perList); code != http.StatusOK {
 		t.Fatalf("per-list manager sets a trigger: %d", code)

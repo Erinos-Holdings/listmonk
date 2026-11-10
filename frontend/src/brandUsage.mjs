@@ -667,18 +667,16 @@ export function welcomeTip(w, t = (k) => k) {
 export function triggerTip(p, t = (k) => k) {
   const rows = Array.isArray(p && p.rows) ? p.rows : [];
   return rows.map((r) => {
-    // Integrations JOURNEY-DRAFTS-SPEC D3: a stored untriggered-draft row (a tagged draft automation
-    // on a step list with no registry row) -- its slug is not a registry slug and is never shown.
-    if (r.untriggered === true) {
-      return t('dashboard.usage.untriggeredDraft', { list: r.listId });
-    }
     if (typeof r.error === 'string' && r.error) {
       return `${r.slug}: ${r.error}`;
     }
     if (r.listId === null || r.listId === undefined) {
       return `${r.slug}: ${t('dashboard.usage.noList')}`;
     }
-    return `${r.slug}: ${t('dashboard.usage.listEvergreen', { list: r.listId, state: r.evergreen })}`;
+    const line = `${r.slug}: ${t('dashboard.usage.listEvergreen', { list: r.listId, state: r.evergreen })}`;
+    // Integrations JOURNEY-LISTS-SPEC D13: a stored inactive row (its list saved, not Active) is
+    // named -- the stored fact only; its colour is the lib's (no rule moves here).
+    return r.inactive === true ? `${line} · ${t('dashboard.usage.inactiveRow', { list: r.listId })}` : line;
   }).join('\n');
 }
 

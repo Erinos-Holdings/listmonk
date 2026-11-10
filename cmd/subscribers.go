@@ -282,6 +282,10 @@ func (a *App) CreateSubscriber(c echo.Context) error {
 	if err := a.refuseStepListAdd(user, nil, listIDs); err != nil {
 		return err
 	}
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D7 M1) -- a standard journey list needs lists:journeys.
+	if err := a.refuseJourneyLocked(user, listIDs...); err != nil {
+		return err
+	}
 
 	// Insert the subscriber into the DB.
 	sub, _, err := a.core.InsertSubscriber(req.Subscriber, listIDs, nil, req.PreconfirmSubs, false, req.Backfill)
@@ -355,6 +359,12 @@ func (a *App) UpdateSubscriber(c echo.Context) error {
 	allPerm, permittedLists := user.GetPermittedLists(auth.PermTypeManage)
 	if allPerm {
 		permittedLists = []int{}
+	}
+
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D7 M2) -- the lists REPLACE the subscriptions: an
+	// add or a drop of a standard journey list needs lists:journeys; a round-trip passes.
+	if err := a.refuseJourneyMembershipChange(user, id, listIDs, permittedLists); err != nil {
+		return err
 	}
 
 	out, _, err := a.core.UpdateSubscriberWithLists(id, req.Subscriber, listIDs, nil, req.PreconfirmSubs, true, false, permittedLists, false)
@@ -439,6 +449,14 @@ func (a *App) PatchSubscriber(c echo.Context) error {
 	allPerm, permittedLists := user.GetPermittedLists(auth.PermTypeManage)
 	if allPerm {
 		permittedLists = []int{}
+	}
+
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D7 M3) -- only a PATCH carrying lists replaces the
+	// subscriptions (as UpdateSubscriber); an attribs/name-only PATCH touches no membership.
+	if overwriteSubs {
+		if err := a.refuseJourneyMembershipChange(user, id, listIDs, permittedLists); err != nil {
+			return err
+		}
 	}
 
 	out, _, err := a.core.UpdateSubscriberWithLists(id, req.Subscriber, listIDs, nil, req.PreconfirmSubs, overwriteSubs, false, permittedLists, false)
@@ -567,6 +585,14 @@ func (a *App) ManageSubscriberLists(c echo.Context) error {
 	// Fork (holds) -- a hold returns its per-id outcome, not okResp.
 	if req.Action == "hold" {
 		return a.holdSubscriberLists(c, subIDs, listIDs, req)
+	}
+
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D7 M4) -- add and remove on a standard journey list
+	// need lists:journeys; unsubscribe and hold (above) are suppressions and stay open.
+	if req.Action == "add" || req.Action == "remove" {
+		if err := a.refuseJourneyLocked(user, listIDs...); err != nil {
+			return err
+		}
 	}
 
 	// Run the action in the DB.
@@ -838,6 +864,14 @@ func (a *App) ManageSubscriberListsByQuery(c echo.Context) error {
 	// write is exactly what a hold must never be, so the by-query endpoint refuses it by name.
 	if req.Action == "hold" {
 		return echo.NewHTTPError(http.StatusBadRequest, "action hold takes explicit ids on PUT /api/subscribers/lists")
+	}
+
+	// Fork (journey lists, JOURNEY-LISTS-SPEC D7 M5) -- as ManageSubscriberLists: add and remove on
+	// a standard journey list need lists:journeys; unsubscribe stays open.
+	if req.Action == "add" || req.Action == "remove" {
+		if err := a.refuseJourneyLocked(user, targetListIDs...); err != nil {
+			return err
+		}
 	}
 
 	// Run the action in the DB.

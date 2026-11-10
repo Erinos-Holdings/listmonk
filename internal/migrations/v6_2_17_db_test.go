@@ -127,6 +127,8 @@ func TestSuperAdminHoldsEveryPermission(t *testing.T) {
 		{"v6.2.17", func() error { return V6_2_17(h.db, nil, nil, lo) }},
 		{"v6.2.23", func() error { return V6_2_23(h.db, nil, nil, lo) }},
 		{"v6.2.29", func() error { return V6_2_29(h.db, nil, nil, lo) }},
+		// Fork (journey lists, JOURNEY-LISTS-SPEC D11) -- lists:journeys.
+		{"v6.2.36", func() error { return V6_2_36(h.db, nil, nil, lo) }},
 	}
 	for _, g := range granting {
 		if err := g.run(); err != nil {

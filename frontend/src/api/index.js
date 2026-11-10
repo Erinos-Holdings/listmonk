@@ -291,6 +291,13 @@ export const updateList = (data) => http.put(
   { loading: models.lists },
 );
 
+// Fork (journey lists, integrations JOURNEY-LISTS-SPEC D2) -- the list's Active switch.
+export const putListActive = (id, active) => http.put(
+  `/api/lists/${id}/active`,
+  { active },
+  { loading: models.lists },
+);
+
 export const deleteList = (id) => http.delete(
   `/api/lists/${id}`,
   { loading: models.lists },
