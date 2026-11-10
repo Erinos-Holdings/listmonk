@@ -1155,7 +1155,7 @@ RETURNS TABLE (list_id INT, subscriber_id INT) AS $$
         AND x.transactional = FALSE AND list_brand_tag(x.tags) IS NOT NULL
         AND NOT EXISTS (SELECT 1 FROM UNNEST(x.tags) AS t WHERE t ~ '^reengage:[0-9]+:[1-4]$')
         AND (SELECT st.value FROM settings st WHERE st.key = 'app.brand_hold_scope') = 'true'::JSONB;
-$$ LANGUAGE sql STABLE;
+$$ LANGUAGE sql STABLE PARALLEL SAFE;
 
 -- brand_eligible_sends: the six broadcasts counted as sent, across the brand. Per member of
 -- p_list_id (subscription_engagement's members and anchor exactly), the number of DISTINCT finished
@@ -1192,7 +1192,7 @@ RETURNS TABLE (subscriber_id INT, eligible_sends BIGINT, first_eligible_send_at 
         SELECT c.id AS campaign_id, c.started_at, c.max_subscriber_id, c.lang, m.subscriber_id, m.anchor_at, m.lang AS sub_lang
         FROM camps c JOIN members m ON (TRUE)
         WHERE c.list_id = p_list_id
-        UNION
+        UNION ALL
         SELECT c.id, c.started_at, c.max_subscriber_id, c.lang, m.subscriber_id, m.anchor_at, m.lang
         FROM members m
         JOIN subscriber_lists r ON (r.subscriber_id = m.subscriber_id AND r.list_id <> p_list_id)

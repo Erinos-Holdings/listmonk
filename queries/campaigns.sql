@@ -301,6 +301,16 @@ campMedia AS (
     WHERE campaign_id = ANY(SELECT id FROM camps) AND media_id IS NOT NULL
     GROUP BY campaign_id
 ),
+-- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- the brand-hold set, computed ONCE per claimed
+-- campaign (as jsends is for brand_journey_skips) so aud anti-joins to it; called inside aud with
+-- camps.id it would be a correlated SubPlan run once per audience row. MATERIALIZED, because a CTE
+-- read once is otherwise inlined and planned as a parameterised inner side probed per audience row.
+held AS MATERIALIZED (
+    SELECT camps.id AS campaign_id, bh.list_id, bh.subscriber_id
+    FROM camps
+    CROSS JOIN LATERAL brand_hold_rows(camps.id) bh
+    WHERE NOT camps.evergreen
+),
 -- Fork (smart sending, integrations SMART-SENDING-SPEC D2) -- the audience join, lifted out of counts
 -- unchanged: one row per (claimed non-evergreen campaign, subscriber it would send to).
 aud AS (
@@ -329,9 +339,9 @@ aud AS (
         -- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- a list row of a subscriber held on
         -- any non-transactional list of that list's brand does not qualify (brand_hold_rows, the
         -- one definition; dark unless app.brand_hold_scope is true). Not a Smart Sending skip -- no
-        -- campaign_smart_skips row, simply not in the audience.
-        AND NOT EXISTS (SELECT 1 FROM brand_hold_rows(camps.id) bh
-            WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id)
+        -- campaign_smart_skips row, simply not in the audience. The set is the held CTE above.
+        AND NOT EXISTS (SELECT 1 FROM held bh
+            WHERE bh.campaign_id = camps.id AND bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id)
 ),
 -- Fork (smart sending, D1/D2) -- the skip set is decided HERE, once per claim, and recorded. skips =
 -- the audience rows brand_journey_skips also returns for that campaign (the one definition of both
