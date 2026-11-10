@@ -346,13 +346,21 @@ func TestBrandUnsubscribe_PlainUnsubscribedRowUntouched(t *testing.T) {
 	}
 }
 
-// TestBrandUnsubscribe_BlocklistBranchUnchanged -- A9/D6. The blocklist branch of the campaign
-// link is untouched by the expansion: every list of every brand, the transactional list included,
-// plus the subscriber blocklisted. It is already maximal.
+// TestBrandUnsubscribe_BlocklistBranchUnchanged -- A9/D6, and D6 is LITERAL. The blocklist branch
+// of the campaign link is untouched by the expansion: every list of every brand, the transactional
+// list included, plus the subscriber blocklisted. It is already maximal. And D3's hold clause is
+// scoped OUT of it: an already-unsubscribed HELD row keeps its `meta.hold` AND its `updated_at`,
+// so this writer keeps agreeing with the admin `blocklist-subscribers` one.
 func TestBrandUnsubscribe_BlocklistBranchUnchanged(t *testing.T) {
 	f := newBrandFixture(t)
 	camp := f.camp("acme blast", f.news)
 	id, uu := f.sub("e@x", f.news, f.step, f.txn, f.zeta, f.untagged)
+
+	// A held row on one of the brand's lists, and a FINAL held row on another.
+	f.setStatus(id, f.step, "unsubscribed", `{"hold":{"reason":"never-engaged","source":"sunset","rule":"never-engaged","at":"2026-05-01T00:00:00Z"}}`)
+	f.setStatus(id, f.zeta, "unsubscribed", `{"hold":{"reason":"never-engaged","source":"sunset","rule":"never-engaged","at":"2026-05-01T00:00:00Z","final_at":"2026-11-01T00:00:00Z"}}`)
+	heldBefore := f.row(id, f.step).UpdatedAt
+	finalBefore := f.row(id, f.zeta).UpdatedAt
 
 	if err := f.app.core.UnsubscribeByCampaign(uu, camp, true); err != nil {
 		t.Fatal(err)
@@ -366,6 +374,24 @@ func TestBrandUnsubscribe_BlocklistBranchUnchanged(t *testing.T) {
 	f.db.Get(&status, `SELECT status FROM subscribers WHERE id = $1`, id)
 	if status != "blocklisted" {
 		t.Fatalf("subscriber status %s, want blocklisted", status)
+	}
+
+	// D6: the held rows are untouched by the blocklist -- hold kept, no release, no bump.
+	for _, tc := range []struct {
+		label  string
+		list   int
+		before time.Time
+	}{{"held", f.step, heldBefore}, {"final held", f.zeta, finalBefore}} {
+		m := f.meta(id, tc.list)
+		if m["hold"] == nil {
+			t.Fatalf("blocklist released the %s row's hold: %s", tc.label, f.row(id, tc.list).Meta)
+		}
+		if m["hold_released"] != nil {
+			t.Fatalf("blocklist wrote hold_released on the %s row: %s", tc.label, f.row(id, tc.list).Meta)
+		}
+		if !f.row(id, tc.list).UpdatedAt.Equal(tc.before) {
+			t.Fatalf("blocklist bumped the %s row's updated_at (%v -> %v)", tc.label, tc.before, f.row(id, tc.list).UpdatedAt)
+		}
 	}
 }
 

@@ -333,6 +333,12 @@ UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW(),
 --      own act is the one thing that ends a final hold (SUNSET-V4 D5). A status change releases
 --      through the trigger instead, so only the already-unsubscribed case is handled here.
 -- A plain already-unsubscribed row (no hold) is left alone: no status write, no updated_at bump.
+--
+-- BOTH halves of change 2/3 -- the `meta ? 'hold'` predicate and the meta release -- are scoped to
+-- the NON-blocklist branch ($3 IS FALSE), because D6 is literal: the blocklist path is unchanged.
+-- Unscoped, a blocklist would release a held row's hold and bump its updated_at, which the admin
+-- blocklist writer (blocklist-subscribers) does not do, so two blocklist writers would disagree
+-- over a route that is dead today (privacy.allow_blocklist is false).
 WITH lists AS (
     SELECT list_id FROM campaign_lists
     LEFT JOIN campaigns ON (campaign_lists.campaign_id = campaigns.id)
@@ -348,9 +354,11 @@ sub AS (
     WHERE uuid = $2 RETURNING id
 )
 UPDATE subscriber_lists SET status = 'unsubscribed', updated_at=NOW(),
-    meta=(CASE WHEN status = 'unsubscribed' THEN subscriber_lists_release_hold(meta, 'unsubscribed') ELSE meta END)
+    meta=(CASE WHEN $3 IS FALSE AND status = 'unsubscribed'
+        THEN subscriber_lists_release_hold(meta, 'unsubscribed') ELSE meta END)
     WHERE
-    subscriber_id = (SELECT id FROM sub) AND (status != 'unsubscribed' OR meta ? 'hold') AND
+    subscriber_id = (SELECT id FROM sub) AND
+    (status != 'unsubscribed' OR ($3 IS FALSE AND meta ? 'hold')) AND
     -- If $3 is false, unsubscribe from the brand's marketing lists ∪ the campaign's own lists,
     -- otherwise all lists.
     CASE WHEN $3 IS FALSE THEN list_id = ANY(SELECT list_id FROM targets) ELSE list_id != 0 END;
