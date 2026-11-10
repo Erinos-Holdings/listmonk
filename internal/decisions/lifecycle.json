@@ -461,7 +461,7 @@
       "key": "sp-hold",
       "section": "sunset-policy",
       "n": 18,
-      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago (the default window, item 17) and the brand has sent them at least 6 broadcasts since they signed up or last returned from a hold (counted from then, not from their last engagement; a broadcast Smart Sending skipped them from is not counted), they stop getting its regular sends, on every list of the brand (its re-engagement lists aside). Every new engagement restarts the window. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list. Someone whose first counted broadcast went out before the brand's sunset start date is never held by this rule, unless they return from a hold or unsubscribe and later sign up again.",
+      "text": "Hold at 180 days without engagement. When someone's last engagement (or their sign-up, if they never engaged) is 180 or more days ago (the default window, item 17) and the brand has sent them at least 6 broadcasts since they signed up or last returned from a hold (counted from then, not from their last engagement; a broadcast Smart Sending skipped them from is not counted), they stop getting its regular sends, on every list of the brand (its re-engagement lists aside). Every new engagement restarts the window. This is a hold, not an unsubscribe: no opt-out is recorded, and they move to the brand's re-engagement list.",
       "changelog": [
         {
           "date": "2026-10-31",
@@ -485,8 +485,8 @@
         {
           "date": "2026-11-10",
           "source": "page",
-          "line": "States what the rule does: a hold covers every list of the brand; a broadcast Smart Sending skipped is not counted; and the sunset start-date condition.",
-          "hash": "5a831d12805d8f9ffbbc08041aeb68e6e35a4bc8bbd9028168e5c0d003d70a0e"
+          "line": "States what the rule does: a hold covers every list of the brand, and a broadcast Smart Sending skipped is not counted.",
+          "hash": "4227c4a4dd0d05fb5994cb1bd8b779af0baa881f55a8a22cb35cbb40603f3bd6"
         }
       ]
     },
