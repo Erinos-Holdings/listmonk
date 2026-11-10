@@ -271,6 +271,25 @@ func (c *Core) GetCampaignListNames(campUUID, subUUID string) ([]string, error) 
 	return out, nil
 }
 
+// GetCampaignBrand (fork, brand unsubscribe -- integrations BRAND-UNSUBSCRIBE-SPEC D11) returns
+// the campaign's brand, or "" when it has no brand-tagged list or spans more than one brand. The
+// public unsubscribe page uses it to decide whether the brand expansion applied: non-empty means
+// the unsubscribe reached the whole brand and the confirmation is generic, because naming one
+// list of many would misdescribe what happened. Best effort, like the other lookups there -- an
+// unknown UUID yields "" and no error, so old or synthetic links still render.
+func (c *Core) GetCampaignBrand(campUUID string) (string, error) {
+	var out string
+	if err := c.q.GetCampaignBrand.Get(&out, campUUID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		c.log.Printf("error fetching campaign brand: %s", pqErrMsg(err))
+		return "", echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
 // GetCampaignForPreview retrieves a campaign with a template body. If the optional tplID is > 0
 // that particular template is used, otherwise, the template saved on the campaign is.
 func (c *Core) GetCampaignForPreview(id, tplID int) (models.Campaign, error) {

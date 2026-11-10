@@ -137,17 +137,20 @@ var shippedLineage = map[string][]string{
 	"np-same-day-double":  {"page#"},
 	"np-launch-overlap":   {"page#", "page#9"},
 	"np-no-restarts":      {"page#", "page#9"},
-	"np-ruze-15d":         {"page#9"},
-	"pp-delivery-clock":   {"slack", "page#"},
-	"pp-returning-thanks": {"page#"},
-	"both-multi-brand":    {"page#"},
-	"both-per-brand":      {"slack", "page#", "relayed", "page", "page#", "page#", "page#9", "page9"},
-	"sp-scope":            {"page#9"},
-	"sp-engagement":       {"page#9"},
-	"sp-hold":             {"page#9"},
-	"sp-asks":             {"page#8", "page#9"},
-	"sp-coming-back":      {"page#9", "page#9"},
-	"sp-suppressed":       {"reject-note", "page#8", "page#9", "page#9"},
+	// Integrations BRAND-UNSUBSCRIBE-SPEC A13 (2026-11-09): item 6 broadened from the newsletter
+	// list to the brand, item 21's ask sentence scoped to "on that consent".
+	"np-unsubscribe-stops": {"page#9"},
+	"np-ruze-15d":          {"page#9"},
+	"pp-delivery-clock":    {"slack", "page#"},
+	"pp-returning-thanks":  {"page#"},
+	"both-multi-brand":     {"page#"},
+	"both-per-brand":       {"slack", "page#", "relayed", "page", "page#", "page#", "page#9", "page9"},
+	"sp-scope":             {"page#9"},
+	"sp-engagement":        {"page#9"},
+	"sp-hold":              {"page#9"},
+	"sp-asks":              {"page#8", "page#9"},
+	"sp-coming-back":       {"page#9", "page#9", "page#9"},
+	"sp-suppressed":        {"reject-note", "page#8", "page#9", "page#9"},
 }
 
 func checkShippedChangelog(t *testing.T, it Item) {
@@ -503,7 +506,7 @@ func TestUnacknowledgedEditFails(t *testing.T) {
 	if err := json.Unmarshal(lifecycleJSON, &d); err != nil {
 		t.Fatal(err)
 	}
-	const i = 5 // np-unsubscribe-stops: one entry, its concept
+	const i = 5 // np-unsubscribe-stops
 	it := d.Items[i]
 	conceptHash := Hash(it.Text)
 	d.Items[i].Text = it.Text + " Edited."
@@ -515,7 +518,8 @@ func TestUnacknowledgedEditFails(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), it.Key) || !strings.Contains(err.Error(), "add a changelog entry carrying the new hash") {
 		t.Fatalf("an unacknowledged edit: %v", err)
 	}
-	d.Items[i].Changelog = append(append([]Change(nil), it.Changelog...), Change{Date: "2026-11-08", Source: "page", Line: "Edited.", Hash: Hash(d.Items[i].Text)})
+	// Dated after the item's newest entry -- parse refuses a decreasing date (D2 (a)).
+	d.Items[i].Changelog = append(append([]Change(nil), it.Changelog...), Change{Date: "2026-11-30", Source: "page", Line: "Edited.", Hash: Hash(d.Items[i].Text)})
 	if b, err = json.Marshal(d); err != nil {
 		t.Fatal(err)
 	}

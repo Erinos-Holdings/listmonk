@@ -109,6 +109,8 @@ var migList = []migFunc{
 	{"v6.2.31", migrations.V6_2_31},
 	// Fork migration (erinos): smart sending look-ahead -- the journey_due forecast table, campaign_smart_skips' look-ahead pair (the journey pair made nullable), smart_sending_brand / brand_journey_due_24h / brand_journey_skips (brand_journey_sends_24h re-created over the shared applicability rule) and the app.smart_sending_lookahead switch row, inserted false (SMART-SENDING-LOOKAHEAD-SPEC) — see internal/migrations/v6.2.32.go.
 	{"v6.2.32", migrations.V6_2_32},
+	// Fork migration (erinos): brand unsubscribe -- brand_marketing_list_ids (the ONE definition of a brand's marketing lists: the brand tag, transactional false) and campaign_brand (the single distinct brand tag over a campaign's lists, NULL when none or several) (BRAND-UNSUBSCRIBE-SPEC) — see internal/migrations/v6.2.33.go.
+	{"v6.2.33", migrations.V6_2_33},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

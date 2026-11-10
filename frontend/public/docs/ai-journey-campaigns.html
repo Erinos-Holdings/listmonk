@@ -325,11 +325,12 @@ td:first-child{font-weight:600;white-space:nowrap}
     <tr><td>Click on the Manage Preferences link</td><td colspan="2">Nothing by itself: the one tracked link whose click is not engagement, so that opening the page to opt out never re-subscribes anyone</td><td><span class="tag t-ext">No</span></td></tr>
     <tr><td>Ticking the brand on the Manage Preferences page</td><td>An authenticated subscribe: releases the hold at once, with no new welcome (a return from a hold, not a re-subscribe)</td><td>The same tick is the way back</td><td><span class="tag t-ok">Yes</span></td></tr>
     <tr><td>Signing up again, or opting in at checkout</td><td colspan="2">Brings them back at any stage; a new sign-up after a real opt-out is a re-subscribe and sends the Day 0 welcome again (item 5)</td><td><span class="tag t-ok">Yes</span></td></tr>
-    <tr><td>Unsubscribe link in a re-engagement email</td><td colspan="2">A real opt-out; they are never asked again</td><td>n/a</td></tr>
+    <tr><td>Unsubscribe link in a re-engagement email</td><td colspan="2">A real opt-out; they are never asked again on that consent</td><td>n/a</td></tr>
   </tbody>
 </table>
 </div>
 <div class="callout">
+  <p class="pushback"><span class="lead">Changed 2026-11-09</span>Unsubscribe now means the <b>brand</b>, not the list. One click in any of a brand's emails — a welcome, a step, a Thank-you, a re-engagement ask, a broadcast — unsubscribes the person from every marketing list of that brand: the newsletter, the journey step lists, the first-order and SKU trigger lists, the re-engagement queues and any imported segment. Other brands are untouched, and so is anything flagged transactional. Unticking a brand on the Manage Preferences page does exactly the same. Two consequences worth knowing: the ask opt-out above is recorded on the brand even when the person has already moved past the queue that ask came from; and "never asked again" means on that consent — if they genuinely sign up again, a further year of silence starts the clock afresh.</p>
   <p><strong>So for the day-360 email:</strong> the primary button is a tracked link to the brand site (one click, done). Manage Preferences is a legitimate second route, two steps long: the page shows the brand unticked from day 180 on, and ticking it resumes sends. After day 365 the same tick is the way back.</p>
   <p><strong>What the page shows (since 2026-11-08):</strong> under a held brand's unticked box, a Paused note (regular sends stopped; tick the box to resume) or, after day 365, a Stopped note (a year without activity; tick the box to resume), so nobody reads a hold as an unsubscribe they never made. The tick is the resume; there is no separate button.</p>
 </div>

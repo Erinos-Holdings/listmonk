@@ -404,7 +404,12 @@ func TestHoldRelease_EveryStatusWriter(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"unsubscribe-by-campaign (guarded no-op)", kept, func(_ int, uu, _ string) {
+		// Fork (brand unsubscribe, integrations BRAND-UNSUBSCRIBE-SPEC D3/D10): the campaign-link
+		// path is the person's OWN act (the footer link and the one-click header), so a held row
+		// it lands on is a real opt-out and the hold is released to 'unsubscribed' -- the same
+		// release unsubscribe-subscribers-from-lists performs. It was a guarded no-op before
+		// 2026-11-09, which meant an Unsubscribe click by a held person recorded nothing.
+		{"unsubscribe-by-campaign (the person's own act)", releasedOut, func(_ int, uu, _ string) {
 			if err := co.UnsubscribeByCampaign(uu, campUUID, false); err != nil {
 				t.Fatal(err)
 			}

@@ -16,17 +16,20 @@ img{max-width:100%}
 :root{
   --bg:#f7f6f2; --surface:#ffffff; --ink:#1c2321; --ink-2:#4a5553; --ink-3:#7a8683;
   --line:#dcdfd9; --accent:#0e6b66; --accent-soft:#d9ecea; --warm:#a3541c; --warm-soft:#f6e4d6;
-  --good:#2a7a3b; --display:"Newsreader",Georgia,"Times New Roman",serif;
+  --good:#2a7a3b; --push:#b42318; --display:"Newsreader",Georgia,"Times New Roman",serif;
   --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --bg:#151a19; --surface:#1e2524; --ink:#eef1ee; --ink-2:#b8c2bf; --ink-3:#86928f;
-  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; color-scheme:dark } }
+  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; --push:#ff8a7a; color-scheme:dark } }
 :root[data-theme="dark"]{
   --bg:#151a19; --surface:#1e2524; --ink:#eef1ee; --ink-2:#b8c2bf; --ink-3:#86928f;
-  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; color-scheme:dark }
+  --line:#2f3937; --accent:#5fc3bc; --accent-soft:#1b3a38; --warm:#e0955e; --warm-soft:#3b2a1d; --good:#6cc27e; --push:#ff8a7a; color-scheme:dark }
 
 *{box-sizing:border-box}
+/* A change to a standard already recorded here, in red so a reader of the brief finds it. */
+.pushback{color:var(--push);font-weight:600}
+.pushback .lead{text-transform:uppercase;font-size:.74rem;letter-spacing:.08em;margin-right:6px}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
 .wrap{max-width:980px;margin:0 auto}
@@ -220,6 +223,7 @@ ul.sources{padding-left:18px}
   </tbody>
 </table>
 </div>
+<p class="pushback"><span class="lead">Changed 2026-11-09</span>An unsubscribe now means the <b>brand</b>, not the list. When someone unsubscribes from any of a brand's emails — or unticks the brand on the Manage Preferences page — they come off every marketing list of that brand: the newsletter, the journey step lists, the first-order and SKU trigger lists, the re-engagement queues and any imported segment. Other brands are untouched, and lists flagged transactional are not touched at all. This changes nothing about the suppression-versus-unsubscribe line above: a hold is still ours to lift and an unsubscribe is still the person's own revoked consent — it is now revoked for the whole brand, which is what the word means to the person reading the email. The same rule was applied backwards to the brands' history.</p>
 
 <h2>Where each proposed modification ended up</h2><!-- docs-ok -->
 <p>This page proposed six modifications, each a frequency or timing fix with a number behind it. The item numbers are the Lifecycle series decisions on Brands › Usage, where the approved text and its History live.</p><!-- docs-ok -->

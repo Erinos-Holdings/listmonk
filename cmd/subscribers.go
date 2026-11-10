@@ -593,6 +593,61 @@ func (a *App) ManageSubscriberLists(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{true})
 }
 
+// BrandUnsubscribeSubscribers (fork, brand unsubscribe -- integrations BRAND-UNSUBSCRIBE-SPEC D4)
+// unsubscribes the given subscribers from every MARKETING list of one brand. Body
+// {ids: []int, brand: string}; the caller never names a list, so brand_marketing_list_ids is the
+// only definition of the target set (D1).
+//
+// An unknown brand (no brands row) is a 400 -- the slug is a typo or a stale caller. A KNOWN
+// brand whose marketing-list set is empty is a no-op 200: a brand provisioned but not yet listed
+// is not an error.
+//
+// Permission: subscribers:manage on the route, plus lists:manage_all here. The target set is
+// computed in SQL, so there is no list-id set to intersect with the caller's permitted lists; a
+// partially-permitted caller would silently write part of a brand, which is worse than a 403. The
+// subscriber-level check (hasSubPerm) runs as it does on the list routes.
+func (a *App) BrandUnsubscribeSubscribers(c echo.Context) error {
+	user := auth.GetUser(c)
+
+	var req struct {
+		SubscriberIDs []int  `json:"ids"`
+		Brand         string `json:"brand"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
+	}
+	if len(req.SubscriberIDs) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("subscribers.errorNoIDs"))
+	}
+
+	brand := strings.TrimSpace(req.Brand)
+	if brand == "" {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.missingFields", "name", "brand"))
+	}
+
+	if _, ok := user.PermissionsMap[auth.PermListManageAll]; !ok {
+		return echo.NewHTTPError(http.StatusForbidden, a.i18n.Ts("globals.messages.permissionDenied", "name", "lists"))
+	}
+	if err := a.hasSubPerm(user, req.SubscriberIDs); err != nil {
+		return err
+	}
+
+	if _, ok, err := a.core.GetBrand(brand); err != nil {
+		return err
+	} else if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			a.i18n.Ts("globals.messages.invalidFields", "name", "brand"))
+	}
+
+	if err := a.core.UnsubscribeBrand(req.SubscriberIDs, brand); err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, okResp{true})
+}
+
 // holdSubscriberLists (fork, holds -- integrations SUNSET-SPEC D3) puts explicit subscriber
 // ids on hold on exactly one list. hold needs reason and source (at is server-stamped);
 // if_updated_before is an RFC 3339 consent-time bound; relabel is the backfill mode that

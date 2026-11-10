@@ -128,6 +128,22 @@ func (c *Core) UnsubscribeLists(subIDs, listIDs []int, listUUIDs []string) error
 	return nil
 }
 
+// UnsubscribeBrand (fork, brand unsubscribe -- integrations BRAND-UNSUBSCRIBE-SPEC D4)
+// unsubscribes subscribers from every MARKETING list of one brand: the brand tag, transactional
+// excluded, as brand_marketing_list_ids defines it in SQL. The caller names the brand and never a
+// list set, so there is exactly one definition of that set and it is not in Go. A held row is a
+// real opt-out here (the person's own act) and its hold is released, final holds included; a
+// plain already-unsubscribed row is left untouched. No row is ever inserted.
+func (c *Core) UnsubscribeBrand(subIDs []int, brand string) error {
+	if _, err := c.q.UnsubscribeBrand.Exec(pq.Array(subIDs), brand); err != nil {
+		c.log.Printf("error unsubscribing from brand: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.subscribers}", "error", err.Error()))
+	}
+
+	return nil
+}
+
 // HoldSubscriptions (fork, holds) puts subscribers on hold on one list -- see the
 // hold-subscribers-lists query for both modes. ifUpdatedBefore nil means no consent-time bound.
 func (c *Core) HoldSubscriptions(subIDs []int, listID int, hold map[string]any, ifUpdatedBefore *time.Time, relabel bool) (models.HoldResult, error) {

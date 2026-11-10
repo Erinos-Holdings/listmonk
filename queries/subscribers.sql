@@ -309,22 +309,65 @@ UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW(),
     WHERE (subscriber_id, list_id) = ANY(SELECT a, b FROM UNNEST($1::INT[]) a, UNNEST((SELECT id FROM listIDs)) b);
 
 -- name: unsubscribe-by-campaign
--- Unsubscribes a subscriber given a campaign UUID (from all the lists in the campaign) and the subscriber UUID.
+-- Unsubscribes a subscriber given a campaign UUID and the subscriber UUID.
 -- If $3 is TRUE, then all subscriptions of the subscriber is blocklisted
 -- and all existing subscriptions, irrespective of lists, unsubscribed.
+--
+-- Fork (brand unsubscribe, integrations BRAND-UNSUBSCRIBE-SPEC D3). This is the person's own act
+-- on R1 (the footer Unsubscribe link) and R2 (the one-click List-Unsubscribe header POST) -- the
+-- same handler, the same call -- and an unsubscribe means the BRAND, not the list. Three changes
+-- from upstream:
+--   1. Target set: campaign_brand($1) ∪ the campaign's own lists. The union is load-bearing, not
+--      belt-and-braces: brand_marketing_list_ids excludes transactional lists and an untagged
+--      list is in no brand set, so without it a campaign sent from a transactional list of the
+--      brand (or from a tagged list beside an untagged one) would stop unsubscribing the very
+--      list the person was emailed from -- a one-click unsubscribe doing LESS than it used to is
+--      a compliance regression. When campaign_brand is NULL (no tagged list, or more than one
+--      brand) the target is the campaign's own lists: exactly the old behaviour (D5).
+--   2. Row predicate: status is not 'unsubscribed' OR the row carries meta.hold. A held row is a
+--      never-engaged/Kickbox/deliverability suppression, and the person's own unsubscribe is a
+--      real opt-out on it (D10).
+--   3. An already-unsubscribed HELD row is released explicitly with
+--      subscriber_lists_release_hold(meta, 'unsubscribed') -- the same release
+--      unsubscribe-subscribers-from-lists performs, FINAL holds included, because the person's
+--      own act is the one thing that ends a final hold (SUNSET-V4 D5). A status change releases
+--      through the trigger instead, so only the already-unsubscribed case is handled here.
+-- A plain already-unsubscribed row (no hold) is left alone: no status write, no updated_at bump.
 WITH lists AS (
     SELECT list_id FROM campaign_lists
     LEFT JOIN campaigns ON (campaign_lists.campaign_id = campaigns.id)
     WHERE campaigns.uuid = $1
 ),
+targets AS (
+    SELECT list_id FROM lists WHERE list_id IS NOT NULL
+    UNION
+    SELECT UNNEST(brand_marketing_list_ids(campaign_brand($1::UUID)))
+),
 sub AS (
     UPDATE subscribers SET status = (CASE WHEN $3 IS TRUE THEN 'blocklisted' ELSE status END)
     WHERE uuid = $2 RETURNING id
 )
-UPDATE subscriber_lists SET status = 'unsubscribed', updated_at=NOW() WHERE
-    subscriber_id = (SELECT id FROM sub) AND status != 'unsubscribed' AND
-    -- If $3 is false, unsubscribe from the campaign's lists, otherwise all lists.
-    CASE WHEN $3 IS FALSE THEN list_id = ANY(SELECT list_id FROM lists) ELSE list_id != 0 END;
+UPDATE subscriber_lists SET status = 'unsubscribed', updated_at=NOW(),
+    meta=(CASE WHEN status = 'unsubscribed' THEN subscriber_lists_release_hold(meta, 'unsubscribed') ELSE meta END)
+    WHERE
+    subscriber_id = (SELECT id FROM sub) AND (status != 'unsubscribed' OR meta ? 'hold') AND
+    -- If $3 is false, unsubscribe from the brand's marketing lists ∪ the campaign's own lists,
+    -- otherwise all lists.
+    CASE WHEN $3 IS FALSE THEN list_id = ANY(SELECT list_id FROM targets) ELSE list_id != 0 END;
+
+-- name: unsubscribe-brand
+-- Fork (brand unsubscribe, integrations BRAND-UNSUBSCRIBE-SPEC D4). The admin route behind R3
+-- (our Manage Preferences page, unticking a brand -- both the listmonk-channel leg and the
+-- ZMA-channel mirror leg) and behind the backwards repair. Subscribers $1, brand $2; the target
+-- set is brand_marketing_list_ids($2) and nothing else -- the caller never names a list, so D1's
+-- definition is the only one there is. Same row predicate and same explicit hold release as
+-- unsubscribe-by-campaign above, for the same reasons; a plain already-unsubscribed row is left
+-- alone. No row is ever inserted (D9).
+UPDATE subscriber_lists SET status = 'unsubscribed', updated_at=NOW(),
+    meta=(CASE WHEN status = 'unsubscribed' THEN subscriber_lists_release_hold(meta, 'unsubscribed') ELSE meta END)
+    WHERE subscriber_id = ANY($1::INT[])
+        AND list_id = ANY(brand_marketing_list_ids($2))
+        AND (status != 'unsubscribed' OR meta ? 'hold');
 
 -- name: hold-subscribers-lists
 -- Fork (holds). Puts subscribers $1 on list $2 on HOLD with the hold object $3 (at is stamped

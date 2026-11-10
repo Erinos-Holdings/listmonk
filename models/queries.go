@@ -59,6 +59,8 @@ type Queries struct {
 	DeleteBlocklistedSubscribers    *sqlx.Stmt `query:"delete-blocklisted-subscribers"`
 	DeleteOrphanSubscribers         *sqlx.Stmt `query:"delete-orphan-subscribers"`
 	UnsubscribeByCampaign           *sqlx.Stmt `query:"unsubscribe-by-campaign"`
+	// Fork (brand unsubscribe, BRAND-UNSUBSCRIBE-SPEC D4) -- the brand-scoped unsubscribe.
+	UnsubscribeBrand *sqlx.Stmt `query:"unsubscribe-brand"`
 	ExportSubscriberData            *sqlx.Stmt `query:"export-subscriber-data"`
 	GetSubscriberActivity           *sqlx.Stmt `query:"get-subscriber-activity"`
 
@@ -79,6 +81,8 @@ type Queries struct {
 	GetLists             *sqlx.Stmt `query:"get-lists"`
 	GetListsByOptin      *sqlx.Stmt `query:"get-lists-by-optin"`
 	GetCampaignListNames *sqlx.Stmt `query:"get-campaign-list-names"`
+	// Fork (brand unsubscribe, BRAND-UNSUBSCRIBE-SPEC D11) -- the confirmation page's branch.
+	GetCampaignBrand *sqlx.Stmt `query:"get-campaign-brand"`
 	GetListTypes         *sqlx.Stmt `query:"get-list-types"`
 	UpdateList           *sqlx.Stmt `query:"update-list"`
 	UpdateListsDate      *sqlx.Stmt `query:"update-lists-date"`

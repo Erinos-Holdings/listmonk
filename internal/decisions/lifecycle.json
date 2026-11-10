@@ -141,7 +141,7 @@
       "key": "np-unsubscribe-stops",
       "section": "no-purchase",
       "n": 6,
-      "text": "Unsubscribing from the newsletter stops every remaining step of both series.",
+      "text": "Unsubscribing from any email of a brand unsubscribes them from every marketing list of that brand, so it stops every remaining step of both series.",
       "changelog": [
         {
           "date": "2026-10-30",
@@ -149,6 +149,12 @@
           "line": "Published for approval",
           "hash": "010ae60d9a0a8ef0a920e0c465a38776a457a322be531027b7b07c642f9ebf8c",
           "reapprove": true
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "Broadened to the brand: an unsubscribe from a step, trigger or ask email now reaches every marketing list of the brand, not just the newsletter list, so it stops the remaining steps whichever email carried the link.",
+          "hash": "68b1f5cea0ba1de8b2d6644a6070f36c4364c3c5db4be60f06df4e78e3080dd3"
         }
       ]
     },
@@ -476,7 +482,7 @@
       "key": "sp-coming-back",
       "section": "sunset-policy",
       "n": 21,
-      "text": "Coming back. Before day 365, any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email; ticking the brand on the Manage Preferences page returns them at once, also with no welcome (a return from a hold, not a re-subscribe, item 5). They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out: they are never asked again.",
+      "text": "Coming back. Before day 365, any engagement from item 16 (a click, a Gmail-confirmed open or a purchase) returns a held subscriber to regular sends the next day, with no new welcome email; ticking the brand on the Manage Preferences page returns them at once, also with no welcome (a return from a hold, not a re-subscribe, item 5). They remain candidates for any journey they have not yet had: a first paid order after coming back enters the Post-purchase series as usual. Unsubscribing from an ask is a real opt-out, recorded on the brand itself from whichever of its emails carried the link, and they are never asked again on that consent; a later genuine re-subscribe starts a new clock.",
       "changelog": [
         {
           "date": "2026-11-02",
@@ -496,6 +502,12 @@
           "source": "page",
           "line": "Scoped to before day 365 (after it, item 22); the Manage Preferences tick named a return from a hold, not a re-subscribe (item 5), so no welcome.",
           "hash": "1866a86d3b28b02ec1cd191cb0e3d8c81abf10abd69ec972e99d55eab82ea7b2"
+        },
+        {
+          "date": "2026-11-09",
+          "source": "page",
+          "line": "The ask opt-out is now recorded on the brand's own row whichever email carried the link, so it holds even for an ask whose queue the person has already left; and \"never asked again\" says on that consent — with the brand confirmed again, a further year of silence starts the clock afresh.",
+          "hash": "f18924cf5cedd5e3e923eee9d3db0dbf0ca0167f8730daac89b671f4694ae0bd"
         }
       ]
     },

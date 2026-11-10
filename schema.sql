@@ -1058,3 +1058,35 @@ RETURNS TABLE (subscriber_id INT, journey_campaign_id INT, journey_sent_at TIMES
     FROM brand_journey_due_24h(camp_id) d
     WHERE NOT EXISTS (SELECT 1 FROM back WHERE back.subscriber_id = d.subscriber_id);
 $$ LANGUAGE sql STABLE;
+
+-- Fork (brand unsubscribe, integrations listmonk/BRAND-UNSUBSCRIBE-SPEC D1/D2): the ONE
+-- definition of "the brand's marketing lists" and the campaign's brand. An unsubscribe by the
+-- person themselves means the BRAND, not the list, so both the campaign-link path
+-- (unsubscribe-by-campaign) and the admin brand route (unsubscribe-brand) expand through
+-- brand_marketing_list_ids. Nothing outside this file re-derives that set -- our Lambdas and
+-- scripts name the brand and never a list set. Mirrored in internal/migrations/v6.2.33.go
+-- (keep the two identical).
+--
+-- brand_marketing_list_ids: every list carrying the brand tag whose transactional flag is false,
+-- irrespective of type (public, private, temporary) or optin -- the newsletter list, journey step
+-- lists, first-order and SKU trigger lists, the four re-engagement queues and every imported or
+-- private segment list, because all of them carry the server-written brand tag. A list with NO
+-- brand tag belongs to no brand and is never reached by a brand unsubscribe.
+--
+-- campaign_brand: the single distinct non-NULL brand tag over the campaign's lists, NULL when
+-- there is none OR more than one. COUNT(DISTINCT ...) = 1, deliberately NOT MIN(), which would
+-- silently pick one of two. NULL means the campaign-link path does exactly what it did before the
+-- expansion (D5).
+CREATE OR REPLACE FUNCTION brand_marketing_list_ids(p_brand TEXT) RETURNS INT[] AS $$
+    SELECT COALESCE(ARRAY_AGG(l.id), '{}'::INT[]) FROM lists l
+        WHERE p_brand IS NOT NULL AND list_brand_tag(l.tags) = p_brand AND l.transactional = FALSE;
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION campaign_brand(camp_uuid UUID) RETURNS TEXT AS $$
+    SELECT CASE WHEN COUNT(DISTINCT list_brand_tag(l.tags)) = 1
+        THEN MIN(list_brand_tag(l.tags)) ELSE NULL END
+    FROM campaigns c
+    JOIN campaign_lists cl ON (cl.campaign_id = c.id)
+    JOIN lists l ON (l.id = cl.list_id)
+    WHERE c.uuid = camp_uuid AND list_brand_tag(l.tags) IS NOT NULL;
+$$ LANGUAGE sql STABLE;

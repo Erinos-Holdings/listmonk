@@ -415,6 +415,14 @@ uniqIDs AS (
 SELECT COUNT(*) AS "count", campaign_id, "timestamp"
     FROM uniqIDs GROUP BY campaign_id, "timestamp" ORDER BY "timestamp" ASC;
 
+-- name: get-campaign-brand
+-- Fork (brand unsubscribe, integrations BRAND-UNSUBSCRIBE-SPEC D11): the campaign's brand, for
+-- the public unsubscribe confirmation page -- non-empty means the brand expansion applied and the
+-- page renders the generic confirmation rather than naming lists. An unknown campaign UUID, a
+-- campaign with no tagged list, or one spanning two brands all yield the empty string, which is
+-- the "name the lists, as before" branch.
+SELECT COALESCE(campaign_brand($1::UUID), '');
+
 -- name: get-campaign-list-names
 -- Names of the lists the unsubscribe-by-campaign for subscriber $2 acts on, for the public
 -- unsubscribe pages. That is the campaign's lists intersected with the subscriber's own

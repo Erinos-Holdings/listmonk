@@ -320,17 +320,27 @@ func (a *App) SubscriptionPrefs(c echo.Context) error {
 				makeMsgTpl(a.i18n.T("public.errorTitle"), "", a.i18n.T("public.errorProcessingRequest")))
 		}
 
-		// Confirmation names the subscriber and the lists acted on. Both lookups are best
+		// Confirmation names the subscriber and the lists acted on. Every lookup is best
 		// effort. The unsubscribe has already happened, so a failure here must still
 		// confirm it, just with less detail. A blocklist opt-out acted on every list, not
 		// the campaign's, so it keeps the generic confirmation rather than naming a subset.
+		//
+		// Fork (brand unsubscribe, integrations BRAND-UNSUBSCRIBE-SPEC D11): so does a brand
+		// unsubscribe. When the campaign resolves a brand, the write above reached every
+		// marketing list of that brand, so naming one list of many would misdescribe what
+		// happened -- and "Ruze no-purchase day 5" is internal vocabulary. The query writes
+		// nothing back, so this second read is how the handler learns which branch ran; an
+		// empty brand (no tagged list, or two brands -- D5) keeps the list names.
 		out := unsubbedTpl{publicTpl: publicTpl{Title: a.i18n.T("public.unsubbedTitle")}}
 		if s, err := a.core.GetSubscriber(0, subUUID, ""); err == nil {
 			out.Email = s.Email
 		}
 		if !blocklist {
-			if names, err := a.core.GetCampaignListNames(campUUID, subUUID); err == nil {
-				out.Lists = names
+			brand, err := a.core.GetCampaignBrand(campUUID)
+			if err != nil || brand == "" {
+				if names, err := a.core.GetCampaignListNames(campUUID, subUUID); err == nil {
+					out.Lists = names
+				}
 			}
 		}
 

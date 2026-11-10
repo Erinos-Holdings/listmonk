@@ -150,6 +150,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/subscribers/:id/blocklist", pm(hasID(a.BlocklistSubscriber), "subscribers:manage"))
 		g.PUT("/api/subscribers/lists/:id", pm(a.ManageSubscriberLists, "subscribers:manage"))
 		g.PUT("/api/subscribers/lists", pm(a.ManageSubscriberLists, "subscribers:manage"))
+		// Fork (brand unsubscribe, BRAND-UNSUBSCRIBE-SPEC D4): unsubscribe from every marketing
+		// list of ONE brand. The caller names the brand, never a list set.
+		g.PUT("/api/subscribers/brand-unsubscribe", pm(a.BrandUnsubscribeSubscribers, "subscribers:manage"))
 		g.DELETE("/api/subscribers/:id", pm(hasID(a.DeleteSubscriber), "subscribers:manage"))
 		g.DELETE("/api/subscribers", pm(a.DeleteSubscribers, "subscribers:manage"))
 
