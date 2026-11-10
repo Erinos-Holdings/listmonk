@@ -419,9 +419,6 @@ export default Vue.extend({
       // read where the user may read the campaign; absent = brand underivable.
       lastQuery: null,
       prefillLists: {},
-      // Integrations DOC-ALIGNMENT-SPEC D7 -- the prefilled campaigns' GET /api/campaigns/:id
-      // objects, by id (read only where the user may read the campaign).
-      campaignObjs: {},
 
       // Data for each view.
       counts: {
@@ -998,10 +995,11 @@ export default Vue.extend({
       return (this.$i18n && this.$i18n.locale) || 'en';
     },
 
-    // Integrations DOC-ALIGNMENT-SPEC D7 -- the Skipped figure per selected campaign, through the
+    // Integrations DOC-ALIGNMENT-SPEC D7 -- the Skipped figure per selected campaign, from the picker
+    // rows themselves (GET /api/analytics/campaigns carries skipped / smart_off), through the
     // Campaign Matrix's own cell function (campaignMatrix.mjs::analyticsSkippedRows).
     skippedRows() {
-      return analyticsSkippedRows(this.form.campaigns, this.campaignObjs, (n) => this.$utils.formatNumber(n), (k, p) => this.$t(k, p));
+      return analyticsSkippedRows(this.form.campaigns, (n) => this.$utils.formatNumber(n), (k, p) => this.$t(k, p));
     },
 
     // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6/D7) -- the toggle's model: the only
@@ -1205,11 +1203,6 @@ export default Vue.extend({
           this.form.campaigns.forEach((c) => {
             this.$api.getCampaignQuiet(c.id).then((full) => {
               this.$set(this.prefillLists, c.id, (full && full.lists) || []);
-              // Integrations DOC-ALIGNMENT-SPEC D7 -- the same read carries skipped / evergreen /
-              // smart_sending for the Skipped figure (campaignMatrix.mjs::analyticsSkippedCell).
-              if (full) {
-                this.$set(this.campaignObjs, c.id, full);
-              }
             }).catch(() => {});
           });
         }

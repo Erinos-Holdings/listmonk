@@ -682,16 +682,39 @@ export function triggerTip(p, t = (k) => k) {
 // row with NO parseable `days` (the lib stores null; its parser error in the hover -- the
 // POLISH3 F5 badge). [] on every other field, a pre-release doc, or a usage-less row. `kind` is
 // 'legacy' or 'warn' (the Vue styles them).
+// Integrations DOC-ALIGNMENT-SPEC D9 (stage 4b W3): an invalid row ON a standard leaf (or in the
+// SKU column) adds no circle, so the leaf itself carries the same ⚠ for each stored row with an
+// `error` -- a rendering of the stored error, never a classification -- and the silent-skip hazard
+// stays visible whether the leaf reads red or green.
+const warnBadge = (r, t) => ({
+  kind: 'warn',
+  glyph: '⚠',
+  tooltip: t('dashboard.usage.npInvalid', { slug: String(r.slug), error: typeof r.error === 'string' && r.error ? r.error : t('dashboard.usage.npNoDays') }),
+});
+
+function leafWarnBadges(row, field, t) {
+  const u = row && row.usage;
+  const leaf = seriesLeafOf(field);
+  let rows = [];
+  if (leaf !== null) {
+    rows = stepRows(stepAt(u, leaf.family, leaf.days));
+  } else if (field === 'sku') {
+    rows = skuRows(u);
+  }
+  return rows.filter((r) => typeof r.error === 'string' && r.error).map((r) => warnBadge(r, t));
+}
+
 export function cellBadges(row, field, t = (k) => k) {
+  const onLeaf = leafWarnBadges(row, field, t);
   const family = [SERIES_WELCOME, SERIES_POST_PURCHASE].find((f) => {
     const fields = f === SERIES_WELCOME ? WELCOME_FIELDS : POST_PURCHASE_FIELDS;
     return field === fields[fields.length - 1];
   });
   const s = family ? seriesOf(row && row.usage, family) : null;
   if (!s || !Array.isArray(s.legacy)) {
-    return [];
+    return onLeaf;
   }
-  return s.legacy.filter(isObj).map((r) => {
+  return [...onLeaf, ...s.legacy.filter(isObj).map((r) => {
     if (typeof r.days === 'number' && Number.isInteger(r.days) && r.days > 0) {
       const badge = {
         kind: 'legacy',
@@ -709,12 +732,8 @@ export function cellBadges(row, field, t = (k) => k) {
       }
       return badge;
     }
-    return {
-      kind: 'warn',
-      glyph: '⚠',
-      tooltip: t('dashboard.usage.npInvalid', { slug: String(r.slug), error: typeof r.error === 'string' && r.error ? r.error : t('dashboard.usage.npNoDays') }),
-    };
-  });
+    return warnBadge(r, t);
+  })];
 }
 
 // D7: the Last broadcast tooltip -- cadence, ratio and windowCount.
@@ -885,7 +904,8 @@ export function circleLink(row, field, color) {
   // its own colour -- grey links like amber. Day 0 and Re-engagement by their stored campaign ids
   // ({ id, evergreen: 'all' }); a row-backed leaf (series step, SKU) by the lists of its VALID rows
   // holding such an automation ({ list_id, evergreen: 'true' }). Red: a Re-engagement step opens
-  // every campaign on its queue list (as before); any other red never links. A pre-D9 doc takes the
+  // every campaign on its queue list (as before), a row-backed leaf the lists of its valid rows
+  // ({ list_id, evergreen: 'all' }, stage 4b W6), No-purchase Day 0 never. A pre-D9 doc takes the
   // older rules below.
   const counts = leafCounts(u, field);
   if (counts) {
@@ -908,15 +928,23 @@ export function circleLink(row, field, color) {
       const ids = idsOf(lo.campaigns);
       return ids.length ? { id: ids.map(String), evergreen: 'all' } : { list_id: [String(lo.listId)], evergreen: 'true' };
     }
-    if (color === 'red') {
+    const dayZeroWelcome = s3 !== null && s3.family === SERIES_WELCOME && s3.days === 0;
+    if (color === 'red' && dayZeroWelcome) {
       return null;
     }
-    if (s3 !== null && s3.family === SERIES_WELCOME && s3.days === 0) {
+    if (dayZeroWelcome) {
       const ids = idsOf(isObj(u.welcome) ? u.welcome.campaigns : []);
       return ids.length ? { id: ids.map(String), evergreen: 'all' } : null;
     }
-    const rows = s3 !== null ? stepRows(lo) : skuRows(u);
-    const lists = [...new Set(rows.filter((r) => !(typeof r.error === 'string' && r.error))
+    const valid = (s3 !== null ? stepRows(lo) : skuRows(u)).filter((r) => !(typeof r.error === 'string' && r.error));
+    // Stage 4b W6: a red 0 on a row-backed leaf whose trigger IS switched on (a valid row with a
+    // list, no automation counted -- the pre-start-join hazard) opens those lists' campaigns of
+    // every kind, the Re-engagement red's shape; with no such row the red is "nothing set up".
+    if (color === 'red') {
+      const lists = [...new Set(valid.map((r) => r.listId).filter(posInt))].sort((a, b) => a - b);
+      return lists.length ? { list_id: lists.map(String), evergreen: 'all' } : null;
+    }
+    const lists = [...new Set(valid
       .filter((r) => (Array.isArray(r.campaigns) ? r.campaigns : []).some((x) => isObj(x) && bubbleOf(x.status) === color))
       .map((r) => r.listId).filter(posInt))].sort((a, b) => a - b);
     return lists.length ? { list_id: lists.map(String), evergreen: 'true' } : null;

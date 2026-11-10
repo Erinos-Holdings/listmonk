@@ -604,16 +604,18 @@ test('SMART-SENDING I8: Skipped shows the count, "off" for a bypass, — for a j
 
 // --- integrations DOC-ALIGNMENT-SPEC D7 / I16 ---
 
-test('DOC-ALIGNMENT I16: the Campaign Analytics Skipped figure is the Matrix cell, from the campaign object', () => {
+test('DOC-ALIGNMENT I16: the Campaign Analytics Skipped figure is the Matrix cell, from the picker row', () => {
   const fmt = (n) => `n${n}`;
   const tt = (k) => (k === 'analytics.matrix.off' ? 'off' : k);
-  // The campaign object (GET /api/campaigns/:id): skipped, evergreen and the effective smart_sending.
-  const obj = (id, name, evergreen, skipped, smartSending) => ({
-    id, name, evergreen, skipped, smart_sending: smartSending,
+  // A row exactly as GET /api/analytics/campaigns returns it (models.AnalyticsCampaign's JSON keys,
+  // not camel-cased; the view renames `name` to "#id: name" on arrival). The SQL already applies
+  // the Matrix's derivation: a journey's skipped is null and its smart_off false.
+  const row = (id, name, evergreen, skipped, smartOff) => ({
+    id, name, status: 'finished', evergreen, started_at: '2026-11-01T15:00:00Z', created_at: '2026-11-01T14:00:00Z', sent: 100, skipped, smart_off: smartOff,
   });
-  const ruled = obj(31, '#31: Ruled', false, 12, true);
-  const off = obj(32, '#32: Launch', false, 0, false);
-  const journey = obj(33, '#33: Welcome', true, 5, false);
+  const ruled = row(31, '#31: Ruled', false, 12, false);
+  const off = row(32, '#32: Launch', false, 0, true);
+  const journey = row(33, '#33: Welcome', true, null, false);
   // Each equals the Matrix's own cellText over the Matrix's row for the same campaign.
   const matrixOf = (r) => cellText(shapeRow({ ...api[0], ...r }), 'skipped', 'num', fmt, undefined, tt);
   assert.equal(analyticsSkippedCell(ruled, fmt, tt), matrixOf({ id: 31, skipped: 12, smart_off: false }));
@@ -625,15 +627,19 @@ test('DOC-ALIGNMENT I16: the Campaign Analytics Skipped figure is the Matrix cel
   }));
   assert.equal(analyticsSkippedCell(journey, fmt, tt), MISSING, 'an evergreen shows none');
   assert.equal(analyticsSkippedCell(null), null);
-  // The view's pure half: the selection's order, a campaign without an object left out.
-  const selected = [{ id: 33, name: '#33: Welcome' }, { id: 31, name: '#31: Ruled' }, { id: 99, name: '#99: Unreadable' }];
-  assert.deepEqual(analyticsSkippedRows(selected, { 31: ruled, 33: journey }, fmt, tt), [
+  // The view's pure half: every selected picker row, in the selection's order; a row from a server
+  // that predates the fields (no smart_off key) has no entry.
+  const legacy = {
+    id: 99, name: '#99: Older server', evergreen: false, sent: 3,
+  };
+  assert.deepEqual(analyticsSkippedRows([journey, ruled, off, legacy], fmt, tt), [
     { id: 33, name: '#33: Welcome', text: MISSING },
     { id: 31, name: '#31: Ruled', text: 'n12' },
+    { id: 32, name: '#32: Launch', text: 'off' },
   ]);
-  assert.deepEqual(analyticsSkippedRows(selected, {}, fmt, tt), []);
-  assert.deepEqual(analyticsSkippedRows(null, null), []);
-  // The view renders it through this helper (no second rule in the template).
+  assert.deepEqual(analyticsSkippedRows(null), []);
+  // The view renders the selection itself through this helper -- no second read, no gate.
   const view = readFileSync(new URL('./views/CampaignAnalytics.vue', import.meta.url), 'utf8');
-  assert.match(view, /analyticsSkippedRows\(this\.form\.campaigns, this\.campaignObjs/);
+  assert.match(view, /analyticsSkippedRows\(this\.form\.campaigns, \(n\)/);
+  assert.doesNotMatch(view, /campaignObjs/);
 });

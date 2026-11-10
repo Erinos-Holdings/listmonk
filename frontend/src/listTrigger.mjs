@@ -12,7 +12,7 @@ import { buildListRequest } from './listBrand.mjs'; // eslint-disable-line impor
 export const TRIGGER_NONE = 'none';
 export const TRIGGER_FIRST_ORDER = 'first_order';
 export const TRIGGER_SKUS = 'skus';
-// NO-PURCHASE-STEPS-SPEC D1/D7 -- a "still deciding" step: {kind: 'no_purchase', days: N}, N 1-365.
+// NO-PURCHASE-STEPS-SPEC D1/D7 -- a No-purchase series step: {kind: 'no_purchase', days: N}, N 1-365.
 export const TRIGGER_NO_PURCHASE = 'no_purchase';
 // LIFECYCLE-SERIES-SPEC S2 -- a Post-purchase series step: {kind: 'post_purchase', days: N}, N 1-365
 // on the server (shape only); the reconciler accepts 5, 14 and 30.
@@ -144,8 +144,8 @@ export function daysPresetsFor(option) {
 }
 
 // daysChoices is the radio options for the days field: the option's presets, plus a stored value
-// outside them (kept so a Save of an older list never changes its days unseen -- D2, Ruze's
-// grandfathered 15), ascending.
+// outside them (kept so a Save of an older list never changes its days unseen -- D2, a stored
+// off-standard day), ascending.
 export function daysChoices(daysText, option = TRIGGER_NO_PURCHASE) {
   const d = textToDays(daysText);
   const out = [...daysPresetsFor(option)];

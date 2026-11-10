@@ -221,7 +221,7 @@ func TestBrandAnalyticsPicker(t *testing.T) {
 		if err := json.Unmarshal([]byte(body), &resp); err != nil || len(resp.Data) == 0 {
 			t.Fatalf("I2 %v: %s (%v)", q, body, err)
 		}
-		want := []string{"created_at", "evergreen", "id", "name", "sent", "started_at", "status"}
+		want := []string{"created_at", "evergreen", "id", "name", "sent", "skipped", "smart_off", "started_at", "status"}
 		for _, r := range resp.Data {
 			keys := []string{}
 			for k := range r {
@@ -232,6 +232,41 @@ func TestBrandAnalyticsPicker(t *testing.T) {
 				t.Fatalf("I2: row keys %v, want %v", keys, want)
 			}
 		}
+	}
+
+	// Integrations DOC-ALIGNMENT-SPEC D7 -- skipped and smart_off as get-campaign-matrix derives them:
+	// a broadcast's campaign_smart_skips rows, 0 when none; NULL for a journey; smart_off only for a
+	// broadcast whose attribs.smart_sending is false (never for a journey).
+	ruled := h.baCamp("Ruled", "finished", 9, f.listA)
+	off := h.baCamp("Off", "finished", 4, f.listA)
+	journey := h.baCamp("Journey", "running", 2, f.listA)
+	h.db.MustExec(`UPDATE campaigns SET attribs = '{"smart_sending": false}' WHERE id IN ($1, $2)`, off, journey)
+	h.db.MustExec(`UPDATE campaigns SET evergreen = true WHERE id = $1`, journey)
+	for s := 1; s <= 3; s++ {
+		h.db.MustExec(`INSERT INTO campaign_smart_skips (campaign_id, subscriber_id, journey_campaign_id, journey_sent_at) VALUES ($1, $2, $3, NOW())`, ruled, s, journey)
+	}
+	_, sbody := pickerReq(t, h, campaignsGetAll, url.Values{"id": {fmt.Sprint(ruled), fmt.Sprint(off), fmt.Sprint(journey), fmt.Sprint(f.campA)}})
+	var srows struct {
+		Data []struct {
+			ID       int  `json:"id"`
+			Skipped  *int `json:"skipped"`
+			SmartOff bool `json:"smart_off"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(sbody), &srows); err != nil {
+		t.Fatalf("skipped rows: %s (%v)", sbody, err)
+	}
+	gotSkip := map[int]string{}
+	for _, r := range srows.Data {
+		s := "null"
+		if r.Skipped != nil {
+			s = fmt.Sprint(*r.Skipped)
+		}
+		gotSkip[r.ID] = fmt.Sprintf("%s/%v", s, r.SmartOff)
+	}
+	wantSkip := map[int]string{ruled: "3/false", off: "0/true", journey: "null/false", f.campA: "0/false"}
+	if !reflect.DeepEqual(gotSkip, wantSkip) {
+		t.Fatalf("skipped/smart_off %v, want %v", gotSkip, wantSkip)
 	}
 
 	// per_page: default 20, capped at 50.

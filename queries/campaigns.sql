@@ -113,7 +113,12 @@ ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 --   $8 the global brand's list ids (GLOBAL-BRAND-SPEC D9), a SEPARATE scope predicate ANDed with
 --      the permission one above (query-campaigns' list filter pattern); empty = no scope
 --   c.sent feeds the page's rates (views / clicks / bounces over Sent, the campaigns list's rule).
-SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.created_at, c.sent
+--   skipped and smart_off (integrations DOC-ALIGNMENT-SPEC D7) are derived exactly as
+--   get-campaign-matrix derives them -- a broadcast's campaign_smart_skips rows (NULL for a
+--   journey) and a broadcast switched off -- so the Campaign Analytics Skipped figure is the Matrix's.
+SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.created_at, c.sent,
+    CASE WHEN NOT c.evergreen THEN (SELECT COUNT(*) FROM campaign_smart_skips sk WHERE sk.campaign_id = c.id) END AS skipped,
+    (NOT c.evergreen AND (c.attribs->'smart_sending') IS NOT DISTINCT FROM 'false'::JSONB) AS smart_off
 FROM campaigns c
 WHERE (
     CASE WHEN CARDINALITY($1::INT[]) > 0 THEN c.id = ANY($1::INT[])

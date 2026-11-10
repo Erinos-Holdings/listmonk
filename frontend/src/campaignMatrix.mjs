@@ -513,27 +513,25 @@ export function cellText(row, field, mode, fmt = (n) => String(n), usd = (n) => 
 // Integrations DOC-ALIGNMENT-SPEC D7 -- the Skipped figure on Campaign Analytics, through THIS
 // module's own shapeRow + cellText so it can never read differently from the Matrix: a journey
 // (evergreen) shows '—', a Smart-Sending-off broadcast the Matrix's "off" text, any other broadcast
-// its recorded count. `c` is the campaign object GET /api/campaigns/:id serves -- it carries
-// `skipped`, `evergreen` and `smart_sending` (the effective switch; the Matrix's row carries the
-// complementary `smart_off`, mapped here exactly as get-campaign-matrix derives it: not evergreen and
-// switched off). null for no campaign object.
+// its recorded count. `c` is a row of GET /api/analytics/campaigns (the picker's own scope, served
+// under campaigns:get_analytics, keys as the server writes them -- not camel-cased), which carries
+// `evergreen`, `skipped` and `smart_off` derived in SQL exactly as get-campaign-matrix derives them;
+// the row goes through shapeRow unchanged. null for no row.
 export function analyticsSkippedCell(c, fmt = (n) => String(n), t = (k) => k) {
   if (!isObj(c)) {
     return null;
   }
-  const row = shapeRow({
-    id: c.id, name: c.name, evergreen: c.evergreen === true, skipped: c.skipped, smart_off: c.evergreen !== true && c.smart_sending === false,
-  });
-  return cellText(row, 'skipped', 'num', fmt, undefined, t);
+  return cellText(shapeRow(c), 'skipped', 'num', fmt, undefined, t);
 }
 
-// The view's pure half (CampaignAnalytics.vue): one { id, name, text } per selected campaign whose
-// campaign object was read (`objs` by id), in the selection's order; a campaign the user may not
-// read has no object and no entry.
-export function analyticsSkippedRows(selected, objs, fmt = (n) => String(n), t = (k) => k) {
+// The view's pure half (CampaignAnalytics.vue): one { id, name, text } per selected picker row, in
+// the selection's order -- no second read and no further permission (every selected row came from
+// the picker endpoint). A row from a server that predates the fields (no `smart_off` key) has no
+// entry rather than a false count.
+export function analyticsSkippedRows(selected, fmt = (n) => String(n), t = (k) => k) {
   return (Array.isArray(selected) ? selected : [])
-    .filter((s) => isObj(s) && isObj(objs) && isObj(objs[s.id]))
-    .map((s) => ({ id: s.id, name: str(s.name), text: analyticsSkippedCell(objs[s.id], fmt, t) }));
+    .filter((s) => isObj(s) && Object.prototype.hasOwnProperty.call(s, 'smart_off'))
+    .map((s) => ({ id: s.id, name: str(s.name), text: analyticsSkippedCell(s, fmt, t) }));
 }
 
 // D7: the GP S% cell's class -- a mechanical comparison of the send day's rate against the

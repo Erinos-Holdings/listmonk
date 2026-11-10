@@ -609,7 +609,7 @@
         ["180–365 days*", "Regular sends stop; re-engagement emails at 180, 270 and 360 days"],
         ["365+ days", "Inactivity suppression: marketing emails stop, with a confirmation email"]
       ],
-      "note": "*and at least 6 broadcasts received since then. Engagement means a click (other than the Manage Preferences link), a purchase, or a Gmail-confirmed open. Days are the default 180-day window's; the later steps follow the hold at +90, +180 and +185 days."
+      "note": "*and at least 6 broadcasts received since they signed up or last returned from a hold. Engagement means a click (other than the Manage Preferences link), a purchase, or a Gmail-confirmed open. Days are the default 180-day window's; the later steps follow the hold at +90, +180 and +185 days."
     }
   }
 }

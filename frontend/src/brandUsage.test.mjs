@@ -1323,3 +1323,49 @@ test('D9 / I18: three-key counts on every leaf family; grey links; an old-shape 
   assert.equal(en['dashboard.usage.circleIdle'], '{n} paused');
   ['dashboard.usage.circleDraft', 'dashboard.usage.legendDraft'].forEach((k) => assert.equal(typeof en[k], 'string', k));
 });
+
+// Integrations DOC-ALIGNMENT-SPEC stage 4b W3 / W6: an invalid row on a standard leaf (or in SKU)
+// shows its ⚠ on that leaf whatever the colour; a red 0 on a row-backed leaf with a valid row that
+// has a list opens those lists (every kind), and a red with no such row does not link.
+test('D9 / W3 / W6: the ⚠ for an invalid row on a leaf; a red 0 links its trigger rows\' lists', () => {
+  const C = (green, amber, grey) => ({ green, amber, grey });
+  const camp = (id, status) => ({ id, status });
+  const empty = (days) => ({
+    days, state: 'none', counts: C(0, 0, 0), rows: [],
+  });
+  const r = (listId, campaigns, error) => ({
+    slug: `x-${listId}`, listId, evergreen: 'running', days: 5, campaigns, ...(error ? { error } : {}),
+  });
+  const shaped = (step5, sku = { rows: [], counts: { green: 0, amber: 0 }, leaf: { state: 'none', counts: C(0, 0, 0) } }) => shapeRows([{
+    brand: 'ruze',
+    usage: usage({
+      series: {
+        welcome: { steps: SERIES_DAYS.welcome.map((days) => (days === 5 ? { days, ...step5 } : empty(days))), legacy: [] },
+        postPurchase: { steps: SERIES_DAYS.postPurchase.map(empty), legacy: [] },
+      },
+      sku,
+    }),
+  }])[0];
+  const warns = (row, f) => cellBadges(row, f, t).filter((b) => b.kind === 'warn' && b.glyph === '⚠');
+  // An invalid row at day 5 with a running automation: a red 0 AND a ⚠ carrying its error.
+  const lone = shaped({ state: 'none', counts: C(0, 0, 0), rows: [r(55, [camp(1, 'running')], 'sinceAt is not a date')] });
+  assert.deepEqual(cell(lone, 'welcome:5', t).circles.map((c) => c.color), ['red']);
+  assert.equal(warns(lone, 'welcome:5').length, 1);
+  assert.match(warns(lone, 'welcome:5')[0].tooltip, /npInvalid.*sinceAt is not a date/);
+  assert.equal(circleLink(lone, 'welcome:5', 'red'), null, 'no valid row: nothing set up, no link');
+  // A valid + invalid pair: green AND a ⚠.
+  const pair = shaped({ state: 'active', counts: C(1, 0, 0), rows: [r(56, [camp(2, 'running')]), r(57, [camp(3, 'running')], 'bad row')] });
+  assert.deepEqual(cell(pair, 'welcome:5', t).circles.map((c) => c.color), ['green']);
+  assert.equal(warns(pair, 'welcome:5').length, 1);
+  // No ⚠ on a leaf whose rows are all valid, nor on another leaf.
+  assert.deepEqual(warns(pair, 'welcome:2'), []);
+  // The SKU column: its invalid row shows the ⚠ too.
+  const sku = shaped({ state: 'none', counts: C(0, 0, 0), rows: [] }, {
+    rows: [{ ...r(90, [camp(9, 'running')]), days: null }, { ...r(91, [], 'skus empty'), days: null }], counts: { green: 1, amber: 1 }, leaf: { state: 'active', counts: C(1, 0, 0) },
+  });
+  assert.equal(warns(sku, 'sku').length, 1);
+  // W6: a valid row with a list and no automation counted -> the red 0 opens that list (all kinds).
+  const unstarted = shaped({ state: 'none', counts: C(0, 0, 0), rows: [r(58, [camp(4, 'finished')]), r(59, [], 'bad')] });
+  assert.deepEqual(cell(unstarted, 'welcome:5', t).circles.map((c) => c.color), ['red']);
+  assert.deepEqual(circleLink(unstarted, 'welcome:5', 'red'), { list_id: ['58'], evergreen: 'all' });
+});

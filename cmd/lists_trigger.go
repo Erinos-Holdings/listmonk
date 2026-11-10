@@ -46,7 +46,7 @@ const (
 
 	joinTriggerFirstOrder = "first_order"
 	joinTriggerSkus       = "skus"
-	// joinTriggerNoPurchase is the "still deciding" step (integrations NO-PURCHASE-STEPS-SPEC D1):
+	// joinTriggerNoPurchase is the No-purchase series step (integrations NO-PURCHASE-STEPS-SPEC D1):
 	// {"kind":"no_purchase","days":N}, N an integer 1-365. Shape only -- the reconciler owns meaning.
 	joinTriggerNoPurchase = "no_purchase"
 	// joinTriggerPostPurchase is a Post-purchase series step (integrations LIFECYCLE-SERIES-SPEC

@@ -209,6 +209,10 @@ type AnalyticsCampaign struct {
 	CreatedAt null.Time `db:"created_at" json:"created_at"`
 	// The denominator of the page's rates (integrations CAMPAIGN-RATES-SPEC, analytics follow-up).
 	Sent int `db:"sent" json:"sent"`
+	// Integrations DOC-ALIGNMENT-SPEC D7 -- the Smart Sending skips (null for a journey) and the
+	// per-campaign switch-off, derived as get-campaign-matrix derives them.
+	Skipped  null.Int `db:"skipped" json:"skipped"`
+	SmartOff bool     `db:"smart_off" json:"smart_off"`
 }
 
 type CampaignViewExport struct {
