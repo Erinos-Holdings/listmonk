@@ -607,15 +607,23 @@ test('SMART-SENDING I8: Skipped shows the count, "off" for a bypass, — for a j
 test('DOC-ALIGNMENT I16: the Campaign Analytics Skipped figure is the Matrix cell, from the picker row', () => {
   const fmt = (n) => `n${n}`;
   const tt = (k) => (k === 'analytics.matrix.off' ? 'off' : k);
-  // A row exactly as GET /api/analytics/campaigns returns it (models.AnalyticsCampaign's JSON keys,
-  // not camel-cased; the view renames `name` to "#id: name" on arrival). The SQL already applies
-  // the Matrix's derivation: a journey's skipped is null and its smart_off false.
+  // A row as GET /api/analytics/campaigns writes it (models.AnalyticsCampaign's JSON keys). The SQL
+  // already applies the Matrix's derivation: a journey's skipped is null and its smart_off false.
   const row = (id, name, evergreen, skipped, smartOff) => ({
     id, name, status: 'finished', evergreen, started_at: '2026-11-01T15:00:00Z', created_at: '2026-11-01T14:00:00Z', sent: 100, skipped, smart_off: smartOff,
   });
   const ruled = row(31, '#31: Ruled', false, 12, false);
   const off = row(32, '#32: Launch', false, 0, true);
   const journey = row(33, '#33: Welcome', true, null, false);
+  // The same rows as the VIEW holds them: through the API module's own key conversion (the
+  // interceptor's default branch -- getAnalyticsCampaigns passes no camelCase option, asserted
+  // below so the fixture shape and the wire shape cannot part).
+  const camel = (r) => Object.fromEntries(Object.entries(r)
+    .map(([k, v]) => [k.replace(/_([a-z])/g, (_, ch) => ch.toUpperCase()), v]));
+  const apiSrc = readFileSync(new URL('./api/index.js', import.meta.url), 'utf8');
+  const call = apiSrc.slice(apiSrc.indexOf('export const getAnalyticsCampaigns'));
+  assert.doesNotMatch(call.slice(0, call.indexOf(');')), /camelCase/);
+  assert.ok(Object.prototype.hasOwnProperty.call(camel(off), 'smartOff'));
   // Each equals the Matrix's own cellText over the Matrix's row for the same campaign.
   const matrixOf = (r) => cellText(shapeRow({ ...api[0], ...r }), 'skipped', 'num', fmt, undefined, tt);
   assert.equal(analyticsSkippedCell(ruled, fmt, tt), matrixOf({ id: 31, skipped: 12, smart_off: false }));
@@ -627,12 +635,12 @@ test('DOC-ALIGNMENT I16: the Campaign Analytics Skipped figure is the Matrix cel
   }));
   assert.equal(analyticsSkippedCell(journey, fmt, tt), MISSING, 'an evergreen shows none');
   assert.equal(analyticsSkippedCell(null), null);
-  // The view's pure half: every selected picker row, in the selection's order; a row from a server
-  // that predates the fields (no smart_off key) has no entry.
+  // The view's pure half: every selected picker row (camel-cased, as the view holds it), in the
+  // selection's order; a row from a server that predates the fields (no smartOff key) has no entry.
   const legacy = {
     id: 99, name: '#99: Older server', evergreen: false, sent: 3,
   };
-  assert.deepEqual(analyticsSkippedRows([journey, ruled, off, legacy], fmt, tt), [
+  assert.deepEqual(analyticsSkippedRows([journey, ruled, off, legacy].map(camel), fmt, tt), [
     { id: 33, name: '#33: Welcome', text: MISSING },
     { id: 31, name: '#31: Ruled', text: 'n12' },
     { id: 32, name: '#32: Launch', text: 'off' },

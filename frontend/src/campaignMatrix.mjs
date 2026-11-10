@@ -514,9 +514,9 @@ export function cellText(row, field, mode, fmt = (n) => String(n), usd = (n) => 
 // module's own shapeRow + cellText so it can never read differently from the Matrix: a journey
 // (evergreen) shows '—', a Smart-Sending-off broadcast the Matrix's "off" text, any other broadcast
 // its recorded count. `c` is a row of GET /api/analytics/campaigns (the picker's own scope, served
-// under campaigns:get_analytics, keys as the server writes them -- not camel-cased), which carries
-// `evergreen`, `skipped` and `smart_off` derived in SQL exactly as get-campaign-matrix derives them;
-// the row goes through shapeRow unchanged. null for no row.
+// under campaigns:get_analytics) in the SERVER's key shape, carrying `evergreen`, `skipped` and
+// `smart_off` derived in SQL exactly as get-campaign-matrix derives them; the row goes through
+// shapeRow unchanged. null for no row.
 export function analyticsSkippedCell(c, fmt = (n) => String(n), t = (k) => k) {
   if (!isObj(c)) {
     return null;
@@ -526,12 +526,18 @@ export function analyticsSkippedCell(c, fmt = (n) => String(n), t = (k) => k) {
 
 // The view's pure half (CampaignAnalytics.vue): one { id, name, text } per selected picker row, in
 // the selection's order -- no second read and no further permission (every selected row came from
-// the picker endpoint). A row from a server that predates the fields (no `smart_off` key) has no
-// entry rather than a false count.
+// the picker endpoint). The view's rows are CAMEL-CASED by the API module (getAnalyticsCampaigns
+// passes no camelCase option, so the interceptor converts every key): the flag arrives as
+// `smartOff` and is handed to the cell function under the server's name. A row from a server that
+// predates the fields (no `smartOff` key) has no entry rather than a false count.
 export function analyticsSkippedRows(selected, fmt = (n) => String(n), t = (k) => k) {
   return (Array.isArray(selected) ? selected : [])
-    .filter((s) => isObj(s) && Object.prototype.hasOwnProperty.call(s, 'smart_off'))
-    .map((s) => ({ id: s.id, name: str(s.name), text: analyticsSkippedCell(s, fmt, t) }));
+    .filter((s) => isObj(s) && Object.prototype.hasOwnProperty.call(s, 'smartOff'))
+    .map((s) => ({
+      id: s.id,
+      name: str(s.name),
+      text: analyticsSkippedCell({ ...s, smart_off: s.smartOff === true }, fmt, t),
+    }));
 }
 
 // D7: the GP S% cell's class -- a mechanical comparison of the send day's rate against the
