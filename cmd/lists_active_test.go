@@ -210,6 +210,13 @@ func TestTriggerChangeTurnsOff(t *testing.T) {
 	keeps("trigger round-trip", map[string]any{"name": "Acme widget buyers 2", "join_trigger": json.RawMessage(`{"kind":"skus","skus":["WIDGET "]}`)})
 	keeps("brand round-trip", map[string]any{"name": "Acme widget buyers 2", "brand": "acme"})
 
+	// Review F4 -- archiving turns Active off; unarchiving leaves it off.
+	turnsOff("archive", map[string]any{"name": "Acme widget buyers 2", "status": "archived"}, "")
+	l.ok("unarchive", l.mkt.json(http.MethodPut, "/api/lists/"+itoa(l.sku), map[string]any{"name": "Acme widget buyers 2", "status": "active"}))
+	if r := l.active(l.sku); r.Active {
+		t.Fatal("unarchiving turned Active back on")
+	}
+
 	turnsOff("trigger change", map[string]any{"name": "Acme widget buyers 2", "join_trigger": json.RawMessage(`{"kind":"skus","skus":["other"]}`)}, "")
 	turnsOff("brand-only change", map[string]any{"name": "Acme widget buyers 2", "brand": "beta"}, "")
 	turnsOff("transactional change", map[string]any{"name": "Acme widget buyers 2", "transactional": true}, "admin")

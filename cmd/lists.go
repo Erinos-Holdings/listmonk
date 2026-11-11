@@ -263,7 +263,7 @@ func (a *App) UpdateList(c echo.Context) error {
 	}
 
 	// Update the list in the DB.
-	out, err := a.core.UpdateList(id, l, keepReserved)
+	out, err := a.core.UpdateList(id, l, keepReserved, user.Username)
 	if err != nil {
 		return err
 	}

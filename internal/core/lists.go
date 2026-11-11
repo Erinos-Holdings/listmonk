@@ -176,9 +176,10 @@ func (c *Core) CreateList(l models.List) (models.List, error) {
 // UpdateList updates a given list. l.Tags is stored as given (the caller has already added the
 // brand projection when the request named a brand); keepReserved (the request carried no brand)
 // keeps the list's current brand:/from:/site: tags, merged in the one update-list statement
-// (BRAND-PICKER-SPEC D2).
-func (c *Core) UpdateList(id int, l models.List, keepReserved bool) (models.List, error) {
-	res, err := c.q.UpdateList.Exec(id, l.Name, l.Type, l.Optin, l.Status, pq.StringArray(normalizeListTags(l.Tags)), l.Description, keepReserved)
+// (BRAND-PICKER-SPEC D2). Fork (journey lists, JOURNEY-LISTS-SPEC review F4) -- by is the
+// request's user: archiving an active list turns its Active switch off, stamped with it.
+func (c *Core) UpdateList(id int, l models.List, keepReserved bool, by string) (models.List, error) {
+	res, err := c.q.UpdateList.Exec(id, l.Name, l.Type, l.Optin, l.Status, pq.StringArray(normalizeListTags(l.Tags)), l.Description, keepReserved, by)
 	if err != nil {
 		c.log.Printf("error updating list: %v", err)
 		return models.List{}, echo.NewHTTPError(http.StatusInternalServerError,

@@ -15,8 +15,8 @@ import (
 //     switch -- a list's joins are live only while it is true), trigger_active_at TIMESTAMPTZ NULL
 //     (the instant of the LAST change of the flag) and trigger_active_by TEXT NULL (who made it);
 //  2. ONLY when step 1 actually added trigger_active (checked in information_schema.columns
-//     before the ALTER, inside the same transaction), activates every list that carries a
-//     join_trigger, with NULL stamps -- nothing live changes at the release. A re-run finds the
+//     before the ALTER, inside the same transaction), activates every ACTIVE (not archived) list
+//     that carries a join_trigger, with NULL stamps -- nothing live changes at the release. A re-run finds the
 //     column and activates nothing, so a list saved inactive or switched off since stays off;
 //  3. grants lists:journeys to Super Admin (1) and the three system API roles BY ID (4
 //     ManagePreferences API -- listmonk_sync, manage_preferences; 7 Re-save API --
@@ -67,7 +67,8 @@ ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active_by TEXT NULL;
 `
 
 // listTriggerActivateExisting runs only when the ALTER added the column (V6_2_36 step 2).
-const listTriggerActivateExisting = `UPDATE lists SET trigger_active = true WHERE join_trigger IS NOT NULL;`
+// Review F4: an ARCHIVED triggered list is not activated (archiving turns Active off).
+const listTriggerActivateExisting = `UPDATE lists SET trigger_active = true WHERE join_trigger IS NOT NULL AND status = 'active';`
 
 // listJourneysGrantDDL grants lists:journeys by role id (review F2: a name match fails silently
 // on a re-cased name). type = 'user' -- list roles never hold a global permission.

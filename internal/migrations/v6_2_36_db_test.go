@@ -52,6 +52,9 @@ func TestJourneyListsMigration_V6_2_36(t *testing.T) {
 	var triggered, plain int
 	h.db.Get(&triggered, `INSERT INTO lists (uuid, name, type, optin, join_trigger) VALUES (gen_random_uuid(), 'Acme first order', 'private', 'single', '{"kind":"first_order"}') RETURNING id`)
 	h.db.Get(&plain, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Plain', 'private', 'single') RETURNING id`)
+	// Review F4 -- an archived triggered list is not activated.
+	var archived int
+	h.db.Get(&archived, `INSERT INTO lists (uuid, name, type, optin, status, join_trigger) VALUES (gen_random_uuid(), 'Old buyers', 'private', 'single', 'archived', '{"kind":"first_order"}') RETURNING id`)
 
 	if err := V6_2_36(h.db, nil, nil, lo); err != nil {
 		t.Fatalf("V6_2_36 run 1: %v", err)
@@ -87,6 +90,9 @@ func TestJourneyListsMigration_V6_2_36(t *testing.T) {
 	}
 	if s := read(plain); s.Active || s.At != nil || s.By != nil {
 		t.Fatalf("untriggered list after run 1: %+v, want false with NULL stamps", s)
+	}
+	if s := read(archived); s.Active {
+		t.Fatal("an archived triggered list was activated by the migration")
 	}
 
 	// Between the runs: the triggered list is switched off, and a trigger is saved on the plain list

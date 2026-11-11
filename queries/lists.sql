@@ -149,6 +149,12 @@ WITH l AS (
             SELECT t FROM UNNEST(lists.tags) AS t WHERE t LIKE 'reengage:%' AND t <> ALL(COALESCE($6::VARCHAR(100)[], '{}'))
         )::VARCHAR(100)[],
         description=(CASE WHEN $7 != '' THEN $7 ELSE description END),
+        -- Fork (journey lists, integrations JOURNEY-LISTS-SPEC review F4) -- archiving an ACTIVE
+        -- list switches its Active switch off, stamped with $9 (the request's user); an
+        -- unarchive never turns it back on. SET expressions read the old row.
+        trigger_active=(CASE WHEN $5 = 'archived' AND trigger_active THEN false ELSE trigger_active END),
+        trigger_active_at=(CASE WHEN $5 = 'archived' AND trigger_active THEN NOW() ELSE trigger_active_at END),
+        trigger_active_by=(CASE WHEN $5 = 'archived' AND trigger_active THEN $9 ELSE trigger_active_by END),
         updated_at=NOW()
     WHERE id = $1
     RETURNING id, name
