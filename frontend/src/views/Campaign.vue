@@ -671,6 +671,7 @@ import {
 } from '../personaFrom.mjs'; // eslint-disable-line import/extensions
 import { canManageBrandPersonas } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { campaignBrand, filterByIds, scopeUnion } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { campaignLinkDefault } from '../linkDefaults.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 import EmojiPickerPopover from '../components/EmojiPickerPopover.vue';
@@ -2602,11 +2603,21 @@ export default Vue.extend({
     // blocks resolve against: the campaign's language ('' -> en) and its derived brand,
     // lower-folded. brand is null -- the "Choose a list" placeholder -- while no list is picked
     // (the derivation alone returns the curated default for zero lists) or the derivation errors.
+    // Fork (integrations EDITOR-DEFAULTS-SPEC D2/D4) -- `campaign: true` marks the campaign editor
+    // (a null body_source opens with the footer pair; TemplateForm never sets it), and
+    // `linkDefault` is the default link of the campaign's OWN brand (linkDefaults.mjs, from this
+    // derivation and the store's health documents -- never the navbar selection). Neither changes
+    // the compile.
     officialContext() {
       const d = this.brandDerivation;
       const noLists = !this.form.lists || this.form.lists.length === 0;
       const brand = noLists || d.error !== null || !d.brand ? null : String(d.brand).toLowerCase();
-      return { lang: this.form.lang || 'en', brand };
+      return {
+        lang: this.form.lang || 'en',
+        brand,
+        campaign: true,
+        linkDefault: campaignLinkDefault(brand, d.fromEmail, this.$store.state.brandHealth),
+      };
     },
 
     // Fork (attribute picker, ATTRIBUTE-PICKER-SPEC D2): the subject and preheader offer the

@@ -428,6 +428,14 @@ export function filterRowsByLaunch(rows, launch, slugOf, docs) {
   return r.filter((x) => matchesLaunch(slugOf(x), launch, docs));
 }
 
+// Fork (integrations EDITOR-DEFAULTS-SPEC D1) -- New needs one brand: the Campaigns page's New
+// button and the navbar's New-campaign item are enabled only under a single-brand selection (never
+// all, none or a selection still loading -- the store's brandSelection is all while pending). The
+// ONE predicate both read. A UI ask, not a security boundary: /campaigns/new has no route guard.
+export function canCreateCampaign(selection) {
+  return isValidSelection(selection) && selection.kind === 'brand';
+}
+
 // D10: the brand a form presets and disables under a selection -- { value, locked }. Under all
 // nothing is preset (value null, locked false). Under a brand the slug, locked, on both forms.
 // Under none: the template form presets '' and locks; the list form stays enabled and required

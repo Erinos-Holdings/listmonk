@@ -332,6 +332,7 @@
     "campaigns.invalid": "Invalid campaign",
     "campaigns.invalidCustomHeaders": "Invalid custom headers: {error}",
     "campaigns.markdown": "Markdown",
+    "campaigns.needBrand": "Must select a brand first",
     "campaigns.needsSendAt": "Campaign needs a date to be scheduled.",
     "campaigns.newCampaign": "New campaign",
     "campaigns.noKnownSubsToTest": "No known subscribers to test.",

@@ -14,7 +14,7 @@ import {
 import { blockNumbers } from './documents/structure';
 import { remapColors } from './remapColors';
 import { officialProjection } from './official/projection';
-import { insertOfficialFooter } from './official/insert';
+import { firstLoadDocument, insertOfficialFooter, withOfficialFooters } from './official/insert';
 import { compileDocument } from './utils';
 
 import { CssBaseline, ThemeProvider } from '@mui/material';
@@ -88,4 +88,8 @@ export {
   compileDocument,
   insertOfficialFooter,
   selectBlock,
+  // Fork (integrations EDITOR-DEFAULTS-SPEC D2): the footer pair on a new campaign's first load
+  // and on a template import (the host's VisualEditor.render / Editor.vue onImportVisualTpl).
+  firstLoadDocument,
+  withOfficialFooters,
 };

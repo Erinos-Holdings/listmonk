@@ -118,7 +118,18 @@ export default {
       }
 
       if (!source) {
-        return;
+        // Fork (integrations EDITOR-DEFAULTS-SPEC D2) -- a null body_source in the CAMPAIGN editor
+        // (the context carries `campaign: true`; TemplateForm never sets it, nor while an
+        // Official_ template is edited) opens with the Official footer pair: the builder's
+        // firstLoadDocument returns the starter document with the pair, else the SAME object --
+        // then nothing is loaded, exactly as before. Loaded through the timer below, so the pair
+        // reaches the form and an untouched new campaign reads as unsaved until its first save.
+        const start = em && em.firstLoadDocument && em.DEFAULT_SOURCE ? em.firstLoadDocument(em.DEFAULT_SOURCE, this.officialContext) : null;
+        if (!start || start === em.DEFAULT_SOURCE) {
+          return;
+        }
+        // eslint-disable-next-line no-param-reassign
+        source = start;
       }
 
       // setDocument() will trigger onChange() that produces both bodySource and body (HTML).

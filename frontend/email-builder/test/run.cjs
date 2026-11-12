@@ -54,6 +54,8 @@ const STANDALONE = [
   [path.join('official', 'insert.ts'), path.join('official', 'insert')],
   // CONTAINER-NESTING-SPEC §2.1 / I9: the structure tree model is import-free too.
   [path.join('documents', 'structure.ts'), path.join('documents', 'structure')],
+  // Fork (integrations EDITOR-DEFAULTS-SPEC I4/I5): the insert-time link default.
+  ['linkDefaults.ts', 'linkDefaults'],
 ];
 // CONTAINER-NESTING-SPEC I9: "import-free" is asserted, not assumed -- tsc would otherwise
 // happily compile (and emit) a relative import alongside the file.

@@ -45,8 +45,12 @@
       <b-menu-item v-if="$can('campaigns:get')" :to="{ name: 'campaigns' }" tag="router-link"
         :active="activeItem.campaigns" data-cy="all-campaigns" icon="rocket-launch-outline"
         :label="$t('menu.allCampaigns')" />
-      <b-menu-item v-if="$can('campaigns:manage')" :to="{ name: 'campaign', params: { id: 'new' } }" tag="router-link"
+      <!-- Fork (integrations EDITOR-DEFAULTS-SPEC D1) -- the same rule as the Campaigns page's New
+           (canCreateCampaign): disabled, with the hover, unless one brand is selected. -->
+      <b-menu-item v-if="$can('campaigns:manage') && canNew" :to="{ name: 'campaign', params: { id: 'new' } }" tag="router-link"
         :active="activeItem.campaign" data-cy="new-campaign" icon="plus" :label="$t('menu.newCampaign')" />
+      <b-menu-item v-else-if="$can('campaigns:manage')" disabled tag="a" data-cy="new-campaign" icon="plus"
+        :title="$t('campaigns.needBrand')" :label="$t('menu.newCampaign')" />
       <b-menu-item v-if="$can('media:*')" :to="{ name: 'media' }" tag="router-link" :active="activeItem.media"
         data-cy="media" icon="image-outline" :label="$t('menu.media')" />
       <b-menu-item v-if="$can('templates:get')" :to="{ name: 'templates' }" tag="router-link"
@@ -90,8 +94,9 @@
 </template>
 
 <script>
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import { isAnalyticsOnly } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
+import { canCreateCampaign } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default {
   name: 'Navigation',
@@ -141,6 +146,12 @@ export default {
 
   computed: {
     ...mapState(['profile']),
+    ...mapGetters(['brandSelection']),
+
+    // Fork (integrations EDITOR-DEFAULTS-SPEC D1) -- the one predicate, shared with Campaigns.vue.
+    canNew() {
+      return canCreateCampaign(this.brandSelection);
+    },
 
     // Fork (brand analytics, D8) -- derived from grants (accessPolicy.mjs), never a role id.
     analyticsOnly() {

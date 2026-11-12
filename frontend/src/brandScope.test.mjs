@@ -10,8 +10,23 @@ import {
   campaignBrand, contextNotice, filterTemplates, formBrandDefault, templateNoticeBrand,
   mediaScopeContext, presetNoticeBrand, filterBrandRows,
   launchOf, matchesLaunch, applyLaunch, launchCounts, filterRowsByLaunch, launchApplies,
-  selectionLoaded, brandKeyStep,
+  selectionLoaded, brandKeyStep, canCreateCampaign,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
+
+// Fork (integrations EDITOR-DEFAULTS-SPEC I1) -- New is enabled iff the selection is one brand; the
+// navbar item reads the same predicate.
+test('canCreateCampaign: brand only', () => {
+  assert.equal(canCreateCampaign(ALL), false);
+  assert.equal(canCreateCampaign(NONE), false);
+  assert.equal(canCreateCampaign({ kind: 'brand', slug: 'ruze' }), true);
+  // Unloaded: the store's brandSelection is ALL while pending; a raw pending scope or nothing at all is false too.
+  assert.equal(canCreateCampaign({ pending: true }), false);
+  assert.equal(canCreateCampaign(undefined), false);
+  assert.equal(canCreateCampaign(null), false);
+  assert.equal(canCreateCampaign({ kind: 'brand', slug: '' }), false);
+  assert.equal(canCreateCampaign(resolveSelection({ kind: 'brand', slug: 'ruze' }, { brands: [{ slug: 'ruze' }], none: true }, false)), false);
+  assert.equal(canCreateCampaign(resolveSelection({ kind: 'brand', slug: 'ruze' }, { brands: [{ slug: 'ruze' }, { slug: 'shala' }], none: true }).selection), true);
+});
 
 const BRANDS = [
   { slug: 'younique', display_name: 'Younique' },

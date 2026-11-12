@@ -26,10 +26,16 @@ export type TOfficialRef = {
 // `brand: null` = the brand is not known yet (a campaign with no lists, or a derivation error):
 // a brand block shows "Choose a list"; the corporate block still resolves (it needs lang only).
 // `official: true` = an Official_ template is being edited (the Insert action is hidden).
+// Fork (integrations EDITOR-DEFAULTS-SPEC D2/D4) -- `campaign: true` = the campaign editor (a null
+// body_source opens with the footer pair; the template editor never sets it); `linkDefault` = the
+// campaign's own brand's default Image/Button link (frontend/src/linkDefaults.mjs), null for none.
+// Neither is read by the resolution or the compile.
 export type TOfficialContext = {
   lang?: string | null;
   brand?: string | null;
   official?: boolean;
+  campaign?: boolean;
+  linkDefault?: string | null;
 };
 
 export type TOfficialStatus = 'ok' | 'missing' | 'no-context' | 'duplicate';

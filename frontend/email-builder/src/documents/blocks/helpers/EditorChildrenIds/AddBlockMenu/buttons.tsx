@@ -59,7 +59,9 @@ export const BUTTONS: TButtonProps[] = [
       data: {
         props: {
           text: 'Button',
-          url: 'https://listmonk.app',
+          // Fork (integrations EDITOR-DEFAULTS-SPEC D3) -- the https://listmonk.app placeholder is
+          // retired: BlocksMenu's freshBlock fills the campaign's default link, else it stays ''.
+          url: '',
         },
         style: { padding: { top: 16, bottom: 16, left: 24, right: 24 } },
       },

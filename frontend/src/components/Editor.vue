@@ -336,7 +336,16 @@ export default {
             this.self.bodySource = data.bodySource;
             this.isVisualTplDisabled = true;
 
-            this.$refs.visualEditor.render(JSON.parse(data.bodySource));
+            // Fork (integrations EDITOR-DEFAULTS-SPEC D2) -- an imported visual template gets the
+            // Official footer pair (the builder's firstLoadDocument: unchanged when it carries
+            // both, the missing kind added next to a lone one, the pair at the end of root when it
+            // carries neither; never while an Official_ template is edited).
+            const em = this.$refs.visualEditor.builder();
+            let doc = JSON.parse(data.bodySource);
+            if (em && em.firstLoadDocument) {
+              doc = em.firstLoadDocument(doc, this.officialContext);
+            }
+            this.$refs.visualEditor.render(doc);
 
             // Fork (LIST-GRID-SPEC D12) -- the campaign form sets its language from the
             // imported template's (Campaign.vue onTemplateImported).

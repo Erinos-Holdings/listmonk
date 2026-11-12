@@ -109,3 +109,80 @@ export function insertOfficialFooter(
   }
   return next;
 }
+
+// Fork (integrations EDITOR-DEFAULTS-SPEC D2/I3) -- where the first reachable footer of each kind
+// sits: its parent, the index in that parent's slot, and whether the slot is a Columns column (not
+// a footer position). The same root walk as presentKinds, recording positions. (The spec names
+// documents/structure.ts::parentOf as the locator; this module must stay import-free -- test/run.cjs
+// compiles it standalone and asserts that -- so the walk is inlined here.)
+type TFooterPos = { parentId: string; index: number; column: boolean };
+
+function footerPositions(doc: TDocument): Record<string, TFooterPos> {
+  const out: Record<string, TFooterPos> = {};
+  const seen = new Set<string>();
+  const visit = (id: string, pos: TFooterPos | null) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const b = doc[id];
+    if (!b) return;
+    const data = b.data || {};
+    if (b.type === 'OfficialFooter' && data.props && typeof data.props.kind === 'string') {
+      if (pos && !(data.props.kind in out)) out[data.props.kind] = pos;
+      return;
+    }
+    if (b.type === 'EmailLayout' && Array.isArray(data.childrenIds)) {
+      data.childrenIds.forEach((c: string, i: number) => visit(c, { parentId: id, index: i, column: false }));
+    } else if (b.type === 'Container' && data.props && Array.isArray(data.props.childrenIds)) {
+      data.props.childrenIds.forEach((c: string, i: number) => visit(c, { parentId: id, index: i, column: false }));
+    } else if (b.type === 'ColumnsContainer' && data.props && Array.isArray(data.props.columns)) {
+      for (const col of data.props.columns) {
+        if (col && Array.isArray(col.childrenIds)) col.childrenIds.forEach((c: string, i: number) => visit(c, { parentId: id, index: i, column: true }));
+      }
+    }
+  };
+  visit('root', null);
+  return out;
+}
+
+function rootLength(doc: TDocument): number {
+  const r = doc.root;
+  return r && r.data && Array.isArray(r.data.childrenIds) ? r.data.childrenIds.length : 0;
+}
+
+// Fork (integrations EDITOR-DEFAULTS-SPEC D2/I3) -- the ONE helper the campaign editor's first load
+// and the template import share, over insertOfficialFooter: both kinds present -> the SAME
+// document; neither -> the pair at the end of root; one kind only -> the missing kind next to it in
+// brand -> corporate order (the brand block before an existing corporate block, the corporate block
+// after an existing brand block); the existing one in a Columns column (not a footer position) ->
+// the missing kind at the end of root. Returns a NEW document when anything was inserted.
+export function withOfficialFooters(document: TDocument): TDocument {
+  if (!document || !document.root || document.root.type !== 'EmailLayout') {
+    return document;
+  }
+  const pos = footerPositions(document);
+  const brand = pos.brand;
+  const corporate = pos.corporate;
+  if (brand && corporate) {
+    return document;
+  }
+  if (!brand && !corporate) {
+    return insertOfficialFooter(document, 'root', rootLength(document), null);
+  }
+  const existing = (brand || corporate) as TFooterPos;
+  if (existing.column) {
+    return insertOfficialFooter(document, 'root', rootLength(document), null);
+  }
+  // brand present -> corporate right after it; corporate present -> brand right before it.
+  return insertOfficialFooter(document, existing.parentId, brand ? existing.index + 1 : existing.index, null);
+}
+
+// Fork (integrations EDITOR-DEFAULTS-SPEC D2/I2) -- the document the builder opens a NULL
+// body_source with: in the campaign editor (the host's context carries `campaign: true`) the
+// footer pair is added; in the template editor (no `campaign`) or while an Official_ template is
+// edited (`official`) the document is returned unchanged (the SAME object).
+export function firstLoadDocument(document: TDocument, context: { campaign?: boolean; official?: boolean } | null | undefined): TDocument {
+  if (!context || context.campaign !== true || context.official) {
+    return document;
+  }
+  return withOfficialFooters(document);
+}

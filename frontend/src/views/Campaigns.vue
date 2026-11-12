@@ -8,11 +8,19 @@
         </h1>
       </div>
       <div class="column has-text-right">
+        <!-- Fork (integrations EDITOR-DEFAULTS-SPEC D1) -- New needs one brand in the navbar
+             selector (canCreateCampaign); disabled, it is a plain button with the hover. -->
         <b-field v-if="$can('campaigns:manage')" expanded>
-          <b-button expanded :to="newCampaignRoute" tag="router-link" class="btn-new"
-            type="is-primary" icon-left="plus" data-cy="btn-new">
-            {{ $t('globals.buttons.new') }}
-          </b-button>
+          <b-tooltip :label="$t('campaigns.needBrand')" :active="!canNew" position="is-left" type="is-dark" style="width: 100%">
+            <b-button v-if="canNew" expanded :to="newCampaignRoute" tag="router-link" class="btn-new"
+              type="is-primary" icon-left="plus" data-cy="btn-new">
+              {{ $t('globals.buttons.new') }}
+            </b-button>
+            <b-button v-else expanded disabled class="btn-new" type="is-primary" icon-left="plus"
+              data-cy="btn-new" :aria-label="$t('campaigns.needBrand')">
+              {{ $t('globals.buttons.new') }}
+            </b-button>
+          </b-tooltip>
         </b-field>
       </div>
     </header>
@@ -430,7 +438,7 @@ import {
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
-import { brandLabelOf, filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { brandLabelOf, canCreateCampaign, filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { stripBrand } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
 import {
@@ -955,6 +963,11 @@ export default Vue.extend({
         return null;
       }
       return { slug: sel.slug, label: brandLabelOf(sel.slug, this.brandRows) };
+    },
+
+    // Fork (integrations EDITOR-DEFAULTS-SPEC D1) -- the one predicate, shared with Navigation.vue.
+    canNew() {
+      return canCreateCampaign(this.brandSelection);
     },
 
     // Fork (evergreen) -- New from the Automations scope pre-enables the evergreen
