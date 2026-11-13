@@ -179,9 +179,18 @@ export function withOfficialFooters(document: TDocument): TDocument {
 // Fork (integrations EDITOR-DEFAULTS-SPEC D2/I2) -- the document the builder opens a NULL
 // body_source with: in the campaign editor (the host's context carries `campaign: true`) the
 // footer pair is added; in the template editor (no `campaign`) or while an Official_ template is
-// edited (`official`) the document is returned unchanged (the SAME object).
-export function firstLoadDocument(document: TDocument, context: { campaign?: boolean; official?: boolean } | null | undefined): TDocument {
+// edited (`official`) the document is returned unchanged (the SAME object). Stage 4 S4-4: so is a
+// campaign whose STORED body is not empty (`storedBody` -- a visual row written with a body but no
+// source keeps its body); the template-import path passes no body.
+export function firstLoadDocument(
+  document: TDocument,
+  context: { campaign?: boolean; official?: boolean } | null | undefined,
+  storedBody?: string | null
+): TDocument {
   if (!context || context.campaign !== true || context.official) {
+    return document;
+  }
+  if (typeof storedBody === 'string' && storedBody.trim() !== '') {
     return document;
   }
   return withOfficialFooters(document);

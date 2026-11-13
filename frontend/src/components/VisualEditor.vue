@@ -29,6 +29,9 @@ export default {
 
   props: {
     source: { type: String, default: '' },
+    // Fork (integrations EDITOR-DEFAULTS-SPEC stage 4 S4-4) -- the campaign's stored body; a null
+    // source opens with the footer pair only when this is empty too.
+    storedBody: { type: String, default: '' },
     height: { type: String, default: 'auto' },
 
     // Brand swatch rows for the color picker. Delivered into the iframe'd builder via its
@@ -124,7 +127,8 @@ export default {
         // firstLoadDocument returns the starter document with the pair, else the SAME object --
         // then nothing is loaded, exactly as before. Loaded through the timer below, so the pair
         // reaches the form and an untouched new campaign reads as unsaved until its first save.
-        const start = em && em.firstLoadDocument && em.DEFAULT_SOURCE ? em.firstLoadDocument(em.DEFAULT_SOURCE, this.officialContext) : null;
+        // Stage 4 S4-4: never over a stored body (storedBody -- a row with a body but no source).
+        const start = em && em.firstLoadDocument && em.DEFAULT_SOURCE ? em.firstLoadDocument(em.DEFAULT_SOURCE, this.officialContext, this.storedBody) : null;
         if (!start || start === em.DEFAULT_SOURCE) {
           return;
         }

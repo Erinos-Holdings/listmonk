@@ -61,7 +61,7 @@
     <richtext-editor v-if="self.contentType === 'richtext'" :disabled="disabled" v-model="self.body" />
 
     <!-- visual editor //-->
-    <visual-editor v-if="self.contentType === 'visual'" :source="self.bodySource" @change="onVisualEditorChange"
+    <visual-editor v-if="self.contentType === 'visual'" :source="self.bodySource" :stored-body="self.body || ''" @change="onVisualEditorChange"
       height="65vh" :brand-palettes="brandPalettes" :media-context="mediaContext" ref="visualEditor"
       :official-context="officialContext" :official-footers="officialFooters" />
 

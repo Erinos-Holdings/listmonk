@@ -94,6 +94,19 @@ const OF = (kind) => ({ type: 'OfficialFooter', data: { props: { kind } } });
   check('I2 first load: official does not', firstLoadDocument(start, { lang: 'en', brand: 'curated', official: true, campaign: true }) === start);
   check('I2 first load: no context does not', firstLoadDocument(start, null) === start && firstLoadDocument(start, undefined) === start);
   check('I2 first load: campaign flag must be exactly true', firstLoadDocument(start, { campaign: 'yes' }) === start);
+  // Stage 4 S4-4: a non-editable campaign (the host sends campaign: canEdit = false) and a stored
+  // body with no source are left alone; an empty or blank stored body still gets the pair.
+  check('S4-4 first load: a campaign that cannot be edited (campaign: false) does not', firstLoadDocument(start, { lang: 'en', brand: 'ruze', campaign: false }) === start);
+  check('S4-4 first load: a stored body with no source is kept', firstLoadDocument(start, { campaign: true }, '<html><body>stored</body></html>') === start);
+  check('S4-4 first load: an empty or blank stored body still gets the pair',
+    J(rootKinds(firstLoadDocument(base(), { campaign: true }, ''))) === J(['a', 'box', 'b', 'OF:brand', 'OF:corporate'])
+    && J(rootKinds(firstLoadDocument(base(), { campaign: true }, '  \n'))) === J(['a', 'box', 'b', 'OF:brand', 'OF:corporate'])
+    && J(rootKinds(firstLoadDocument(base(), { campaign: true }, null))) === J(['a', 'box', 'b', 'OF:brand', 'OF:corporate']));
+  // The host passes the stored body on the first load (VisualEditor.vue), and Editor.vue binds it.
+  const hostSrc = (rel) => fs.readFileSync(path.join(__dirname, '..', '..', 'src', rel), 'utf8');
+  check('S4-4 host: VisualEditor passes storedBody to firstLoadDocument', /firstLoadDocument\(em\.DEFAULT_SOURCE, this\.officialContext, this\.storedBody\)/.test(hostSrc(path.join('components', 'VisualEditor.vue'))));
+  check('S4-4 host: Editor.vue binds the stored body', /:stored-body="self\.body \|\| ''"/.test(hostSrc(path.join('components', 'Editor.vue'))));
+  check('S4-4 host: Campaign.vue sends campaign: this.canEdit', /campaign: this\.canEdit,/.test(hostSrc(path.join('views', 'Campaign.vue'))));
 }
 
 // ---- I4: applyLinkDefault -------------------------------------------------------------------

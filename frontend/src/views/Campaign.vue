@@ -2603,7 +2603,7 @@ export default Vue.extend({
     // blocks resolve against: the campaign's language ('' -> en) and its derived brand,
     // lower-folded. brand is null -- the "Choose a list" placeholder -- while no list is picked
     // (the derivation alone returns the curated default for zero lists) or the derivation errors.
-    // Fork (integrations EDITOR-DEFAULTS-SPEC D2/D4) -- `campaign: true` marks the campaign editor
+    // Fork (integrations EDITOR-DEFAULTS-SPEC D2/D4) -- `campaign: true` marks an editable campaign
     // (a null body_source opens with the footer pair; TemplateForm never sets it), and
     // `linkDefault` is the default link of the campaign's OWN brand (linkDefaults.mjs, from this
     // derivation and the store's health documents -- never the navbar selection). Neither changes
@@ -2615,7 +2615,9 @@ export default Vue.extend({
       return {
         lang: this.form.lang || 'en',
         brand,
-        campaign: true,
+        // Stage 4 S4-4: only where the campaign can be saved (draft/scheduled/paused) -- else the
+        // inserted pair would read as unsaved changes nobody can save.
+        campaign: this.canEdit,
         linkDefault: campaignLinkDefault(brand, d.fromEmail, this.$store.state.brandHealth),
       };
     },
