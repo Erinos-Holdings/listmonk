@@ -8,6 +8,7 @@
 
 import {
   storedTrigger, triggerOption, isStepTrigger, TRIGGER_FIRST_ORDER, TRIGGER_SKUS,
+  systemHiddenOf, journeyLockedOf,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 export const CLASS_NONE = 'none';
@@ -233,4 +234,28 @@ export function addableLists(options, keepIds = []) {
 export function manageListOptions(options, action) {
   const opts = Array.isArray(options) ? options : [];
   return action === 'add' ? addableLists(opts) : opts;
+}
+
+// Fork (campaign lists, integrations CAMPAIGN-LISTS-SPEC D3/D3.1, I6). campaignListChoices is the
+// campaign Lists dropdown's choices: every option the server does not mark system_hidden, in
+// order, rows untouched. ONLY the dropdown reads it -- listOptions keeps feeding the journey
+// classes, the re-engagement note, resolvedLists and the brand derivation, so a saved or
+// prefilled hidden list stays selected and classified; it is just not offered again. A UI choice:
+// the server accepts a hidden list (system writers create campaigns on them).
+export function campaignListChoices(options) {
+  return (Array.isArray(options) ? options : []).filter((l) => !systemHiddenOf(l));
+}
+
+// preselectListId (D5, I8) is the list a NEW campaign opens on: the id of the one option that is
+// not a system list at all (journey_locked false -- so a selectable 180d/270d queue does not
+// count) when the global selector is one brand, the form is new, there is no ?list_id= prefill
+// (resolved or not) and nothing is selected; else null (zero or several candidates included). The
+// options are the form's listOptions, already the brand's scope. The form evaluates it once.
+export function preselectListId({
+  isNew, prefilled, current, brandOne, options,
+} = {}) {
+  if (!isNew || prefilled || !brandOne) return null;
+  if (Array.isArray(current) && current.length > 0) return null;
+  const candidates = (Array.isArray(options) ? options : []).filter((l) => l && !journeyLockedOf(l));
+  return candidates.length === 1 ? candidates[0].id : null;
 }

@@ -16,6 +16,7 @@ package main
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/knadh/listmonk/internal/auth"
@@ -41,10 +42,41 @@ func isJourneyLockedList(l models.List) bool {
 	return false
 }
 
-// markJourneyLocked sets journey_locked on list responses (I14).
+// reWinbackQueueTag is a win-back sunset queue's tag (integrations CAMPAIGN-LISTS-SPEC D2/D6):
+// reengage:<brand list id>:1 (180d) or :2 (270d) -- the two queues Brand Usage decision sp-winback
+// keeps selectable. Matched against the whitespace-trimmed tag.
+var reWinbackQueueTag = regexp.MustCompile(`^reengage:\d+:[12]$`)
+
+// isHiddenSystemList is the ONE definition of a HIDDEN system list (CAMPAIGN-LISTS-SPEC D6): the
+// stored trigger kind is first_order, no_purchase or post_purchase, OR some tag whose
+// whitespace-trimmed text starts with reengage: and does NOT match ^reengage:\d+:[12]$. A malformed
+// reengage tag hides (the safe side). Its SQL twin is the hide_system predicate of query-lists
+// (queries/lists.sql), pinned by TestQueryListsHideSystemAgreesWithGo -- change both together.
+// Written to the formal rule's shape on purpose, not as locked && !winback.
+func isHiddenSystemList(l models.List) bool {
+	if isStandardTriggerKind(joinTriggerKind(l.JoinTrigger)) {
+		return true
+	}
+	for _, t := range l.Tags {
+		t = strings.TrimSpace(t)
+		if strings.HasPrefix(t, reengageTagPrefix) && !reWinbackQueueTag.MatchString(t) {
+			return true
+		}
+	}
+	return false
+}
+
+// setListFlags is the ONE per-list setter of the computed system-list flags (CAMPAIGN-LISTS-SPEC
+// D6, I2): journey_locked and system_hidden are always set together, on every list response.
+func setListFlags(l *models.List) {
+	l.JourneyLocked = isJourneyLockedList(*l)
+	l.SystemHidden = isHiddenSystemList(*l)
+}
+
+// markJourneyLocked sets journey_locked and system_hidden on list responses (I14).
 func markJourneyLocked(lists []models.List) {
 	for i := range lists {
-		lists[i].JourneyLocked = isJourneyLockedList(lists[i])
+		setListFlags(&lists[i])
 	}
 }
 

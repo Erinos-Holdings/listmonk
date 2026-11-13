@@ -249,6 +249,13 @@ export function journeyLockedOf(list) {
   return either(list, 'journey_locked', 'journeyLocked') === true;
 }
 
+// systemHiddenOf is the server's system_hidden (integrations CAMPAIGN-LISTS-SPEC D6): a system list
+// the campaign Lists selector and the Lists page (by default) leave out. Never re-derived here --
+// the server's isHiddenSystemList is the one definition, so no tag rule lives in the frontend.
+export function systemHiddenOf(list) {
+  return either(list, 'system_hidden', 'systemHidden') === true;
+}
+
 export function triggerActiveOf(list) {
   return either(list, 'trigger_active', 'triggerActive') === true;
 }
@@ -371,22 +378,35 @@ export function triggerBadge(joinTrigger, triggerSync) {
   return { state: 'pending', key: 'lists.triggerSyncPending', params: {} };
 }
 
-// listTriggerItem is the Lists page sub-line item, or '' for a list without a trigger. The state
-// word only -- never the error text -- then the Active switch's state (JOURNEY-LISTS-SPEC D12).
+// listTriggerItem is the Lists page sub-line item, or null for a list without a trigger: `text`,
+// the kind phrase and the sync state word only -- never the error text -- and `active`, the Active
+// switch's state (JOURNEY-LISTS-SPEC D12). The view renders the switch's word after the text as a
+// colored span (CAMPAIGN-LISTS-SPEC D8: activeWordOf).
 export function listTriggerItem(list) {
   const opt = triggerOption(storedTrigger(list));
-  if (opt === TRIGGER_NONE) return '';
+  if (opt === TRIGGER_NONE) return null;
   const what = triggerWhat(storedTrigger(list));
   const badge = triggerBadge(storedTrigger(list), storedTriggerSync(list));
   const state = { pending: 'pending sync', live: 'live', invalid: 'invalid' }[badge.state];
-  return `${what} · ${state} · ${triggerActiveOf(list) ? 'Active' : 'Inactive'}`;
+  return { text: `${what} · ${state}`, active: triggerActiveOf(list) };
 }
 
-// withTriggerItem appends the item to the sub-line text with the page's ' · ' separator, or
-// returns the text unchanged for a list without a trigger.
+// activeWordOf is the sub-line's last word and its class (D8): green "Active", red "Inactive".
+export function activeWordOf(active) {
+  return active
+    ? { word: 'Active', cls: 'has-text-success' }
+    : { word: 'Inactive', cls: 'has-text-danger' };
+}
+
+// withTriggerItem is the sub-line for the view: `text`, the given sub-line with the item's text
+// appended with the page's ' · ' separator (unchanged for a list without a trigger), and
+// `active` -- the Active switch's state, or null when there is no trigger (no word rendered).
+// The view writes ' · ' and activeWordOf(active) after the text.
 export function withTriggerItem(subline, list) {
   const item = listTriggerItem(list);
-  return item ? `${subline} · ${item}` : subline;
+  return item
+    ? { text: `${subline} · ${item.text}`, active: item.active }
+    : { text: subline, active: null };
 }
 
 // pickerLabel is the campaign list picker's dropdown label: the name, with the trigger suffix.

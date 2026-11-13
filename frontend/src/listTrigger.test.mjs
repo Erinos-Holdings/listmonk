@@ -12,8 +12,14 @@ import {
   SERIES_WELCOME, SERIES_POST_PURCHASE, WELCOME_STEP_DAYS, POST_PURCHASE_STEP_DAYS,
   SERIES_REENGAGEMENT, REENGAGEMENT_DAYS, STEP_TRIGGERS, seriesOfTrigger,
   journeySaveBlocked, STANDARD_TRIGGERS, isStandardTrigger, journeyOptionDisabled, journeyLockedOf, formReadOnly,
-  activeSwitchState, triggerChangeTurnsOff,
+  activeSwitchState, triggerChangeTurnsOff, activeWordOf, systemHiddenOf,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
+
+// CAMPAIGN-LISTS-SPEC I10 -- the sub-line as the Lists page renders it: the item's text, then
+// ' · ' and the Active switch's word (activeWordOf). The asserted strings below are the pre-D8
+// sub-lines, unchanged: the split moved the word into a colored span, nothing else.
+const itemText = (item) => (item ? `${item.text} · ${activeWordOf(item.active).word}` : '');
+const sublineText = (s) => (s.active === null ? s.text : `${s.text} · ${activeWordOf(s.active).word}`);
 
 // JOURNEY-UX-SPEC IA4 -- the selector's help follows the value (A1.4); A1.3's bold lead + prose.
 test('IA4: type help per selector value; the Sends lead and prose per trigger radio', () => {
@@ -203,19 +209,19 @@ test('reengagement family: seriesStepKey on REENGAGEMENT_DAYS only', () => {
 test('no_purchase: picker label and sub-line item (LIFECYCLE-SERIES-SPEC S10 phrases)', () => {
   const l = { name: 'Ruze Still Deciding', join_trigger: { kind: 'no_purchase', days: 7 } };
   assert.equal(pickerLabel(l), 'Ruze Still Deciding — No-purchase series day 7');
-  assert.equal(listTriggerItem(l), 'No-purchase series day 7 · pending sync · Inactive');
+  assert.equal(itemText(listTriggerItem(l)), 'No-purchase series day 7 · pending sync · Inactive');
   const live = { ...l, trigger_sync: { state: 'live', slug: 'ruze-no-purchase-56' }, trigger_active: true };
-  assert.equal(listTriggerItem(live), 'No-purchase series day 7 · live · Active');
-  assert.equal(withTriggerItem('#56 · Ruze', live), '#56 · Ruze · No-purchase series day 7 · live · Active');
+  assert.equal(itemText(listTriggerItem(live)), 'No-purchase series day 7 · live · Active');
+  assert.equal(sublineText(withTriggerItem('#56 · Ruze', live)), '#56 · Ruze · No-purchase series day 7 · live · Active');
   const pp = { name: 'Ruze day 14', join_trigger: { kind: 'post_purchase', days: 14 } };
   assert.equal(pickerLabel(pp), 'Ruze day 14 — Post-purchase series day 14');
-  assert.equal(listTriggerItem(pp), 'Post-purchase series day 14 · pending sync · Inactive');
+  assert.equal(itemText(listTriggerItem(pp)), 'Post-purchase series day 14 · pending sync · Inactive');
   // The camel-cased browser row reads the same.
   const camel = {
     name: 'Step 2', joinTrigger: { kind: 'no_purchase', days: 14 }, triggerSync: { state: 'invalid', error: 'x' }, triggerActive: true,
   };
   assert.equal(pickerLabel(camel), 'Step 2 — No-purchase series day 14');
-  assert.equal(listTriggerItem(camel), 'No-purchase series day 14 · invalid · Active');
+  assert.equal(itemText(listTriggerItem(camel)), 'No-purchase series day 14 · invalid · Active');
   assert.deepEqual(triggerBadge(storedTrigger(camel), storedTriggerSync(camel)), { state: 'invalid', key: 'lists.triggerSyncInvalid', params: { error: 'x' } });
 });
 
@@ -239,16 +245,39 @@ test('badge per trigger_sync state', () => {
 });
 
 test('sub-line item: the kind and the state word, never the error text', () => {
-  assert.equal(listTriggerItem({}), '');
-  assert.equal(listTriggerItem(null), '');
-  assert.equal(listTriggerItem({ join_trigger: { kind: 'first_order' } }), 'Post-purchase series day 0 · pending sync · Inactive');
-  assert.equal(listTriggerItem({ join_trigger: { kind: 'skus', skus: ['a'] }, trigger_sync: { state: 'live', slug: 's' }, trigger_active: true }), 'joins on SKU purchase · live · Active');
-  const inv = listTriggerItem({ join_trigger: { kind: 'first_order' }, trigger_sync: { state: 'invalid', error: 'secret detail' } });
+  assert.equal(listTriggerItem({}), null);
+  assert.equal(listTriggerItem(null), null);
+  assert.equal(itemText(listTriggerItem({ join_trigger: { kind: 'first_order' } })), 'Post-purchase series day 0 · pending sync · Inactive');
+  assert.equal(itemText(listTriggerItem({ join_trigger: { kind: 'skus', skus: ['a'] }, trigger_sync: { state: 'live', slug: 's' }, trigger_active: true })), 'joins on SKU purchase · live · Active');
+  const inv = itemText(listTriggerItem({ join_trigger: { kind: 'first_order' }, trigger_sync: { state: 'invalid', error: 'secret detail' } }));
   assert.equal(inv, 'Post-purchase series day 0 · invalid · Inactive');
   assert.equal(inv.includes('secret'), false);
   const activeFo = { join_trigger: { kind: 'first_order' }, trigger_sync: { state: 'live' }, trigger_active: true };
-  assert.equal(withTriggerItem('#7 · Acme', activeFo), '#7 · Acme · Post-purchase series day 0 · live · Active');
-  assert.equal(withTriggerItem('#5', { name: 'x' }), '#5');
+  assert.equal(sublineText(withTriggerItem('#7 · Acme', activeFo)), '#7 · Acme · Post-purchase series day 0 · live · Active');
+  assert.deepEqual(withTriggerItem('#5', { name: 'x' }), { text: '#5', active: null });
+});
+
+// CAMPAIGN-LISTS-SPEC I10 (D8) -- the state word is split off the text: the item carries the
+// switch's state, the text never holds the word, and the view colors it green Active / red Inactive.
+test('I10: Active/Inactive split off the sub-line and colored', () => {
+  const on = { join_trigger: { kind: 'first_order' }, trigger_sync: { state: 'live' }, trigger_active: true };
+  const off = { joinTrigger: { kind: 'no_purchase', days: 2 } };
+  assert.deepEqual(listTriggerItem(on), { text: 'Post-purchase series day 0 · live', active: true });
+  assert.deepEqual(listTriggerItem(off), { text: 'No-purchase series day 2 · pending sync', active: false });
+  assert.deepEqual(withTriggerItem('#7', on), { text: '#7 · Post-purchase series day 0 · live', active: true });
+  assert.deepEqual(activeWordOf(true), { word: 'Active', cls: 'has-text-success' });
+  assert.deepEqual(activeWordOf(false), { word: 'Inactive', cls: 'has-text-danger' });
+});
+
+// CAMPAIGN-LISTS-SPEC D6 / I6 -- the server's system_hidden, under either spelling, never derived.
+test('systemHiddenOf reads the server flag under either spelling, never the tags', () => {
+  assert.equal(systemHiddenOf({ system_hidden: true }), true);
+  assert.equal(systemHiddenOf({ systemHidden: true }), true);
+  assert.equal(systemHiddenOf({ systemHidden: false, journeyLocked: true }), false);
+  assert.equal(systemHiddenOf({ tags: ['reengage:5:4'], joinTrigger: { kind: 'first_order' } }), false);
+  assert.equal(systemHiddenOf({}), false);
+  assert.equal(systemHiddenOf(null), false);
+  assert.equal(systemHiddenOf({ system_hidden: 'true' }), false);
 });
 
 // The API client camel-cases every response (utils.camelKeys, deep), so a browser row carries
@@ -260,13 +289,13 @@ test('readers accept the camel-cased row the browser actually holds', () => {
   assert.deepEqual(storedTriggerSync(row), { state: 'live', syncedAt: '2026-10-17T06:10:38Z' });
   assert.equal(triggerOption(storedTrigger(row)), TRIGGER_FIRST_ORDER);
   assert.equal(triggerBadge(storedTrigger(row), storedTriggerSync(row)).params.time, '2026-10-17T06:10:38Z');
-  assert.equal(listTriggerItem(row), 'Post-purchase series day 0 · live · Inactive');
-  assert.equal(listTriggerItem({ ...row, triggerActive: true }), 'Post-purchase series day 0 · live · Active');
+  assert.equal(itemText(listTriggerItem(row)), 'Post-purchase series day 0 · live · Inactive');
+  assert.equal(itemText(listTriggerItem({ ...row, triggerActive: true })), 'Post-purchase series day 0 · live · Active');
   assert.equal(pickerLabel(row), 'Acme first order — Post-purchase series day 0');
   // The wire spelling still wins when both are present, and an absent trigger is none either way.
   assert.deepEqual(storedTrigger({ join_trigger: null, joinTrigger: { kind: 'skus' } }), null);
   assert.equal(storedTrigger({}), undefined);
-  assert.equal(listTriggerItem({ joinTrigger: null }), '');
+  assert.equal(listTriggerItem({ joinTrigger: null }), null);
 });
 
 test('picker label', () => {

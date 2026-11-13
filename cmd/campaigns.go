@@ -1579,16 +1579,22 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 	if len(c.ListIDs) == 0 {
 		return c, errors.New(a.i18n.T("campaigns.fieldInvalidListIDs"))
 	}
+	// Fork (campaign lists, integrations CAMPAIGN-LISTS-SPEC D4) -- a campaign targets exactly one
+	// list, every type (create, update, the opt-in path and the test send all run this). It sits
+	// after the brand mapping, From, name and subject rules, so a two-brand pair keeps its
+	// brandFromConflict error and only an otherwise-valid multi-list request answers oneList. It
+	// supersedes the evergreen-only evergreenOneList branch (that key stays as the form's
+	// rendering of a stored multi-list campaign).
+	if len(c.ListIDs) > 1 {
+		return c, errors.New(a.i18n.T("campaigns.oneList"))
+	}
 
-	// Fork (evergreen) -- one list (join-time semantics are per list), never scheduled
-	// (an evergreen is not claimed by next-campaigns, so a scheduled one would never
+	// Fork (evergreen) -- one list (join-time semantics are per list; the rule above), never
+	// scheduled (an evergreen is not claimed by next-campaigns, so a scheduled one would never
 	// start), never opt-in, non-negative delay.
 	if c.Evergreen {
 		if c.Type == models.CampaignTypeOptin {
 			return c, errors.New(a.i18n.T("campaigns.evergreenNotOptin"))
-		}
-		if len(c.ListIDs) != 1 {
-			return c, errors.New(a.i18n.T("campaigns.evergreenOneList"))
 		}
 		if c.SendAt.Valid {
 			return c, errors.New(a.i18n.T("campaigns.evergreenNoSchedule"))

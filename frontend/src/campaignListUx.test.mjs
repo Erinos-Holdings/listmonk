@@ -382,6 +382,57 @@ test('IA3: the Manage-lists picker is filtered only under action add, restored o
   assert.deepEqual(ids(manageListOptions([NP, PLAIN], 'add')), [4]);
 });
 
+// CAMPAIGN-LISTS-SPEC I6 -- the dropdown's choices drop the server's system_hidden lists (either
+// spelling), keep everything else in order, rows and labels untouched; nothing is derived from tags.
+test('I6: campaignListChoices drops system_hidden lists only', () => {
+  const row = (id, label, flags) => ({ id, label, ...flags });
+  const opts = [
+    row(10, 'Acme news', {}),
+    row(11, 'Acme first order — Post-purchase series day 0', { systemHidden: true, journeyLocked: true }),
+    row(12, 'Acme re-engagement 1', { systemHidden: false, tags: ['reengage:10:1'] }),
+    row(13, 'Acme re-engagement 4', { system_hidden: true, journey_locked: true }),
+    row(14, 'Acme widget buyers — joins on SKU purchase', { system_hidden: false }),
+    // A tag alone never hides: the server's flag is the one definition.
+    row(15, 'Tagged only', { tags: ['reengage:10:4'] }),
+  ];
+  const out = ux.campaignListChoices(opts);
+  assert.deepEqual(out.map((l) => l.id), [10, 12, 14, 15]);
+  assert.equal(out[2], opts[4]);
+  assert.equal(out[2].label, 'Acme widget buyers — joins on SKU purchase');
+  assert.deepEqual(ux.campaignListChoices(undefined), []);
+  assert.deepEqual(ux.campaignListChoices([]), []);
+});
+
+// CAMPAIGN-LISTS-SPEC I8 -- the New-campaign preselect.
+test('I8: preselectListId picks the one non-system list, else null', () => {
+  const news = { id: 6, journeyLocked: false };
+  const fo = { id: 40, journeyLocked: true, systemHidden: true };
+  const q1 = { id: 41, journeyLocked: true, systemHidden: false };
+  const q2 = { id: 42, journey_locked: true, system_hidden: false };
+  const q4 = { id: 44, journey_locked: true, system_hidden: true };
+  const base = {
+    isNew: true, prefilled: false, current: [], brandOne: true, options: [news, fo, q1, q2, q4],
+  };
+  // The brand's only other lists are system lists, the 180d/270d queues included: the newsletter.
+  assert.equal(ux.preselectListId(base), 6);
+  // snake_case rows read the same.
+  assert.equal(ux.preselectListId({ ...base, options: [{ id: 6, journey_locked: false }, q2, q4] }), 6);
+  // A row with no flag at all is not a system list.
+  assert.equal(ux.preselectListId({ ...base, options: [{ id: 7, name: 'x' }, fo] }), 7);
+  // ruze's two ordinary lists: no preselect.
+  const ruze = [{ id: 15, name: 'Ruze', journeyLocked: false }, { id: 38, name: 'Ruze VIP', journey_locked: false }, fo];
+  assert.equal(ux.preselectListId({ ...base, options: ruze }), null);
+  // Zero candidates.
+  assert.equal(ux.preselectListId({ ...base, options: [fo, q1, q4] }), null);
+  assert.equal(ux.preselectListId({ ...base, options: [] }), null);
+  // Not new, a prefill (resolved or not), a non-empty selection, not one brand: null.
+  assert.equal(ux.preselectListId({ ...base, isNew: false }), null);
+  assert.equal(ux.preselectListId({ ...base, prefilled: true }), null);
+  assert.equal(ux.preselectListId({ ...base, current: [news] }), null);
+  assert.equal(ux.preselectListId({ ...base, brandOne: false }), null);
+  assert.equal(ux.preselectListId(), null);
+});
+
 // Every i18n key the A1 bindings name exists in en.json.
 test('A1.6: the amendment keys are in en.json', () => {
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));

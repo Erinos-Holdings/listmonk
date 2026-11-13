@@ -258,8 +258,14 @@
                 <!-- JOURNEY-UX-SPEC A1.12: a user's list change re-derives the journey toggles when
                      the selection's class changes (onListsInput); the sender section and the
                      journey block below render campaignListUx.mjs's answers. -->
-                <list-selector :value="form.lists" @input="onListsInput" :selected="form.lists" :all="listOptions"
-                  :disabled="!canEdit" :label="$t('globals.terms.lists')" :placeholder="$t('campaigns.sendToLists')" />
+                <!-- CAMPAIGN-LISTS-SPEC D3/D4: the dropdown offers listChoices (listOptions minus the
+                     server's system_hidden lists) and is single-select (a pick replaces). Every
+                     other consumer -- journeySelection, hasReengageList, resolvedLists, the brand
+                     derivation -- keeps reading listOptions, so a saved or prefilled hidden list
+                     stays selected and classified. -->
+                <list-selector :value="form.lists" @input="onListsInput" :selected="form.lists" :all="listChoices"
+                  single :disabled="!canEdit" :label="$t('globals.terms.lists')"
+                  :placeholder="$t('campaigns.sendToLists')" />
 
                 <!-- READ-ONLY BY DESIGN: the From address is a property of the brand, derived from
                      the selected lists' `from:` tag. The escape hatch is editing the list, not the
@@ -658,7 +664,7 @@ import ListSelector from '../components/ListSelector.vue';
 import { pickerLabel } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import {
   hasReengageList, journeyMatrix, journeyNotices, journeyPayload, selectionChange, selectionClasses,
-  selectionClassKey, selectionRow, senderSection,
+  selectionClassKey, selectionRow, senderSection, campaignListChoices, preselectListId,
 } from '../campaignListUx.mjs'; // eslint-disable-line import/extensions
 import Media from './Media.vue';
 import { normalizeMediaTagsLenient } from '../mediaTags';
@@ -816,6 +822,9 @@ export default Vue.extend({
 
       // IDs from ?list_id query param.
       selListIDs: [],
+
+      // Fork (campaign lists, CAMPAIGN-LISTS-SPEC D5) -- the preselect has been evaluated (once).
+      preselectDone: false,
 
       // True between loading an existing campaign and the first settled derivation, so the
       // repoint TOAST fires once per load rather than on every subsequent list edit. The
@@ -1731,6 +1740,29 @@ export default Vue.extend({
       this.setLists(lists, 'user');
     },
 
+    // Fork (campaign lists, CAMPAIGN-LISTS-SPEC D5) -- a NEW campaign under a one-brand selection
+    // opens on the brand's one non-system list (campaignListUx.mjs preselectListId). Evaluated
+    // exactly once (the guard is set whether or not a list was chosen), from afterListsLoaded so a
+    // hard load waits for the lists store and the scope. It calls setLists directly and never
+    // writes selListIDs: the selectedLists watcher would re-apply it and override a later change.
+    preselectOnce() {
+      if (this.preselectDone) {
+        return;
+      }
+      this.preselectDone = true;
+      const id = preselectListId({
+        isNew: this.isNew,
+        prefilled: this.$route.query.list_id !== undefined,
+        current: this.form.lists,
+        brandOne: this.brandSelection.kind === 'brand',
+        options: this.listOptions,
+      });
+      const option = id === null ? null : this.listOptions.find((l) => l.id === id);
+      if (option) {
+        this.setLists([option], 'preselect');
+      }
+    },
+
     // setLists assigns form.lists and runs the re-derive, classing the previous selection against
     // the options as they stood before the assignment.
     setLists(lists, source) {
@@ -2263,6 +2295,13 @@ export default Vue.extend({
     listOptions() {
       return filterByIds(this.lists, scopeUnion(this.scopeListIds, [this.data.lists]))
         .map((l) => ({ ...l, label: pickerLabel(l) }));
+    },
+
+    // Fork (campaign lists, CAMPAIGN-LISTS-SPEC D3/D3.1) -- the dropdown's choices only: listOptions
+    // without the server's system_hidden lists (campaignListUx.mjs campaignListChoices). Nothing
+    // else reads this.
+    listChoices() {
+      return campaignListChoices(this.listOptions);
     },
 
     // Fork (journey form UX, JOURNEY-UX-SPEC D1/D2/D3) -- the selected lists classified by their
@@ -2942,6 +2981,9 @@ export default Vue.extend({
 
         this.selListIDs = strIds.map((v) => parseInt(v, 10));
       }
+
+      // Fork (campaign lists, D5) -- the one-brand preselect, once, after the lists and scope load.
+      this.afterListsLoaded(() => this.preselectOnce());
     } else {
       const intID = parseInt(id, 10);
       if (intID <= 0 || Number.isNaN(intID)) {

@@ -80,7 +80,8 @@
                 {{ $t('lists.activeSwitch') }}
               </b-switch>
             </b-field>
-            <p v-if="activeState.hintKey" class="help is-warning" data-cy="list-active-hint">{{ $t(activeState.hintKey) }}</p>
+            <!-- CAMPAIGN-LISTS-SPEC D9: red, not the unreadable yellow is-warning. -->
+            <p v-if="activeState.hintKey" class="help is-danger" data-cy="list-active-hint">{{ $t(activeState.hintKey) }}</p>
             <p v-if="activeState.warningKey" class="help is-danger" data-cy="list-active-warning">{{ $t(activeState.warningKey) }}</p>
           </div>
           <!-- JOURNEY-UX-SPEC A1.4: the help follows the selection (listTypeHelpKey). -->

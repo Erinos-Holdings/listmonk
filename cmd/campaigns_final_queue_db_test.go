@@ -54,10 +54,12 @@ func TestCampaignFinalQueueCreateUpdate(t *testing.T) {
 		name := "Brand re-engagement " + itoa(n)
 		f.wantErr("create regular on queue "+itoa(n), f.postCampaign(q[n], "", nil),
 			http.StatusBadRequest, "campaigns.finalQueueNoBroadcast", "list", name)
-		// Mixed with an allowed list: still refused.
+		// Mixed with an allowed list: refused -- since CAMPAIGN-LISTS-SPEC D4 by the one-list rule
+		// in validateCampaignFields, which runs before this guard (the guard stays covered by the
+		// single-list cases).
 		f.wantErr("create regular on plain+queue "+itoa(n),
 			f.admin.json(http.MethodPost, "/api/campaigns", pfBody(plain, "", map[string]any{"lists": []int{plain, q[n]}})),
-			http.StatusBadRequest, "campaigns.finalQueueNoBroadcast", "list", name)
+			http.StatusBadRequest, "campaigns.oneList")
 	}
 	if n := f.count(`SELECT COUNT(*) FROM campaigns`); n != 0 {
 		t.Fatalf("%d campaigns written by refused creates", n)

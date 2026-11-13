@@ -23,6 +23,7 @@
 
 <script>
 import Vue from 'vue';
+import { nextListSelection } from '../listSelection.mjs'; // eslint-disable-line import/extensions
 
 export default {
   name: 'ListSelector',
@@ -33,6 +34,8 @@ export default {
     message: { type: String, default: '' },
     required: Boolean,
     disabled: Boolean,
+    // Fork (campaign lists, D4) -- one list at most: a pick replaces the selection.
+    single: Boolean,
     classes: {
       type: Array,
       default: () => [],
@@ -59,7 +62,9 @@ export default {
       if (!l) {
         return;
       }
-      this.selectedItems.push(l);
+      // Fork (campaign lists, CAMPAIGN-LISTS-SPEC D4) -- `single` (the campaign form): a pick
+      // replaces the selection; otherwise it appends (listSelection.mjs).
+      this.selectedItems = nextListSelection(this.selectedItems, l, this.$props.single);
       this.query = '';
 
       // Propagate the items to the parent's v-model binding.

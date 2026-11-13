@@ -60,8 +60,12 @@ func (a *App) GetLists(c echo.Context) error {
 		// tag. A named brand is the existing tag=brand:<slug>. Both narrow, never widen, the
 		// permission scoping above.
 		noBrand, _ = strconv.ParseBool(c.QueryParam("nobrand"))
+
+		// Fork (campaign lists, CAMPAIGN-LISTS-SPEC D7) -- hide_system=true drops the hidden system
+		// lists (the Lists page with "View system lists" off). Totals and pagination follow it.
+		hideSystem, _ = strconv.ParseBool(c.QueryParam("hide_system"))
 	)
-	res, total, err := a.core.QueryLists(query, typ, optin, status, tags, orderBy, order, hasAllPerm, permittedIDs, noBrand, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryLists(query, typ, optin, status, tags, orderBy, order, hasAllPerm, permittedIDs, noBrand, hideSystem, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}
@@ -103,9 +107,10 @@ func (a *App) GetList(c echo.Context) error {
 }
 
 // decorateList sets the computed response fields (fork, journey lists -- JOURNEY-LISTS-SPEC D6,
-// D2a): journey_locked always, running_automation when running (the single-list GET only).
+// D2a): journey_locked and system_hidden always (one setter, CAMPAIGN-LISTS-SPEC D6),
+// running_automation when running (the single-list GET only).
 func (a *App) decorateList(l *models.List, running bool) error {
-	l.JourneyLocked = isJourneyLockedList(*l)
+	setListFlags(l)
 	if running {
 		ok, err := a.core.ListHasRunningEvergreen(l.ID)
 		if err != nil {

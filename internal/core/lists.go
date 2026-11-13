@@ -39,8 +39,9 @@ func (c *Core) GetLists(typ, status string, getAll bool, permittedIDs []int) ([]
 
 // QueryLists gets multiple lists based on multiple query params. Along with the  paginated and sliced
 // results, the total number of lists in the DB is returned. Fork (global brand, GLOBAL-BRAND-SPEC
-// D6) -- noBrand keeps only the lists with no brand tag.
-func (c *Core) QueryLists(searchStr, typ, optin, status string, tags []string, orderBy, order string, getAll bool, permittedIDs []int, noBrand bool, offset, limit int) ([]models.List, int, error) {
+// D6) -- noBrand keeps only the lists with no brand tag. Fork (campaign lists, CAMPAIGN-LISTS-SPEC
+// D7) -- hideSystem drops the hidden system lists (the SQL twin of cmd isHiddenSystemList).
+func (c *Core) QueryLists(searchStr, typ, optin, status string, tags []string, orderBy, order string, getAll bool, permittedIDs []int, noBrand, hideSystem bool, offset, limit int) ([]models.List, int, error) {
 	_ = c.refreshCache(matListSubStats, false)
 
 	if tags == nil {
@@ -51,7 +52,7 @@ func (c *Core) QueryLists(searchStr, typ, optin, status string, tags []string, o
 		out            = []models.List{}
 		queryStr, stmt = makeSearchQuery(searchStr, orderBy, order, c.q.QueryLists, listQuerySortFields)
 	)
-	if err := c.db.Select(&out, stmt, 0, "", queryStr, typ, optin, status, pq.StringArray(tags), getAll, pq.Array(permittedIDs), offset, limit, noBrand); err != nil {
+	if err := c.db.Select(&out, stmt, 0, "", queryStr, typ, optin, status, pq.StringArray(tags), getAll, pq.Array(permittedIDs), offset, limit, noBrand, hideSystem); err != nil {
 		c.log.Printf("error fetching lists: %v", err)
 		return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
@@ -81,7 +82,9 @@ func (c *Core) GetList(id int, uuid string) (models.List, error) {
 
 	var res []models.List
 	queryStr, stmt := makeSearchQuery("", "", "", c.q.QueryLists, nil)
-	if err := c.db.Select(&res, stmt, id, uu, queryStr, "", "", "", pq.StringArray{}, true, nil, 0, 1, false); err != nil {
+	// The last bind is hide_system, always false here (CAMPAIGN-LISTS-SPEC D7) -- a hidden list is
+	// always readable by id.
+	if err := c.db.Select(&res, stmt, id, uu, queryStr, "", "", "", pq.StringArray{}, true, nil, 0, 1, false, false); err != nil {
 		c.log.Printf("error fetching lists: %v", err)
 		return models.List{}, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))

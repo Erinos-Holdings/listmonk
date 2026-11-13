@@ -90,6 +90,11 @@ type List struct {
 	// API response so the form mirrors the server; never read from the database.
 	JourneyLocked bool `db:"-" json:"journey_locked"`
 
+	// SystemHidden (integrations CAMPAIGN-LISTS-SPEC D6) is cmd's isHiddenSystemList(list): a
+	// system list the campaign Lists selector and the Lists page (by default) leave out. Set with
+	// JourneyLocked by the one setter (cmd setListFlags); never read from the database.
+	SystemHidden bool `db:"-" json:"system_hidden"`
+
 	// RunningAutomation (D2a) is set by GET /api/lists/:id only (one query per list); nil and
 	// omitted on the multi-list responses.
 	RunningAutomation *bool `db:"-" json:"running_automation,omitempty"`

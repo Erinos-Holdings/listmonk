@@ -29,6 +29,14 @@ WITH ls AS (
     -- Fork (global brand, GLOBAL-BRAND-SPEC D6) -- nobrand=true keeps only the lists with no brand
     -- tag (list_brand_tag, the one statement of the single-brand rule), the No brand context.
     AND (NOT $12::BOOLEAN OR list_brand_tag(lists.tags) IS NULL)
+    -- Fork (campaign lists, CAMPAIGN-LISTS-SPEC D6/D7) -- hide_system=true drops the HIDDEN system
+    -- lists. This predicate is the SQL statement of cmd isHiddenSystemList (a standard trigger
+    -- kind, or a reengage tag that is not a 180d or 270d win-back queue), pinned by
+    -- TestQueryListsHideSystemAgreesWithGo. Change both together. GetList always binds false.
+    AND (NOT $13::BOOLEAN OR NOT (
+        COALESCE(lists.join_trigger->>'kind', '') IN ('first_order', 'no_purchase', 'post_purchase')
+        OR EXISTS (SELECT 1 FROM UNNEST(lists.tags) t WHERE BTRIM(t) LIKE 'reengage:%' AND BTRIM(t) !~ '^reengage:\d+:[12]$')
+    ))
 ),
 -- Fork (list grid, LIST-GRID-SPEC D4) -- the view is grouped (list_id, status, segment, lang)
 -- since v6.2.11, so it is summed to (list_id, status) BEFORE JSONB_OBJECT_AGG. That aggregate

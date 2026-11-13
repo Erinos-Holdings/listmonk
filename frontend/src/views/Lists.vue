@@ -43,6 +43,15 @@
               </b-field>
             </form>
           </div>
+          <!-- Fork (campaign lists, CAMPAIGN-LISTS-SPEC D7) -- off hides the system lists the
+          server marks system_hidden (hide_system=true); search is filtered too. -->
+          <div class="column is-narrow">
+            <b-field>
+              <b-switch :value="showSystem" @input="onShowSystemChange" size="is-small" data-cy="show-system-lists">
+                {{ $t('lists.showSystem') }}
+              </b-switch>
+            </b-field>
+          </div>
         </div>
         <div class="actions" v-if="bulk.checked.length > 0">
           <a class="a" href="#" @click.prevent="deleteLists" data-cy="btn-delete-lists">
@@ -110,8 +119,16 @@
           from the roster's brands rows, the slug when the row is missing. Under a one-brand
           selection the brand part is redundant and omitted. Block-level, so it sits below the
           name and the marker, never between them. -->
+          <!-- Fork (campaign lists, CAMPAIGN-LISTS-SPEC D8) -- a triggered list's last word is its
+          Active switch: green Active, red Inactive (listTrigger.mjs activeWordOf). -->
           <p class="is-size-7 has-text-grey list-subline" data-cy="list-subline">
-            {{ listSubline(props.row) }}
+            {{ listSubline(props.row).text }}
+            <template v-if="listSubline(props.row).active !== null">
+              ·
+              <span :class="activeWord(listSubline(props.row).active).cls" data-cy="list-active-word">
+                {{ activeWord(listSubline(props.row).active).word }}
+              </span>
+            </template>
           </p>
           <!-- C3/C4: tags live behind the expand; one per line (C5) so the column can shrink. -->
           <b-taglist v-if="expanded[props.row.id]" class="stacked-tags">
@@ -291,7 +308,8 @@ import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-dis
 import { isLockedList } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf, listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { withSunsetItem } from '../listSunset.mjs'; // eslint-disable-line import/extensions
-import { journeyLockedOf, withTriggerItem } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
+import { journeyLockedOf, withTriggerItem, activeWordOf } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
+import { showSystemLists, systemListsParams, SHOW_SYSTEM_PREF } from '../listsPage.mjs'; // eslint-disable-line import/extensions
 // Fork (list grid; dashboard counts, integrations DASHBOARD-COUNTS-SPEC D7) -- the one lines rule,
 // shared with the Dashboard.
 import { gridLines } from '../gridLines.mjs'; // eslint-disable-line import/extensions
@@ -353,6 +371,10 @@ export default Vue.extend({
       // pagination) have Pending? Starts hidden; a rejected probe shows the column -- a hidden
       // non-zero Pending is worse than a column of zeros.
       hasPending: false,
+
+      // Fork (campaign lists, CAMPAIGN-LISTS-SPEC D7) -- "View system lists", default off,
+      // persisted per viewer (pref lists.showSystem).
+      showSystem: showSystemLists(this.$utils.getPref(SHOW_SYSTEM_PREF)),
 
       queryParams: {
         page: 1,
@@ -419,8 +441,24 @@ export default Vue.extend({
       return this.canEditList(row) && !(journeyLockedOf(row) && !this.$can('lists:journeys'));
     },
 
+    // Fork (campaign lists, D8) -- the Active switch's word and class.
+    activeWord(active) {
+      return activeWordOf(active);
+    },
+
+    // Fork (campaign lists, CAMPAIGN-LISTS-SPEC D7) -- the "View system lists" toggle: persisted per
+    // viewer, and a change re-reads the listing (and the Pending probe) from page 1.
+    onShowSystemChange(val) {
+      this.showSystem = val === true;
+      this.$utils.setPref(SHOW_SYSTEM_PREF, this.showSystem);
+      this.queryParams.page = 1;
+      this.bulk = { checked: [], all: false };
+      this.refresh();
+    },
+
     // Fork: `#<id> · <brand display name>`, the brand omitted for a brandless list and under a
-    // one-brand selection (every row is that brand).
+    // one-brand selection (every row is that brand). Returns {text, active} (withTriggerItem):
+    // active is the trigger's Active switch, null for a list without a trigger.
     listSubline(row) {
       const id = `#${row.id}`;
       // Fork (sunset v2, SUNSET-V2-SPEC D8): a re-engagement queue's countdown is one more
@@ -537,6 +575,8 @@ export default Vue.extend({
         status: this.queryParams.status,
         // Fork (global brand, D6) -- tag=brand:<slug> / nobrand=true; nothing under All brands.
         ...listsScopeParams(this.brandSelection),
+        // Fork (campaign lists, D7) -- hide_system=true while "View system lists" is off.
+        ...systemListsParams(this.showSystem),
       }).then((resp) => {
         this.lists = resp;
       });
@@ -555,7 +595,9 @@ export default Vue.extend({
     // request shows the column (fail open, V8).
     probePending() {
       this.$api.probeListsPending({
-        status: this.queryParams.status, ...listsScopeParams(this.brandSelection),
+        status: this.queryParams.status,
+        ...listsScopeParams(this.brandSelection),
+        ...systemListsParams(this.showSystem),
       }).then((resp) => {
         const results = (resp && resp.results) || [];
         this.hasPending = ((results[0] && results[0].subscriberGrid
