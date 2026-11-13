@@ -106,7 +106,7 @@ const OF = (kind) => ({ type: 'OfficialFooter', data: { props: { kind } } });
   const hostSrc = (rel) => fs.readFileSync(path.join(__dirname, '..', '..', 'src', rel), 'utf8');
   check('S4-4 host: VisualEditor passes storedBody to firstLoadDocument', /firstLoadDocument\(em\.DEFAULT_SOURCE, this\.officialContext, this\.storedBody\)/.test(hostSrc(path.join('components', 'VisualEditor.vue'))));
   check('S4-4 host: Editor.vue binds the stored body', /:stored-body="self\.body \|\| ''"/.test(hostSrc(path.join('components', 'Editor.vue'))));
-  check('S4-4 host: Campaign.vue sends campaign: this.canEdit', /campaign: this\.canEdit,/.test(hostSrc(path.join('views', 'Campaign.vue'))));
+  check('S4-4 / S4b-1 host: Campaign.vue sends campaign: this.canEdit && this.canManage', /campaign: this\.canEdit && this\.canManage,/.test(hostSrc(path.join('views', 'Campaign.vue'))));
 }
 
 // ---- I4: applyLinkDefault -------------------------------------------------------------------

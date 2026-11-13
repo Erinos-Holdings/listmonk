@@ -2615,9 +2615,10 @@ export default Vue.extend({
       return {
         lang: this.form.lang || 'en',
         brand,
-        // Stage 4 S4-4: only where the campaign can be saved (draft/scheduled/paused) -- else the
-        // inserted pair would read as unsaved changes nobody can save.
-        campaign: this.canEdit,
+        // Stage 4 S4-4 / S4b-1: only where the campaign can be saved -- an editable status AND a
+        // user holding campaigns:manage -- else the inserted pair would read as unsaved changes
+        // nobody can save.
+        campaign: this.canEdit && this.canManage,
         linkDefault: campaignLinkDefault(brand, d.fromEmail, this.$store.state.brandHealth),
       };
     },
