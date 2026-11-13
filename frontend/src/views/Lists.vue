@@ -60,8 +60,10 @@
           <span class="a">
             {{ $tc('globals.messages.numSelected', numSelectedLists, { num: numSelectedLists }) }}
             <!-- Fork (global brand) -- the by-query list delete carries no brand scope, so
-                 "select all" is not offered under a brand: a selection is the page's rows by id. -->
-            <span v-if="!bulk.all && lists.total > lists.perPage && !scopeListIds">
+                 "select all" is not offered under a brand: a selection is the page's rows by id.
+                 CAMPAIGN-LISTS-SPEC D7 (review I-1): nor does it carry hide_system, so it is not
+                 offered while system lists are hidden either. -->
+            <span v-if="!bulk.all && lists.total > lists.perPage && !scopeListIds && showSystem">
               &mdash;
               <a href="#" @click.prevent="onSelectAll" data-cy="select-all-lists">
                 {{ $tc('globals.messages.selectAll', lists.total, { num: lists.total }) }}

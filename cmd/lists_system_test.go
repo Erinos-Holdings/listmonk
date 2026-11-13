@@ -30,6 +30,8 @@ var systemListCases = []systemListCase{
 	{"malformed reengage:x", "", []string{"reengage:x"}, true},
 	{"malformed reengage:5:5", "", []string{"reengage:5:5"}, true},
 	{"padded queue 3", "", []string{" reengage:5:3"}, true},
+	{"tab-padded queue 1", "", []string{"reengage:5:1\t"}, false},
+	{"newline-padded queue 4", "", []string{"\nreengage:5:4"}, true},
 	{"standard trigger plus a win-back tag", `{"kind":"first_order"}`, []string{"reengage:5:1"}, true},
 	{"win-back and final tags together", "", []string{"reengage:5:2", "reengage:5:4"}, true},
 	{"queue 1", "", []string{"reengage:5:1"}, false},

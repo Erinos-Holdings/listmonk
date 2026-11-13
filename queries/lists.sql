@@ -35,7 +35,7 @@ WITH ls AS (
     -- TestQueryListsHideSystemAgreesWithGo. Change both together. GetList always binds false.
     AND (NOT $13::BOOLEAN OR NOT (
         COALESCE(lists.join_trigger->>'kind', '') IN ('first_order', 'no_purchase', 'post_purchase')
-        OR EXISTS (SELECT 1 FROM UNNEST(lists.tags) t WHERE BTRIM(t) LIKE 'reengage:%' AND BTRIM(t) !~ '^reengage:\d+:[12]$')
+        OR EXISTS (SELECT 1 FROM UNNEST(lists.tags) t WHERE BTRIM(t, E' \t\n\r\f\x0B') LIKE 'reengage:%' AND BTRIM(t, E' \t\n\r\f\x0B') !~ '^reengage:\d+:[12]$')
     ))
 ),
 -- Fork (list grid, LIST-GRID-SPEC D4) -- the view is grouped (list_id, status, segment, lang)

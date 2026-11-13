@@ -47,6 +47,10 @@ func isJourneyLockedList(l models.List) bool {
 // keeps selectable. Matched against the whitespace-trimmed tag.
 var reWinbackQueueTag = regexp.MustCompile(`^reengage:\d+:[12]$`)
 
+// hiddenTagTrim is the ASCII whitespace isHiddenSystemList trims from a tag -- the same set as the
+// query-lists predicate's BTRIM(t, E' \t\n\r\f\x0B'). Change both together.
+const hiddenTagTrim = " \t\n\r\f\v"
+
 // isHiddenSystemList is the ONE definition of a HIDDEN system list (CAMPAIGN-LISTS-SPEC D6): the
 // stored trigger kind is first_order, no_purchase or post_purchase, OR some tag whose
 // whitespace-trimmed text starts with reengage: and does NOT match ^reengage:\d+:[12]$. A malformed
@@ -58,7 +62,8 @@ func isHiddenSystemList(l models.List) bool {
 		return true
 	}
 	for _, t := range l.Tags {
-		t = strings.TrimSpace(t)
+		// The SQL twin's BTRIM set exactly (review I-2), so the two homes trim alike.
+		t = strings.Trim(t, hiddenTagTrim)
 		if strings.HasPrefix(t, reengageTagPrefix) && !reWinbackQueueTag.MatchString(t) {
 			return true
 		}
