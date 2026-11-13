@@ -1,0 +1,20 @@
+{{ define "join" }}
+{{ template "header" .}}
+<section class="section join">
+    {{ if eq .Data.State "confirm" }}
+        <h2>{{ .Data.Copy.Heading }}</h2>
+        <p class="tagline">{{ .Data.Copy.Body }}</p>
+        <form method="post" class="join-form">
+            <p>
+                <button type="submit" class="button" id="btn-join">{{ .Data.Copy.Button }}</button>
+            </p>
+        </form>
+    {{ else if eq .Data.State "already" }}
+        <h2>{{ .Data.Copy.DoneHeading }}</h2>
+        <p class="tagline">{{ .Data.Copy.Already }}</p>
+    {{ else }}
+        <p class="tagline">{{ .Data.Copy.Cannot }}</p>
+    {{ end }}
+</section>
+{{ template "footer" .}}
+{{ end }}

@@ -202,6 +202,19 @@ func TestTransformTrackLinksDynamic(t *testing.T) {
 			`<a href="{{ UnsubscribeURL }}">u</a><a href="{{ ManageURL }}">m</a><a href="{{ OptinURL }}">o</a><a href="{{ MessageURL }}">v</a>`,
 		},
 		{
+			// Fork (join link, JOIN-LINK-SPEC I10) -- the Join link is never TrackLink-wrapped.
+			"JoinURL in an href is never wrapped (I10)",
+			CampaignContentTypeVisual,
+			`<a href="{{ JoinURL }}">j</a>`,
+			`<a href="{{ JoinURL }}">j</a>`,
+		},
+		{
+			"JoinURL in a VML marker → decoded value, never a TrackLink (I10)",
+			CampaignContentTypeVisual,
+			fmt.Sprintf(marker, "{{ JoinURL }}"),
+			`{{ JoinURL }}`,
+		},
+		{
 			"hand-typed TrackLink href with raw quotes is not re-wrapped",
 			CampaignContentTypeVisual,
 			`<a href="{{ TrackLink "https://x.test" }}">x</a>`,

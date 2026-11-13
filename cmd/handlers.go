@@ -405,6 +405,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST("/subscription/form", a.SubscriptionForm)
 		g.GET("/subscription/:campUUID/:subUUID", noIndex(a.hasUUID(a.hasSub(a.SubscriptionPage), "campUUID", "subUUID")))
 		g.POST("/subscription/:campUUID/:subUUID", a.hasUUID(a.hasSub(a.SubscriptionPrefs), "campUUID", "subUUID"))
+		// Fork (join link, JOIN-LINK-SPEC D1) -- the {{ JoinURL }} route. The GET only renders; no
+		// HEAD route is registered (405, nothing written). The static `join` segment is matched
+		// ahead of the :campUUID param above.
+		g.GET("/subscription/join/:campUUID/:subUUID", noIndex(a.hasUUID(a.hasSub(a.JoinPage), "campUUID", "subUUID")))
+		g.POST("/subscription/join/:campUUID/:subUUID", a.hasUUID(a.hasSub(a.JoinConfirm), "campUUID", "subUUID"))
 		g.GET("/subscription/optin/:subUUID", noIndex(a.hasUUID(a.hasSub(a.OptinPage), "subUUID")))
 		g.POST("/subscription/optin/:subUUID", a.hasUUID(a.hasSub(a.OptinPage), "subUUID"))
 		g.POST("/subscription/export/:subUUID", a.hasUUID(a.hasSub(a.SelfExportSubscriberData), "subUUID"))

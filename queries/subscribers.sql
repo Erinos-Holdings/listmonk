@@ -377,6 +377,72 @@ UPDATE subscriber_lists SET status = 'unsubscribed', updated_at=NOW(),
         AND list_id = ANY(brand_marketing_list_ids($2))
         AND (status != 'unsubscribed' OR meta ? 'hold');
 
+-- name: get-join-plan
+-- Fork (join link, integrations listmonk/JOIN-LINK-SPEC D2/D4/D10). The plan both verbs of
+-- /subscription/join read, for subscriber $1 and campaign $2, plus what the page shows (the
+-- address, the subscriber's own language for the page-language fallback, the brand's From for
+-- its display name). Read-only -- the GET calls this and nothing else.
+SELECT p.outcome, COALESCE(p.brand, '') AS brand, COALESCE(p.list_id, 0) AS list_id, COALESCE(p.lang, '') AS lang,
+    COALESCE(s.email, '') AS email, COALESCE(s.attribs->>'lang', '') AS sub_lang,
+    COALESCE(b.from_email, '') AS from_email
+FROM join_plan($1::UUID, $2::UUID) p
+LEFT JOIN subscribers s ON (s.uuid = $1::UUID)
+LEFT JOIN brands b ON (b.slug = p.brand);
+
+-- name: join-brand
+-- Fork (join link, integrations listmonk/JOIN-LINK-SPEC D5/D7/D8). The ONE write of the join
+-- route, one statement, subscriber $1 and campaign $2. It re-evaluates join_plan in its own
+-- snapshot and INSERTs the brand master row only when the outcome is join, as a NEW subscriber
+-- (status confirmed, NO listmonk.backfill, so the trigger stamps confirmed_at and a running
+-- welcome on the master list in the joiner's language selects them), with meta.join = {at,
+-- campaign_id}. ON CONFLICT DO NOTHING RETURNING -- and every other write is conditioned on a row
+-- having been returned, so a concurrent writer that won the row (S2-7) leaves no stamp, no
+-- language and no deletion behind. When a row was returned
+--   (a) attribs.confirms[brand] = {at, from = join}, merged into the existing confirms;
+--   (b) attribs.lang = the campaign's language, ONLY when the subscriber has none;
+--   (c) the person's row on the campaign's own list is DELETED when, and only when, that list
+--       carries the tag winback. A row on any other list is never touched (a journey step or
+--       queue row is a processed marker).
+-- No signups key and no IP are written. An existing master row is never changed (join_plan
+-- never says join while one exists, and the conflict clause covers the race).
+WITH p AS (
+    SELECT * FROM join_plan($1::UUID, $2::UUID)
+),
+s AS (SELECT id FROM subscribers WHERE uuid = $1::UUID),
+c AS (SELECT id FROM campaigns WHERE uuid = $2::UUID),
+ts AS (SELECT TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS at),
+ins AS (
+    INSERT INTO subscriber_lists (subscriber_id, list_id, status, meta)
+    SELECT s.id, p.list_id, 'confirmed',
+        JSONB_BUILD_OBJECT('join', JSONB_BUILD_OBJECT('at', ts.at, 'campaign_id', c.id))
+    FROM p, s, c, ts
+    WHERE p.outcome = 'join' AND p.list_id IS NOT NULL
+    ON CONFLICT (subscriber_id, list_id) DO NOTHING
+    RETURNING subscriber_id, list_id
+),
+stamp AS (
+    UPDATE subscribers sb SET
+        attribs = (sb.attribs
+            || JSONB_BUILD_OBJECT('confirms',
+                (CASE WHEN JSONB_TYPEOF(sb.attribs->'confirms') = 'object' THEN sb.attribs->'confirms' ELSE '{}'::JSONB END)
+                || JSONB_BUILD_OBJECT(p.brand, JSONB_BUILD_OBJECT('at', ts.at, 'from', 'join'))))
+            || (CASE WHEN NULLIF(sb.attribs->>'lang', '') IS NULL AND NULLIF(p.lang, '') IS NOT NULL
+                THEN JSONB_BUILD_OBJECT('lang', p.lang) ELSE '{}'::JSONB END),
+        updated_at = NOW()
+    FROM ins, p, ts
+    WHERE sb.id = ins.subscriber_id
+    RETURNING sb.id
+),
+del AS (
+    DELETE FROM subscriber_lists d
+    USING ins, c, campaign_lists cl, lists wl
+    WHERE d.subscriber_id = ins.subscriber_id
+        AND cl.campaign_id = c.id AND wl.id = cl.list_id AND d.list_id = wl.id
+        AND 'winback' = ANY(wl.tags) AND wl.id <> ins.list_id
+    RETURNING d.list_id
+)
+SELECT (SELECT COUNT(*) FROM ins) > 0 AS joined, (SELECT COUNT(*) FROM del) AS removed;
+
 -- name: hold-subscribers-lists
 -- Fork (holds). Puts subscribers $1 on list $2 on HOLD with the hold object $3 (at is stamped
 -- here). $4 is the consent-time bound (NULL = none), a row updated at or after it is skipped.

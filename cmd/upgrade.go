@@ -117,6 +117,8 @@ var migList = []migFunc{
 	{"v6.2.35", migrations.V6_2_35},
 	// Fork migration (erinos): journey lists -- lists.trigger_active/trigger_active_at/trigger_active_by (the list's Active switch), every list already carrying a join_trigger activated (only when the column is new), and lists:journeys granted to roles 1, 4, 7 and 13 by id (JOURNEY-LISTS-SPEC) — see internal/migrations/v6.2.36.go.
 	{"v6.2.36", migrations.V6_2_36},
+	// Fork migration (erinos): join link -- brand_master_list_id (a brand's single public, non-transactional, active list), join_refusal (the fail-closed eligibility predicate) and join_plan (the one plan the {{ JoinURL }} route's GET and POST read) (JOIN-LINK-SPEC) — see internal/migrations/v6.2.37.go.
+	{"v6.2.37", migrations.V6_2_37},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

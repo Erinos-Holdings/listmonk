@@ -23,6 +23,28 @@ import (
 // not fetch the URL, it checks that one was rendered.
 const unsubMarker = "/subscription/"
 
+// joinMarker follows unsubMarker in every {{ JoinURL }} rendering (cfg.JoinURL is
+// "<root>/subscription/join/%s/%s", fork join link, JOIN-LINK-SPEC D13). A Join link is a
+// subscribe link, never an unsubscribe link, so it never satisfies the guard.
+const joinMarker = "join/"
+
+// hasUnsubLink reports whether body carries an unsubMarker occurrence that is not a Join link.
+// Every other /subscription/ rendering (UnsubscribeURL, ManageURL, OptinURL) still counts,
+// exactly as before.
+func hasUnsubLink(body string) bool {
+	for i := 0; ; {
+		j := strings.Index(body[i:], unsubMarker)
+		if j < 0 {
+			return false
+		}
+		at := i + j + len(unsubMarker)
+		if !strings.HasPrefix(body[at:], joinMarker) {
+			return true
+		}
+		i = at
+	}
+}
+
 // FooterGuardOnStatus reports whether a campaign status change must be footer-guarded.
 // EVERY transition into running|scheduled is -- resume (paused -> running) and
 // paused -> scheduled included. Compliance beats convenience: no button may put a
@@ -70,7 +92,7 @@ func FooterProblems(rendered []byte, contentType string, markers []string) []str
 	var out []string
 
 	body := string(rendered)
-	if !strings.Contains(body, unsubMarker) {
+	if !hasUnsubLink(body) {
 		out = append(out, fmt.Sprintf("the rendered message contains no unsubscribe link (no %q URL) -- add {{ UnsubscribeURL }} to the campaign or its template footer", unsubMarker))
 	}
 

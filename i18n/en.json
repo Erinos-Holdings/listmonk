@@ -123,6 +123,7 @@
     "analytics.toDate": "To",
     "attributes.email": "Email address",
     "attributes.firstName": "First name (or \"there\")",
+    "attributes.joinLink": "Join link",
     "attributes.lastName": "Last name",
     "attributes.name": "Full name",
     "bounces.complaint": "Complaint",

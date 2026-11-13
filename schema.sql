@@ -1226,3 +1226,60 @@ $$ LANGUAGE sql STABLE;
 ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active_at TIMESTAMP WITH TIME ZONE NULL;
 ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active_by TEXT NULL;
+
+-- Fork (join link, integrations listmonk/JOIN-LINK-SPEC D3/D4/D6): the read half of the
+-- {{ JoinURL }} route. Nothing here writes; the one write is queries/subscribers.sql join-brand,
+-- which re-evaluates join_plan in its own statement. Mirrored in internal/migrations/v6.2.37.go
+-- (keep the two identical).
+--
+-- brand_master_list_id: a brand's master opt-in list -- the SINGLE list carrying the brand tag
+-- that is public, non-transactional and active; NULL when there is none or more than one (liyora).
+--
+-- join_refusal: NULL when the subscriber may join the brand, else the reason (never shown to the
+-- person). Fails closed: an unknown subscriber, and any hold whose reason is not never-engaged
+-- (an unknown reason included), refuse. Any unsubscribed row on a marketing list of the brand --
+-- a brand opt-out, the person's own unsubscribe from the win-back mail included -- refuses.
+--
+-- join_plan: the ONE plan both verbs read (D4, first match wins) -- no_campaign, no_brand,
+-- no_master, refused, already (master row confirmed), cannot (any other master row), join (no
+-- master row). lang is the campaign's attribs.lang.
+CREATE OR REPLACE FUNCTION brand_master_list_id(p_brand TEXT) RETURNS INT AS $$
+    SELECT CASE WHEN COUNT(*) = 1 THEN MIN(l.id) ELSE NULL END FROM lists l
+        WHERE p_brand IS NOT NULL AND list_brand_tag(l.tags) = p_brand
+            AND l.type = 'public' AND l.transactional = FALSE AND l.status = 'active';
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION join_refusal(p_sub_id INT, p_brand TEXT) RETURNS TEXT AS $$
+    SELECT CASE
+        WHEN s.id IS NULL THEN 'no_subscriber'
+        WHEN s.status IN ('blocklisted', 'disabled') THEN s.status::TEXT
+        WHEN EXISTS (SELECT 1 FROM bounces b WHERE b.subscriber_id = s.id AND b.type = 'complaint') THEN 'complaint'
+        WHEN EXISTS (SELECT 1 FROM subscriber_lists sl WHERE sl.subscriber_id = s.id AND sl.status = 'unsubscribed'
+            AND sl.meta ? 'hold' AND sl.meta->'hold'->>'reason' IS DISTINCT FROM 'never-engaged') THEN 'hold'
+        WHEN EXISTS (SELECT 1 FROM subscriber_lists sl WHERE sl.subscriber_id = s.id AND sl.status = 'unsubscribed'
+            AND sl.meta->'hold_released'->>'to' = 'unsubscribed'
+            AND sl.meta->'hold_released'->'hold'->>'reason' IS DISTINCT FROM 'never-engaged') THEN 'hold_released'
+        WHEN EXISTS (SELECT 1 FROM subscriber_lists sl WHERE sl.subscriber_id = s.id AND sl.status = 'unsubscribed'
+            AND sl.list_id = ANY(brand_marketing_list_ids(p_brand))) THEN 'brand_optout'
+        ELSE NULL END
+    FROM (SELECT 1) AS one LEFT JOIN subscribers s ON (s.id = p_sub_id);
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION join_plan(p_sub_uuid UUID, p_camp_uuid UUID)
+RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
+    WITH c AS (SELECT cp.id, NULLIF(cp.attribs->>'lang', '') AS lang FROM campaigns cp WHERE cp.uuid = p_camp_uuid),
+    b AS (SELECT campaign_brand(p_camp_uuid) AS brand),
+    m AS (SELECT brand_master_list_id((SELECT b.brand FROM b)) AS list_id),
+    s AS (SELECT sb.id FROM subscribers sb WHERE sb.uuid = p_sub_uuid),
+    r AS (SELECT sl.status FROM subscriber_lists sl
+        WHERE sl.subscriber_id = (SELECT s.id FROM s) AND sl.list_id = (SELECT m.list_id FROM m))
+    SELECT CASE
+            WHEN NOT EXISTS (SELECT 1 FROM c) THEN 'no_campaign'
+            WHEN (SELECT b.brand FROM b) IS NULL THEN 'no_brand'
+            WHEN (SELECT m.list_id FROM m) IS NULL THEN 'no_master'
+            WHEN join_refusal((SELECT s.id FROM s), (SELECT b.brand FROM b)) IS NOT NULL THEN 'refused'
+            WHEN (SELECT r.status FROM r) = 'confirmed' THEN 'already'
+            WHEN EXISTS (SELECT 1 FROM r) THEN 'cannot'
+            ELSE 'join' END,
+        (SELECT b.brand FROM b), (SELECT m.list_id FROM m), (SELECT c.lang FROM c);
+$$ LANGUAGE sql STABLE;

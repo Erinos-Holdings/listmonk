@@ -400,7 +400,8 @@ var (
 	// TrackLink string literal: a TrackLink (nesting), and listmonk's URL functions, which the
 	// D4 resolver (empty FuncMap) cannot evaluate — wrapping `{{ UnsubscribeURL }}` would
 	// turn every unsubscribe link in an Html block into a fallback redirect.
-	regReservedTplFunc = regexp.MustCompile(`{{\s*(TrackLink|TrackView|UnsubscribeURL|ManageURL|OptinURL|MessageURL)\b`)
+	// Fork (join link, JOIN-LINK-SPEC D1) -- JoinURL: the Join link is never tracked.
+	regReservedTplFunc = regexp.MustCompile(`{{\s*(TrackLink|TrackView|UnsubscribeURL|ManageURL|OptinURL|MessageURL|JoinURL)\b`)
 )
 
 // TransformTrackLinks applies the compile-time tracked-link rewrites to a campaign body and

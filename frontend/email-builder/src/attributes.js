@@ -252,6 +252,31 @@ function markdownShopLinkItem(brand, value) {
   };
 }
 
+// Fork (join link) -- integrations JOIN-LINK-SPEC D14. The win-back campaign's Join link: a
+// system action (never tracked, the review classifies it `system`), no brand needed -- the route
+// resolves the brand from the campaign's list. On 'markdown' it is selection-aware like the shop
+// link: a selected [label](anything) gets its destination replaced with <{{ JoinURL }}>.
+const JOIN_LINK_EXPR = '{{ JoinURL }}';
+
+function joinLinkItem() {
+  return {
+    id: 'join_link', label: 'Join link', expr: JOIN_LINK_EXPR, disabled: false, reason: '',
+  };
+}
+
+function markdownJoinLinkItem(value) {
+  const base = joinLinkItem();
+  const md = matchMarkdownLink(value);
+  if (md === null) {
+    return base;
+  }
+  return {
+    ...base,
+    expr: `${md.lead}[${md.label}](<${JOIN_LINK_EXPR}>)${md.trail}`,
+    replace: true,
+  };
+}
+
 // attributeMenu(kind, context) -> { items: [{ id, label, expr, disabled, reason, replace? }] }.
 // kind is 'text' (subject/preheader, Heading, richtext), 'link' (Button Url, Image link) or
 // 'markdown' (the Text block's ribbon); context is { brand, value? } (brand a slug, null or
@@ -281,7 +306,7 @@ export function attributeMenu(kind, context) {
     return { items: text };
   }
   if (kind === 'link') {
-    return { items: [shopLinkItem(brand), productLinkItem(brand, value)] };
+    return { items: [shopLinkItem(brand), productLinkItem(brand, value), joinLinkItem()] };
   }
   if (kind === 'markdown') {
     return {
@@ -289,6 +314,7 @@ export function attributeMenu(kind, context) {
         ...text,
         markdownShopLinkItem(brand, value),
         productLinkItem(brand, value, MARKDOWN_NO_URL_REASON),
+        markdownJoinLinkItem(value),
       ],
     };
   }

@@ -545,6 +545,31 @@ func (c *Core) UnsubscribeByCampaign(subUUID, campUUID string, blocklist bool) e
 	return nil
 }
 
+// GetJoinPlan (fork, join link -- integrations JOIN-LINK-SPEC D2/D4) evaluates the join plan for
+// a subscriber and a campaign, read-only. It is the only call the GET handler makes.
+func (c *Core) GetJoinPlan(subUUID, campUUID string) (models.JoinPlan, error) {
+	var out models.JoinPlan
+	if err := c.q.GetJoinPlan.Get(&out, subUUID, campUUID); err != nil {
+		c.log.Printf("error reading join plan: %v", err)
+		return out, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.subscriber}", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
+// JoinBrand (fork, join link -- integrations JOIN-LINK-SPEC D7) runs the join's one write. Joined
+// is false when the statement's own plan was not `join` or a concurrent writer won the master
+// row; the caller then re-reads the plan and renders that outcome.
+func (c *Core) JoinBrand(subUUID, campUUID string) (models.JoinResult, error) {
+	var out models.JoinResult
+	if err := c.q.JoinBrand.Get(&out, subUUID, campUUID); err != nil {
+		c.log.Printf("error joining brand: %v", err)
+		return out, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.subscribers}", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
 // ConfirmOptionSubscription confirms a subscriber's optin subscription.
 func (c *Core) ConfirmOptionSubscription(subUUID string, listUUIDs []string, meta models.JSON) error {
 	if meta == nil {

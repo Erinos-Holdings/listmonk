@@ -96,7 +96,9 @@ var regTplFuncs = []regTplFunc{
 	},
 
 	{
-		regExp:  regexp.MustCompile(`{{(\s+)?(TrackView|UnsubscribeURL|ManageURL|OptinURL|MessageURL)(\s+)?}}`),
+		// Fork (join link, JOIN-LINK-SPEC D1) -- JoinURL. Changes together with
+		// regReservedTplFunc (models/campaigns.go) and the integrations review's system actions.
+		regExp:  regexp.MustCompile(`{{(\s+)?(TrackView|UnsubscribeURL|ManageURL|OptinURL|MessageURL|JoinURL)(\s+)?}}`),
 		replace: `{{ $2 . }}`,
 	},
 }

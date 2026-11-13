@@ -1,0 +1,8 @@
+{{ define "joined" }}
+{{ template "header" .}}
+<section class="section joined">
+    <h2>{{ .Data.Copy.DoneHeading }}</h2>
+    <p class="tagline">{{ .Data.Copy.DoneBody }}</p>
+</section>
+{{ template "footer" .}}
+{{ end }}

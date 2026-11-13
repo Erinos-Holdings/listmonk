@@ -74,6 +74,7 @@ type UrlConfig struct {
 	ViewTrackURL string
 	OptinURL     string
 	MessageURL   string
+	JoinURL      string // Fork (join link, JOIN-LINK-SPEC D1).
 	ArchiveURL   string
 }
 
@@ -533,6 +534,10 @@ func initUrlConfig(ko *koanf.Koanf) *UrlConfig {
 		// url.com/link/{campaign_uuid}/{subscriber_uuid}
 		MessageURL: fmt.Sprintf("%s/campaign/%%s/%%s", root),
 
+		// Fork (join link, JOIN-LINK-SPEC D1).
+		// url.com/subscription/join/{campaign_uuid}/{subscriber_uuid}
+		JoinURL: fmt.Sprintf("%s/subscription/join/%%s/%%s", root),
+
 		// url.com/archive
 		ArchiveURL: root + "/archive",
 
@@ -664,6 +669,7 @@ func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlCon
 		LinkTrackURL:          u.LinkTrackURL,
 		ViewTrackURL:          u.ViewTrackURL,
 		MessageURL:            u.MessageURL,
+		JoinURL:               u.JoinURL,
 		ArchiveURL:            u.ArchiveURL,
 		RootURL:               u.RootURL,
 		UnsubHeader:           ko.Bool("privacy.unsubscribe_header"),

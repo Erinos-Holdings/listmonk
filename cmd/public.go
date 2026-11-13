@@ -53,14 +53,27 @@ type tplData struct {
 	// AuthPage is true for the admin auth pages (login, forgot/reset password, first-run
 	// setup): light-mode pages that take the bundled light logo and no vendor footer.
 	AuthPage bool
-	Data     any
-	L        *i18n.I18n
+	// Fork (join link, JOIN-LINK-SPEC D10) -- the <html lang> value, from the data's PageLang();
+	// empty = no lang attribute (every page but the join pages).
+	Lang string
+	Data any
+	L    *i18n.I18n
 }
 
 type publicTpl struct {
 	Title       string
 	Description string
+
+	// Fork (join link, integrations JOIN-LINK-SPEC D10) -- the page's <html lang>. Optional: empty
+	// renders today's bare <html>.
+	Lang string
 }
+
+// PageLang is the page's <html lang> value (Render reads it through pageLanger).
+func (p publicTpl) PageLang() string { return p.Lang }
+
+// pageLanger is any template data carrying a page language (every type embedding publicTpl).
+type pageLanger interface{ PageLang() string }
 
 type unsubTpl struct {
 	publicTpl
@@ -119,7 +132,12 @@ var (
 
 // Render executes and renders a template for echo.
 func (t *tplRenderer) Render(w io.Writer, name string, data any, c echo.Context) error {
+	lang := ""
+	if pl, ok := data.(pageLanger); ok {
+		lang = pl.PageLang()
+	}
 	return t.templates.ExecuteTemplate(w, name, tplData{
+		Lang:                lang,
 		SiteName:            t.SiteName,
 		RootURL:             t.RootURL,
 		LogoURL:             t.LogoURL,

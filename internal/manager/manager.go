@@ -161,6 +161,9 @@ type Config struct {
 	UnsubURL              string
 	OptinURL              string
 	MessageURL            string
+	// Fork (join link, JOIN-LINK-SPEC D1) -- "<root>/subscription/join/%s/%s" (campaign UUID,
+	// the subscriber's REAL UUID).
+	JoinURL string
 	ViewTrackURL          string
 	ArchiveURL            string
 	RootURL               string
@@ -443,6 +446,12 @@ func (m *Manager) TemplateFuncs(c *models.Campaign) template.FuncMap {
 		},
 		"MessageURL": func(msg *CampaignMessage) string {
 			return fmt.Sprintf(m.cfg.MessageURL, c.UUID, msg.Subscriber.UUID)
+		},
+		// Fork (join link, JOIN-LINK-SPEC D1) -- the win-back Join link. Always the subscriber's
+		// real UUID (never the tracking dummy): the UUID pair is the capability. Never tracked
+		// (models.regReservedTplFunc lists it).
+		"JoinURL": func(msg *CampaignMessage) string {
+			return fmt.Sprintf(m.cfg.JoinURL, c.UUID, msg.Subscriber.UUID)
 		},
 		"ArchiveURL": func() string {
 			return m.cfg.ArchiveURL

@@ -61,6 +61,9 @@ type Queries struct {
 	UnsubscribeByCampaign           *sqlx.Stmt `query:"unsubscribe-by-campaign"`
 	// Fork (brand unsubscribe, BRAND-UNSUBSCRIBE-SPEC D4) -- the brand-scoped unsubscribe.
 	UnsubscribeBrand *sqlx.Stmt `query:"unsubscribe-brand"`
+	// Fork (join link, JOIN-LINK-SPEC D4/D7) -- the plan both verbs read, and the one write.
+	GetJoinPlan *sqlx.Stmt `query:"get-join-plan"`
+	JoinBrand   *sqlx.Stmt `query:"join-brand"`
 	ExportSubscriberData            *sqlx.Stmt `query:"export-subscriber-data"`
 	GetSubscriberActivity           *sqlx.Stmt `query:"get-subscriber-activity"`
 

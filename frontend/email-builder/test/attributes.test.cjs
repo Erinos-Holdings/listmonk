@@ -97,14 +97,15 @@ check('I4: text ids in order', show(text.map((i) => i.id)) === show(['first_name
   show(text.map((i) => i.id)));
 // 2026-10-21 (user): UnsubscribeURL / MessageURL removed from the link group (the official
 // footers carry both); the Text block's 'markdown' group is text + the two shop items.
-check('I4: link ids in order', show(link.map((i) => i.id)) === show(['shop_link', 'product_link']),
+// JOIN-LINK-SPEC D14: the link group gains join_link, last.
+check('I4: link ids in order', show(link.map((i) => i.id)) === show(['shop_link', 'product_link', 'join_link']),
   show(link.map((i) => i.id)));
 check('I4: no unsubscribe/message anywhere',
   ['link', 'text', 'markdown'].every((k) => attributeMenu(k, { brand: 'ruze' }).items
     .every((i) => i.id !== 'unsubscribe' && i.id !== 'message' && !/UnsubscribeURL|MessageURL/.test(i.expr))));
 const markdown = attributeMenu('markdown', { brand: 'ruze', value: 'https://ruzepouches.com/pk/X/' }).items;
 check('I4: markdown ids in order',
-  show(markdown.map((i) => i.id)) === show(['first_name', 'last_name', 'name', 'email', 'shop_link', 'product_link']),
+  show(markdown.map((i) => i.id)) === show(['first_name', 'last_name', 'name', 'email', 'shop_link', 'product_link', 'join_link']),
   show(markdown.map((i) => i.id)));
 check('markdown: text items match the text group byte-for-byte',
   show(markdown.slice(0, 4)) === show(text), show(markdown.slice(0, 4)));
@@ -394,6 +395,42 @@ check('TL I5: a markdown link still needs a brand',
   check('TL I3: quoted label enabled, destination half quote-free',
     ql && ql.disabled === false && ql.expr.startsWith('[say "hi"](<') && qlDest && !qlDest.includes('"'),
     ql && ql.expr);
+}
+
+// ==== JOIN-LINK-SPEC (integrations) I13 -- the Join link (D14) ===============================
+// The literal is pinned in Go (models/join_test.go, the shorthand + reserved list) and in the
+// integrations review (tests/lib/campaign-review/extract.test.ts / d-tier.test.ts, `system`).
+{
+  const JOIN = '{{ JoinURL }}';
+  const joinItem = (kind, ctx) => attributeMenu(kind, ctx).items.find((i) => i.id === 'join_link');
+  for (const ctx of [{ brand: 'ruze' }, { brand: null }, {}, undefined]) {
+    const it = joinItem('link', ctx);
+    check(`JL I13: link group offers Join link -> ${JOIN} with no brand needed (${show(ctx)})`,
+      it && it.label === 'Join link' && it.expr === JOIN && it.disabled === false && it.reason === '' && it.replace === undefined,
+      show(it));
+  }
+  check('JL I13: the text group never offers the Join link', joinItem('text', { brand: 'ruze' }) === undefined);
+  {
+    const it = joinItem('markdown', { brand: 'ruze', value: '' });
+    check('JL I13: markdown, no selection -> caret insert of the bare action',
+      it && it.expr === JOIN && it.disabled === false && it.replace === undefined, show(it));
+  }
+  {
+    const it = joinItem('markdown', { brand: null, value: 'hello' });
+    check('JL I13: markdown, a non-link selection -> caret insert (no replace)',
+      it && it.expr === JOIN && it.replace === undefined, show(it));
+  }
+  {
+    const it = joinItem('markdown', { brand: 'ruze', value: '[Oui, je veux rester informée](x)' });
+    check('JL I13: markdown, a selected [label](anything) -> destination replaced with <{{ JoinURL }}>',
+      it && it.replace === true && it.expr === `[Oui, je veux rester informée](<${JOIN}>)`, show(it));
+    check('JL I13: fixed point', joinItem('markdown', { brand: 'ruze', value: it.expr }).expr === it.expr);
+  }
+  check('JL I13: outer whitespace kept verbatim',
+    joinItem('markdown', { value: ' [a](x) ' }).expr === ` [a](<${JOIN}>) `);
+  check('JL I13: the link group never parses markdown',
+    joinItem('link', { brand: 'ruze', value: '[a](x)' }).expr === JOIN);
+  check('JL I13: the Join link carries no double quote', !JOIN.includes('"'));
 }
 
 console.log(failed === 0 ? 'attributes: all checks pass' : `attributes: ${failed} FAILED`);
