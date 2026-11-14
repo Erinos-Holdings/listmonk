@@ -156,8 +156,9 @@ export const WARNING_CODES = Object.freeze([
 const foldName = (s) => str(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 // ⟨…⟩: not adjacent to a letter or digit on either side (not regex \b, which treats `_` as a word
-// character).
-const NB = '(?<![\\p{L}\\p{N}])';
+// character). The leading side is a CONSUMED boundary, never a lookbehind (review S4-2: this module
+// is in the entry chunk, and an engine without lookbehind would fail to boot the whole admin UI).
+const NB = '(?:^|[^\\p{L}\\p{N}])';
 const NA = '(?![\\p{L}\\p{N}])';
 const bounded = (p, flags = 'u') => new RegExp(`${NB}(?:${p})${NA}`, flags);
 
@@ -180,9 +181,11 @@ const MONTHS = 'january|february|march|april|may|june|july|august|september|octo
   + '|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec';
 const RE_MONTH = new RegExp(`${NB}(?:${MONTHS})${NA} \\d`, 'iu');
 
-// A MM-DD-YY / MM-YYYY shaped token: additionally not adjacent to `-` or a digit (rows 5-6).
-const RE_STD_TOKEN = /(?<![\p{L}\p{N}-])(\d{2})-(\d{2})(?:-(\d{2}))?(?![\p{L}\p{N}-])/gu;
-const RE_STD_TOKEN_4 = /(?<![\p{L}\p{N}-])(\d{2})-(\d{4})(?![\p{L}\p{N}-])/gu;
+// A MM-DD-YY / MM-YYYY shaped token: additionally not adjacent to `-` or a digit (rows 5-6). The
+// leading boundary is consumed (S4-2); capture 1 is the token itself, so its index is derived.
+const RE_STD_TOKEN = /(?:^|[^\p{L}\p{N}-])((\d{2})-(\d{2})(?:-(\d{2}))?)(?![\p{L}\p{N}-])/gu;
+const RE_STD_TOKEN_4 = /(?:^|[^\p{L}\p{N}-])((\d{2})-(\d{4}))(?![\p{L}\p{N}-])/gu;
+const tokenIndex = (m) => m.index + m[0].length - m[1].length;
 
 const daysIn = (month, year) => new Date(Date.UTC(year, month, 0)).getUTCDate();
 
@@ -197,18 +200,10 @@ function validStd(mm, dd, yy) {
 
 // Every standard-shaped token: { index, valid }.
 function stdTokens(s) {
-  const days = Array.from(s.matchAll(RE_STD_TOKEN)).filter((m) => m[3] !== undefined)
-    .map((m) => ({ index: m.index, valid: validStd(m[1], m[2], m[3]) }));
-  const months = Array.from(s.matchAll(RE_STD_TOKEN_4)).map((m) => ({ index: m.index, valid: validStd(m[1], null, null) }));
+  const days = Array.from(s.matchAll(RE_STD_TOKEN)).filter((m) => m[4] !== undefined)
+    .map((m) => ({ index: tokenIndex(m), valid: validStd(m[2], m[3], m[4]) }));
+  const months = Array.from(s.matchAll(RE_STD_TOKEN_4)).map((m) => ({ index: tokenIndex(m), valid: validStd(m[2], null, null) }));
   return days.concat(months);
-}
-
-// Valid standard date at the start: ^MM-DD-YY or ^MM-YYYY, then a space or the end, a real date.
-function startsWithValidStd(s) {
-  let m = /^(\d{2})-(\d{2})-(\d{2})(?= |$)/.exec(s);
-  if (m) return validStd(m[1], m[2], m[3]);
-  m = /^(\d{2})-(\d{4})(?= |$)/.exec(s);
-  return m ? validStd(m[1], null, null) : false;
 }
 
 // The leading date token (§3, S2-4): one numeric shape anchored at the start, ending at a non-digit.
@@ -283,7 +278,8 @@ export function nameWarnings(kind, name, ctx = {}) {
 
   const tokens = stdTokens(s);
   if (RE_DATE_BAD.some((re) => re.test(s)) || RE_MONTH.test(s) || tokens.some((t) => !t.valid)) out.add('dateFormat');
-  if (!startsWithValidStd(s) && tokens.some((t) => t.valid && t.index !== 0)) out.add('datePosition');
+  // Silent whenever a VALID standard token is at the start, whatever follows it (S4-4).
+  if (!tokens.some((t) => t.valid && t.index === 0) && tokens.some((t) => t.valid && t.index !== 0)) out.add('datePosition');
 
   if (isList && lt) {
     const okPrefix = lt.public ? trimmed === lt.expected : raw.trimStart().startsWith(lt.prefix);

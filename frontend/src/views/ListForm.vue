@@ -39,15 +39,17 @@
              (naming.mjs::nameWarnings, warnings only) and the grey sample; a private list's brand
              prefix is a fixed addon before a required HANDLE input (listPrefixAddon), and the saved
              name is joinListName(addon, handle). Without the addon, the plain input. -->
-        <b-field v-if="nameAddon" :label="$t('globals.fields.name')" label-position="on-border"
+        <!-- Keyed (review S4-1): Buefy caches its addon layout per instance, so the two branches
+             must be distinct instances. pattern (S4-3): a whitespace-only handle is not a handle. -->
+        <b-field v-if="nameAddon" key="name-addon" :label="$t('globals.fields.name')" label-position="on-border"
           :message="nameMessage" :type="nameMessageType" data-cy="list-name-addon">
           <p class="control">
             <span class="button is-static">{{ nameAddon }}</span>
           </p>
           <b-input :maxlength="handleLimit.maxlength || 200" :ref="'focus'" v-model="nameHandle" name="name"
-            :placeholder="nameSample" required :disabled="readOnly" expanded @blur="nameTouched = true" />
+            :placeholder="nameSample" required pattern=".*\S.*" :disabled="readOnly" expanded @blur="nameTouched = true" />
         </b-field>
-        <b-field v-else :label="$t('globals.fields.name')" label-position="on-border" :message="nameMessage"
+        <b-field v-else key="name-plain" :label="$t('globals.fields.name')" label-position="on-border" :message="nameMessage"
           :type="nameMessageType">
           <b-input :maxlength="nameLimit.maxlength || 200" :ref="'focus'" v-model="form.name" name="name"
             :placeholder="nameSample" required :disabled="readOnly" @blur="nameTouched = true" />
@@ -607,8 +609,13 @@ export default Vue.extend({
     // the handle. When the addon appears (the brand is known, or the type turns private) the name
     // is re-split into it; an already-prefixed stored name is left byte-for-byte as stored.
     // When it goes away the plain input simply shows form.name, already the join.
-    nameAddon(now) {
-      if (!now) return;
+    nameAddon(now, was) {
+      if (!now) {
+        // S4-5: nothing typed after the addon -> the plain input starts empty (its grey sample
+        // shows), not with a bare prefix the user never typed.
+        if (was && !this.nameHandle.trim()) this.form.name = '';
+        return;
+      }
       this.nameHandle = splitListName(this.form.name, now);
       if (!(this.form.name || '').startsWith(`${now} `)) {
         this.form.name = joinListName(now, this.nameHandle);

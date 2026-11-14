@@ -479,6 +479,8 @@ export default Vue.extend({
     // once touched, D6), the field's message (the hint when none, D4) and the grey sample (D3).
     // The brand roster is the store's (loaded once by App.vue).
     nameWarningCodes() {
+      // No warnings on a form the user cannot save (S4-7, §4/I6).
+      if (!this.$can('templates:manage')) return [];
       return nameWarnings('template', this.form.name, { brands: this.brandRows })
         .filter((c) => c !== 'handleMissing' || this.nameTouched);
     },

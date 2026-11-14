@@ -95,6 +95,8 @@
     { "kind": "campaign", "name": "Sale 11-14-26", "warnings": ["datePosition"] },
     { "kind": "campaign", "name": "Winback 11-2026", "warnings": ["datePosition"] },
     { "kind": "campaign", "name": "Sale 14-11-26", "warnings": ["dateFormat"] },
+    { "kind": "campaign", "name": "11-14-26–11-15-26 Sale", "warnings": [] },
+    { "kind": "campaign", "name": "11-14-26, 11-21-26 Sale", "warnings": [] },
 
     { "kind": "campaign", "name": "11-14-26", "warnings": ["handleMissing"] },
     { "kind": "campaign", "name": "11-14-26 ", "warnings": ["handleMissing"] },
