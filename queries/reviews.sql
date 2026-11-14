@@ -23,12 +23,6 @@ UPDATE campaign_reviews SET status = $3, report = $4, error = $5, updated_at = N
 -- The newest row of a campaign, whatever its status.
 SELECT * FROM campaign_reviews WHERE campaign_id = $1 ORDER BY requested_at DESC, id DESC LIMIT 1;
 
--- name: get-campaign-review-by-hash
--- The newest COMPLETE row for a campaign at a bundle hash -- a newer failed or stale row for the
--- same hash does not hide it (the gate, D6).
-SELECT * FROM campaign_reviews WHERE campaign_id = $1 AND bundle_hash = $2 AND status = 'complete'
-    ORDER BY requested_at DESC, id DESC LIMIT 1;
-
 -- name: get-campaign-review-current
 -- Fork (naming standard, integrations NAMING-STANDARD-SPEC D12 §4.7) -- the CURRENT review the one
 -- core lookup core.CurrentReview reads -- the newest COMPLETE row at either hash, $2 the new

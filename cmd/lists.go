@@ -252,19 +252,21 @@ func (a *App) UpdateList(c echo.Context) error {
 	// passed above -- so a locked name here is always a rename-into): with no copy present it
 	// would lock this list, subscribers and brand included, with SQL as the only undo. Creation
 	// (CreateList) is the one way to mint the locked list.
+	// Fork (naming standard, NAMING-STANDARD-SPEC D3/D6 §4.3) -- a CHANGED name is stored trimmed, so
+	// it is trimmed BEFORE the locked-name check (review S4-3: a trailing space used to slip the
+	// locked name past it and the trim then stored it).
+	if l.Name != "" && l.Name != cur.Name {
+		l.Name = strings.TrimSpace(l.Name)
+	}
 	if models.IsLockedListName(l.Name) {
 		return a.lockedListErr(l.Name)
 	}
-	// Fork (naming standard, NAMING-STANDARD-SPEC D3/D6 §4.3) -- only a CHANGED name is judged (an
-	// unchanged longer name stays valid until renamed; "" keeps the stored name); a changed one is
-	// stored trimmed, judged against the brand and type the list will have. The former-name rule
-	// runs in core.UpdateList's transaction.
+	// Only a CHANGED name is judged (an unchanged longer name stays valid until renamed; "" keeps
+	// the stored name), against the brand and type the list will have. The former-name rule runs in
+	// core.UpdateList's transaction.
 	if l.Name != "" && l.Name != cur.Name {
-		l.Name = strings.TrimSpace(l.Name)
-		if l.Name != cur.Name {
-			if err := a.nameRuleErr(models.NameKindList, l.Name, listReqBrand(r, cur.Brand), listTypeOr(l.Type, cur.Type)); err != nil {
-				return err
-			}
+		if err := a.nameRuleErr(models.NameKindList, l.Name, listReqBrand(r, cur.Brand), listTypeOr(l.Type, cur.Type)); err != nil {
+			return err
 		}
 	}
 

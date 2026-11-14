@@ -133,13 +133,16 @@ export function afterBrandChange(state, scopeListIds) {
 // canSelectAll guards the "select all N" whole-query affordance: offered only when the page shows
 // MORE than one page of an UNNARROWED query -- never under the single filter, the route list scope,
 // the brand-selector scope, (POLISH3 D2) the route status scope or (MATRIX-POLISH-SPEC D10.2) the
-// route id scope, since the by-query bulk delete carries only query + evergreen.
+// route id scope, since the by-query bulk delete carries only query + evergreen. Fork (naming
+// standard, NAMING-STANDARD-SPEC D2, review S4-1) -- nor under the language toggle: offered only when
+// it is All ('all', '' or absent).
 export function canSelectAll({
   bulkAll = false, total = 0, perPage = 0, listID = null, routeListIDs = null, scopeListIds = null, routeStatus = null,
-  routeIDs = null,
+  routeIDs = null, lang = 'all',
 } = {}) {
+  const langAll = lang === 'all' || lang === '' || lang === null || lang === undefined;
   return !bulkAll && total > perPage && (listID === null || listID === undefined)
-    && !hasRouteScope(routeListIDs) && !scopeListIds && !routeStatus && !hasRouteScope(routeIDs);
+    && !hasRouteScope(routeListIDs) && !scopeListIds && !routeStatus && !hasRouteScope(routeIDs) && langAll;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -448,7 +448,7 @@ import {
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { stripBrand } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  campaignBrandOf, chipsFor, cloneName, formerNameOf, nameCounter,
+  campaignBrandOf, chipsFor, cloneBaseOf, cloneName, formerNameOf, nameCounter,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
 import { langParam } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
@@ -563,9 +563,18 @@ export default Vue.extend({
       return f ? this.$t('naming.formerName', { name: f }) : row.name;
     },
 
-    // D7 -- the clone prompt: `Clone<N> <name>` over this page's names, 30 with the hint and count.
-    promptClone(row) {
-      const names = ((this.campaigns && this.campaigns.results) || []).map((c) => c.name);
+    // D7 -- the clone prompt: `Clone<N> <name>`, N over every campaign whose name carries the base
+    // (one quiet search for the base, review S4-10 -- not only this page), 30 with the hint and count.
+    // A failed search falls back to this page's names.
+    async promptClone(row) {
+      const base = cloneBaseOf(row.name);
+      let names = ((this.campaigns && this.campaigns.results) || []).map((c) => c.name);
+      try {
+        const res = await this.$api.findCampaignsByName(base);
+        names = names.concat(((res && res.results) || []).map((c) => c.name));
+      } catch (e) {
+        // Keep the page's names.
+      }
       const value = cloneName(row.name, names);
       const count = nameCounter('campaign', value);
       this.$utils.prompt(
@@ -1085,6 +1094,8 @@ export default Vue.extend({
         scopeListIds: this.scopeListIds,
         routeStatus: this.queryParams.routeStatus,
         routeIDs: this.queryParams.routeIDs,
+        // NAMING-STANDARD-SPEC D2 (review S4-1) -- the by-query delete carries no language.
+        lang: this.langSelection,
       });
     },
   },

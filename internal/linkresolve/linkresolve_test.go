@@ -231,6 +231,15 @@ func TestUTMCampaign(t *testing.T) {
 	if k, err := ValidateUTMParams(tpls); err != nil {
 		t.Fatalf("ValidateUTMParams refused %q: %v", k, err)
 	}
+	// Review S4-11: a misspelt field parses but fails at execution -- the save refuses it (it would
+	// otherwise be dropped from every click by RenderUTMParams).
+	typo := map[string]string{"utm_source": "listmonk", "utm_campaign": "{{ .Campaign.UTMCampain }}"}
+	if k, err := ValidateUTMParams(typo); err == nil || k != "utm_campaign" {
+		t.Fatalf("ValidateUTMParams accepted a misspelt field: key %q err %v", k, err)
+	}
+	if got := RenderUTMParams(typo, CampaignInfo{ID: 1, Name: "x"}); got["utm_campaign"] != "" {
+		t.Fatalf("fixture: the typo renders %q", got["utm_campaign"])
+	}
 }
 
 // I14 -- Expressions extracts only DYNAMIC TrackLink arguments from a transformed body, with

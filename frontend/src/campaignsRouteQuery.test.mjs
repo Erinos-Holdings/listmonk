@@ -125,6 +125,11 @@ test('I2 (stage 2 F1): "select all N" is never offered under the route scope, th
   assert.equal(canSelectAll({ ...base, scopeListIds: [1] }), false);
   assert.equal(canSelectAll({ ...base, bulkAll: true }), false);
   assert.equal(canSelectAll({ ...base, total: 20 }), false);
+  // NAMING-STANDARD-SPEC D2 / review S4-1: the language toggle narrows the page but not the
+  // by-query delete, so "select all N" is offered only under All.
+  ['en', 'es', 'fr', 'de', 'it'].forEach((lang) => assert.equal(canSelectAll({ ...base, lang }), false, lang));
+  assert.equal(canSelectAll({ ...base, lang: 'all' }), true);
+  assert.equal(canSelectAll({ ...base, lang: '' }), true);
   // After the route scope clears, the affordance comes back.
   const cleared = selectList({ listID: null, routeListIDs: [3, 9] }, null);
   assert.equal(canSelectAll({ ...base, ...cleared }), true);

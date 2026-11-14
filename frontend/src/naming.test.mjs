@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  LANG_VALUES, NAME_MAX, campaignBrandOf, chipsFor, cloneName, duplicateOf, formerNameOf, isExempt, langMatches,
+  LANG_VALUES, NAME_MAX, campaignBrandOf, chipsFor, cloneBaseOf, cloneName, duplicateOf, formerNameOf, isExempt, langMatches,
   langOf, listDisplayName, nameCounter, normalizeLang,
 } from './naming.mjs'; // eslint-disable-line import/extensions
 import {
@@ -91,6 +91,9 @@ test('I11: cloneName -- Clone<N> <base>, N one past the highest existing for tha
   const long = 'A name of exactly thirty chars';
   assert.equal(long.length, 30);
   assert.equal(cloneName(long, []), `Clone1 ${long}`);
+  // The base the Campaigns page searches for (review S4-10).
+  assert.equal(cloneBaseOf('Clone3 Welcome'), 'Welcome');
+  assert.equal(cloneBaseOf('Welcome'), 'Welcome');
   // Not Copy of.
   assert.ok(!cloneName('x', []).startsWith('Copy of'));
 });

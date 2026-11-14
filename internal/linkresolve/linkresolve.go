@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"regexp"
 	"sort"
@@ -381,7 +382,15 @@ func ValidateUTMParams(tpls map[string]string) (string, error) {
 		if strings.TrimSpace(k) == "" {
 			return k, errors.New("empty parameter name")
 		}
-		if _, err := template.New("utm").Funcs(template.FuncMap{}).Parse(v); err != nil {
+		t, err := template.New("utm").Funcs(template.FuncMap{}).Parse(v)
+		if err != nil {
+			return k, err
+		}
+		// Fork (naming standard, NAMING-STANDARD-SPEC §4.6, review S4-11) -- also EXECUTE it once
+		// against a zero CampaignInfo, exactly as RenderUTMParams does: a misspelt field
+		// (`{{ .Campaign.UTMCampain }}`) parses but fails at execution, and RenderUTMParams would then
+		// drop the parameter silently on every click. The Settings save refuses it instead.
+		if err := t.Execute(io.Discard, map[string]any{"Campaign": CampaignInfo{}}); err != nil {
 			return k, err
 		}
 	}

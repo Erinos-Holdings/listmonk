@@ -329,18 +329,6 @@ func (c *Core) CurrentReview(cm models.Campaign) (*models.CampaignReview, error)
 	return &row, nil
 }
 
-// GetReviewByHash returns the newest COMPLETE row for (campaign, hash), or nil.
-func (c *Core) GetReviewByHash(campID int, hash string) (*models.CampaignReview, error) {
-	var row models.CampaignReview
-	if err := c.q.GetCampaignReviewByHash.Get(&row, campID, hash); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, c.reviewErr(err, "fetching")
-	}
-	return &row, nil
-}
-
 // GetPreviousReview returns the newest complete row requested before jobID (D14's cache), or nil.
 func (c *Core) GetPreviousReview(campID int, jobID string) (*models.CampaignReview, error) {
 	var row models.CampaignReview

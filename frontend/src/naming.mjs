@@ -81,10 +81,16 @@ export function listDisplayName(list, brandSelection, brands = []) {
 
 const RE_CLONE = /^Clone(\d+) /;
 
+// D7 -- a name minus any leading `Clone<k> ` (the base the clone number counts over; the Campaigns
+// page searches for it to find every existing clone, review S4-10).
+export function cloneBaseOf(name) {
+  return str(name).replace(RE_CLONE, '');
+}
+
 // D7 -- `Clone<N> <base>`: base = the name minus any leading `Clone<k> `; N = 1 + the highest k among
 // the existing `Clone<k> <base>` names (1 when none). No truncation: over 30 the server refuses.
 export function cloneName(name, existingNames = []) {
-  const base = str(name).replace(RE_CLONE, '');
+  const base = cloneBaseOf(name);
   let max = 0;
   (Array.isArray(existingNames) ? existingNames : []).forEach((n) => {
     const m = RE_CLONE.exec(str(n));

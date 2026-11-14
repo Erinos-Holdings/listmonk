@@ -371,6 +371,15 @@ func TestGeneralUpdateNameRule(t *testing.T) {
 	if f, _ := formerRow(t, h, "list", lid); f != "A legacy list name far longer than thirty" {
 		t.Fatalf("list former name %q", f)
 	}
+	// Review S4-3: a locked list name with a trailing space is trimmed BEFORE the locked-name check,
+	// so it is refused (409) and nothing is stored -- never trimmed into the locked name.
+	before := storedName(t, h, "lists", lid)
+	if code, _ := lc.put(lid, `{"name": "`+models.LockedListNames[0]+` "}`, admin); code != http.StatusConflict {
+		t.Fatalf("a locked name with a trailing space: %d, want 409", code)
+	}
+	if got := storedName(t, h, "lists", lid); got != before {
+		t.Fatalf("a refused locked-name update stored %q", got)
+	}
 
 	// Create: the rule applies (a clone is a create).
 	if code, _ := lc.call(h.app.CreateList, http.MethodPost, "/api/lists", 0, `{"name": "`+strings.Repeat("q", 31)+`", "type": "private", "optin": "single"}`, admin); code != http.StatusBadRequest {
