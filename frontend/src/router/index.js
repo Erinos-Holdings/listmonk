@@ -104,10 +104,17 @@ const routes = [
     meta: { title: 'globals.terms.templates', group: 'campaigns' },
     component: () => import('../views/Templates.vue'),
   },
+  // Fork (integrations MATRIX-VIEWS-SPEC D1) -- Analytics is a root page (/analytics, no group); the
+  // old path redirects to it keeping the query, so ?id= deep links and bookmarks still land. It stays
+  // before /campaigns/:id so 'analytics' is never read as a campaign id.
   {
     path: '/campaigns/analytics',
+    redirect: (to) => ({ name: 'campaignAnalytics', query: to.query, hash: to.hash }),
+  },
+  {
+    path: '/analytics',
     name: 'campaignAnalytics',
-    meta: { title: 'analytics.title', group: 'campaigns' },
+    meta: { title: 'analytics.title' },
     component: () => import('../views/CampaignAnalytics.vue'),
   },
   // Fork (campaign review, CAMPAIGN-INSPECT-SPEC D11) -- the checklist window: a bare route (no

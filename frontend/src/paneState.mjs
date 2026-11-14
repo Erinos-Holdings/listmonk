@@ -1,5 +1,5 @@
 // Fork (campaign matrix, integrations listmonk/CAMPAIGN-MATRIX-SPEC D1/D3). The pane choice of the
-// Brands page (Matrix | Usage | Health, key brands.pane) and of Campaigns > Analytics
+// Brands page (Matrix | Usage | Health, key brands.pane) and of Analytics
 // (Matrix | Campaign, key analytics.pane). The Dashboard's own pane rule is
 // brandMatrix.mjs::initialPane (D2: Overview | SES). No Vue; tested by paneState.test.mjs.
 // Fork (matrix polish, integrations MATRIX-POLISH-SPEC D1/D2) -- Matrix first and the default on both

@@ -1,13 +1,16 @@
 <template>
   <!-- Fork (campaign matrix, integrations listmonk/CAMPAIGN-MATRIX-SPEC D3-D10). The Matrix pane of
-       Campaigns > Analytics: one row per campaign in scope with activity in the window (the Mountain
+       Analytics: one row per campaign in scope with activity in the window (the Mountain
        days from 60 days back through TODAY -- HOURLY-HEALTH-SPEC D1; the Brand Matrix still ends
        yesterday), in the Brand Matrix's grouped-header style, with a Status column (D2). The server
        (GET /api/analytics/campaigns/matrix) scopes and counts; every rate, header, sort and
        missing-value rule is campaignMatrix.mjs. The brand selector reaches the server as list_id;
        the navbar launch filter narrows here by each row's brand. Fork (matrix polish, integrations
        MATRIX-POLISH-SPEC D3-D7): one Views column, the Shop Link Attribution group, Tracked /
-       Matched headers, no Brand column under a single-brand selection, names truncated. -->
+       Matched headers, no Brand column under a single-brand selection, names truncated. Fork
+       (integrations MATRIX-VIEWS-SPEC D2-D4): the Health | Attribution view toggle, the left columns
+       Date, Brand, Campaign, Status, Sent, Skipped, the Brand cell as the upper-cased slug and no
+       brand chip in the Campaign cell (campaignMatrix.mjs). -->
   <section class="campaign-matrix relative" data-cy="campaign-matrix">
     <b-loading v-if="loading" active :is-full-page="false" />
     <div class="cm-toolbar is-flex is-align-items-center mb-3">
@@ -45,12 +48,25 @@
         <b-input v-model="nameQuery" name="name" icon="magnify" :placeholder="$t('analytics.matrix.nameFilter')"
           data-cy="cm-name-filter" />
       </b-field>
+      <!-- MATRIX-VIEWS-SPEC D2: the view toggle, right of the name filter; part of the session state.
+           A sort on a column the new view hides falls back to Date desc (campaignMatrix.mjs::sortForView). -->
+      <b-field class="segmented mb-0 ml-4">
+        <b-radio-button v-model="state.view" native-value="health" type="is-primary"
+          data-cy="cm-view-health" @input="onView">
+          {{ $t('analytics.matrix.viewHealth') }}
+        </b-radio-button>
+        <b-radio-button v-model="state.view" native-value="attribution" type="is-primary"
+          data-cy="cm-view-attribution" @input="onView">
+          {{ $t('analytics.matrix.viewAttribution') }}
+        </b-radio-button>
+      </b-field>
     </div>
     <div class="table-container">
       <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="cm-table">
         <thead>
-          <!-- MATRIX-POLISH-SPEC D4/D5: no Views group (Views is one column); CONVERSIONS then
-               SHOP LINK ATTRIBUTION after Clicks (campaignMatrix.mjs::groupHeaders). -->
+          <!-- MATRIX-POLISH-SPEC D4/D5: no Views group (Views is one column); CONVERSIONS after
+               Clicks, then the view's groups (campaignMatrix.mjs::groupHeaders, derived from the
+               same column list as the header cells -- MATRIX-VIEWS-SPEC D2). -->
           <tr class="bm-groups">
             <th :colspan="leftCols.length" />
             <th v-for="(g, i) in groupCols" :key="i" :colspan="g.span" :class="g.cls">{{ groupLabel(g) }}</th>
@@ -71,37 +87,47 @@
         </thead>
         <tbody>
           <tr v-for="row in tableRows" :key="row.totals ? 'totals' : row.id" :class="row.totals ? 'bm-totals' : ''">
-            <td :class="bmTd('name')" class="cm-name">
-              <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended).
-                   MATRIX-POLISH-SPEC D7 (widened 2026-11-06): the first NAME_MAX characters, then '…',
-                   the brand's name stripped under a single-brand selection; the stored name on hover. -->
-              <!-- Fork (naming standard, NAMING-STANDARD-SPEC D1/D10) -- the brand and language chips
-                   (naming.mjs::chipsFor; hidden when the selector / toggle selects them) and the
-                   former name on hover. -->
-              <template v-if="!row.totals">
-                <b-tag v-if="chipsOf(row).brand" class="is-small brand-chip" :data-cy="`cm-brand-chip-${row.id}`">{{ chipsOf(row).brand }}</b-tag>
-                <b-tag v-if="chipsOf(row).lang" class="is-small lang" :data-cy="`cm-lang-chip-${row.id}`">{{ chipsOf(row).lang }}</b-tag>
-              </template>
-              <router-link v-if="!row.totals" :to="{ name: 'campaignAnalytics', query: { id: row.id } }"
-                :title="nameTitle(row)" :data-cy="`cm-name-${row.id}`">
+            <!-- MATRIX-VIEWS-SPEC D3: the left cells in leftCols' order (Date, Brand, Campaign, Status,
+                 Sent, Skipped); MATRIX-POLISH-SPEC D6: no Brand column under a single-brand selection. -->
+            <template v-for="c in leftCols">
+              <td v-if="c.field === 'name'" :key="c.field" :class="bmTd('name')" class="cm-name">
+                <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended).
+                     MATRIX-POLISH-SPEC D7 (widened 2026-11-06): the first NAME_MAX characters, then '…';
+                     the stored name on hover. -->
+                <!-- Fork (naming standard, NAMING-STANDARD-SPEC D1/D10) -- the language chip
+                     (campaignMatrix.mjs::matrixChips: chipsFor's language rule, no brand chip --
+                     MATRIX-VIEWS-SPEC D4) and the former name on hover. -->
+                <b-tag v-if="!row.totals && chipsOf(row).lang" class="is-small lang" :data-cy="`cm-lang-chip-${row.id}`">
+                  {{ chipsOf(row).lang }}
+                </b-tag>
+                <router-link v-if="!row.totals" :to="{ name: 'campaignAnalytics', query: { id: row.id } }"
+                  :title="nameTitle(row)" :data-cy="`cm-name-${row.id}`">
 {{ nameOf(row).text }}
 </router-link>
-              <template v-else>{{ row.name }}</template>
-            </td>
-            <!-- MATRIX-POLISH-SPEC D6: no Brand column under a single-brand selection. -->
-            <td v-if="showBrand" :class="bmTd('brand')">{{ row.totals ? '' : (row.label || '—') }}</td>
-            <td :class="bmTd('date')">
-              <span :title="dateTip(row)">{{ dateText(row) }}</span>
-            </td>
-            <!-- HOURLY-HEALTH-SPEC D2: the Campaigns page's status tag; empty on the totals row. -->
-            <td :class="bmTd('status')" :data-cy="`cm-status-${row.totals ? 'totals' : row.id}`">
-              <b-tag v-if="statusOf(row)" :class="statusOf(row).status">{{ $t(statusOf(row).label) }}</b-tag>
-            </td>
-            <td class="has-text-right" :class="bmTd('sent')">{{ cell(row, 'sent') }}</td>
-            <!-- SMART-SENDING-SPEC D5: the recorded skips, "off" for a bypass, '—' for a journey. -->
-            <td class="has-text-right" :class="bmTd('skipped')" :data-cy="`cm-skipped-${row.totals ? 'totals' : row.id}`">
-              {{ cell(row, 'skipped') }}
-            </td>
+                <template v-else>{{ row.name }}</template>
+              </td>
+              <!-- MATRIX-VIEWS-SPEC D4: the upper-cased slug, the display name on hover. -->
+              <td v-else-if="c.field === 'brand'" :key="c.field" :class="bmTd('brand')"
+                :title="brandOf(row).title" :data-cy="`cm-brand-${row.totals ? 'totals' : row.id}`">
+                {{ brandOf(row).text }}
+              </td>
+              <td v-else-if="c.field === 'date'" :key="c.field" :class="bmTd('date')">
+                <span :title="dateTip(row)">{{ dateText(row) }}</span>
+              </td>
+              <!-- HOURLY-HEALTH-SPEC D2: the Campaigns page's status tag; empty on the totals row. -->
+              <td v-else-if="c.field === 'status'" :key="c.field" :class="bmTd('status')"
+                :data-cy="`cm-status-${row.totals ? 'totals' : row.id}`">
+                <b-tag v-if="statusOf(row)" :class="statusOf(row).status">{{ $t(statusOf(row).label) }}</b-tag>
+              </td>
+              <td v-else-if="c.field === 'sent'" :key="c.field" class="has-text-right" :class="bmTd('sent')">
+                {{ cell(row, 'sent') }}
+              </td>
+              <!-- SMART-SENDING-SPEC D5: the recorded skips, "off" for a bypass, '—' for a journey. -->
+              <td v-else-if="c.field === 'skipped'" :key="c.field" class="has-text-right" :class="bmTd('skipped')"
+                :data-cy="`cm-skipped-${row.totals ? 'totals' : row.id}`">
+                {{ cell(row, 'skipped') }}
+              </td>
+            </template>
             <td v-for="c in midCols" :key="c.field" class="has-text-right" :class="[bmTd(c.field), c.group]"
               :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
               <span v-if="c.field === 'gp_rate'" :class="gpClass(row) || null" :title="gpTitle(row)">
@@ -133,13 +159,14 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  CONVERSION_FIELDS, GAP_FAILED, GAP_FIELDS, GAP_PENDING, GAP_READY, cellText, clickSort, conversionValue, dateCell,
-  filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
-  midColumns, nameCell, saveState, shapeRows, showBrandColumn, statusCell, tableRows,
+  CONVERSION_FIELDS, GAP_FAILED, GAP_FIELDS, GAP_PENDING, GAP_READY, brandCell, cellText, clickSort, conversionValue,
+  dateCell, filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, leftColumns, loadState,
+  matrixChips, mergeGapCounts, midColumns, nameCell, saveState, shapeRows, showBrandColumn, sortForView, statusCell,
+  tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { chipsFor, formerNameOf, langMatches } from '../naming.mjs'; // eslint-disable-line import/extensions
+import { formerNameOf, langMatches } from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -162,7 +189,8 @@ export default Vue.extend({
       loading: false,
       // The name filter's text (never persisted).
       nameQuery: '',
-      // Sort, %/$ | # mode and kind, per browser session (sessionStorage key analytics.matrix).
+      // Sort, %/$ | # mode, kind and view (MATRIX-VIEWS-SPEC D2), per browser session
+      // (sessionStorage key analytics.matrix).
       state: loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
     };
   },
@@ -181,20 +209,20 @@ export default Vue.extend({
       return showBrandColumn(this.brandSelection);
     },
 
-    // HOURLY-HEALTH-SPEC D2: Campaign, Brand, Date, Status, Sent (campaignMatrix.mjs::leftColumns).
+    // MATRIX-VIEWS-SPEC D3: Date, Brand, Campaign, Status, Sent, Skipped (campaignMatrix.mjs::leftColumns).
     leftCols() {
       return leftColumns(this.showBrand);
     },
 
-    // D5 / MATRIX-POLISH-SPEC D3-D5: Views, Clicks, Shop Link Attribution (Founder, Self, Creator,
-    // Corp), Conversions (Tracked, Matched), Bounces (Hard, Soft), Complaints (FBL, GP S%), Gmail gap
-    // (Gmail, Yahoo, Gap -- GMAIL-GAP-SPEC D3).
+    // MATRIX-VIEWS-SPEC D2: Views, Clicks, Conversions (Tracked, Matched), then Health's Bounces
+    // (Hard, Soft), Complaints (FBL, GP S%), Gmail gap (Gmail, Yahoo, Gap) or Attribution's Shop Link
+    // Attribution (Founder, Self, Creator, Corp) -- campaignMatrix.mjs::midColumns.
     midCols() {
-      return midColumns(this.showGp);
+      return midColumns(this.showGp, this.state.view);
     },
 
     groupCols() {
-      return groupHeaders(this.showGp);
+      return groupHeaders(this.showGp, this.state.view);
     },
 
     tableRows() {
@@ -282,6 +310,12 @@ export default Vue.extend({
       this.fetchRows();
     },
 
+    // MATRIX-VIEWS-SPEC D2: a sort on a column the view hides falls back to Date desc.
+    onView() {
+      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp);
+      this.saveState();
+    },
+
     onSort(field) {
       this.state.sort = clickSort(this.state.sort, field);
       this.saveState();
@@ -325,9 +359,14 @@ export default Vue.extend({
       return nameCell(row.name);
     },
 
-    // Fork (naming standard, NAMING-STANDARD-SPEC D1/D10).
+    // Fork (naming standard, NAMING-STANDARD-SPEC D1/D10; no brand chip since MATRIX-VIEWS-SPEC D4).
     chipsOf(row) {
-      return chipsFor(row, { brandSelection: this.brandSelection, langSelection: this.langSelection });
+      return matrixChips(row, { brandSelection: this.brandSelection, langSelection: this.langSelection });
+    },
+
+    // MATRIX-VIEWS-SPEC D4.
+    brandOf(row) {
+      return brandCell(row);
     },
 
     nameTitle(row) {
@@ -391,6 +430,8 @@ export default Vue.extend({
   },
 
   created() {
+    // MATRIX-VIEWS-SPEC D2: a stored sort on a column the stored view hides falls back to Date desc.
+    this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp);
     this.$root.$on('page.refresh', this.fetchRows);
   },
 

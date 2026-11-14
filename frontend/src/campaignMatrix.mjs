@@ -1,5 +1,5 @@
 // Fork (campaign matrix, integrations listmonk/CAMPAIGN-MATRIX-SPEC D4-D9). The pure half of the
-// Campaign Matrix pane of Campaigns > Analytics: row shaping (the launch filter), the column
+// Campaign Matrix pane of Analytics: row shaping (the launch filter), the column
 // headers, the %/$ | # cells, the totals row, the sort (Date default, missing last) and the
 // per-session state. No Vue, no DOM; tested by campaignMatrix.test.mjs (yarn test).
 //
@@ -16,7 +16,13 @@
 // gmail / gmail_proxy / yahoo / yahoo_proxy counts and gap_thresholds (the stored line) of a SECOND
 // request, GET /api/campaigns/analytics/gmail_gap over the broadcast rows, merged in by
 // mergeGapCounts after the matrix renders; the arithmetic is gmailGap.mjs's, the fork holds no value.
+// Fork (integrations MATRIX-VIEWS-SPEC D2-D4) -- the Health | Attribution view (midColumns /
+// groupHeaders per view, the group row derived from the columns, sortForView, `view` in the session
+// state), the left columns Date, Brand, Campaign, Status, Sent, Skipped, the Brand cell as the
+// upper-cased slug (brandCell; Brand sorts by slug) and the Matrix's chips without a brand chip
+// (matrixChips).
 import { matchesLaunch, normalizeLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
+import { chipsFor } from './naming.mjs'; // eslint-disable-line import/extensions
 import { normalizeMeasure } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 import {
   gapClass as gapTierClass, gapCounts, gapOf, gapReasonTip, gapText, poolCounts,
@@ -63,14 +69,14 @@ export function statusRank(status) {
   return i === -1 ? STATUS_ORDER.length : i;
 }
 
-// The left columns, in order: Campaign, Brand (unless one brand is selected, MATRIX-POLISH D6),
-// Date, Status (HOURLY-HEALTH D2), Sent, Skipped (integrations SMART-SENDING-SPEC D5 -- a count, not
-// a rate over Sent).
+// The left columns, in order (MATRIX-VIEWS D3): Date, Brand (unless one brand is selected,
+// MATRIX-POLISH D6), Campaign, Status (HOURLY-HEALTH D2), Sent, Skipped (integrations
+// SMART-SENDING-SPEC D5 -- a count, not a rate over Sent).
 export function leftColumns(showBrand = true) {
   const cols = [
-    { field: 'name', label: 'analytics.matrix.campaign' },
-    { field: 'brand', label: 'dashboard.matrix.brand' },
     { field: 'date', label: 'analytics.matrix.date' },
+    { field: 'brand', label: 'dashboard.matrix.brand' },
+    { field: 'name', label: 'analytics.matrix.campaign' },
     { field: 'status', label: 'analytics.matrix.status' },
     { field: 'sent', label: 'dashboard.matrix.sent' },
     { field: 'skipped', label: 'analytics.matrix.skipped', help: 'analytics.matrix.skippedHelp' },
@@ -92,12 +98,15 @@ export const MODES = Object.freeze(['pct', 'num']);
 // D4: the kind pill -- the Campaigns page's kinds (campaignsRouteQuery.mjs SCOPE_KINDS), default All.
 export const KINDS = Object.freeze(['all', 'broadcasts', 'automations']);
 
-// D5: default sort Date descending; mode %/$; kind All.
+// MATRIX-VIEWS D2: the Health | Attribution view toggle.
+export const VIEWS = Object.freeze(['health', 'attribution']);
+
+// D5: default sort Date descending; mode %/$; kind All; view Health (MATRIX-VIEWS D2).
 export const DEFAULT_STATE = Object.freeze({
-  sort: Object.freeze({ field: 'date', order: 'desc' }), mode: 'pct', kind: 'all',
+  sort: Object.freeze({ field: 'date', order: 'desc' }), mode: 'pct', kind: 'all', view: 'health',
 });
 
-// The sessionStorage key of { sort, mode, kind }.
+// The sessionStorage key of { sort, mode, kind, view }.
 export const STORAGE_KEY = 'analytics.matrix';
 
 export const RATE_DIGITS = 2;
@@ -141,69 +150,117 @@ export function showBrandColumn(selection) {
   return !(selection && selection.kind === 'brand');
 }
 
-// The column headers (i18n keys). The group row: Views and Clicks are single columns spanning both
-// header rows' meaning (MATRIX-POLISH D4: Views is placed where its group was), then CONVERSIONS
-// (Tracked / Matched -- D3), SHOP LINK ATTRIBUTION (D5; after Conversions since 2026-10-29), BOUNCES,
-// COMPLAINTS (FBL, plus GP S% for a brands:get holder).
-export function midColumns(showGp) {
-  const cols = [
-    {
-      field: 'views', label: 'analytics.matrix.views', help: 'analytics.matrix.viewsHelp', group: '',
-    },
-    {
-      field: 'clicks', label: 'dashboard.matrix.clicks', help: 'analytics.matrix.clicksHelp', group: '',
-    },
-    { field: 'tracked', label: 'analytics.conversions.tracked', group: 'bm-eng' },
-    { field: 'matched', label: 'analytics.conversions.matched', group: 'bm-eng' },
-    {
-      field: 'shop_founder', label: 'analytics.matrix.founder', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
-    },
-    {
-      field: 'shop_self', label: 'analytics.matrix.self', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
-    },
-    {
-      field: 'shop_creator', label: 'analytics.matrix.creator', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
-    },
-    {
-      field: 'shop_corp', label: 'analytics.matrix.corp', help: 'analytics.matrix.shopLinksHelp', group: 'bm-shop',
-    },
-    { field: 'hard_bounces', label: 'analytics.matrix.hard', group: 'bm-subs' },
-    { field: 'soft_bounces', label: 'analytics.matrix.soft', group: 'bm-subs' },
-    {
-      field: 'complaints', label: 'analytics.matrix.fbl', help: 'analytics.matrix.fblHelp', group: 'bm-subs',
-    },
-  ];
-  if (showGp) {
-    cols.push({
-      field: 'gp_rate', label: 'dashboard.matrix.spam', help: 'analytics.matrix.gpHelp', group: 'bm-subs',
-    });
-  }
+export const normalizeView = (v) => (VIEWS.includes(v) ? v : DEFAULT_STATE.view);
+
+// The column headers (i18n keys). Each column names its group header (`heading`, '' for none) and
+// the views that show it (MATRIX-VIEWS D2): Views, Clicks and CONVERSIONS (Tracked / Matched) in
+// both; SHOP LINK ATTRIBUTION (Founder, Self, Creator, Corp) under Attribution; BOUNCES, COMPLAINTS
+// (FBL, plus GP S% for a brands:get holder) and GMAIL GAP (Gmail, Yahoo, Gap) under Health, in that
+// order. MATRIX-POLISH D4: Views is placed where its group was (no group over Views / Clicks).
+const BOTH = Object.freeze(['health', 'attribution']);
+const HEALTH = Object.freeze(['health']);
+const ATTRIBUTION = Object.freeze(['attribution']);
+const ALL_MID = Object.freeze([
+  {
+    field: 'views', label: 'analytics.matrix.views', help: 'analytics.matrix.viewsHelp', group: '', heading: '', views: BOTH,
+  },
+  {
+    field: 'clicks', label: 'dashboard.matrix.clicks', help: 'analytics.matrix.clicksHelp', group: '', heading: '', views: BOTH,
+  },
+  {
+    field: 'tracked', label: 'analytics.conversions.tracked', group: 'bm-eng', heading: 'analytics.conversions.title', views: BOTH,
+  },
+  {
+    field: 'matched', label: 'analytics.conversions.matched', group: 'bm-eng', heading: 'analytics.conversions.title', views: BOTH,
+  },
+  ...SHOP_FIELDS.map((field) => ({
+    field,
+    label: `analytics.matrix.${field.slice('shop_'.length)}`,
+    help: 'analytics.matrix.shopLinksHelp',
+    group: 'bm-shop',
+    heading: 'analytics.matrix.shopLinks',
+    views: ATTRIBUTION,
+  })),
+  {
+    field: 'hard_bounces', label: 'analytics.matrix.hard', group: 'bm-subs', heading: 'analytics.matrix.bounces', views: HEALTH,
+  },
+  {
+    field: 'soft_bounces', label: 'analytics.matrix.soft', group: 'bm-subs', heading: 'analytics.matrix.bounces', views: HEALTH,
+  },
+  {
+    field: 'complaints', label: 'analytics.matrix.fbl', help: 'analytics.matrix.fblHelp', group: 'bm-subs', heading: 'analytics.matrix.complaints', views: HEALTH,
+  },
+  {
+    field: 'gp_rate', label: 'dashboard.matrix.spam', help: 'analytics.matrix.gpHelp', group: 'bm-subs', heading: 'analytics.matrix.complaints', views: HEALTH, gp: true,
+  },
   // GMAIL-GAP-SPEC D3: the right-most group, whatever the GP column.
-  cols.push(
-    {
-      field: 'gmail_open', label: 'analytics.matrix.gmail', help: 'analytics.matrix.gmailHelp', group: 'bm-gap',
-    },
-    {
-      field: 'yahoo_open', label: 'analytics.matrix.yahoo', help: 'analytics.matrix.yahooHelp', group: 'bm-gap',
-    },
-    {
-      field: 'gmail_gap', label: 'analytics.matrix.gap', help: 'analytics.matrix.gapHelp', group: 'bm-gap',
-    },
-  );
-  return cols;
+  {
+    field: 'gmail_open', label: 'analytics.matrix.gmail', help: 'analytics.matrix.gmailHelp', group: 'bm-gap', heading: 'analytics.matrix.gmailGap', views: HEALTH,
+  },
+  {
+    field: 'yahoo_open', label: 'analytics.matrix.yahoo', help: 'analytics.matrix.yahooHelp', group: 'bm-gap', heading: 'analytics.matrix.gmailGap', views: HEALTH,
+  },
+  {
+    field: 'gmail_gap', label: 'analytics.matrix.gap', help: 'analytics.matrix.gapHelp', group: 'bm-gap', heading: 'analytics.matrix.gmailGap', views: HEALTH,
+  },
+]);
+
+export function midColumns(showGp, view = DEFAULT_STATE.view) {
+  const v = normalizeView(view);
+  return ALL_MID
+    .filter((c) => c.views.includes(v) && (!c.gp || showGp))
+    .map(({
+      field, label, help, group, heading,
+    }) => (help ? {
+      field, label, help, group, heading,
+    } : {
+      field, label, group, heading,
+    }));
 }
 
-// The group header row after the left columns: { label (i18n key or ''), span, cls }. Views and
-// Clicks carry no group (an empty cell over each). GMAIL-GAP-SPEC D3: GMAIL GAP last.
-export function groupHeaders(showGp) {
-  return [
-    { label: '', span: 2, cls: '' },
-    { label: 'analytics.conversions.title', span: 2, cls: 'bm-eng bm-group' },
-    { label: 'analytics.matrix.shopLinks', span: SHOP_FIELDS.length, cls: 'bm-shop bm-group' },
-    { label: 'analytics.matrix.bounces', span: 2, cls: 'bm-subs bm-group' },
-    { label: 'analytics.matrix.complaints', span: showGp ? 2 : 1, cls: 'bm-subs bm-group' },
-    { label: 'analytics.matrix.gmailGap', span: GAP_FIELDS.length, cls: 'bm-gap bm-group' },
-  ];
+// The group header row after the left columns: { label (i18n key or ''), span, cls }, DERIVED from
+// midColumns (MATRIX-VIEWS D2) -- consecutive columns under one heading are one span, so a span can
+// never disagree with the columns shown. Views and Clicks carry no group (one empty cell over both).
+export function groupHeaders(showGp, view = DEFAULT_STATE.view) {
+  const out = [];
+  midColumns(showGp, view).forEach((c) => {
+    const last = out[out.length - 1];
+    if (last && last.label === c.heading) {
+      last.span += 1;
+      return;
+    }
+    out.push({ label: c.heading, span: 1, cls: c.heading ? `${c.group} bm-group` : '' });
+  });
+  return out;
+}
+
+// MATRIX-VIEWS D2: a sort on a column the view does not show falls back to DEFAULT_STATE.sort (Date
+// desc); a visible one is kept. Applied when the view changes and when a stored state is loaded.
+export function sortForView(sort, view = DEFAULT_STATE.view, showGp = false) {
+  const visible = [...leftColumns(true), ...midColumns(showGp, view)].map((c) => c.field);
+  if (sort && visible.includes(sort.field) && (sort.order === 'asc' || sort.order === 'desc')) {
+    return { field: sort.field, order: sort.order };
+  }
+  return { ...DEFAULT_STATE.sort };
+}
+
+// MATRIX-VIEWS D4: the Brand cell -- the campaign's slug upper-cased (the chip's and the list-name
+// prefix's form), '—' with no brand, '' on the totals row; the display name is the hover.
+export function brandCell(row) {
+  if (!row || row.totals) {
+    return { text: '', title: null };
+  }
+  const slug = str(row.brand);
+  if (!slug) {
+    return { text: MISSING, title: null };
+  }
+  return { text: slug.toUpperCase(), title: str(row.label) || slug };
+}
+
+// MATRIX-VIEWS D4 / I7: the Matrix's chips -- never a brand chip (the Brand column carries it); the
+// language chip under chipsFor's own rule.
+export function matrixChips(row, { brandSelection, langSelection } = {}) {
+  return { brand: null, lang: chipsFor(row, { brandSelection, langSelection }).lang };
 }
 
 // shapeRow flattens one API row. A missing Sent is null; an uncovered conversion measure is null;
@@ -613,8 +670,9 @@ export function sortRows(rows, sort = DEFAULT_STATE.sort, mode = DEFAULT_STATE.m
       return (cmpText(a.name, b.name, locale) * dir) || (a.id - b.id);
     }
     if (field === 'brand') {
-      const va = a.label || null;
-      const vb = b.label || null;
+      // MATRIX-VIEWS D4: by the slug the cell shows, not the display name.
+      const va = a.brand || null;
+      const vb = b.brand || null;
       if (va === null || vb === null) {
         return missingLast(va, vb) || tie(a, b);
       }
@@ -665,6 +723,7 @@ export function normalizeState(s) {
     sort: okSort ? { field: sort.field, order: sort.order } : { ...DEFAULT_STATE.sort },
     mode: s && MODES.includes(s.mode) ? s.mode : DEFAULT_STATE.mode,
     kind: s && KINDS.includes(s.kind) ? s.kind : DEFAULT_STATE.kind,
+    view: normalizeView(s && s.view),
   };
 }
 

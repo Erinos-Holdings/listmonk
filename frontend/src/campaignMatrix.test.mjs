@@ -15,7 +15,9 @@ import {
   gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
   midColumns, nameCell, normalizeState, saveState, shapeRow, shapeRows, showBrandColumn,
   sortRows, statusCell, statusRank, tableRows, totalsRow,
+  brandCell, matrixChips, sortForView,
 } from './campaignMatrix.mjs'; // eslint-disable-line import/extensions
+import { chipsFor } from './naming.mjs'; // eslint-disable-line import/extensions
 import { scopedCell } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
 const api = [
@@ -134,8 +136,9 @@ test('MATRIX-POLISH I8: shop-link totals -- over the rows with a shop link, with
   assert.equal(cellText(totalsRow(noShop), 'shop_self', 'pct'), MISSING);
 });
 
-test('MATRIX-POLISH I8: header texts -- one Views column, Shop Link Attribution after Clicks, Tracked / Matched', () => {
-  const cols = midColumns(false);
+test('MATRIX-POLISH I8: header texts -- one Views column, Shop Link Attribution after Conversions, Tracked / Matched', () => {
+  // MATRIX-VIEWS D2: the shop-link group is the Attribution view's; the rest is Health's.
+  const cols = midColumns(false, 'attribution').concat(midColumns(false, 'health').slice(4));
   assert.deepEqual(cols.map((c) => c.field), [
     'views', 'clicks', 'tracked', 'matched',
     'shop_founder', 'shop_self', 'shop_creator', 'shop_corp', 'hard_bounces', 'soft_bounces', 'complaints',
@@ -154,16 +157,14 @@ test('MATRIX-POLISH I8: header texts -- one Views column, Shop Link Attribution 
   // No tier columns, nowhere.
   ['client', 'proxy', 'machine'].forEach((f) => {
     assert.ok(!COUNT_FIELDS.includes(f), f);
-    assert.ok(!midColumns(true).some((c) => c.field === f), f);
+    ['health', 'attribution'].forEach((v) => assert.ok(!midColumns(true, v).some((c) => c.field === f), f));
   });
-  // The group row: nothing over Views/Clicks, then the four groups; spans match the leaves.
-  const g = groupHeaders(false);
-  assert.deepEqual(g.map((x) => x.label), [
-    '', 'analytics.conversions.title', 'analytics.matrix.shopLinks', 'analytics.matrix.bounces', 'analytics.matrix.complaints',
-    'analytics.matrix.gmailGap',
+  // The group row: nothing over Views/Clicks, then the view's groups; spans match the leaves.
+  assert.deepEqual(groupHeaders(false, 'health').map((x) => x.label), [
+    '', 'analytics.conversions.title', 'analytics.matrix.bounces', 'analytics.matrix.complaints', 'analytics.matrix.gmailGap',
   ]);
-  assert.equal(g.reduce((t, x) => t + x.span, 0), midColumns(false).length);
-  assert.equal(groupHeaders(true).reduce((t, x) => t + x.span, 0), midColumns(true).length);
+  const g = groupHeaders(false, 'attribution');
+  assert.deepEqual(g.map((x) => x.label), ['', 'analytics.conversions.title', 'analytics.matrix.shopLinks']);
   assert.ok(g[2].cls.includes('bm-shop'));
   // The key texts themselves.
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
@@ -173,6 +174,8 @@ test('MATRIX-POLISH I8: header texts -- one Views column, Shop Link Attribution 
   assert.equal(en['analytics.matrix.shopLinks'].toUpperCase(), 'SHOP LINK ATTRIBUTION');
   assert.deepEqual(['founder', 'self', 'creator', 'corp'].map((k) => en[`analytics.matrix.${k}`]), ['Founder', 'Self', 'Creator', 'Corp']);
   cols.concat(midColumns(true)).forEach((c) => assert.ok(en[c.label], c.label));
+  groupHeaders(true, 'health').concat(groupHeaders(true, 'attribution'))
+    .filter((x) => x.label).forEach((x) => assert.ok(en[x.label], x.label));
 });
 
 test('MATRIX-POLISH I8: the Brand column is hidden only under a single-brand selection', () => {
@@ -340,9 +343,15 @@ test('D7: the GP colour compares the send-day rate against the STORED thresholds
 test('state: the session state round-trips and anything unreadable is the default', () => {
   const mem = new Map();
   const store = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v) };
-  assert.deepEqual(loadState(store), { sort: { field: 'date', order: 'desc' }, mode: 'pct', kind: 'all' });
-  assert.equal(saveState(store, { sort: { field: 'views', order: 'asc' }, mode: 'num', kind: 'automations' }), true);
-  assert.deepEqual(JSON.parse(mem.get(STORAGE_KEY)), { sort: { field: 'views', order: 'asc' }, mode: 'num', kind: 'automations' });
+  assert.deepEqual(loadState(store), {
+    sort: { field: 'date', order: 'desc' }, mode: 'pct', kind: 'all', view: 'health',
+  });
+  assert.equal(saveState(store, {
+    sort: { field: 'views', order: 'asc' }, mode: 'num', kind: 'automations', view: 'attribution',
+  }), true);
+  assert.deepEqual(JSON.parse(mem.get(STORAGE_KEY)), {
+    sort: { field: 'views', order: 'asc' }, mode: 'num', kind: 'automations', view: 'attribution',
+  });
   assert.deepEqual(loadState(store).kind, 'automations');
   mem.set(STORAGE_KEY, '{bad');
   assert.deepEqual(loadState(store), loadState(null));
@@ -372,9 +381,8 @@ test('HOURLY-HEALTH I2: Status sorts running, paused, scheduled, draft, finished
 });
 
 test('HOURLY-HEALTH I2: the Status column after Date, before Sent; the header and cell texts; the totals cell empty', () => {
-  // Integrations SMART-SENDING-SPEC D5: Skipped follows Sent.
-  assert.deepEqual(leftColumns(true).map((c) => c.field), ['name', 'brand', 'date', 'status', 'sent', 'skipped']);
-  assert.deepEqual(leftColumns(false).map((c) => c.field), ['name', 'date', 'status', 'sent', 'skipped']);
+  // Integrations SMART-SENDING-SPEC D5: Skipped follows Sent (the full order: MATRIX-VIEWS I3 below).
+  assert.deepEqual(leftColumns(true).map((c) => c.field).slice(-3), ['status', 'sent', 'skipped']);
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   assert.equal(en['analytics.matrix.status'], 'Status');
   leftColumns(true).forEach((c) => assert.ok(en[c.label], c.label));
@@ -388,7 +396,7 @@ test('HOURLY-HEALTH I2: the Status column after Date, before Sent; the header an
 
 test('HOURLY-HEALTH I2: status round-trips normalizeState', () => {
   const s = {
-    sort: { field: 'status', order: 'asc' }, mode: 'num', kind: 'broadcasts',
+    sort: { field: 'status', order: 'asc' }, mode: 'num', kind: 'broadcasts', view: 'health',
   };
   assert.deepEqual(normalizeState(s), s);
   assert.deepEqual(normalizeState(JSON.parse(JSON.stringify(normalizeState(s)))), s);
@@ -665,4 +673,114 @@ test('DOC-ALIGNMENT I16: the Campaign Analytics Skipped figure is the Matrix cel
   const view = readFileSync(new URL('./views/CampaignAnalytics.vue', import.meta.url), 'utf8');
   assert.match(view, /analyticsSkippedRows\(this\.form\.campaigns, \(n\)/);
   assert.doesNotMatch(view, /campaignObjs/);
+});
+
+// --- integrations MATRIX-VIEWS-SPEC I1-I7 ---
+
+const BOTH_COLS = ['views', 'clicks', 'tracked', 'matched'];
+const HEALTH_COLS = ['hard_bounces', 'soft_bounces', 'complaints', 'gmail_open', 'yahoo_open', 'gmail_gap'];
+const HEALTH_GP_COLS = ['hard_bounces', 'soft_bounces', 'complaints', 'gp_rate', 'gmail_open', 'yahoo_open', 'gmail_gap'];
+
+test('midColumns per view', () => {
+  const f = (gp, v) => midColumns(gp, v).map((c) => c.field);
+  assert.deepEqual(f(false, 'health'), [...BOTH_COLS, ...HEALTH_COLS]);
+  assert.deepEqual(f(true, 'health'), [...BOTH_COLS, ...HEALTH_GP_COLS]);
+  assert.deepEqual(f(false, 'attribution'), [...BOTH_COLS, ...SHOP_FIELDS]);
+  assert.deepEqual(f(true, 'attribution'), [...BOTH_COLS, ...SHOP_FIELDS]);
+  // The default and an unknown view are Health.
+  assert.deepEqual(f(true), f(true, 'health'));
+  assert.deepEqual(f(true, 'bogus'), f(true, 'health'));
+});
+
+test('groupHeaders agree with midColumns', () => {
+  [false, true].forEach((gp) => ['health', 'attribution'].forEach((v) => {
+    const cols = midColumns(gp, v);
+    const g = groupHeaders(gp, v);
+    assert.equal(g.reduce((t, x) => t + x.span, 0), cols.length, `${gp} ${v}`);
+    // Walk the spans over the columns: every column under a span carries that span's heading, and
+    // each span is exactly the count of its heading's columns.
+    let i = 0;
+    g.forEach((x) => {
+      cols.slice(i, i + x.span).forEach((c) => assert.equal(c.heading, x.label, `${gp} ${v} ${c.field}`));
+      assert.equal(x.span, cols.filter((c) => c.heading === x.label).length, `${gp} ${v} ${x.label}`);
+      if (x.label) assert.ok(x.cls.includes(cols[i].group) && x.cls.includes('bm-group'));
+      i += x.span;
+    });
+  }));
+  // Complaints spans 2 with GP, 1 without.
+  const span = (gp) => groupHeaders(gp, 'health').find((x) => x.label === 'analytics.matrix.complaints').span;
+  assert.equal(span(true), 2);
+  assert.equal(span(false), 1);
+});
+
+test('leftColumns order', () => {
+  assert.deepEqual(leftColumns(true).map((c) => c.field), ['date', 'brand', 'name', 'status', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(false).map((c) => c.field), ['date', 'name', 'status', 'sent', 'skipped']);
+  // The first-click direction is unchanged.
+  const first = leftColumns(true).map((c) => clickSort({ field: 'views', order: 'desc' }, c.field).order);
+  assert.deepEqual(first, ['desc', 'asc', 'asc', 'asc', 'desc', 'desc']);
+});
+
+test('loadState view', () => {
+  assert.equal(DEFAULT_STATE.view, 'health');
+  const mem = new Map();
+  const store = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v) };
+  assert.equal(loadState(store).view, 'health');
+  mem.set(STORAGE_KEY, JSON.stringify({ sort: { field: 'views', order: 'asc' }, mode: 'num', kind: 'all' }));
+  assert.equal(loadState(store).view, 'health');
+  mem.set(STORAGE_KEY, JSON.stringify({ view: 'bogus' }));
+  assert.equal(loadState(store).view, 'health');
+  mem.set(STORAGE_KEY, JSON.stringify({ view: 'attribution' }));
+  assert.equal(loadState(store).view, 'attribution');
+  saveState(store, { ...loadState(store), view: 'health' });
+  assert.equal(loadState(store).view, 'health');
+});
+
+test('sortForView fallback', () => {
+  const def = { ...DEFAULT_STATE.sort };
+  assert.deepEqual(sortForView({ field: 'shop_self', order: 'asc' }, 'health', true), def);
+  assert.deepEqual(sortForView({ field: 'shop_self', order: 'asc' }, 'attribution', true), { field: 'shop_self', order: 'asc' });
+  assert.deepEqual(sortForView({ field: 'gmail_gap', order: 'asc' }, 'attribution', true), def);
+  assert.deepEqual(sortForView({ field: 'gmail_gap', order: 'asc' }, 'health', false), { field: 'gmail_gap', order: 'asc' });
+  assert.deepEqual(sortForView({ field: 'gp_rate', order: 'desc' }, 'health', false), def);
+  assert.deepEqual(sortForView({ field: 'gp_rate', order: 'desc' }, 'health', true), { field: 'gp_rate', order: 'desc' });
+  // Columns in both views and the left columns are kept in either.
+  ['tracked', 'views', 'brand', 'name', 'skipped'].forEach((field) => ['health', 'attribution'].forEach((v) => {
+    assert.deepEqual(sortForView({ field, order: 'asc' }, v, false), { field, order: 'asc' });
+  }));
+  assert.deepEqual(sortForView(null, 'health', false), def);
+});
+
+test('brandCell', () => {
+  const rows = shapeRows(api, { brandLabel: (s) => ({ ruze: 'RUZE Pouches', thirstygirl: 'Thirsty Girl' }[s]) });
+  assert.deepEqual(brandCell(rows[0]), { text: 'RUZE', title: 'RUZE Pouches' });
+  assert.deepEqual(brandCell(rows[1]), { text: 'THIRSTYGIRL', title: 'Thirsty Girl' });
+  assert.deepEqual(brandCell(rows[3]), { text: MISSING, title: null });
+  assert.deepEqual(brandCell(totalsRow(rows)), { text: '', title: null });
+});
+
+test('sortRows by brand slug', () => {
+  // The display names sort the other way round from the slugs: a slug sort is distinguishable.
+  const rows = shapeRows([
+    { ...api[0], id: 1, brand: 'alpha' },
+    { ...api[0], id: 2, brand: 'zeta' },
+    { ...api[0], id: 3, brand: null },
+  ], { brandLabel: (s) => ({ alpha: 'Zzz Last', zeta: 'Aaa First' }[s]) });
+  assert.deepEqual(sortRows(rows, { field: 'brand', order: 'asc' }).map((r) => r.id), [1, 2, 3]);
+  assert.deepEqual(sortRows(rows, { field: 'brand', order: 'desc' }).map((r) => r.id), [2, 1, 3]);
+});
+
+test('matrixChips', () => {
+  const ALL = { kind: 'all' };
+  const row = { brand: 'thirstygirl', lang: 'fr' };
+  assert.deepEqual(matrixChips(row, { brandSelection: ALL, langSelection: 'all' }), { brand: null, lang: 'FR' });
+  ['all', 'fr', 'en'].forEach((langSelection) => {
+    assert.equal(matrixChips(row, { brandSelection: ALL, langSelection }).lang, chipsFor(row, { brandSelection: ALL, langSelection }).lang);
+  });
+  assert.deepEqual(matrixChips({ brand: 'ruze', lang: '' }, { brandSelection: ALL, langSelection: 'all' }), { brand: null, lang: null });
+  // The component takes its chips from matrixChips, never chipsFor directly, and renders no brand chip.
+  const vue = readFileSync(new URL('./components/CampaignMatrix.vue', import.meta.url), 'utf8');
+  assert.match(vue, /matrixChips\(row/);
+  assert.doesNotMatch(vue, /chipsFor\(|import[^;]*\bchipsFor\b/);
+  assert.doesNotMatch(vue, /brand-chip/);
 });

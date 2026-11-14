@@ -5,7 +5,7 @@
 // store's selectLang mutation, whose one caller is LanguageToggle.vue. The predicate itself is
 // naming.mjs::langMatches (one statement, pinned with the server's query-campaigns lang filter).
 //
-// Shown only where it filters: Campaigns, the Campaign Matrix (Campaigns › Analytics) and Templates
+// Shown only where it filters: Campaigns, the Campaign Matrix (Analytics) and Templates
 // -- never Lists, Subscribers, Dashboard, Media or the per-campaign Analytics pane (§3).
 import { LANG_VALUES, normalizeLang } from './naming.mjs'; // eslint-disable-line import/extensions
 

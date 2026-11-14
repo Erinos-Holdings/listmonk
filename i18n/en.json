@@ -41,6 +41,8 @@
     "analytics.panes.matrix": "Matrix",
     "analytics.matrix.campaign": "Campaign",
     "analytics.matrix.nameFilter": "Filter by name",
+    "analytics.matrix.viewHealth": "Health",
+    "analytics.matrix.viewAttribution": "Attribution",
     "analytics.matrix.date": "Date",
     "analytics.matrix.views": "Views",
     "analytics.matrix.viewsHelp": "Distinct subscribers who viewed the campaign (the one Views definition).",
