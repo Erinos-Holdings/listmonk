@@ -441,7 +441,7 @@ del AS (
         AND 'winback' = ANY(wl.tags) AND wl.id <> ins.list_id
     RETURNING d.list_id
 )
-SELECT (SELECT COUNT(*) FROM ins) > 0 AS joined, (SELECT COUNT(*) FROM del) AS removed;
+SELECT (SELECT COUNT(*) FROM ins) > 0 AS joined;
 
 -- name: hold-subscribers-lists
 -- Fork (holds). Puts subscribers $1 on list $2 on HOLD with the hold object $3 (at is stamped

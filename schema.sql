@@ -1241,8 +1241,10 @@ ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active_by TEXT NULL;
 -- a brand opt-out, the person's own unsubscribe from the win-back mail included -- refuses.
 --
 -- join_plan: the ONE plan both verbs read (D4, first match wins) -- no_campaign, no_brand,
--- no_master, refused, already (master row confirmed), cannot (any other master row), join (no
--- master row). lang is the campaign's attribs.lang.
+-- no_master, refused, already (master row confirmed), cannot (any other master row), cannot (row
+-- 6a, S4-2 -- the campaign's body or its template's body does not carry JoinURL, or the subscriber
+-- holds no row on any of the campaign's lists), join (no master row). lang is the campaign's
+-- attribs.lang.
 CREATE OR REPLACE FUNCTION brand_master_list_id(p_brand TEXT) RETURNS INT AS $$
     SELECT CASE WHEN COUNT(*) = 1 THEN MIN(l.id) ELSE NULL END FROM lists l
         WHERE p_brand IS NOT NULL AND list_brand_tag(l.tags) = p_brand
@@ -1267,7 +1269,10 @@ $$ LANGUAGE sql STABLE;
 
 CREATE OR REPLACE FUNCTION join_plan(p_sub_uuid UUID, p_camp_uuid UUID)
 RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
-    WITH c AS (SELECT cp.id, NULLIF(cp.attribs->>'lang', '') AS lang FROM campaigns cp WHERE cp.uuid = p_camp_uuid),
+    WITH c AS (SELECT cp.id, NULLIF(cp.attribs->>'lang', '') AS lang,
+            (STRPOS(COALESCE(cp.body, ''), 'JoinURL') > 0
+                OR EXISTS (SELECT 1 FROM templates t WHERE t.id = cp.template_id AND STRPOS(COALESCE(t.body, ''), 'JoinURL') > 0)) AS tagged
+        FROM campaigns cp WHERE cp.uuid = p_camp_uuid),
     b AS (SELECT campaign_brand(p_camp_uuid) AS brand),
     m AS (SELECT brand_master_list_id((SELECT b.brand FROM b)) AS list_id),
     s AS (SELECT sb.id FROM subscribers sb WHERE sb.uuid = p_sub_uuid),
@@ -1280,6 +1285,9 @@ RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
             WHEN join_refusal((SELECT s.id FROM s), (SELECT b.brand FROM b)) IS NOT NULL THEN 'refused'
             WHEN (SELECT r.status FROM r) = 'confirmed' THEN 'already'
             WHEN EXISTS (SELECT 1 FROM r) THEN 'cannot'
+            WHEN NOT COALESCE((SELECT c.tagged FROM c), FALSE)
+                OR NOT EXISTS (SELECT 1 FROM subscriber_lists rl JOIN campaign_lists cl ON (cl.list_id = rl.list_id)
+                    WHERE rl.subscriber_id = (SELECT s.id FROM s) AND cl.campaign_id = (SELECT c.id FROM c)) THEN 'cannot'
             ELSE 'join' END,
         (SELECT b.brand FROM b), (SELECT m.list_id FROM m), (SELECT c.lang FROM c);
 $$ LANGUAGE sql STABLE;

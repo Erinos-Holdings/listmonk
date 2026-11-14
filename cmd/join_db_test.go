@@ -38,9 +38,15 @@ func newJoinFixture(t *testing.T) *joinFixture {
 	return f
 }
 
-// langCamp creates a regular campaign on lists with attribs.lang = lang ("" = none).
+// joinBody is a campaign body carrying the Join link (D4 row 6a: the plan joins only from a
+// campaign whose body or template carries JoinURL).
+const joinBody = `<p>Oui !</p><a href="{{ JoinURL }}">Join</a>`
+
+// langCamp creates a regular campaign on lists with attribs.lang = lang ("" = none) whose body
+// carries the Join link.
 func (f *joinFixture) langCamp(name, lang string, lists ...int) (int, string) {
 	uu := f.camp(name, lists...)
+	f.db.MustExec(`UPDATE campaigns SET body = $2 WHERE uuid = $1`, uu, joinBody)
 	if lang != "" {
 		f.db.MustExec(`UPDATE campaigns SET attribs = JSONB_BUILD_OBJECT('lang', $2::TEXT) WHERE uuid = $1`, uu, lang)
 	}
@@ -214,6 +220,38 @@ func joinCases() []joinCase {
 		{"master confirmed", func(f *joinFixture) (string, string) {
 			return onWinback(f, "conf@x", func(id int) { f.addRow(id, f.news, "confirmed", `{}`) })
 		}, models.JoinOutcomeAlready},
+		// D4 row 6a (S4-2): the link is live only where it was sent.
+		{"6a: a campaign without JoinURL (a rewritten unsubscribe URL)", func(f *joinFixture) (string, string) {
+			camp, uu := onWinback(f, "notag@x", nil)
+			f.db.MustExec(`UPDATE campaigns SET body = '<a href="{{ UnsubscribeURL }}">u</a>' WHERE uuid = $1`, camp)
+			var n int
+			f.db.Get(&n, `SELECT COUNT(*) FROM campaigns c JOIN templates t ON (t.id = c.template_id) WHERE c.uuid = $1 AND t.body LIKE '%JoinURL%'`, camp)
+			if n != 0 {
+				f.t.Fatalf("fixture template carries JoinURL")
+			}
+			return camp, uu
+		}, models.JoinOutcomeCannot},
+		{"6a: a non-recipient of a JoinURL campaign", func(f *joinFixture) (string, string) {
+			_, camp := f.langCamp("acme win-back other", "fr", f.winback)
+			id, uu := f.bareSub("nonrecip@x", `{}`)
+			f.addRow(id, f.zeta, "confirmed", `{}`) // on another list, never on the campaign's
+			return camp, uu
+		}, models.JoinOutcomeCannot},
+		{"6a: a recipient whose campaign carries JoinURL in its TEMPLATE only", func(f *joinFixture) (string, string) {
+			camp, uu := onWinback(f, "tpltag@x", nil)
+			var tpl int
+			if err := f.db.Get(&tpl, `INSERT INTO templates (name, type, subject, body) VALUES ('join tpl', 'campaign', '', '<a href="{{ JoinURL }}">j</a>{{ template "content" . }}') RETURNING id`); err != nil {
+				f.t.Fatal(err)
+			}
+			f.db.MustExec(`UPDATE campaigns SET body = 'plain', template_id = $2 WHERE uuid = $1`, camp, tpl)
+			return camp, uu
+		}, models.JoinOutcomeJoin},
+		{"6a: a recipient of a JoinURL campaign on a non-winback list (a transactional list)", func(f *joinFixture) (string, string) {
+			_, camp := f.langCamp("acme receipt join", "", f.txn)
+			id, uu := f.bareSub("txnrecip@x", `{}`)
+			f.addRow(id, f.txn, "confirmed", `{}`)
+			return camp, uu
+		}, models.JoinOutcomeJoin},
 		{"join: never-engaged hold on ANOTHER brand is not a refusal", func(f *joinFixture) (string, string) {
 			return onWinback(f, "ne@x", func(id int) { f.addRow(id, f.zeta, "unsubscribed", `{"hold":{"reason":"never-engaged"}}`) })
 		}, models.JoinOutcomeJoin},
@@ -482,7 +520,9 @@ func TestJoin_LostRace(t *testing.T) {
 // resolve no brand; a brand with no single public active list resolves no master.
 func TestJoin_BrandResolution(t *testing.T) {
 	f := newJoinFixture(t)
-	_, uu := f.bareSub("res@x", `{}`)
+	resID, uu := f.bareSub("res@x", `{}`)
+	// A recipient of the transactional sending list (D4 row 6a needs a row on the campaign's list).
+	f.addRow(resID, f.txn, "confirmed", `{}`)
 
 	_, txnCamp := f.langCamp("acme receipt", "", f.txn)
 	if p := f.plan(uu, txnCamp); p.Outcome != models.JoinOutcomeJoin || p.Brand != "acme" || p.ListID != f.news {

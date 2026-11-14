@@ -24,9 +24,7 @@ const (
 	JoinOutcomeJoin       = "join"
 )
 
-// JoinResult is the join-brand query's row: whether the master row was inserted, and how many
-// win-back rows were deleted with it.
+// JoinResult is the join-brand query's row: whether the master row was inserted.
 type JoinResult struct {
-	Joined  bool `db:"joined"`
-	Removed int  `db:"removed"`
+	Joined bool `db:"joined"`
 }
