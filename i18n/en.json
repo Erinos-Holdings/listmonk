@@ -1550,6 +1550,7 @@
     "subscribers.langAll": "All languages",
     "subscribers.langFilter": "Filter by language",
     "subscribers.listChangeApplied": "List change applied.",
+    "subscribers.listChangeNotApplied": "The selection changed while the form was open. Nothing was applied.",
     "subscribers.lists": "Lists",
     "subscribers.listsHelp": "Lists from which subscribers have unsubscribed themselves cannot be removed.",
     "subscribers.listsPlaceholder": "Lists to subscribe to",

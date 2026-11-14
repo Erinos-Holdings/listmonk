@@ -730,6 +730,8 @@ export default Vue.extend({
           // GLOBAL-LANG D4 (S2-1) -- never by query while the rows are loading.
           if (target !== 'query' || this.byQueryBusy || !filter) {
             this.isBulkListFormVisible = false;
+            // Stage 4c S4c-3 -- never a silent close: nothing was written, say so.
+            this.$utils.toast(this.$t('subscribers.listChangeNotApplied'), 'is-warning');
             return;
           }
           // 'All' is selected, perform by query. Fork (list grid, D7; global brand, D8/I12) -- the

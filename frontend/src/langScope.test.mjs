@@ -62,7 +62,7 @@ test('global language wiring', () => {
   };
   ['blocklistSubscribers', 'deleteSubscribers', 'exportSubscribers'].forEach((m) => assert.match(method(m), /if \(this\.byQueryBusy\) \{\s*return;/, m));
   // add / remove / unsubscribe by query: the busy guard sits in the one by-query condition.
-  assert.match(method('bulkChangeLists'), /\|\| this\.byQueryBusy \|\|[^\n]*\{\s*this\.isBulkListFormVisible = false;\s*return;/);
+  assert.match(method('bulkChangeLists'), /\|\| this\.byQueryBusy \|\|[^\n]*\{\s*this\.isBulkListFormVisible = false;[\s\S]{0,200}?\s*return;/);
   assert.match(method('showBulkListForm'), /this\.bulk\.all && this\.byQueryBusy/);
   // The by-query language note on Blocklist, Delete, Export and the Manage-lists modal (I6).
   assert.match(method('blocklistSubscribers'), /withLangNote\(this\.\$t\('subscribers\.confirmBlocklist'/);
@@ -103,6 +103,12 @@ test('global language wiring', () => {
   });
   assert.match(method('deleteSubscribers'), /all: filter\.queryExp\.trim\(\) === '' && filter\.search\.trim\(\) === ''/);
   assert.match(method('exportSubscribers'), /subscriberExportParams\(filter, this\.scopeListIds, ids\)/);
+  // Stage 4c S4c-2 -- the load-bearing lines: the snapshot is a COPY; the export and the modal's
+  // language line read the answered filter. S4c-3: the no-request close says so.
+  assert.match(method('querySubscribers'), /const asked = \{ \.\.\.this\.queryParams \};/);
+  assert.match(method('exportSubscribers'), /const filter = answeredFilter\(this\.answeredQuery\);/);
+  assert.match(method('bulkListLangNote'), /const filter = answeredFilter\(this\.answeredQuery\);/);
+  assert.match(method('bulkChangeLists'), /this\.isBulkListFormVisible = false;\s*\/\/[^\n]*\n\s*this\.\$utils\.toast\(this\.\$t\('subscribers\.listChangeNotApplied'\), 'is-warning'\);\s*return;/);
   assert.doesNotMatch(subs, /subscriberQueryBody\(this\.queryParams/);
   assert.doesNotMatch(subs, /subscriberExportParams\(this\.queryParams/);
 });
