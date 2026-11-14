@@ -23,10 +23,10 @@
          Brand and Sent, the Engagement section (incl. GP S%), Conversions, then Subscribers,
          each section tinted, the sorted column emphasized. Sorting is clickSort; the spam
          cell's class/style/tooltip stay brandMatrix.mjs::spamCell (GP-SPAM-VISIBILITY D3). -->
-    <!-- Polish 2026-11-14: the blue bar while a global filter narrows the Matrix. -->
-    <global-filter-bar launch />
     <div class="table-container">
       <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="matrix-table">
+        <!-- Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
+        <caption v-if="$filterCaption()" class="filter-caption" data-cy="filter-caption">{{ $filterCaption() }}</caption>
         <thead>
           <tr class="bm-groups">
             <th colspan="3" />

@@ -4,7 +4,7 @@ import VueI18n from 'vue-i18n';
 import 'emoji-picker-element';
 
 import App from './App.vue';
-import GlobalFilterBar from './components/GlobalFilterBar.vue';
+import { filterCaption } from './filterBar.mjs'; // eslint-disable-line import/extensions
 import router from './router';
 import store from './store';
 import * as api from './api';
@@ -18,8 +18,18 @@ const i18n = new VueI18n();
 
 Vue.use(Buefy, {});
 
-// Fork (polish 2026-11-14) -- the blue global-filter bar, used above every narrowed matrix/table.
-Vue.component('GlobalFilterBar', GlobalFilterBar);
+// Fork (polish 2026-11-14) -- the filter caption of every narrowed matrix/table ("BNKD Wellness ·
+// EN"; filterBar.mjs). Read in render, so the store getters it touches keep it reactive. opts:
+// { brand, lang } -- whether that global filter narrows the table (both default true).
+Vue.prototype.$filterCaption = function filterCaptionOf(opts = {}) {
+  return filterCaption({
+    selection: this.$store.getters.brandSelection,
+    lang: this.$store.getters.langEffective,
+    brands: this.$store.state.brandRows,
+    noBrand: this.$t('brand.selector.none'),
+    applies: opts,
+  });
+};
 Vue.config.productionTip = false;
 
 // Fork (emoji picker, integrations EMOJI-PICKER-SPEC D4): the side-effect import defines the

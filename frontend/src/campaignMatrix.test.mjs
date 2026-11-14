@@ -800,7 +800,7 @@ test('langCell and the Lang column', () => {
   assert.match(vue, /langCell\(row\)/);
   assert.doesNotMatch(vue, /chipsFor\(|matrixChips|b-tag[^>]*class="is-small lang"/);
   assert.doesNotMatch(vue, /brand-chip/);
-  assert.match(vue, /<global-filter-bar launch brand-column lang-column \/>/);
+  assert.match(vue, /<caption v-if="\$filterCaption\(\)" class="filter-caption"/);
 });
 
 test('sortRows by lang: by code, a row without one last in both orders', () => {

@@ -107,11 +107,9 @@
     </section><!-- control -->
 
     <br />
-    <!-- Polish 2026-11-14: the blue bar while the brand selector narrows the page. Not the language
-         (review R4): the route's own lang is this page's filter and its picker names it, so the
-         global selection could misstate it. -->
-    <global-filter-bar :lang="false" />
-    <b-table :data="subscribers.results ?? []" :loading="loading.subscribers" @check-all="onTableCheck"
+    <!-- Polish 2026-11-14: the filter caption -- the brand only (review R4: the route's own lang is
+         this page's filter and its picker names it, so the global selection could misstate it). -->
+    <b-table :data="subscribers.results ?? []" :caption="$filterCaption({ lang: false })" :loading="loading.subscribers" @check-all="onTableCheck"
       @check="onTableCheck" :checked-rows.sync="bulk.checked" paginated backend-pagination pagination-position="both"
       @page-change="onPageChange" :current-page="queryParams.page" :per-page="subscribers.perPage"
       :total="subscribers.total" hoverable checkable backend-sorting @sort="onSort">

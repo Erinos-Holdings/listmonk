@@ -34,11 +34,6 @@
       </div>
     </header>
 
-    <!-- Polish 2026-11-14 (review R3): the blue bar while the brand selector or launch filter narrows
-         the Health table (brand-level health is never filtered by language). Placed before the
-         v-if chain below so it never splits it; the Matrix and Usage panes carry their own. -->
-    <global-filter-bar v-if="$can('brands:get') && !brandParam && pane === 'health'" launch :lang="false" />
-
     <p v-if="!$can('brands:get')" class="has-text-grey">{{ $t('brands.noPermission') }}</p>
 
     <!-- Fork (campaign matrix, CAMPAIGN-MATRIX-SPEC D1) -- the Matrix and Usage panes. -->
@@ -49,7 +44,9 @@
     <!-- BRANDS-UX-SPEC D3: backend-sorting -- Buefy never sorts; the view owns {field, order} and
     sorts (and filters) its own rows through health-sort.mjs. First click on any non-Brand column
     is descending (worst / largest first); the tiebreak is always Brand A-Z. -->
+    <!-- Polish 2026-11-14: the filter caption (the brand only -- health is never by language). -->
     <b-table v-else-if="!brandParam" ref="table" :data="visibleRows" :loading="loading.brands" hoverable
+      :caption="$filterCaption({ lang: false })"
       backend-sorting :default-sort="[sort.field, sort.order]" @sort="onSort">
       <b-table-column v-slot="props" field="name" :label="$t('brands.brand')" sortable
         header-class="cy-name">

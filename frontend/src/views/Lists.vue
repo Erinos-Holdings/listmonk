@@ -35,10 +35,8 @@
       </div>
     </header>
 
-    <!-- Polish 2026-11-14: the blue bar while the brand selector or language toggle narrows the page. -->
-    <global-filter-bar />
-
-    <b-table :data="lists.results" :loading="loading.listsFull" @check-all="onTableCheck" @check="onTableCheck"
+    <!-- Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
+    <b-table :data="lists.results" :caption="$filterCaption()" :loading="loading.listsFull" @check-all="onTableCheck" @check="onTableCheck"
       :checked-rows.sync="bulk.checked" hoverable :default-sort="['created_at', 'desc']" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page" :per-page="lists.perPage"
       :total="lists.total" checkable backend-sorting @sort="onSort" ref="table">

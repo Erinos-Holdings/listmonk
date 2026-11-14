@@ -27,12 +27,11 @@
       </b-radio-button>
     </b-field>
 
-    <!-- Polish 2026-11-14: the blue bar while a global filter narrows the table. -->
-    <global-filter-bar launch lang-column />
-
     <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D12) -- filtered client-side; the
-         store stays every row (the campaign form's template picker is never filtered, S3). -->
-    <b-table :data="shownTemplates" :hoverable="true" :loading="loading.templates" default-sort="createdAt">
+         store stays every row (the campaign form's template picker is never filtered, S3).
+         Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
+    <b-table :data="shownTemplates" :hoverable="true" :loading="loading.templates" default-sort="createdAt"
+      :caption="$filterCaption()">
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" :td-attrs="$utils.tdID" sortable>
         <!-- Fork (naming standard, NAMING-STANDARD-SPEC D15/D1/D10) -- the brand and language chips
              from the template's own columns (hidden when the selector / toggle selects them) and
@@ -58,7 +57,7 @@
       <!-- Polish 2026-11-14 (the user): the template's language as its own column, right of Name, in
            plain text -- shown only under All languages (otherwise the filter bar names the language);
            it replaces the language chip. -->
-      <b-table-column v-if="showLang" v-slot="props" field="lang" :label="$t('analytics.matrix.lang')" sortable>
+      <b-table-column v-if="showLang" v-slot="props" field="lang" :label="$t('analytics.matrix.lang')" sortable centered>
         <span data-cy="template-lang">{{ langText(props.row.lang) }}</span>
       </b-table-column>
 

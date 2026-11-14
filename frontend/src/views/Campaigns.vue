@@ -25,10 +25,8 @@
       </div>
     </header>
 
-    <!-- Polish 2026-11-14: the blue bar while the brand selector or language toggle narrows the page. -->
-    <global-filter-bar lang-column />
-
-    <b-table :data="campaigns.results" :loading="loading.campaigns" :row-class="highlightedRow"
+    <!-- Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
+    <b-table :data="campaigns.results" :caption="$filterCaption()" :loading="loading.campaigns" :row-class="highlightedRow"
       @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page"
       :per-page="campaigns.perPage" :total="campaigns.total" hoverable checkable backend-sorting @sort="onSort">
@@ -209,7 +207,7 @@
       <!-- Polish 2026-11-14 (the user): the campaign's send language as its own column, right of
            Name, in plain text (the send-language code, EN+ with its hover; '—' with none) -- shown only
            under All languages; otherwise the blue filter bar names the language. Replaces the chip. -->
-      <b-table-column v-if="showLang" v-slot="props" field="lang" :label="$t('analytics.matrix.lang')" width="5%">
+      <b-table-column v-if="showLang" v-slot="props" field="lang" :label="$t('analytics.matrix.lang')" width="5%" centered>
         <span data-cy="campaign-lang" :title="langChipTitle(props.row)">{{ langText(props.row) }}</span>
       </b-table-column>
       <b-table-column v-slot="props" cell-class="lists" field="lists" :label="$t('globals.terms.lists')" width="15%">

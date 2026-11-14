@@ -61,11 +61,10 @@
         </b-radio-button>
       </b-field>
     </div>
-    <!-- Polish 2026-11-14: the blue bar while a global filter narrows the Matrix (the launch filter
-         narrows its rows too); it says the Brand / Lang columns are hidden. -->
-    <global-filter-bar launch brand-column lang-column />
     <div class="table-container">
       <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="cm-table">
+        <!-- Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
+        <caption v-if="$filterCaption()" class="filter-caption" data-cy="filter-caption">{{ $filterCaption() }}</caption>
         <thead>
           <!-- MATRIX-POLISH-SPEC D4/D5: no Views group (Views is one column); CONVERSIONS after
                Clicks, then the view's groups (campaignMatrix.mjs::groupHeaders, derived from the
@@ -76,7 +75,9 @@
           </tr>
           <tr>
             <th v-for="c in leftCols" :key="c.field"
-              :class="[bmTh(c.field), { 'has-text-right': c.field === 'sent' || c.field === 'skipped' }]"
+              :class="[bmTh(c.field), {
+                'has-text-right': c.field === 'sent' || c.field === 'skipped', 'has-text-centered': c.field === 'lang',
+              }]"
               :title="c.help ? $t(c.help) : null"
               :aria-sort="bmAria(c.field)" @click="onSort(c.field)" :data-cy="`cm-head-${c.field}`">
               {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
@@ -105,7 +106,7 @@
 </router-link>
               </td>
               <!-- Polish 2026-11-14: the language code in plain text, under All languages only. -->
-              <td v-else-if="c.field === 'lang'" :key="c.field" :class="bmTd('lang')"
+              <td v-else-if="c.field === 'lang'" :key="c.field" class="has-text-centered" :class="bmTd('lang')"
                 :data-cy="`cm-lang-${row.totals ? 'totals' : row.id}`">
                 {{ langOf(row) }}
               </td>

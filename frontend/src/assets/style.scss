@@ -326,8 +326,9 @@ $trigger-label-indent: calc(2rem - 1px);
     padding-right: 0;
     // The same gap the Campaigns page keeps between its list dropdown and the search box
     // (two Bulma columns: 2 × 0.75rem).
+    // Polish 2026-11-14: the launch filter is first, so the gap is on its right.
     .launch-filter {
-      margin-left: 1.5rem;
+      margin-right: 1.5rem;
     }
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle, the same gap.
     .language-toggle {
@@ -771,31 +772,19 @@ body.is-noscroll {
 .language-toggle.lang-app-none .field.segmented.is-global > .field-body > .field.has-addons {
   border-color: var(--lang-none);
 }
-// Polish 2026-11-14 -- the blue global-filter bar across the top of a matrix or table
-// (GlobalFilterBar.vue): the primary colour, so a narrowed table reads as narrowed at a glance.
-.global-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-  background: $primary;
-  color: $white;
-  border-radius: 4px;
-  padding: 0.45rem 0.75rem;
-  margin-bottom: 0.75rem;
+// Polish 2026-11-14 -- the filter caption: the table's own first row while the brand selector or
+// language toggle narrows it ("BNKD Wellness · EN"; filterBar.mjs). Light blue, dark text -- a
+// quiet marker, not an alert. b-table renders its `caption` prop as the table's <caption>; the
+// hand-built matrices carry <caption class="filter-caption">. No other table in the app uses one.
+table.table > caption {
+  caption-side: top;
+  text-align: left;
+  background: #e8f0fd;
+  color: $grey-darker;
+  font-weight: 600;
   font-size: 0.9rem;
-  .icon {
-    color: $white;
-  }
-  .gfb-label {
-    font-weight: 600;
-  }
-  .gfb-sep {
-    margin: 0 0.35rem;
-  }
-  .gfb-hidden {
-    opacity: 0.9;
-  }
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid #c9dcfa;
 }
 
 // Polish 2026-11-14 -- the Lists page's "View system lists" switch: the default switch size at the
@@ -2930,7 +2919,7 @@ th.role-toggle-select a {
     padding-left: 0.75rem; // no measured offset here: keep Bulma's navbar-item spacing
     padding-right: 0.75rem;
     .launch-filter {
-      margin-left: 0.5rem; // the wrapped second row's indent, as reviewed
+      margin-right: 0.5rem; // first in the row since polish 2026-11-14
     }
   }
 }

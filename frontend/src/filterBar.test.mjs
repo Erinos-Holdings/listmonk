@@ -1,50 +1,44 @@
-// Fork (polish 2026-11-14): filterBar.mjs -- which global filters the blue bar names and which
-// columns it says are hidden. Run: node --test src/filterBar.test.mjs.
+// Fork (polish 2026-11-14): filterBar.mjs -- the filter caption's text: the brand's display name and
+// the two-letter language, nothing else. Run: node --test src/filterBar.test.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { filterBarState } from './filterBar.mjs'; // eslint-disable-line import/extensions
+import { filterCaption } from './filterBar.mjs'; // eslint-disable-line import/extensions
 
-const ALL = { kind: 'all' };
-const RUZE = { kind: 'brand', slug: 'ruze' };
-const NONE = { kind: 'none' };
+const BRANDS = [{ slug: 'bnkd', display_name: 'BNKD Wellness' }, { slug: 'ruze', display_name: 'RUZE' }];
+const BNKD = { kind: 'brand', slug: 'bnkd' };
 
-test('nothing active: no bar', () => {
-  assert.equal(filterBarState({ selection: ALL, launch: 'all', lang: 'all' }), null);
-  assert.equal(filterBarState(), null);
-  // A filter the table does not take is never listed.
-  assert.equal(filterBarState({ selection: ALL, launch: 'launched', lang: 'all' }), null);
-  assert.equal(filterBarState({ selection: RUZE, lang: 'fr', applies: { brand: false, lang: false } }), null);
+test('nothing active: no caption', () => {
+  assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'all', brands: BRANDS }), '');
+  assert.equal(filterCaption(), '');
+  // A filter the table does not take is never named.
+  assert.equal(filterCaption({
+    selection: BNKD, lang: 'fr', brands: BRANDS, applies: { brand: false, lang: false },
+  }), '');
 });
 
-test('each filter, in order, with its hidden column', () => {
-  const s = filterBarState({
-    selection: RUZE,
-    launch: 'launched',
-    lang: 'es',
-    applies: { launch: true },
-    columns: { brand: true, lang: true },
+test('brand display name, two-letter language, separated by a dot', () => {
+  assert.equal(filterCaption({ selection: BNKD, lang: 'en', brands: BRANDS }), 'BNKD Wellness · EN');
+  assert.equal(filterCaption({ selection: BNKD, lang: 'all', brands: BRANDS }), 'BNKD Wellness');
+  assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'es', brands: BRANDS }), 'ES');
+  assert.equal(filterCaption({ selection: { kind: 'none' }, lang: 'de', noBrand: 'No brand' }), 'No brand · DE');
+  // Language not applicable to the table: brand only.
+  assert.equal(filterCaption({
+    selection: BNKD, lang: 'en', brands: BRANDS, applies: { lang: false },
+  }), 'BNKD Wellness');
+  // A slug with no brands row falls back to the slug; an unknown language to none.
+  assert.equal(filterCaption({ selection: { kind: 'brand', slug: 'newbrand' }, lang: 'pt' }), 'newbrand');
+});
+
+test('the global helper and every table use the caption', () => {
+  const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+  assert.match(read('./main.js'), /Vue\.prototype\.\$filterCaption = function/);
+  // Every narrowed table carries it; the old bar component is gone.
+  ['./components/CampaignMatrix.vue', './components/BrandMatrix.vue', './components/BrandUsage.vue',
+    './views/Brands.vue', './views/Campaigns.vue', './views/Templates.vue', './views/Lists.vue',
+    './views/Subscribers.vue', './views/Bounces.vue'].forEach((p) => {
+    const vue = read(p);
+    assert.match(vue, /\$filterCaption\(/, p);
+    assert.doesNotMatch(vue, /global-filter-bar/, p);
   });
-  assert.deepEqual(s.items, [
-    { key: 'filterBar.brand', params: { brand: 'ruze' } },
-    { key: 'filterBar.launched', params: {} },
-    { key: 'filterBar.lang', params: { lang: 'ES' } },
-  ]);
-  assert.deepEqual(s.hidden, ['filterBar.col.brand', 'filterBar.col.lang']);
-  // No column declared: none listed as hidden.
-  assert.deepEqual(filterBarState({ selection: RUZE, lang: 'es' }).hidden, []);
-  // No brand hides no Brand column (several brandless rows may still differ).
-  const n = filterBarState({ selection: NONE, lang: 'all', columns: { brand: true } });
-  assert.deepEqual(n, { items: [{ key: 'filterBar.noBrand', params: {} }], hidden: [] });
-  // Unknown launch / lang values resolve to all.
-  assert.equal(filterBarState({
-    selection: ALL, launch: 'x', lang: 'pt', applies: { launch: true },
-  }), null);
-});
-
-test('every key the helper emits is in en.json', () => {
-  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
-  ['filterBar.label', 'filterBar.brand', 'filterBar.noBrand', 'filterBar.launched', 'filterBar.unlaunched',
-    'filterBar.lang', 'filterBar.hidden', 'filterBar.col.brand', 'filterBar.col.lang']
-    .forEach((k) => assert.ok(en[k], k));
 });

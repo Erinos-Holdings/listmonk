@@ -9,11 +9,11 @@
        circles are the table's only chroma. -->
   <section class="brand-usage relative" data-cy="brand-usage">
     <b-loading v-if="loading" active :is-full-page="false" />
-    <!-- Polish 2026-11-14: the blue bar while a global filter narrows the table. -->
-    <global-filter-bar launch />
     <div class="table-container">
       <table class="table is-hoverable is-narrow bu-table" data-cy="usage-table"
         :style="{ '--bu-line-pad': `${linePadPx}px` }">
+        <!-- Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
+        <caption v-if="$filterCaption()" class="filter-caption" data-cy="filter-caption">{{ $filterCaption() }}</caption>
         <thead>
           <!-- 2026-11-02 (user): the parent brand's band, above the header and out of the sort --
                the Loyalty Rewards block (this month and next, per language: EN over SKU, FR..IT over

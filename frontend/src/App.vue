@@ -17,9 +17,11 @@
              flow immediately right of the selector. Both sit in one wrapper so the measured offset
              (alignSelector, unchanged) still puts the SELECTOR's left edge on the content edge on
              desktop, where it is absolutely positioned. -->
+        <!-- Polish 2026-11-14 (the user): the launch filter now sits LEFT of the selector; the wrapper's
+             left edge (the launch filter's, when shown) is what lands on the content edge. -->
         <div v-if="!brandScope.hidden" class="navbar-item brand-context" :style="selectorStyle">
-          <brand-selector />
           <launch-filter />
+          <brand-selector />
           <!-- Fork (naming standard, NAMING-STANDARD-SPEC D2; GLOBAL-LANG-SPEC D1) -- the language
                toggle, beside the selector, on every navbar route (hidden with app.lang_enable off). -->
           <language-toggle />
