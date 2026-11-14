@@ -35,6 +35,9 @@
       </div>
     </header>
 
+    <!-- Polish 2026-11-14: the blue bar while the brand selector or language toggle narrows the page. -->
+    <global-filter-bar />
+
     <b-table :data="lists.results" :loading="loading.listsFull" @check-all="onTableCheck" @check="onTableCheck"
       :checked-rows.sync="bulk.checked" hoverable :default-sort="['created_at', 'desc']" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page" :per-page="lists.perPage"
@@ -53,9 +56,10 @@
           </div>
           <!-- Fork (campaign lists, CAMPAIGN-LISTS-SPEC D7) -- off hides the system lists the
           server marks system_hidden (hide_system=true); search is filtered too. -->
-          <div class="column is-narrow">
+          <!-- Polish 2026-11-14: the default (readable) size, centred on the search field's height. -->
+          <div class="column is-narrow system-lists-toggle">
             <b-field>
-              <b-switch :value="showSystem" @input="onShowSystemChange" size="is-small" data-cy="show-system-lists">
+              <b-switch :value="showSystem" @input="onShowSystemChange" data-cy="show-system-lists">
                 {{ $t('lists.showSystem') }}
               </b-switch>
             </b-field>

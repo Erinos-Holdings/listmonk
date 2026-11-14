@@ -105,7 +105,11 @@ export default Vue.extend({
 .language-toggle {
   display: inline-flex;
   align-items: center;
-  .field {
+  // Polish 2026-11-14: Bulma's `.field:not(:last-child)` margin applied once the note followed the
+  // field (a language selected) and lifted the control off the row's centre line. Pinned at 0 with
+  // a selector that outranks it.
+  .field,
+  > .field.segmented:not(:last-child) {
     margin-bottom: 0;
   }
   .lang-note {

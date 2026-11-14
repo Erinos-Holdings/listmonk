@@ -232,9 +232,13 @@ export function isStandardTrigger(option) {
   return STANDARD_TRIGGERS.includes(option);
 }
 
-// journeyOptionDisabled: a standard radio is rendered disabled for a user without lists:journeys.
-export function journeyOptionDisabled(option, canJourneys) {
-  return !canJourneys && isStandardTrigger(option);
+// journeyOptionDisabled: a standard radio is rendered disabled. Polish 2026-11-14 (the user): for
+// everyone, lists:journeys holders included -- the standard lists are system-generated for every
+// brand (add-listmonk-brand.ts step 5j), so the form never makes one -- except the list's own
+// STORED option, which stays selected and selectable so an existing journey list keeps its kind.
+// The server rule is unchanged (a caller without lists:journeys is refused).
+export function journeyOptionDisabled(option, storedOption = '') {
+  return isStandardTrigger(option) && option !== storedOption;
 }
 
 // The three server fields, read under either key spelling (the API client camel-cases responses).

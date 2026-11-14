@@ -8,9 +8,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  LANG_VALUES, NAME_MAX, WARNING_CODES, campaignBrandOf, chipsFor, clearsPrefill, cloneBaseOf, cloneName, duplicateOf,
+  BLOCKING_CODES, LANG_VALUES, NAME_MAX, WARNING_CODES, campaignBrandOf, chipsFor, clearsPrefill, cloneBaseOf, cloneName, duplicateOf,
   formatNameDate, formerNameOf, isExempt, joinListName, langMatches, langOf, listDisplayName, listPrefixAddon, nameCounter,
-  namePlaceholder, namePrefill, nameWarnings, normalizeLang, splitListName,
+  isNameBlocked, nameMessageTypeOf, namePlaceholder, namePrefill, nameWarnings, normalizeLang, splitListName,
 } from './naming.mjs'; // eslint-disable-line import/extensions
 import { LANG_PREF, langLabel, langParam } from './langScope.mjs'; // eslint-disable-line import/extensions
 
@@ -282,4 +282,21 @@ test('langScope: values, the pref, its label and the Campaigns param', () => {
   assert.equal(langParam('de'), 'de');
   assert.equal(normalizeLang('pt'), 'all');
   assert.equal(normalizeLang(' IT '), 'it');
+});
+
+// Post-release polish (2026-11-14): the exact checks block saving; the two heuristics stay amber.
+test('blocking codes: exact checks block, heuristics warn', () => {
+  assert.deepEqual([...BLOCKING_CODES].sort(), ['dateFormat', 'datePosition', 'handleMissing', 'listPrefix', 'stepCode', 'underscore']);
+  BLOCKING_CODES.forEach((c) => assert.ok(WARNING_CODES.includes(c), c));
+  assert.equal(isNameBlocked(['language', 'brandFirst']), false);
+  assert.equal(isNameBlocked(['language', 'underscore']), true);
+  assert.equal(isNameBlocked([]), false);
+  assert.equal(nameMessageTypeOf(['handleMissing']), 'is-danger');
+  assert.equal(nameMessageTypeOf(['language']), 'is-warning');
+  assert.equal(nameMessageTypeOf([], true), 'is-warning');
+  assert.equal(nameMessageTypeOf([]), null);
+  // An untouched new campaign (just the date prefill) and a bare list prefix are blocked.
+  assert.equal(isNameBlocked(nameWarnings('campaign', namePrefill('campaign', { today: new Date(2026, 10, 14) }))), true);
+  assert.equal(isNameBlocked(nameWarnings('list', joinListName('RUZE', ''), { brands: WX.brands, brandSlug: 'ruze', listType: 'private' })), true);
+  assert.equal(isNameBlocked(nameWarnings('campaign', '11-14-26 Product Launch')), false);
 });

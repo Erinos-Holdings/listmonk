@@ -18,11 +18,11 @@
 // mergeGapCounts after the matrix renders; the arithmetic is gmailGap.mjs's, the fork holds no value.
 // Fork (integrations MATRIX-VIEWS-SPEC D2-D4) -- the Health | Attribution view (midColumns /
 // groupHeaders per view, the group row derived from the columns, sortForView, `view` in the session
-// state), the left columns Date, Brand, Campaign, Status, Sent, Skipped, the Brand cell as the
-// upper-cased slug (brandCell; Brand sorts by slug) and the Matrix's chips without a brand chip
-// (matrixChips).
+// state). Polish 2026-11-14: the left columns Status, Started, Brand, Campaign, Lang (All languages
+// only), Sent, Skipped; the Brand cell the lowercase slug (brandCell; Brand sorts by slug); no chips
+// (the language is langCell).
 import { matchesLaunch, normalizeLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions
-import { chipsFor } from './naming.mjs'; // eslint-disable-line import/extensions
+import { langColumnText, showLangColumn } from './naming.mjs'; // eslint-disable-line import/extensions
 import { normalizeMeasure } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 import {
   gapClass as gapTierClass, gapCounts, gapOf, gapReasonTip, gapText, poolCounts,
@@ -44,7 +44,25 @@ export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
 // (gmailGap.mjs); null counts = a journey.
 export const GAP_FIELDS = Object.freeze(['gmail_open', 'yahoo_open', 'gmail_gap']);
 
-export const SORT_FIELDS = Object.freeze(['name', 'brand', 'date', 'status', 'sent', 'skipped', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
+export const SORT_FIELDS = Object.freeze(['name', 'brand', 'lang', 'date', 'status', 'sent', 'skipped', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
+
+// The Matrix's day zone: the window's and the send day's (the get-campaign-matrix zone CTE).
+const MATRIX_ZONE = 'America/Denver';
+
+// mountainDay: a timestamp's America/Denver calendar day as YYYY-MM-DD; null when absent/invalid.
+export function mountainDay(ts) {
+  if (ts === null || ts === undefined || ts === '') {
+    return null;
+  }
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  // en-CA formats a date as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: MATRIX_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+}
 
 // Integrations SMART-SENDING-SPEC D5 -- the Skipped cell's text on a broadcast that switched Smart
 // Sending off and recorded no skips (it still sorts as its count, 0); one that recorded skips before
@@ -69,20 +87,26 @@ export function statusRank(status) {
   return i === -1 ? STATUS_ORDER.length : i;
 }
 
-// The left columns, in order (MATRIX-VIEWS D3): Date, Brand (unless one brand is selected,
-// MATRIX-POLISH D6), Campaign, Status (HOURLY-HEALTH D2), Sent, Skipped (integrations
+// The left columns, in order (polish 2026-11-14, the user, superseding MATRIX-VIEWS D3's order):
+// Status (HOURLY-HEALTH D2), Started (the `date` field), Brand (unless one brand is selected,
+// MATRIX-POLISH D6), Campaign, Lang (only under All languages -- otherwise the filter bar says
+// which language the rows are; it replaces the old language chip), Sent, Skipped (integrations
 // SMART-SENDING-SPEC D5 -- a count, not a rate over Sent).
-export function leftColumns(showBrand = true) {
+export function leftColumns(showBrand = true, showLang = false) {
   const cols = [
-    { field: 'date', label: 'analytics.matrix.date' },
+    { field: 'status', label: 'analytics.matrix.status' },
+    { field: 'date', label: 'analytics.matrix.started' },
     { field: 'brand', label: 'dashboard.matrix.brand' },
     { field: 'name', label: 'analytics.matrix.campaign' },
-    { field: 'status', label: 'analytics.matrix.status' },
+    { field: 'lang', label: 'analytics.matrix.lang' },
     { field: 'sent', label: 'dashboard.matrix.sent' },
     { field: 'skipped', label: 'analytics.matrix.skipped', help: 'analytics.matrix.skippedHelp' },
   ];
-  return showBrand ? cols : cols.filter((c) => c.field !== 'brand');
+  return cols.filter((c) => (showBrand || c.field !== 'brand') && (showLang || c.field !== 'lang'));
 }
+
+// The Lang column is shown only when the language selection is All (naming.mjs, the one rule).
+export { showLangColumn };
 
 // The Status cell: the campaign's status as the Campaigns page's tag ({ status, label } with the
 // campaigns.status.<status> key); the totals row's cell is empty (null).
@@ -235,9 +259,10 @@ export function groupHeaders(showGp, view = DEFAULT_STATE.view) {
 }
 
 // MATRIX-VIEWS D2: a sort on a column the view does not show falls back to DEFAULT_STATE.sort (Date
-// desc); a visible one is kept. Applied when the view changes and when a stored state is loaded.
-export function sortForView(sort, view = DEFAULT_STATE.view, showGp = false) {
-  const visible = [...leftColumns(true), ...midColumns(showGp, view)].map((c) => c.field);
+// desc); a visible one is kept. Applied when the view changes, when a stored state is loaded and
+// (polish 2026-11-14, review R5) when the language selection shows or hides the Lang column.
+export function sortForView(sort, view = DEFAULT_STATE.view, showGp = false, showLang = true) {
+  const visible = [...leftColumns(true, showLang), ...midColumns(showGp, view)].map((c) => c.field);
   if (sort && visible.includes(sort.field) && (sort.order === 'asc' || sort.order === 'desc')) {
     return { field: sort.field, order: sort.order };
   }
@@ -254,13 +279,17 @@ export function brandCell(row) {
   if (!slug) {
     return { text: MISSING, title: null };
   }
-  return { text: slug.toUpperCase(), title: str(row.label) || slug };
+  // Polish 2026-11-14 (the user): the slug as stored, all lowercase.
+  return { text: slug.toLowerCase(), title: str(row.label) || slug };
 }
 
-// MATRIX-VIEWS D4 / I7: the Matrix's chips -- never a brand chip (the Brand column carries it); the
-// language chip under chipsFor's own rule.
-export function matrixChips(row, { brandSelection, langSelection } = {}) {
-  return { brand: null, lang: chipsFor(row, { brandSelection, langSelection }).lang };
+// Polish 2026-11-14 (the user): the Lang cell -- the campaign's two-letter language upper-cased in
+// plain text (no chip); '—' with no language; '' on the totals row.
+export function langCell(row) {
+  if (!row || row.totals) {
+    return '';
+  }
+  return langColumnText(row.lang);
 }
 
 // shapeRow flattens one API row. A missing Sent is null; an uncovered conversion measure is null;
@@ -285,6 +314,11 @@ export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null, gapStat
     // is '—' with a hover).
     date: r.evergreen === true ? null : (str(r.send_day) || null),
     lastSent: str(r.last_sent) || null,
+    // Polish 2026-11-14 (the user): the Started column -- every campaign's started_at (a journey's
+    // and a multi-day broadcast's start too) as its Mountain date; startedAt keeps the instant for
+    // the sort.
+    startedAt: str(r.started_at) || null,
+    started: mountainDay(r.started_at),
     sent: numOrNull(r.sent),
     // SMART-SENDING-SPEC D5: a broadcast's recorded skips (null for a journey -- '—') and its bypass.
     skipped: r.evergreen === true ? null : numOrNull(r.skipped),
@@ -370,8 +404,11 @@ export function totalsRow(rows, label = 'Total') {
     evergreen: false,
     brand: '',
     label: '',
+    lang: '',
     date: null,
     lastSent: null,
+    startedAt: null,
+    started: null,
     gp_rate: null,
     gpThresholds: null,
     // GMAIL-GAP-SPEC D3: the four counts summed over the rows carrying them (broadcasts), so the
@@ -619,21 +656,23 @@ export function gapTip(row, field, fmt = (n) => String(n)) {
   return gapReasonTip(gapOf(c, row.gapThresholds).reason, row.gapThresholds, fmt);
 }
 
-// The Date cell: a broadcast's send date; a journey '—' with "Journey — last sent <date>".
+// The Started cell (polish 2026-11-14): every campaign's start day (Mountain) -- a journey's too,
+// with "Journey — last sent <date>" on hover; '—' when it never started.
 export function dateCell(row) {
   if (!row || row.totals) {
     return { text: '', tip: null };
   }
+  const text = row.started || MISSING;
   if (row.evergreen) {
-    return { text: MISSING, tip: { key: 'analytics.matrix.journeyLastSent', params: { date: row.lastSent || MISSING } } };
+    return { text, tip: { key: 'analytics.matrix.journeyLastSent', params: { date: row.lastSent || MISSING } } };
   }
-  return { text: row.date || MISSING, tip: null };
+  return { text, tip: null };
 }
 
 // The first-click direction: text columns and Status (still moving first) ascending, every other
 // descending.
 export function defaultOrder(field) {
-  return field === 'name' || field === 'brand' || field === 'status' ? 'asc' : 'desc';
+  return field === 'name' || field === 'brand' || field === 'lang' || field === 'status' ? 'asc' : 'desc';
 }
 
 // clickSort: a NEW column takes its default direction, the current column toggles, an unknown field
@@ -651,9 +690,9 @@ export function clickSort(current, field) {
 
 const cmpText = (a, b, locale) => a.localeCompare(b, locale, { sensitivity: 'base' });
 
-// sortRows: by the displayed quantity in the mode. A missing value ranks last in BOTH orders; Date
-// puts journeys after broadcasts in both orders, broadcasts by send date and journeys by last sent;
-// an unbranded row's Brand is missing. Ties fall back to the name, then the id. The totals row is
+// sortRows: by the displayed quantity in the mode. A missing value ranks last in BOTH orders; Started
+// (the `date` field) sorts every campaign by its start instant, never-started last; an unbranded
+// row's Brand and a language-less row's Lang are missing. Ties fall back to the name, then the id. The totals row is
 // never passed in.
 export function sortRows(rows, sort = DEFAULT_STATE.sort, mode = DEFAULT_STATE.mode, locale = 'en') {
   const field = SORT_FIELDS.includes(sort && sort.field) ? sort.field : DEFAULT_STATE.sort.field;
@@ -669,10 +708,11 @@ export function sortRows(rows, sort = DEFAULT_STATE.sort, mode = DEFAULT_STATE.m
     if (field === 'name') {
       return (cmpText(a.name, b.name, locale) * dir) || (a.id - b.id);
     }
-    if (field === 'brand') {
-      // MATRIX-VIEWS D4: by the slug the cell shows, not the display name.
-      const va = a.brand || null;
-      const vb = b.brand || null;
+    if (field === 'brand' || field === 'lang') {
+      // MATRIX-VIEWS D4: by the slug the cell shows, not the display name; Lang by its code. A row
+      // without one sorts last in both orders.
+      const va = a[field] || null;
+      const vb = b[field] || null;
       if (va === null || vb === null) {
         return missingLast(va, vb) || tie(a, b);
       }
@@ -689,11 +729,10 @@ export function sortRows(rows, sort = DEFAULT_STATE.sort, mode = DEFAULT_STATE.m
       return ((ra - rb) * dir) || tie(a, b);
     }
     if (field === 'date') {
-      if (a.evergreen !== b.evergreen) {
-        return a.evergreen ? 1 : -1;
-      }
-      const va = a.evergreen ? a.lastSent : a.date;
-      const vb = b.evergreen ? b.lastSent : b.date;
+      // Started (polish 2026-11-14): by the start instant, journeys and broadcasts together; a
+      // campaign that never started sorts last in both orders.
+      const va = a.startedAt;
+      const vb = b.startedAt;
       if (!va || !vb) {
         return missingLast(va || null, vb || null) || tie(a, b);
       }

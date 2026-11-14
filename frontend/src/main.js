@@ -4,6 +4,7 @@ import VueI18n from 'vue-i18n';
 import 'emoji-picker-element';
 
 import App from './App.vue';
+import GlobalFilterBar from './components/GlobalFilterBar.vue';
 import router from './router';
 import store from './store';
 import * as api from './api';
@@ -16,6 +17,9 @@ Vue.use(VueI18n);
 const i18n = new VueI18n();
 
 Vue.use(Buefy, {});
+
+// Fork (polish 2026-11-14) -- the blue global-filter bar, used above every narrowed matrix/table.
+Vue.component('GlobalFilterBar', GlobalFilterBar);
 Vue.config.productionTip = false;
 
 // Fork (emoji picker, integrations EMOJI-PICKER-SPEC D4): the side-effect import defines the

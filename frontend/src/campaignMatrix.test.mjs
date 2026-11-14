@@ -15,9 +15,8 @@ import {
   gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
   midColumns, nameCell, normalizeState, saveState, shapeRow, shapeRows, showBrandColumn,
   sortRows, statusCell, statusRank, tableRows, totalsRow,
-  brandCell, matrixChips, sortForView,
+  brandCell, langCell, mountainDay, showLangColumn, sortForView,
 } from './campaignMatrix.mjs'; // eslint-disable-line import/extensions
-import { chipsFor } from './naming.mjs'; // eslint-disable-line import/extensions
 import { scopedCell } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
 const api = [
@@ -26,6 +25,7 @@ const api = [
     name: 'Spring',
     evergreen: false,
     send_day: '2026-10-20',
+    started_at: '2026-10-20T16:00:00Z',
     brand: 'ruze',
     sent: 1000,
     views: 300,
@@ -47,6 +47,7 @@ const api = [
     name: 'Autumn',
     evergreen: false,
     send_day: '2026-09-15',
+    started_at: '2026-09-15T16:00:00Z',
     brand: 'thirstygirl',
     sent: 500,
     views: 100,
@@ -69,6 +70,7 @@ const api = [
     name: 'Welcome',
     evergreen: true,
     last_sent: '2026-10-26',
+    started_at: '2026-08-01T16:00:00Z',
     brand: 'ruze',
     sent: 200,
     views: 80,
@@ -90,6 +92,7 @@ const api = [
     name: 'Two brands',
     evergreen: false,
     send_day: '2026-10-01',
+    started_at: '2026-10-01T16:00:00Z',
     brand: null,
     sent: 0,
     views: 0,
@@ -274,17 +277,24 @@ test('I6: the totals row -- per column over the rows carrying a value, with thos
   assert.equal(tr[tr.length - 1].totals, true);
 });
 
-test('I6: Date sort -- broadcasts by send date, journeys after them by last sent, in both orders', () => {
+// Polish 2026-11-14: the Started column -- every campaign's start day (Mountain), journeys included,
+// sorted by the start instant with journeys and broadcasts together; never started = last both ways.
+test('Started sort and cell', () => {
   const rows = shapeRows([...api, {
-    ...api[2], id: 5, name: 'Old journey', last_sent: '2026-10-01',
+    ...api[2], id: 5, name: 'Never started journey', started_at: null,
   }]);
   const ids = (s) => sortRows(rows, s, 'pct').map((r) => r.id);
   assert.deepEqual(ids({ field: 'date', order: 'desc' }), [1, 4, 2, 3, 5]);
-  assert.deepEqual(ids({ field: 'date', order: 'asc' }), [2, 4, 1, 5, 3]);
+  assert.deepEqual(ids({ field: 'date', order: 'asc' }), [3, 2, 4, 1, 5]);
   assert.deepEqual(dateCell(rows.find((r) => r.id === 3)), {
-    text: MISSING, tip: { key: 'analytics.matrix.journeyLastSent', params: { date: '2026-10-26' } },
+    text: '2026-08-01', tip: { key: 'analytics.matrix.journeyLastSent', params: { date: '2026-10-26' } },
   });
+  assert.equal(dateCell(rows.find((r) => r.id === 5)).text, MISSING);
   assert.deepEqual(dateCell(rows[0]), { text: '2026-10-20', tip: null });
+  // The Mountain day, not the UTC one: 03:00Z is the previous evening in Denver.
+  assert.equal(mountainDay('2026-11-14T03:00:00Z'), '2026-11-13');
+  assert.equal(mountainDay(null), null);
+  assert.equal(mountainDay('bogus'), null);
 });
 
 test('I6: a missing value sorts last in BOTH orders', () => {
@@ -380,9 +390,10 @@ test('HOURLY-HEALTH I2: Status sorts running, paused, scheduled, draft, finished
   assert.deepEqual(clickSort({ field: 'date', order: 'desc' }, 'status'), { field: 'status', order: 'asc' });
 });
 
-test('HOURLY-HEALTH I2: the Status column after Date, before Sent; the header and cell texts; the totals cell empty', () => {
-  // Integrations SMART-SENDING-SPEC D5: Skipped follows Sent (the full order: MATRIX-VIEWS I3 below).
-  assert.deepEqual(leftColumns(true).map((c) => c.field).slice(-3), ['status', 'sent', 'skipped']);
+test('HOURLY-HEALTH I2: the Status column (first since polish 2026-11-14); the header and cell texts; the totals cell empty', () => {
+  // Integrations SMART-SENDING-SPEC D5: Skipped follows Sent (the full order: leftColumns order below).
+  assert.equal(leftColumns(true).map((c) => c.field)[0], 'status');
+  assert.deepEqual(leftColumns(true).map((c) => c.field).slice(-2), ['sent', 'skipped']);
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   assert.equal(en['analytics.matrix.status'], 'Status');
   leftColumns(true).forEach((c) => assert.ok(en[c.label], c.label));
@@ -713,12 +724,14 @@ test('groupHeaders agree with midColumns', () => {
   assert.equal(span(false), 1);
 });
 
+// Polish 2026-11-14: Status far left, Started (the date field), Brand, Campaign, Lang (All only).
 test('leftColumns order', () => {
-  assert.deepEqual(leftColumns(true).map((c) => c.field), ['date', 'brand', 'name', 'status', 'sent', 'skipped']);
-  assert.deepEqual(leftColumns(false).map((c) => c.field), ['date', 'name', 'status', 'sent', 'skipped']);
-  // The first-click direction is unchanged.
-  const first = leftColumns(true).map((c) => clickSort({ field: 'views', order: 'desc' }, c.field).order);
-  assert.deepEqual(first, ['desc', 'asc', 'asc', 'asc', 'desc', 'desc']);
+  assert.deepEqual(leftColumns(true, true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'lang', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(false, true).map((c) => c.field), ['status', 'date', 'name', 'lang', 'sent', 'skipped']);
+  assert.equal(leftColumns(true).find((c) => c.field === 'date').label, 'analytics.matrix.started');
+  const first = leftColumns(true, true).map((c) => clickSort({ field: 'views', order: 'desc' }, c.field).order);
+  assert.deepEqual(first, ['asc', 'desc', 'asc', 'asc', 'asc', 'desc', 'desc']);
 });
 
 test('loadState view', () => {
@@ -749,12 +762,17 @@ test('sortForView fallback', () => {
     assert.deepEqual(sortForView({ field, order: 'asc' }, v, false), { field, order: 'asc' });
   }));
   assert.deepEqual(sortForView(null, 'health', false), def);
+  // Review R5: Lang is kept while its column shows, falls back once a language hides it.
+  assert.deepEqual(sortForView({ field: 'lang', order: 'asc' }, 'health', false), { field: 'lang', order: 'asc' });
+  assert.deepEqual(sortForView({ field: 'lang', order: 'asc' }, 'attribution', false, true), { field: 'lang', order: 'asc' });
+  assert.deepEqual(sortForView({ field: 'lang', order: 'asc' }, 'health', false, false), def);
 });
 
 test('brandCell', () => {
   const rows = shapeRows(api, { brandLabel: (s) => ({ ruze: 'RUZE Pouches', thirstygirl: 'Thirsty Girl' }[s]) });
-  assert.deepEqual(brandCell(rows[0]), { text: 'RUZE', title: 'RUZE Pouches' });
-  assert.deepEqual(brandCell(rows[1]), { text: 'THIRSTYGIRL', title: 'Thirsty Girl' });
+  // Polish 2026-11-14: the slug in lowercase.
+  assert.deepEqual(brandCell(rows[0]), { text: 'ruze', title: 'RUZE Pouches' });
+  assert.deepEqual(brandCell(rows[1]), { text: 'thirstygirl', title: 'Thirsty Girl' });
   assert.deepEqual(brandCell(rows[3]), { text: MISSING, title: null });
   assert.deepEqual(brandCell(totalsRow(rows)), { text: '', title: null });
 });
@@ -770,19 +788,29 @@ test('sortRows by brand slug', () => {
   assert.deepEqual(sortRows(rows, { field: 'brand', order: 'desc' }).map((r) => r.id), [2, 1, 3]);
 });
 
-test('matrixChips', () => {
-  const ALL = { kind: 'all' };
-  const row = { brand: 'thirstygirl', lang: 'fr' };
-  assert.deepEqual(matrixChips(row, { brandSelection: ALL, langSelection: 'all' }), { brand: null, lang: 'FR' });
-  ['all', 'fr', 'en'].forEach((langSelection) => {
-    assert.equal(matrixChips(row, { brandSelection: ALL, langSelection }).lang, chipsFor(row, { brandSelection: ALL, langSelection }).lang);
-  });
-  assert.deepEqual(matrixChips({ brand: 'ruze', lang: '' }, { brandSelection: ALL, langSelection: 'all' }), { brand: null, lang: null });
-  // The component takes its chips from matrixChips, never chipsFor directly, and renders no brand chip.
+// Polish 2026-11-14: the Lang column replaced the language chip -- plain upper-cased code, '—' with
+// none, '' on totals; shown only under All languages; the component renders no chip at all.
+test('langCell and the Lang column', () => {
+  assert.equal(langCell({ lang: 'fr' }), 'FR');
+  assert.equal(langCell({ lang: '' }), MISSING);
+  assert.equal(langCell({ totals: true, lang: 'fr' }), '');
+  assert.equal(showLangColumn('all'), true);
+  assert.equal(showLangColumn('es'), false);
   const vue = readFileSync(new URL('./components/CampaignMatrix.vue', import.meta.url), 'utf8');
-  assert.match(vue, /matrixChips\(row/);
-  assert.doesNotMatch(vue, /chipsFor\(|import[^;]*\bchipsFor\b/);
+  assert.match(vue, /langCell\(row\)/);
+  assert.doesNotMatch(vue, /chipsFor\(|matrixChips|b-tag[^>]*class="is-small lang"/);
   assert.doesNotMatch(vue, /brand-chip/);
+  assert.match(vue, /<global-filter-bar launch brand-column lang-column \/>/);
+});
+
+test('sortRows by lang: by code, a row without one last in both orders', () => {
+  const rows = shapeRows([
+    { ...api[0], id: 1, lang: 'fr' },
+    { ...api[0], id: 2, lang: 'de' },
+    { ...api[0], id: 3, lang: '' },
+  ]);
+  assert.deepEqual(sortRows(rows, { field: 'lang', order: 'asc' }).map((r) => r.id), [2, 1, 3]);
+  assert.deepEqual(sortRows(rows, { field: 'lang', order: 'desc' }).map((r) => r.id), [1, 2, 3]);
 });
 
 // MATRIX-VIEWS-SPEC I8 (S4-3): the declarative wiring, pinned by text -- the root route and its
@@ -806,7 +834,14 @@ test('matrix views wiring', () => {
   const vue = read('./components/CampaignMatrix.vue');
   assert.match(vue, /midColumns\(this\.showGp, this\.state\.view\)/);
   assert.match(vue, /groupHeaders\(this\.showGp, this\.state\.view\)/);
-  assert.match(vue, /onView\(\) \{\s*this\.state\.sort = sortForView\(this\.state\.sort, this\.state\.view, this\.showGp\);/);
+  assert.match(vue, /onView\(\) \{\s*this\.state\.sort = sortForView\(this\.state\.sort, this\.state\.view, this\.showGp, this\.showLang\);/);
+  // Review R5: a language change re-checks the sort.
+  assert.match(vue, /showLang\(\) \{\s*this\.state\.sort = sortForView\(this\.state\.sort, this\.state\.view, this\.showGp, this\.showLang\);/);
   assert.match(vue, /created\(\) \{[^}]*sortForView\(/);
-  assert.match(vue, /<template v-if="row\.totals">\{\{ row\.name \}\}<\/template>/);
+  // The totals label sits in whichever left column is first (Status since polish 2026-11-14).
+  assert.match(vue, /<template v-if="row\.totals">\{\{ firstField === 'status' \? row\.name : '' \}\}<\/template>/);
+  assert.match(vue, /firstField\(\) \{\s*return this\.leftCols\[0\]\.field;/);
+  // Analytics sits between the Campaigns group and Users (polish 2026-11-14).
+  const at = (s) => nav.indexOf(s);
+  assert.ok(at('<!-- campaigns -->') < at('data-cy="analytics"') && at('data-cy="analytics"') < at('data-cy="users"'));
 });

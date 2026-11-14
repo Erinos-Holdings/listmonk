@@ -689,7 +689,8 @@ import {
   campaignBrand, filterByIds, scopeUnion, storeLists,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
-  campaignBrandOf, clearsPrefill, duplicateOf, nameCounter, namePlaceholder, namePrefill, nameWarnings,
+  campaignBrandOf, clearsPrefill, duplicateOf, isNameBlocked, nameCounter, nameMessageTypeOf, namePlaceholder, namePrefill,
+  nameWarnings,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
 import { campaignLinkDefault } from '../linkDefaults.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -952,6 +953,17 @@ export default Vue.extend({
   },
 
   methods: {
+    // Polish 2026-11-14 -- a name failing an exact check is refused before any save leg; the red
+    // field message (touched now) says why.
+    refuseBlockedName() {
+      if (!this.nameBlocked) {
+        return false;
+      }
+      this.nameTouched = true;
+      this.$utils.toast(this.$t('naming.nameBlocked'), 'is-danger');
+      return true;
+    },
+
     // Fork (name guardrails, NAME-GUARDRAILS-SPEC §4) -- leaving the field marks it touched (D6).
     onNameBlur() {
       this.nameTouched = true;
@@ -1668,6 +1680,9 @@ export default Vue.extend({
     onSubmit(typ) {
       // Fork (name guardrails, D6) -- a save attempt counts as touched.
       this.nameTouched = true;
+      if (this.refuseBlockedName()) {
+        return;
+      }
 
       // The controls are disabled while a derivation is blocked, but Ctrl+S and a native form
       // submit reach here regardless.
@@ -2257,6 +2272,9 @@ export default Vue.extend({
     // token, also its alts messages' run) so it renders the starting state at first render and never
     // the previous report; a start failure (409/503 included) posts the run's `failed` message.
     async inspectCampaign() {
+      if (this.refuseBlockedName()) {
+        return;
+      }
       const { id } = this.data;
       const run = newToken();
       // Post-release fix (2026-11-05): the base job id the window must NOT treat as this run's,
@@ -2316,6 +2334,9 @@ export default Vue.extend({
     // Starts or schedule a campaign.
     startCampaign() {
       if (!this.canStart && !this.canSchedule) {
+        return;
+      }
+      if (this.refuseBlockedName()) {
         return;
       }
 
@@ -2457,8 +2478,16 @@ export default Vue.extend({
       return lines.length ? lines : this.$t('naming.hint');
     },
 
+    // Polish 2026-11-14: red when an exact check fails (naming.mjs::nameMessageTypeOf).
     nameMessageType() {
-      return this.nameWarningCodes.length || this.duplicateName ? 'is-warning' : null;
+      return nameMessageTypeOf(this.nameWarningCodes, !!this.duplicateName);
+    },
+
+    // Polish 2026-11-14: an exact check failing blocks every save leg (Save, Test, Inspect, Start),
+    // touched or not -- an untouched new campaign is just the date. Never on a form the user
+    // cannot edit (a finished campaign's legacy name).
+    nameBlocked() {
+      return this.canEdit && isNameBlocked(nameWarnings('campaign', this.form.name, { brands: this.brands }));
     },
 
     // The grey sample in the empty field (D3).

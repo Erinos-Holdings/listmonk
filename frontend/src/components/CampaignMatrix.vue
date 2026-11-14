@@ -61,6 +61,9 @@
         </b-radio-button>
       </b-field>
     </div>
+    <!-- Polish 2026-11-14: the blue bar while a global filter narrows the Matrix (the launch filter
+         narrows its rows too); it says the Brand / Lang columns are hidden. -->
+    <global-filter-bar launch brand-column lang-column />
     <div class="table-container">
       <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="cm-table">
         <thead>
@@ -94,32 +97,34 @@
                 <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended).
                      MATRIX-POLISH-SPEC D7 (widened 2026-11-06): the first NAME_MAX characters, then '…';
                      the stored name on hover. -->
-                <!-- Fork (naming standard, NAMING-STANDARD-SPEC D1/D10) -- the language chip
-                     (campaignMatrix.mjs::matrixChips: chipsFor's language rule, no brand chip --
-                     MATRIX-VIEWS-SPEC D4) and the former name on hover. -->
-                <b-tag v-if="!row.totals && chipsOf(row).lang" class="is-small lang" :data-cy="`cm-lang-chip-${row.id}`">
-                  {{ chipsOf(row).lang }}
-                </b-tag>
+                <!-- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- the former name on hover. No
+                     chips (polish 2026-11-14: the language is the Lang column). -->
                 <router-link v-if="!row.totals" :to="{ name: 'campaignAnalytics', query: { id: row.id } }"
                   :title="nameTitle(row)" :data-cy="`cm-name-${row.id}`">
 {{ nameOf(row).text }}
 </router-link>
               </td>
-              <!-- MATRIX-VIEWS-SPEC D4: the upper-cased slug, the display name on hover. -->
+              <!-- Polish 2026-11-14: the language code in plain text, under All languages only. -->
+              <td v-else-if="c.field === 'lang'" :key="c.field" :class="bmTd('lang')"
+                :data-cy="`cm-lang-${row.totals ? 'totals' : row.id}`">
+                {{ langOf(row) }}
+              </td>
+              <!-- MATRIX-VIEWS-SPEC D4 (lowercase since polish 2026-11-14): the slug, the display name on hover. -->
               <td v-else-if="c.field === 'brand'" :key="c.field" :class="bmTd('brand')"
                 :title="brandOf(row).title" :data-cy="`cm-brand-${row.totals ? 'totals' : row.id}`">
                 {{ brandOf(row).text }}
               </td>
-              <!-- MATRIX-VIEWS-SPEC D3 (S4-1): Date is always the first column, so the totals row's
-                   label sits here. -->
+              <!-- The Started column (polish 2026-11-14): every campaign's start day. -->
               <td v-else-if="c.field === 'date'" :key="c.field" :class="bmTd('date')" :data-cy="`cm-date-${row.totals ? 'totals' : row.id}`">
-                <template v-if="row.totals">{{ row.name }}</template>
+                <template v-if="row.totals">{{ firstField === 'date' ? row.name : '' }}</template>
                 <span v-else :title="dateTip(row)">{{ dateText(row) }}</span>
               </td>
-              <!-- HOURLY-HEALTH-SPEC D2: the Campaigns page's status tag; empty on the totals row. -->
+              <!-- HOURLY-HEALTH-SPEC D2: the Campaigns page's status tag. Status is the first column
+                   (polish 2026-11-14), so the totals row's label sits here (MATRIX-VIEWS S4-1). -->
               <td v-else-if="c.field === 'status'" :key="c.field" :class="bmTd('status')"
                 :data-cy="`cm-status-${row.totals ? 'totals' : row.id}`">
-                <b-tag v-if="statusOf(row)" :class="statusOf(row).status">{{ $t(statusOf(row).label) }}</b-tag>
+                <template v-if="row.totals">{{ firstField === 'status' ? row.name : '' }}</template>
+                <b-tag v-else-if="statusOf(row)" :class="statusOf(row).status">{{ $t(statusOf(row).label) }}</b-tag>
               </td>
               <td v-else-if="c.field === 'sent'" :key="c.field" class="has-text-right" :class="bmTd('sent')">
                 {{ cell(row, 'sent') }}
@@ -162,8 +167,8 @@ import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   CONVERSION_FIELDS, GAP_FAILED, GAP_FIELDS, GAP_PENDING, GAP_READY, brandCell, cellText, clickSort, conversionValue,
-  dateCell, filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, leftColumns, loadState,
-  matrixChips, mergeGapCounts, midColumns, nameCell, saveState, shapeRows, showBrandColumn, sortForView, statusCell,
+  dateCell, filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, langCell, leftColumns, loadState,
+  mergeGapCounts, midColumns, nameCell, saveState, shapeRows, showBrandColumn, showLangColumn, sortForView, statusCell,
   tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
@@ -213,9 +218,19 @@ export default Vue.extend({
       return showBrandColumn(this.brandSelection);
     },
 
-    // MATRIX-VIEWS-SPEC D3: Date, Brand, Campaign, Status, Sent, Skipped (campaignMatrix.mjs::leftColumns).
+    // Polish 2026-11-14: Status, Started, Brand, Campaign, Lang (All languages only), Sent, Skipped
+    // (campaignMatrix.mjs::leftColumns).
     leftCols() {
-      return leftColumns(this.showBrand);
+      return leftColumns(this.showBrand, this.showLang);
+    },
+
+    showLang() {
+      return showLangColumn(this.langSelection);
+    },
+
+    // The totals row's label sits in whichever column is first.
+    firstField() {
+      return this.leftCols[0].field;
     },
 
     // MATRIX-VIEWS-SPEC D2: Views, Clicks, Conversions (Tracked, Matched), then Health's Bounces
@@ -316,7 +331,7 @@ export default Vue.extend({
 
     // MATRIX-VIEWS-SPEC D2: a sort on a column the view hides falls back to Date desc.
     onView() {
-      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp);
+      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang);
       this.saveState();
     },
 
@@ -363,9 +378,9 @@ export default Vue.extend({
       return nameCell(row.name);
     },
 
-    // Fork (naming standard, NAMING-STANDARD-SPEC D1/D10; no brand chip since MATRIX-VIEWS-SPEC D4).
-    chipsOf(row) {
-      return matrixChips(row, { brandSelection: this.brandSelection, langSelection: this.langSelection });
+    // Polish 2026-11-14: the Lang column replaces the language chip.
+    langOf(row) {
+      return langCell(row);
     },
 
     // MATRIX-VIEWS-SPEC D4.
@@ -431,11 +446,18 @@ export default Vue.extend({
         this.fetchRows();
       }
     },
+
+    // Polish 2026-11-14 (review R5): a Lang sort falls back to Started desc when a language hides
+    // the column.
+    showLang() {
+      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang);
+      this.saveState();
+    },
   },
 
   created() {
     // MATRIX-VIEWS-SPEC D2: a stored sort on a column the stored view hides falls back to Date desc.
-    this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp);
+    this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang);
     this.$root.$on('page.refresh', this.fetchRows);
   },
 

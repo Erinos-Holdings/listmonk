@@ -771,6 +771,46 @@ body.is-noscroll {
 .language-toggle.lang-app-none .field.segmented.is-global > .field-body > .field.has-addons {
   border-color: var(--lang-none);
 }
+// Polish 2026-11-14 -- the blue global-filter bar across the top of a matrix or table
+// (GlobalFilterBar.vue): the primary colour, so a narrowed table reads as narrowed at a glance.
+.global-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  background: $primary;
+  color: $white;
+  border-radius: 4px;
+  padding: 0.45rem 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  .icon {
+    color: $white;
+  }
+  .gfb-label {
+    font-weight: 600;
+  }
+  .gfb-sep {
+    margin: 0 0.35rem;
+  }
+  .gfb-hidden {
+    opacity: 0.9;
+  }
+}
+
+// Polish 2026-11-14 -- the Lists page's "View system lists" switch: the default switch size at the
+// body font (1rem), vertically centred on the search field beside it.
+.system-lists-toggle {
+  display: flex;
+  align-items: center;
+  .field {
+    margin-bottom: 0;
+  }
+  .switch {
+    font-size: 1rem;
+  }
+}
+
 // GLOBAL-LANG D4 (S2-1) -- the Subscribers export and by-query actions wait for the rows.
 .subscribers .actions.is-busy a {
   pointer-events: none;

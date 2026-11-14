@@ -34,6 +34,11 @@
       </div>
     </header>
 
+    <!-- Polish 2026-11-14 (review R3): the blue bar while the brand selector or launch filter narrows
+         the Health table (brand-level health is never filtered by language). Placed before the
+         v-if chain below so it never splits it; the Matrix and Usage panes carry their own. -->
+    <global-filter-bar v-if="$can('brands:get') && !brandParam && pane === 'health'" launch :lang="false" />
+
     <p v-if="!$can('brands:get')" class="has-text-grey">{{ $t('brands.noPermission') }}</p>
 
     <!-- Fork (campaign matrix, CAMPAIGN-MATRIX-SPEC D1) -- the Matrix and Usage panes. -->

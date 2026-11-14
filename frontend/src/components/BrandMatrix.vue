@@ -23,6 +23,8 @@
          Brand and Sent, the Engagement section (incl. GP S%), Conversions, then Subscribers,
          each section tinted, the sorted column emphasized. Sorting is clickSort; the spam
          cell's class/style/tooltip stay brandMatrix.mjs::spamCell (GP-SPAM-VISIBILITY D3). -->
+    <!-- Polish 2026-11-14: the blue bar while a global filter narrows the Matrix. -->
+    <global-filter-bar launch />
     <div class="table-container">
       <table class="table is-fullwidth is-hoverable is-narrow bm-table" data-cy="matrix-table">
         <thead>
@@ -75,7 +77,11 @@
                 :to="{ name: 'brand', params: { brand: row.brand } }" />
             </td>
             <td :class="bmTd('brand')">
-              <span :data-cy="`matrix-brand-${row.brand || 'totals'}`">{{ row.label }}</span>
+              <!-- Polish 2026-11-14 (the user): the slug in lowercase, the display name on hover; the
+                   totals row keeps its label. -->
+              <span :data-cy="`matrix-brand-${row.brand || 'totals'}`" :title="row.totals ? null : row.label">
+                {{ row.totals ? row.label : String(row.brand || '').toLowerCase() }}
+              </span>
             </td>
             <td class="has-text-right" :class="bmTd('sent')">
               <span :title="$t('dashboard.matrix.sentHelp')">{{ cell(row, 'sent') }}</span>

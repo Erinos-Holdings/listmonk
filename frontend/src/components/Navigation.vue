@@ -10,15 +10,6 @@
       :active="activeItem.brands || activeItem.brand" data-cy="brands" icon="speedometer"
       :label="$t('brands.title')" /><!-- brands -->
 
-    <!-- Fork (integrations MATRIX-VIEWS-SPEC D1) -- Analytics is ONE root item for everyone holding
-    campaigns:get_analytics, directly under Brands (Dashboard, Brands, Analytics -- the read-only
-    views together); it left the Campaigns group, and the analytics-only user's separate root item
-    (BRAND-ANALYTICS-SPEC D8, whose Campaigns group, Forms and Documentation stay hidden) merged
-    into it. -->
-    <b-menu-item v-if="$can('campaigns:get_analytics')" :to="{ name: 'campaignAnalytics' }" tag="router-link"
-      :active="activeItem.campaignAnalytics" data-cy="analytics" icon="chart-bar"
-      :label="$t('globals.terms.analytics')" /><!-- analytics -->
-
     <b-menu-item :expanded="activeGroup.lists" :active="activeGroup.lists" data-cy="lists"
       @update:active="(state) => toggleGroup('lists', state)" icon="format-list-bulleted-square"
       :label="$t('globals.terms.lists')">
@@ -58,6 +49,14 @@
         :active="activeItem.templates" data-cy="templates" icon="file-image-outline"
         :label="$t('globals.terms.templates')" />
     </b-menu-item><!-- campaigns -->
+
+    <!-- Fork (integrations MATRIX-VIEWS-SPEC D1) -- Analytics is ONE root item for everyone holding
+    campaigns:get_analytics, outside the Campaigns group (the analytics-only user's separate root
+    item, BRAND-ANALYTICS-SPEC D8, merged into it; their Campaigns group, Forms and Documentation stay
+    hidden). Polish 2026-11-14 (the user): placed between Campaigns and Users. -->
+    <b-menu-item v-if="$can('campaigns:get_analytics')" :to="{ name: 'campaignAnalytics' }" tag="router-link"
+      :active="activeItem.campaignAnalytics" data-cy="analytics" icon="chart-bar"
+      :label="$t('globals.terms.analytics')" /><!-- analytics -->
 
     <b-menu-item v-if="$can('users:*', 'roles:*')" :expanded="activeGroup.users" :active="activeGroup.users"
       data-cy="users" @update:active="(state) => toggleGroup('users', state)" icon="account-multiple"

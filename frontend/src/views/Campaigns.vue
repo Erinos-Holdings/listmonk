@@ -25,6 +25,9 @@
       </div>
     </header>
 
+    <!-- Polish 2026-11-14: the blue bar while the brand selector or language toggle narrows the page. -->
+    <global-filter-bar lang-column />
+
     <b-table :data="campaigns.results" :loading="loading.campaigns" :row-class="highlightedRow"
       @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page"
@@ -178,15 +181,10 @@
               {{ $t('lists.optin') }}
             </b-tag>
             <!-- Fork (naming standard, NAMING-STANDARD-SPEC D1) -- the brand chip (the list brand, in
-                 capitals) and the language chip (attribs.lang; the send-language label, EN+), each
-                 hidden when the brand selector / language toggle already selects it; none when absent
-                 (naming.mjs::chipsFor). -->
+                 capitals), hidden when the brand selector already selects it; none when absent
+                 (naming.mjs::chipsFor). The language is the Lang column (polish 2026-11-14). -->
             <b-tag v-if="chipsOf(props.row).brand" class="is-small brand-chip" data-cy="brand-chip">
               {{ chipsOf(props.row).brand }}
-            </b-tag>
-            <b-tag v-if="chipsOf(props.row).lang" class="is-small lang"
-              data-cy="lang-chip" :title="langChipTitle(props.row)">
-              {{ langChip(props.row.attribs.lang) }}
             </b-tag>
             <!-- NAMING-STANDARD-SPEC D14: the stored name, shown whole (the brand is the chip).
                  D10: the hover is the former name when there is one. -->
@@ -207,6 +205,12 @@
             </b-tag>
           </b-taglist>
         </div>
+      </b-table-column>
+      <!-- Polish 2026-11-14 (the user): the campaign's send language as its own column, right of
+           Name, in plain text (the send-language code, EN+ with its hover; '—' with none) -- shown only
+           under All languages; otherwise the blue filter bar names the language. Replaces the chip. -->
+      <b-table-column v-if="showLang" v-slot="props" field="lang" :label="$t('analytics.matrix.lang')" width="5%">
+        <span data-cy="campaign-lang" :title="langChipTitle(props.row)">{{ langText(props.row) }}</span>
       </b-table-column>
       <b-table-column v-slot="props" cell-class="lists" field="lists" :label="$t('globals.terms.lists')" width="15%">
         <ul>
@@ -436,7 +440,7 @@ import { mapGetters, mapState } from 'vuex';
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
-import { isSendPlus, sendLangCode } from '../langs';
+import { isSendPlus } from '../langs';
 import {
   hasEnSplit, enSplit, smartSendingOf, toSendOf,
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
@@ -446,7 +450,8 @@ import {
   canCreateCampaign, filterByIds, storeLists,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
-  campaignBrandOf, chipsFor, cloneBaseOf, cloneName, formerNameOf, nameCounter,
+  campaignBrandOf, chipsFor, cloneBaseOf, cloneName, formerNameOf, isNameBlocked, langColumnText, nameCounter,
+  nameWarnings, showLangColumn,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
 import { langParam } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
@@ -574,13 +579,24 @@ export default Vue.extend({
       this.$utils.prompt(
         `${this.$t('globals.buttons.clone')} — ${this.$t('naming.hint')} (${this.$t('naming.counter', { n: count.n, max: count.max })})`,
         { placeholder: this.$t('globals.fields.name'), value, maxlength: count.maxlength || 200 },
-        (name) => this.cloneCampaign(name, row),
+        (name) => {
+          // Polish 2026-11-14 (review R7): the clone prompt is a name input too -- an exact check
+          // failing refuses the clone, as the campaign form refuses the save.
+          if (isNameBlocked(nameWarnings('campaign', name))) {
+            this.$utils.toast(this.$t('naming.cloneBlocked'), 'is-danger');
+            return;
+          }
+          this.cloneCampaign(name, row);
+        },
       );
     },
 
     // Fork (langs.js, the "+" convention). The chip names a send audience: EN+.
-    langChip(lang) {
-      return sendLangCode(lang);
+    // Polish 2026-11-14: the Lang column's cell -- the plain two-letter code (the Matrix's and
+    // Templates' rule, review R6), '—' with none; English keeps its "also reaches no-language
+    // subscribers" hover (langChipTitle).
+    langText(row) {
+      return langColumnText(row && row.attribs ? row.attribs.lang : '');
     },
 
     langChipTitle(row) {
@@ -998,6 +1014,11 @@ export default Vue.extend({
   },
 
   computed: {
+    // Polish 2026-11-14: the Lang column only under All languages.
+    showLang() {
+      return showLangColumn(this.langSelection);
+    },
+
     ...mapState(['campaigns', 'lists', 'loading', 'serverConfig']),
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the navbar language toggle; All while
     // app.lang_enable is off (GLOBAL-LANG-SPEC D1: the toggle is hidden then).

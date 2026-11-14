@@ -16,6 +16,20 @@
       </div>
     </header>
 
+    <!-- Polish 2026-11-14 (the user): the Footer | Other toggle (the official footer templates, or
+         everything else; templatesPage.mjs), the Campaigns page's page-local .segmented style. -->
+    <b-field class="segmented mb-3" data-cy="template-kind">
+      <b-radio-button :value="kind" native-value="footer" type="is-primary" data-cy="template-kind-footer" @input="onKind">
+        {{ $t('templates.kindFooter') }}
+      </b-radio-button>
+      <b-radio-button :value="kind" native-value="other" type="is-primary" data-cy="template-kind-other" @input="onKind">
+        {{ $t('templates.kindOther') }}
+      </b-radio-button>
+    </b-field>
+
+    <!-- Polish 2026-11-14: the blue bar while a global filter narrows the table. -->
+    <global-filter-bar launch lang-column />
+
     <!-- Fork (global brand, integrations GLOBAL-BRAND-SPEC D12) -- filtered client-side; the
          store stays every row (the campaign form's template picker is never filtered, S3). -->
     <b-table :data="shownTemplates" :hoverable="true" :loading="loading.templates" default-sort="createdAt">
@@ -24,7 +38,6 @@
              from the template's own columns (hidden when the selector / toggle selects them) and
              the former name on hover. -->
         <b-tag v-if="chipsOf(props.row).brand" class="is-small brand-chip" data-cy="brand-chip">{{ chipsOf(props.row).brand }}</b-tag>
-        <b-tag v-if="chipsOf(props.row).lang" class="is-small lang" data-cy="lang-chip">{{ chipsOf(props.row).lang }}</b-tag>
         <a href="#" @click.prevent="showEditForm(props.row)" :title="nameTitle(props.row)">
           {{ props.row.name }}
         </a>
@@ -40,6 +53,13 @@
         <p class="is-size-7 has-text-grey" v-if="props.row.type === 'tx'">
           {{ props.row.subject }}
         </p>
+      </b-table-column>
+
+      <!-- Polish 2026-11-14 (the user): the template's language as its own column, right of Name, in
+           plain text -- shown only under All languages (otherwise the filter bar names the language);
+           it replaces the language chip. -->
+      <b-table-column v-if="showLang" v-slot="props" field="lang" :label="$t('analytics.matrix.lang')" sortable>
+        <span data-cy="template-lang">{{ langText(props.row.lang) }}</span>
       </b-table-column>
 
       <b-table-column v-slot="props" field="type" :label="$t('globals.fields.type')" sortable>
@@ -135,9 +155,11 @@ import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 
 import TemplateForm from './TemplateForm.vue';
 import { isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
-import { filterTemplates } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
-  chipsFor, cloneName, formerNameOf, langMatches, nameCounter,
+  TEMPLATE_KIND_PREF, normalizeTemplateKind, templateRows,
+} from '../templatesPage.mjs'; // eslint-disable-line import/extensions
+import {
+  chipsFor, cloneName, formerNameOf, isNameBlocked, langColumnText, nameCounter, nameWarnings, showLangColumn,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -158,6 +180,8 @@ export default Vue.extend({
       isEditing: false,
       isFormVisible: false,
       previewItem: null,
+      // Polish 2026-11-14: the Footer | Other toggle, remembered per viewer (pref templates.kind).
+      kind: normalizeTemplateKind(this.$utils.getPref(TEMPLATE_KIND_PREF)),
     };
   },
 
@@ -209,7 +233,19 @@ export default Vue.extend({
       this.previewItem = null;
     },
 
-    // Fork (naming standard, NAMING-STANDARD-SPEC D15/D10).
+    // Polish 2026-11-14: the Footer | Other toggle's change.
+    onKind(v) {
+      this.kind = normalizeTemplateKind(v);
+      this.$utils.setPref(TEMPLATE_KIND_PREF, this.kind);
+    },
+
+    // Polish 2026-11-14: the Lang column's cell.
+    langText(lang) {
+      return langColumnText(lang);
+    },
+
+    // Fork (naming standard, NAMING-STANDARD-SPEC D15/D10) -- the brand chip (the language is the
+    // Lang column since polish 2026-11-14).
     chipsOf(row) {
       return chipsFor(row, { brandSelection: this.brandSelection, langSelection: this.langSelection });
     },
@@ -227,7 +263,14 @@ export default Vue.extend({
       this.$utils.prompt(
         `${this.$t('globals.buttons.clone')} — ${this.$t('naming.hint')} (${this.$t('naming.counter', { n: count.n, max: count.max })})`,
         { placeholder: this.$t('globals.fields.name'), value, maxlength: count.maxlength || 200 },
-        (name) => this.cloneTemplate(name, row),
+        (name) => {
+          // Polish 2026-11-14 (review R7): an exact check failing refuses the clone.
+          if (isNameBlocked(nameWarnings('template', name))) {
+            this.$utils.toast(this.$t('naming.cloneBlocked'), 'is-danger');
+            return;
+          }
+          this.cloneTemplate(name, row);
+        },
       );
     },
 
@@ -269,13 +312,26 @@ export default Vue.extend({
     ...mapState(['templates', 'loading']),
     // GLOBAL-LANG-SPEC D1 -- All while app.lang_enable is off (the toggle is hidden then).
     ...mapGetters({ langSelection: 'langEffective' }),
+    ...mapGetters(['launch', 'brandHealth']),
 
     // Fork (global brand, D12) -- a brand's rows plus the brandless rows; No brand the brandless
     // rows only; All brands every row. Fork (naming standard, NAMING-STANDARD-SPEC D2) -- then the
     // language toggle, client-side (naming.mjs::langMatches; a template has a language column).
+    // Polish 2026-11-14: the Lang column only under All languages.
+    showLang() {
+      return showLangColumn(this.langSelection);
+    },
+
+    // Polish 2026-11-14 (the user): every global filter -- brand, launch (newly honoured) and
+    // language -- and the Footer | Other toggle (templatesPage.mjs::templateRows).
     shownTemplates() {
-      return filterTemplates(Array.isArray(this.templates) ? this.templates : [], this.brandSelection)
-        .filter((t) => langMatches(t.lang, this.langSelection));
+      return templateRows(this.templates, {
+        selection: this.brandSelection,
+        launch: this.launch,
+        docs: this.brandHealth,
+        lang: this.langSelection,
+        kind: this.kind,
+      });
     },
   },
 

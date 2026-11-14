@@ -9,6 +9,10 @@
       </div>
     </header>
 
+    <!-- Polish 2026-11-14 (review R3): the blue bar while the brand selector narrows the table
+         (bounces are never filtered by language). -->
+    <global-filter-bar :lang="false" />
+
     <b-table :data="bounces.results" :hoverable="true" :loading="loading.bounces" default-sort="createdAt" checkable
       @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" detailed show-detail-icon
       paginated backend-pagination pagination-position="both" @page-change="onPageChange"

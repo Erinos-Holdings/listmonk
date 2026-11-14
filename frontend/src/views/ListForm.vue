@@ -61,7 +61,10 @@
         already of that brand); a list of another brand keeps it enabled, with the notice. -->
         <!-- JOURNEY-UX-SPEC A1.5: the From line sits directly under the help (no field margin
         between them while it shows). -->
-        <b-field :label="$t('lists.brand')" label-position="on-border" :message="$t('lists.brandHelp')"
+        <!-- Polish 2026-11-14 (the user): a new list's brand is the navbar selection (New needs one
+             brand -- NAME-GUARDRAILS), so the dropdown is shown only when editing; the From line
+             below still names the brand's sender. -->
+        <b-field v-if="isEditing" :label="$t('lists.brand')" label-position="on-border" :message="$t('lists.brandHelp')"
           :class="{ 'mb-0': !!chosenBrand }">
           <b-select v-model="brand" name="brand" :placeholder="$t('lists.brand')" :required="!locked" expanded
             :disabled="readOnly || brandLocked" data-cy="list-brand">
@@ -117,8 +120,9 @@
           re-read a slot that appears or disappears after mount, which is why the slot version
           showed only the first time and never for SKUs (the G-H2 finding). -->
           <div v-if="listType === 'journey'" class="list-journey-pane" data-cy="list-journey-pane">
-            <!-- JOURNEY-LISTS-SPEC D12: the standard options are admin-only (lists:journeys). -->
-            <p v-if="!canJourneys" class="help mb-2" data-cy="list-journey-admin-only">
+            <!-- Polish 2026-11-14: the standard options are system-generated for every brand, so the
+                 note shows to everyone (they are disabled for everyone, listTrigger.mjs). -->
+            <p class="help mb-2" data-cy="list-journey-admin-only">
               {{ $t('lists.journeyStandardAdminOnly') }}
             </p>
             <div class="trigger-option">
@@ -270,7 +274,8 @@ import {
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
-  joinListName, listPrefixAddon, nameCounter, namePlaceholder, nameWarnings, splitListName,
+  isNameBlocked, joinListName, listPrefixAddon, nameCounter, nameMessageTypeOf, namePlaceholder, nameWarnings,
+  splitListName,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -350,8 +355,10 @@ export default Vue.extend({
     },
 
     // JOURNEY-LISTS-SPEC D12: a standard radio is disabled without lists:journeys.
+    // Polish 2026-11-14 (the user): the standard kinds are system-generated for every brand, so
+    // they are disabled for everyone except the list's own stored kind (listTrigger.mjs).
     optionDisabled(option) {
-      return journeyOptionDisabled(option, this.canJourneys);
+      return journeyOptionDisabled(option, triggerOptionOf(storedTrigger(this.data)));
     },
 
     // JOURNEY-LISTS-SPEC D2: the switch saves on its own route; the form re-reads the list.
@@ -369,6 +376,12 @@ export default Vue.extend({
       // Fork (name guardrails, D6) -- a save attempt counts as touched.
       this.nameTouched = true;
       if (this.readOnly || this.saveBlocked) {
+        return;
+      }
+      // Polish 2026-11-14 (review R2): a name failing an exact check is not saved -- said with a toast
+      // and the red line (touched now), as the campaign and template forms do; never a silent Save.
+      if (this.nameBlocked) {
+        this.$utils.toast(this.$t('naming.nameBlocked'), 'is-danger');
         return;
       }
       if (this.isEditing) {
@@ -468,8 +481,15 @@ export default Vue.extend({
       return lines.length ? lines : this.$t('naming.hint');
     },
 
+    // Polish 2026-11-14: red when an exact check fails; such a name cannot be saved (saveBlocked).
     nameMessageType() {
-      return this.nameWarningCodes.length ? 'is-warning' : null;
+      return nameMessageTypeOf(this.nameWarningCodes);
+    },
+
+    nameBlocked() {
+      return !this.readOnly && isNameBlocked(nameWarnings('list', this.form.name, {
+        brands: this.brands, brandSlug: this.brand || '', listType: this.form.type,
+      }));
     },
 
     // The grey sample (D3): `Product Launch` in the handle input, else the whole sample name.

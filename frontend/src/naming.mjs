@@ -5,7 +5,8 @@
 // Tested with `node --test src/naming.test.mjs` (yarn test:naming).
 //
 // The server's name rule is models/naming.go (NameProblem); this module mirrors only what the form
-// shows (the 30 limit and the exempt prefixes) and never refuses -- the server does.
+// shows (the 30 limit and the exempt prefixes). Since polish 2026-11-14 the forms also refuse a name
+// failing one of BLOCKING_CODES (below) -- a form-only rule; the server's is unchanged.
 
 export const NAME_MAX = 30;
 export const CATALOG_PREFIX = 'CATALOG ';
@@ -56,6 +57,18 @@ export function chipsFor(row, { brandSelection, langSelection } = {}) {
   const brandShown = brand !== '' && !(brandSelection && brandSelection.kind === 'brand' && brandSelection.slug === brand);
   const langShown = lang !== '' && normalizeLang(langSelection) !== lang;
   return { brand: brandShown ? brand.toUpperCase() : null, lang: langShown ? lang.toUpperCase() : null };
+}
+
+// Polish 2026-11-14 (the user) -- the Lang column's cell (Campaign Matrix, Campaigns, Templates): the
+// two-letter code upper-cased in plain text, '—' with none. The column shows only under All
+// languages (showLangColumn); it replaced the language chip on those three tables.
+export function langColumnText(lang) {
+  const l = str(lang).trim();
+  return l ? l.toUpperCase() : '—';
+}
+
+export function showLangColumn(langSelection) {
+  return normalizeLang(langSelection) === 'all';
 }
 
 // D10 -- the former name shown on hover, or null when there is none or it equals the name. The API's
@@ -285,11 +298,32 @@ export function nameWarnings(kind, name, ctx = {}) {
     const okPrefix = lt.public ? trimmed === lt.expected : raw.trimStart().startsWith(lt.prefix);
     if (!okPrefix && !lt.expected.startsWith(trimmed)) out.add('listPrefix');
     if (trimmed === lt.bare) out.add('handleMissing');
-  } else if (!isList && afterLeadingDate(cloneBaseOf(trimmed)) === '') {
+  }
+  // A date-only name has no short name (polish 2026-11-14, review R1): a campaign or template minus
+  // any Clone<k>; a list on its handle (the name minus its exact brand prefix), branded or not.
+  if (isList ? afterLeadingDate(s.trim()) === '' && s.trim() !== '' : afterLeadingDate(cloneBaseOf(trimmed)) === '') {
     out.add('handleMissing');
   }
 
   return WARNING_CODES.filter((code) => out.has(code));
+}
+
+// Post-release polish (2026-11-14, the user): the EXACT checks block saving in the three forms --
+// a standard that is not enforced is not a standard. The two heuristic checks (language: a last
+// word of EN/ES/FR/DE/IT, so "Make IT" trips it; brandFirst: any brand's slug or display name at
+// the start) stay amber warnings, because a block with no override would stop real names. Form-only:
+// the server's rule is still models/naming.go (length, control characters, reserved prefixes).
+export const BLOCKING_CODES = Object.freeze(['underscore', 'stepCode', 'dateFormat', 'datePosition', 'listPrefix', 'handleMissing']);
+
+// Is any of the codes a blocking one?
+export function isNameBlocked(codes) {
+  return (Array.isArray(codes) ? codes : []).some((c) => BLOCKING_CODES.includes(c));
+}
+
+// The field's Buefy type for the shown codes: red when one blocks, amber when only heuristics fire.
+export function nameMessageTypeOf(codes, extraWarning = false) {
+  if (isNameBlocked(codes)) return 'is-danger';
+  return (Array.isArray(codes) && codes.length) || extraWarning ? 'is-warning' : null;
 }
 
 // §3.1 -- the one date formatter: MM-DD-YY, local date, zero-padded.

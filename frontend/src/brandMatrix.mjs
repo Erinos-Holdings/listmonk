@@ -176,7 +176,8 @@ export function displayValue(row, field, mode = DEFAULT_STATE.mode) {
     return mode === 'num' ? num(row[field]) : num(row[`${field}_sales`]);
   }
   if (field === 'brand') {
-    return row.label;
+    // Polish 2026-11-14: the cell shows the lowercase slug.
+    return row.brand;
   }
   if (field === 'sent' || field === 'spam_rate') {
     return numOrNull(row[field]);
@@ -337,7 +338,8 @@ export function sortRows(rows, sort = DEFAULT_STATE.sort, mode = DEFAULT_STATE.m
   const byName = (a, b) => a.label.localeCompare(b.label, locale, { sensitivity: 'base' }) || a.brand.localeCompare(b.brand);
   return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
     if (field === 'brand') {
-      return byName(a, b) * dir;
+      // Polish 2026-11-14: by the slug the cell now shows.
+      return (a.brand.localeCompare(b.brand, locale, { sensitivity: 'base' }) * dir) || byName(a, b);
     }
     const va = displayValue(a, field, mode);
     const vb = displayValue(b, field, mode);

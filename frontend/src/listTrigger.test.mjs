@@ -364,10 +364,14 @@ test('I13: no preselected trigger, Save blocked, standard radios and locked list
 
   STANDARD_TRIGGERS.forEach((opt) => {
     assert.equal(isStandardTrigger(opt), true, opt);
-    assert.equal(journeyOptionDisabled(opt, false), true, opt);
-    assert.equal(journeyOptionDisabled(opt, true), false, opt);
+    // Polish 2026-11-14: disabled for everyone, except the list's own stored option.
+    assert.equal(journeyOptionDisabled(opt), true, opt);
+    assert.equal(journeyOptionDisabled(opt, ''), true, opt);
+    assert.equal(journeyOptionDisabled(opt, opt), false, `${opt} stays on its own list`);
+    STANDARD_TRIGGERS.filter((o) => o !== opt).forEach((other) => assert.equal(journeyOptionDisabled(opt, other), true));
   });
-  assert.equal(journeyOptionDisabled(TRIGGER_SKUS, false), false, 'SKUs stay enabled');
+  assert.equal(journeyOptionDisabled(TRIGGER_SKUS), false, 'SKUs stay enabled');
+  assert.equal(journeyOptionDisabled(TRIGGER_SKUS, TRIGGER_FIRST_ORDER), false);
   assert.deepEqual([...STANDARD_TRIGGERS].sort(), ['first_order', 'no_purchase', 'post_purchase']);
 
   // journey_locked is the server's field (never re-derived): read under either spelling.

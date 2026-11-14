@@ -141,7 +141,9 @@ import { CAMPAIGN_LANGS } from '../langs';
 import { normalizeMediaTagsLenient } from '../mediaTags';
 import { isOfficialName, runSweep, selectSweepItems } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault, templateNoticeBrand } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { nameCounter, namePlaceholder, nameWarnings } from '../naming.mjs'; // eslint-disable-line import/extensions
+import {
+  isNameBlocked, nameCounter, nameMessageTypeOf, namePlaceholder, nameWarnings,
+} from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -228,6 +230,11 @@ export default Vue.extend({
     onSubmit() {
       // Fork (name guardrails, D6) -- a save attempt counts as touched.
       this.nameTouched = true;
+      // Polish 2026-11-14: a name failing an exact check is not saved; the red line says why.
+      if (this.nameBlocked) {
+        this.$utils.toast(this.$t('naming.nameBlocked'), 'is-danger');
+        return;
+      }
 
       // OFFICIAL-FOOTER-SPEC D10/D11: an official save is a considered act -- confirm with the
       // counts the re-save sweep will touch, then save, then sweep.
@@ -490,8 +497,13 @@ export default Vue.extend({
       return lines.length ? lines : this.$t('naming.hint');
     },
 
+    // Polish 2026-11-14: red when an exact check fails (naming.mjs::nameMessageTypeOf).
     nameMessageType() {
-      return this.nameWarningCodes.length ? 'is-warning' : null;
+      return nameMessageTypeOf(this.nameWarningCodes);
+    },
+
+    nameBlocked() {
+      return this.$can('templates:manage') && isNameBlocked(nameWarnings('template', this.form.name, { brands: this.brandRows }));
     },
 
     nameSample() {

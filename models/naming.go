@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	// NameMaxLen is the standard's limit: the input field and the server enforce 30 (the
-	// guidance is 28 or fewer). For a branded list it applies to the part after the brand prefix.
+	// NameMaxLen is the standard's limit: the input field and the server enforce 30, and the
+	// guidance says 30 (2026-11-14; it said 28). For a branded list it applies to the part after
+	// the brand prefix.
 	NameMaxLen = 30
 
 	// CatalogCampaignPrefix marks a render-catalog draft (`CATALOG <stem>`, integrations
