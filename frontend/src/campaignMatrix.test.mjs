@@ -14,7 +14,7 @@ import {
   STATUS_ORDER, STORAGE_KEY, cellText, clickSort, conversionValue, dateCell, displayValue, filterByLaunch, filterByName,
   gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
   midColumns, nameCell, normalizeState, saveState, shapeRow, shapeRows, showBrandColumn,
-  sortRows, statusCell, statusRank, stripBrand, tableRows, totalsRow,
+  sortRows, statusCell, statusRank, tableRows, totalsRow,
 } from './campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { scopedCell } from './conversionCells.mjs'; // eslint-disable-line import/extensions
 
@@ -193,35 +193,9 @@ test('MATRIX-POLISH I8 (widened 2026-11-06): the name shows 60 characters then �
   // Characters, not UTF-16 units: an emoji is never split.
   const emoji = `${'x'.repeat(59)}🎉🎉`;
   assert.equal(nameCell(emoji).text, `${'x'.repeat(59)}🎉…`);
-  // Under a single-brand selection the shown text is brand-stripped; the title is the stored name.
-  const tg = { slug: 'thirstygirl', label: 'Thirsty Girl' };
-  assert.deepEqual(nameCell('Thirsty Girl Is Live', tg), { text: 'Is Live', title: 'Thirsty Girl Is Live' });
-  assert.deepEqual(nameCell('Thirsty Girl Is Live', null), { text: 'Thirsty Girl Is Live', title: 'Thirsty Girl Is Live' });
-});
-
-test('2026-11-06: stripBrand removes the brand name as a whole segment, with one separator run', () => {
-  const yq = { slug: 'younique', label: 'Younique' };
-  assert.equal(stripBrand('Younique Active - Nov 5th DE', yq), 'Active - Nov 5th DE');
-  assert.equal(stripBrand('Younique - Active Oct 15th - DE', yq), 'Active Oct 15th - DE');
-  assert.equal(stripBrand('Copy of Younique - Winback Oct 20th ES', yq), 'Copy of Winback Oct 20th ES');
-  assert.equal(stripBrand('110526_JoyBelle_Festive Flame_IT', { slug: 'joybelle', label: 'JoyBelle' }), '110526_Festive Flame_IT');
-  // Case-insensitive; the slug counts; a word-prefix of the display name (RUZE of "Ruze Pouches",
-  // BNKD of "BNKD Wellness") only between hard separators.
-  const ruze = { slug: 'ruze', label: 'Ruze Pouches' };
-  assert.equal(stripBrand('102926_RUZE_Energy, Focus, Unwind._EN', ruze), '102926_Energy, Focus, Unwind._EN');
-  assert.equal(stripBrand('Ruze_No purchase_15 days_EN', ruze), 'No purchase_15 days_EN');
-  assert.equal(stripBrand('BNKD_Welcome_EN', { slug: 'bnkd', label: 'BNKD Wellness' }), 'Welcome_EN');
-  assert.equal(stripBrand('High Five Friday', { slug: 'highcontrast', label: 'High Contrast Beauty' }), 'High Five Friday');
-  // A hard separator before and a space after keeps the hard one.
-  const tg = { slug: 'thirstygirl', label: 'Thirsty Girl' };
-  assert.equal(stripBrand('101926_Thirsty Girl Is Live_EN', tg), '101926_Is Live_EN');
-  assert.equal(stripBrand('Thirsty Girl journey — Day 0: Welcome', tg), 'journey — Day 0: Welcome');
-  // Never inside a word, never to an empty name, never without a brand.
-  assert.equal(stripBrand('Shalala party', { slug: 'shala', label: 'Shala' }), 'Shalala party');
-  assert.equal(stripBrand('TG_WE02_EN', tg), 'TG_WE02_EN');
-  assert.equal(stripBrand('Younique', yq), 'Younique');
-  assert.equal(stripBrand('Younique Active', null), 'Younique Active');
-  assert.equal(stripBrand('', yq), '');
+  // NAMING-STANDARD-SPEC D14 (R2): stripBrand is retired — a standard name carries no brand (the
+  // chip does), so the shown text is the stored name whatever the selection.
+  assert.deepEqual(nameCell('Why We Call It RUZE'), { text: 'Why We Call It RUZE', title: 'Why We Call It RUZE' });
 });
 
 test('2026-11-06: filterByName is a case-insensitive substring of the stored name; blank keeps all', () => {

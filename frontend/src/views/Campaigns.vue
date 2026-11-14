@@ -188,11 +188,10 @@
               data-cy="lang-chip" :title="langChipTitle(props.row)">
               {{ langChip(props.row.attribs.lang) }}
             </b-tag>
-            <!-- 2026-11-06: under a single-brand selection the brand's name is stripped from the shown
-                 text (campaignMatrix.mjs::stripBrand, as the Campaign Matrix does); the stored name is
-                 the copy. NAMING-STANDARD-SPEC D10: the hover is the former name when there is one. -->
+            <!-- NAMING-STANDARD-SPEC D14: the stored name, shown whole (the brand is the chip).
+                 D10: the hover is the former name when there is one. -->
             <router-link :to="{ name: 'campaign', params: { id: props.row.id } }" :title="nameTitle(props.row)">
-              {{ shownName(props.row.name) }}
+              {{ props.row.name }}
               <copy-text :text="props.row.name" hide-text />
             </router-link>
           </p>
@@ -444,9 +443,8 @@ import {
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
 import {
-  brandLabelOf, canCreateCampaign, filterByIds, storeLists,
+  canCreateCampaign, filterByIds, storeLists,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { stripBrand } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   campaignBrandOf, chipsFor, cloneBaseOf, cloneName, formerNameOf, nameCounter,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
@@ -547,10 +545,6 @@ export default Vue.extend({
   },
 
   methods: {
-    shownName(name) {
-      return this.stripBrandOf ? stripBrand(name, this.stripBrandOf) : name;
-    },
-
     // Fork (naming standard, NAMING-STANDARD-SPEC D1/D10) -- the title cell's chips and hover.
     chipsOf(row) {
       return chipsFor({ ...row, brand: campaignBrandOf({ lists: row.lists }, this.listBrands) }, {
@@ -1015,15 +1009,6 @@ export default Vue.extend({
         if (l && l.brand) out[l.id] = l.brand;
       });
       return out;
-    },
-
-    // The brand whose name shownName strips: the navbar's single-brand selection, else none.
-    stripBrandOf() {
-      const sel = this.brandSelection;
-      if (!sel || sel.kind !== 'brand') {
-        return null;
-      }
-      return { slug: sel.slug, label: brandLabelOf(sel.slug, this.brandRows) };
     },
 
     // Fork (integrations EDITOR-DEFAULTS-SPEC D1) -- the one predicate, shared with Navigation.vue.

@@ -181,15 +181,6 @@ export default Vue.extend({
       return showBrandColumn(this.brandSelection);
     },
 
-    // The brand whose name the name cell strips: the navbar's single-brand selection, else none.
-    stripBrand() {
-      const s = this.brandSelection;
-      if (!s || s.kind !== 'brand') {
-        return null;
-      }
-      return { slug: s.slug, label: brandLabelOf(s.slug, this.brandRows) };
-    },
-
     // HOURLY-HEALTH-SPEC D2: Campaign, Brand, Date, Status, Sent (campaignMatrix.mjs::leftColumns).
     leftCols() {
       return leftColumns(this.showBrand);
@@ -331,7 +322,7 @@ export default Vue.extend({
     },
 
     nameOf(row) {
-      return nameCell(row.name, this.stripBrand);
+      return nameCell(row.name);
     },
 
     // Fork (naming standard, NAMING-STANDARD-SPEC D1/D10).
