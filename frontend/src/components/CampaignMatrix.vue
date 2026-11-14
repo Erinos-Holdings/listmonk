@@ -104,15 +104,17 @@
                   :title="nameTitle(row)" :data-cy="`cm-name-${row.id}`">
 {{ nameOf(row).text }}
 </router-link>
-                <template v-else>{{ row.name }}</template>
               </td>
               <!-- MATRIX-VIEWS-SPEC D4: the upper-cased slug, the display name on hover. -->
               <td v-else-if="c.field === 'brand'" :key="c.field" :class="bmTd('brand')"
                 :title="brandOf(row).title" :data-cy="`cm-brand-${row.totals ? 'totals' : row.id}`">
                 {{ brandOf(row).text }}
               </td>
-              <td v-else-if="c.field === 'date'" :key="c.field" :class="bmTd('date')">
-                <span :title="dateTip(row)">{{ dateText(row) }}</span>
+              <!-- MATRIX-VIEWS-SPEC D3 (S4-1): Date is always the first column, so the totals row's
+                   label sits here. -->
+              <td v-else-if="c.field === 'date'" :key="c.field" :class="bmTd('date')" :data-cy="`cm-date-${row.totals ? 'totals' : row.id}`">
+                <template v-if="row.totals">{{ row.name }}</template>
+                <span v-else :title="dateTip(row)">{{ dateText(row) }}</span>
               </td>
               <!-- HOURLY-HEALTH-SPEC D2: the Campaigns page's status tag; empty on the totals row. -->
               <td v-else-if="c.field === 'status'" :key="c.field" :class="bmTd('status')"

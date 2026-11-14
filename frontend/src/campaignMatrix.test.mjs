@@ -784,3 +784,29 @@ test('matrixChips', () => {
   assert.doesNotMatch(vue, /chipsFor\(|import[^;]*\bchipsFor\b/);
   assert.doesNotMatch(vue, /brand-chip/);
 });
+
+// MATRIX-VIEWS-SPEC I8 (S4-3): the declarative wiring, pinned by text -- the root route and its
+// query-keeping redirect, one sidebar item outside the Campaigns group, the toggle's wiring, and the
+// totals label in the Date cell (S4-1).
+test('matrix views wiring', () => {
+  const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+  const router = read('./router/index.js');
+  const redirectAt = router.indexOf("path: '/campaigns/analytics'");
+  const rootAt = router.indexOf("path: '/analytics'");
+  assert.ok(redirectAt > -1 && rootAt > -1);
+  assert.match(router.slice(redirectAt, rootAt), /redirect: \(to\) => \(\{ name: 'campaignAnalytics', query: to\.query/);
+  assert.match(router.slice(rootAt, rootAt + 200), /name: 'campaignAnalytics'/);
+  assert.ok(redirectAt < router.indexOf("path: '/campaigns/:id'"));
+
+  const nav = read('./components/Navigation.vue');
+  assert.equal(nav.match(/data-cy="analytics"/g).length, 1);
+  const campaignsGroup = nav.slice(nav.indexOf('data-cy="campaigns"'), nav.indexOf('<!-- campaigns -->'));
+  assert.doesNotMatch(campaignsGroup, /campaignAnalytics/);
+
+  const vue = read('./components/CampaignMatrix.vue');
+  assert.match(vue, /midColumns\(this\.showGp, this\.state\.view\)/);
+  assert.match(vue, /groupHeaders\(this\.showGp, this\.state\.view\)/);
+  assert.match(vue, /onView\(\) \{\s*this\.state\.sort = sortForView\(this\.state\.sort, this\.state\.view, this\.showGp\);/);
+  assert.match(vue, /created\(\) \{[^}]*sortForView\(/);
+  assert.match(vue, /<template v-if="row\.totals">\{\{ row\.name \}\}<\/template>/);
+});
