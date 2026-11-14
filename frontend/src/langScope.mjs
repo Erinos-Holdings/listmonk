@@ -209,6 +209,25 @@ export function subscriberResponseCurrent(seq, latestSeq, mounted) {
   return mounted === true && Number.isInteger(seq) && seq === latestSeq;
 }
 
+// D4 (stage 4b S4b-1): the target of a Subscribers bulk verb (blocklist, delete, the Manage-lists
+// add / remove / unsubscribe) -- 'query' ONLY when "select all" is on, 'ids' when rows are checked,
+// else 'none' (send nothing). Never a by-ID -> by-query fallthrough: a selection that emptied (a
+// query answered while the modal was open) is no request, not the whole filter.
+export function bulkTarget({ all, checkedCount } = {}) {
+  if (all === true) {
+    return 'query';
+  }
+  return Number.isInteger(checkedCount) && checkedCount > 0 ? 'ids' : 'none';
+}
+
+// D4 (stage 4b S4b-2): the filter a by-query body, the export and their confirmation's language
+// line are built from -- the queryParams the ACCEPTED answer answered (the snapshot taken when it
+// was applied), never the live object, which the search box edits before any query runs. null
+// (nothing answered yet) is the busy state; the caller sends nothing.
+export function answeredFilter(snapshot) {
+  return snapshot && typeof snapshot === 'object' ? { ...snapshot } : null;
+}
+
 // D4 (S2-3, I6): the language line shown before every by-query write and export -- '' when the
 // request carries no `lang`, else fmt(lang) (the component passes a translated sentence built
 // from its own label of the value). params is a request body ({ lang }) or the export's

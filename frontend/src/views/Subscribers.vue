@@ -271,7 +271,7 @@ import {
   effectiveListIds, filterByIds, gridFilterOf, scopeUnion, subscriberExportParams, subscriberQueryBody,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
-  byQueryLangNote, langParam, routeLangLabel, subscriberResponseCurrent,
+  answeredFilter, bulkTarget, byQueryLangNote, langParam, routeLangLabel, subscriberResponseCurrent,
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
@@ -320,6 +320,10 @@ export default Vue.extend({
       // its own answered is busy (the store may still hold another mount's rows).
       reqSeq: 0,
       answeredSeq: -1,
+      // Stage 4b S4b-2 -- the queryParams the accepted answer answered; every by-query body, the
+      // export and their language line are built from it (langScope.mjs::answeredFilter), never
+      // from the live queryParams the search box edits before any query runs.
+      answeredQuery: null,
 
       // Query params to filter the getSubscribers() API call.
       queryParams: {
@@ -528,6 +532,9 @@ export default Vue.extend({
       this.reqSeq += 1;
       const seq = this.reqSeq;
       const current = () => subscriberResponseCurrent(seq, this.reqSeq, this.pageMounted === true);
+      // Stage 4b S4b-2 -- the filter this query asks, kept as answeredQuery once its answer is
+      // accepted: the rows on screen answer exactly it.
+      const asked = { ...this.queryParams };
       this.$nextTick(() => {
         // S4-2: only a SUCCESSFUL answer un-busies the page -- a failed query leaves the previous
         // filter's rows on screen, so the page stays busy until a query of it succeeds.
@@ -536,6 +543,7 @@ export default Vue.extend({
             return;
           }
           this.answeredSeq = seq;
+          this.answeredQuery = asked;
           this.bulk.checked = [];
         });
       });
@@ -583,7 +591,14 @@ export default Vue.extend({
       }
       let fn = null;
       let body = null;
-      if (!this.bulk.all && this.bulk.checked.length > 0) {
+      // Stage 4b S4b-1 -- by query ONLY under "select all"; nothing checked and no select-all
+      // sends nothing (langScope.mjs::bulkTarget).
+      const target = bulkTarget({ all: this.bulk.all, checkedCount: this.bulk.checked.length });
+      const filter = answeredFilter(this.answeredQuery);
+      if (target === 'none' || (target === 'query' && !filter)) {
+        return;
+      }
+      if (target === 'ids') {
         // If 'all' is not selected, blocklist subscribers by IDs.
         fn = () => {
           const ids = this.bulk.checked.map((s) => s.id);
@@ -594,7 +609,8 @@ export default Vue.extend({
         // 'All' is selected, blocklist by query.
         // Fork (global brand, D8/I12) -- the body carries the effective list ids.
         // GLOBAL-LANG D4 (S2-3) -- the body is built once: the confirmation names its language.
-        body = subscriberQueryBody(this.queryParams, this.scopeListIds);
+        // Stage 4b S4b-2 -- from the answered filter, never the live (possibly edited) one.
+        body = subscriberQueryBody(filter, this.scopeListIds);
         fn = () => {
           this.$api.blocklistSubscribersByQuery(body)
             .then(() => this.querySubscribers());
@@ -615,7 +631,12 @@ export default Vue.extend({
       // filter (list grid) and the selected ids, built by brandScope.mjs. GLOBAL-LANG D4 (S2-3)
       // -- built before the confirmation, which names its language.
       const ids = !this.bulk.all && this.bulk.checked.length > 0 ? this.bulk.checked.map((s) => s.id) : [];
-      const params = subscriberExportParams(this.queryParams, this.scopeListIds, ids);
+      // Stage 4b S4b-2 -- from the answered filter, never the live (possibly edited) one.
+      const filter = answeredFilter(this.answeredQuery);
+      if (!filter) {
+        return;
+      }
+      const params = subscriberExportParams(filter, this.scopeListIds, ids);
       this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmExport', { num }), params), () => {
         const q = new URLSearchParams(params);
 
@@ -629,7 +650,13 @@ export default Vue.extend({
       }
       let fn = null;
       let body = null;
-      if (!this.bulk.all && this.bulk.checked.length > 0) {
+      // Stage 4b S4b-1 -- by query ONLY under "select all" (langScope.mjs::bulkTarget).
+      const target = bulkTarget({ all: this.bulk.all, checkedCount: this.bulk.checked.length });
+      const filter = answeredFilter(this.answeredQuery);
+      if (target === 'none' || (target === 'query' && !filter)) {
+        return;
+      }
+      if (target === 'ids') {
         // If 'all' is not selected, delete subscribers by IDs.
         fn = () => {
           const ids = this.bulk.checked.map((s) => s.id);
@@ -646,11 +673,12 @@ export default Vue.extend({
         body = {
           // If the query expression is empty, explicitly pass `all=true`
           // so that the backend deletes all records in the DB with an empty query string.
-          all: this.queryParams.queryExp.trim() === '' && this.queryParams.search.trim() === '',
+          // Stage 4b S4b-2 -- the answered filter's texts, never the live box's.
+          all: filter.queryExp.trim() === '' && filter.search.trim() === '',
           // Fork (list grid, D7). all=true above is sent exactly when a grid-linked page has
           // no search -- the server keeps the segment through it (it never voids a segment).
           // Fork (global brand, D8/I12) -- and the effective list ids, which it keeps too.
-          ...subscriberQueryBody(this.queryParams, this.scopeListIds),
+          ...subscriberQueryBody(filter, this.scopeListIds),
         };
         fn = () => {
           this.$api.deleteSubscribersByQuery(body).then(() => {
@@ -689,19 +717,27 @@ export default Vue.extend({
         fn = this.$api.addSubscribersToLists;
         data.ids = [this.listFormTarget.id];
         this.listFormTarget = null;
-      } else if (!this.bulk.all && this.bulk.checked.length > 0) {
-        // If 'all' is not selected, perform by IDs.
-        fn = this.$api.addSubscribersToLists;
-        data.ids = this.bulk.checked.map((s) => s.id);
       } else {
-        // GLOBAL-LANG D4 (S2-1) -- never by query while the rows are loading.
-        if (this.byQueryBusy) {
-          return;
+        // Stage 4b S4b-1 -- by query ONLY under "select all"; a selection emptied while the modal
+        // was open (a query answered) sends nothing -- never a fallthrough to the whole filter.
+        const target = bulkTarget({ all: this.bulk.all, checkedCount: this.bulk.checked.length });
+        if (target === 'ids') {
+          // If 'all' is not selected, perform by IDs.
+          fn = this.$api.addSubscribersToLists;
+          data.ids = this.bulk.checked.map((s) => s.id);
+        } else {
+          const filter = answeredFilter(this.answeredQuery);
+          // GLOBAL-LANG D4 (S2-1) -- never by query while the rows are loading.
+          if (target !== 'query' || this.byQueryBusy || !filter) {
+            this.isBulkListFormVisible = false;
+            return;
+          }
+          // 'All' is selected, perform by query. Fork (list grid, D7; global brand, D8/I12) -- the
+          // shared by-query body: query, search, status, grid filter and the effective list ids,
+          // from the answered filter (stage 4b S4b-2).
+          Object.assign(data, subscriberQueryBody(filter, this.scopeListIds));
+          fn = this.$api.addSubscribersToListsByQuery;
         }
-        // 'All' is selected, perform by query. Fork (list grid, D7; global brand, D8/I12) -- the
-        // shared by-query body: query, search, status, grid filter and the effective list ids.
-        Object.assign(data, subscriberQueryBody(this.queryParams, this.scopeListIds));
-        fn = this.$api.addSubscribersToListsByQuery;
       }
 
       fn(data).then(() => {
@@ -772,10 +808,13 @@ export default Vue.extend({
 
     // GLOBAL-LANG D4 (S2-3, I6) -- the Manage-lists modal's language line, by-query mode only.
     bulkListLangNote() {
-      if (this.listFormTarget || (!this.bulk.all && this.bulk.checked.length > 0)) {
+      const filter = answeredFilter(this.answeredQuery);
+      if (this.listFormTarget || !filter
+        || bulkTarget({ all: this.bulk.all, checkedCount: this.bulk.checked.length }) !== 'query') {
         return '';
       }
-      return byQueryLangNote(this.gridFilter, (l) => this.$t('naming.byQueryLang', { lang: this.routeLangLabel(l) }));
+      // Stage 4b S4b-2 -- the answered filter's language, the one the by-query body will carry.
+      return byQueryLangNote(gridFilterOf(filter), (l) => this.$t('naming.byQueryLang', { lang: this.routeLangLabel(l) }));
     },
 
     // Fork (LIST-COLLAPSE-SPEC C8). Shown when languages are on, or when the route carries one

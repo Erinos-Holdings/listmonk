@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import {
   APPLICABILITY_STATES, LANG_APPLICABILITY, SUBSCRIBER_ROUTES, byQueryLangNote, effectiveLang, langApplicability,
   langEntryRedirect, langNote, langToggleVisible, routeLangLabel, subscriberResponseCurrent, viewPaneValue,
+  answeredFilter, bulkTarget,
 } from './langScope.mjs'; // eslint-disable-line import/extensions
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -60,18 +61,68 @@ test('global language wiring', () => {
     return subs.slice(at, subs.indexOf('\n    },', at));
   };
   ['blocklistSubscribers', 'deleteSubscribers', 'exportSubscribers'].forEach((m) => assert.match(method(m), /if \(this\.byQueryBusy\) \{\s*return;/, m));
-  assert.match(method('bulkChangeLists'), /if \(this\.byQueryBusy\) \{\s*return;/); // add / remove / unsubscribe by query
+  // add / remove / unsubscribe by query: the busy guard sits in the one by-query condition.
+  assert.match(method('bulkChangeLists'), /\|\| this\.byQueryBusy \|\|[^\n]*\{\s*this\.isBulkListFormVisible = false;\s*return;/);
   assert.match(method('showBulkListForm'), /this\.bulk\.all && this\.byQueryBusy/);
   // The by-query language note on Blocklist, Delete, Export and the Manage-lists modal (I6).
   assert.match(method('blocklistSubscribers'), /withLangNote\(this\.\$t\('subscribers\.confirmBlocklist'/);
   assert.match(method('deleteSubscribers'), /withLangNote\(this\.\$t\('subscribers\.confirmDelete'/);
   assert.match(method('exportSubscribers'), /withLangNote\(this\.\$t\('subscribers\.confirmExport'/);
   assert.match(subs, /:lang-note="bulkListLangNote"/);
-  assert.match(subs, /bulkListLangNote\(\) \{[\s\S]*?byQueryLangNote\(this\.gridFilter,/);
+  assert.match(subs, /bulkListLangNote\(\) \{[\s\S]*?byQueryLangNote\(gridFilterOf\(filter\),/);
   assert.match(read('./views/SubscriberBulkList.vue'), /<p v-if="langNote"/);
   // The toggle rewrites the route; the read query goes through gridFilterOf.
   assert.match(subs, /langEffective\(now\) \{[\s\S]*?this\.onLangSelect\(want\);/);
   assert.match(subs, /gridFilter\(\) \{\s*return gridFilterOf\(this\.queryParams\);/);
+
+  // Stage 4b S4b-3 -- the round-1 fixes, each revertible only by failing here.
+  // S4-2: no failed-query un-busy in querySubscribers.
+  assert.doesNotMatch(method('querySubscribers'), /\.catch\(/);
+  assert.match(method('querySubscribers'), /this\.answeredSeq = seq;\s*this\.answeredQuery = asked;/);
+  // S4-1: the subscriber route queries too -- the list query is outside the params.id branch.
+  const mountedAt = subs.indexOf('\n  mounted() {');
+  const mounted = subs.slice(mountedAt, subs.indexOf('\n  },', mountedAt));
+  assert.match(mounted, /if \(this\.\$route\.params\.id\) \{[\s\S]*?\n {4}\}\n[\s\S]*?\n {4}this\.afterListsLoaded\(\(\) => this\.querySubscribers\(\)\);/);
+  assert.doesNotMatch(mounted, /\} else \{/);
+  // S4-3: closing the form keeps the route's lang (only lang).
+  assert.match(method('onFormClose'), /\{ lang: this\.\$route\.query\.lang \}/);
+  assert.match(method('onFormClose'), /this\.\$router\.push\(\{ name: 'subscribers', query \}\)/);
+  // S4b-1: by query only under select-all, never a by-ID fallthrough.
+  ['blocklistSubscribers', 'deleteSubscribers', 'bulkChangeLists'].forEach((m) => {
+    assert.match(method(m), /bulkTarget\(\{ all: this\.bulk\.all, checkedCount: this\.bulk\.checked\.length \}\)/, m);
+    assert.doesNotMatch(method(m), /!this\.bulk\.all && this\.bulk\.checked\.length > 0/, m);
+  });
+  ['blocklistSubscribers', 'deleteSubscribers'].forEach((m) => {
+    assert.match(method(m), /if \(target === 'none' \|\| \(target === 'query' && !filter\)\) \{\s*return;/, m);
+  });
+  assert.match(method('bulkChangeLists'), /if \(target !== 'query' \|\| this\.byQueryBusy \|\| !filter\) \{/);
+  // S4b-2: every by-query body and the export from the answered snapshot, never the live params.
+  ['blocklistSubscribers', 'deleteSubscribers', 'bulkChangeLists'].forEach((m) => {
+    assert.match(method(m), /const filter = answeredFilter\(this\.answeredQuery\);/, m);
+    assert.match(method(m), /subscriberQueryBody\(filter, this\.scopeListIds\)/, m);
+  });
+  assert.match(method('deleteSubscribers'), /all: filter\.queryExp\.trim\(\) === '' && filter\.search\.trim\(\) === ''/);
+  assert.match(method('exportSubscribers'), /subscriberExportParams\(filter, this\.scopeListIds, ids\)/);
+  assert.doesNotMatch(subs, /subscriberQueryBody\(this\.queryParams/);
+  assert.doesNotMatch(subs, /subscriberExportParams\(this\.queryParams/);
+});
+
+// Stage 4b S4b-1/S4b-2 -- the pure halves.
+test('bulk target and the answered filter', () => {
+  assert.equal(bulkTarget({ all: true, checkedCount: 0 }), 'query');
+  assert.equal(bulkTarget({ all: true, checkedCount: 20 }), 'query');
+  assert.equal(bulkTarget({ all: false, checkedCount: 3 }), 'ids');
+  assert.equal(bulkTarget({ all: false, checkedCount: 0 }), 'none'); // never a by-query fallthrough
+  assert.equal(bulkTarget({}), 'none');
+  assert.equal(bulkTarget(), 'none');
+  assert.equal(bulkTarget({ all: 'yes', checkedCount: 0 }), 'none');
+
+  assert.equal(answeredFilter(null), null);
+  assert.equal(answeredFilter(undefined), null);
+  const snap = { search: 'gmail', queryExp: '', lang: 'es' };
+  const f = answeredFilter(snap);
+  assert.deepEqual(f, snap);
+  assert.notEqual(f, snap); // a copy: the snapshot is never edited through it
 });
 
 // I1 -- agreement with the router file's text: every `name: '<x>'` route, no more, no fewer.
