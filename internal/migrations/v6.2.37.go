@@ -17,8 +17,10 @@ import (
 //     of such a hold to unsubscribed, blocklisted/disabled, a complaint, any unsubscribed row on
 //     a marketing list of the brand);
 //   - join_plan(subscriber uuid, campaign uuid) -- the one plan both verbs read; it says join only
-//     for a recipient (a row on one of the campaign's lists) of a campaign whose body or template
-//     carries JoinURL (D4 row 6a), so a rewritten unsubscribe URL joins nobody.
+//     for a recipient (a non-unsubscribed row on one of the campaign's lists) of a campaign whose
+//     rendered send carries the {{ JoinURL }} action -- its body or altbody, or
+//     COALESCE(frozen_template_body, the live template, the default template), the send's own
+//     template choice (D4 row 6a, S4-2/S4b-1..3) -- so a rewritten unsubscribe URL joins nobody.
 //
 // No table, column or index. The only write is the binary's join-brand query, which calls
 // join_plan; nothing else calls the functions.
@@ -73,9 +75,11 @@ $$ LANGUAGE sql STABLE;
 CREATE OR REPLACE FUNCTION join_plan(p_sub_uuid UUID, p_camp_uuid UUID)
 RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
     WITH c AS (SELECT cp.id, NULLIF(cp.attribs->>'lang', '') AS lang,
-            (STRPOS(COALESCE(cp.body, ''), 'JoinURL') > 0
-                OR EXISTS (SELECT 1 FROM templates t WHERE t.id = cp.template_id AND STRPOS(COALESCE(t.body, ''), 'JoinURL') > 0)) AS tagged
-        FROM campaigns cp WHERE cp.uuid = p_camp_uuid),
+            (COALESCE(cp.body, '') ~ '\{\{-?\s*JoinURL\y'
+                OR COALESCE(cp.altbody, '') ~ '\{\{-?\s*JoinURL\y'
+                OR COALESCE(cp.frozen_template_body, t.body,
+                    (SELECT d.body FROM templates d WHERE d.is_default = true LIMIT 1), '') ~ '\{\{-?\s*JoinURL\y') AS tagged
+        FROM campaigns cp LEFT JOIN templates t ON (t.id = cp.template_id) WHERE cp.uuid = p_camp_uuid),
     b AS (SELECT campaign_brand(p_camp_uuid) AS brand),
     m AS (SELECT brand_master_list_id((SELECT b.brand FROM b)) AS list_id),
     s AS (SELECT sb.id FROM subscribers sb WHERE sb.uuid = p_sub_uuid),
@@ -90,7 +94,8 @@ RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
             WHEN EXISTS (SELECT 1 FROM r) THEN 'cannot'
             WHEN NOT COALESCE((SELECT c.tagged FROM c), FALSE)
                 OR NOT EXISTS (SELECT 1 FROM subscriber_lists rl JOIN campaign_lists cl ON (cl.list_id = rl.list_id)
-                    WHERE rl.subscriber_id = (SELECT s.id FROM s) AND cl.campaign_id = (SELECT c.id FROM c)) THEN 'cannot'
+                    WHERE rl.subscriber_id = (SELECT s.id FROM s) AND cl.campaign_id = (SELECT c.id FROM c)
+                        AND rl.status <> 'unsubscribed') THEN 'cannot'
             ELSE 'join' END,
         (SELECT b.brand FROM b), (SELECT m.list_id FROM m), (SELECT c.lang FROM c);
 $$ LANGUAGE sql STABLE;

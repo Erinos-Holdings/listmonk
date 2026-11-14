@@ -1242,9 +1242,11 @@ ALTER TABLE lists ADD COLUMN IF NOT EXISTS trigger_active_by TEXT NULL;
 --
 -- join_plan: the ONE plan both verbs read (D4, first match wins) -- no_campaign, no_brand,
 -- no_master, refused, already (master row confirmed), cannot (any other master row), cannot (row
--- 6a, S4-2 -- the campaign's body or its template's body does not carry JoinURL, or the subscriber
--- holds no row on any of the campaign's lists), join (no master row). lang is the campaign's
--- attribs.lang.
+-- 6a, S4-2/S4b -- what the send renders carries no {{ JoinURL }} action, or the subscriber holds
+-- no non-unsubscribed row on any of the campaign's lists), join (no master row). "What the send
+-- renders" is the campaign's body or altbody plus COALESCE(frozen_template_body, the live
+-- template's body, the default template's body) -- the send's own COALESCE (queries/campaigns.sql)
+-- -- matched as the template action, never the bare word. lang is the campaign's attribs.lang.
 CREATE OR REPLACE FUNCTION brand_master_list_id(p_brand TEXT) RETURNS INT AS $$
     SELECT CASE WHEN COUNT(*) = 1 THEN MIN(l.id) ELSE NULL END FROM lists l
         WHERE p_brand IS NOT NULL AND list_brand_tag(l.tags) = p_brand
@@ -1270,9 +1272,11 @@ $$ LANGUAGE sql STABLE;
 CREATE OR REPLACE FUNCTION join_plan(p_sub_uuid UUID, p_camp_uuid UUID)
 RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
     WITH c AS (SELECT cp.id, NULLIF(cp.attribs->>'lang', '') AS lang,
-            (STRPOS(COALESCE(cp.body, ''), 'JoinURL') > 0
-                OR EXISTS (SELECT 1 FROM templates t WHERE t.id = cp.template_id AND STRPOS(COALESCE(t.body, ''), 'JoinURL') > 0)) AS tagged
-        FROM campaigns cp WHERE cp.uuid = p_camp_uuid),
+            (COALESCE(cp.body, '') ~ '\{\{-?\s*JoinURL\y'
+                OR COALESCE(cp.altbody, '') ~ '\{\{-?\s*JoinURL\y'
+                OR COALESCE(cp.frozen_template_body, t.body,
+                    (SELECT d.body FROM templates d WHERE d.is_default = true LIMIT 1), '') ~ '\{\{-?\s*JoinURL\y') AS tagged
+        FROM campaigns cp LEFT JOIN templates t ON (t.id = cp.template_id) WHERE cp.uuid = p_camp_uuid),
     b AS (SELECT campaign_brand(p_camp_uuid) AS brand),
     m AS (SELECT brand_master_list_id((SELECT b.brand FROM b)) AS list_id),
     s AS (SELECT sb.id FROM subscribers sb WHERE sb.uuid = p_sub_uuid),
@@ -1287,7 +1291,8 @@ RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
             WHEN EXISTS (SELECT 1 FROM r) THEN 'cannot'
             WHEN NOT COALESCE((SELECT c.tagged FROM c), FALSE)
                 OR NOT EXISTS (SELECT 1 FROM subscriber_lists rl JOIN campaign_lists cl ON (cl.list_id = rl.list_id)
-                    WHERE rl.subscriber_id = (SELECT s.id FROM s) AND cl.campaign_id = (SELECT c.id FROM c)) THEN 'cannot'
+                    WHERE rl.subscriber_id = (SELECT s.id FROM s) AND cl.campaign_id = (SELECT c.id FROM c)
+                        AND rl.status <> 'unsubscribed') THEN 'cannot'
             ELSE 'join' END,
         (SELECT b.brand FROM b), (SELECT m.list_id FROM m), (SELECT c.lang FROM c);
 $$ LANGUAGE sql STABLE;

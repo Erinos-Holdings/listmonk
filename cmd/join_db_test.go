@@ -46,7 +46,9 @@ const joinBody = `<p>Oui !</p><a href="{{ JoinURL }}">Join</a>`
 // carries the Join link.
 func (f *joinFixture) langCamp(name, lang string, lists ...int) (int, string) {
 	uu := f.camp(name, lists...)
-	f.db.MustExec(`UPDATE campaigns SET body = $2 WHERE uuid = $1`, uu, joinBody)
+	// template_id NULL: the fixture's `SELECT id FROM templates LIMIT 1` would otherwise pick
+	// whichever template an earlier case created (S4b-3's confound).
+	f.db.MustExec(`UPDATE campaigns SET body = $2, template_id = NULL WHERE uuid = $1`, uu, joinBody)
 	if lang != "" {
 		f.db.MustExec(`UPDATE campaigns SET attribs = JSONB_BUILD_OBJECT('lang', $2::TEXT) WHERE uuid = $1`, uu, lang)
 	}
@@ -55,6 +57,23 @@ func (f *joinFixture) langCamp(name, lang string, lists ...int) (int, string) {
 		f.t.Fatal(err)
 	}
 	return id, uu
+}
+
+// tpl creates a campaign template, with or without the Join link; isDefault makes it the default
+// template (clearing any other).
+func (f *joinFixture) tpl(name string, withJoin, isDefault bool) int {
+	body := `<p>tpl</p>{{ template "content" . }}`
+	if withJoin {
+		body = `<a href="{{ JoinURL }}">j</a>{{ template "content" . }}`
+	}
+	if isDefault {
+		f.db.MustExec(`UPDATE templates SET is_default = false WHERE is_default`)
+	}
+	var id int
+	if err := f.db.Get(&id, `INSERT INTO templates (name, type, subject, body, is_default) VALUES ($1, 'campaign', '', $2, $3) RETURNING id`, name, body, isDefault); err != nil {
+		f.t.Fatal(err)
+	}
+	return id
 }
 
 // bareSub creates a subscriber with no list rows and the given attribs JSON.
@@ -223,14 +242,56 @@ func joinCases() []joinCase {
 		// D4 row 6a (S4-2): the link is live only where it was sent.
 		{"6a: a campaign without JoinURL (a rewritten unsubscribe URL)", func(f *joinFixture) (string, string) {
 			camp, uu := onWinback(f, "notag@x", nil)
-			f.db.MustExec(`UPDATE campaigns SET body = '<a href="{{ UnsubscribeURL }}">u</a>' WHERE uuid = $1`, camp)
-			var n int
-			f.db.Get(&n, `SELECT COUNT(*) FROM campaigns c JOIN templates t ON (t.id = c.template_id) WHERE c.uuid = $1 AND t.body LIKE '%JoinURL%'`, camp)
-			if n != 0 {
-				f.t.Fatalf("fixture template carries JoinURL")
-			}
+			f.db.MustExec(`UPDATE campaigns SET body = '<a href="{{ UnsubscribeURL }}">u</a>', template_id = $2 WHERE uuid = $1`, camp, f.tpl("plain tpl", false, false))
 			return camp, uu
 		}, models.JoinOutcomeCannot},
+		// S4b-1: the gate reads the template the send renders -- the frozen body first, else the
+		// live template, else the default template.
+		{"6a/S4b-1: frozen template body with the link, live template without", func(f *joinFixture) (string, string) {
+			camp, uu := onWinback(f, "frozen-with@x", nil)
+			f.db.MustExec(`UPDATE campaigns SET body = 'plain', template_id = $2, frozen_template_body = $3 WHERE uuid = $1`,
+				camp, f.tpl("live without", false, false), `<a href="{{ JoinURL . }}">j</a>{{ template "content" . }}`)
+			return camp, uu
+		}, models.JoinOutcomeJoin},
+		{"6a/S4b-1: frozen template body without the link, live template with", func(f *joinFixture) (string, string) {
+			camp, uu := onWinback(f, "frozen-without@x", nil)
+			f.db.MustExec(`UPDATE campaigns SET body = 'plain', template_id = $2, frozen_template_body = $3 WHERE uuid = $1`,
+				camp, f.tpl("live with", true, false), `<p>old</p>{{ template "content" . }}`)
+			return camp, uu
+		}, models.JoinOutcomeCannot},
+		{"6a/S4b-1: no template_id, the default template carries the link", func(f *joinFixture) (string, string) {
+			camp, uu := onWinback(f, "default-tpl@x", nil)
+			f.tpl("default with", true, true)
+			f.db.MustExec(`UPDATE campaigns SET body = 'plain', template_id = NULL WHERE uuid = $1`, camp)
+			return camp, uu
+		}, models.JoinOutcomeJoin},
+		// S4b-2: an unsubscribed row on a campaign list outside the brand's marketing set
+		// (transactional) is not a recipient; an unconfirmed one is (single opt-in mails it).
+		{"6a/S4b-2: only an unsubscribed row on a transactional campaign list", func(f *joinFixture) (string, string) {
+			_, camp := f.langCamp("acme receipt unsub", "", f.txn)
+			id, uu := f.bareSub("txnunsub@x", `{}`)
+			f.addRow(id, f.txn, "unsubscribed", `{}`)
+			return camp, uu
+		}, models.JoinOutcomeCannot},
+		{"6a/S4b-2: an unconfirmed row on a transactional campaign list", func(f *joinFixture) (string, string) {
+			_, camp := f.langCamp("acme receipt unconf", "", f.txn)
+			id, uu := f.bareSub("txnunconf@x", `{}`)
+			f.addRow(id, f.txn, "unconfirmed", `{}`)
+			return camp, uu
+		}, models.JoinOutcomeJoin},
+		// S4b-3: the template ACTION, not the word; body or altbody.
+		{"6a/S4b-3: the word JoinURL only in an HTML comment and visible text", func(f *joinFixture) (string, string) {
+			camp, uu := onWinback(f, "word@x", nil)
+			f.db.MustExec(`UPDATE campaigns SET body = '<!-- TODO add JoinURL later --><p>JoinURL soon</p><a href="{{ UnsubscribeURL }}">u</a>', template_id = $2 WHERE uuid = $1`,
+				camp, f.tpl("plain tpl 2", false, false))
+			return camp, uu
+		}, models.JoinOutcomeCannot},
+		{"6a/S4b-3: the action only in altbody", func(f *joinFixture) (string, string) {
+			camp, uu := onWinback(f, "alt@x", nil)
+			f.db.MustExec(`UPDATE campaigns SET body = '<a href="{{ UnsubscribeURL }}">u</a>', altbody = 'Join: {{JoinURL}}', template_id = $2 WHERE uuid = $1`,
+				camp, f.tpl("plain tpl 3", false, false))
+			return camp, uu
+		}, models.JoinOutcomeJoin},
 		{"6a: a non-recipient of a JoinURL campaign", func(f *joinFixture) (string, string) {
 			_, camp := f.langCamp("acme win-back other", "fr", f.winback)
 			id, uu := f.bareSub("nonrecip@x", `{}`)
@@ -239,11 +300,7 @@ func joinCases() []joinCase {
 		}, models.JoinOutcomeCannot},
 		{"6a: a recipient whose campaign carries JoinURL in its TEMPLATE only", func(f *joinFixture) (string, string) {
 			camp, uu := onWinback(f, "tpltag@x", nil)
-			var tpl int
-			if err := f.db.Get(&tpl, `INSERT INTO templates (name, type, subject, body) VALUES ('join tpl', 'campaign', '', '<a href="{{ JoinURL }}">j</a>{{ template "content" . }}') RETURNING id`); err != nil {
-				f.t.Fatal(err)
-			}
-			f.db.MustExec(`UPDATE campaigns SET body = 'plain', template_id = $2 WHERE uuid = $1`, camp, tpl)
+			f.db.MustExec(`UPDATE campaigns SET body = 'plain', template_id = $2 WHERE uuid = $1`, camp, f.tpl("join tpl", true, false))
 			return camp, uu
 		}, models.JoinOutcomeJoin},
 		{"6a: a recipient of a JoinURL campaign on a non-winback list (a transactional list)", func(f *joinFixture) (string, string) {
