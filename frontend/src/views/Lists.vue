@@ -19,10 +19,18 @@
         </div>
       </div>
       <div class="column has-text-right">
+        <!-- Fork (name guardrails, integrations NAME-GUARDRAILS-SPEC D7) -- New needs one brand in
+             the navbar selector, exactly as Campaigns' New (the one predicate, canCreateCampaign). -->
         <b-field v-if="$can('lists:manage_all')" expanded>
-          <b-button expanded type="is-primary" icon-left="plus" class="btn-new" @click="showNewForm" data-cy="btn-new">
-            {{ $t('globals.buttons.new') }}
-          </b-button>
+          <b-tooltip :label="$t('campaigns.needBrand')" :active="!canNew" position="is-left" type="is-dark" style="width: 100%">
+            <b-button v-if="canNew" expanded type="is-primary" icon-left="plus" class="btn-new" @click="showNewForm" data-cy="btn-new">
+              {{ $t('globals.buttons.new') }}
+            </b-button>
+            <b-button v-else expanded disabled class="btn-new" type="is-primary" icon-left="plus"
+              data-cy="btn-new" :aria-label="$t('campaigns.needBrand')">
+              {{ $t('globals.buttons.new') }}
+            </b-button>
+          </b-tooltip>
         </b-field>
       </div>
     </header>
@@ -313,7 +321,7 @@ import HealthChip from '../components/HealthChip.vue';
 import { isSendPlus, sendLangCode } from '../langs';
 import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { isLockedList } from '../listBrand.mjs'; // eslint-disable-line import/extensions
-import { brandLabelOf, listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { brandLabelOf, canCreateCampaign, listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { formerNameOf, listDisplayName } from '../naming.mjs'; // eslint-disable-line import/extensions
 import { withSunsetItem } from '../listSunset.mjs'; // eslint-disable-line import/extensions
 import { journeyLockedOf, withTriggerItem, activeWordOf } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
@@ -705,6 +713,12 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading', 'settings', 'serverConfig', 'profile']),
+
+    // Fork (name guardrails, NAME-GUARDRAILS-SPEC D7) -- the one predicate, shared with
+    // Campaigns.vue and Navigation.vue: New needs one brand selected.
+    canNew() {
+      return canCreateCampaign(this.brandSelection);
+    },
 
     // Fork (brand analytics, BRAND-ANALYTICS-SPEC D9) -- accessPolicy.mjs.
     canViewBrand() {

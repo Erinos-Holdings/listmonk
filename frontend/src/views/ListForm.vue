@@ -34,10 +34,23 @@
         </b-notification>
         <!-- Fork (naming standard, NAMING-STANDARD-SPEC D3/D6) -- the limit is 30 after the brand
              prefix (`<SLUG> ` private, `<display name> ` public), so maxlength is 30 + the prefix;
-             the hint names the rule. -->
-        <b-field :label="$t('globals.fields.name')" label-position="on-border" :message="$t('naming.hint')">
+             the hint names the rule.
+             Fork (name guardrails, NAME-GUARDRAILS-SPEC §4 D6/D8) -- live naming warnings
+             (naming.mjs::nameWarnings, warnings only) and the grey sample; a private list's brand
+             prefix is a fixed addon before a required HANDLE input (listPrefixAddon), and the saved
+             name is joinListName(addon, handle). Without the addon, the plain input. -->
+        <b-field v-if="nameAddon" :label="$t('globals.fields.name')" label-position="on-border"
+          :message="nameMessage" :type="nameMessageType" data-cy="list-name-addon">
+          <p class="control">
+            <span class="button is-static">{{ nameAddon }}</span>
+          </p>
+          <b-input :maxlength="handleLimit.maxlength || 200" :ref="'focus'" v-model="nameHandle" name="name"
+            :placeholder="nameSample" required :disabled="readOnly" expanded @blur="nameTouched = true" />
+        </b-field>
+        <b-field v-else :label="$t('globals.fields.name')" label-position="on-border" :message="nameMessage"
+          :type="nameMessageType">
           <b-input :maxlength="nameLimit.maxlength || 200" :ref="'focus'" v-model="form.name" name="name"
-            :placeholder="$t('globals.fields.name')" required :disabled="readOnly" />
+            :placeholder="nameSample" required :disabled="readOnly" @blur="nameTouched = true" />
         </b-field>
 
         <!-- BRAND-PICKER-SPEC D3: the brand is chosen, never typed; the server writes the
@@ -254,7 +267,9 @@ import {
   triggerChangeTurnsOff,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { nameCounter } from '../naming.mjs'; // eslint-disable-line import/extensions
+import {
+  joinListName, listPrefixAddon, nameCounter, namePlaceholder, nameWarnings, splitListName,
+} from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -303,6 +318,12 @@ export default Vue.extend({
       // is on that response only), refreshed after an Active switch; null until read.
       fresh: null,
       activeBusy: false,
+
+      // Fork (name guardrails, NAME-GUARDRAILS-SPEC D6/D8) -- the handle typed after the fixed
+      // addon (kept as typed; form.name is its trimmed join), and whether the name field has been
+      // left or a save tried (handleMissing shows only then).
+      nameHandle: '',
+      nameTouched: false,
     };
   },
 
@@ -343,6 +364,8 @@ export default Vue.extend({
     },
 
     onSubmit() {
+      // Fork (name guardrails, D6) -- a save attempt counts as touched.
+      this.nameTouched = true;
       if (this.readOnly || this.saveBlocked) {
         return;
       }
@@ -413,6 +436,47 @@ export default Vue.extend({
 
     nameLimit() {
       return nameCounter('list', this.form.name, this.namePrefix);
+    },
+
+    // Fork (name guardrails, NAME-GUARDRAILS-SPEC D8) -- the fixed `<SLUG>` addon ('' = the plain
+    // input): a private list with a brand, new or stored with that prefix.
+    nameAddon() {
+      return listPrefixAddon({
+        brandSlug: this.brand || '',
+        listType: this.form.type,
+        isNew: !this.isEditing,
+        storedName: this.$props.data.name || '',
+      });
+    },
+
+    // The handle input's limit: the 30 applies to the handle itself.
+    handleLimit() {
+      return nameCounter('list', this.nameHandle);
+    },
+
+    // The shown warning codes (§4): none on a read-only form; handleMissing only once touched.
+    nameWarningCodes() {
+      if (this.readOnly) return [];
+      return nameWarnings('list', this.form.name, { brands: this.brands, brandSlug: this.brand || '', listType: this.form.type })
+        .filter((c) => c !== 'handleMissing' || this.nameTouched);
+    },
+
+    nameMessage() {
+      const lines = this.nameWarningCodes.map((c) => this.$t(`naming.warn.${c}`));
+      return lines.length ? lines : this.$t('naming.hint');
+    },
+
+    nameMessageType() {
+      return this.nameWarningCodes.length ? 'is-warning' : null;
+    },
+
+    // The grey sample (D3): `Product Launch` in the handle input, else the whole sample name.
+    nameSample() {
+      if (this.nameAddon) return 'Product Launch';
+      const b = this.chosenBrand;
+      return namePlaceholder('list', {
+        brandSlug: b ? b.slug : '', brandDisplay: b ? b.display_name : '', listType: this.form.type,
+      });
     },
 
     chosenBrand() {
@@ -539,6 +603,23 @@ export default Vue.extend({
   },
 
   watch: {
+    // Fork (name guardrails, NAME-GUARDRAILS-SPEC D8) -- form.name is always the addon joined with
+    // the handle. When the addon appears (the brand is known, or the type turns private) the name
+    // is re-split into it; an already-prefixed stored name is left byte-for-byte as stored.
+    // When it goes away the plain input simply shows form.name, already the join.
+    nameAddon(now) {
+      if (!now) return;
+      this.nameHandle = splitListName(this.form.name, now);
+      if (!(this.form.name || '').startsWith(`${now} `)) {
+        this.form.name = joinListName(now, this.nameHandle);
+      }
+    },
+
+    nameHandle(h) {
+      if (!this.nameAddon || splitListName(this.form.name, this.nameAddon) === h) return;
+      this.form.name = joinListName(this.nameAddon, h);
+    },
+
     // LIFECYCLE-SERIES-SPEC S7: switching between the two step kinds keeps the chosen days only
     // when the new kind offers it as a radio; otherwise the field empties (no hidden value is sent).
     triggerOption() {

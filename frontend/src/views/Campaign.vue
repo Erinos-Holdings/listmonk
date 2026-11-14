@@ -173,13 +173,15 @@
                 <!-- Fork (naming standard, NAMING-STANDARD-SPEC D3/D8) -- the name input shows n/30
                      with the standard's hint (exempt CATALOG names are not limited; the server is the
                      rule), and a NON-blocking warning when another open campaign of the same brand
-                     and language already has this name (naming.mjs::duplicateOf). -->
+                     and language already has this name (naming.mjs::duplicateOf).
+                     Fork (name guardrails, NAME-GUARDRAILS-SPEC §4) -- live naming warnings
+                     (naming.mjs::nameWarnings, warnings only), the grey sample, and on a NEW campaign
+                     the `MM-DD-YY ` prefill that one Backspace clears while untouched. -->
                 <b-field :label="$t('globals.fields.name')" label-position="on-border"
-                  :message="duplicateName ? $t('naming.duplicate', { name: duplicateName.name, id: duplicateName.id }) : $t('naming.hint')"
-                  :type="duplicateName ? 'is-warning' : null">
+                  :message="nameMessage" :type="nameMessageType">
                   <b-input :maxlength="nameLimit.maxlength || 200" :ref="'focus'" v-model="form.name" name="name" :disabled="!canEdit"
-                    :placeholder="$t('globals.fields.name')" required autofocus @blur="checkDuplicateName"
-                    data-cy="campaign-name" />
+                    :placeholder="nameSample" required autofocus @blur="onNameBlur"
+                    @keydown.native="onNameKeydown" data-cy="campaign-name" />
                 </b-field>
 
                 <!-- Fork (multi-language campaigns) -- attribs.lang. Hidden behind app.lang_enable
@@ -686,7 +688,9 @@ import { canManageBrandPersonas } from '../accessPolicy.mjs'; // eslint-disable-
 import {
   campaignBrand, filterByIds, scopeUnion, storeLists,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { campaignBrandOf, duplicateOf, nameCounter } from '../naming.mjs'; // eslint-disable-line import/extensions
+import {
+  campaignBrandOf, clearsPrefill, duplicateOf, nameCounter, namePlaceholder, namePrefill, nameWarnings,
+} from '../naming.mjs'; // eslint-disable-line import/extensions
 import { campaignLinkDefault } from '../linkDefaults.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
@@ -893,6 +897,12 @@ export default Vue.extend({
       // brand and language (a warning only), or null.
       duplicateName: null,
 
+      // Fork (name guardrails, NAME-GUARDRAILS-SPEC §3.1/§4) -- the NEW campaign's prefill (''
+      // otherwise) and whether the name field has been left or a save tried (handleMissing shows
+      // only then, D6).
+      namePrefillText: '',
+      nameTouched: false,
+
       // Binds form input values.
       form: {
         archiveSlug: null,
@@ -942,6 +952,24 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (name guardrails, NAME-GUARDRAILS-SPEC §4) -- leaving the field marks it touched (D6).
+    onNameBlur() {
+      this.nameTouched = true;
+      this.checkDuplicateName();
+    },
+
+    // Fork (name guardrails, NAME-GUARDRAILS-SPEC §3.1 D5) -- one Backspace clears the untouched
+    // prefill: no modifier key, the caret collapsed at the end, the value exactly the prefill.
+    onNameKeydown(e) {
+      if (e.key !== 'Backspace' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      const el = e.target;
+      const value = this.form.name || '';
+      if (!el || el.selectionStart !== value.length || el.selectionEnd !== value.length) return;
+      if (!clearsPrefill(value, this.namePrefillText)) return;
+      e.preventDefault();
+      this.form.name = '';
+    },
+
     // Fork (naming standard, NAMING-STANDARD-SPEC D8) -- one quiet search on the name; the warning
     // never blocks a save. The brand is the form's lists' brand, the language the form's.
     checkDuplicateName() {
@@ -1638,6 +1666,9 @@ export default Vue.extend({
     },
 
     onSubmit(typ) {
+      // Fork (name guardrails, D6) -- a save attempt counts as touched.
+      this.nameTouched = true;
+
       // The controls are disabled while a derivation is blocked, but Ctrl+S and a native form
       // submit reach here regardless.
       if (this.isBrandBlocked) {
@@ -2407,6 +2438,34 @@ export default Vue.extend({
       return nameCounter('campaign', this.form.name);
     },
 
+    // Fork (name guardrails, NAME-GUARDRAILS-SPEC §4) -- the shown warning codes: none on a form
+    // the user cannot edit (legacy names on finished campaigns must not light up); handleMissing
+    // only once touched (D6).
+    nameWarningCodes() {
+      if (!this.canEdit) return [];
+      return nameWarnings('campaign', this.form.name, { brands: this.brands })
+        .filter((c) => c !== 'handleMissing' || this.nameTouched);
+    },
+
+    // The field's message: the warnings (one per line, code order), then the duplicate warning;
+    // the hint (D4) when neither.
+    nameMessage() {
+      const lines = this.nameWarningCodes.map((c) => this.$t(`naming.warn.${c}`));
+      if (this.duplicateName) {
+        lines.push(this.$t('naming.duplicate', { name: this.duplicateName.name, id: this.duplicateName.id }));
+      }
+      return lines.length ? lines : this.$t('naming.hint');
+    },
+
+    nameMessageType() {
+      return this.nameWarningCodes.length || this.duplicateName ? 'is-warning' : null;
+    },
+
+    // The grey sample in the empty field (D3).
+    nameSample() {
+      return namePlaceholder('campaign', { today: new Date() });
+    },
+
     // Fork: the Send-later helper text — the scheduled instant in Mountain time (MDT/MST
     // resolved by Intl for that date) and in UTC, 12-hour, no seconds, one format for both.
     sendAtMessage() {
@@ -3012,6 +3071,11 @@ export default Vue.extend({
     const { id } = this.$route.params;
     if (id === 'new') {
       this.isNew = true;
+
+      // Fork (name guardrails, NAME-GUARDRAILS-SPEC D5) -- a NEW campaign starts with today's
+      // `MM-DD-YY ` in the name (normal text); one Backspace clears it while untouched.
+      this.namePrefillText = namePrefill('campaign', { today: new Date() });
+      this.form.name = this.namePrefillText;
 
       // Fork (evergreen) -- the Campaigns list's New button carries the Automations
       // scope, pre-enabling "send to new subscribers"; still editable before save.

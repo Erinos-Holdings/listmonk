@@ -30,10 +30,13 @@
           <div class="columns">
             <div class="column is-9">
               <!-- Fork (naming standard, NAMING-STANDARD-SPEC D3/D15) -- n/30 and the hint;
-                   an Official_ name is exempt (no limit). -->
-              <b-field :label="$t('globals.fields.name')" label-position="on-border" :message="$t('naming.hint')">
+                   an Official_ name is exempt (no limit).
+                   Fork (name guardrails, NAME-GUARDRAILS-SPEC §4) -- live naming warnings
+                   (naming.mjs::nameWarnings, warnings only) and the grey `Newsletter` sample; no prefill. -->
+              <b-field :label="$t('globals.fields.name')" label-position="on-border" :message="nameMessage"
+                :type="nameMessageType">
                 <b-input :maxlength="nameLimit.maxlength || 200" :ref="'focus'" v-model="form.name" name="name"
-                  :placeholder="$t('globals.fields.name')" required />
+                  :placeholder="nameSample" required @blur="nameTouched = true" />
               </b-field>
             </div>
             <div class="column is-3">
@@ -138,7 +141,7 @@ import { CAMPAIGN_LANGS } from '../langs';
 import { normalizeMediaTagsLenient } from '../mediaTags';
 import { isOfficialName, runSweep, selectSweepItems } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault, templateNoticeBrand } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { nameCounter } from '../naming.mjs'; // eslint-disable-line import/extensions
+import { nameCounter, namePlaceholder, nameWarnings } from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -176,6 +179,9 @@ export default Vue.extend({
       },
       previewItem: null,
       egPlaceholder: '{{ template "content" . }}',
+
+      // Fork (name guardrails, D6) -- the name field has been left or a save tried.
+      nameTouched: false,
 
       // Brand swatch picker state. brandSlug is the dropdown selection (roster entries are
       // lowercase-folded, so it is always canonical); it doubles as the stale-response guard:
@@ -220,6 +226,9 @@ export default Vue.extend({
     },
 
     onSubmit() {
+      // Fork (name guardrails, D6) -- a save attempt counts as touched.
+      this.nameTouched = true;
+
       // OFFICIAL-FOOTER-SPEC D10/D11: an official save is a considered act -- confirm with the
       // counts the re-save sweep will touch, then save, then sweep.
       if (this.isOfficialSave) {
@@ -464,6 +473,27 @@ export default Vue.extend({
     // Fork (naming standard, NAMING-STANDARD-SPEC D3) -- the name input's limit (null when exempt).
     nameLimit() {
       return nameCounter('template', this.form.name);
+    },
+
+    // Fork (name guardrails, NAME-GUARDRAILS-SPEC §4) -- the shown warning codes (handleMissing only
+    // once touched, D6), the field's message (the hint when none, D4) and the grey sample (D3).
+    // The brand roster is the store's (loaded once by App.vue).
+    nameWarningCodes() {
+      return nameWarnings('template', this.form.name, { brands: this.brandRows })
+        .filter((c) => c !== 'handleMissing' || this.nameTouched);
+    },
+
+    nameMessage() {
+      const lines = this.nameWarningCodes.map((c) => this.$t(`naming.warn.${c}`));
+      return lines.length ? lines : this.$t('naming.hint');
+    },
+
+    nameMessageType() {
+      return this.nameWarningCodes.length ? 'is-warning' : null;
+    },
+
+    nameSample() {
+      return namePlaceholder('template');
     },
 
     // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10: an `Official_` template (the stored

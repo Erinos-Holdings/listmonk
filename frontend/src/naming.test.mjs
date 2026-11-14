@@ -8,8 +8,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  LANG_VALUES, NAME_MAX, campaignBrandOf, chipsFor, cloneBaseOf, cloneName, duplicateOf, formerNameOf, isExempt, langMatches,
-  langOf, listDisplayName, nameCounter, normalizeLang,
+  LANG_VALUES, NAME_MAX, WARNING_CODES, campaignBrandOf, chipsFor, clearsPrefill, cloneBaseOf, cloneName, duplicateOf,
+  formatNameDate, formerNameOf, isExempt, joinListName, langMatches, langOf, listDisplayName, listPrefixAddon, nameCounter,
+  namePlaceholder, namePrefill, nameWarnings, normalizeLang, splitListName,
 } from './naming.mjs'; // eslint-disable-line import/extensions
 import {
   LANG_PREF, LANG_ROUTES, langLabel, langParam, langToggleShown,
@@ -149,6 +150,127 @@ test('nameCounter / isExempt -- 30 on the handle; a list adds its prefix to maxl
   assert.equal(nameCounter('template', 'Official_footer_corporate_long_name_en').maxlength, null);
   assert.equal(isExempt('list', 'CATALOG x'), false);
   assert.equal(nameCounter('campaign', 'ÁÁÁ').n, 3);
+});
+
+// ---- NAME-GUARDRAILS-SPEC I1-I4b: the live naming warnings, the sample and the prefill. ----
+
+const WX = JSON.parse(readFileSync(new URL('./testdata/name-warnings.json', import.meta.url), 'utf8'));
+const wctx = (c) => ({ brands: WX.brands, ...(c.ctx || {}) });
+
+test('I1/I2/I4b: nameWarnings answers every case of the shared table', () => {
+  assert.ok(WX.cases.length >= 80);
+  WX.cases.forEach((c) => {
+    assert.deepEqual(nameWarnings(c.kind, c.name, wctx(c)), c.warnings, `${c.kind} ${JSON.stringify(c.name)}`);
+  });
+  // Every code is exercised firing at least once by the table.
+  WARNING_CODES.forEach((code) => assert.ok(WX.cases.some((c) => c.warnings.includes(code)), code));
+});
+
+test('I1: codes come in the fixed order, each at most once', () => {
+  WX.cases.forEach((c) => {
+    const w = nameWarnings(c.kind, c.name, wctx(c));
+    assert.deepEqual(w, WARNING_CODES.filter((code) => w.includes(code)));
+  });
+});
+
+test('I1: no typing prefix of a correct name shows dateFormat', () => {
+  const target = '11-14-26 Product Launch';
+  for (let i = 1; i <= target.length; i += 1) {
+    const w = nameWarnings('campaign', target.slice(0, i), { brands: WX.brands });
+    assert.ok(!w.includes('dateFormat'), `${JSON.stringify(target.slice(0, i))} -> ${w}`);
+  }
+  const month = '11-2026 Winback';
+  for (let i = 1; i <= month.length; i += 1) {
+    assert.ok(!nameWarnings('campaign', month.slice(0, i), { brands: WX.brands }).includes('dateFormat'), month.slice(0, i));
+  }
+  // A list name being typed never shows listPrefix (S2-8).
+  ['RUZE Sale', 'Ruze Pouches Emails'].forEach((full, k) => {
+    const ctx = { brands: WX.brands, brandSlug: 'ruze', listType: k === 0 ? 'private' : 'public' };
+    for (let i = 1; i <= full.length; i += 1) assert.ok(!nameWarnings('list', full.slice(0, i), ctx).includes('listPrefix'), full.slice(0, i));
+  });
+});
+
+const DAYS = [new Date(2026, 10, 14), new Date(2026, 0, 5), new Date(2027, 8, 9), new Date(2028, 1, 29)];
+
+test('formatNameDate: MM-DD-YY, local, zero-padded', () => {
+  assert.equal(formatNameDate(new Date(2026, 10, 14)), '11-14-26');
+  assert.equal(formatNameDate(new Date(2026, 0, 5)), '01-05-26');
+  assert.equal(formatNameDate(new Date(2030, 8, 9, 23, 59)), '09-09-30');
+});
+
+test('I3: every placeholder yields no warning and fits the counter', () => {
+  DAYS.forEach((today) => {
+    const p = namePlaceholder('campaign', { today });
+    assert.equal(p, `${formatNameDate(today)} Product Launch`);
+    assert.deepEqual(nameWarnings('campaign', p, { brands: WX.brands }), []);
+    assert.equal(nameCounter('campaign', p).over, false);
+  });
+  assert.equal(namePlaceholder('template', {}), 'Newsletter');
+  assert.deepEqual(nameWarnings('template', 'Newsletter', { brands: WX.brands }), []);
+  const lists = [
+    [{ brandSlug: 'ruze', brandDisplay: 'Ruze Pouches', listType: 'private' }, 'RUZE Product Launch', 'RUZE '],
+    [{ brandSlug: 'ruze', brandDisplay: 'Ruze Pouches', listType: 'public' }, 'Ruze Pouches Emails', 'Ruze Pouches '],
+    [{ brandSlug: 'liyora', brandDisplay: 'LIYORÁ', listType: 'public' }, 'LIYORÁ Emails', 'LIYORÁ '],
+    [{ brandSlug: '', brandDisplay: '', listType: 'private' }, 'BRAND Product Launch', ''],
+    [{ brandSlug: '', brandDisplay: '', listType: 'public' }, 'Brand Emails', ''],
+  ];
+  lists.forEach(([ctx, want, prefix]) => {
+    const p = namePlaceholder('list', ctx);
+    assert.equal(p, want);
+    assert.deepEqual(nameWarnings('list', p, { brands: WX.brands, brandSlug: ctx.brandSlug, listType: ctx.listType }), [], p);
+    assert.equal(nameCounter('list', p, prefix).over, false);
+  });
+});
+
+test('I4: namePrefill and clearsPrefill', () => {
+  DAYS.forEach((today) => {
+    const p = namePrefill('campaign', { today });
+    assert.equal(p, `${formatNameDate(today)} `);
+    assert.deepEqual(nameWarnings('campaign', p, { brands: WX.brands }), ['handleMissing']);
+  });
+  assert.equal(namePrefill('campaign', { today: new Date(2026, 2, 4) }), '03-04-26 ');
+  // D8: no list prefill of any kind -- the private prefix is the addon.
+  assert.equal(namePrefill('template', { today: new Date() }), '');
+  assert.equal(namePrefill('list', { brandSlug: 'ruze', listType: 'private' }), '');
+  assert.equal(namePrefill('list', { brandSlug: 'ruze', listType: 'public' }), '');
+  assert.equal(namePrefill('list', { brandSlug: '', listType: 'private' }), '');
+
+  const p = '11-14-26 ';
+  assert.equal(clearsPrefill(p, p), true);
+  assert.equal(clearsPrefill('', p), false);
+  assert.equal(clearsPrefill(`${p}x`, p), false);
+  assert.equal(clearsPrefill(p.trimEnd(), p), false);
+  assert.equal(clearsPrefill('', ''), false);
+  assert.equal(clearsPrefill('anything', ''), false);
+});
+
+test('I4 (D8): listPrefixAddon, splitListName and joinListName', () => {
+  assert.equal(listPrefixAddon({ brandSlug: 'ruze', listType: 'private', isNew: true }), 'RUZE');
+  const edit = (brandSlug, storedName) => listPrefixAddon({
+    brandSlug, listType: 'private', isNew: false, storedName,
+  });
+  assert.equal(edit('ruze', 'RUZE Sale'), 'RUZE');
+  assert.equal(edit('curated', 'RobbieList'), '');
+  assert.equal(edit('ruze', 'RUZESale'), '');
+  assert.equal(listPrefixAddon({ brandSlug: 'ruze', listType: 'public', isNew: true }), '');
+  assert.equal(listPrefixAddon({ brandSlug: '', listType: 'private', isNew: true }), '');
+  assert.equal(listPrefixAddon({ brandSlug: null, listType: 'private', isNew: true }), '');
+
+  [['RUZE', 'RUZE Re-engage D180', 'ruze'], ['LIYORA', 'LIYORA AirLuxe', 'liyora'],
+    ['THIRSTYGIRL', 'THIRSTYGIRL No-purchase D2', 'thirstygirl']].forEach(([a, n, slug]) => {
+    const h = splitListName(n, a);
+    assert.equal(`${a} ${h}`, n);
+    assert.equal(joinListName(a, h), n);
+    assert.ok(!nameWarnings('list', joinListName(a, h), { brands: WX.brands, brandSlug: slug, listType: 'private' }).includes('listPrefix'));
+  });
+  assert.equal(joinListName('RUZE', '  Promo '), 'RUZE Promo');
+  assert.ok(!nameWarnings('list', joinListName('RUZE', '  Promo '), { brands: WX.brands, brandSlug: 'ruze', listType: 'private' }).includes('listPrefix'));
+  // An empty handle joins to the bare prefix: no listPrefix, only handleMissing (shown after blur).
+  assert.deepEqual(nameWarnings('list', joinListName('RUZE', ''), { brands: WX.brands, brandSlug: 'ruze', listType: 'private' }), ['handleMissing']);
+  // No addon: the handle is the name.
+  assert.equal(joinListName('', 'RobbieList'), 'RobbieList');
+  assert.equal(splitListName('RobbieList', ''), 'RobbieList');
+  assert.equal(splitListName('Ruze Sale', 'RUZE'), 'Ruze Sale');
 });
 
 test('langScope: values, the pref, the routes it shows on, its label and the Campaigns param', () => {
