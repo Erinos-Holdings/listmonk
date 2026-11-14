@@ -136,18 +136,48 @@ export function langApplicability(routeName, { pane, query, selection } = {}) {
   return { state: def.state, desc: def.desc };
 }
 
-// D2/I3: the grey line under the toggle -- shown iff the selection is not All. null under All
-// (nothing is filtered), else { key, lang, pageLang? } for the component to translate.
+// D2/I3: the grey line under the toggle -- shown when the selection is not All, and (stage 4
+// S4-5) also under All when the page's own language filter differs from it (the Subscribers
+// page-filter case: a lang=fr link under All reads "Page filter: FR", so colour is never the only
+// signal). null otherwise, else { key, lang, pageLang? } for the component to translate.
 export function langNote(selection, applicability) {
   const sel = normalizeLang(selection);
-  if (sel === 'all' || !applicability) {
+  if (!applicability) {
     return null;
+  }
+  if (sel === 'all') {
+    return applicability.pageLang && applicability.pageLang !== 'all'
+      ? { key: applicability.desc, lang: sel, pageLang: applicability.pageLang } : null;
   }
   const out = { key: applicability.desc, lang: sel };
   if (applicability.pageLang) {
     out.pageLang = applicability.pageLang;
   }
   return out;
+}
+
+// D4 (stage 4 S4-7): the ONE label of a Subscribers route language value, as the page's own picker
+// names it -- shared by Subscribers.vue (the by-query note) and LanguageToggle.vue (the page-filter
+// line). labels = { all, none, other, name(code), sendName(code) }: the caller's translations
+// (i18n and langs.js stay out of this pure module). '' / 'all' -> all; en_only -> the stored English
+// name; en -> the send-language name (EN+); none / other; a code -> its name, else the raw value.
+export function routeLangLabel(v, labels) {
+  if (!v || v === 'all') {
+    return labels.all;
+  }
+  if (v === 'none') {
+    return labels.none;
+  }
+  if (v === 'other') {
+    return labels.other;
+  }
+  if (v === 'en_only') {
+    return labels.name('en');
+  }
+  if (v === 'en') {
+    return labels.sendName('en');
+  }
+  return labels.name(v) || v;
 }
 
 // D4 (S2-1/S2-4, I4): the Subscribers entry redirect, decided in the router's beforeEach. Only a

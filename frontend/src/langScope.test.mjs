@@ -7,9 +7,72 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  LANG_APPLICABILITY, SUBSCRIBER_ROUTES, byQueryLangNote, effectiveLang, langApplicability, langEntryRedirect,
-  langNote, langToggleVisible, subscriberResponseCurrent, viewPaneValue,
+  APPLICABILITY_STATES, LANG_APPLICABILITY, SUBSCRIBER_ROUTES, byQueryLangNote, effectiveLang, langApplicability,
+  langEntryRedirect, langNote, langToggleVisible, routeLangLabel, subscriberResponseCurrent, viewPaneValue,
 } from './langScope.mjs'; // eslint-disable-line import/extensions
+
+const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+
+// Stage 4 S4-7 -- the one label mapper of a Subscribers route language value.
+test('route language label', () => {
+  const labels = {
+    all: 'All languages', none: 'No language', other: 'Other', name: (c) => ({ en: 'English', fr: 'Français' }[c] || ''), sendName: (c) => `${c}+`,
+  };
+  assert.equal(routeLangLabel('', labels), 'All languages');
+  assert.equal(routeLangLabel('all', labels), 'All languages');
+  assert.equal(routeLangLabel(undefined, labels), 'All languages');
+  assert.equal(routeLangLabel('none', labels), 'No language');
+  assert.equal(routeLangLabel('other', labels), 'Other');
+  assert.equal(routeLangLabel('en_only', labels), 'English');
+  assert.equal(routeLangLabel('en', labels), 'en+');
+  assert.equal(routeLangLabel('fr', labels), 'Français');
+  assert.equal(routeLangLabel('pt', labels), 'pt');
+  // Both screens use it.
+  assert.match(read('./views/Subscribers.vue'), /return routeLangLabel\(l, \{/);
+  assert.match(read('./components/LanguageToggle.vue'), /return routeLangLabel\(v, \{/);
+});
+
+// Stage 4 S4-4 -- the wiring the pure tests cannot see (I4's and I4c's enforcement points, I6's
+// call sites, D4's busy guards); each pin fails if its call is reverted.
+test('global language wiring', () => {
+  const main = read('./main.js');
+  const guard = main.slice(main.indexOf('router.beforeEach('), main.indexOf('router.afterEach('));
+  assert.match(guard, /langEntryRedirect\(to, from, store\.getters\.langEffective\)/);
+  assert.match(guard, /next\(langRedirect\)/);
+  const init = main.slice(main.indexOf('async function initConfig('), main.indexOf('app.$mount('));
+  assert.match(init, /langEntryRedirect\(landed, null, store\.getters\.langEffective\)/);
+  assert.match(init, /router\.replace\(langRedirect\)/);
+
+  const api = read('./api/index.js');
+  assert.match(api, /'store' in resp\.config && \(typeof resp\.config\.accept !== 'function' \|\| resp\.config\.accept\(\)\)/);
+  const getSubs = api.slice(api.indexOf('export const getSubscribers'), api.indexOf('export const getSubscriber ='));
+  assert.match(getSubs, /accept: opts\.accept/);
+
+  const subs = read('./views/Subscribers.vue');
+  assert.match(subs, /getSubscribers\(qp, \{ accept: current \}\)/);
+  assert.match(subs, /subscriberResponseCurrent\(seq, this\.reqSeq, this\.pageMounted === true\)/);
+  assert.match(subs, /answeredSeq: -1,/); // S4-1: no answer yet = busy
+  assert.match(subs, /byQueryBusy\(\) \{\s*return !!this\.loading\.subscribers \|\| this\.answeredSeq !== this\.reqSeq;/);
+  // The busy guard on the by-query verbs and the export.
+  const method = (name) => {
+    const at = subs.indexOf(`\n    ${name}(`);
+    assert.ok(at > -1, name);
+    return subs.slice(at, subs.indexOf('\n    },', at));
+  };
+  ['blocklistSubscribers', 'deleteSubscribers', 'exportSubscribers'].forEach((m) => assert.match(method(m), /if \(this\.byQueryBusy\) \{\s*return;/, m));
+  assert.match(method('bulkChangeLists'), /if \(this\.byQueryBusy\) \{\s*return;/); // add / remove / unsubscribe by query
+  assert.match(method('showBulkListForm'), /this\.bulk\.all && this\.byQueryBusy/);
+  // The by-query language note on Blocklist, Delete, Export and the Manage-lists modal (I6).
+  assert.match(method('blocklistSubscribers'), /withLangNote\(this\.\$t\('subscribers\.confirmBlocklist'/);
+  assert.match(method('deleteSubscribers'), /withLangNote\(this\.\$t\('subscribers\.confirmDelete'/);
+  assert.match(method('exportSubscribers'), /withLangNote\(this\.\$t\('subscribers\.confirmExport'/);
+  assert.match(subs, /:lang-note="bulkListLangNote"/);
+  assert.match(subs, /bulkListLangNote\(\) \{[\s\S]*?byQueryLangNote\(this\.gridFilter,/);
+  assert.match(read('./views/SubscriberBulkList.vue'), /<p v-if="langNote"/);
+  // The toggle rewrites the route; the read query goes through gridFilterOf.
+  assert.match(subs, /langEffective\(now\) \{[\s\S]*?this\.onLangSelect\(want\);/);
+  assert.match(subs, /gridFilter\(\) \{\s*return gridFilterOf\(this\.queryParams\);/);
+});
 
 // I1 -- agreement with the router file's text: every `name: '<x>'` route, no more, no fewer.
 test('applicability covers the router', () => {
@@ -61,7 +124,7 @@ test('applicability table', () => {
   // Every entry's state is one of the three, every description an i18n key.
   Object.keys(LANG_APPLICABILITY).forEach((r) => {
     const a = langApplicability(r, { selection: 'fr', query: { lang: 'fr' } });
-    assert.ok(['all', 'partial', 'none'].includes(a.state), r);
+    assert.ok(APPLICABILITY_STATES.includes(a.state), r);
     assert.match(a.desc, /^naming\.langApp\./, r);
   });
 });
@@ -74,7 +137,12 @@ test('note only when filtered', () => {
   assert.deepEqual(langNote('es', a), { key: 'naming.langApp.dashboard', lang: 'es' });
   const p = langApplicability('subscribers', { query: { lang: 'none' }, selection: 'es' });
   assert.deepEqual(langNote('es', p), { key: 'naming.langApp.pageFilter', lang: 'es', pageLang: 'none' });
-  assert.equal(langNote('all', p), null);
+  // Stage 4 S4-5: under All, a page whose own language filter differs (a lang=fr link) still shows
+  // its page-filter line; an unfiltered page under All shows none.
+  const frUnderAll = langApplicability('subscribers', { query: { lang: 'fr' }, selection: 'all' });
+  assert.deepEqual(langNote('all', frUnderAll), { key: 'naming.langApp.pageFilter', lang: 'all', pageLang: 'fr' });
+  assert.equal(langNote('all', langApplicability('subscribers', { query: {}, selection: 'all' })), null);
+  assert.equal(langNote('all', langApplicability('lists')), null);
   // Grey views still carry their line when filtered.
   assert.ok(langNote('fr', langApplicability('media')));
 

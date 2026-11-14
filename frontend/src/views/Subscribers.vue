@@ -270,7 +270,9 @@ import {
 import {
   effectiveListIds, filterByIds, gridFilterOf, scopeUnion, subscriberExportParams, subscriberQueryBody,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { byQueryLangNote, langParam, subscriberResponseCurrent } from '../langScope.mjs'; // eslint-disable-line import/extensions
+import {
+  byQueryLangNote, langParam, routeLangLabel, subscriberResponseCurrent,
+} from '../langScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -314,8 +316,10 @@ export default Vue.extend({
       // Fork (global language, GLOBAL-LANG-SPEC D4, S2-1) -- the latest subscribers query this
       // page issued and the latest one answered; a response is applied only when it answers the
       // latest query of the still-mounted page (subscriberResponseCurrent).
+      // S4-1: answeredSeq starts below any sequence, so a page that has not yet had a query of
+      // its own answered is busy (the store may still hold another mount's rows).
       reqSeq: 0,
-      answeredSeq: 0,
+      answeredSeq: -1,
 
       // Query params to filter the getSubscribers() API call.
       queryParams: {
@@ -421,7 +425,10 @@ export default Vue.extend({
 
     onFormClose() {
       if (this.$route.params.id) {
-        this.$router.push({ name: 'subscribers' });
+        // GLOBAL-LANG stage 4 S4-3 -- the language the page was entered under (and only that)
+        // rides the push; subscriber -> subscribers is not an entry, so the guard adds nothing.
+        const query = typeof this.$route.query.lang === 'string' ? { lang: this.$route.query.lang } : {};
+        this.$router.push({ name: 'subscribers', query });
       }
     },
 
@@ -522,16 +529,14 @@ export default Vue.extend({
       const seq = this.reqSeq;
       const current = () => subscriberResponseCurrent(seq, this.reqSeq, this.pageMounted === true);
       this.$nextTick(() => {
+        // S4-2: only a SUCCESSFUL answer un-busies the page -- a failed query leaves the previous
+        // filter's rows on screen, so the page stays busy until a query of it succeeds.
         this.$api.getSubscribers(qp, { accept: current }).then(() => {
           if (!current()) {
             return;
           }
           this.answeredSeq = seq;
           this.bulk.checked = [];
-        }).catch(() => {
-          if (current()) {
-            this.answeredSeq = seq;
-          }
         });
       });
     },
@@ -543,21 +548,16 @@ export default Vue.extend({
       return note ? `${msg} ${note}` : msg;
     },
 
-    // A route lang value as the page's own picker names it.
+    // A route lang value as the page's own picker names it (langScope.mjs::routeLangLabel, the one
+    // mapper shared with the navbar toggle; S4-7).
     routeLangLabel(l) {
-      if (l === 'en_only') {
-        return this.langLabel('en');
-      }
-      if (l === 'none') {
-        return this.$t('lists.grid.noLangChip');
-      }
-      if (l === 'other') {
-        return this.$t('lists.grid.other');
-      }
-      if (isSendPlus(l)) {
-        return sendLangLabel(l);
-      }
-      return this.langLabel(l) || l;
+      return routeLangLabel(l, {
+        all: this.$t('subscribers.langAll'),
+        none: this.$t('lists.grid.noLangChip'),
+        other: this.$t('lists.grid.other'),
+        name: campaignLangLabel,
+        sendName: sendLangLabel,
+      });
     },
 
     managePrefsUrl(sub) {
@@ -879,10 +879,11 @@ export default Vue.extend({
       this.$api.getSubscriber(parseInt(this.$route.params.id, 10)).then((data) => {
         this.showEditForm(data);
       });
-    } else {
-      // Get subscribers on load. Fork (global brand, D3) -- once the lists have loaded (I13).
-      this.afterListsLoaded(() => this.querySubscribers());
     }
+    // Get subscribers on load. Fork (global brand, D3) -- once the lists have loaded (I13).
+    // GLOBAL-LANG stage 4 S4-1 -- the `subscriber` route too, so the table behind the form shows
+    // this page's own rows (never another mount's) and by-query actions un-busy on its answer.
+    this.afterListsLoaded(() => this.querySubscribers());
   },
 });
 </script>

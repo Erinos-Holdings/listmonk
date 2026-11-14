@@ -8,7 +8,7 @@
        the title carries the same text -- colour is never the only signal. Never disabled: on a grey
        view it still changes the global selection. -->
   <div v-if="shown" class="language-toggle" :class="`lang-app-${applicability.state}`" data-cy="language-toggle"
-    role="group" :aria-label="$t('naming.langToggle')" :title="noteText || descText" :data-lang-state="applicability.state">
+    role="group" :aria-label="$t('naming.langToggle')" :title="noteText || descText">
     <b-field class="segmented is-global">
       <b-radio-button v-for="v in values" :key="v" v-model="value" :native-value="v" size="is-small" :type="buttonType"
         :data-cy="`lang-${v}`">
@@ -23,7 +23,7 @@
 import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import {
-  LANG_VALUES, langApplicability, langLabel, langNote, langToggleVisible,
+  LANG_VALUES, langApplicability, langLabel, langNote, langToggleVisible, routeLangLabel,
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { campaignLangLabel, sendLangLabel } from '../langs';
 
@@ -82,24 +82,16 @@ export default Vue.extend({
       return langLabel(v, this.$t('naming.langAll'));
     },
 
-    // A Subscribers route value as the page's own picker names it.
+    // A Subscribers route value as the page's own picker names it (langScope.mjs::routeLangLabel,
+    // the one mapper; S4-7).
     pageLangLabel(v) {
-      if (!v || v === 'all') {
-        return this.$t('subscribers.langAll');
-      }
-      if (v === 'none') {
-        return this.$t('lists.grid.noLangChip');
-      }
-      if (v === 'other') {
-        return this.$t('lists.grid.other');
-      }
-      if (v === 'en_only') {
-        return campaignLangLabel('en');
-      }
-      if (v === 'en') {
-        return sendLangLabel('en');
-      }
-      return campaignLangLabel(v) || v;
+      return routeLangLabel(v, {
+        all: this.$t('subscribers.langAll'),
+        none: this.$t('lists.grid.noLangChip'),
+        other: this.$t('lists.grid.other'),
+        name: campaignLangLabel,
+        sendName: sendLangLabel,
+      });
     },
 
     translate(key, lang, pageLang) {

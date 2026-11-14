@@ -2,8 +2,10 @@ package main
 
 // Fork (global language filter) -- integrations GLOBAL-LANG-SPEC I5 against a real database: the
 // by-query bulk endpoints (blocklist, delete, list add / remove / unsubscribe) and the export apply
-// a `lang` carried ALONE (the global toggle's value reaches the Subscribers page as the route's
-// lang, with no segment) on the server -- lang=es touches only the send-language-ES subscribers,
+// a `lang` carried WITHOUT a segment (the global toggle's value reaches the Subscribers page as the
+// route's lang; the bodies below still carry list_ids, as the page sends them, and one read-only
+// export case carries no list at all -- the All-brands form) on the server -- lang=es touches only
+// the send-language-ES subscribers,
 // and lang=en is the send language (en plus no-language). Each verb is asserted. The expected ids
 // come from internal/testfixtures/listgrid (an independent Go statement of the language rule), so
 // no assertion compares the SQL with itself. Shares the list-grid fixture (LISTMONK_TEST_PG opt-in;
@@ -133,6 +135,17 @@ func TestByQueryLangFilter(t *testing.T) {
 			}
 			if got := strings.Count(strings.TrimSpace(body), "\n"); len(want) == 0 || got != len(want) {
 				t.Fatalf("export lang=%s: %d rows, want %d", lang, got, len(want))
+			}
+		}
+		// The All-brands form: no list_id at all -- lang alone narrows every subscriber (read-only).
+		for _, lang := range []string{"es", "en"} {
+			want := f.want(false, "", lang)
+			code, body := f.call(f.app.ExportSubscribers, http.MethodGet, "/api/subscribers/export?lang="+lang, "", plainUser)
+			if code != http.StatusOK {
+				t.Fatalf("export no list lang=%s: %d %s", lang, code, body)
+			}
+			if got := strings.Count(strings.TrimSpace(body), "\n"); len(want) == 0 || got != len(want) {
+				t.Fatalf("export no list lang=%s: %d rows, want %d", lang, got, len(want))
 			}
 		}
 		// EN is the send language: it includes the no-language subscribers.
