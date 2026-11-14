@@ -12,11 +12,17 @@
 -- subscriber_lang, send_lang) from the base tables. grid has query-lists' subscriber_grid shape;
 -- total and blocklisted are its all row. engagement sums get-campaign-stats over C, the counted
 -- expression interpolated at boot with the same statsSel (cmd/init.go), so the two never disagree.
+-- integrations GLOBAL-LANG-SPEC D5 -- $4 = the language ('' = All, else a models.CampaignLangs
+-- code, validated by the handler), a BOUND parameter -- C keeps only the campaigns whose attribs.lang
+-- is exactly $4 (a no-language campaign counts under All only), so every campaign number follows.
+-- The subscriber grid is unchanged (already per language; the client reads its line); never a
+-- permission input -- the scope is still $1/$2/$3.
 WITH camps AS (
     SELECT c.id, c.status, c.sent FROM campaigns c
-    WHERE $2::BOOLEAN OR EXISTS (
+    WHERE ($2::BOOLEAN OR EXISTS (
         SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
-    )
+    ))
+        AND ($4::TEXT = '' OR c.attribs->>'lang' = $4::TEXT)
 ),
 lst AS (
     SELECT id, type, optin, status FROM lists WHERE $3::BOOLEAN OR id = ANY($1::INT[])
@@ -167,11 +173,20 @@ SELECT JSON_BUILD_OBJECT(
 --   else the campaigns on a list in $1 carrying a brand tag other than unattributed (never the
 --   get_all widening of C), zero-filled whenever that set is open in scope terms (unscoped, or a
 --   branded list in scope) and absent otherwise. The SES daily never carries the current day.
+-- integrations GLOBAL-LANG-SPEC D5 -- $4 = the language ('' = All, else a models.CampaignLangs code,
+-- validated by the handler), a BOUND parameter. With $4 set, C keeps only the campaigns whose
+-- attribs.lang is exactly $4 (clicks and conversions follow), and the sends are listmonk's own over
+-- the WHOLE window (live_from = d0), so no SES day is used (the SES document cannot be split by
+-- language); the live hours are those of live_camps -- never camps, whose get_all widening would
+-- leak sends outside a list-scoped user's scope -- narrowed by the same rule, zero-filled under the
+-- unchanged live_on rule, every point live. sends_source names the source ('listmonk' under a
+-- language, else 'ses'). scoped is unchanged by $4.
 WITH camps AS (
     SELECT c.id FROM campaigns c
-    WHERE $2::BOOLEAN OR EXISTS (
+    WHERE ($2::BOOLEAN OR EXISTS (
         SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
-    )
+    ))
+        AND ($4::TEXT = '' OR c.attribs->>'lang' = $4::TEXT)
 ),
 zone AS (
     SELECT 'America/Denver'::TEXT AS tz
@@ -243,9 +258,9 @@ ses_last AS (
         AND (x->>'day')::DATE BETWEEN win.d0 AND win.d1 - 1
 ),
 live AS (
-    SELECT COALESCE(sl.d + 1, win.d1) AS live_from,
-        (COALESCE(sl.d + 1, win.d1)::TIMESTAMP AT TIME ZONE win.tz) AS tl
-    FROM ses_last sl, win
+    SELECT lf.d AS live_from, (lf.d::TIMESTAMP AT TIME ZONE win.tz) AS tl
+    FROM ses_last sl, win,
+        LATERAL (SELECT CASE WHEN $4::TEXT <> '' THEN win.d0 ELSE COALESCE(sl.d + 1, win.d1) END AS d) lf
 ),
 live_on AS (
     SELECT $3::BOOLEAN OR EXISTS (
@@ -255,11 +270,12 @@ live_on AS (
 ),
 live_camps AS (
     SELECT c.id FROM campaigns c
-    WHERE $3::BOOLEAN OR EXISTS (
+    WHERE ($3::BOOLEAN OR EXISTS (
         SELECT 1 FROM campaign_lists cl JOIN lists l ON (l.id = cl.list_id), UNNEST(l.tags) AS t
         WHERE cl.campaign_id = c.id AND l.id = ANY($1::INT[])
             AND LEFT(t, 6) = 'brand:' AND SUBSTR(t, 7) <> 'unattributed'
-    )
+    ))
+        AND ($4::TEXT = '' OR c.attribs->>'lang' = $4::TEXT)
 ),
 live_hours AS (
     SELECT (h.hour AT TIME ZONE (SELECT tz FROM zone))::DATE AS d, SUM(h.n)::BIGINT AS n
@@ -312,6 +328,7 @@ SELECT JSON_BUILD_OBJECT(
     'clicks', COALESCE((SELECT * FROM clicks), '[]'),
     'conversions', COALESCE((SELECT * FROM conversions), '[]'),
     'today', (SELECT TO_CHAR(d1, 'YYYY-MM-DD') FROM win),
+    'sends_source', CASE WHEN $4::TEXT = '' THEN 'ses' ELSE 'listmonk' END,
     'scoped', NOT $3::BOOLEAN
 ) AS data;
 
@@ -370,6 +387,15 @@ SELECT JSON_BUILD_OBJECT(
 --     rule and threshold lives in the integrations lib/brand-usage.ts, which names this site; the
 --     fork computes none (no test spans the repos). The row object is built as JSONB so the key can
 --     be omitted -- its consumers read it by key, never by order.
+-- integrations GLOBAL-LANG-SPEC D6 -- $3 = the language ('' = All, else a models.CampaignLangs code,
+-- validated by the handler), a BOUND parameter, never a permission input. With $3 set, per brand --
+-- subscribers count only those whose send language (send_lang(subscriber_lang(attribs)) -- EN
+-- includes no-language) is $3; C (bcamps) keeps only the campaigns whose attribs.lang is exactly
+-- $3; tracked / matched keep only the rows whose campaign is in that language (joined on
+-- campaign_conversions.campaign_id, still grouped by the stored brand); sent is listmonk's own
+-- campaign_send_hours of the narrowed C over the WHOLE window (live_from = d0, no SES day -- the SES
+-- document cannot be split by language). health, usage and thresholds are unchanged (brand-level).
+-- sends_source names the denominator ('listmonk' under a language, else 'ses').
 WITH lst AS (
     SELECT id, type, optin, list_brand_tag(tags) AS brand FROM lists
     WHERE ($2::BOOLEAN OR id = ANY($1::INT[])) AND status = 'active'
@@ -390,10 +416,13 @@ subs AS (
     JOIN subscribers s ON (s.id = sl.subscriber_id)
     CROSS JOIN LATERAL (SELECT subscription_segment(sl.status, sl.meta, s.status, l.optin) AS seg) g
     WHERE l.type = 'public'
+        AND ($3::TEXT = '' OR send_lang(subscriber_lang(s.attribs)) = $3::TEXT)
     GROUP BY l.brand
 ),
 bcamps AS (
     SELECT DISTINCT l.brand, cl.campaign_id AS id FROM lst l JOIN campaign_lists cl ON (cl.list_id = l.id)
+    JOIN campaigns c ON (c.id = cl.campaign_id)
+    WHERE $3::TEXT = '' OR c.attribs->>'lang' = $3::TEXT
 ),
 zone AS (
     SELECT 'America/Denver'::TEXT AS tz
@@ -476,9 +505,9 @@ ses_last AS (
         AND (x->>'day')::DATE BETWEEN win.d0 AND win.d1 - 1
 ),
 live AS (
-    SELECT COALESCE(sl.d + 1, win.d1) AS live_from,
-        (COALESCE(sl.d + 1, win.d1)::TIMESTAMP AT TIME ZONE win.tz) AS tl
-    FROM ses_last sl, win
+    SELECT lf.d AS live_from, (lf.d::TIMESTAMP AT TIME ZONE win.tz) AS tl
+    FROM ses_last sl, win,
+        LATERAL (SELECT CASE WHEN $3::TEXT <> '' THEN win.d0 ELSE COALESCE(sl.d + 1, win.d1) END AS d) lf
 ),
 ses_sent AS (
     SELECT r->>'brand' AS brand, SUM((x->>'sends')::NUMERIC)::BIGINT AS n FROM sesdoc,
@@ -510,6 +539,9 @@ conv AS (
     SELECT cc.brand, cc.measure, COUNT(*) AS orders, COALESCE(SUM(cc.sales_usd), 0) AS sales
     FROM campaign_conversions cc
     WHERE cc.purchased_at >= (SELECT t0 FROM bounds) AND cc.purchased_at < (SELECT t1 FROM bounds)
+        AND ($3::TEXT = '' OR EXISTS (
+            SELECT 1 FROM campaigns c WHERE c.id = cc.campaign_id AND c.attribs->>'lang' = $3::TEXT
+        ))
     GROUP BY 1, 2
 ),
 convdoc AS (
@@ -560,6 +592,7 @@ SELECT JSON_BUILD_OBJECT(
         LEFT JOIN conv ct ON (ct.brand = b.brand AND ct.measure = 'tracked')
         LEFT JOIN conv cm ON (cm.brand = b.brand AND cm.measure = 'matched')
     ), '[]'),
+    'sends_source', CASE WHEN $3::TEXT = '' THEN 'ses' ELSE 'listmonk' END,
     'scoped', NOT $2::BOOLEAN
 ) AS data;
 
@@ -646,9 +679,12 @@ FROM agg;
 -- the charts' former rule, kept here (31 days ending on the day of the latest event of those
 -- campaigns, by MAX(created_at) over the campaign_id index; the charts themselves moved to a UTC
 -- window ending yesterday in DASHBOARD-SENDS-SPEC). Raw rows. Unknown client (NULL) is reported as
--- the empty string.
+-- the empty string. integrations GLOBAL-LANG-SPEC D5 -- $1 = the language ('' = All, else a
+-- models.CampaignLangs code, validated by the handler), a BOUND parameter -- only the campaigns whose
+-- attribs.lang is exactly $1. The window is then that language's own latest event (not a partition).
 WITH camps AS (
     SELECT c.id FROM campaigns c
+    WHERE $1::TEXT = '' OR c.attribs->>'lang' = $1::TEXT
 ),
 vd AS (
     SELECT MAX(created_at)::DATE AS to_date FROM campaign_views WHERE campaign_id IN (SELECT id FROM camps)
@@ -677,12 +713,14 @@ SELECT COALESCE(v.client, c.client) AS client, COALESCE(v.n, 0) AS views, COALES
 -- Fork (client stats, CLIENT-STATS-SPEC D6/D7; GLOBAL-BRAND-SPEC D5). get-dashboard-clients over a
 -- scope, with $1/$2 exactly as get-dashboard-counts-scoped ($1 = the scope's list ids, $2 =
 -- campaigns get_all, else the campaigns with ANY campaign_lists row on $1; always false under a
--- global brand list_id). Same window and counting.
+-- global brand list_id). Same window and counting. $3 = the language, bound, exactly as
+-- get-dashboard-clients' $1 (integrations GLOBAL-LANG-SPEC D5).
 WITH camps AS (
     SELECT c.id FROM campaigns c
-    WHERE $2::BOOLEAN OR EXISTS (
+    WHERE ($2::BOOLEAN OR EXISTS (
         SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
-    )
+    ))
+        AND ($3::TEXT = '' OR c.attribs->>'lang' = $3::TEXT)
 ),
 vd AS (
     SELECT MAX(created_at)::DATE AS to_date FROM campaign_views WHERE campaign_id IN (SELECT id FROM camps)
@@ -714,8 +752,10 @@ SELECT COALESCE(v.client, c.client) AS client, COALESCE(v.n, 0) AS views, COALES
 -- row count (CLIENT-STATS-SPEC D6's charts rule; the Analytics Location table dedupes per
 -- (subscriber, campaign) under individual tracking -- a recorded divergence). Unknown country
 -- (NULL) is reported as the empty string. Any scope reads get-dashboard-countries-scoped.
+-- integrations GLOBAL-LANG-SPEC D5 -- $1 = the language, bound, exactly as get-dashboard-clients.
 WITH camps AS (
     SELECT c.id FROM campaigns c
+    WHERE $1::TEXT = '' OR c.attribs->>'lang' = $1::TEXT
 ),
 vd AS (
     SELECT MAX(created_at)::DATE AS to_date FROM campaign_views WHERE campaign_id IN (SELECT id FROM camps)
@@ -742,12 +782,13 @@ SELECT COALESCE(v.country, c.country) AS country, COALESCE(v.n, 0) AS views, COA
 
 -- name: get-dashboard-countries-scoped
 -- Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4). get-dashboard-countries over a
--- scope, with $1/$2 exactly as get-dashboard-clients-scoped. Same window and counting.
+-- scope, with $1/$2/$3 exactly as get-dashboard-clients-scoped. Same window and counting.
 WITH camps AS (
     SELECT c.id FROM campaigns c
-    WHERE $2::BOOLEAN OR EXISTS (
+    WHERE ($2::BOOLEAN OR EXISTS (
         SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($1::INT[])
-    )
+    ))
+        AND ($3::TEXT = '' OR c.attribs->>'lang' = $3::TEXT)
 ),
 vd AS (
     SELECT MAX(created_at)::DATE AS to_date FROM campaign_views WHERE campaign_id IN (SELECT id FROM camps)

@@ -747,6 +747,36 @@ body.is-noscroll {
   border-color: $primary;
 }
 
+// Fork (global language, integrations GLOBAL-LANG-SPEC D2, I12) -- the language toggle's selected
+// segment wears the view's applicability: blue (the primary, above) applies here, ORANGE partly
+// applies, grey not applicable. The orange is defined ONCE, here, and is deliberately NOT Bulma's
+// $warning yellow nor has-text-warning-dark, which mean "health warning" across the admin UI.
+:root {
+  --lang-partial: #e8710a;
+  --lang-none: #8a8a8a;
+}
+.language-toggle .field.segmented > .field-body > .field.has-addons .b-radio.radio.button.is-selected {
+  &.is-lang-partial {
+    background: var(--lang-partial);
+    color: $white;
+  }
+  &.is-lang-none {
+    background: var(--lang-none);
+    color: $white;
+  }
+}
+.language-toggle.lang-app-partial .field.segmented.is-global > .field-body > .field.has-addons {
+  border-color: var(--lang-partial);
+}
+.language-toggle.lang-app-none .field.segmented.is-global > .field-body > .field.has-addons {
+  border-color: var(--lang-none);
+}
+// GLOBAL-LANG D4 (S2-1) -- the Subscribers export and by-query actions wait for the rows.
+.subscribers .actions.is-busy a {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 // Fork (evergreen) -- the "Days after joining" label sits above its compact number input,
 // centred over the +/- controls, instead of floating on the border where it collided with them.
 .field.evergreen-delay {

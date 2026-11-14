@@ -8,6 +8,7 @@
       </header>
 
       <section expanded class="modal-card-body">
+        <p v-if="langNote" class="notification is-light is-size-7 py-2 px-3" data-cy="bulk-lang-note">{{ langNote }}</p>
         <b-field label="Action">
           <div>
             <b-radio v-model="form.action" name="action" native-value="add" data-cy="check-list-add">
@@ -75,6 +76,10 @@ export default Vue.extend({
     // Fork (global brand, D8) -- the target lists offered: the scope united with the affected
     // rows' lists (every list under All brands). The modal no longer reads the store.
     options: { type: Array, default: () => [] },
+    // Fork (global language, integrations GLOBAL-LANG-SPEC D4, S2-3) -- the by-query language line
+    // (langScope.mjs::byQueryLangNote, built by the caller): '' unless the modal acts by query with
+    // a lang. No confirmation is added; the line is shown above the actions.
+    langNote: { type: String, default: '' },
   },
 
   data() {

@@ -421,6 +421,7 @@ import {
   BRANDS_PANES, BRANDS_PANE_PREF, initialBrandsPane, readPane, writePane,
 } from '../paneState.mjs'; // eslint-disable-line import/extensions
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
+import { viewPaneValue } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import {
   compareDay, compareStatus, compareText, sortRows,
 } from '../health-sort';
@@ -839,6 +840,19 @@ export default Vue.extend({
     brandParam() {
       this.fetchHistory();
     },
+
+    // Fork (global language, integrations GLOBAL-LANG-SPEC D2, S2-5) -- the navbar toggle reads
+    // this pane's applicability from the store.
+    pane: {
+      immediate: true,
+      handler(p) {
+        this.$store.commit('setViewPane', viewPaneValue('brands', p));
+      },
+    },
+  },
+
+  beforeDestroy() {
+    this.$store.commit('setViewPane', '');
   },
 
   mounted() {

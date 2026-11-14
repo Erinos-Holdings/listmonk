@@ -203,7 +203,11 @@ export function effectiveListIds(listID, scopeIds) {
   return null;
 }
 
-function gridFilterOf(qp) {
+// The Subscribers page's segment/lang filter (LIST-GRID D7). Exported (integrations
+// GLOBAL-LANG-SPEC D4, S2-11): the page's READ query is built through it too, so the read, the
+// export and every by-query write carry the same filter -- the global language reaches all of
+// them as the route's lang.
+export function gridFilterOf(qp) {
   const out = {};
   if (qp.segment) {
     out.segment = qp.segment;

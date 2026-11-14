@@ -4,7 +4,7 @@
 // rate-first and over WHICH denominator (cells, engagement lines), so the Vue cannot pick another.
 // The grid is the API's subscribers.grid -- the Lists grid's shape summed over the scope's public
 // lists. Tested by dashboardSubs.test.mjs (npm run test:dashboard-subs).
-import { gridLines } from './gridLines.mjs'; // eslint-disable-line import/extensions
+import { gridLines, langGridLines, lineOf } from './gridLines.mjs'; // eslint-disable-line import/extensions
 import { rateCell } from './campaignRates.mjs'; // eslint-disable-line import/extensions
 
 // D2. The segment lines in display order, each with its grid key and label key. Blocklisted is
@@ -29,8 +29,18 @@ export function subscriberRows(subscriberGrid) {
 
 // D3. The expanded table's columns: all, then the Lists grid's language lines (gridLines), each
 // { key, row, none } -- none is the no-language subset on the en column (the EN+ tooltip).
-export function subscriberColumns(subscriberGrid, langEnabled) {
-  return gridLines(subscriberGrid, langEnabled);
+// Fork (global language, integrations GLOBAL-LANG-SPEC D5, I11) -- under a language selection L
+// (the EFFECTIVE one) the table is L's column alone (gridLines.mjs::langGridLines).
+export function subscriberColumns(subscriberGrid, langEnabled, selection = 'all') {
+  return selection && selection !== 'all' ? langGridLines(subscriberGrid, langEnabled, selection) : gridLines(subscriberGrid, langEnabled);
+}
+
+// GLOBAL-LANG D5 (S2-14, I11): the Subscribers container's headline under L -- L's grid line as
+// the total, the segment lines and the blocklisted count; a language with no key reads zero, never
+// the all line. Orphans are not here: they stay All-language (they have no language).
+export function subscriberTotals(subscriberGrid, selection = 'all') {
+  const line = lineOf(subscriberGrid, selection);
+  return { line, total: line.total || 0, blocklisted: line.blocked || 0 };
 }
 
 // R1. pctCount is the rate-first pair { pct, count }: pct is count / denominator as a percentage

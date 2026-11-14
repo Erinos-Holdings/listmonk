@@ -545,7 +545,18 @@ export function brandListIds(lists, brand) {
 // shapeRow flattens one API row: { brand, label, usage (the stored object, or null), zma, listIds
 // (the brand's active list ids, ascending -- the Journeys/broadcast link set), skipped (POLISH3
 // D5: the matrix endpoint's live per-language skipped object, or null) }.
-export function shapeRow(r, brands, lists = []) {
+// Fork (global language, integrations GLOBAL-LANG-SPEC D8, I11) -- the Skipped counts under a
+// language selection L (the EFFECTIVE one): only L's entry is kept (EN has none -- Skipped counts
+// fr/es/de/it -- so under EN nothing is), every other leaf reads '—'. Under All the object is
+// unchanged. Nothing else on the row narrows (score, circles, decisions).
+export function narrowSkipped(skipped, lang = 'all') {
+  if (!isObj(skipped) || !lang || lang === 'all') {
+    return isObj(skipped) ? skipped : null;
+  }
+  return Object.prototype.hasOwnProperty.call(skipped, lang) ? { [lang]: skipped[lang] } : {};
+}
+
+export function shapeRow(r, brands, lists = [], lang = 'all') {
   const usage = isObj(r && r.usage) ? r.usage : null;
   return {
     brand: r.brand,
@@ -554,7 +565,7 @@ export function shapeRow(r, brands, lists = []) {
     computedAt: typeof (r && r.computedAt) === 'string' ? r.computedAt : null,
     zma: !!usage && usage.channel === 'zma',
     listIds: brandListIds(lists, r.brand),
-    skipped: isObj(r && r.skipped) ? r.skipped : null,
+    skipped: narrowSkipped(isObj(r && r.skipped) ? r.skipped : null, lang),
   };
 }
 
@@ -598,11 +609,14 @@ const rowClean = (r) => !(typeof r.error === 'string' && r.error) && r.listId !=
 
 // D2: the Brand Matrix's rows exactly -- the API rows narrowed by the launch filter over the rows'
 // own health documents, then flattened. The server has already applied the brand scope. `lists`
-// is the lists store (POLISH2 D2's link set).
-export function shapeRows(apiRows, { brands = [], launch = 'all', lists = [] } = {}) {
+// is the lists store (POLISH2 D2's link set). `lang` is the effective language selection
+// (GLOBAL-LANG-SPEC D8: narrowSkipped).
+export function shapeRows(apiRows, {
+  brands = [], launch = 'all', lists = [], lang = 'all',
+} = {}) {
   const rows = (Array.isArray(apiRows) ? apiRows : []).filter((r) => r && typeof r.brand === 'string' && r.brand !== '');
   const docs = healthDocs(rows);
-  return rows.filter((r) => matchesLaunch(r.brand, launch, docs)).map((r) => shapeRow(r, brands, lists));
+  return rows.filter((r) => matchesLaunch(r.brand, launch, docs)).map((r) => shapeRow(r, brands, lists, lang));
 }
 
 // The columns a ZMA row does not score (its sends live in ZMA -- a red would be false, v1 I6),

@@ -182,18 +182,44 @@ func (a *App) dashboardScopeFor(c echo.Context) (dashboardScope, error) {
 	return sc, nil
 }
 
+// dashboardLang (fork, integrations GLOBAL-LANG-SPEC D5/D6/D9, I7) is the Dashboard and Brand
+// Matrix reads' optional language: absent or '' is All, otherwise exactly one of
+// models.CampaignLangs; anything else is an error (a 400). It narrows rows the scope already
+// permits and is bound as a SQL parameter -- never a permission input, never interpolated.
+func dashboardLang(qp url.Values) (string, error) {
+	l := qp.Get("lang")
+	if l == "" || models.IsCampaignLang(l) {
+		return l, nil
+	}
+	return "", fmt.Errorf("invalid lang %q", l)
+}
+
+// dashboardLangFor is dashboardLang on a request, with an invalid lang as a 400.
+func (a *App) dashboardLangFor(c echo.Context) (string, error) {
+	l, err := dashboardLang(c.QueryParams())
+	if err != nil {
+		return "", echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "lang"))
+	}
+	return l, nil
+}
+
 // GetDashboardCharts returns chart data points to render ont he dashboard.
 func (a *App) GetDashboardCharts(c echo.Context) error {
 	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7; global brand, GLOBAL-BRAND-SPEC D5) -- a
 	// list-scoped user, or any list_id, reads live, scoped charts; blanket list access with no
 	// list_id reads the same live statement unscoped (integrations DASHBOARD-SENDS-SPEC D2 -- no
-	// longer mat_dashboard_charts).
+	// longer mat_dashboard_charts). GLOBAL-LANG-SPEC D5 -- an optional lang narrows the campaigns
+	// and makes the sends listmonk's own (sends_source).
+	lang, err := a.dashboardLangFor(c)
+	if err != nil {
+		return err
+	}
 	sc, err := a.dashboardScopeFor(c)
 	if err != nil {
 		return err
 	}
 	if sc.scoped {
-		out, err := a.core.GetDashboardChartsScoped(sc.listIDs, sc.allCampaigns)
+		out, err := a.core.GetDashboardChartsScoped(sc.listIDs, sc.allCampaigns, lang)
 		if err != nil {
 			return err
 		}
@@ -201,7 +227,7 @@ func (a *App) GetDashboardCharts(c echo.Context) error {
 	}
 
 	// Get the chart data from the DB.
-	out, err := a.core.GetDashboardCharts()
+	out, err := a.core.GetDashboardCharts(lang)
 	if err != nil {
 		return err
 	}
@@ -213,13 +239,17 @@ func (a *App) GetDashboardCharts(c echo.Context) error {
 func (a *App) GetDashboardCounts(c echo.Context) error {
 	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D6/D7; global brand, GLOBAL-BRAND-SPEC D5) -- as
 	// GetDashboardCharts: list-scoped users and any list_id get live counts over the scope
-	// (scoped: true), never the global numbers.
+	// (scoped: true), never the global numbers. GLOBAL-LANG-SPEC D5 -- an optional lang.
+	lang, err := a.dashboardLangFor(c)
+	if err != nil {
+		return err
+	}
 	sc, err := a.dashboardScopeFor(c)
 	if err != nil {
 		return err
 	}
 	if sc.scoped {
-		out, err := a.core.GetDashboardCountsScoped(sc.listIDs, sc.allCampaigns)
+		out, err := a.core.GetDashboardCountsScoped(sc.listIDs, sc.allCampaigns, lang)
 		if err != nil {
 			return err
 		}
@@ -228,7 +258,7 @@ func (a *App) GetDashboardCounts(c echo.Context) error {
 
 	// Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D5) -- the unscoped read is the
 	// same live query over every list and campaign (scoped: false), no longer mat_dashboard_counts.
-	out, err := a.core.GetDashboardCounts()
+	out, err := a.core.GetDashboardCounts(lang)
 	if err != nil {
 		return err
 	}
@@ -243,12 +273,17 @@ func (a *App) GetDashboardCounts(c echo.Context) error {
 // gate, because each row carries the brand's health document. The campaigns get_all argument does
 // not apply: a brand's campaigns are those on its lists.
 func (a *App) GetDashboardBrandMatrix(c echo.Context) error {
+	// GLOBAL-LANG-SPEC D6 -- an optional lang.
+	lang, err := a.dashboardLangFor(c)
+	if err != nil {
+		return err
+	}
 	sc, err := a.dashboardScopeFor(c)
 	if err != nil {
 		return err
 	}
 
-	out, err := a.core.GetDashboardBrandMatrix(sc.listIDs, !sc.scoped)
+	out, err := a.core.GetDashboardBrandMatrix(sc.listIDs, !sc.scoped, lang)
 	if err != nil {
 		return err
 	}
@@ -262,19 +297,24 @@ func (a *App) GetDashboardBrandMatrix(c echo.Context) error {
 // The panel's own ?brand= picker is gone (GLOBAL-BRAND-SPEC D5, superseding CLIENT-STATS-SPEC D7):
 // the global brand selector's list_id is the one filter.
 func (a *App) GetDashboardClients(c echo.Context) error {
+	// GLOBAL-LANG-SPEC D5 -- an optional lang (both statements).
+	lang, err := a.dashboardLangFor(c)
+	if err != nil {
+		return err
+	}
 	sc, err := a.dashboardScopeFor(c)
 	if err != nil {
 		return err
 	}
 	if sc.scoped {
-		rows, err := a.core.GetDashboardClientsScoped(sc.listIDs, sc.allCampaigns)
+		rows, err := a.core.GetDashboardClientsScoped(sc.listIDs, sc.allCampaigns, lang)
 		if err != nil {
 			return err
 		}
 		return c.JSON(http.StatusOK, okResp{models.DashboardClients{Scoped: true, Clients: rows}})
 	}
 
-	rows, err := a.core.GetDashboardClients()
+	rows, err := a.core.GetDashboardClients(lang)
 	if err != nil {
 		return err
 	}
@@ -285,19 +325,24 @@ func (a *App) GetDashboardClients(c echo.Context) error {
 // counts, integrations DASHBOARD-COUNTS-SPEC R4): GetDashboardClients keyed by country, with the
 // same dashboardScopeFor branching, window and raw count.
 func (a *App) GetDashboardCountries(c echo.Context) error {
+	// GLOBAL-LANG-SPEC D5 -- an optional lang (both statements).
+	lang, err := a.dashboardLangFor(c)
+	if err != nil {
+		return err
+	}
 	sc, err := a.dashboardScopeFor(c)
 	if err != nil {
 		return err
 	}
 	if sc.scoped {
-		rows, err := a.core.GetDashboardCountriesScoped(sc.listIDs, sc.allCampaigns)
+		rows, err := a.core.GetDashboardCountriesScoped(sc.listIDs, sc.allCampaigns, lang)
 		if err != nil {
 			return err
 		}
 		return c.JSON(http.StatusOK, okResp{models.DashboardCountries{Scoped: true, Countries: rows}})
 	}
 
-	rows, err := a.core.GetDashboardCountries()
+	rows, err := a.core.GetDashboardCountries(lang)
 	if err != nil {
 		return err
 	}

@@ -267,7 +267,8 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['templates', 'loading']),
-    ...mapGetters(['langSelection']),
+    // GLOBAL-LANG-SPEC D1 -- All while app.lang_enable is off (the toggle is hidden then).
+    ...mapGetters({ langSelection: 'langEffective' }),
 
     // Fork (global brand, D12) -- a brand's rows plus the brandless rows; No brand the brandless
     // rows only; All brands every row. Fork (naming standard, NAMING-STANDARD-SPEC D2) -- then the

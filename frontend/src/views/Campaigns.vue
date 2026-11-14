@@ -999,8 +999,9 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['campaigns', 'lists', 'loading', 'serverConfig']),
-    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the navbar language toggle.
-    ...mapGetters(['langSelection']),
+    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the navbar language toggle; All while
+    // app.lang_enable is off (GLOBAL-LANG-SPEC D1: the toggle is hidden then).
+    ...mapGetters({ langSelection: 'langEffective' }),
 
     // D1 -- list id -> brand slug from the lists store (the brand chip's source).
     listBrands() {

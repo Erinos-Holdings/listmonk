@@ -365,6 +365,7 @@ import {
   ANALYTICS_PANE_PREF, initialAnalyticsPane, readPane, writePane,
 } from '../paneState.mjs'; // eslint-disable-line import/extensions
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
+import { viewPaneValue } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { analyticsSkippedRows } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
@@ -1153,7 +1154,21 @@ export default Vue.extend({
     },
   },
 
+  // Fork (global language, integrations GLOBAL-LANG-SPEC D2, S2-5) -- the pane leaves with the view.
+  beforeDestroy() {
+    this.$store.commit('setViewPane', '');
+  },
+
   watch: {
+    // Fork (global language, GLOBAL-LANG-SPEC D2, S2-5) -- the navbar toggle reads this pane's
+    // applicability (Matrix all, Campaign none) from the store.
+    pane: {
+      immediate: true,
+      handler(p) {
+        this.$store.commit('setViewPane', viewPaneValue('analytics', p));
+      },
+    },
+
     // Fork (global brand, D4) -- re-fetch the picker under the new selection; the picked
     // campaigns stay (D9).
     brandKey(now) {

@@ -23,3 +23,32 @@ export function gridLines(subscriberGrid, langEnabled) {
   }
   return lines;
 }
+
+// Fork (global language, integrations GLOBAL-LANG-SPEC D5/D7, I11). A grid's subscriber counts
+// under a language selection L ('all' | en | es | fr | de | it, already the EFFECTIVE selection --
+// All while app.lang_enable is off). lineOf is L's row -- the send-language line, so EN includes
+// the no-language subscribers (the grid's en line, which its EN link matches) -- and a language
+// with no key in the grid reads ZERO, never the all line. Under All it is the all row.
+export const ZERO_ROW = Object.freeze({
+  active: 0, held: 0, unsubscribed: 0, pending: 0, blocked: 0, total: 0,
+});
+
+export function lineOf(subscriberGrid, selection) {
+  const grid = subscriberGrid || {};
+  const sel = typeof selection === 'string' && selection ? selection : 'all';
+  if (sel === 'all') {
+    return grid.all || {};
+  }
+  return grid[sel] || ZERO_ROW;
+}
+
+// The Lists page's lines under L (D7): under All, gridLines unchanged; under L, L's line alone
+// (with the en line's no-language subset for its tooltip), whether or not the row is expanded.
+export function langGridLines(subscriberGrid, langEnabled, selection) {
+  const sel = typeof selection === 'string' && selection ? selection : 'all';
+  if (!langEnabled || sel === 'all') {
+    return gridLines(subscriberGrid, langEnabled);
+  }
+  const grid = subscriberGrid || {};
+  return [{ key: sel, row: lineOf(grid, sel), none: sel === 'en' ? (grid.none || null) : null }];
+}

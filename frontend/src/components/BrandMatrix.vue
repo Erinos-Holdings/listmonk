@@ -70,7 +70,8 @@
         <tbody>
           <tr v-for="row in tableRows" :key="row.brand || 'totals'" :class="row.totals ? 'bm-totals' : ''">
             <td class="bm-health">
-              <health-chip v-if="row.status" :status="row.status"
+              <!-- GLOBAL-LANG D6 -- brand-level: unchanged under a language, marked on hover. -->
+              <health-chip v-if="row.status" :status="row.status" :title="allLangsTip ? $t(allLangsTip) : null"
                 :to="{ name: 'brand', params: { brand: row.brand } }" />
             </td>
             <td :class="bmTd('brand')">
@@ -81,7 +82,8 @@
             </td>
             <td v-for="c in engCells" :key="c.field" class="bm-eng has-text-right" :class="bmTd(c.field)">
               <span v-if="c.field === 'spam_rate'" :class="spamCell(row).cls"
-                :style="spamCell(row).style || null" :title="$t(spamCell(row).tooltip)"
+                :style="spamCell(row).style || null"
+                :title="allLangsTip ? `${$t(spamCell(row).tooltip)} ${$t(allLangsTip)}` : $t(spamCell(row).tooltip)"
                 :data-cy="`matrix-spam-${row.brand || 'totals'}`">
                 {{ row.totals ? '' : cell(row, 'spam_rate') }}</span>
               <!-- DASHBOARDS-POLISH-SPEC D1: red when the displayed rate crosses the row's STORED
@@ -106,6 +108,10 @@
       </table>
     </div>
     <p class="is-size-7 has-text-grey mt-2" data-cy="matrix-note">{{ $t('dashboard.matrix.note') }}</p>
+    <!-- GLOBAL-LANG D6 -- the response names the denominator's source. -->
+    <p v-if="sendsSource === 'listmonk'" class="is-size-7 has-text-grey mt-1" data-cy="matrix-note-listmonk">
+      {{ $t('dashboard.matrix.noteListmonk') }}
+    </p>
   </section>
 </template>
 
@@ -114,10 +120,11 @@ import Vue from 'vue';
 import { mapGetters } from 'vuex';
 import HealthChip from './HealthChip.vue';
 import {
-  CONVERSION_FIELDS, ENGAGEMENT_FIELDS, cellText, clickSort, conversionValue, engagementCell, loadState,
+  CONVERSION_FIELDS, ENGAGEMENT_FIELDS, allLanguagesNote, cellText, clickSort, conversionValue, engagementCell, loadState,
   saveState, sessionStore, shapeRows, spamCell, tableRows,
 } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
+import { langParam } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -133,6 +140,7 @@ export default Vue.extend({
       apiRows: [],
       // CAMPAIGN-CONVERSIONS-SPEC D11 -- the conversions doc's as_of/floors (null = no doc: '—').
       conversions: null,
+      sendsSource: 'ses',
       loading: false,
       // D6 -- sort and %|# mode per browser session (sessionStorage key dashboard.matrix, kept).
       state: loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
@@ -140,7 +148,12 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapGetters(['launch']),
+    ...mapGetters(['launch', 'langEffective']),
+
+    // GLOBAL-LANG D6 -- the all-languages hover on GP S% and the chip, under a language.
+    allLangsTip() {
+      return allLanguagesNote(this.langEffective);
+    },
 
     conversionFields() {
       return CONVERSION_FIELDS;
@@ -193,8 +206,11 @@ export default Vue.extend({
   },
 
   methods: {
+    // GLOBAL-LANG D6 -- the effective language rides the read (none under All).
     scopeParams() {
-      return this.scopeListIds ? { list_id: this.scopeListIds } : {};
+      const p = this.scopeListIds ? { list_id: this.scopeListIds } : {};
+      const lang = langParam(this.langEffective);
+      return lang ? { ...p, lang } : p;
     },
 
     fetchMatrix() {
@@ -202,6 +218,7 @@ export default Vue.extend({
       this.$api.getDashboardBrandMatrix(this.scopeParams()).then((data) => {
         this.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
         this.conversions = (data && data.conversions) || null;
+        this.sendsSource = data && data.sends_source === 'listmonk' ? 'listmonk' : 'ses';
       }).finally(() => {
         this.loading = false;
       });
@@ -263,7 +280,7 @@ export default Vue.extend({
     },
 
     engagementCell(row, field) {
-      return engagementCell(row, field, this.state.mode);
+      return engagementCell(row, field, this.state.mode, this.langEffective);
     },
   },
 
@@ -273,6 +290,11 @@ export default Vue.extend({
       if (this.brandChanged(now)) {
         this.fetchMatrix();
       }
+    },
+
+    // GLOBAL-LANG D6 -- a language change refetches (once the lists have loaded).
+    langEffective() {
+      this.afterListsLoaded(() => this.fetchMatrix());
     },
   },
 

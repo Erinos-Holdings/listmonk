@@ -112,8 +112,12 @@
       @page-change="onPageChange" :current-page="queryParams.page" :per-page="subscribers.perPage"
       :total="subscribers.total" hoverable checkable backend-sorting @sort="onSort">
       <template #top-left>
-        <div class="actions">
-          <a class="a" href="#" @click.prevent="exportSubscribers" data-cy="btn-export-subscribers">
+        <!-- Fork (global language, GLOBAL-LANG-SPEC D4, S2-1) -- the export and every by-query
+             action are disabled while the rows are loading (byQueryBusy), so the rows, the total in
+             a confirmation and the by-query request always describe the same filter. -->
+        <div class="actions" :class="{ 'is-busy': byQueryBusy }">
+          <a class="a" href="#" @click.prevent="exportSubscribers" data-cy="btn-export-subscribers"
+            :aria-disabled="byQueryBusy ? 'true' : null">
             <b-icon icon="cloud-download-outline" size="is-small" />
             {{ $t('subscribers.export') }}
           </a>
@@ -129,7 +133,7 @@
             </a>
             <span class="a">
               {{ $t('globals.messages.numSelected', { num: numSelectedSubscribers }) }}
-              <span v-if="!bulk.all && subscribers.total > subscribers.perPage">
+              <span v-if="!bulk.all && subscribers.total > subscribers.perPage && !byQueryBusy">
                 &mdash;
                 <a href="#" @click.prevent="selectAllSubscribers">
                   {{ $t('globals.messages.selectAll', { num: subscribers.total }) }}
@@ -242,7 +246,7 @@
     <!-- Manage list modal -->
     <b-modal scroll="keep" :aria-modal="true" :active.sync="isBulkListFormVisible" :width="500" class="has-overflow">
       <subscriber-bulk-list :num-subscribers="listFormTarget ? 1 : numSelectedSubscribers" :options="bulkListOptions"
-        @finished="bulkChangeLists" />
+        :lang-note="bulkListLangNote" @finished="bulkChangeLists" />
     </b-modal>
 
     <!-- Add / edit form modal -->
@@ -254,7 +258,7 @@
 
 <script>
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { uris, MANAGE_PREFS_URL } from '../constants';
 import SubscriberBulkList from './SubscriberBulkList.vue';
@@ -264,8 +268,9 @@ import {
   CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
 } from '../langs';
 import {
-  effectiveListIds, filterByIds, scopeUnion, subscriberExportParams, subscriberQueryBody,
+  effectiveListIds, filterByIds, gridFilterOf, scopeUnion, subscriberExportParams, subscriberQueryBody,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { byQueryLangNote, langParam, subscriberResponseCurrent } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -305,6 +310,12 @@ export default Vue.extend({
       },
 
       queryInput: '',
+
+      // Fork (global language, GLOBAL-LANG-SPEC D4, S2-1) -- the latest subscribers query this
+      // page issued and the latest one answered; a response is applied only when it answers the
+      // latest query of the still-mounted page (subscriberResponseCurrent).
+      reqSeq: 0,
+      answeredSeq: 0,
 
       // Query params to filter the getSubscribers() API call.
       queryParams: {
@@ -389,6 +400,9 @@ export default Vue.extend({
     },
 
     showBulkListForm() {
+      if (this.bulk.all && this.byQueryBusy) {
+        return;
+      }
       this.listFormTarget = null;
       this.isBulkListFormVisible = true;
     },
@@ -502,11 +516,48 @@ export default Vue.extend({
         delete qp.queryExp;
       }
 
+      // Fork (global language, D4, S2-1, I4c) -- numbered; the api layer commits the rows only
+      // when this is still the mounted page's latest query.
+      this.reqSeq += 1;
+      const seq = this.reqSeq;
+      const current = () => subscriberResponseCurrent(seq, this.reqSeq, this.pageMounted === true);
       this.$nextTick(() => {
-        this.$api.getSubscribers(qp).then(() => {
+        this.$api.getSubscribers(qp, { accept: current }).then(() => {
+          if (!current()) {
+            return;
+          }
+          this.answeredSeq = seq;
           this.bulk.checked = [];
+        }).catch(() => {
+          if (current()) {
+            this.answeredSeq = seq;
+          }
         });
       });
+    },
+
+    // Fork (global language, D4, S2-3, I6) -- the confirmation text with the by-query language
+    // line appended when the request carries a lang.
+    withLangNote(msg, params) {
+      const note = byQueryLangNote(params, (l) => this.$t('naming.byQueryLang', { lang: this.routeLangLabel(l) }));
+      return note ? `${msg} ${note}` : msg;
+    },
+
+    // A route lang value as the page's own picker names it.
+    routeLangLabel(l) {
+      if (l === 'en_only') {
+        return this.langLabel('en');
+      }
+      if (l === 'none') {
+        return this.$t('lists.grid.noLangChip');
+      }
+      if (l === 'other') {
+        return this.$t('lists.grid.other');
+      }
+      if (isSendPlus(l)) {
+        return sendLangLabel(l);
+      }
+      return this.langLabel(l) || l;
     },
 
     managePrefsUrl(sub) {
@@ -527,7 +578,11 @@ export default Vue.extend({
     },
 
     blocklistSubscribers() {
+      if (this.byQueryBusy) {
+        return;
+      }
       let fn = null;
+      let body = null;
       if (!this.bulk.all && this.bulk.checked.length > 0) {
         // If 'all' is not selected, blocklist subscribers by IDs.
         fn = () => {
@@ -538,31 +593,42 @@ export default Vue.extend({
       } else {
         // 'All' is selected, blocklist by query.
         // Fork (global brand, D8/I12) -- the body carries the effective list ids.
+        // GLOBAL-LANG D4 (S2-3) -- the body is built once: the confirmation names its language.
+        body = subscriberQueryBody(this.queryParams, this.scopeListIds);
         fn = () => {
-          this.$api.blocklistSubscribersByQuery(subscriberQueryBody(this.queryParams, this.scopeListIds))
+          this.$api.blocklistSubscribersByQuery(body)
             .then(() => this.querySubscribers());
         };
       }
 
-      this.$utils.confirm(this.$t('subscribers.confirmBlocklist', { num: this.numSelectedSubscribers }), fn);
+      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmBlocklist', { num: this.numSelectedSubscribers }), body), fn);
     },
 
     exportSubscribers() {
+      if (this.byQueryBusy) {
+        return;
+      }
       const num = !this.bulk.all && this.bulk.checked.length > 0
         ? this.bulk.checked.length : this.subscribers.total;
 
-      this.$utils.confirm(this.$t('subscribers.confirmExport', { num }), () => {
-        // Fork (global brand, D8/I12) -- search/query, the effective list ids, status, the grid
-        // filter (list grid) and the selected ids, built by brandScope.mjs.
-        const ids = !this.bulk.all && this.bulk.checked.length > 0 ? this.bulk.checked.map((s) => s.id) : [];
-        const q = new URLSearchParams(subscriberExportParams(this.queryParams, this.scopeListIds, ids));
+      // Fork (global brand, D8/I12) -- search/query, the effective list ids, status, the grid
+      // filter (list grid) and the selected ids, built by brandScope.mjs. GLOBAL-LANG D4 (S2-3)
+      // -- built before the confirmation, which names its language.
+      const ids = !this.bulk.all && this.bulk.checked.length > 0 ? this.bulk.checked.map((s) => s.id) : [];
+      const params = subscriberExportParams(this.queryParams, this.scopeListIds, ids);
+      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmExport', { num }), params), () => {
+        const q = new URLSearchParams(params);
 
         document.location.href = `${uris.exportSubscribers}?${q.toString()}`;
       });
     },
 
     deleteSubscribers() {
+      if (this.byQueryBusy) {
+        return;
+      }
       let fn = null;
+      let body = null;
       if (!this.bulk.all && this.bulk.checked.length > 0) {
         // If 'all' is not selected, delete subscribers by IDs.
         fn = () => {
@@ -575,17 +641,19 @@ export default Vue.extend({
             });
         };
       } else {
-        // 'All' is selected, delete by query.
+        // 'All' is selected, delete by query. GLOBAL-LANG D4 (S2-3) -- the body is built once:
+        // the confirmation names its language.
+        body = {
+          // If the query expression is empty, explicitly pass `all=true`
+          // so that the backend deletes all records in the DB with an empty query string.
+          all: this.queryParams.queryExp.trim() === '' && this.queryParams.search.trim() === '',
+          // Fork (list grid, D7). all=true above is sent exactly when a grid-linked page has
+          // no search -- the server keeps the segment through it (it never voids a segment).
+          // Fork (global brand, D8/I12) -- and the effective list ids, which it keeps too.
+          ...subscriberQueryBody(this.queryParams, this.scopeListIds),
+        };
         fn = () => {
-          this.$api.deleteSubscribersByQuery({
-            // If the query expression is empty, explicitly pass `all=true`
-            // so that the backend deletes all records in the DB with an empty query string.
-            all: this.queryParams.queryExp.trim() === '' && this.queryParams.search.trim() === '',
-            // Fork (list grid, D7). all=true above is sent exactly when a grid-linked page has
-            // no search -- the server keeps the segment through it (it never voids a segment).
-            // Fork (global brand, D8/I12) -- and the effective list ids, which it keeps too.
-            ...subscriberQueryBody(this.queryParams, this.scopeListIds),
-          }).then(() => {
+          this.$api.deleteSubscribersByQuery(body).then(() => {
             this.querySubscribers();
 
             this.$utils.toast(this.$t(
@@ -596,7 +664,7 @@ export default Vue.extend({
         };
       }
 
-      this.$utils.confirm(this.$t('subscribers.confirmDelete', { num: this.numSelectedSubscribers }), fn);
+      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmDelete', { num: this.numSelectedSubscribers }), body), fn);
     },
 
     bulkChangeLists(action, preconfirm, lists, backfill = false) {
@@ -626,6 +694,10 @@ export default Vue.extend({
         fn = this.$api.addSubscribersToLists;
         data.ids = this.bulk.checked.map((s) => s.id);
       } else {
+        // GLOBAL-LANG D4 (S2-1) -- never by query while the rows are loading.
+        if (this.byQueryBusy) {
+          return;
+        }
         // 'All' is selected, perform by query. Fork (list grid, D7; global brand, D8/I12) -- the
         // shared by-query body: query, search, status, grid filter and the effective list ids.
         Object.assign(data, subscriberQueryBody(this.queryParams, this.scopeListIds));
@@ -640,6 +712,17 @@ export default Vue.extend({
   },
 
   watch: {
+    // Fork (global language, GLOBAL-LANG-SPEC D4) -- the navbar toggle changed while on the page:
+    // rewrite the route's lang (All removes it) exactly as the page's own picker does, so the page
+    // remounts under it. The route stays the page's single source of the filter.
+    langEffective(now) {
+      const want = langParam(now);
+      if ((this.$route.query.lang || '') === want) {
+        return;
+      }
+      this.onLangSelect(want);
+    },
+
     // Fork: a row-opened Manage lists modal dismissed without saving must not leave its target behind.
     isBulkListFormVisible(visible) {
       if (!visible) {
@@ -673,15 +756,26 @@ export default Vue.extend({
     // Fork (list grid, LIST-GRID-SPEC D7). THE one place the segment/lang filter is read for a
     // request. Every read and every select-all write spreads it, so a by-query delete,
     // blocklist or list change can never reach beyond the rows the page is showing.
+    // GLOBAL-LANG D4 (S2-11) -- through the same builder the by-query body and the export use.
     gridFilter() {
-      const out = {};
-      if (this.queryParams.segment) {
-        out.segment = this.queryParams.segment;
+      return gridFilterOf(this.queryParams);
+    },
+
+    ...mapGetters(['langEffective']),
+
+    // GLOBAL-LANG D4 (S2-1) -- true while the rows on screen may not answer the latest query: the
+    // store's loading flag, or a query of this page still unanswered. The export and every
+    // by-query action wait for it.
+    byQueryBusy() {
+      return !!this.loading.subscribers || this.answeredSeq !== this.reqSeq;
+    },
+
+    // GLOBAL-LANG D4 (S2-3, I6) -- the Manage-lists modal's language line, by-query mode only.
+    bulkListLangNote() {
+      if (this.listFormTarget || (!this.bulk.all && this.bulk.checked.length > 0)) {
+        return '';
       }
-      if (this.queryParams.lang) {
-        out.lang = this.queryParams.lang;
-      }
-      return out;
+      return byQueryLangNote(this.gridFilter, (l) => this.$t('naming.byQueryLang', { lang: this.routeLangLabel(l) }));
     },
 
     // Fork (LIST-COLLAPSE-SPEC C8). Shown when languages are on, or when the route carries one
@@ -750,11 +844,18 @@ export default Vue.extend({
     this.$root.$on('page.refresh', this.querySubscribers);
   },
 
+  // GLOBAL-LANG D4 (S2-1) -- a response landing after the page is gone is never applied.
+  beforeDestroy() {
+    this.pageMounted = false;
+  },
+
   destroyed() {
     this.$root.$off('page.refresh', this.querySubscribers);
   },
 
   mounted() {
+    // Non-reactive on purpose: read only by the stale-response check.
+    this.pageMounted = true;
     if (this.$route.params.listID) {
       this.queryParams.listID = parseInt(this.$route.params.listID, 10);
     }

@@ -209,6 +209,13 @@ export function cellText(row, field, mode, fmt = (n) => String(n)) {
 // flagged tooltip -- while the color shows the problem, the color wins and the tooltip is the
 // plain one. The totals row carries no spam signal. Returns { cls, style, tooltip } (tooltip is an
 // i18n key); Dashboard.vue binds them and decides nothing.
+// GLOBAL-LANG-SPEC D6: under a language, GP S% and the health chip are shown unchanged but marked
+// on hover -- they are brand-level, all languages. null under All.
+export const ALL_LANGUAGES_HELP = 'dashboard.matrix.allLanguages';
+export function allLanguagesNote(lang) {
+  return typeof lang === 'string' && lang !== '' && lang !== 'all' ? ALL_LANGUAGES_HELP : null;
+}
+
 export const SPAM_HELP = 'dashboard.matrix.spamHelp';
 export const SPAM_FLAGGED_HELP = 'dashboard.matrix.spamFlaggedHelp';
 const SPAM_STATUS_CLASS = Object.freeze({ issues: 'has-text-danger', warn: 'has-text-warning-dark' });
@@ -290,9 +297,12 @@ export function displayedRate(row, field) {
 // the thresholds totalsRow copied from its first carrier. DASHBOARDS-POLISH3-SPEC D1 (replacing
 // POLISH D1's "% mode only"): the breach is a ROW property decided from the rate in BOTH modes --
 // the mode only picks which figure (rate or count) wears it, so `mode` no longer changes the result.
+// Fork (global language, integrations GLOBAL-LANG-SPEC D6, S2-8b, I10b): under a language
+// selection (lang other than 'all') the colouring is OFF -- the stored thresholds were set for
+// all-language rates over SES sends, and a language's rates are over listmonk's own sends.
 // eslint-disable-next-line no-unused-vars
-export function engagementCell(row, field, mode = DEFAULT_STATE.mode) {
-  if (!row) {
+export function engagementCell(row, field, mode = DEFAULT_STATE.mode, lang = 'all') {
+  if (!row || (typeof lang === 'string' && lang !== '' && lang !== 'all')) {
     return { cls: '' };
   }
   const hit = breachesThreshold(row.thresholds, field, displayedRate(row, field), { sent: row.sent, complaints: row.complaints });

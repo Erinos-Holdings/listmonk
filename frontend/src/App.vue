@@ -20,8 +20,8 @@
         <div v-if="!brandScope.hidden" class="navbar-item brand-context" :style="selectorStyle">
           <brand-selector />
           <launch-filter />
-          <!-- Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle, beside the
-               selector, on Campaigns / the Campaign Matrix / Templates only. -->
+          <!-- Fork (naming standard, NAMING-STANDARD-SPEC D2; GLOBAL-LANG-SPEC D1) -- the language
+               toggle, beside the selector, on every navbar route (hidden with app.lang_enable off). -->
           <language-toggle />
         </div>
         <div v-else class="navbar-item brand-context">

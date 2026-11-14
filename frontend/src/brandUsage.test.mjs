@@ -10,9 +10,29 @@ import {
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
   GUIDE_COLUMN_REM, GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, pageWidth, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
   REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName, approxClock, hoverText, splitStepTitle, stepDetail,
+  narrowSkipped,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { seriesStepKey } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
+
+// integrations GLOBAL-LANG-SPEC I11 (D8) -- the Skipped counts narrow to L client-side.
+test('GLOBAL-LANG I11: Skipped narrows to L; EN has none; All unchanged', () => {
+  const skipped = {
+    fr: { count: 4, lists: [3] }, es: { count: 2, lists: [5] }, de: { count: 0, lists: [] }, it: { count: 1, lists: [7] },
+  };
+  assert.deepEqual(narrowSkipped(skipped, 'all'), skipped);
+  assert.deepEqual(narrowSkipped(skipped), skipped);
+  assert.deepEqual(narrowSkipped(skipped, 'fr'), { fr: skipped.fr });
+  assert.deepEqual(narrowSkipped(skipped, 'en'), {});
+  assert.equal(narrowSkipped(null, 'fr'), null);
+  const api = [{ brand: 'ruze', skipped, usage: { score: 1 } }];
+  const [row] = shapeRows(api, { lang: 'es' });
+  assert.equal(cell(row, 'skipped:es').text, '2');
+  assert.equal(cell(row, 'skipped:fr').text, MISSING);
+  assert.equal(cell(shapeRows(api)[0], 'skipped:fr').text, '4');
+  // The rest of the row is untouched.
+  assert.deepEqual(row.usage, shapeRows(api)[0].usage);
+});
 
 const t = (k, p) => (p ? `${k}${JSON.stringify(p)}` : k);
 

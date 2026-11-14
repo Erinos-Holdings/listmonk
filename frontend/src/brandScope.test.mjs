@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   ALL, NONE,
   storeLists, rosterFrom, resolveSelection, scopeListIds, listsScopeParams,
-  scopeUnion, filterByIds, effectiveListIds, subscriberQueryBody, subscriberExportParams,
+  scopeUnion, filterByIds, effectiveListIds, subscriberQueryBody, subscriberExportParams, gridFilterOf,
   campaignBrand, contextNotice, filterTemplates, formBrandDefault, templateNoticeBrand,
   mediaScopeContext, presetNoticeBrand, filterBrandRows,
   launchOf, matchesLaunch, applyLaunch, launchCounts, filterRowsByLaunch, launchApplies,
@@ -192,6 +192,19 @@ test('I12 subscriberQueryBody: no list and no scope (all) is null, as today', ()
   assert.deepEqual(b, {
     search: 'amy', query: '', list_ids: null, subscription_status: 'confirmed',
   });
+});
+
+// integrations GLOBAL-LANG-SPEC I4b -- the global language reaches the Subscribers page as the
+// route's lang ALONE (no segment): the read query (gridFilterOf), the by-query body and the export
+// carry exactly it.
+test('GLOBAL-LANG I4b: a lang-only filter rides the read query, the by-query body and the export', () => {
+  const qp = { ...QP, segment: null, lang: 'es' };
+  assert.deepEqual(gridFilterOf(qp), { lang: 'es' });
+  assert.deepEqual(gridFilterOf({ ...qp, lang: null }), {});
+  assert.deepEqual(gridFilterOf({ ...QP }), { segment: 'active', lang: 'fr' });
+  assert.equal(subscriberQueryBody(qp, null).lang, 'es');
+  assert.equal('segment' in subscriberQueryBody(qp, null), false);
+  assert.deepEqual(subscriberExportParams(qp, null, []).filter(([k]) => k === 'lang' || k === 'segment'), [['lang', 'es']]);
 });
 
 test('I12 subscriberExportParams: the three cases, plus the checked ids', () => {

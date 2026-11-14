@@ -198,7 +198,9 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapGetters(['launch', 'langSelection']),
+    // GLOBAL-LANG-SPEC D1 -- langSelection is All while app.lang_enable is off.
+    ...mapGetters(['launch']),
+    ...mapGetters({ langSelection: 'langEffective' }),
     ...mapState({ healthDocs: 'brandHealth' }),
 
     // D7: the GP S% column only for a brands:get holder (the server returns no GP otherwise).

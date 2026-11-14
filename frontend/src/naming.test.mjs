@@ -12,9 +12,7 @@ import {
   formatNameDate, formerNameOf, isExempt, joinListName, langMatches, langOf, listDisplayName, listPrefixAddon, nameCounter,
   namePlaceholder, namePrefill, nameWarnings, normalizeLang, splitListName,
 } from './naming.mjs'; // eslint-disable-line import/extensions
-import {
-  LANG_PREF, LANG_ROUTES, langLabel, langParam, langToggleShown,
-} from './langScope.mjs'; // eslint-disable-line import/extensions
+import { LANG_PREF, langLabel, langParam } from './langScope.mjs'; // eslint-disable-line import/extensions
 
 const ALL = { kind: 'all' };
 const RUZE = { kind: 'brand', slug: 'ruze' };
@@ -273,12 +271,11 @@ test('I4 (D8): listPrefixAddon, splitListName and joinListName', () => {
   assert.equal(splitListName('Ruze Sale', 'RUZE'), 'Ruze Sale');
 });
 
-test('langScope: values, the pref, the routes it shows on, its label and the Campaigns param', () => {
+// (Where the toggle shows and applies -- GLOBAL-LANG-SPEC, superseding the route list -- is
+// langScope.test.mjs.)
+test('langScope: values, the pref, its label and the Campaigns param', () => {
   assert.deepEqual([...LANG_VALUES], ['all', 'en', 'es', 'fr', 'de', 'it']);
   assert.equal(LANG_PREF, 'brand.lang');
-  assert.deepEqual([...LANG_ROUTES], ['campaigns', 'templates', 'campaignAnalytics']);
-  ['campaigns', 'templates', 'campaignAnalytics'].forEach((r) => assert.equal(langToggleShown(r), true));
-  ['lists', 'subscribers', 'dashboard', 'media', 'campaign'].forEach((r) => assert.equal(langToggleShown(r), false));
   assert.equal(langLabel('all', 'All'), 'All');
   assert.equal(langLabel('fr', 'All'), 'FR');
   assert.equal(langParam('all'), '');

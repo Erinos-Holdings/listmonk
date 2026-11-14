@@ -314,7 +314,7 @@
 
 <script>
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import ListForm from './ListForm.vue';
 import HealthChip from '../components/HealthChip.vue';
@@ -328,7 +328,7 @@ import { journeyLockedOf, withTriggerItem, activeWordOf } from '../listTrigger.m
 import { showSystemLists, systemListsParams, SHOW_SYSTEM_PREF } from '../listsPage.mjs'; // eslint-disable-line import/extensions
 // Fork (list grid; dashboard counts, integrations DASHBOARD-COUNTS-SPEC D7) -- the one lines rule,
 // shared with the Dashboard.
-import { gridLines } from '../gridLines.mjs'; // eslint-disable-line import/extensions
+import { gridLines, langGridLines } from '../gridLines.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork. Columns whose FIRST click sorts ascending (see onSort). Text columns go here; every other
@@ -540,8 +540,9 @@ export default Vue.extend({
 
     // C6. The unrecognised-language alarm, which must be visible without expanding.
     hasOther(list) {
-      // With app.lang_enable off gridLines shows no Other line, so there is nothing to expand to.
-      if (!this.serverConfig.lang_enabled) {
+      // With app.lang_enable off gridLines shows no Other line, so there is nothing to expand to;
+      // nor under a language selection (GLOBAL-LANG D7: the L line alone).
+      if (!this.serverConfig.lang_enabled || this.langEffective !== 'all') {
         return false;
       }
       const grid = list.subscriberGrid || {};
@@ -549,7 +550,13 @@ export default Vue.extend({
     },
 
     // C3/C4. Collapsed = the "all" line alone; expanded = today's gridLines rule, unchanged.
+    // GLOBAL-LANG D7 -- under a language selection every row shows L's line alone (gridLines.mjs::
+    // langGridLines), expanded or not; its cells link to that language (EN: lang=en, the send
+    // language), as the grid's EN line does.
     visibleLines(list) {
+      if (this.langEffective !== 'all') {
+        return langGridLines(list.subscriberGrid, this.serverConfig.lang_enabled, this.langEffective);
+      }
       const lines = this.gridLines(list);
       return this.expanded[list.id] ? lines : lines.slice(0, 1);
     },
@@ -713,6 +720,8 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading', 'settings', 'serverConfig', 'profile']),
+    // GLOBAL-LANG D7 -- the effective language selection (All with app.lang_enable off).
+    ...mapGetters(['langEffective']),
 
     // Fork (name guardrails, NAME-GUARDRAILS-SPEC D7) -- the one predicate, shared with
     // Campaigns.vue and Navigation.vue: New needs one brand selected.

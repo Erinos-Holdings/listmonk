@@ -349,15 +349,16 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapGetters(['launch']),
+    ...mapGetters(['launch', 'langEffective']),
 
     // D2/D7 -- the matrix rows (same launch filter and display names), sorted. DASHBOARDS-POLISH2-SPEC
     // D2 -- the lists store (active, permitted lists) gives each row its brand list-id set.
     // 2026-11-02 (user): the parent brand's row is out of the sort (it renders in the band above
     // the header, parentRow).
     tableRows() {
+      // GLOBAL-LANG-SPEC D8 -- the Skipped counts narrow to the effective language (client-side).
       const rows = shapeRows(this.apiRows, {
-        brands: this.brandRows, launch: this.launch, lists: this.$store.state.lists,
+        brands: this.brandRows, launch: this.launch, lists: this.$store.state.lists, lang: this.langEffective,
       });
       return sortRows(splitParent(rows).rest, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en');
     },
@@ -369,7 +370,9 @@ export default Vue.extend({
       if (!source) {
         return null;
       }
-      return shapeRows([source], { brands: this.brandRows, launch: 'all', lists: this.$store.state.lists })[0] || null;
+      return shapeRows([source], {
+        brands: this.brandRows, launch: 'all', lists: this.$store.state.lists, lang: this.langEffective,
+      })[0] || null;
     },
 
     parentSelected() {

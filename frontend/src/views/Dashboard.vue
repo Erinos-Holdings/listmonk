@@ -54,10 +54,10 @@
                     <!-- Fork (brand matrix, BRAND-MATRIX-SPEC D9) -- comma-separated, never k/m. -->
                     <p class="title">
                       <b-icon icon="account-multiple" />
-                      {{ $utils.formatNumber(counts.subscribers.total || 0) }}
+                      {{ $utils.formatNumber(subsTotals.total) }}
                     </p>
                     <p class="is-size-6 has-text-grey">
-                      {{ $tc('globals.terms.subscriber', counts.subscribers.total) }}
+                      {{ $tc('globals.terms.subscriber', subsTotals.total) }}
                     </p>
                   </div>
 
@@ -251,6 +251,10 @@
                 </div>
               </div>
               <p class="is-size-7 has-text-grey" data-cy="charts-note">{{ $t('dashboard.chartsNote') }}</p>
+              <!-- GLOBAL-LANG-SPEC D5 -- under a language the Sends are listmonk's own (sends_source). -->
+              <p v-if="sendsSource === 'listmonk'" class="is-size-7 has-text-grey" data-cy="charts-note-listmonk">
+                {{ $t('dashboard.chartsNoteListmonk') }}
+              </p>
             </article>
           </div>
 
@@ -390,7 +394,7 @@
 <script>
 import dayjs from 'dayjs';
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import Chart from '../components/Chart.vue';
 import {
   clicksAxisMax, sendsClicksOptions, shapeSendsClicks, todayOutline,
@@ -415,9 +419,10 @@ import {
 } from '../countryRows.mjs'; // eslint-disable-line import/extensions
 import {
   engagementLines, loadOverviewState, pctCount, saveOverviewState, segmentCell, subsCellText, subscriberColumns,
-  subscriberRows,
+  subscriberRows, subscriberTotals,
 } from '../dashboardSubs.mjs'; // eslint-disable-line import/extensions
 import { isSendPlus, sendLangCode } from '../langs';
+import { langParam } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -456,6 +461,8 @@ export default Vue.extend({
       // (sessionStorage key dashboard.conversionsChart; a fresh session is $ with Tracked off).
       chartClicks: [],
       chartConversions: [],
+      // GLOBAL-LANG-SPEC D5 -- the charts response's sends_source ('ses' | 'listmonk').
+      sendsSource: 'ses',
       conv: loadConvState(sessionStore(typeof window !== 'undefined' ? window : null)),
       counts: {
         lists: {},
@@ -489,8 +496,12 @@ export default Vue.extend({
       saveOverviewState(sessionStore(window), { mode: this.overview.mode });
     },
 
+    // GLOBAL-LANG-SPEC D5 -- every Dashboard read also carries the effective language (no lang
+    // under All). A presentation filter: the server binds it, never a permission input (D9).
     scopeParams() {
-      return this.scopeListIds ? { list_id: this.scopeListIds } : {};
+      const p = this.scopeListIds ? { list_id: this.scopeListIds } : {};
+      const lang = langParam(this.langEffective);
+      return lang ? { ...p, lang } : p;
     },
 
     // The Tracked/Matched tooltip (definition, floor, as-of, stale note) -- conversionCells.mjs.
@@ -578,6 +589,7 @@ export default Vue.extend({
       this.$api.getDashboardCharts(params).then((data) => {
         this.isChartsLoading = false;
         this.chartToday = data.today || null;
+        this.sendsSource = data.sendsSource === 'listmonk' ? 'listmonk' : 'ses';
         this.sendsClicksChart = this.makeSendsClicks(data);
         this.clicksMax = clicksAxisMax(data.clicks);
         this.chartClicks = data.clicks || [];
@@ -665,6 +677,8 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['settings', 'serverConfig']),
+    // GLOBAL-LANG-SPEC D5 -- the effective language selection (All with app.lang_enable off).
+    ...mapGetters(['langEffective']),
 
     // The Sends + Clicks chart's axes, legend and tooltip (sendsClicksChart.mjs); the Clicks axis
     // max follows the fetched data (the chart re-reads options on change).
@@ -716,12 +730,18 @@ export default Vue.extend({
       return (this.counts.subscribers && this.counts.subscribers.grid) || {};
     },
 
+    // GLOBAL-LANG-SPEC D5 -- the headline line is the selection's (All: the all line; L: L's
+    // send-language line, zero when absent); dashboardSubs.mjs::subscriberTotals decides.
+    subsTotals() {
+      return subscriberTotals(this.subsGrid, this.langEffective);
+    },
+
     subsAll() {
-      return this.subsGrid.all || {};
+      return this.subsTotals.line;
     },
 
     subsRows() {
-      return subscriberRows(this.subsGrid);
+      return subscriberRows({ all: this.subsAll });
     },
 
     // The collapsed segment lines with their aligned-column parts.
@@ -730,7 +750,7 @@ export default Vue.extend({
     },
 
     subsColumns() {
-      return subscriberColumns(this.subsGrid, !!(this.serverConfig && this.serverConfig.lang_enabled));
+      return subscriberColumns(this.subsGrid, !!(this.serverConfig && this.serverConfig.lang_enabled), this.langEffective);
     },
 
     // Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D11) -- the Overview's two
@@ -793,6 +813,11 @@ export default Vue.extend({
       if (this.brandChanged(now)) {
         this.fetchData();
       }
+    },
+
+    // GLOBAL-LANG-SPEC D5 -- a language change re-issues them too (once the lists have loaded).
+    langEffective() {
+      this.afterListsLoaded(() => this.fetchData());
     },
   },
 

@@ -101,8 +101,10 @@ http.interceptors.response.use((resp) => {
     data = resp.data.data;
   }
 
-  // Store the API response for a model.
-  if ('store' in resp.config) {
+  // Store the API response for a model. Fork (global language, GLOBAL-LANG-SPEC D4, S2-1) -- a
+  // request may carry `accept`, checked before the commit: a stale response (not the mounted
+  // page's latest query) is never stored.
+  if ('store' in resp.config && (typeof resp.config.accept !== 'function' || resp.config.accept())) {
     store.commit('setModelResponse', { model: resp.config.store, data });
   }
 
@@ -358,12 +360,15 @@ export const getBrandTheme = (slug) => http.get(
 );
 
 // Subscribers.
-export const getSubscribers = async (params) => http.get(
+// Fork (global language, GLOBAL-LANG-SPEC D4) -- opts.accept: () => boolean, the page's stale-
+// response check (langScope.mjs::subscriberResponseCurrent), run before the store commit.
+export const getSubscribers = async (params, opts = {}) => http.get(
   '/api/subscribers',
   {
     params,
     loading: models.subscribers,
     store: models.subscribers,
+    accept: opts.accept,
     camelCase: (keyPath) => !keyPath.startsWith('.results.*.attribs'),
   },
 );

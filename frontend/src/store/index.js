@@ -5,7 +5,7 @@ import Utils from '../utils';
 import {
   ALL, applyLaunch, launchApplies, normalizeLaunch, resolveSelection, rosterFrom, scopeListIds, selectionLoaded,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { LANG_PREF, normalizeLang } from '../langScope.mjs'; // eslint-disable-line import/extensions
+import { LANG_PREF, effectiveLang, normalizeLang } from '../langScope.mjs'; // eslint-disable-line import/extensions
 
 Vue.use(Vuex);
 
@@ -42,6 +42,9 @@ export default new Vuex.Store({
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle's stored value
     // (pref `brand.lang`); the langSelection getter resolves an unknown one to 'all'.
     langStored: prefs.getPref(LANG_PREF) || 'all',
+    // Fork (global language, GLOBAL-LANG-SPEC D2) -- the current pane of a paned view the navbar
+    // cannot see ('brands:usage', 'analytics:campaign'); '' when none is mounted.
+    viewPane: '',
     // Fork (launch filter, D3) -- the GET /api/brands/health documents. Empty (never fetched, or a
     // failed read) means every brand is launched.
     brandHealth: [],
@@ -97,6 +100,13 @@ export default new Vuex.Store({
       const v = normalizeLang(lang);
       state.langStored = v;
       prefs.setPref(LANG_PREF, v);
+    },
+
+    // Fork (global language, GLOBAL-LANG-SPEC D2, S2-5) -- a paned view commits its pane here
+    // (value '<view>:<pane>', langScope.mjs::viewPaneValue) and clears it on beforeDestroy; the
+    // language toggle reads it to pick the pane's applicability.
+    setViewPane(state, value) {
+      state.viewPane = typeof value === 'string' ? value : '';
     },
 
     // Fork (launch filter, D3).
@@ -181,6 +191,10 @@ export default new Vuex.Store({
     brandKey: (state, getters) => (getters.brandScope.pending ? 'pending' : JSON.stringify(getters.brandSelection)),
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- 'all' | 'en' | 'es' | 'fr' | 'de' | 'it'.
     langSelection: (state) => normalizeLang(state.langStored),
+    // Fork (global language, GLOBAL-LANG-SPEC D1) -- the selection the views apply: All while
+    // app.lang_enable is off (the toggle is hidden; there are no languages to filter).
+    langEffective: (state) => effectiveLang(state.langStored, state[models.serverConfig]),
+    viewPane: (state) => state.viewPane,
   },
 
   modules: {

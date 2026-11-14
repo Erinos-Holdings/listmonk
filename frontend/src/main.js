@@ -9,6 +9,7 @@ import store from './store';
 import * as api from './api';
 import Utils from './utils';
 import { routeRedirect } from './accessPolicy.mjs'; // eslint-disable-line import/extensions
+import { langEntryRedirect } from './langScope.mjs'; // eslint-disable-line import/extensions
 
 // Internationalisation.
 Vue.use(VueI18n);
@@ -40,9 +41,19 @@ router.beforeEach((to, from, next) => {
   const redirect = routeRedirect(currentProfile, to.name, to.params);
   if (redirect) {
     next(redirect);
-  } else {
-    next();
+    return;
   }
+
+  // Fork (global language, integrations GLOBAL-LANG-SPEC D4, S2-1) -- entering Subscribers from
+  // another page under a language carries it as the route's lang BEFORE the page mounts, so the
+  // unfiltered mount and its request never happen. The effective selection is All until the
+  // server config is known (first load: initConfig re-applies this before mounting).
+  const langRedirect = langEntryRedirect(to, from, store.getters.langEffective);
+  if (langRedirect) {
+    next(langRedirect);
+    return;
+  }
+  next();
 });
 
 router.afterEach((to) => {
@@ -108,6 +119,14 @@ async function initConfig(app) {
   const redirect = routeRedirect(profile, cur.name, cur.params);
   if (redirect) {
     await router.replace(redirect).catch(() => {});
+  }
+  // Fork (global language, GLOBAL-LANG-SPEC D4) -- the first navigation ran before the server
+  // config (app.lang_enable) was loaded, so its entry decision read All; decide it now, before the
+  // app mounts. A first load is always an entry (from no route).
+  const landed = router.currentRoute;
+  const langRedirect = langEntryRedirect(landed, null, store.getters.langEffective);
+  if (langRedirect) {
+    await router.replace(langRedirect).catch(() => {});
   }
 
   // Set the page title after i18n has loaded.

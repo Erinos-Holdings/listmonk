@@ -7,6 +7,7 @@ import {
   DEFAULT_STATE, ENGAGEMENT_FIELDS, STORAGE_KEY, cellText, clickSort, defaultOrder, displayValue, initialPane, loadState, rateOf,
   SPAM_FLAGGED_HELP, SPAM_HELP, saveState, sessionStore, shapeRows, sortRows, spamCell, tableRows, totalsRow,
   BREACH_CLASS, breachesThreshold, displayedRate, engagementCell, firstThresholds, conversionValue,
+  ALL_LANGUAGES_HELP, allLanguagesNote,
 } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
 
 const api = [
@@ -342,6 +343,25 @@ test('I2: breachesThreshold compares the displayed rate against the stored value
   assert.equal(breachesThreshold({ clicks: { warnBelow: '0.05', minSent: 500 } }, 'clicks', 0, { sent: 1000 }), false);
   assert.equal(breachesThreshold({ clicks: { warnBelow: 0.05 } }, 'clicks', 0, { sent: 1000 }), false);
   assert.equal(breachesThreshold(TH, 'clicks', null, { sent: 1000 }), false);
+});
+
+// integrations GLOBAL-LANG-SPEC I10b -- the engagement colouring is off under a language; GP S%
+// and the chip carry the all-languages hover there.
+test('GLOBAL-LANG I10b: engagement colouring off under a language', () => {
+  const r = mrow({
+    sent: 1000, clicks: 10, hard_bounces: 40, blocks: 30, complaints: 5, thresholds: TH,
+  });
+  ['clicks', 'hard_bounces', 'complaints'].forEach((f) => {
+    assert.deepEqual(engagementCell(r, f, 'pct'), { cls: BREACH_CLASS }); // the default is All
+    assert.deepEqual(engagementCell(r, f, 'pct', 'all'), { cls: BREACH_CLASS });
+    ['en', 'es', 'fr', 'de', 'it'].forEach((l) => {
+      assert.deepEqual(engagementCell(r, f, 'pct', l), { cls: '' });
+      assert.deepEqual(engagementCell(r, f, 'num', l), { cls: '' });
+    });
+  });
+  assert.equal(allLanguagesNote('all'), null);
+  assert.equal(allLanguagesNote(''), null);
+  assert.equal(allLanguagesNote('fr'), ALL_LANGUAGES_HELP);
 });
 
 test('I2 / POLISH3 I1: engagementCell -- stored values only, both modes alike, no thresholds colors nothing', () => {

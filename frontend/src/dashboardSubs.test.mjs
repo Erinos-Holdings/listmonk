@@ -4,12 +4,32 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   OVERVIEW_DEFAULT, OVERVIEW_STORAGE_KEY, engagementLines, loadOverviewState, pctCount, saveOverviewState, segmentCell,
-  subsCellText, subscriberColumns, subscriberRows,
+  subsCellText, subscriberColumns, subscriberRows, subscriberTotals,
 } from './dashboardSubs.mjs'; // eslint-disable-line import/extensions
 import { gridLines } from './gridLines.mjs'; // eslint-disable-line import/extensions
 
 const cell = (o) => ({
   active: 0, held: 0, unsubscribed: 0, pending: 0, blocked: 0, total: 0, ...o,
+});
+
+// integrations GLOBAL-LANG-SPEC I11 -- the Overview's subscriber totals and blocklisted under L.
+test('GLOBAL-LANG I11: subscriber totals and blocklisted follow L\'s line; a missing key is zero', () => {
+  const g = {
+    all: cell({ active: 8, blocked: 2, total: 10 }),
+    en: cell({ active: 5, blocked: 1, total: 6 }),
+    none: cell({ active: 2, total: 2 }),
+    fr: cell({ active: 3, blocked: 1, total: 4 }),
+  };
+  assert.deepEqual(subscriberTotals(g, 'all'), { line: g.all, total: 10, blocklisted: 2 });
+  assert.deepEqual(subscriberTotals(g), { line: g.all, total: 10, blocklisted: 2 });
+  assert.deepEqual(subscriberTotals(g, 'en'), { line: g.en, total: 6, blocklisted: 1 }); // EN includes none
+  assert.deepEqual(subscriberTotals(g, 'fr'), { line: g.fr, total: 4, blocklisted: 1 });
+  assert.equal(subscriberTotals(g, 'de').total, 0); // never the all line
+  assert.equal(subscriberTotals(g, 'de').blocklisted, 0);
+  // The expanded table under L is L's column alone.
+  assert.deepEqual(subscriberColumns(g, true, 'fr').map((c) => c.key), ['fr']);
+  assert.deepEqual(subscriberColumns(g, true, 'all'), gridLines(g, true));
+  assert.deepEqual(subscriberColumns(g, true), gridLines(g, true));
 });
 
 test('rows: the D2 order, Pending hidden at zero', () => {

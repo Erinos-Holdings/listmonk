@@ -14,34 +14,36 @@ import (
 // Fork (dashboard sends, integrations DASHBOARD-SENDS-SPEC D2) -- the unscoped read is the one live
 // charts query over every campaign and every brand's sends (unscoped = true). mat_dashboard_charts
 // is no longer read, so it is no longer refreshed here (RefreshMatViews still refreshes it).
-func (c *Core) GetDashboardCharts() (types.JSONText, error) {
-	return c.dashboardCharts([]int{}, true, true)
+// lang (integrations GLOBAL-LANG-SPEC D5) is '' (All) or a models.CampaignLangs code, validated by
+// the handler; every Dashboard statement binds it as a parameter, never interpolated.
+func (c *Core) GetDashboardCharts(lang string) (types.JSONText, error) {
+	return c.dashboardCharts([]int{}, true, true, lang)
 }
 
 // GetDashboardCounts returns stats counts to show on the dashboard.
 // Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D5) -- the unscoped read is the one
 // live counts query over every list and every campaign (unscoped = true). mat_dashboard_counts is
 // no longer read, so it is no longer refreshed here (RefreshMatViews still refreshes it).
-func (c *Core) GetDashboardCounts() (types.JSONText, error) {
-	return c.dashboardCounts([]int{}, true, true)
+func (c *Core) GetDashboardCounts(lang string) (types.JSONText, error) {
+	return c.dashboardCounts([]int{}, true, true, lang)
 }
 
 // GetDashboardCountsScoped (fork, brand analytics, BRAND-ANALYTICS-SPEC D7) returns the Dashboard
 // counts of a list-scoped user: listIDs is P; allCampaigns (campaigns:get_all) counts every
 // campaign instead of those targeting P. A live read -- it never touches refreshCache, which would
 // refresh the global view for nothing.
-func (c *Core) GetDashboardCountsScoped(listIDs []int, allCampaigns bool) (types.JSONText, error) {
-	return c.dashboardCounts(listIDs, allCampaigns, false)
+func (c *Core) GetDashboardCountsScoped(listIDs []int, allCampaigns bool, lang string) (types.JSONText, error) {
+	return c.dashboardCounts(listIDs, allCampaigns, false, lang)
 }
 
 // dashboardCounts (fork, DASHBOARD-COUNTS-SPEC D5) runs the one counts statement for both paths.
-func (c *Core) dashboardCounts(listIDs []int, allCampaigns, unscoped bool) (types.JSONText, error) {
+func (c *Core) dashboardCounts(listIDs []int, allCampaigns, unscoped bool, lang string) (types.JSONText, error) {
 	if listIDs == nil {
 		listIDs = []int{}
 	}
 
 	var out types.JSONText
-	if err := c.q.GetDashboardCountsScoped.Get(&out, pq.Array(listIDs), allCampaigns, unscoped); err != nil {
+	if err := c.q.GetDashboardCountsScoped.Get(&out, pq.Array(listIDs), allCampaigns, unscoped, lang); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard stats", "error", pqErrMsg(err)))
 	}
@@ -51,18 +53,18 @@ func (c *Core) dashboardCounts(listIDs []int, allCampaigns, unscoped bool) (type
 
 // GetDashboardChartsScoped (fork, brand analytics, BRAND-ANALYTICS-SPEC D7) is the chart
 // counterpart of GetDashboardCountsScoped. Live, no refreshCache.
-func (c *Core) GetDashboardChartsScoped(listIDs []int, allCampaigns bool) (types.JSONText, error) {
-	return c.dashboardCharts(listIDs, allCampaigns, false)
+func (c *Core) GetDashboardChartsScoped(listIDs []int, allCampaigns bool, lang string) (types.JSONText, error) {
+	return c.dashboardCharts(listIDs, allCampaigns, false, lang)
 }
 
 // dashboardCharts (fork, DASHBOARD-SENDS-SPEC D2) runs the one charts statement for both paths.
-func (c *Core) dashboardCharts(listIDs []int, allCampaigns, unscoped bool) (types.JSONText, error) {
+func (c *Core) dashboardCharts(listIDs []int, allCampaigns, unscoped bool, lang string) (types.JSONText, error) {
 	if listIDs == nil {
 		listIDs = []int{}
 	}
 
 	var out types.JSONText
-	if err := c.q.GetDashboardChartsScoped.Get(&out, pq.Array(listIDs), allCampaigns, unscoped); err != nil {
+	if err := c.q.GetDashboardChartsScoped.Get(&out, pq.Array(listIDs), allCampaigns, unscoped, lang); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard charts", "error", pqErrMsg(err)))
 	}
@@ -74,13 +76,15 @@ func (c *Core) dashboardCharts(listIDs []int, allCampaigns, unscoped bool) (type
 // matrix statement: listIDs is the scope (ignored when unscoped, which reads every list). Live.
 // DASHBOARDS-POLISH3-SPEC D5/I6 -- the skipped-language statement runs over the SAME scope and its
 // counts are merged onto every row as `skipped` (MergeSkippedLangs).
-func (c *Core) GetDashboardBrandMatrix(listIDs []int, unscoped bool) (types.JSONText, error) {
+// lang (GLOBAL-LANG-SPEC D6) narrows the matrix statement only; the skipped-language counts stay
+// per language already (the Usage pane picks its entries client-side, D8).
+func (c *Core) GetDashboardBrandMatrix(listIDs []int, unscoped bool, lang string) (types.JSONText, error) {
 	if listIDs == nil {
 		listIDs = []int{}
 	}
 
 	var out types.JSONText
-	if err := c.q.GetDashboardBrandMatrix.Get(&out, pq.Array(listIDs), unscoped); err != nil {
+	if err := c.q.GetDashboardBrandMatrix.Get(&out, pq.Array(listIDs), unscoped, lang); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard brand matrix", "error", pqErrMsg(err)))
 	}
@@ -187,9 +191,9 @@ func MergeSkippedLangs(matrix, skipped types.JSONText) (types.JSONText, error) {
 // email-client token over the Dashboard window, over every campaign: the unscoped panel. Any scope
 // (a list-scoped user, the global brand's list_id) reads GetDashboardClientsScoped
 // (GLOBAL-BRAND-SPEC D5). Live, no refreshCache.
-func (c *Core) GetDashboardClients() ([]models.CampaignAnalyticsClient, error) {
+func (c *Core) GetDashboardClients(lang string) ([]models.CampaignAnalyticsClient, error) {
 	out := []models.CampaignAnalyticsClient{}
-	if err := c.q.GetDashboardClients.Select(&out); err != nil {
+	if err := c.q.GetDashboardClients.Select(&out, lang); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard clients", "error", pqErrMsg(err)))
 	}
@@ -199,13 +203,13 @@ func (c *Core) GetDashboardClients() ([]models.CampaignAnalyticsClient, error) {
 // GetDashboardClientsScoped (fork, client stats, CLIENT-STATS-SPEC D7; GLOBAL-BRAND-SPEC D5) is
 // GetDashboardClients over a scope, with the GetDashboardCountsScoped arguments. Live, no
 // refreshCache.
-func (c *Core) GetDashboardClientsScoped(listIDs []int, allCampaigns bool) ([]models.CampaignAnalyticsClient, error) {
+func (c *Core) GetDashboardClientsScoped(listIDs []int, allCampaigns bool, lang string) ([]models.CampaignAnalyticsClient, error) {
 	if listIDs == nil {
 		listIDs = []int{}
 	}
 
 	out := []models.CampaignAnalyticsClient{}
-	if err := c.q.GetDashboardClientsScoped.Select(&out, pq.Array(listIDs), allCampaigns); err != nil {
+	if err := c.q.GetDashboardClientsScoped.Select(&out, pq.Array(listIDs), allCampaigns, lang); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard clients", "error", pqErrMsg(err)))
 	}
@@ -215,9 +219,9 @@ func (c *Core) GetDashboardClientsScoped(listIDs []int, allCampaigns bool) ([]mo
 // GetDashboardCountries (fork, dashboard counts, integrations DASHBOARD-COUNTS-SPEC R4) is
 // GetDashboardClients keyed by country: views and clicks per country code ("" = unknown) over the
 // Dashboard window and every campaign, raw rows. Live, no refreshCache.
-func (c *Core) GetDashboardCountries() ([]models.CampaignAnalyticsCountry, error) {
+func (c *Core) GetDashboardCountries(lang string) ([]models.CampaignAnalyticsCountry, error) {
 	out := []models.CampaignAnalyticsCountry{}
-	if err := c.q.GetDashboardCountries.Select(&out); err != nil {
+	if err := c.q.GetDashboardCountries.Select(&out, lang); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard countries", "error", pqErrMsg(err)))
 	}
@@ -226,13 +230,13 @@ func (c *Core) GetDashboardCountries() ([]models.CampaignAnalyticsCountry, error
 
 // GetDashboardCountriesScoped (fork, dashboard counts, DASHBOARD-COUNTS-SPEC R4) is
 // GetDashboardCountries over a scope, with the GetDashboardClientsScoped arguments.
-func (c *Core) GetDashboardCountriesScoped(listIDs []int, allCampaigns bool) ([]models.CampaignAnalyticsCountry, error) {
+func (c *Core) GetDashboardCountriesScoped(listIDs []int, allCampaigns bool, lang string) ([]models.CampaignAnalyticsCountry, error) {
 	if listIDs == nil {
 		listIDs = []int{}
 	}
 
 	out := []models.CampaignAnalyticsCountry{}
-	if err := c.q.GetDashboardCountriesScoped.Select(&out, pq.Array(listIDs), allCampaigns); err != nil {
+	if err := c.q.GetDashboardCountriesScoped.Select(&out, pq.Array(listIDs), allCampaigns, lang); err != nil {
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "dashboard countries", "error", pqErrMsg(err)))
 	}
