@@ -20,7 +20,12 @@
          store stays every row (the campaign form's template picker is never filtered, S3). -->
     <b-table :data="shownTemplates" :hoverable="true" :loading="loading.templates" default-sort="createdAt">
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" :td-attrs="$utils.tdID" sortable>
-        <a href="#" @click.prevent="showEditForm(props.row)">
+        <!-- Fork (naming standard, NAMING-STANDARD-SPEC D15/D1/D10) -- the brand and language chips
+             from the template's own columns (hidden when the selector / toggle selects them) and
+             the former name on hover. -->
+        <b-tag v-if="chipsOf(props.row).brand" class="is-small brand-chip" data-cy="brand-chip">{{ chipsOf(props.row).brand }}</b-tag>
+        <b-tag v-if="chipsOf(props.row).lang" class="is-small lang" data-cy="lang-chip">{{ chipsOf(props.row).lang }}</b-tag>
+        <a href="#" @click.prevent="showEditForm(props.row)" :title="nameTitle(props.row)">
           {{ props.row.name }}
         </a>
         <!-- Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10. -->
@@ -76,9 +81,8 @@
               <b-icon icon="pencil-outline" size="is-small" />
             </b-tooltip>
           </a>
-          <a href="#" @click.prevent="$utils.prompt(`Clone template`,
-            { placeholder: 'Name', value: `Copy of ${props.row.name}` },
-            (name) => cloneTemplate(name, props.row))" data-cy="btn-clone" :aria-label="$t('globals.buttons.clone')">
+          <!-- Fork (naming standard, NAMING-STANDARD-SPEC D7/D3) -- `Clone<N> <name>`, 30 with the hint. -->
+          <a href="#" @click.prevent="promptClone(props.row)" data-cy="btn-clone" :aria-label="$t('globals.buttons.clone')">
             <b-tooltip :label="$t('globals.buttons.clone')" type="is-dark">
               <b-icon icon="file-multiple-outline" size="is-small" />
             </b-tooltip>
@@ -125,13 +129,16 @@
 
 <script>
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import CampaignPreview from '../components/CampaignPreview.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 
 import TemplateForm from './TemplateForm.vue';
 import { isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 import { filterTemplates } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import {
+  chipsFor, cloneName, formerNameOf, langMatches, nameCounter,
+} from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -202,6 +209,28 @@ export default Vue.extend({
       this.previewItem = null;
     },
 
+    // Fork (naming standard, NAMING-STANDARD-SPEC D15/D10).
+    chipsOf(row) {
+      return chipsFor(row, { brandSelection: this.brandSelection, langSelection: this.langSelection });
+    },
+
+    nameTitle(row) {
+      const f = formerNameOf(row);
+      return f ? this.$t('naming.formerName', { name: f }) : null;
+    },
+
+    // D7 -- the clone prompt over every template name.
+    promptClone(row) {
+      const names = (Array.isArray(this.templates) ? this.templates : []).map((t) => t.name);
+      const value = cloneName(row.name, names);
+      const count = nameCounter('template', value);
+      this.$utils.prompt(
+        `${this.$t('globals.buttons.clone')} — ${this.$t('naming.hint')} (${this.$t('naming.counter', { n: count.n, max: count.max })})`,
+        { placeholder: this.$t('globals.fields.name'), value, maxlength: count.maxlength || 200 },
+        (name) => this.cloneTemplate(name, row),
+      );
+    },
+
     cloneTemplate(name, t) {
       const data = {
         name,
@@ -238,11 +267,14 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['templates', 'loading']),
+    ...mapGetters(['langSelection']),
 
     // Fork (global brand, D12) -- a brand's rows plus the brandless rows; No brand the brandless
-    // rows only; All brands every row.
+    // rows only; All brands every row. Fork (naming standard, NAMING-STANDARD-SPEC D2) -- then the
+    // language toggle, client-side (naming.mjs::langMatches; a template has a language column).
     shownTemplates() {
-      return filterTemplates(Array.isArray(this.templates) ? this.templates : [], this.brandSelection);
+      return filterTemplates(Array.isArray(this.templates) ? this.templates : [], this.brandSelection)
+        .filter((t) => langMatches(t.lang, this.langSelection));
     },
   },
 

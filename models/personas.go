@@ -14,6 +14,8 @@ import (
 	"net/mail"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -83,14 +85,17 @@ func PersonaProblem(persona, brandFrom string) (string, []string) {
 	if strings.TrimSpace(persona) == "" {
 		return "brands.personaEmpty", nil
 	}
-	if len(persona) > PersonaMaxLen {
+	// Counted in runes (integrations NAMING-STANDARD-SPEC §4.8): `LIYORÁ` is six characters.
+	if utf8.RuneCountInString(persona) > PersonaMaxLen {
 		return "brands.personaTooLong", []string{"persona", persona, "max", strconv.Itoa(PersonaMaxLen)}
 	}
 
-	// Printable ASCII only: no control character (CR/LF/TAB/DEL -- header injection) and no
-	// non-ASCII (net/mail would RFC 2047-encode it, which some clients show raw).
+	// Printable only: no control character (CR/LF/TAB/DEL -- header injection) and no Unicode
+	// format/separator character beside the ASCII space. A non-ASCII letter is allowed since
+	// NAMING-STANDARD-SPEC §4.8 (2026-11-13): net/mail RFC 2047-encodes it on the wire and parses
+	// it back (the wire rule below still applies).
 	for _, r := range persona {
-		if r < 0x20 || r > 0x7e {
+		if r < 0x20 || r == 0x7f || !unicode.IsPrint(r) {
 			return "brands.personaInvalid", []string{"persona", persona}
 		}
 	}

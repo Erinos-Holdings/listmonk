@@ -24,6 +24,7 @@ type List struct {
 
 	UUID        string         `db:"uuid" json:"uuid"`
 	Name        string         `db:"name" json:"name"`
+	FormerName  null.String    `db:"former_name" json:"former_name"` // Fork (NAMING-STANDARD-SPEC D10): the former_names row, null when never renamed.
 	Type        string         `db:"type" json:"type"`
 	Optin       string         `db:"optin" json:"optin"`
 	Status      string         `db:"status" json:"status"`

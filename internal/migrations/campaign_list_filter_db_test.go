@@ -22,7 +22,7 @@ func (h *evergreenHarness) queryCampaigns(t *testing.T, stmt *sqlx.Stmt, evergre
 
 	// $11 (fork, matrix polish, integrations MATRIX-POLISH-SPEC D10.2) -- an empty id array applies no
 	// id filter.
-	rows, err := stmt.Queryx(0, pq.StringArray{}, pq.StringArray{}, "", true, pq.Array([]int{}), 0, 0, evergreen, listIDs, pq.Array([]int{}))
+	rows, err := stmt.Queryx(0, pq.StringArray{}, pq.StringArray{}, "", true, pq.Array([]int{}), 0, 0, evergreen, listIDs, pq.Array([]int{}), "")
 	if err != nil {
 		t.Fatalf("query-campaigns: %v", err)
 	}

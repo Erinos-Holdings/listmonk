@@ -38,7 +38,11 @@ func TestListTagsProblem(t *testing.T) {
 		{"duplicate brand", []string{"brand:x", "brand:y", "from:hello@x.com"}, allowed, "lists.brandTagsDuplicate", ""},
 		{"duplicate from", []string{"brand:x", "from:hello@x.com", "from:a@x.com"}, allowed, "lists.brandTagsDuplicate", ""},
 		{"bad slug", []string{"brand:Thirsty Girl", "from:hello@x.com"}, allowed, "lists.brandTagInvalidSlug", "Thirsty Girl"},
-		{"non-ASCII from", []string{"brand:x", "from:Liyorá <hello@x.com>"}, allowed, "lists.brandFromTagNotASCII", "Liyorá <hello@x.com>"},
+		// NAMING-STANDARD-SPEC I10: a non-ASCII display name is accepted; the guards still refuse.
+		{"non-ASCII from", []string{"brand:x", "from:LIYORÁ <hello@x.com>"}, allowed, "", ""},
+		{"non-printable from", []string{"brand:x", "from:LIYOR​A <hello@x.com>"}, allowed, "lists.brandFromTagInvalid", "LIYOR​A <hello@x.com>"},
+		{"CRLF from", []string{"brand:x", "from:X\r\nBcc: y <hello@x.com>"}, allowed, "lists.brandFromTagInvalid", "X\r\nBcc: y <hello@x.com>"},
+		{"non-ASCII from, angle in name", []string{"brand:x", "from:LIYORÁ <a@b> <hello@x.com>"}, allowed, "lists.brandFromTagInvalid", "LIYORÁ <a@b> <hello@x.com>"},
 		{"trailing junk", []string{"brand:x", "from:X <hello@x.com> JUNK"}, allowed, "lists.brandFromTagInvalid", "X <hello@x.com> JUNK"},
 		{"bare unsanitizable", []string{"brand:x", "from:not an address"}, allowed, "lists.brandFromTagInvalid", "not an address"},
 		{"unknown address", []string{"brand:x", "from:X <hello@y.com>"}, allowed, "lists.brandFromTagUnknownAddress", "X <hello@y.com>"},

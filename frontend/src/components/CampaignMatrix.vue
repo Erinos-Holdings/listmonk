@@ -38,8 +38,9 @@
           {{ $t('dashboard.matrix.num') }}
         </b-radio-button>
       </b-field>
-      <!-- The name filter: a client-side substring of the stored name (campaignMatrix.mjs::filterByName),
-           applied as you type; not sticky, like the Campaigns page's search. -->
+      <!-- The name filter: a client-side substring of the stored name, or of the brand's slug or display
+           name (NAMING-STANDARD-SPEC D9; campaignMatrix.mjs::filterByName), applied as you type; not
+           sticky, like the Campaigns page's search. -->
       <b-field class="mb-0 cm-name-filter">
         <b-input v-model="nameQuery" name="name" icon="magnify" :placeholder="$t('analytics.matrix.nameFilter')"
           data-cy="cm-name-filter" />
@@ -74,8 +75,15 @@
               <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended).
                    MATRIX-POLISH-SPEC D7 (widened 2026-11-06): the first NAME_MAX characters, then '…',
                    the brand's name stripped under a single-brand selection; the stored name on hover. -->
+              <!-- Fork (naming standard, NAMING-STANDARD-SPEC D1/D10) -- the brand and language chips
+                   (naming.mjs::chipsFor; hidden when the selector / toggle selects them) and the
+                   former name on hover. -->
+              <template v-if="!row.totals">
+                <b-tag v-if="chipsOf(row).brand" class="is-small brand-chip" :data-cy="`cm-brand-chip-${row.id}`">{{ chipsOf(row).brand }}</b-tag>
+                <b-tag v-if="chipsOf(row).lang" class="is-small lang" :data-cy="`cm-lang-chip-${row.id}`">{{ chipsOf(row).lang }}</b-tag>
+              </template>
               <router-link v-if="!row.totals" :to="{ name: 'campaignAnalytics', query: { id: row.id } }"
-                :title="nameOf(row).title" :data-cy="`cm-name-${row.id}`">
+                :title="nameTitle(row)" :data-cy="`cm-name-${row.id}`">
 {{ nameOf(row).text }}
 </router-link>
               <template v-else>{{ row.name }}</template>
@@ -131,6 +139,7 @@ import {
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { chipsFor, formerNameOf, langMatches } from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -159,7 +168,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapGetters(['launch']),
+    ...mapGetters(['launch', 'langSelection']),
     ...mapState({ healthDocs: 'brandHealth' }),
 
     // D7: the GP S% column only for a brands:get holder (the server returns no GP otherwise).
@@ -206,7 +215,10 @@ export default Vue.extend({
         gapThresholds: this.gapThresholds,
         gapState: this.gapState,
       });
-      return tableRows(filterByName(rows, this.nameQuery), this.state.sort, this.state.mode, {
+      // NAMING-STANDARD-SPEC D2: the language toggle, client-side (naming.mjs::langMatches, the
+      // server's lang predicate -- a row with no language is always kept).
+      const langRows = rows.filter((r) => langMatches(r.lang, this.langSelection));
+      return tableRows(filterByName(langRows, this.nameQuery), this.state.sort, this.state.mode, {
         locale: (this.$i18n && this.$i18n.locale) || 'en',
         totalsLabel: this.$t('dashboard.matrix.total'),
       });
@@ -320,6 +332,16 @@ export default Vue.extend({
 
     nameOf(row) {
       return nameCell(row.name, this.stripBrand);
+    },
+
+    // Fork (naming standard, NAMING-STANDARD-SPEC D1/D10).
+    chipsOf(row) {
+      return chipsFor(row, { brandSelection: this.brandSelection, langSelection: this.langSelection });
+    },
+
+    nameTitle(row) {
+      const f = formerNameOf(row);
+      return f ? this.$t('naming.formerName', { name: f }) : this.nameOf(row).title;
     },
 
     // D9: the cell reuses conversionCells.mjs::scopedCell -- whole-dollar sales under %/$, orders

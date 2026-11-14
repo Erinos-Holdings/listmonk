@@ -29,8 +29,10 @@
           </b-message>
           <div class="columns">
             <div class="column is-9">
-              <b-field :label="$t('globals.fields.name')" label-position="on-border">
-                <b-input :maxlength="200" :ref="'focus'" v-model="form.name" name="name"
+              <!-- Fork (naming standard, NAMING-STANDARD-SPEC D3/D15) -- n/30 and the hint;
+                   an Official_ name is exempt (no limit). -->
+              <b-field :label="$t('globals.fields.name')" label-position="on-border" :message="$t('naming.hint')">
+                <b-input :maxlength="nameLimit.maxlength || 200" :ref="'focus'" v-model="form.name" name="name"
                   :placeholder="$t('globals.fields.name')" required />
               </b-field>
             </div>
@@ -136,6 +138,7 @@ import { CAMPAIGN_LANGS } from '../langs';
 import { normalizeMediaTagsLenient } from '../mediaTags';
 import { isOfficialName, runSweep, selectSweepItems } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault, templateNoticeBrand } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { nameCounter } from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -457,6 +460,11 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading', 'lists', 'templates']),
+
+    // Fork (naming standard, NAMING-STANDARD-SPEC D3) -- the name input's limit (null when exempt).
+    nameLimit() {
+      return nameCounter('template', this.form.name);
+    },
 
     // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10: an `Official_` template (the stored
     // name, or the one being typed).

@@ -45,6 +45,8 @@ type Template struct {
 	Base
 
 	Name string `db:"name" json:"name"`
+	// FormerName (fork, NAMING-STANDARD-SPEC D10): the former_names row, null when never renamed.
+	FormerName null.String `db:"former_name" json:"former_name"`
 	// Subject is only for type=tx.
 	Subject    string      `db:"subject" json:"subject"`
 	Type       string      `db:"type" json:"type"`

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"text/template"
@@ -318,13 +319,35 @@ func ApplyUTM(dest string, hosts []string, params map[string]string) string {
 }
 
 // CampaignInfo is the campaign context the UTM parameter templates may reference.
+//
+// Fork (naming standard, integrations NAMING-STANDARD-SPEC D11 §4.5): UTMCampaign is the standard
+// utm_campaign value, UTMCampaign(brand slug, name, language) -- `{{ .Campaign.UTMCampaign }}`.
+// `{{ .Campaign.Name }}` keeps its meaning (the bare campaign name); the live setting switches
+// from one to the other by a Settings save (§4.6), so the field ships dark.
 type CampaignInfo struct {
-	ID   int
-	Name string
+	ID          int
+	Name        string
+	UTMCampaign string
+}
+
+var reUTMSpace = regexp.MustCompile(`\s+`)
+
+// UTMCampaign is the standard utm_campaign value (D11): the non-empty parts of [slug, name with
+// each whitespace run replaced by "-", lang] joined by "_" -- ("ruze", "No Nicotine", "en") ->
+// "ruze_No-Nicotine_en". The name is trimmed first. The slug is omitted when the campaign's brand
+// could not be resolved (an unmapped or failed list read), the language when the campaign has none.
+func UTMCampaign(slug, name, lang string) string {
+	parts := make([]string, 0, 3)
+	for _, p := range []string{strings.TrimSpace(slug), reUTMSpace.ReplaceAllString(strings.TrimSpace(name), "-"), strings.TrimSpace(lang)} {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, "_")
 }
 
 // RenderUTMParams renders the `app.utm_params` templates (`{{ .Campaign.Name }}`,
-// `{{ .Campaign.ID }}` available) into concrete values for one campaign. A template that
+// `{{ .Campaign.ID }}`, `{{ .Campaign.UTMCampaign }}` available) into concrete values for one campaign. A template that
 // fails to parse or execute is dropped (logged by the caller if it cares) rather than
 // emitted raw; a key whose value renders empty is kept empty.
 func RenderUTMParams(tpls map[string]string, c CampaignInfo) map[string]string {

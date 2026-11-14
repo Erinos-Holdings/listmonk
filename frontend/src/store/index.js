@@ -5,6 +5,7 @@ import Utils from '../utils';
 import {
   ALL, applyLaunch, launchApplies, normalizeLaunch, resolveSelection, rosterFrom, scopeListIds, selectionLoaded,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { LANG_PREF, normalizeLang } from '../langScope.mjs'; // eslint-disable-line import/extensions
 
 Vue.use(Vuex);
 
@@ -38,6 +39,9 @@ export default new Vuex.Store({
     // Fork (launch filter, integrations LAUNCH-FILTER-SPEC D1) -- the navbar launch filter's stored
     // value; the launch getter resolves an unknown one to 'all'.
     launchStored: prefs.getPref('brand.launch') || 'all',
+    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle's stored value
+    // (pref `brand.lang`); the langSelection getter resolves an unknown one to 'all'.
+    langStored: prefs.getPref(LANG_PREF) || 'all',
     // Fork (launch filter, D3) -- the GET /api/brands/health documents. Empty (never fetched, or a
     // failed read) means every brand is launched.
     brandHealth: [],
@@ -85,6 +89,14 @@ export default new Vuex.Store({
       const v = normalizeLaunch(launch);
       state.launchStored = v;
       prefs.setPref('brand.launch', v);
+    },
+
+    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle's change: the store and
+    // the pref, no reload. The `brand.lang` pref's one writer; only LanguageToggle.vue calls it.
+    selectLang(state, lang) {
+      const v = normalizeLang(lang);
+      state.langStored = v;
+      prefs.setPref(LANG_PREF, v);
     },
 
     // Fork (launch filter, D3).
@@ -167,6 +179,8 @@ export default new Vuex.Store({
     // A primitive the pages watch: it changes only when the resolved selection does (a lists
     // refresh that leaves the selection as it was does not re-fire a page's fetch).
     brandKey: (state, getters) => (getters.brandScope.pending ? 'pending' : JSON.stringify(getters.brandSelection)),
+    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- 'all' | 'en' | 'es' | 'fr' | 'de' | 'it'.
+    langSelection: (state) => normalizeLang(state.langStored),
   },
 
   modules: {

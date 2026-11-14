@@ -61,6 +61,10 @@ type ReviewState struct {
 	Dispositions []models.ReviewDisposition `json:"dispositions"`
 	Verdict      review.VerdictResult       `json:"verdict"`
 	CurrentHash  string                     `json:"current_hash"`
+	// Current (fork, NAMING-STANDARD-SPEC §4.7) -- the newest row (Review) was taken at either of
+	// the campaign's current hashes (the new formula, or the legacy one over the name at review);
+	// false when there is no row. Readers use it for "edited since", never current_hash alone.
+	Current bool `json:"current"`
 }
 
 // ReviewGate is the gate's row and its verdict.
@@ -259,12 +263,23 @@ func (c *Core) GetLatestReview(cm models.Campaign) (ReviewState, error) {
 	} else {
 		out.Verdict = review.VerdictResult{Verdict: review.VerdictNone, Blockers: []review.Blocker{}}
 	}
-	gate, err := c.GetReviewByHash(cm.ID, out.CurrentHash)
+	// Fork (naming standard, NAMING-STANDARD-SPEC §4.7) -- the gate row is core.CurrentReview's (either
+	// hash), and Current says whether the NEWEST row is a current review of this campaign -- the
+	// one flag the campaign page, the window and scripts/inspect-campaign.ts read ("edited since"
+	// was row.bundle_hash != current_hash, which a pre-release review fails after the release).
+	gate, err := c.CurrentReview(cm)
 	if err != nil {
 		return out, err
 	}
 	if gate != nil {
 		out.Gate = &ReviewGate{Review: gate, Verdict: review.Verdict(json.RawMessage(gate.Report), ds)}
+	}
+	if out.Review != nil {
+		h, legacy, err := c.ReviewHashes(cm)
+		if err != nil {
+			return out, err
+		}
+		out.Current = out.Review.BundleHash == h || out.Review.BundleHash == legacy
 	}
 	return out, nil
 }
@@ -276,6 +291,42 @@ func (c *Core) GetReviewDispositions(campID int) ([]models.ReviewDisposition, er
 		return nil, c.reviewErr(err, "fetching dispositions for")
 	}
 	return ds, nil
+}
+
+// ReviewHashes are the two hashes a CURRENT review of the campaign may carry (fork, integrations
+// NAMING-STANDARD-SPEC D12 §4.7): the new formula (review.BundleHash, no name) and the legacy one
+// over the name at review -- the campaign's former_names row when one exists (repeated renames
+// keep the ORIGINAL name there), else its current name. Legacy acceptance is permanent: a new
+// review always stores the new hash, so the legacy hash only ever matches a review written before
+// the release, and only while content and lists are unchanged.
+func (c *Core) ReviewHashes(cm models.Campaign) (string, string, error) {
+	nameAtReview := cm.Name
+	var former string
+	if err := c.q.GetFormerName.Get(&former, models.NameKindCampaign, cm.ID); err == nil {
+		nameAtReview = former
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return "", "", c.reviewErr(err, "fetching the former name for")
+	}
+	ids := CampaignListIDs(cm)
+	return review.BundleHash(cm, ids), review.LegacyBundleHash(cm, ids, nameAtReview), nil
+}
+
+// CurrentReview is the ONE "is this review current" lookup (NAMING-STANDARD-SPEC §4.7): the newest
+// COMPLETE review whose bundle_hash is either ReviewHashes value, or nil. Its readers are the Start
+// gate (reviewGateReason), GetLatestReview (gate, current) and AddDispositionsAt (today's row).
+func (c *Core) CurrentReview(cm models.Campaign) (*models.CampaignReview, error) {
+	h, legacy, err := c.ReviewHashes(cm)
+	if err != nil {
+		return nil, err
+	}
+	var row models.CampaignReview
+	if err := c.q.GetCampaignReviewCurrent.Get(&row, cm.ID, h, legacy); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, c.reviewErr(err, "fetching")
+	}
+	return &row, nil
 }
 
 // GetReviewByHash returns the newest COMPLETE row for (campaign, hash), or nil.
@@ -367,8 +418,9 @@ func (c *Core) AddDispositionsAt(cm models.Campaign, jobID string, userID int, u
 	if len(items) == 0 {
 		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.Ts("globals.messages.invalidFields", "name", "items"))
 	}
-	// Today's row: the gate (newest complete at the current hash), else the newest complete row.
-	current, err := c.GetReviewByHash(campID, CampaignBundleHash(cm))
+	// Today's row: the gate (core.CurrentReview -- newest complete at either current hash), else the
+	// newest complete row.
+	current, err := c.CurrentReview(cm)
 	if err != nil {
 		return nil, err
 	}

@@ -44,6 +44,7 @@ type Campaign struct {
 	UUID              string          `db:"uuid" json:"uuid"`
 	Type              string          `db:"type" json:"type"`
 	Name              string          `db:"name" json:"name"`
+	FormerName        null.String     `db:"former_name" json:"former_name"` // Fork (NAMING-STANDARD-SPEC D10): the former_names row (the ORIGINAL name), null when never renamed; read by core.CurrentReview.
 	Subject           string          `db:"subject" json:"subject"`
 	FromEmail         string          `db:"from_email" json:"from_email"`
 	Body              string          `db:"body" json:"body"`

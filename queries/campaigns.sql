@@ -64,6 +64,8 @@ SELECT id FROM camp;
 -- for pagination in the frontend, albeit being a field that'll repeat
 -- with every resultant row.
 SELECT  c.*,
+        -- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- the former name, NULL when none.
+        (SELECT f.name FROM former_names f WHERE f.kind = 'campaign' AND f.id = c.id) AS former_name,
         COUNT(*) OVER () AS total,
         (
             SELECT COALESCE(ARRAY_TO_JSON(ARRAY_AGG(l)), '[]') FROM (
@@ -76,7 +78,20 @@ FROM campaigns c
 WHERE ($1 = 0 OR id = $1)
     AND (CARDINALITY($2::campaign_status[]) = 0 OR status = ANY($2))
     AND (CARDINALITY($3::VARCHAR(100)[]) = 0 OR $3 <@ tags)
-    AND ($4 = '' OR TO_TSVECTOR(CONCAT(name, ' ', subject)) @@ TO_TSQUERY($4) OR CONCAT(c.name, ' ', c.subject) ILIKE $4)
+    AND ($4 = '' OR TO_TSVECTOR(CONCAT(name, ' ', subject)) @@ TO_TSQUERY($4) OR CONCAT(c.name, ' ', c.subject) ILIKE $4
+        -- Fork (naming standard, NAMING-STANDARD-SPEC D9) -- the search also matches the brand of
+        -- the campaign's lists, its slug or its display name (the brands row From's name part).
+        -- Keep identical to query-analytics-campaigns' predicate.
+        OR EXISTS (SELECT 1 FROM campaign_lists bcl JOIN lists bl ON (bl.id = bcl.list_id)
+            LEFT JOIN brands bb ON (bb.slug = list_brand_tag(bl.tags))
+            WHERE bcl.campaign_id = c.id AND list_brand_tag(bl.tags) IS NOT NULL
+                AND (list_brand_tag(bl.tags) ILIKE REPLACE($4, '&', '%')
+                    OR (POSITION('<' IN bb.from_email) > 1
+                        AND BTRIM(SPLIT_PART(bb.from_email, '<', 1)) ILIKE REPLACE($4, '&', '%')))))
+    -- Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle. $12 '' = every
+    -- campaign; else that language plus every campaign with no language (it shows under every
+    -- setting). The node test's langMatches agrees (frontend/src/testdata/lang-filter.json).
+    AND ($12 = '' OR c.attribs->>'lang' = $12 OR COALESCE(c.attribs->>'lang', '') = '')
     -- Get all campaigns or filter by list IDs.
     AND (
         $5 OR EXISTS (
@@ -127,6 +142,13 @@ WHERE (
         OR TO_TSVECTOR(CONCAT(c.name, ' ', c.subject)) @@ PLAINTO_TSQUERY($2::TEXT)
         OR CONCAT(c.name, ' ', c.subject) ILIKE $2::TEXT
         OR c.id = $3::INT
+        -- Fork (naming standard, NAMING-STANDARD-SPEC D9) -- query-campaigns' brand predicate.
+        OR EXISTS (SELECT 1 FROM campaign_lists bcl JOIN lists bl ON (bl.id = bcl.list_id)
+            LEFT JOIN brands bb ON (bb.slug = list_brand_tag(bl.tags))
+            WHERE bcl.campaign_id = c.id AND list_brand_tag(bl.tags) IS NOT NULL
+                AND (list_brand_tag(bl.tags) ILIKE REPLACE($2::TEXT, '&', '%')
+                    OR (POSITION('<' IN bb.from_email) > 1
+                        AND BTRIM(SPLIT_PART(bb.from_email, '<', 1)) ILIKE REPLACE($2::TEXT, '&', '%'))))
     ) END
 )
     AND (
@@ -148,6 +170,8 @@ LIMIT (CASE WHEN CARDINALITY($1::INT[]) > 0 THEN NULL ELSE $7::INT END);
 -- snapshot, not the live template — but only for the sending template; an archive
 -- template ($4 != 'default') is a display concern and stays live.
 SELECT campaigns.*,
+    -- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- the former name, NULL when none.
+    (SELECT f.name FROM former_names f WHERE f.kind = 'campaign' AND f.id = campaigns.id) AS former_name,
     COALESCE(CASE WHEN $4 = 'default' THEN campaigns.frozen_template_body END, templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
     FROM campaigns
     LEFT JOIN templates ON (
@@ -1143,6 +1167,10 @@ SELECT JSON_BUILD_OBJECT(
         SELECT JSON_AGG(JSON_BUILD_OBJECT(
             'id', k.id,
             'name', k.name,
+            -- Fork (naming standard, NAMING-STANDARD-SPEC D1/D10) -- the language chip and the
+            -- former-name hover of the title cell.
+            'lang', (SELECT NULLIF(cp.attribs->>'lang', '') FROM campaigns cp WHERE cp.id = k.id),
+            'former_name', (SELECT f.name FROM former_names f WHERE f.kind = 'campaign' AND f.id = k.id),
             'status', k.status,
             'evergreen', k.evergreen,
             'started_at', k.started_at,

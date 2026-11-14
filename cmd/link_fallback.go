@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,7 +40,12 @@ type linkFallbacks struct {
 
 type cachedFallback struct {
 	url string
-	at  time.Time
+	// Fork (naming standard, NAMING-STANDARD-SPEC §4.5) -- the campaign's resolved brand slug,
+	// cached beside the URL, trusted only when mapped (the list mapping resolved). A failed or
+	// unmapped read is never trusted for the slug: utmSlug re-resolves on the next click.
+	slug   string
+	mapped bool
+	at     time.Time
 }
 
 type cachedCampaign struct {
@@ -101,6 +107,12 @@ func (l *linkFallbacks) forCampaign(c *models.Campaign) string {
 	}
 	l.mu.Unlock()
 
+	return l.resolve(c).url
+}
+
+// resolve reads the campaign's brand mapping and caches the fallback URL with the slug (fork,
+// NAMING-STANDARD-SPEC §4.5): the slug is recorded only when the mapping resolved.
+func (l *linkFallbacks) resolve(c *models.Campaign) cachedFallback {
 	ids := campaignListIDs(c)
 	if len(ids) == 0 {
 		if full, err := l.core.GetCampaign(c.ID, "", ""); err == nil {
@@ -119,12 +131,35 @@ func (l *linkFallbacks) forCampaign(c *models.Campaign) string {
 		b.Site = m.site
 	}
 
-	out := linkresolve.Fallback(b, l.setting())
+	e := cachedFallback{url: linkresolve.Fallback(b, l.setting()), at: time.Now()}
+	if !b.Err && b.Mapped && b.Slug != "" {
+		e.slug, e.mapped = b.Slug, true
+	}
 
 	l.mu.Lock()
-	l.byID[c.ID] = cachedFallback{url: out, at: time.Now()}
+	l.byID[c.ID] = e
 	l.mu.Unlock()
-	return out
+	return e
+}
+
+// utmSlug is the brand slug the standard utm_campaign carries (NAMING-STANDARD-SPEC §4.5): the
+// cached slug while the cached entry is fresh AND mapped; otherwise the mapping is read again (a
+// failed or unmapped read is never trusted, so the next click retries) and "" when it still does
+// not resolve -- the slug part is then omitted.
+func (l *linkFallbacks) utmSlug(c models.Campaign) string {
+	if c.ID == 0 {
+		return ""
+	}
+	l.mu.Lock()
+	e, ok := l.byID[c.ID]
+	l.mu.Unlock()
+	if ok && e.mapped && time.Since(e.at) < linkCacheTTL {
+		return e.slug
+	}
+	if r := l.resolve(&c); r.mapped {
+		return r.slug
+	}
+	return ""
 }
 
 // campaignByUUID loads (and caches) the campaign row behind a tracked link's campaign UUID —
@@ -188,14 +223,31 @@ func (l *linkFallbacks) hostUnion() []string {
 	return hosts
 }
 
+// usesUTMCampaign reports whether any configured UTM template reads .Campaign.UTMCampaign -- the
+// slug read (a brand-mapping lookup on an unmapped campaign) is skipped while the setting is dark.
+func usesUTMCampaign(tpls map[string]string) bool {
+	for _, v := range tpls {
+		if strings.Contains(v, "UTMCampaign") {
+			return true
+		}
+	}
+	return false
+}
+
 // applyUTM appends the configured UTM parameters to dest (D7/D8) when tagging is enabled and
 // the destination host is in the union. camp supplies the name/id the parameter templates read.
 func (l *linkFallbacks) applyUTM(dest string, camp models.Campaign) string {
 	if !l.ko.Bool("app.utm_enable") {
 		return dest
 	}
-	params := linkresolve.RenderUTMParams(l.ko.StringMap("app.utm_params"),
-		linkresolve.CampaignInfo{ID: camp.ID, Name: camp.Name})
+	// Fork (naming standard, NAMING-STANDARD-SPEC D11 §4.5) -- UTMCampaign is filled for every
+	// click; only a setting that reads {{ .Campaign.UTMCampaign }} uses it (the release ships dark).
+	tpls := l.ko.StringMap("app.utm_params")
+	info := linkresolve.CampaignInfo{ID: camp.ID, Name: camp.Name}
+	if usesUTMCampaign(tpls) {
+		info.UTMCampaign = linkresolve.UTMCampaign(l.utmSlug(camp), camp.Name, camp.Lang())
+	}
+	params := linkresolve.RenderUTMParams(tpls, info)
 	return linkresolve.ApplyUTM(dest, l.hostUnion(), params)
 }
 

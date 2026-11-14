@@ -8,7 +8,9 @@
 SELECT id, name, type, subject,
     (CASE WHEN $2 = false THEN body ELSE '' END) as body,
     (CASE WHEN $2 = false THEN body_source ELSE NULL END) as body_source,
-    is_default, brand, lang, created_at, updated_at
+    is_default, brand, lang, created_at, updated_at,
+    -- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- former_name, NULL when never renamed.
+    (SELECT f.name FROM former_names f WHERE f.kind = 'template' AND f.id = templates.id) AS former_name
     FROM templates WHERE ($1 = 0 OR id = $1) AND ($3 = '' OR type = $3::template_type)
     ORDER BY created_at;
 

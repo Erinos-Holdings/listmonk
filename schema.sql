@@ -1296,3 +1296,15 @@ RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
             ELSE 'join' END,
         (SELECT b.brand FROM b), (SELECT m.list_id FROM m), (SELECT c.lang FROM c);
 $$ LANGUAGE sql STABLE;
+
+-- Fork (naming standard, integrations listmonk/NAMING-STANDARD-SPEC D10 §4.1): a renamed record's
+-- ORIGINAL name (campaign, list or template), written by the rename endpoints and the name-changing
+-- update paths, read as the API rows' former_name and by core.CurrentReview. No foreign key (three
+-- kinds; ids are never reused). Mirrored in internal/migrations/v6.2.38.go.
+CREATE TABLE IF NOT EXISTS former_names (
+    kind        TEXT NOT NULL CHECK (kind IN ('campaign', 'list', 'template')),
+    id          INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    renamed_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (kind, id)
+);

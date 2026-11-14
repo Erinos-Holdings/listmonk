@@ -104,8 +104,16 @@ func (a *App) GetCampaigns(c echo.Context) error {
 			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
 	}
 
+	// Fork (naming standard, NAMING-STANDARD-SPEC D2) -- optional lang (absent = no filter): that
+	// language plus every campaign with no language. A presentation filter only (the toggle); it
+	// intersects with the permission scope and never widens it.
+	lang := strings.ToLower(strings.TrimSpace(c.QueryParam("lang")))
+	if lang != "" && !models.IsCampaignLang(lang) {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "lang"))
+	}
+
 	// Query and retrieve campaigns from the DB.
-	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, evergreen, listIDs, ids, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, evergreen, listIDs, ids, lang, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}
@@ -346,6 +354,12 @@ func (a *App) CreateCampaign(c echo.Context) error {
 	if err := a.refuseFinalQueue(o.Evergreen, o.ListIDs); err != nil {
 		return err
 	}
+	// Fork (naming standard, NAMING-STANDARD-SPEC D3 §4.3) -- the name rule on create (a clone is a
+	// create), beside the field validation for the same reason; the name is stored trimmed.
+	o.Name = strings.TrimSpace(o.Name)
+	if err := a.nameRuleErr(models.NameKindCampaign, o.Name, "", ""); err != nil {
+		return err
+	}
 
 	if o.ArchiveTemplateID.Valid && o.ArchiveTemplateID.Int != 0 {
 		o.ArchiveTemplateID = o.TemplateID
@@ -420,6 +434,17 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 	// from the stored row, so an absent flag keeps the stored one).
 	if err := a.refuseFinalQueue(o.Evergreen, o.ListIDs); err != nil {
 		return err
+	}
+	// Fork (naming standard, NAMING-STANDARD-SPEC D3 §4.3) -- only a CHANGED name is judged (an
+	// unchanged longer name stays valid until renamed); a changed one is stored trimmed. The
+	// former-name rule runs in core.UpdateCampaign's transaction.
+	if o.Name != cm.Name {
+		o.Name = strings.TrimSpace(o.Name)
+		if o.Name != cm.Name {
+			if err := a.nameRuleErr(models.NameKindCampaign, o.Name, "", ""); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Fork (evergreen) -- once a campaign has started, its evergreen flag and its lists

@@ -29,6 +29,14 @@ SELECT * FROM campaign_reviews WHERE campaign_id = $1 ORDER BY requested_at DESC
 SELECT * FROM campaign_reviews WHERE campaign_id = $1 AND bundle_hash = $2 AND status = 'complete'
     ORDER BY requested_at DESC, id DESC LIMIT 1;
 
+-- name: get-campaign-review-current
+-- Fork (naming standard, integrations NAMING-STANDARD-SPEC D12 §4.7) -- the CURRENT review the one
+-- core lookup core.CurrentReview reads -- the newest COMPLETE row at either hash, $2 the new
+-- formula (no name) or $3 the legacy formula over the name at review. A newer failed or stale row
+-- does not hide it.
+SELECT * FROM campaign_reviews WHERE campaign_id = $1 AND bundle_hash IN ($2, $3) AND status = 'complete'
+    ORDER BY requested_at DESC, id DESC LIMIT 1;
+
 -- name: get-campaign-review-latest-complete
 -- The newest COMPLETE row of a campaign, whatever its hash (the disposition fallback).
 SELECT * FROM campaign_reviews WHERE campaign_id = $1 AND status = 'complete'

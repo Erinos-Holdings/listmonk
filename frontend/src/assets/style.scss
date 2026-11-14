@@ -329,6 +329,10 @@ $trigger-label-indent: calc(2rem - 1px);
     .launch-filter {
       margin-left: 1.5rem;
     }
+    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle, the same gap.
+    .language-toggle {
+      margin-left: 1.5rem;
+    }
   }
   .favicon {
     display: none;

@@ -32,8 +32,11 @@
         <b-notification v-if="journeyReadOnly" type="is-info" :closable="false" data-cy="list-journey-locked">
           {{ $t('lists.journeyLockedNotice') }}
         </b-notification>
-        <b-field :label="$t('globals.fields.name')" label-position="on-border">
-          <b-input :maxlength="200" :ref="'focus'" v-model="form.name" name="name"
+        <!-- Fork (naming standard, NAMING-STANDARD-SPEC D3/D6) -- the limit is 30 after the brand
+             prefix (`<SLUG> ` private, `<display name> ` public), so maxlength is 30 + the prefix;
+             the hint names the rule. -->
+        <b-field :label="$t('globals.fields.name')" label-position="on-border" :message="$t('naming.hint')">
+          <b-input :maxlength="nameLimit.maxlength || 200" :ref="'focus'" v-model="form.name" name="name"
             :placeholder="$t('globals.fields.name')" required :disabled="readOnly" />
         </b-field>
 
@@ -251,6 +254,7 @@ import {
   triggerChangeTurnsOff,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { nameCounter } from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -397,6 +401,19 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading', 'profile']),
+
+    // Fork (naming standard, NAMING-STANDARD-SPEC D6) -- the brand prefix this name is measured
+    // after (the same exact-match rule as models.ListNameRemainder), and the input's limit.
+    namePrefix() {
+      const b = this.chosenBrand;
+      if (!b || !b.slug) return '';
+      const p = this.form.type === 'public' ? `${b.display_name || ''} ` : `${b.slug.toUpperCase()} `;
+      return p.trim() !== '' && (this.form.name || '').startsWith(p) ? p : '';
+    },
+
+    nameLimit() {
+      return nameCounter('list', this.form.name, this.namePrefix);
+    },
 
     chosenBrand() {
       return this.brands.find((b) => b.slug === this.brand) || null;

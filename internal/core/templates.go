@@ -49,15 +49,31 @@ func (c *Core) CreateTemplate(name, typ, subject string, body []byte, bodySource
 
 // UpdateTemplate updates a given template.
 func (c *Core) UpdateTemplate(id int, name, subject string, body []byte, bodySource null.String, brand, lang string) (models.Template, error) {
-	res, err := c.q.UpdateTemplate.Exec(id, name, subject, body, bodySource, brand, lang)
-	if err != nil {
-		return models.Template{}, echo.NewHTTPError(http.StatusInternalServerError,
+	errUpd := func(err error) error {
+		return echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.template}", "error", pqErrMsg(err)))
+	}
+	// Fork (naming standard, NAMING-STANDARD-SPEC §4.2) -- the former-name rule in the same
+	// transaction, before the write; a no-op for an unchanged or empty (kept) name.
+	tx, err := c.db.Beginx()
+	if err != nil {
+		return models.Template{}, errUpd(err)
+	}
+	defer tx.Rollback()
+	if err := c.recordFormerNameTx(tx, models.NameKindTemplate, id, name); err != nil {
+		return models.Template{}, errUpd(err)
+	}
+	res, err := tx.Stmtx(c.q.UpdateTemplate).Exec(id, name, subject, body, bodySource, brand, lang)
+	if err != nil {
+		return models.Template{}, errUpd(err)
 	}
 
 	if n, _ := res.RowsAffected(); n == 0 {
 		return models.Template{}, echo.NewHTTPError(http.StatusBadRequest,
 			c.i18n.Ts("globals.messages.notFound", "name", "{globals.terms.template}"))
+	}
+	if err := tx.Commit(); err != nil {
+		return models.Template{}, errUpd(err)
 	}
 
 	return c.GetTemplate(id, false)

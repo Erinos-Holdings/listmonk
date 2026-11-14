@@ -38,7 +38,11 @@ func TestPersonaProblem(t *testing.T) {
 		{"empty", "", "brands.personaEmpty"},
 		{"blank", "   ", "brands.personaEmpty"},
 		{"too long", strings.Repeat("N", 49) + " Thirsty Girl", "brands.personaTooLong"}, // 62
-		{"non-ASCII", "Natashá at Thirsty Girl", "brands.personaInvalid"},
+		// NAMING-STANDARD-SPEC I10: non-ASCII letters are allowed now; a non-printable rune is not.
+		{"zero-width space", "Natasha​at Thirsty Girl", "brands.personaInvalid"},
+		{"no-break space", "Natasha at Thirsty Girl", "brands.personaInvalid"},
+		{"line separator", "Natasha at Thirsty Girl", "brands.personaInvalid"},
+		{"too long in runes", strings.Repeat("Á", 48) + " Thirsty Girl", "brands.personaTooLong"}, // 61 runes
 		{"CR", "Natasha\rat Thirsty Girl", "brands.personaInvalid"},
 		{"LF", "Natasha\nat Thirsty Girl", "brands.personaInvalid"},
 		{"CRLF header injection", "Natasha at Thirsty Girl\r\nBcc: x@y.example.test", "brands.personaInvalid"},
@@ -98,6 +102,11 @@ func TestPersonaProblem(t *testing.T) {
 		{"Jean-Luc at Thirsty Girl", personaTestFrom},
 		{"Nat & Jo at Thirsty Girl 2", personaTestFrom},
 		{at60, personaTestFrom},
+		// NAMING-STANDARD-SPEC I10 -- non-ASCII letters (the wire round trip below still applies);
+		// length in runes: 47 two-byte runes + " Thirsty Girl" = 60 runes, 107 bytes.
+		{"Natashá at Thirsty Girl", personaTestFrom},
+		{strings.Repeat("Á", 47) + " Thirsty Girl", personaTestFrom},
+		{"Ana at LIYORÁ", "LIYORÁ <hello@liyora.example.test>"},
 		// One valid persona per live brand display name: the 14 display_names of the live
 		// GET /api/brands (read 2026-10-10), spelled and cased exactly as the brand Froms are.
 		{"Robbie at Curated", "Curated <hello@curated.example.test>"},

@@ -88,7 +88,8 @@ func TestBrandPersonasPut(t *testing.T) {
 		{"empty", []string{"Nat at Acme", "   "}, "brands.personaEmpty", nil},
 		{"too long", []string{long}, "brands.personaTooLong", []string{"persona", long, "max", "60"}},
 		{"at sign", []string{"Nat @ Acme"}, "brands.personaInvalid", []string{"persona", "Nat @ Acme"}},
-		{"non-ASCII", []string{"Natá at Acme"}, "brands.personaInvalid", []string{"persona", "Natá at Acme"}},
+		// NAMING-STANDARD-SPEC §4.8: a non-ASCII letter is allowed now; a non-printable rune is not.
+		{"zero-width space", []string{"Nat​ at Acme"}, "brands.personaInvalid", []string{"persona", "Nat​ at Acme"}},
 		{"no brand name", []string{"Nat"}, "brands.personaNoBrandName", []string{"persona", "Nat", "brand", "Acme"}},
 		{"case-only brand name", []string{"Nat at acme"}, "brands.personaNoBrandName", []string{"persona", "Nat at acme", "brand", "Acme"}},
 		{"the brand name alone", []string{"Acme"}, "brands.personaIsBrand", []string{"persona", "Acme"}},

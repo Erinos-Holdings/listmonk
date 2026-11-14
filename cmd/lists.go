@@ -133,6 +133,12 @@ func (a *App) CreateList(c echo.Context) error {
 	if !strHasLen(l.Name, 1, stdInputMaxLen) {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.invalidName"))
 	}
+	// Fork (naming standard, NAMING-STANDARD-SPEC D6 §4.3) -- the name rule on create, the limit on
+	// the part after the brand prefix; stored trimmed.
+	l.Name = strings.TrimSpace(l.Name)
+	if err := a.nameRuleErr(models.NameKindList, l.Name, listReqBrand(r, ""), listTypeOr(l.Type, "")); err != nil {
+		return err
+	}
 	// Fork (BRAND-PICKER-SPEC D2) -- reserved tags are refused; the brand's projection is the
 	// only writer. Absent brand on create = no reserved tags.
 	tags, _, err := a.listTagsFor(r)
@@ -248,6 +254,18 @@ func (a *App) UpdateList(c echo.Context) error {
 	// (CreateList) is the one way to mint the locked list.
 	if models.IsLockedListName(l.Name) {
 		return a.lockedListErr(l.Name)
+	}
+	// Fork (naming standard, NAMING-STANDARD-SPEC D3/D6 §4.3) -- only a CHANGED name is judged (an
+	// unchanged longer name stays valid until renamed; "" keeps the stored name); a changed one is
+	// stored trimmed, judged against the brand and type the list will have. The former-name rule
+	// runs in core.UpdateList's transaction.
+	if l.Name != "" && l.Name != cur.Name {
+		l.Name = strings.TrimSpace(l.Name)
+		if l.Name != cur.Name {
+			if err := a.nameRuleErr(models.NameKindList, l.Name, listReqBrand(r, cur.Brand), listTypeOr(l.Type, cur.Type)); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Fork (list join triggers, D3/D2) -- the trigger shape and the brand rule are validated

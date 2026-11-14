@@ -184,11 +184,13 @@ export function stripBrand(name, brand) {
 
 // The name filter beside the %/$ | # toggle: a case-insensitive substring of the STORED name (the
 // brand-stripped text is display only); blank keeps every row. Applied before the totals row, so the
-// totals are the rows shown.
+// totals are the rows shown. Fork (naming standard, NAMING-STANDARD-SPEC D9) -- it also matches the
+// row's brand, by slug or by display name (the row's `label`), as the Campaigns search does.
 export function filterByName(rows, query) {
   const q = str(query).trim().toLowerCase();
   if (!q) return rows;
-  return rows.filter((r) => str(r.name).toLowerCase().includes(q));
+  return rows.filter((r) => str(r.name).toLowerCase().includes(q)
+    || (str(r.brand) !== '' && (str(r.brand).toLowerCase().includes(q) || str(r.label).toLowerCase().includes(q))));
 }
 
 export function nameCell(name, brand = null) {
@@ -283,6 +285,9 @@ export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null, gapStat
   const out = {
     id: r.id,
     name: str(r.name),
+    // Fork (naming standard, NAMING-STANDARD-SPEC D1/D10) -- the language chip and the former-name hover.
+    lang: str(r.lang),
+    former_name: typeof r.former_name === 'string' && r.former_name !== '' ? r.former_name : null,
     status: str(r.status),
     evergreen: r.evergreen === true,
     brand,

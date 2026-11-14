@@ -193,6 +193,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Fork (journey lists, JOURNEY-LISTS-SPEC D2) -- the list's Active switch; the list's
 		// manage permission, checked in the handler (the UpdateList posture).
 		g.PUT("/api/lists/:id/active", hasID(a.PutListActive))
+		// Fork (naming standard, NAMING-STANDARD-SPEC D13 §4.2) -- the name-only rename; the handler
+		// adds campaigns:review_structure, the list's manage access and the journey lock.
+		g.PUT("/api/lists/:id/name", pm(hasID(a.RenameList), "lists:manage_all"))
 		g.DELETE("/api/lists", a.DeleteLists)
 		g.DELETE("/api/lists/:id", hasID(a.DeleteList))
 
@@ -243,6 +246,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST("/api/campaigns", pm(a.CreateCampaign, "campaigns:manage_all", "campaigns:manage"))
 		g.PUT("/api/campaigns/:id", pm(hasID(a.UpdateCampaign), "campaigns:manage_all", "campaigns:manage"))
 		g.PUT("/api/campaigns/:id/status", pm(hasID(a.UpdateCampaignStatus), "campaigns:send"))
+		// Fork (naming standard, NAMING-STANDARD-SPEC D13 §4.2) -- the name-only rename in every
+		// status; the handler adds campaigns:review_structure.
+		g.PUT("/api/campaigns/:id/name", pm(hasID(a.RenameCampaign), "campaigns:manage_all"))
 		g.PUT("/api/campaigns/:id/archive", pm(hasID(a.UpdateCampaignArchive), "campaigns:manage_all", "campaigns:manage"))
 		g.DELETE("/api/campaigns", pm(a.DeleteCampaigns, "campaigns:manage", "campaigns:manage_all"))
 		g.DELETE("/api/campaigns/:id", pm(hasID(a.DeleteCampaign), "campaigns:manage_all", "campaigns:manage"))
@@ -303,6 +309,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST("/api/templates", pm(a.CreateTemplate, "templates:manage"))
 		g.PUT("/api/templates/:id", pm(hasID(a.UpdateTemplate), "templates:manage"))
 		g.PUT("/api/templates/:id/default", pm(hasID(a.TemplateSetDefault), "templates:manage"))
+		// Fork (naming standard, NAMING-STANDARD-SPEC D13 §4.2) -- the name-only rename; the handler
+		// adds campaigns:review_structure.
+		g.PUT("/api/templates/:id/name", pm(hasID(a.RenameTemplate), "templates:manage"))
 		g.DELETE("/api/templates/:id", pm(hasID(a.DeleteTemplate), "templates:manage"))
 
 		g.DELETE("/api/maintenance/subscribers/:type", pm(a.GCSubscribers, "settings:maintain"))

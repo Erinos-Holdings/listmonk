@@ -234,6 +234,28 @@ test('2026-11-06: filterByName is a case-insensitive substring of the stored nam
   assert.deepEqual(filterByName(rows, undefined), rows);
 });
 
+// Fork (naming standard) -- integrations NAMING-STANDARD-SPEC I13 (the Matrix filter): the filter also
+// matches the row's brand by slug and by display name (shapeRow's label); names carry no brand now.
+test('I13: filterByName matches the brand slug and display name', () => {
+  const row = (id, name, brand) => ({
+    id, name, brand, lang: 'en',
+  });
+  const labels = { thirstygirl: 'Thirsty Girl', ruze: 'Ruze Pouches' };
+  const rows = shapeRows([row(1, 'Welcome', 'thirstygirl'), row(2, 'Welcome', 'ruze'), row(3, 'Thirsty days', null)], {
+    brandLabel: (s) => labels[s] || s,
+  });
+  assert.deepEqual(filterByName(rows, 'thirstygirl').map((r) => r.id), [1]);
+  assert.deepEqual(filterByName(rows, 'Thirsty Girl').map((r) => r.id), [1]);
+  assert.deepEqual(filterByName(rows, 'thirsty').map((r) => r.id), [1, 3]);
+  assert.deepEqual(filterByName(rows, 'POUCHES').map((r) => r.id), [2]);
+  assert.deepEqual(filterByName(rows, 'welcome').map((r) => r.id), [1, 2]);
+  // NAMING-STANDARD-SPEC D1/D10 -- the row carries lang and former_name for the title cell.
+  const r = shapeRows([{ ...row(4, 'Welcome', 'ruze'), lang: 'fr', former_name: 'Ruze_Welcome_FR' }])[0];
+  assert.equal(r.lang, 'fr');
+  assert.equal(r.former_name, 'Ruze_Welcome_FR');
+  assert.equal(shapeRows([{ id: 5, name: 'x' }])[0].former_name, null);
+});
+
 test('I6: %/$ cells are count / Sent (conversions in $); # cells are counts (conversions in orders)', () => {
   const r = shapeRow(api[0]);
   assert.equal(cellText(r, 'views', 'pct'), '30.00%');

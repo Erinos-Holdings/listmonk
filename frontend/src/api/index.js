@@ -516,6 +516,14 @@ export const getCampaignQuiet = async (id) => http.get(`/api/campaigns/${id}`, {
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D11. Raw (snake_case, NOT camelCased) reads for
 // the re-save sweep: its PUT payloads are built from these rows verbatim, and camelCasing would
 // rewrite nested keys (archive_meta, attribs) the full-replace PUT then stores.
+// Fork (naming standard, integrations NAMING-STANDARD-SPEC D8) -- the campaign form's duplicate-name
+// lookup: one quiet search, never the campaigns store (the Campaigns page owns it), raw keys.
+export const findCampaignsByName = async (name) => http.get('/api/campaigns', {
+  params: { query: name, no_body: true, per_page: 50 },
+  camelCase: false,
+  disableToast: true,
+});
+
 export const getCampaignsRaw = async () => http.get('/api/campaigns', {
   params: { per_page: 'all' },
   camelCase: false,

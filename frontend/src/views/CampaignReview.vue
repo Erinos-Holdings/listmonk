@@ -492,7 +492,8 @@ export default Vue.extend({
     },
 
     isEdited() {
-      return !this.gate && !!this.row && this.row.status === 'complete' && this.row.bundle_hash !== this.state.current_hash;
+      // Fork (NAMING-STANDARD-SPEC §4.7) -- the server's `current` (either hash), not current_hash.
+      return !this.gate && !!this.row && this.row.status === 'complete' && !this.state.current;
     },
 
     verdictSource() {

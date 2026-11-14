@@ -20,6 +20,12 @@
         <div v-if="!brandScope.hidden" class="navbar-item brand-context" :style="selectorStyle">
           <brand-selector />
           <launch-filter />
+          <!-- Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle, beside the
+               selector, on Campaigns / the Campaign Matrix / Templates only. -->
+          <language-toggle />
+        </div>
+        <div v-else class="navbar-item brand-context">
+          <language-toggle />
         </div>
       </template>
       <template #end>
@@ -140,6 +146,7 @@ import stepUp, { stepUpError } from './stepUp';
 import Navigation from './components/Navigation.vue';
 import BrandSelector from './components/BrandSelector.vue';
 import LaunchFilter from './components/LaunchFilter.vue';
+import LanguageToggle from './components/LanguageToggle.vue';
 import HealthSync from './components/HealthSync.vue';
 
 export default Vue.extend({
@@ -149,6 +156,7 @@ export default Vue.extend({
     Navigation,
     BrandSelector,
     LaunchFilter,
+    LanguageToggle,
     HealthSync,
   },
 

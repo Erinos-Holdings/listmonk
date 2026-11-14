@@ -102,10 +102,15 @@
         <div>
           <!-- Fork (brand analytics, BRAND-ANALYTICS-SPEC D9): the form only for users who may save
           it; everyone else reads the name as plain text (the server refuses the save anyway). -->
-          <a v-if="canEditList(props.row)" :href="`/lists/${props.row.id}`" @click.prevent="showEditForm(props.row)">
-            {{ props.row.name }}
+          <!-- Fork (naming standard, NAMING-STANDARD-SPEC D6/D10) -- under a single-brand selection
+               the brand's own prefix (exactly `<SLUG> ` or `<display name> `) is hidden
+               (naming.mjs::listDisplayName); the hover is the former name when there is one, else
+               the full stored name. -->
+          <a v-if="canEditList(props.row)" :href="`/lists/${props.row.id}`" @click.prevent="showEditForm(props.row)"
+            :title="listNameTitle(props.row)">
+            {{ shownListName(props.row) }}
           </a>
-          <span v-else data-cy="list-name">{{ props.row.name }}</span>
+          <span v-else data-cy="list-name" :title="listNameTitle(props.row)">{{ shownListName(props.row) }}</span>
           <!-- Fork (LIST-COLLAPSE-SPEC C6). `Other` is an alarm, so it survives the collapse: the
           marker shows on the collapsed row, beside the name, and expands it. -->
           <b-tooltip v-if="hasOther(props.row) && !expanded[props.row.id]" :label="$t('lists.grid.otherHelp')" type="is-dark" multilined
@@ -309,6 +314,7 @@ import { isSendPlus, sendLangCode } from '../langs';
 import { canManageList, canViewBrand } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { isLockedList } from '../listBrand.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf, listsScopeParams } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { formerNameOf, listDisplayName } from '../naming.mjs'; // eslint-disable-line import/extensions
 import { withSunsetItem } from '../listSunset.mjs'; // eslint-disable-line import/extensions
 import { journeyLockedOf, withTriggerItem, activeWordOf } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { showSystemLists, systemListsParams, SHOW_SYSTEM_PREF } from '../listsPage.mjs'; // eslint-disable-line import/extensions
@@ -472,6 +478,17 @@ export default Vue.extend({
         return withTriggerItem(withSunsetItem(id, row.sunset), row);
       }
       return withTriggerItem(withSunsetItem(`${id} · ${brandLabelOf(row.brand, this.brandRows)}`, row.sunset), row);
+    },
+
+    // Fork (naming standard, NAMING-STANDARD-SPEC D6/D10).
+    shownListName(row) {
+      return listDisplayName(row, this.brandSelection, this.brandRows);
+    },
+
+    listNameTitle(row) {
+      const f = formerNameOf(row);
+      if (f) return this.$t('naming.formerName', { name: f });
+      return this.shownListName(row) !== row.name ? row.name : null;
     },
 
     // Show the edit list form.

@@ -182,16 +182,33 @@ func (c *Core) CreateList(l models.List) (models.List, error) {
 // (BRAND-PICKER-SPEC D2). Fork (journey lists, JOURNEY-LISTS-SPEC review F4) -- by is the
 // request's user: archiving an active list turns its Active switch off, stamped with it.
 func (c *Core) UpdateList(id int, l models.List, keepReserved bool, by string) (models.List, error) {
-	res, err := c.q.UpdateList.Exec(id, l.Name, l.Type, l.Optin, l.Status, pq.StringArray(normalizeListTags(l.Tags)), l.Description, keepReserved, by)
-	if err != nil {
+	errUpd := func(err error) error {
 		c.log.Printf("error updating list: %v", err)
-		return models.List{}, echo.NewHTTPError(http.StatusInternalServerError,
+		return echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.list}", "error", pqErrMsg(err)))
+	}
+	// Fork (naming standard, NAMING-STANDARD-SPEC §4.2) -- the former-name rule in the same
+	// transaction, before the write (it reads the stored name); a no-op for an unchanged or empty
+	// (kept) name.
+	tx, err := c.db.Beginx()
+	if err != nil {
+		return models.List{}, errUpd(err)
+	}
+	defer tx.Rollback()
+	if err := c.recordFormerNameTx(tx, models.NameKindList, id, l.Name); err != nil {
+		return models.List{}, errUpd(err)
+	}
+	res, err := tx.Stmtx(c.q.UpdateList).Exec(id, l.Name, l.Type, l.Optin, l.Status, pq.StringArray(normalizeListTags(l.Tags)), l.Description, keepReserved, by)
+	if err != nil {
+		return models.List{}, errUpd(err)
 	}
 
 	if n, _ := res.RowsAffected(); n == 0 {
 		return models.List{}, echo.NewHTTPError(http.StatusBadRequest,
 			c.i18n.Ts("globals.messages.notFound", "name", "{globals.terms.list}"))
+	}
+	if err := tx.Commit(); err != nil {
+		return models.List{}, errUpd(err)
 	}
 
 	return c.GetList(id, "")

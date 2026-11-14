@@ -38,8 +38,24 @@ import (
 //     unedited campaign);
 //   - attribs without its smart_sending key (fork, SMART-SENDING-SPEC D4 -- the TS twin must drop it
 //     too, or a switched-off campaign's Inspect reads stale);
-//   - lists = the target list ids, sorted.
+//   - lists = the target list ids, sorted;
+//   - NOT the campaign name (fork, integrations NAMING-STANDARD-SPEC D12 -- a rename must not void a
+//     passed Inspect; the review no longer reads the name). LegacyBundleHash is the pre-release
+//     formula, which still hashed "name", kept so a review written before the release stays
+//     current (core.CurrentReview).
 func BundleHash(camp models.Campaign, listIDs []int) string {
+	return bundleHash(camp, listIDs, false, "")
+}
+
+// LegacyBundleHash is the pre-NAMING-STANDARD formula: BundleHash plus "name" = name (the name the
+// campaign carried when the review was written -- core.CurrentReview passes the campaign's
+// former_names row when one exists, else its current name). The shared fixture pins it as
+// legacyExpected in both repos. Permanent (NAMING-STANDARD-SPEC §4.7).
+func LegacyBundleHash(camp models.Campaign, listIDs []int, name string) string {
+	return bundleHash(camp, listIDs, true, name)
+}
+
+func bundleHash(camp models.Campaign, listIDs []int, withName bool, name string) string {
 	ids := append([]int(nil), listIDs...)
 	sort.Ints(ids)
 	idsAny := make([]any, len(ids))
@@ -89,10 +105,13 @@ func BundleHash(camp models.Campaign, listIDs []int) string {
 		"evergreen":           camp.Evergreen,
 		"headers":             headers,
 		"lists":               idsAny,
-		"name":                camp.Name,
 		"send_delay_secs":     camp.SendDelaySecs,
 		"subject":             camp.Subject,
 		"template_id":         nullInt(camp.TemplateID.Valid, camp.TemplateID.Int),
+	}
+
+	if withName {
+		obj["name"] = name
 	}
 
 	var buf bytes.Buffer

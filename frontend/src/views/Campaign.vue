@@ -170,9 +170,16 @@
           <div class="columns">
             <div class="column is-7">
               <form @submit.prevent="() => onSubmit(isNew ? 'create' : 'update')">
-                <b-field :label="$t('globals.fields.name')" label-position="on-border">
-                  <b-input :maxlength="200" :ref="'focus'" v-model="form.name" name="name" :disabled="!canEdit"
-                    :placeholder="$t('globals.fields.name')" required autofocus />
+                <!-- Fork (naming standard, NAMING-STANDARD-SPEC D3/D8) -- the name input shows n/30
+                     with the standard's hint (exempt CATALOG names are not limited; the server is the
+                     rule), and a NON-blocking warning when another open campaign of the same brand
+                     and language already has this name (naming.mjs::duplicateOf). -->
+                <b-field :label="$t('globals.fields.name')" label-position="on-border"
+                  :message="duplicateName ? $t('naming.duplicate', { name: duplicateName.name, id: duplicateName.id }) : $t('naming.hint')"
+                  :type="duplicateName ? 'is-warning' : null">
+                  <b-input :maxlength="nameLimit.maxlength || 200" :ref="'focus'" v-model="form.name" name="name" :disabled="!canEdit"
+                    :placeholder="$t('globals.fields.name')" required autofocus @blur="checkDuplicateName"
+                    data-cy="campaign-name" />
                 </b-field>
 
                 <!-- Fork (multi-language campaigns) -- attribs.lang. Hidden behind app.lang_enable
@@ -676,7 +683,10 @@ import {
   pickerBrandRow, fromToApply, isSyncRepoint, campaignRefs, blockingCampaigns,
 } from '../personaFrom.mjs'; // eslint-disable-line import/extensions
 import { canManageBrandPersonas } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
-import { campaignBrand, filterByIds, scopeUnion } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import {
+  campaignBrand, filterByIds, scopeUnion, storeLists,
+} from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { campaignBrandOf, duplicateOf, nameCounter } from '../naming.mjs'; // eslint-disable-line import/extensions
 import { campaignLinkDefault } from '../linkDefaults.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
@@ -879,6 +889,10 @@ export default Vue.extend({
       // Bumped by applyDraft to re-mount the editor on the restored content.
       editorKey: 0,
 
+      // Fork (naming standard, NAMING-STANDARD-SPEC D8) -- the other open campaign of the same name,
+      // brand and language (a warning only), or null.
+      duplicateName: null,
+
       // Binds form input values.
       form: {
         archiveSlug: null,
@@ -928,6 +942,34 @@ export default Vue.extend({
   },
 
   methods: {
+    // Fork (naming standard, NAMING-STANDARD-SPEC D8) -- one quiet search on the name; the warning
+    // never blocks a save. The brand is the form's lists' brand, the language the form's.
+    checkDuplicateName() {
+      const name = (this.form.name || '').trim();
+      if (!name) {
+        this.duplicateName = null;
+        return;
+      }
+      const brandMap = {};
+      storeLists(this.lists).forEach((l) => {
+        if (l && l.brand) brandMap[l.id] = l.brand;
+      });
+      const candidate = {
+        id: this.isNew ? 0 : this.data.id,
+        name,
+        brand: campaignBrandOf({ lists: this.form.lists || [] }, brandMap),
+        lang: this.form.lang || '',
+      };
+      this.$api.findCampaignsByName(name).then((res) => {
+        const rows = ((res && res.results) || []).map((r) => ({
+          ...r, brand: campaignBrandOf(r, brandMap), lang: (r.attribs && r.attribs.lang) || '',
+        }));
+        this.duplicateName = duplicateOf(candidate, rows);
+      }).catch(() => {
+        this.duplicateName = null;
+      });
+    },
+
     // Fork (emoji picker, integrations EMOJI-PICKER-SPEC D2/D5/D6). The subject's or preheader's
     // native <input> (b-input wraps it).
     emojiInput(field) {
@@ -2360,6 +2402,11 @@ export default Vue.extend({
       return campaignBrand(this.data.lists, this.lists);
     },
 
+    // Fork (naming standard, NAMING-STANDARD-SPEC D3) -- the name input's limit (null when exempt).
+    nameLimit() {
+      return nameCounter('campaign', this.form.name);
+    },
+
     // Fork: the Send-later helper text — the scheduled instant in Mountain time (MDT/MST
     // resolved by Intl for that date) and in UTC, 12-hour, no seconds, one format for both.
     sendAtMessage() {
@@ -2561,7 +2608,9 @@ export default Vue.extend({
       if (!r) {
         return 'notInspected';
       }
-      if (r.bundle_hash !== st.current_hash || r.status === 'stale') {
+      // Fork (NAMING-STANDARD-SPEC §4.7) -- `current` is the server's one answer (either hash; a
+      // pre-release review of a renamed, unedited campaign is current), never current_hash alone.
+      if (!st.current || r.status === 'stale') {
         return 'edited';
       }
       if (r.status === 'failed') {

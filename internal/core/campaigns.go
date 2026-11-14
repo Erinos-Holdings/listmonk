@@ -31,7 +31,10 @@ const (
 // listIDs (fork) scopes the result to campaigns targeting any of the given lists; empty applies no filter.
 // ids (fork, matrix polish, integrations MATRIX-POLISH-SPEC D10.2) scopes the result to those campaign
 // ids, ANDed with every other filter and the permission scope; empty applies no filter.
-func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, offset, limit int) (models.Campaigns, int, error) {
+//
+// Fork (naming standard, NAMING-STANDARD-SPEC D2) -- lang "" applies no filter; else that language
+// plus every campaign with no language (the language toggle).
+func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, lang string, offset, limit int) (models.Campaigns, int, error) {
 	queryStr, stmt := makeSearchQuery(searchStr, orderBy, order, c.q.QueryCampaigns, campQuerySortFields)
 
 	if statuses == nil {
@@ -53,7 +56,7 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 
 	// Unsafe to ignore scanning fields not present in models.Campaigns.
 	var out models.Campaigns
-	if err := c.db.Select(&out, stmt, 0, pq.StringArray(statuses), pq.StringArray(tags), queryStr, getAll, pq.Array(permittedLists), offset, limit, evergreen, pq.Array(listIDs), pq.Array(ids)); err != nil {
+	if err := c.db.Select(&out, stmt, 0, pq.StringArray(statuses), pq.StringArray(tags), queryStr, getAll, pq.Array(permittedLists), offset, limit, evergreen, pq.Array(listIDs), pq.Array(ids), lang); err != nil {
 		c.log.Printf("error fetching campaigns: %v", err)
 		return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
@@ -404,7 +407,20 @@ func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs
 		}
 		attribs = o.Attribs
 	}
-	_, err := c.q.UpdateCampaign.Exec(id,
+	// Fork (naming standard, NAMING-STANDARD-SPEC §4.2) -- the former-name rule runs in the same
+	// transaction, before the write (it reads the stored name); a no-op for an unchanged name.
+	tx, err := c.db.Beginx()
+	if err != nil {
+		return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+	defer tx.Rollback()
+	if err := c.recordFormerNameTx(tx, models.NameKindCampaign, id, o.Name); err != nil {
+		c.log.Printf("error recording a campaign's former name: %v", err)
+		return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+	_, err = tx.Stmtx(c.q.UpdateCampaign).Exec(id,
 		o.Name,
 		o.Subject,
 		o.FromEmail,
@@ -428,6 +444,10 @@ func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs
 		o.SendDelaySecs)
 	if err != nil {
 		c.log.Printf("error updating campaign: %v", err)
+		return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+	if err := tx.Commit(); err != nil {
 		return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
 	}

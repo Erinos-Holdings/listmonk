@@ -177,15 +177,21 @@
             <b-tag v-if="props.row.type === 'optin'" class="is-small">
               {{ $t('lists.optin') }}
             </b-tag>
-            <!-- Fork (multi-language campaigns) -- absent lang is "All", one word everywhere. -->
-            <b-tag v-if="serverConfig.lang_enabled || (props.row.attribs && props.row.attribs.lang)" class="is-small lang"
+            <!-- Fork (naming standard, NAMING-STANDARD-SPEC D1) -- the brand chip (the list brand, in
+                 capitals) and the language chip (attribs.lang; the send-language label, EN+), each
+                 hidden when the brand selector / language toggle already selects it; none when absent
+                 (naming.mjs::chipsFor). -->
+            <b-tag v-if="chipsOf(props.row).brand" class="is-small brand-chip" data-cy="brand-chip">
+              {{ chipsOf(props.row).brand }}
+            </b-tag>
+            <b-tag v-if="chipsOf(props.row).lang" class="is-small lang"
               data-cy="lang-chip" :title="langChipTitle(props.row)">
-              {{ props.row.attribs && props.row.attribs.lang ? langChip(props.row.attribs.lang) : $t('campaigns.langAll') }}
+              {{ langChip(props.row.attribs.lang) }}
             </b-tag>
             <!-- 2026-11-06: under a single-brand selection the brand's name is stripped from the shown
                  text (campaignMatrix.mjs::stripBrand, as the Campaign Matrix does); the stored name is
-                 the hover and the copy. -->
-            <router-link :to="{ name: 'campaign', params: { id: props.row.id } }" :title="props.row.name">
+                 the copy. NAMING-STANDARD-SPEC D10: the hover is the former name when there is one. -->
+            <router-link :to="{ name: 'campaign', params: { id: props.row.id } }" :title="nameTitle(props.row)">
               {{ shownName(props.row.name) }}
               <copy-text :text="props.row.name" hide-text />
             </router-link>
@@ -391,12 +397,11 @@
               <b-icon icon="file-find-outline" size="is-small" />
             </b-tooltip>
           </a>
-          <a v-if="$can('campaigns:manage')" href="#" @click.prevent="$utils.prompt($t('globals.buttons.clone'),
-            {
-              placeholder: $t('globals.fields.name'),
-              value: $t('campaigns.copyOf', { name: props.row.name }),
-            },
-            (name) => cloneCampaign(name, props.row))" data-cy="btn-clone" :aria-label="$t('globals.buttons.clone')">
+          <!-- Fork (naming standard, NAMING-STANDARD-SPEC D7/D3) -- the copy is `Clone<N> <name>`
+               (naming.mjs::cloneName), the input limited to 30 with the hint and count; over 30 the
+               server refuses on save (no silent truncation). -->
+          <a v-if="$can('campaigns:manage')" href="#" @click.prevent="promptClone(props.row)"
+            data-cy="btn-clone" :aria-label="$t('globals.buttons.clone')">
             <b-tooltip :label="$t('globals.buttons.clone')" type="is-dark">
               <b-icon icon="file-multiple-outline" size="is-small" />
             </b-tooltip>
@@ -428,7 +433,7 @@
 <script>
 import dayjs from 'dayjs';
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
@@ -438,8 +443,14 @@ import {
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
-import { brandLabelOf, canCreateCampaign, filterByIds } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import {
+  brandLabelOf, canCreateCampaign, filterByIds, storeLists,
+} from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { stripBrand } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
+import {
+  campaignBrandOf, chipsFor, cloneName, formerNameOf, nameCounter,
+} from '../naming.mjs'; // eslint-disable-line import/extensions
+import { langParam } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
 import {
   LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KIND_PREF, afterBrandChange, campaignsRouteQuery, canSelectAll,
@@ -538,6 +549,30 @@ export default Vue.extend({
   methods: {
     shownName(name) {
       return this.stripBrandOf ? stripBrand(name, this.stripBrandOf) : name;
+    },
+
+    // Fork (naming standard, NAMING-STANDARD-SPEC D1/D10) -- the title cell's chips and hover.
+    chipsOf(row) {
+      return chipsFor({ ...row, brand: campaignBrandOf({ lists: row.lists }, this.listBrands) }, {
+        brandSelection: this.brandSelection, langSelection: this.langSelection,
+      });
+    },
+
+    nameTitle(row) {
+      const f = formerNameOf(row);
+      return f ? this.$t('naming.formerName', { name: f }) : row.name;
+    },
+
+    // D7 -- the clone prompt: `Clone<N> <name>` over this page's names, 30 with the hint and count.
+    promptClone(row) {
+      const names = ((this.campaigns && this.campaigns.results) || []).map((c) => c.name);
+      const value = cloneName(row.name, names);
+      const count = nameCounter('campaign', value);
+      this.$utils.prompt(
+        `${this.$t('globals.buttons.clone')} — ${this.$t('naming.hint')} (${this.$t('naming.counter', { n: count.n, max: count.max })})`,
+        { placeholder: this.$t('globals.fields.name'), value, maxlength: count.maxlength || 200 },
+        (name) => this.cloneCampaign(name, row),
+      );
     },
 
     // Fork (langs.js, the "+" convention). The chip names a send audience: EN+.
@@ -754,6 +789,12 @@ export default Vue.extend({
       if (listID !== undefined) {
         params.list_id = listID;
       }
+      // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the toggle's language (absent under All):
+      // that language plus every campaign with no language, filtered by the server.
+      const lang = langParam(this.langSelection);
+      if (lang) {
+        params.lang = lang;
+      }
 
       this.$api.getCampaigns(params);
     },
@@ -955,6 +996,17 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['campaigns', 'lists', 'loading', 'serverConfig']),
+    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the navbar language toggle.
+    ...mapGetters(['langSelection']),
+
+    // D1 -- list id -> brand slug from the lists store (the brand chip's source).
+    listBrands() {
+      const out = {};
+      storeLists(this.lists).forEach((l) => {
+        if (l && l.brand) out[l.id] = l.brand;
+      });
+      return out;
+    },
 
     // The brand whose name shownName strips: the navbar's single-brand selection, else none.
     stripBrandOf() {
@@ -1038,6 +1090,14 @@ export default Vue.extend({
   },
 
   watch: {
+    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- a toggle change refetches from page 1.
+    langSelection() {
+      this.queryParams.page = 1;
+      this.bulk.checked = [];
+      this.bulk.all = false;
+      this.refreshCampaigns();
+    },
+
     // Fork (global brand, D4) -- reset the in-page list filter to "All lists" when the chosen
     // list is outside the new scope, then fetch through refreshCampaigns (the poll's path).
     // DASHBOARDS-POLISH2-SPEC D2 (stage 2 F2) -- ANY selector change also clears the route list

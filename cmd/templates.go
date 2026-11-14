@@ -113,6 +113,12 @@ func (a *App) CreateTemplate(c echo.Context) error {
 	if err := a.validateTemplate(&o); err != nil {
 		return err
 	}
+	// Fork (naming standard, NAMING-STANDARD-SPEC D15 §4.3) -- the name rule on create (Official_
+	// exempt); stored trimmed.
+	o.Name = strings.TrimSpace(o.Name)
+	if err := a.nameRuleErr(models.NameKindTemplate, o.Name, "", ""); err != nil {
+		return err
+	}
 	if err := a.guardOfficialTemplate(nil, &o); err != nil {
 		return err
 	}
@@ -162,6 +168,17 @@ func (a *App) UpdateTemplate(c echo.Context) error {
 	stored, err := a.core.GetTemplate(id, true)
 	if err != nil {
 		return err
+	}
+	// Fork (naming standard, NAMING-STANDARD-SPEC D15 §4.3) -- only a CHANGED name is judged (""
+	// keeps the stored name); a changed one is stored trimmed. The former-name rule runs in
+	// core.UpdateTemplate's transaction.
+	if o.Name != "" && o.Name != stored.Name {
+		o.Name = strings.TrimSpace(o.Name)
+		if o.Name != stored.Name {
+			if err := a.nameRuleErr(models.NameKindTemplate, o.Name, "", ""); err != nil {
+				return err
+			}
+		}
 	}
 	if err := a.guardOfficialTemplate(&stored, &o); err != nil {
 		return err

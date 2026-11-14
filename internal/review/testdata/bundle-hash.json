@@ -1,5 +1,5 @@
 {
- "comment": "Shared by integrations tests/lib/campaign-review/bundle.test.ts and the fork's internal/review/bundle_test.go (copied into internal/review/testdata/bundle-hash.json). The expected hash is pinned in BOTH tests; change them together (CAMPAIGN-INSPECT-SPEC D4, I2).",
+ "comment": "Shared by integrations tests/lib/campaign-review/bundle.test.ts and the fork's internal/review/bundle_test.go (copied into internal/review/testdata/bundle-hash.json). The expected hash is pinned in BOTH tests; change them together (CAMPAIGN-INSPECT-SPEC D4, I2). legacyExpected is the pre-NAMING-STANDARD formula (the same object plus \"name\" = the campaign's name), pinned in both tests too (NAMING-STANDARD-SPEC D12, I5).",
  "campaign": {
   "id": 4242,
   "uuid": "0e8f5a2e-1111-4222-8333-944455556666",
@@ -59,7 +59,8 @@
   "updated_at": "2026-09-25T00:00:00Z",
   "created_at": "2026-09-24T00:00:00Z"
  },
- "expected": "824337bdbfef82eb131f4150df40ec621465ae141f43648fbec7d12f764befbb",
+ "expected": "9a48a25eb99bf5acc2110539ab06590dd63bcc3a129b4e757aeeb22264204286",
+ "legacyExpected": "824337bdbfef82eb131f4150df40ec621465ae141f43648fbec7d12f764befbb",
  "pairs": [
   {
    "name": "send_at is not hashed",
@@ -220,12 +221,12 @@
    "same": false
   },
   {
-   "name": "name",
+   "name": "name is not hashed (NAMING-STANDARD-SPEC D12)",
    "a": {
     "name": "Fixture_Hash_DE"
    },
    "b": {},
-   "same": false
+   "same": true
   },
   {
    "name": "content_type",

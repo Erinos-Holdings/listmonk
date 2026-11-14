@@ -1,7 +1,10 @@
 -- lists
 -- name: get-lists
 -- Fork (BRAND-PICKER-SPEC D2) -- brand is the list's brand slug, or empty when untagged.
-SELECT *, COALESCE(list_brand_tag(tags), '') AS brand FROM lists WHERE (CASE WHEN $1 = '' THEN 1=1 ELSE type=$1::list_type END)
+-- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- former_name, NULL when never renamed.
+SELECT *, COALESCE(list_brand_tag(tags), '') AS brand,
+    (SELECT f.name FROM former_names f WHERE f.kind = 'list' AND f.id = lists.id) AS former_name
+    FROM lists WHERE (CASE WHEN $1 = '' THEN 1=1 ELSE type=$1::list_type END)
     AND (CASE WHEN $2 = '' THEN 1=1 ELSE status=$2::list_status END)
     AND CASE
         -- Optional list IDs based on user permission.
@@ -11,7 +14,10 @@ SELECT *, COALESCE(list_brand_tag(tags), '') AS brand FROM lists WHERE (CASE WHE
 
 -- name: query-lists
 WITH ls AS (
-    SELECT COUNT(*) OVER () AS total, lists.*, COALESCE(list_brand_tag(lists.tags), '') AS brand FROM lists WHERE
+    SELECT COUNT(*) OVER () AS total, lists.*, COALESCE(list_brand_tag(lists.tags), '') AS brand,
+        -- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- former_name, NULL when never renamed.
+        (SELECT f.name FROM former_names f WHERE f.kind = 'list' AND f.id = lists.id) AS former_name
+        FROM lists WHERE
     CASE
         WHEN $1 > 0 THEN id = $1
         WHEN $2 != '' THEN uuid = $2::UUID

@@ -372,8 +372,10 @@ func (a *App) reviewGateReason(cm models.Campaign) (string, error) {
 	}
 
 	id := cm.ID
-	hash := core.CampaignBundleHash(cm)
-	row, err := a.core.GetReviewByHash(id, hash)
+	// Fork (naming standard, NAMING-STANDARD-SPEC §4.7) -- core.CurrentReview, the one lookup: a
+	// review at the new hash or at the legacy hash over the name at review (a renamed, unedited
+	// campaign's pre-release Inspect stays current).
+	row, err := a.core.CurrentReview(cm)
 	if err != nil {
 		return "", err
 	}
@@ -387,7 +389,7 @@ func (a *App) reviewGateReason(cm models.Campaign) (string, error) {
 			return a.i18n.T("campaigns.reviewReasonNotInspected"), nil
 		case state.Review.Status == models.ReviewStatusRunning:
 			return a.i18n.T("campaigns.reviewReasonRunning"), nil
-		case state.Review.BundleHash != hash:
+		case !state.Current:
 			return a.i18n.T("campaigns.reviewReasonEdited"), nil
 		default:
 			return a.i18n.T("campaigns.reviewReasonNotInspected"), nil

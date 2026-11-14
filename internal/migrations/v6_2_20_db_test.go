@@ -105,8 +105,9 @@ func TestBrandsBackfillMigration(t *testing.T) {
 			list("Upper", "brand:Acme", "from:hello@acme.example.test")
 		}, []string{`"Lower"`, `"Upper"`, "only by case"}},
 		{"BrandProblem", func() {
-			list("Accented", "brand:acme", "from:Acmé <hello@acme.example.test>")
-		}, []string{`"Accented"`, "lists.brandFromTagNotASCII"}},
+			// A non-ASCII display name is valid since NAMING-STANDARD-SPEC §4.8; trailing junk is not.
+			list("Junk", "brand:acme", "from:Acmé <hello@acme.example.test> JUNK")
+		}, []string{`"Junk"`, "lists.brandFromTagInvalid"}},
 		{"reserved slug", func() {
 			list("Health", "brand:health", "from:hello@acme.example.test")
 		}, []string{`"Health"`, "lists.brandSlugReserved"}},

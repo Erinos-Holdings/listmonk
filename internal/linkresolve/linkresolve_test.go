@@ -206,6 +206,33 @@ func TestUTMParams(t *testing.T) {
 	}
 }
 
+// Integrations NAMING-STANDARD-SPEC I9 (the pure half) -- UTMCampaign's format (the non-empty parts
+// of slug, name with whitespace runs as "-", lang, joined by "_"); {{ .Campaign.UTMCampaign }}
+// renders it, {{ .Campaign.Name }} keeps the bare name, and validation accepts the field.
+func TestUTMCampaign(t *testing.T) {
+	for _, c := range []struct{ slug, name, lang, want string }{
+		{"ruze", "No Nicotine", "en", "ruze_No-Nicotine_en"},
+		{"thirstygirl", "10-28-26 Halloween  Pairing", "fr", "thirstygirl_10-28-26-Halloween-Pairing_fr"},
+		{"ruze", "  Padded\tname ", "en", "ruze_Padded-name_en"},
+		{"", "No Nicotine", "en", "No-Nicotine_en"},
+		{"ruze", "No Nicotine", "", "ruze_No-Nicotine"},
+		{"", "Plain", "", "Plain"},
+		{"liyora", "LIYORÁ AirLuxe", "es", "liyora_LIYORÁ-AirLuxe_es"},
+	} {
+		if got := UTMCampaign(c.slug, c.name, c.lang); got != c.want {
+			t.Errorf("UTMCampaign(%q, %q, %q) = %q want %q", c.slug, c.name, c.lang, got, c.want)
+		}
+	}
+	tpls := map[string]string{"utm_campaign": "{{ .Campaign.UTMCampaign }}", "utm_term": "{{ .Campaign.Name }}"}
+	got := RenderUTMParams(tpls, CampaignInfo{ID: 9, Name: "No Nicotine", UTMCampaign: UTMCampaign("ruze", "No Nicotine", "en")})
+	if want := map[string]string{"utm_campaign": "ruze_No-Nicotine_en", "utm_term": "No Nicotine"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("RenderUTMParams = %v want %v", got, want)
+	}
+	if k, err := ValidateUTMParams(tpls); err != nil {
+		t.Fatalf("ValidateUTMParams refused %q: %v", k, err)
+	}
+}
+
 // I14 -- Expressions extracts only DYNAMIC TrackLink arguments from a transformed body, with
 // Go string escapes undone, de-duplicated.
 func TestExpressions(t *testing.T) {

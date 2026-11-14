@@ -22,6 +22,7 @@ package models
 import (
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/knadh/listmonk/internal/linkresolve"
 )
@@ -180,7 +181,8 @@ const maxTagLen = 100
 //     e-mail; nil skips the shape check for bare addresses.
 //
 // Rules, in order: the slug is SES-safe and not the reserved `health`; the From is non-empty
-// and ASCII (nothing RFC 2047-encodes the header), a whole `Display Name <address>` match or
+// and printable (non-ASCII allowed: net/mail RFC 2047-encodes the name on the wire), a whole
+// `Display Name <address>` match or
 // a sanitizable bare address, fits a tag, and its address is configured; the site is an
 // absolute http(s) URL that fits a tag.
 func BrandProblem(slug, from, site string, allowedFrom func(bare string) bool, sanitize func(string) (string, error)) (string, []string) {
@@ -195,16 +197,18 @@ func BrandProblem(slug, from, site string, allowedFrom func(bare string) bool, s
 		return "lists.brandFromTagInvalid", []string{"from", from}
 	}
 
-	// The From header is emitted verbatim and nothing RFC 2047-encodes it, so a non-ASCII
-	// display name ships a malformed header. `Liyora`, not `Liyorá`.
+	// A non-ASCII display name is allowed (integrations NAMING-STANDARD-SPEC §4.8, 2026-11-13):
+	// the From header is re-serialised through net/mail by smtppool.formatAddress
+	// (internal/smtppool/email.go), which RFC 2047-encodes a non-ASCII name
+	// (`=?utf-8?q?LIYOR=C3=81?= <hello@liyorahair.com>`) and parses back to `LIYORÁ`. The
+	// earlier ASCII-only rule's reason ("some clients show the encoded form raw") was never
+	// evidenced. Only a printable rune is allowed (unicode.IsPrint: no Unicode format or
+	// separator character beside the ASCII space).
 	// A control character (CR, LF, TAB, DEL ...) is a header-injection vector: `\s` in
 	// ReFromAddress consumes a newline and `.` matches a CR, so `Curated\r\nX-Injected: y
 	// <hello@x>` would otherwise pass the whole-match check and ship as two headers.
 	for _, r := range from {
-		if r > 127 {
-			return "lists.brandFromTagNotASCII", []string{"from", from}
-		}
-		if r < 0x20 || r == 0x7f {
+		if r < 0x20 || r == 0x7f || !unicode.IsPrint(r) {
 			return "lists.brandFromTagInvalid", []string{"from", from}
 		}
 	}

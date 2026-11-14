@@ -119,6 +119,8 @@ var migList = []migFunc{
 	{"v6.2.36", migrations.V6_2_36},
 	// Fork migration (erinos): join link -- brand_master_list_id (a brand's single public, non-transactional, active list), join_refusal (the fail-closed eligibility predicate) and join_plan (the one plan the {{ JoinURL }} route's GET and POST read) (JOIN-LINK-SPEC) — see internal/migrations/v6.2.37.go.
 	{"v6.2.37", migrations.V6_2_37},
+	// Fork migration (erinos): naming standard -- the former_names table (per campaign, list or template, its ORIGINAL name before the first rename; written by the name-only rename endpoints and the name-changing update paths, read as former_name and by core.CurrentReview) (NAMING-STANDARD-SPEC) — see internal/migrations/v6.2.38.go.
+	{"v6.2.38", migrations.V6_2_38},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

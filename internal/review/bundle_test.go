@@ -13,11 +13,16 @@ import (
 	"github.com/knadh/listmonk/models"
 )
 
-const pinnedHash = "824337bdbfef82eb131f4150df40ec621465ae141f43648fbec7d12f764befbb"
+const pinnedHash = "9a48a25eb99bf5acc2110539ab06590dd63bcc3a129b4e757aeeb22264204286"
+
+// legacyHash is the pre-NAMING-STANDARD formula (the name hashed) over the fixture campaign with its
+// own name -- integrations NAMING-STANDARD-SPEC I5; the TS test pins the same hex.
+const legacyHash = "824337bdbfef82eb131f4150df40ec621465ae141f43648fbec7d12f764befbb"
 
 type hashFixture struct {
 	Campaign map[string]json.RawMessage `json:"campaign"`
 	Expected string                     `json:"expected"`
+	Legacy   string                     `json:"legacyExpected"`
 	Pairs    []struct {
 		Name string                     `json:"name"`
 		A    map[string]json.RawMessage `json:"a"`
@@ -73,6 +78,61 @@ func TestBundleHashPinned(t *testing.T) {
 	}
 	if got := hashOf(t, fx.Campaign, nil); got != pinnedHash {
 		t.Fatalf("BundleHash = %s, want %s (the TS twin's hash)", got, pinnedHash)
+	}
+}
+
+// Integrations NAMING-STANDARD-SPEC I5 -- BundleHash ignores the name; LegacyBundleHash with the
+// name at review reproduces the pre-release hash whatever the campaign is called now; any content
+// or list change moves both.
+func TestBundleHashLegacy(t *testing.T) {
+	fx := loadHashFixture(t)
+	if fx.Legacy != legacyHash {
+		t.Fatalf("fixture legacyExpected %s, pinned %s", fx.Legacy, legacyHash)
+	}
+	campOf := func(patch map[string]json.RawMessage) (models.Campaign, []int) {
+		m := map[string]json.RawMessage{}
+		for k, v := range fx.Campaign {
+			m[k] = v
+		}
+		for k, v := range patch {
+			m[k] = v
+		}
+		b, _ := json.Marshal(m)
+		var camp models.Campaign
+		if err := json.Unmarshal(b, &camp); err != nil {
+			t.Fatal(err)
+		}
+		var lists []struct {
+			ID int `json:"id"`
+		}
+		json.Unmarshal(m["lists"], &lists)
+		ids := []int{}
+		for _, l := range lists {
+			ids = append(ids, l.ID)
+		}
+		return camp, ids
+	}
+	orig, ids := campOf(nil)
+	if got := LegacyBundleHash(orig, ids, orig.Name); got != legacyHash {
+		t.Fatalf("LegacyBundleHash = %s, want %s", got, legacyHash)
+	}
+	renamed, rids := campOf(map[string]json.RawMessage{"name": json.RawMessage(`"Renamed"`)})
+	if got := BundleHash(renamed, rids); got != pinnedHash {
+		t.Fatalf("a rename moved BundleHash: %s", got)
+	}
+	if got := LegacyBundleHash(renamed, rids, orig.Name); got != legacyHash {
+		t.Fatalf("legacy with the name at review = %s, want %s", got, legacyHash)
+	}
+	if got := LegacyBundleHash(renamed, rids, renamed.Name); got == legacyHash {
+		t.Fatal("legacy with the new name matched the old hash")
+	}
+	for _, patch := range []map[string]json.RawMessage{
+		{"subject": json.RawMessage(`"x"`)}, {"body": json.RawMessage(`"x"`)}, {"lists": json.RawMessage(`[{"id": 1}]`)},
+	} {
+		c, l := campOf(patch)
+		if BundleHash(c, l) == pinnedHash || LegacyBundleHash(c, l, orig.Name) == legacyHash {
+			t.Fatalf("a content/list change %v left a hash unchanged", patch)
+		}
 	}
 }
 

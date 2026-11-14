@@ -241,7 +241,15 @@ type Queries struct {
 	UpsertSystemHealth     *sqlx.Stmt `query:"upsert-system-health"`
 	GetSystemHealthHistory *sqlx.Stmt `query:"get-system-health-history"`
 
+	// Fork (naming standard) -- queries/naming.sql, NAMING-STANDARD-SPEC §4.2.
+	RecordFormerName *sqlx.Stmt `query:"record-former-name"`
+	GetFormerName    *sqlx.Stmt `query:"get-former-name"`
+	RenameCampaign   *sqlx.Stmt `query:"rename-campaign"`
+	RenameList       *sqlx.Stmt `query:"rename-list"`
+	RenameTemplate   *sqlx.Stmt `query:"rename-template"`
+
 	// Fork (campaign review) -- queries/reviews.sql, CAMPAIGN-INSPECT-SPEC D5.
+	GetCampaignReviewCurrent     *sqlx.Stmt `query:"get-campaign-review-current"`
 	InsertCampaignReview         *sqlx.Stmt `query:"insert-campaign-review"`
 	UpdateCampaignReviewProgress *sqlx.Stmt `query:"update-campaign-review-progress"`
 	UpdateCampaignReviewResult   *sqlx.Stmt `query:"update-campaign-review-result"`

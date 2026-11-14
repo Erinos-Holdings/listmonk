@@ -1,0 +1,21 @@
+{
+  "comment": "The language toggle's ONE predicate (integrations listmonk/NAMING-STANDARD-SPEC D2, I12): toggle '' (All) matches everything; a language matches campaigns in that language AND every campaign with no language (lang null = attribs without the key; '' = an empty value). Read by frontend/src/naming.test.mjs (naming.mjs::langMatches) and by cmd/campaigns_test.go (the query-campaigns lang predicate) -- change both together.",
+  "cases": [
+    { "toggle": "",   "lang": "en", "match": true },
+    { "toggle": "",   "lang": "fr", "match": true },
+    { "toggle": "",   "lang": null, "match": true },
+    { "toggle": "en", "lang": "en", "match": true },
+    { "toggle": "en", "lang": "fr", "match": false },
+    { "toggle": "en", "lang": null, "match": true },
+    { "toggle": "en", "lang": "",   "match": true },
+    { "toggle": "fr", "lang": "fr", "match": true },
+    { "toggle": "fr", "lang": "es", "match": false },
+    { "toggle": "fr", "lang": "en", "match": false },
+    { "toggle": "fr", "lang": null, "match": true },
+    { "toggle": "es", "lang": "es", "match": true },
+    { "toggle": "de", "lang": "de", "match": true },
+    { "toggle": "de", "lang": "it", "match": false },
+    { "toggle": "it", "lang": "it", "match": true },
+    { "toggle": "it", "lang": "",   "match": true }
+  ]
+}
