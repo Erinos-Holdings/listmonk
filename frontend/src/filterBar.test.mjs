@@ -38,7 +38,9 @@ test("a page's own language (langText) replaces the global one", () => {
     selection: BNKD, lang: 'en', brands: BRANDS, langText: 'Spanish',
   }), 'BNKD Wellness · Spanish');
   // '' (route lang all): no language, even with the toggle on ES.
-  assert.equal(filterCaption({ selection: BNKD, lang: 'es', brands: BRANDS, langText: '' }), 'BNKD Wellness');
+  assert.equal(filterCaption({
+    selection: BNKD, lang: 'es', brands: BRANDS, langText: '',
+  }), 'BNKD Wellness');
   assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'all', langText: 'No language' }), 'No language');
 });
 
