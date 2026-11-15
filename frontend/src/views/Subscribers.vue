@@ -4,23 +4,15 @@
       <div class="column is-10">
         <h1 class="title is-4">
           {{ $t('globals.terms.subscribers') }}
+          <!-- SUBSCRIBERS-FILTERS-SPEC D7 -- every displayed count with thousands separators. -->
           <span v-if="!isNaN(subscribers.total)">
-            (<span data-cy="count">{{ subscribers.total }}</span>)
+            (<span data-cy="count">{{ $utils.formatNumber(subscribers.total) }}</span>)
           </span>
           <span v-if="currentList">
             &raquo; {{ currentList.name }}
             <span v-if="queryParams.subStatus" class="has-text-grey has-text-weight-normal is-capitalized">({{
               queryParams.subStatus }})</span>
           </span>
-          <!-- Fork (list grid, LIST-GRID-SPEC D8). The Lists-page grid's segment filter. It rides
-          every query, page, sort, export and select-all bulk request until removed. The language
-          half of that filter is the picker inside the search field (LIST-COLLAPSE-SPEC C11) --
-          one control per fact. -->
-          <b-taglist v-if="queryParams.segment" class="grid-filter is-inline-flex ml-2">
-            <b-tag closable attached type="is-light" data-cy="chip-segment" @close="clearGridFilter('segment')">
-              {{ $t(`lists.grid.${queryParams.segment}`) }}
-            </b-tag>
-          </b-taglist>
         </h1>
       </div>
       <div class="column has-text-right">
@@ -38,32 +30,38 @@
       :kind="$tc('globals.terms.list', 1).toLowerCase()" />
 
     <section class="subscribers-controls">
+      <!-- Fork (Subscribers filters, integrations SUBSCRIBERS-FILTERS-SPEC D4-D6) -- Lists ▾ ·
+           Status ▾ · search, the Campaigns page's controls layout. Both dropdowns WRITE THE ROUTE
+           AND NOTHING ELSE (:value + @input, never v-model on queryParams): the route stays the
+           page's single source of the filter, the router guard corrects it before the page mounts
+           (subscriberFilters.mjs::subscribersRouteFix), and the language is the navbar toggle's. -->
       <div class="columns">
-        <div class="column is-8">
+        <div class="column is-narrow">
+          <b-field grouped>
+            <!-- D4 -- the lists of the brand scope, system lists grouped last; disabled under All
+                 brands unless the route already names a list (then All lists + that list). -->
+            <b-select data-cy="select-list" :aria-label="$t('subscribers.listFilter')"
+              :value="queryParams.listID || null" :disabled="!listOpts.enabled" @input="onListSelect">
+              <option :value="null">{{ $t('subscribers.allLists') }}</option>
+              <option v-for="l in listOpts.ordinary" :key="l.id" :value="l.id">{{ l.name }}</option>
+              <optgroup v-if="listOpts.system.length" :label="$t('subscribers.systemLists')">
+                <option v-for="l in listOpts.system" :key="l.id" :value="l.id">{{ l.name }}</option>
+              </optgroup>
+              <option v-if="listOpts.extra" :value="listOpts.extra.id">{{ listOpts.extra.name }}</option>
+            </b-select>
+            <!-- D5 -- a status is a status OF a list: enabled only when the route names one. -->
+            <b-select data-cy="select-status" :aria-label="$t('subscribers.statusFilter')"
+              :title="statusOn ? null : $t('subscribers.statusFilter')"
+              :value="statusOn ? (queryParams.segment || '') : ''" :disabled="!statusOn" @input="onStatusSelect">
+              <option value="">{{ $t('subscribers.allStatuses') }}</option>
+              <option v-for="s in segments" :key="s" :value="s">{{ $t(`lists.grid.${s}`) }}</option>
+            </b-select>
+          </b-field>
+        </div>
+        <div class="column is-6">
           <form @submit.prevent="onSubmit">
             <div>
               <b-field addons>
-                <!-- Fork (LIST-COLLAPSE-SPEC C8). The language filter, inline to the left of the
-                search, and the only path to the no-language residue now that the Lists grid's
-                suffix link is gone. It WRITES THE ROUTE AND NOTHING ELSE: :value + @input,
-                never v-model / .sync on queryParams.lang, which keeps its single writer (route
-                hydration) and single request reader (gridFilter). "English" is STORED en
-                (lang=en_only), disjoint from "No language"; the Lists grid's EN cells link to
-                lang=en -- the send language, en plus none -- which arrives here as the extra
-                option below. -->
-                <b-select v-if="showLangPicker" data-cy="select-lang" :title="extraLangTitle"
-                  :aria-label="$t('subscribers.langFilter')" :value="queryParams.lang || ''" @input="onLangSelect">
-                  <option value="">{{ $t('subscribers.langAll') }}</option>
-                  <option value="en_only">{{ langLabel('en') }}</option>
-                  <option value="none">{{ $t('lists.grid.noLangChip') }}</option>
-                  <option v-for="l in langOptions" :key="l" :value="l">{{ langLabel(l) }}</option>
-                  <!-- A route value outside the set (a grid EN cell's lang=en; the grid's Other
-                  line; a hand-typed ?lang=pt, which the server 400s) is appended as one extra
-                  option, so the select is never blank and "All languages" always recovers. -->
-                  <option v-if="extraLang" :value="extraLang" :title="extraLangTitle">
-                    {{ extraLangLabel }}
-                  </option>
-                </b-select>
                 <b-input @input="onSimpleQueryInput" v-model="queryInput" expanded
                   :placeholder="$t('subscribers.queryPlaceholder')" icon="magnify" ref="query"
                   :disabled="isSearchAdvanced" data-cy="search" />
@@ -134,11 +132,11 @@
               <b-icon icon="account-off-outline" size="is-small" /> Blocklist
             </a>
             <span class="a">
-              {{ $t('globals.messages.numSelected', { num: numSelectedSubscribers }) }}
+              {{ $t('globals.messages.numSelected', { num: $utils.formatNumber(numSelectedSubscribers) }) }}
               <span v-if="!bulk.all && subscribers.total > subscribers.perPage && !byQueryBusy">
                 &mdash;
                 <a href="#" @click.prevent="selectAllSubscribers">
-                  {{ $t('globals.messages.selectAll', { num: subscribers.total }) }}
+                  {{ $t('globals.messages.selectAll', { num: $utils.formatNumber(subscribers.total) }) }}
                 </a>
               </span>
             </span>
@@ -266,23 +264,19 @@ import { uris, MANAGE_PREFS_URL } from '../constants';
 import SubscriberBulkList from './SubscriberBulkList.vue';
 import SubscriberForm from './SubscriberForm.vue';
 import CopyText from '../components/CopyText.vue';
-import {
-  CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
-} from '../langs';
+import { campaignLangLabel, sendLangLabel } from '../langs';
 import {
   effectiveListIds, filterByIds, gridFilterOf, scopeUnion, subscriberExportParams, subscriberQueryBody,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
   answeredFilter, bulkTarget, byQueryLangNote, langParam, routeLangLabel, subscriberResponseCurrent,
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
-import { captionLangName } from '../filterBar.mjs'; // eslint-disable-line import/extensions
+import { subscriberCaptionLang } from '../filterBar.mjs'; // eslint-disable-line import/extensions
+import {
+  SEGMENTS, listOptions, listRoute, statusEnabled, statusQuery,
+} from '../subscriberFilters.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
-
-// Fork (LIST-COLLAPSE-SPEC C11). The languages the picker offers after English (STORED en alone,
-// lang=en_only, its own option) and No language. For these four the stored and the send language
-// are the same set. Derived, so a new campaign language is one edit (langs.js), not two.
-const PICKER_LANGS = CAMPAIGN_LANGS.map((l) => l.code).filter((c) => c !== 'en');
 
 export default Vue.extend({
   components: {
@@ -315,6 +309,9 @@ export default Vue.extend({
       },
 
       queryInput: '',
+
+      // SUBSCRIBERS-FILTERS D5 -- the Status dropdown's segments.
+      segments: SEGMENTS,
 
       // Fork (global language, GLOBAL-LANG-SPEC D4, S2-1) -- the latest subscribers query this
       // page issued and the latest one answered; a response is applied only when it answers the
@@ -433,7 +430,7 @@ export default Vue.extend({
     onFormClose() {
       if (this.$route.params.id) {
         // GLOBAL-LANG stage 4 S4-3 -- the language the page was entered under (and only that)
-        // rides the push; subscriber -> subscribers is not an entry, so the guard adds nothing.
+        // rides the push (the guard, SUBSCRIBERS-FILTERS D3, would add the selection anyway).
         const query = typeof this.$route.query.lang === 'string' ? { lang: this.$route.query.lang } : {};
         this.$router.push({ name: 'subscribers', query });
       }
@@ -467,10 +464,10 @@ export default Vue.extend({
       this.querySubscribers({ page: 1 });
     },
 
-    // Fork (list grid). Removing a chip goes through the route: the router-view is keyed by
-    // fullPath, so the page reloads with the remaining filter and nothing can go on carrying
-    // the removed one (a bulk selection made under it is dropped with the page).
-    // The picker sits inside the search field, so the two read as one filter: every filter
+    // Fork (list grid; SUBSCRIBERS-FILTERS-SPEC D4/D5). Every filter change goes through the route:
+    // the router-view is keyed by fullPath, so the page reloads with the new filter and nothing can
+    // go on carrying the old one (a bulk selection made under it is dropped with the page).
+    // The dropdowns sit beside the search field, so they read as one filter: every filter
     // route push carries the CURRENT simple search text across its reload (mounted() reads it
     // back) -- set from the box each time, so a filter push never resurrects an older search=.
     // Submitting or clearing the box does NOT rewrite the route, so between pushes the URL's
@@ -484,16 +481,28 @@ export default Vue.extend({
       return search ? { ...rest, search } : rest;
     },
 
-    clearGridFilter(which) {
-      const query = { ...this.$route.query };
-      delete query[which];
-      this.$router.push({ path: this.$route.path, query: this.withRouteSearch(query) });
+    // SUBSCRIBERS-FILTERS D4 -- a list pick (null = All lists) through the one route builder, which
+    // drops the segment and the legacy subscription_status and keeps lang and the search.
+    onListSelect(id) {
+      const listId = id === null || id === '' ? null : Number(id);
+      if (listId === (this.queryParams.listID || null)) {
+        return;
+      }
+      this.$router.push(listRoute(this.withRouteSearch({ ...this.$route.query }), listId));
     },
 
-    // Fork (LIST-COLLAPSE-SPEC C8/C11). Same reload path as clearGridFilter: the page remounts
-    // with the new language. The simple search text is carried (withRouteSearch); an advanced
-    // query, the sort and the page number are discarded (they are not route state) along with
-    // any bulk selection made under the old filter.
+    // SUBSCRIBERS-FILTERS D5 -- a status pick ('' = All statuses) on the current list route.
+    onStatusSelect(segment) {
+      if ((segment || '') === (this.$route.query.segment || '')) {
+        return;
+      }
+      this.$router.push({ path: this.$route.path, query: this.withRouteSearch(statusQuery(this.$route.query, segment)) });
+    },
+
+    // Fork (LIST-COLLAPSE-SPEC C8/C11; since SUBSCRIBERS-FILTERS D3 the navbar toggle's): the page
+    // remounts with the new language. The simple search text is carried (withRouteSearch); an
+    // advanced query, the sort and the page number are discarded (they are not route state) along
+    // with any bulk selection made under the old filter.
     onLangSelect(lang) {
       const query = { ...this.$route.query };
       if (lang) {
@@ -502,10 +511,6 @@ export default Vue.extend({
         delete query.lang;
       }
       this.$router.push({ path: this.$route.path, query: this.withRouteSearch(query) });
-    },
-
-    langLabel(code) {
-      return campaignLangLabel(code);
     },
 
     // Search / query subscribers.
@@ -559,8 +564,8 @@ export default Vue.extend({
       return note ? `${msg} ${note}` : msg;
     },
 
-    // A route lang value as the page's own picker names it (langScope.mjs::routeLangLabel, the one
-    // mapper shared with the navbar toggle; S4-7).
+    // A route lang value named for the by-query note (langScope.mjs::routeLangLabel, the one
+    // mapper; S4-7).
     routeLangLabel(l) {
       return routeLangLabel(l, {
         all: this.$t('subscribers.langAll'),
@@ -620,7 +625,7 @@ export default Vue.extend({
         };
       }
 
-      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmBlocklist', { num: this.numSelectedSubscribers }), body), fn);
+      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmBlocklist', { num: this.$utils.formatNumber(this.numSelectedSubscribers) }), body), fn);
     },
 
     exportSubscribers() {
@@ -640,7 +645,7 @@ export default Vue.extend({
         return;
       }
       const params = subscriberExportParams(filter, this.scopeListIds, ids);
-      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmExport', { num }), params), () => {
+      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmExport', { num: this.$utils.formatNumber(num) }), params), () => {
         const q = new URLSearchParams(params);
 
         document.location.href = `${uris.exportSubscribers}?${q.toString()}`;
@@ -667,7 +672,7 @@ export default Vue.extend({
             .then(() => {
               this.querySubscribers();
 
-              this.$utils.toast(this.$t('subscribers.subscribersDeleted', { num: this.numSelectedSubscribers }));
+              this.$utils.toast(this.$t('subscribers.subscribersDeleted', { num: this.$utils.formatNumber(this.numSelectedSubscribers) }));
             });
         };
       } else {
@@ -689,13 +694,13 @@ export default Vue.extend({
 
             this.$utils.toast(this.$t(
               'subscribers.subscribersDeleted',
-              { num: this.numSelectedSubscribers },
+              { num: this.$utils.formatNumber(this.numSelectedSubscribers) },
             ));
           });
         };
       }
 
-      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmDelete', { num: this.numSelectedSubscribers }), body), fn);
+      this.$utils.confirm(this.withLangNote(this.$t('subscribers.confirmDelete', { num: this.$utils.formatNumber(this.numSelectedSubscribers) }), body), fn);
     },
 
     bulkChangeLists(action, preconfirm, lists, backfill = false) {
@@ -753,10 +758,11 @@ export default Vue.extend({
   },
 
   watch: {
-    // Fork (global language, GLOBAL-LANG-SPEC D4) -- the navbar toggle changed while on the page:
-    // rewrite the route's lang (All removes it) exactly as the page's own picker does, so the page
-    // remounts under it. The route stays the page's single source of the filter.
-    langEffective(now) {
+    // Fork (global language, GLOBAL-LANG-SPEC D4; SUBSCRIBERS-FILTERS-SPEC D2/D3) -- the navbar
+    // toggle changed while on the page: rewrite the route's lang to the RAW selection (All removes
+    // it), so the page remounts under it; the router guard then sees agreeing values. The route
+    // stays the page's single source of the filter.
+    langSubscribers(now) {
       const want = langParam(now);
       if ((this.$route.query.lang || '') === want) {
         return;
@@ -776,12 +782,13 @@ export default Vue.extend({
     // by-query action can never act on a selection made under another scope. The simple search is
     // carried (withRouteSearch). On the plain subscribers route the push would be a duplicate
     // (same fullPath, no remount), so the page drops the same state itself and re-reads.
+    // SUBSCRIBERS-FILTERS D4 (I8) -- through the one route builder, which drops the list's segment.
     brandKey(now) {
       if (!this.brandChanged(now)) {
         return;
       }
       if (this.$route.name === 'subscribers_list') {
-        this.$router.push({ name: 'subscribers', query: this.withRouteSearch({ ...this.$route.query }) });
+        this.$router.push(listRoute(this.withRouteSearch({ ...this.$route.query }), null));
         return;
       }
       this.isBulkListFormVisible = false;
@@ -792,7 +799,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['subscribers', 'lists', 'loading', 'serverConfig']),
+    ...mapState(['subscribers', 'lists', 'loading']),
 
     // Fork (list grid, LIST-GRID-SPEC D7). THE one place the segment/lang filter is read for a
     // request. Every read and every select-all write spreads it, so a by-query delete,
@@ -802,7 +809,19 @@ export default Vue.extend({
       return gridFilterOf(this.queryParams);
     },
 
-    ...mapGetters(['langEffective']),
+    // SUBSCRIBERS-FILTERS D2 -- the raw selection (subscriber-only languages included); every other
+    // view reads langEffective.
+    ...mapGetters(['langSubscribers']),
+
+    // SUBSCRIBERS-FILTERS D4 -- the Lists dropdown's options and enablement.
+    listOpts() {
+      return listOptions(this.lists, this.brandSelection, this.queryParams.listID);
+    },
+
+    // D5 -- the Status dropdown is enabled only on a list route.
+    statusOn() {
+      return statusEnabled(this.queryParams.listID);
+    },
 
     // GLOBAL-LANG D4 (S2-1) -- true while the rows on screen may not answer the latest query: the
     // store's loading flag, or a query of this page still unanswered. The export and every
@@ -822,47 +841,14 @@ export default Vue.extend({
       return byQueryLangNote(gridFilterOf(filter), (l) => this.$t('naming.byQueryLang', { lang: this.routeLangLabel(l) }));
     },
 
-    // Polish 2026-11-14 -- the filter caption's language: the route's lang (the page's own filter),
-    // English names (filterBar.mjs::captionLangName); en_only and en both read "English".
+    // Polish 2026-11-14 -- the filter caption's language: the route's lang (the page's own filter).
+    // SUBSCRIBERS-FILTERS D8 (I13): English+ / English / Other / No language / the English name
+    // (filterBar.mjs::subscriberCaptionLang).
     captionLang() {
-      return routeLangLabel(this.queryParams.lang, {
-        all: '',
+      return subscriberCaptionLang(this.queryParams.lang, {
         none: this.$t('lists.grid.noLangChip'),
         other: this.$t('lists.grid.other'),
-        name: captionLangName,
-        sendName: captionLangName,
       });
-    },
-
-    // Fork (LIST-COLLAPSE-SPEC C8). Shown when languages are on, or when the route carries one
-    // (so a lang= link stays visible and clearable even with app.lang_enable off).
-    showLangPicker() {
-      return this.serverConfig.lang_enabled || !!this.queryParams.lang;
-    },
-
-    langOptions() {
-      return PICKER_LANGS;
-    },
-
-    // A route lang that is not one of the picker's own options.
-    extraLang() {
-      const l = this.queryParams.lang;
-      if (!l || l === 'en_only' || l === 'none' || PICKER_LANGS.includes(l)) {
-        return null;
-      }
-      return l;
-    },
-
-    extraLangTitle() {
-      return isSendPlus(this.extraLang) ? this.$t('langs.sendPlusHelp') : null;
-    },
-
-    extraLangLabel() {
-      // Arrived from a grid EN+ cell: the send language, en plus no-language.
-      if (isSendPlus(this.extraLang)) {
-        return sendLangLabel(this.extraLang);
-      }
-      return this.extraLang === 'other' ? this.$t('lists.grid.other') : this.extraLang;
     },
 
     numSelectedSubscribers() {
@@ -918,7 +904,8 @@ export default Vue.extend({
     if (this.$route.query.subscription_status) {
       this.queryParams.subStatus = this.$route.query.subscription_status;
     }
-    // Fork (list grid). Unknown values are passed through and refused by the server (400).
+    // Fork (list grid). SUBSCRIBERS-FILTERS D3 -- the router guard has already dropped a segment
+    // without a list or outside the five, and a lang the toggle cannot hold, so both are read as is.
     if (this.$route.query.segment) {
       this.queryParams.segment = this.$route.query.segment;
     }

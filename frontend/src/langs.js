@@ -14,8 +14,9 @@ export const CAMPAIGN_LANGS = [
 // the Lists grid's EN line counts them. Every label that means the send audience carries a "+"
 // -- English+ / EN+ -- by DEFINITION, whether or not a given list has any no-language rows, so
 // the same word never means two audiences. Labels that mean the stored/content language stay
-// bare: a template's language, and the Subscribers picker's "English" (lang=en_only). Each "+"
-// label carries the langs.sendPlusHelp title.
+// bare: a template's language, and the navbar toggle's "EN" (lang=en_only, stored English;
+// SUBSCRIBERS-FILTERS-SPEC D1 -- the toggle's EN+ is the send language). Each "+" label carries
+// the langs.sendPlusHelp title.
 export const SEND_PLUS_LANG = 'en';
 export const isSendPlus = (code) => (code || '').toLowerCase() === SEND_PLUS_LANG;
 

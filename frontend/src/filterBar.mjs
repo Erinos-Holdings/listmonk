@@ -18,6 +18,21 @@ export const CAPTION_LANG_NAMES = Object.freeze({
 });
 export const captionLangName = (code) => CAPTION_LANG_NAMES[(code || '').toLowerCase()] || '';
 
+// SUBSCRIBERS-FILTERS-SPEC D8 (I13) -- the Subscribers page's own caption language, named from its
+// route lang: '' / all -> '' (no language), en -> English+ (the send language), en_only -> English
+// (stored), other / none -> the caller's labels ({ other, none }, default Other / No language), a
+// code -> its English name. CAPTION_LANG_NAMES is untouched: the global caption under en is
+// "English".
+export function subscriberCaptionLang(v, labels = {}) {
+  const l = typeof v === 'string' ? v.toLowerCase() : '';
+  if (!l || l === 'all') return '';
+  if (l === 'en') return `${captionLangName('en')}+`;
+  if (l === 'en_only') return captionLangName('en');
+  if (l === 'other') return labels.other || 'Other';
+  if (l === 'none') return labels.none || 'No language';
+  return captionLangName(l);
+}
+
 // filterCaption -> the caption text, '' when nothing applies. selection: the resolved brand selection
 // ({ kind: all | brand | none, slug }); lang: the effective language ('all' while the toggle is
 // hidden); brands: the GET /api/brands rows (display names); noBrand: the "No brand" label;
@@ -40,7 +55,9 @@ export function filterCaption({
     return parts.join(CAPTION_SEPARATOR);
   }
   const g = normalizeLang(lang);
-  if (ap.lang && g !== 'all') {
+  // A value with no English name (a subscriber-only language, which langEffective never passes)
+  // names nothing.
+  if (ap.lang && g !== 'all' && captionLangName(g)) {
     parts.push(captionLangName(g));
   }
   return parts.join(CAPTION_SEPARATOR);

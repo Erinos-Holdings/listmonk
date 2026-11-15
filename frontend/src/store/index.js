@@ -5,7 +5,9 @@ import Utils from '../utils';
 import {
   ALL, applyLaunch, launchApplies, normalizeLaunch, resolveSelection, rosterFrom, scopeListIds, selectionLoaded,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
-import { LANG_PREF, effectiveLang, normalizeLang } from '../langScope.mjs'; // eslint-disable-line import/extensions
+import {
+  LANG_PREF, effectiveLang, normalizeLang, subscribersLang,
+} from '../langScope.mjs'; // eslint-disable-line import/extensions
 
 Vue.use(Vuex);
 
@@ -95,7 +97,9 @@ export default new Vuex.Store({
     },
 
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle's change: the store and
-    // the pref, no reload. The `brand.lang` pref's one writer; only LanguageToggle.vue calls it.
+    // the pref, no reload. The `brand.lang` pref's one writer. Two callers: LanguageToggle.vue and
+    // the router guard in main.js (SUBSCRIBERS-FILTERS-SPEC D3.3 -- a Subscribers route arriving
+    // with another toggle language sets the selection).
     selectLang(state, lang) {
       const v = normalizeLang(lang);
       state.langStored = v;
@@ -189,11 +193,16 @@ export default new Vuex.Store({
     // A primitive the pages watch: it changes only when the resolved selection does (a lists
     // refresh that leaves the selection as it was does not re-fire a page's fetch).
     brandKey: (state, getters) => (getters.brandScope.pending ? 'pending' : JSON.stringify(getters.brandSelection)),
-    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- 'all' | 'en' | 'es' | 'fr' | 'de' | 'it'.
+    // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- one of naming.mjs::LANG_VALUES (the raw
+    // toggle value; read only by the toggle itself, SUBSCRIBERS-FILTERS-SPEC I3).
     langSelection: (state) => normalizeLang(state.langStored),
     // Fork (global language, GLOBAL-LANG-SPEC D1) -- the selection the views apply: All while
-    // app.lang_enable is off (the toggle is hidden; there are no languages to filter).
+    // app.lang_enable is off (the toggle is hidden; there are no languages to filter), and All for
+    // a subscriber-only language (SUBSCRIBERS-FILTERS D2; the fold lives in effectiveLang).
     langEffective: (state) => effectiveLang(state.langStored, state[models.serverConfig]),
+    // Fork (SUBSCRIBERS-FILTERS D2) -- the raw selection the Subscribers page and the router guard
+    // apply: the normalised value while the toggle is visible, else All.
+    langSubscribers: (state) => subscribersLang(state.langStored, state[models.serverConfig]),
     viewPane: (state) => state.viewPane,
   },
 

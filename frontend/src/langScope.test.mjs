@@ -1,18 +1,132 @@
 // Fork (global language filter) -- integrations listmonk/GLOBAL-LANG-SPEC I1, I2, I3, I4, I4c and
 // I6: langScope.mjs -- the applicability table covers the router exactly, its states per view
 // (panes and the Subscribers route-wins case), the note only when filtered, the toggle hidden with
-// languages off, the Subscribers entry redirect, the stale-response check and the by-query note.
+// languages off, the stale-response check and the by-query note; SUBSCRIBERS-FILTERS-SPEC I1-I4, I6
+// and I14 (the toggle's values, the fold, the raw-selection readers, the grey line, the guard
+// wiring, the labels).
 // Run: node --test src/langScope.test.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import {
-  APPLICABILITY_STATES, LANG_APPLICABILITY, SUBSCRIBER_ROUTES, byQueryLangNote, effectiveLang, langApplicability,
-  langEntryRedirect, langNote, langToggleVisible, routeLangLabel, subscriberResponseCurrent, viewPaneValue,
-  answeredFilter, bulkTarget,
+  APPLICABILITY_STATES, LANG_APPLICABILITY, LANG_VALUES, SUBSCRIBER_ONLY_LANGS, SUBSCRIBER_ROUTES, byQueryLangNote,
+  effectiveLang, langApplicability, langLabel, langNote, langNoteLabel, langToggleVisible, routeLangLabel,
+  subscriberResponseCurrent, subscribersLang, viewPaneValue, answeredFilter, bulkTarget,
 } from './langScope.mjs'; // eslint-disable-line import/extensions
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+const ON = { lang_enabled: true };
+const OFF = { lang_enabled: false };
+
+// SUBSCRIBERS-FILTERS-SPEC I1 -- the toggle's values are exactly the server's subscriber lang= filter
+// values (models.IsSubscriberLangFilter: CampaignLangs + the three SubscriberLang* constants) plus
+// all, in D1 order. Read from the fork's Go source so the two cannot drift.
+test('toggle values = server lang filter + all', () => {
+  assert.deepEqual([...LANG_VALUES], ['all', 'en', 'en_only', 'es', 'fr', 'de', 'it', 'other', 'none']);
+  const campaigns = read('../../models/campaigns.go');
+  const m = campaigns.match(/var CampaignLangs = \[\]string\{([^}]*)\}/);
+  assert.ok(m, 'CampaignLangs not found');
+  const codes = [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+  const lists = read('../../models/lists.go');
+  const consts = ['SubscriberLangNone', 'SubscriberLangOther', 'SubscriberLangEnOnly'].map((n) => {
+    const c = lists.match(new RegExp(`\\b${n}\\s*=\\s*"([^"]+)"`));
+    assert.ok(c, n);
+    return c[1];
+  });
+  const server = new Set([...codes, ...consts]);
+  assert.deepEqual(new Set(LANG_VALUES.filter((v) => v !== 'all')), server);
+  assert.deepEqual(new Set(SUBSCRIBER_ONLY_LANGS), new Set(consts));
+});
+
+// I2.
+test('effectiveLang folds subscriber-only languages', () => {
+  LANG_VALUES.forEach((v) => {
+    const want = SUBSCRIBER_ONLY_LANGS.includes(v) ? 'all' : v;
+    assert.equal(effectiveLang(v, ON), want, v);
+    assert.equal(effectiveLang(v, OFF), 'all', v);
+    // The raw selection Subscribers applies: verbatim while visible, All when hidden.
+    assert.equal(subscribersLang(v, ON), v, v);
+    assert.equal(subscribersLang(v, OFF), 'all', v);
+  });
+  assert.equal(effectiveLang('pt', ON), 'all');
+  assert.equal(subscribersLang('pt', ON), 'all');
+  // The store's getters are these two functions (the fold has one home).
+  const store = read('./store/index.js');
+  assert.match(store, /langEffective: \(state\) => effectiveLang\(state\.langStored, state\[models\.serverConfig\]\)/);
+  assert.match(store, /langSubscribers: \(state\) => subscribersLang\(state\.langStored, state\[models\.serverConfig\]\)/);
+});
+
+// I3 -- only the toggle, the store, the guard and the Subscribers page read the raw selection.
+test('only Subscribers reads the raw selection', () => {
+  const root = new URL('./', import.meta.url).pathname;
+  const allowed = new Set(['views/Subscribers.vue', 'components/LanguageToggle.vue', 'store/index.js', 'main.js']);
+  const files = [];
+  const walk = (dir) => readdirSync(dir).forEach((f) => {
+    const p = `${dir}${f}`;
+    if (statSync(p).isDirectory()) {
+      walk(`${p}/`);
+    } else if (/\.(js|mjs|vue)$/.test(f) && !/\.test\.mjs$/.test(f)) {
+      files.push(p.slice(root.length));
+    }
+  });
+  walk(root);
+  assert.ok(files.length > 50, `found ${files.length} files`);
+  const needles = ["'langSelection'", "'langSubscribers'", 'getters.langSelection', 'getters.langSubscribers'];
+  files.filter((f) => !allowed.has(f)).forEach((f) => {
+    const src = readFileSync(`${root}${f}`, 'utf8');
+    needles.forEach((n) => assert.ok(!src.includes(n), `${f} reads ${n}`));
+  });
+  // And the four that may, do.
+  assert.match(read('./views/Subscribers.vue'), /mapGetters\(\['langSubscribers'\]\)/);
+  assert.match(read('./components/LanguageToggle.vue'), /mapGetters\(\['langSelection'/);
+  assert.match(read('./main.js'), /store\.getters\.langSubscribers/);
+});
+
+// I4 -- a subscriber-only selection reads grey with the Subscribers-only description on every
+// non-Subscribers route (panes included), and applies on the Subscribers routes.
+test('subscriber-only selection is grey off Subscribers', () => {
+  SUBSCRIBER_ONLY_LANGS.forEach((sel) => {
+    Object.keys(LANG_APPLICABILITY).forEach((r) => {
+      const panes = LANG_APPLICABILITY[r].panes ? Object.keys(LANG_APPLICABILITY[r].panes) : [''];
+      panes.forEach((p) => {
+        const a = langApplicability(r, { selection: sel, pane: p ? viewPaneValue(LANG_APPLICABILITY[r].view, p) : '' });
+        if (SUBSCRIBER_ROUTES.includes(r)) {
+          assert.deepEqual(a, { state: 'all', desc: 'naming.langApp.subscribersStored' }, `${r} ${sel}`);
+        } else {
+          assert.deepEqual(a, { state: 'none', desc: 'naming.langApp.subscribersOnly' }, `${r}:${p} ${sel}`);
+        }
+      });
+    });
+    assert.deepEqual(langApplicability('nope', { selection: sel }), { state: 'none', desc: 'naming.langApp.subscribersOnly' });
+  });
+  // The toggle reads it with the raw selection.
+  assert.match(read('./components/LanguageToggle.vue'), /langApplicability\(r\.name, \{ pane: this\.viewPane, selection: this\.langSelection \}\)/);
+});
+
+// I14 -- button labels (pure, translations passed in) and the note's {lang}.
+test('labels', () => {
+  const labels = { all: 'Tout', other: 'Autre', none: 'Aucune' };
+  assert.deepEqual(LANG_VALUES.map((v) => langLabel(v, labels)), ['Tout', 'EN+', 'EN', 'ES', 'FR', 'DE', 'IT', 'Autre', 'Aucune']);
+  assert.deepEqual(LANG_VALUES.map((v) => langLabel(v)), ['All', 'EN+', 'EN', 'ES', 'FR', 'DE', 'IT', 'Other', 'None']);
+  assert.equal(langLabel('fr', 'All'), 'FR'); // the older string signature
+  assert.equal(langLabel('pt', labels), 'Tout');
+  // The note: EN+ on Subscribers, bare EN elsewhere; every other value as its button.
+  assert.equal(langNoteLabel('en', true), 'EN+');
+  assert.equal(langNoteLabel('en', false), 'EN');
+  assert.equal(langNoteLabel('en_only', false), 'EN');
+  assert.equal(langNoteLabel('none', false, labels), 'Aucune');
+  assert.equal(langNoteLabel('fr', true), 'FR');
+  // The note keys: send language for a toggle code, stored language for a subscriber-only value.
+  ['en', 'es', 'fr', 'de', 'it'].forEach((v) => assert.equal(langApplicability('subscribers', { selection: v }).desc, 'naming.langApp.subscribers'));
+  const en = JSON.parse(read('../../i18n/en.json'));
+  assert.equal(en['naming.langApp.subscribers'], '{lang}: subscribers by send language');
+  assert.equal(en['naming.langApp.subscribersStored'], '{lang}: subscribers by stored language');
+  assert.match(en['naming.langApp.subscribersOnly'], /applies to Subscribers only/);
+  ['naming.langOther', 'naming.langNone'].forEach((k) => assert.ok(en[k], k));
+  const toggle = read('./components/LanguageToggle.vue');
+  assert.match(toggle, /return langLabel\(v, this\.labels\(\)\);/);
+  assert.match(toggle, /langNoteLabel\(lang, this\.onSubscribers, this\.labels\(\)\)/);
+});
 
 // Stage 4 S4-7 -- the one label mapper of a Subscribers route language value.
 test('route language label', () => {
@@ -28,20 +142,27 @@ test('route language label', () => {
   assert.equal(routeLangLabel('en', labels), 'en+');
   assert.equal(routeLangLabel('fr', labels), 'Français');
   assert.equal(routeLangLabel('pt', labels), 'pt');
-  // Both screens use it.
+  // The by-query note of Subscribers uses it (the toggle's page-filter line is retired,
+  // SUBSCRIBERS-FILTERS D3).
   assert.match(read('./views/Subscribers.vue'), /return routeLangLabel\(l, \{/);
-  assert.match(read('./components/LanguageToggle.vue'), /return routeLangLabel\(v, \{/);
 });
 
 // Stage 4 S4-4 -- the wiring the pure tests cannot see (I4's and I4c's enforcement points, I6's
 // call sites, D4's busy guards); each pin fails if its call is reverted.
 test('global language wiring', () => {
+  // SUBSCRIBERS-FILTERS I6 -- both sites decide through subscribersRouteFix with the raw selection
+  // (langSubscribers), commit commitLang before the navigation proceeds, and replace.
   const main = read('./main.js');
+  const fixAt = main.indexOf('function subscribersFixOf(');
+  const fixFn = main.slice(fixAt, main.indexOf('\n}\n', fixAt));
+  assert.match(fixFn, /subscribersRouteFix\(to, store\.getters\.langSubscribers, langToggleVisible\(store\.state\.serverConfig\)\)/);
+  assert.match(fixFn, /if \(fix\.commitLang\) \{\s*store\.commit\('selectLang', fix\.commitLang\);\s*\}\s*return fix\.query \?/);
+  assert.match(fixFn, /replace: true/);
+  assert.doesNotMatch(main, /langEntryRedirect/);
   const guard = main.slice(main.indexOf('router.beforeEach('), main.indexOf('router.afterEach('));
-  assert.match(guard, /langEntryRedirect\(to, from, store\.getters\.langEffective\)/);
-  assert.match(guard, /next\(langRedirect\)/);
+  assert.match(guard, /if \(langConfigReady\) \{\s*const langRedirect = subscribersFixOf\(to\);\s*if \(langRedirect\) \{\s*next\(langRedirect\);/);
   const init = main.slice(main.indexOf('async function initConfig('), main.indexOf('app.$mount('));
-  assert.match(init, /langEntryRedirect\(landed, null, store\.getters\.langEffective\)/);
+  assert.match(init, /langConfigReady = true;\s*const landed = router\.currentRoute;\s*const langRedirect = subscribersFixOf\(landed\);/);
   assert.match(init, /router\.replace\(langRedirect\)/);
 
   const api = read('./api/index.js');
@@ -72,7 +193,7 @@ test('global language wiring', () => {
   assert.match(subs, /bulkListLangNote\(\) \{[\s\S]*?byQueryLangNote\(gridFilterOf\(filter\),/);
   assert.match(read('./views/SubscriberBulkList.vue'), /<p v-if="langNote"/);
   // The toggle rewrites the route; the read query goes through gridFilterOf.
-  assert.match(subs, /langEffective\(now\) \{[\s\S]*?this\.onLangSelect\(want\);/);
+  assert.match(subs, /langSubscribers\(now\) \{[\s\S]*?this\.onLangSelect\(want\);/);
   assert.match(subs, /gridFilter\(\) \{\s*return gridFilterOf\(this\.queryParams\);/);
 
   // Stage 4b S4b-3 -- the round-1 fixes, each revertible only by failing here.
@@ -164,19 +285,18 @@ test('applicability table', () => {
   const matrixDesc = langApplicability('brands', { pane: 'brands:matrix' }).desc;
   assert.notEqual(matrixDesc, langApplicability('brands', { pane: 'brands:usage' }).desc);
 
-  // The three Subscribers routes: all when the route's lang is the selection's parameter, else
-  // partial with the page filter -- the route wins.
+  // The three Subscribers routes: the selection applies (SUBSCRIBERS-FILTERS D3 -- the guard makes
+  // the route agree before mount, so there is no page-filter state): by send language for a toggle
+  // code, by stored language for a subscriber-only value.
   SUBSCRIBER_ROUTES.forEach((r) => {
-    assert.deepEqual(langApplicability(r, { query: { lang: 'es' }, selection: 'es' }), { state: 'all', desc: 'naming.langApp.subscribers' });
-    assert.deepEqual(langApplicability(r, { query: {}, selection: 'all' }), { state: 'all', desc: 'naming.langApp.subscribers' });
-    const page = (pageLang) => ({ state: 'partial', desc: 'naming.langApp.pageFilter', pageLang });
-    assert.deepEqual(langApplicability(r, { query: {}, selection: 'es' }), page('all'));
-    assert.deepEqual(langApplicability(r, { query: { lang: 'none' }, selection: 'es' }), page('none'));
-    assert.deepEqual(langApplicability(r, { query: { lang: 'fr' }, selection: 'all' }), page('fr'));
-    // EN is the send language en; the stored-English en_only is a different filter.
-    assert.equal(langApplicability(r, { query: { lang: 'en' }, selection: 'en' }).state, 'all');
-    assert.equal(langApplicability(r, { query: { lang: 'en_only' }, selection: 'en' }).state, 'partial');
+    ['all', 'en', 'es', 'fr', 'de', 'it'].forEach((sel) => {
+      assert.deepEqual(langApplicability(r, { selection: sel }), { state: 'all', desc: 'naming.langApp.subscribers' }, `${r} ${sel}`);
+    });
+    SUBSCRIBER_ONLY_LANGS.forEach((sel) => {
+      assert.deepEqual(langApplicability(r, { selection: sel }), { state: 'all', desc: 'naming.langApp.subscribersStored' });
+    });
   });
+  assert.doesNotMatch(read('./langScope.mjs'), /pageFilter|pageLang/);
 
   // Every entry's state is one of the three, every description an i18n key.
   Object.keys(LANG_APPLICABILITY).forEach((r) => {
@@ -192,13 +312,11 @@ test('note only when filtered', () => {
   assert.equal(langNote('all', a), null);
   assert.equal(langNote(undefined, a), null);
   assert.deepEqual(langNote('es', a), { key: 'naming.langApp.dashboard', lang: 'es' });
-  const p = langApplicability('subscribers', { query: { lang: 'none' }, selection: 'es' });
-  assert.deepEqual(langNote('es', p), { key: 'naming.langApp.pageFilter', lang: 'es', pageLang: 'none' });
-  // Stage 4 S4-5: under All, a page whose own language filter differs (a lang=fr link) still shows
-  // its page-filter line; an unfiltered page under All shows none.
-  const frUnderAll = langApplicability('subscribers', { query: { lang: 'fr' }, selection: 'all' });
-  assert.deepEqual(langNote('all', frUnderAll), { key: 'naming.langApp.pageFilter', lang: 'all', pageLang: 'fr' });
-  assert.equal(langNote('all', langApplicability('subscribers', { query: {}, selection: 'all' })), null);
+  const p = langApplicability('subscribers', { selection: 'none' });
+  assert.deepEqual(langNote('none', p), { key: 'naming.langApp.subscribersStored', lang: 'none' });
+  assert.deepEqual(langNote('other', langApplicability('campaigns', { selection: 'other' })), { key: 'naming.langApp.subscribersOnly', lang: 'other' });
+  // SUBSCRIBERS-FILTERS D3 retired the page-filter line: under All there is never a note.
+  assert.equal(langNote('all', langApplicability('subscribers', { selection: 'all' })), null);
   assert.equal(langNote('all', langApplicability('lists')), null);
   // Grey views still carry their line when filtered.
   assert.ok(langNote('fr', langApplicability('media')));
@@ -213,32 +331,8 @@ test('note only when filtered', () => {
   assert.equal(effectiveLang('pt', { lang_enabled: true }), 'all');
 });
 
-// I4.
-test('entry redirect', () => {
-  const dash = { name: 'dashboard', query: {} };
-  const to = (name, query = {}, params = {}) => ({
-    name, query, params, hash: '',
-  });
-  // Entry from outside, no lang/segment, selection != All: redirected with the parameter.
-  assert.deepEqual(langEntryRedirect(to('subscribers'), dash, 'es'), to('subscribers', { lang: 'es' }));
-  const listRedirect = langEntryRedirect(to('subscribers_list', { search: 'x' }, { listID: '4' }), dash, 'en');
-  assert.deepEqual(listRedirect, to('subscribers_list', { search: 'x', lang: 'en' }, { listID: '4' }));
-  assert.equal(langEntryRedirect(to('subscriber', {}, { id: '9' }), { name: undefined }, 'de').query.lang, 'de');
-  assert.equal(langEntryRedirect(to('subscribers'), null, 'fr').query.lang, 'fr'); // first load
-  // Selection All: never.
-  assert.equal(langEntryRedirect(to('subscribers'), dash, 'all'), null);
-  // An explicit lang or segment (a Lists-grid cell, its whole-column cells) is never rewritten.
-  assert.equal(langEntryRedirect(to('subscribers_list', { segment: 'active' }), dash, 'es'), null);
-  assert.equal(langEntryRedirect(to('subscribers_list', { lang: 'none' }), dash, 'es'), null);
-  assert.equal(langEntryRedirect(to('subscribers', { lang: '' }), dash, 'es'), null);
-  // Between the three routes: not an entry (the page's own All languages sticks).
-  SUBSCRIBER_ROUTES.forEach((from) => {
-    SUBSCRIBER_ROUTES.forEach((t) => assert.equal(langEntryRedirect(to(t), { name: from }, 'es'), null, `${from}->${t}`));
-  });
-  // Any other target: never.
-  assert.equal(langEntryRedirect(to('lists'), dash, 'es'), null);
-  assert.equal(langEntryRedirect(to('campaigns'), dash, 'es'), null);
-});
+// I4 (GLOBAL-LANG's entry redirect) is retired: its cases are folded into subscriberFilters.test.mjs
+// "route fix" (SUBSCRIBERS-FILTERS-SPEC I5).
 
 // I4c.
 test('stale subscribers responses are rejected', () => {

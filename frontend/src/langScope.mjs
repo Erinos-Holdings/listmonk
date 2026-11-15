@@ -1,9 +1,11 @@
 // Fork (naming standard, integrations listmonk/NAMING-STANDARD-SPEC D2 §4.4; global language
 // filter, integrations listmonk/GLOBAL-LANG-SPEC). The global language toggle
-// `All | EN | ES | FR | DE | IT` beside the brand selector: a PRESENTATION filter like the brand
-// selector -- it never reaches a server-side permission decision (GLOBAL-LANG D9). Its value is the
-// store's `langSelection` getter, persisted in the pref `brand.lang` (the `brand.launch` pattern) by
-// the store's selectLang mutation, whose one caller is LanguageToggle.vue. The listing predicate is
+// `All | EN+ | EN | ES | FR | DE | IT | Other | None` (SUBSCRIBERS-FILTERS-SPEC D1) beside the brand
+// selector: a PRESENTATION filter like the brand selector -- it never reaches a server-side
+// permission decision (GLOBAL-LANG D9). Its value is the store's `langSelection` getter, persisted
+// in the pref `brand.lang` (the `brand.launch` pattern) by the store's selectLang mutation, whose
+// two callers are LanguageToggle.vue and the router guard in main.js (a Subscribers route arriving
+// with another language sets it; SUBSCRIBERS-FILTERS D3.3). The listing predicate is
 // naming.mjs::langMatches (one statement, pinned with the server's query-campaigns lang filter).
 //
 // GLOBAL-LANG D1/D2 (superseding NAMING-STANDARD §3's "shown only where it filters"): the toggle is
@@ -18,10 +20,30 @@ export { LANG_VALUES, normalizeLang };
 
 export const LANG_PREF = 'brand.lang';
 
-// The button label of a value: All, or the upper-cased code.
-export function langLabel(v, allLabel = 'All') {
+// SUBSCRIBERS-FILTERS-SPEC D1 -- the toggle values only the Subscribers page applies (stored
+// English, an unrecognised value, no usable language). Every other view reads them as All (D2).
+export const SUBSCRIBER_ONLY_LANGS = Object.freeze(['en_only', 'other', 'none']);
+
+// SUBSCRIBERS-FILTERS D1 (I14) -- the button label of a value. labels: the caller's translations,
+// { all, other, none } (a string is the All label alone, the older signature). en -> EN+ (the send
+// language, the "+" convention of langs.js), en_only -> EN (stored English), other / none, a code
+// -> upper case.
+export function langLabel(v, labels = {}) {
+  const l = typeof labels === 'string' ? { all: labels } : (labels || {});
   const n = normalizeLang(v);
-  return n === 'all' ? allLabel : n.toUpperCase();
+  if (n === 'all') return l.all || 'All';
+  if (n === 'en') return 'EN+';
+  if (n === 'en_only') return 'EN';
+  if (n === 'other') return l.other || 'Other';
+  if (n === 'none') return l.none || 'None';
+  return n.toUpperCase();
+}
+
+// D1 -- the {lang} of the grey line: the button label on Subscribers; on every other view `en`
+// reads bare EN (a campaign's language is never "plus").
+export function langNoteLabel(v, onSubscribers, labels = {}) {
+  if (!onSubscribers && normalizeLang(v) === 'en') return 'EN';
+  return langLabel(v, labels);
 }
 
 // A selection's `lang` query parameter: '' (absent) for All, else the code -- EN is `en`, the SEND
@@ -37,7 +59,17 @@ export function langToggleVisible(serverConfig) {
 }
 
 // D1: the selection a view applies -- All whenever the toggle is hidden (no languages to filter).
+// SUBSCRIBERS-FILTERS D2 (I2): the ONE home of the fold -- a subscriber-only language is All on
+// every view that reads this (every view but Subscribers); no consumer re-derives it.
 export function effectiveLang(selection, serverConfig) {
+  if (!langToggleVisible(serverConfig)) return 'all';
+  const n = normalizeLang(selection);
+  return SUBSCRIBER_ONLY_LANGS.includes(n) ? 'all' : n;
+}
+
+// SUBSCRIBERS-FILTERS D2 -- the raw selection the Subscribers page and the router guard apply (the
+// store's langSubscribers): the normalised value while the toggle is visible, else All.
+export function subscribersLang(selection, serverConfig) {
   return langToggleVisible(serverConfig) ? normalizeLang(selection) : 'all';
 }
 
@@ -109,25 +141,20 @@ function paneOf(def, paneValue) {
   return Object.prototype.hasOwnProperty.call(def.panes, p) ? p : def.defaultPane;
 }
 
-// D4: the route's `lang` as the page applies it ('' = All languages; any other string verbatim,
-// including the values the toggle cannot express: en_only, none, other).
-function routeLangOf(query) {
-  const q = query || {};
-  return typeof q.lang === 'string' ? q.lang : '';
-}
-
-// D2: { state, desc, pageLang? } for a route. On the Subscribers routes the route wins: when its
-// lang (absent = All) differs from the selection's parameter, the state is partial and the
-// description is the page filter (pageLang = the route value, 'all' for none). An unknown route
-// is none.
-export function langApplicability(routeName, { pane, query, selection } = {}) {
+// D2: { state, desc } for a route. An unknown route is none. SUBSCRIBERS-FILTERS D3: on the
+// Subscribers routes the router guard makes the route's lang agree with the selection before the
+// page mounts (subscriberFilters.mjs::subscribersRouteFix), so there is no page-filter (partial)
+// state any more: the selection applies -- by send language, or by stored language for a
+// subscriber-only value. D2 (I4): off Subscribers a subscriber-only selection is grey with the
+// Subscribers-only description, whatever the route's own entry says.
+export function langApplicability(routeName, { pane, selection } = {}) {
   const def = Object.prototype.hasOwnProperty.call(LANG_APPLICABILITY, routeName) ? LANG_APPLICABILITY[routeName] : NONE;
+  const subscriberOnly = SUBSCRIBER_ONLY_LANGS.includes(normalizeLang(selection));
   if (def.subscribers) {
-    const routeLang = routeLangOf(query);
-    if (routeLang !== langParam(selection)) {
-      return { state: 'partial', desc: 'naming.langApp.pageFilter', pageLang: routeLang || 'all' };
-    }
-    return { state: 'all', desc: 'naming.langApp.subscribers' };
+    return { state: 'all', desc: subscriberOnly ? 'naming.langApp.subscribersStored' : 'naming.langApp.subscribers' };
+  }
+  if (subscriberOnly) {
+    return { state: 'none', desc: 'naming.langApp.subscribersOnly' };
   }
   if (def.panes) {
     const e = def.panes[paneOf(def, pane)];
@@ -136,29 +163,19 @@ export function langApplicability(routeName, { pane, query, selection } = {}) {
   return { state: def.state, desc: def.desc };
 }
 
-// D2/I3: the grey line under the toggle -- shown when the selection is not All, and (stage 4
-// S4-5) also under All when the page's own language filter differs from it (the Subscribers
-// page-filter case: a lang=fr link under All reads "Page filter: FR", so colour is never the only
-// signal). null otherwise, else { key, lang, pageLang? } for the component to translate.
+// D2/I3: the grey line under the toggle -- shown when the selection is not All (SUBSCRIBERS-FILTERS
+// D3 retired the page-filter line: the route always agrees with the selection). null otherwise,
+// else { key, lang } for the component to translate.
 export function langNote(selection, applicability) {
   const sel = normalizeLang(selection);
-  if (!applicability) {
+  if (!applicability || sel === 'all') {
     return null;
   }
-  if (sel === 'all') {
-    return applicability.pageLang && applicability.pageLang !== 'all'
-      ? { key: applicability.desc, lang: sel, pageLang: applicability.pageLang } : null;
-  }
-  const out = { key: applicability.desc, lang: sel };
-  if (applicability.pageLang) {
-    out.pageLang = applicability.pageLang;
-  }
-  return out;
+  return { key: applicability.desc, lang: sel };
 }
 
-// D4 (stage 4 S4-7): the ONE label of a Subscribers route language value, as the page's own picker
-// names it -- shared by Subscribers.vue (the by-query note) and LanguageToggle.vue (the page-filter
-// line). labels = { all, none, other, name(code), sendName(code) }: the caller's translations
+// D4 (stage 4 S4-7): the ONE label of a Subscribers route language value -- the by-query note of
+// Subscribers.vue. labels = { all, none, other, name(code), sendName(code) }: the caller's translations
 // (i18n and langs.js stay out of this pure module). '' / 'all' -> all; en_only -> the stored English
 // name; en -> the send-language name (EN+); none / other; a code -> its name, else the raw value.
 export function routeLangLabel(v, labels) {
@@ -180,28 +197,9 @@ export function routeLangLabel(v, labels) {
   return labels.name(v) || v;
 }
 
-// D4 (S2-1/S2-4, I4): the Subscribers entry redirect, decided in the router's beforeEach. Only a
-// navigation INTO one of the three Subscribers routes FROM a route that is not one of them, only
-// when the incoming query carries neither `lang` nor `segment` (a Lists-grid cell or a lang= link
-// is explicit and never rewritten), and only when the selection is not All: the same route with
-// lang=<the selection's parameter> (EN -> en, the send language). null otherwise.
-export function langEntryRedirect(to, from, selection) {
-  const sel = normalizeLang(selection);
-  if (!to || sel === 'all' || !SUBSCRIBER_ROUTES.includes(to.name)) {
-    return null;
-  }
-  if (from && SUBSCRIBER_ROUTES.includes(from.name)) {
-    return null;
-  }
-  const q = to.query || {};
-  const has = (k) => Object.prototype.hasOwnProperty.call(q, k);
-  if (has('lang') || has('segment')) {
-    return null;
-  }
-  return {
-    name: to.name, params: { ...(to.params || {}) }, query: { ...q, lang: langParam(sel) }, hash: to.hash || '',
-  };
-}
+// The Subscribers entry redirect (GLOBAL-LANG D4's langEntryRedirect) is retired: every
+// navigation to a Subscribers route passes subscriberFilters.mjs::subscribersRouteFix
+// (SUBSCRIBERS-FILTERS-SPEC D3), called from both main.js sites.
 
 // D4 (S2-1, I4c): a subscribers query response is applied only when it answers the latest query
 // issued by the page that is still mounted.

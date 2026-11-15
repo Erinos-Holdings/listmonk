@@ -274,7 +274,10 @@ test('I4 (D8): listPrefixAddon, splitListName and joinListName', () => {
 // (Where the toggle shows and applies -- GLOBAL-LANG-SPEC, superseding the route list -- is
 // langScope.test.mjs.)
 test('langScope: values, the pref, its label and the Campaigns param', () => {
-  assert.deepEqual([...LANG_VALUES], ['all', 'en', 'es', 'fr', 'de', 'it']);
+  // SUBSCRIBERS-FILTERS-SPEC D1 (agreement with the server: langScope.test.mjs I1).
+  assert.deepEqual([...LANG_VALUES], ['all', 'en', 'en_only', 'es', 'fr', 'de', 'it', 'other', 'none']);
+  assert.equal(normalizeLang('EN_ONLY'), 'en_only');
+  assert.equal(langParam('none'), 'none');
   assert.equal(LANG_PREF, 'brand.lang');
   assert.equal(langLabel('all', 'All'), 'All');
   assert.equal(langLabel('fr', 'All'), 'FR');

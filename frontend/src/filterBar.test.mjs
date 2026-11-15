@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { filterCaption } from './filterBar.mjs'; // eslint-disable-line import/extensions
+import { CAPTION_LANG_NAMES, filterCaption, subscriberCaptionLang } from './filterBar.mjs'; // eslint-disable-line import/extensions
 
 const BRANDS = [{ slug: 'bnkd', display_name: 'BNKD Wellness' }, { slug: 'ruze', display_name: 'RUZE' }];
 const BNKD = { kind: 'brand', slug: 'bnkd' };
@@ -42,6 +42,32 @@ test("a page's own language (langText) replaces the global one", () => {
     selection: BNKD, lang: 'es', brands: BRANDS, langText: '',
   }), 'BNKD Wellness');
   assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'all', langText: 'No language' }), 'No language');
+});
+
+// SUBSCRIBERS-FILTERS-SPEC I13 -- the Subscribers page's own caption language; the global one is
+// untouched.
+test("Subscribers' caption language names the route language", () => {
+  const labels = { none: 'No language', other: 'Other' };
+  assert.equal(subscriberCaptionLang('en', labels), 'English+');
+  assert.equal(subscriberCaptionLang('en_only', labels), 'English');
+  assert.equal(subscriberCaptionLang('other', labels), 'Other');
+  assert.equal(subscriberCaptionLang('none', labels), 'No language');
+  assert.equal(subscriberCaptionLang('fr', labels), 'French');
+  assert.equal(subscriberCaptionLang('it', labels), 'Italian');
+  assert.equal(subscriberCaptionLang('', labels), '');
+  assert.equal(subscriberCaptionLang(null, labels), '');
+  assert.equal(subscriberCaptionLang('all', labels), '');
+  // The global caption under en still reads "English" (CAPTION_LANG_NAMES untouched).
+  assert.equal(CAPTION_LANG_NAMES.en, 'English');
+  assert.equal(filterCaption({ selection: BNKD, lang: 'en', brands: BRANDS }), 'BNKD Wellness · English');
+  // A subscriber-only value (never passed by langEffective) names nothing in the global caption.
+  assert.equal(filterCaption({ selection: BNKD, lang: 'none', brands: BRANDS }), 'BNKD Wellness');
+  // Subscribers passes it as its langText.
+  const subs = readFileSync(new URL('./views/Subscribers.vue', import.meta.url), 'utf8');
+  assert.match(subs, /\$filterCaption\(\{ langText: captionLang \}\)/);
+  assert.match(subs, /captionLang\(\) \{\s*return subscriberCaptionLang\(this\.queryParams\.lang, \{/);
+  // Other views read the folded selection.
+  assert.match(readFileSync(new URL('./main.js', import.meta.url), 'utf8'), /lang: this\.\$store\.getters\.langEffective,/);
 });
 
 test('the global helper and every table use the caption', () => {

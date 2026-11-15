@@ -12,8 +12,12 @@ export const NAME_MAX = 30;
 export const CATALOG_PREFIX = 'CATALOG ';
 export const OFFICIAL_PREFIX = 'Official_';
 
-// D2 -- the language toggle's values, in display order. 'all' applies no filter.
-export const LANG_VALUES = Object.freeze(['all', 'en', 'es', 'fr', 'de', 'it']);
+// D2 -- the language toggle's values, in display order. 'all' applies no filter. Since
+// SUBSCRIBERS-FILTERS-SPEC D1 exactly the server's subscriber lang= filter values plus 'all'
+// (models.IsSubscriberLangFilter): en is the SEND language (labelled EN+), en_only stored English
+// (EN); en_only, other and none are subscriber-only (langScope.mjs::SUBSCRIBER_ONLY_LANGS -- every
+// other view reads them as All, langScope.mjs::effectiveLang).
+export const LANG_VALUES = Object.freeze(['all', 'en', 'en_only', 'es', 'fr', 'de', 'it', 'other', 'none']);
 
 export function normalizeLang(v) {
   const s = typeof v === 'string' ? v.trim().toLowerCase() : '';

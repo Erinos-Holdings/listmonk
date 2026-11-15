@@ -10,7 +10,8 @@ import store from './store';
 import * as api from './api';
 import Utils from './utils';
 import { routeRedirect } from './accessPolicy.mjs'; // eslint-disable-line import/extensions
-import { langEntryRedirect } from './langScope.mjs'; // eslint-disable-line import/extensions
+import { langToggleVisible } from './langScope.mjs'; // eslint-disable-line import/extensions
+import { subscribersRouteFix } from './subscriberFilters.mjs'; // eslint-disable-line import/extensions
 
 // Internationalisation.
 Vue.use(VueI18n);
@@ -46,6 +47,24 @@ Vue.config.ignoredElements = ['emoji-picker'];
 // then makes no redirect decision and initConfig re-evaluates the landed route once it is known.
 let currentProfile = null;
 
+// Fork (Subscribers filters, integrations SUBSCRIBERS-FILTERS-SPEC D3). Set once the server config
+// (app.lang_enable) is in the store: before that the toggle reads as hidden, and the guard would
+// drop a route's lang it cannot yet judge -- so the first navigation is decided by initConfig.
+let langConfigReady = false;
+
+// D3 (I6) -- the ONE decision for every navigation to a Subscribers route, at both sites (the
+// guard and initConfig): commit a route language that differs from the selection (selectLang),
+// then the corrected query, if any, as a replace. Returns the corrected location or null.
+function subscribersFixOf(to) {
+  const fix = subscribersRouteFix(to, store.getters.langSubscribers, langToggleVisible(store.state.serverConfig));
+  if (fix.commitLang) {
+    store.commit('selectLang', fix.commitLang);
+  }
+  return fix.query ? {
+    path: to.path, query: fix.query, hash: to.hash, replace: true,
+  } : null;
+}
+
 // Setup the router.
 router.beforeEach((to, from, next) => {
   if (to.matched.length === 0) {
@@ -61,14 +80,17 @@ router.beforeEach((to, from, next) => {
     return;
   }
 
-  // Fork (global language, integrations GLOBAL-LANG-SPEC D4, S2-1) -- entering Subscribers from
-  // another page under a language carries it as the route's lang BEFORE the page mounts, so the
-  // unfiltered mount and its request never happen. The effective selection is All until the
-  // server config is known (first load: initConfig re-applies this before mounting).
-  const langRedirect = langEntryRedirect(to, from, store.getters.langEffective);
-  if (langRedirect) {
-    next(langRedirect);
-    return;
+  // Fork (Subscribers filters, SUBSCRIBERS-FILTERS-SPEC D3; was GLOBAL-LANG-SPEC D4's entry
+  // redirect) -- every navigation to a Subscribers route (entry, in-page, Back/Forward) is made to
+  // agree with the toggle BEFORE the page mounts, so the page never mounts with a state the rules
+  // correct and issues no refused request. Until the server config is known the first load is
+  // left to initConfig, which re-applies this before mounting.
+  if (langConfigReady) {
+    const langRedirect = subscribersFixOf(to);
+    if (langRedirect) {
+      next(langRedirect);
+      return;
+    }
   }
   next();
 });
@@ -137,11 +159,12 @@ async function initConfig(app) {
   if (redirect) {
     await router.replace(redirect).catch(() => {});
   }
-  // Fork (global language, GLOBAL-LANG-SPEC D4) -- the first navigation ran before the server
-  // config (app.lang_enable) was loaded, so its entry decision read All; decide it now, before the
-  // app mounts. A first load is always an entry (from no route).
+  // Fork (SUBSCRIBERS-FILTERS-SPEC D3; was GLOBAL-LANG-SPEC D4) -- the first navigation ran before
+  // the server config (app.lang_enable) was loaded, so the guard left it alone; decide it now,
+  // before the app mounts, and let the guard decide every later navigation.
+  langConfigReady = true;
   const landed = router.currentRoute;
-  const langRedirect = langEntryRedirect(landed, null, store.getters.langEffective);
+  const langRedirect = subscribersFixOf(landed);
   if (langRedirect) {
     await router.replace(langRedirect).catch(() => {});
   }

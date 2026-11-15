@@ -1,7 +1,9 @@
 <template>
   <!-- Fork (naming standard, integrations NAMING-STANDARD-SPEC D2; global language, GLOBAL-LANG-SPEC
-       D1/D2). The navbar language toggle All | EN | ES | FR | DE | IT, beside the brand selector, on
-       every route with the navbar (hidden only while app.lang_enable is off). A presentation filter,
+       D1/D2; SUBSCRIBERS-FILTERS-SPEC D1/D2). The navbar language toggle
+       All | EN+ | EN | ES | FR | DE | IT | Other | None, beside the brand selector, on every route
+       with the navbar (hidden only while app.lang_enable is off); EN, Other and None filter the
+       Subscribers page only and read grey (All) everywhere else. A presentation filter,
        never a scope or a permission. The selected button wears the view's applicability
        (langScope.mjs::LANG_APPLICABILITY): blue applies, orange partly applies, grey not
        applicable; off All a grey line beside it names what is filtered (the "Filtered" marker), and
@@ -23,9 +25,8 @@
 import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import {
-  LANG_VALUES, langApplicability, langLabel, langNote, langToggleVisible, routeLangLabel,
+  LANG_VALUES, SUBSCRIBER_ROUTES, langApplicability, langLabel, langNote, langNoteLabel, langToggleVisible,
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
-import { campaignLangLabel, sendLangLabel } from '../langs';
 
 // The Buefy button type per applicability state (the classes are style.scss's).
 const BUTTON_TYPES = Object.freeze({ all: 'is-primary', partial: 'is-lang-partial', none: 'is-lang-none' });
@@ -48,7 +49,11 @@ export default Vue.extend({
 
     applicability() {
       const r = this.$route || {};
-      return langApplicability(r.name, { pane: this.viewPane, query: r.query, selection: this.langSelection });
+      return langApplicability(r.name, { pane: this.viewPane, selection: this.langSelection });
+    },
+
+    onSubscribers() {
+      return SUBSCRIBER_ROUTES.includes((this.$route || {}).name);
     },
 
     buttonType() {
@@ -58,15 +63,16 @@ export default Vue.extend({
     // D2/I3: the grey line, only off All.
     noteText() {
       const n = langNote(this.langSelection, this.applicability);
-      return n ? this.translate(n.key, n.lang, n.pageLang) : '';
+      return n ? this.translate(n.key, n.lang) : '';
     },
 
     // The title under All: the view's description, with the language left out.
     descText() {
-      return this.translate(this.applicability.desc, this.langSelection, this.applicability.pageLang);
+      return this.translate(this.applicability.desc, this.langSelection);
     },
 
-    // D2: the control is the selectLang mutation's only caller.
+    // D2: the control commits selectLang (the router guard is its only other caller,
+    // SUBSCRIBERS-FILTERS-SPEC D3.3).
     value: {
       get() {
         return this.langSelection;
@@ -78,24 +84,18 @@ export default Vue.extend({
   },
 
   methods: {
+    labels() {
+      return { all: this.$t('naming.langAll'), other: this.$t('naming.langOther'), none: this.$t('naming.langNone') };
+    },
+
+    // SUBSCRIBERS-FILTERS D1 (I14) -- the one label mapper, langScope.mjs::langLabel.
     labelOf(v) {
-      return langLabel(v, this.$t('naming.langAll'));
+      return langLabel(v, this.labels());
     },
 
-    // A Subscribers route value as the page's own picker names it (langScope.mjs::routeLangLabel,
-    // the one mapper; S4-7).
-    pageLangLabel(v) {
-      return routeLangLabel(v, {
-        all: this.$t('subscribers.langAll'),
-        none: this.$t('lists.grid.noLangChip'),
-        other: this.$t('lists.grid.other'),
-        name: campaignLangLabel,
-        sendName: sendLangLabel,
-      });
-    },
-
-    translate(key, lang, pageLang) {
-      return this.$t(key, { lang: this.labelOf(lang), page: this.pageLangLabel(pageLang) });
+    // D1 -- the note's {lang}: bare EN for `en` off the Subscribers page.
+    translate(key, lang) {
+      return this.$t(key, { lang: langNoteLabel(lang, this.onSubscribers, this.labels()) });
     },
   },
 });
