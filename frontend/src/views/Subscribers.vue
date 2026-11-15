@@ -107,9 +107,9 @@
     </section><!-- control -->
 
     <br />
-    <!-- Polish 2026-11-14: the filter caption -- the brand only (review R4: the route's own lang is
-         this page's filter and its picker names it, so the global selection could misstate it). -->
-    <b-table :data="subscribers.results ?? []" :caption="$filterCaption({ lang: false })" :loading="loading.subscribers" @check-all="onTableCheck"
+    <!-- Polish 2026-11-14: the filter caption -- the brand and the ROUTE's language (review R4: the
+         route's lang is this page's filter, so the global selection could misstate it). -->
+    <b-table :data="subscribers.results ?? []" :caption="$filterCaption({ langText: captionLang })" :loading="loading.subscribers" @check-all="onTableCheck"
       @check="onTableCheck" :checked-rows.sync="bulk.checked" paginated backend-pagination pagination-position="both"
       @page-change="onPageChange" :current-page="queryParams.page" :per-page="subscribers.perPage"
       :total="subscribers.total" hoverable checkable backend-sorting @sort="onSort">
@@ -275,6 +275,7 @@ import {
 import {
   answeredFilter, bulkTarget, byQueryLangNote, langParam, routeLangLabel, subscriberResponseCurrent,
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
+import { captionLangName } from '../filterBar.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -819,6 +820,18 @@ export default Vue.extend({
       }
       // Stage 4b S4b-2 -- the answered filter's language, the one the by-query body will carry.
       return byQueryLangNote(gridFilterOf(filter), (l) => this.$t('naming.byQueryLang', { lang: this.routeLangLabel(l) }));
+    },
+
+    // Polish 2026-11-14 -- the filter caption's language: the route's lang (the page's own filter),
+    // English names (filterBar.mjs::captionLangName); en_only and en both read "English".
+    captionLang() {
+      return routeLangLabel(this.queryParams.lang, {
+        all: '',
+        none: this.$t('lists.grid.noLangChip'),
+        other: this.$t('lists.grid.other'),
+        name: captionLangName,
+        sendName: captionLangName,
+      });
     },
 
     // Fork (LIST-COLLAPSE-SPEC C8). Shown when languages are on, or when the route carries one

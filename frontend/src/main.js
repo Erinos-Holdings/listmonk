@@ -19,15 +19,18 @@ const i18n = new VueI18n();
 Vue.use(Buefy, {});
 
 // Fork (polish 2026-11-14) -- the filter caption of every narrowed matrix/table ("BNKD Wellness ·
-// EN"; filterBar.mjs). Read in render, so the store getters it touches keep it reactive. opts:
-// { brand, lang } -- whether that global filter narrows the table (both default true).
+// English"; filterBar.mjs). Read in render, so the store getters it touches keep it reactive. opts:
+// { brand, lang } -- whether that global filter narrows the table (both default true); langText --
+// the page's own language filter, named by the page, in place of the global language.
 Vue.prototype.$filterCaption = function filterCaptionOf(opts = {}) {
+  const { langText, ...applies } = opts;
   return filterCaption({
     selection: this.$store.getters.brandSelection,
     lang: this.$store.getters.langEffective,
     brands: this.$store.state.brandRows,
     noBrand: this.$t('brand.selector.none'),
-    applies: opts,
+    applies,
+    langText,
   });
 };
 Vue.config.productionTip = false;

@@ -17,17 +17,29 @@ test('nothing active: no caption', () => {
   }), '');
 });
 
-test('brand display name, two-letter language, separated by a dot', () => {
-  assert.equal(filterCaption({ selection: BNKD, lang: 'en', brands: BRANDS }), 'BNKD Wellness · EN');
+test('brand display name, English language name, separated by a dot', () => {
+  assert.equal(filterCaption({ selection: BNKD, lang: 'en', brands: BRANDS }), 'BNKD Wellness · English');
   assert.equal(filterCaption({ selection: BNKD, lang: 'all', brands: BRANDS }), 'BNKD Wellness');
-  assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'es', brands: BRANDS }), 'ES');
-  assert.equal(filterCaption({ selection: { kind: 'none' }, lang: 'de', noBrand: 'No brand' }), 'No brand · DE');
+  assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'es', brands: BRANDS }), 'Spanish');
+  assert.equal(filterCaption({ selection: { kind: 'none' }, lang: 'de', noBrand: 'No brand' }), 'No brand · German');
+  assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'fr' }), 'French');
+  assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'it' }), 'Italian');
   // Language not applicable to the table: brand only.
   assert.equal(filterCaption({
     selection: BNKD, lang: 'en', brands: BRANDS, applies: { lang: false },
   }), 'BNKD Wellness');
   // A slug with no brands row falls back to the slug; an unknown language to none.
   assert.equal(filterCaption({ selection: { kind: 'brand', slug: 'newbrand' }, lang: 'pt' }), 'newbrand');
+});
+
+test("a page's own language (langText) replaces the global one", () => {
+  // Subscribers: the route's lang, whatever the toggle says.
+  assert.equal(filterCaption({
+    selection: BNKD, lang: 'en', brands: BRANDS, langText: 'Spanish',
+  }), 'BNKD Wellness · Spanish');
+  // '' (route lang all): no language, even with the toggle on ES.
+  assert.equal(filterCaption({ selection: BNKD, lang: 'es', brands: BRANDS, langText: '' }), 'BNKD Wellness');
+  assert.equal(filterCaption({ selection: { kind: 'all' }, lang: 'all', langText: 'No language' }), 'No language');
 });
 
 test('the global helper and every table use the caption', () => {
