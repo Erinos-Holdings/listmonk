@@ -326,9 +326,9 @@ $trigger-label-indent: calc(2rem - 1px);
     padding-right: 0;
     // The same gap the Campaigns page keeps between its list dropdown and the search box
     // (two Bulma columns: 2 × 0.75rem).
-    // Polish 2026-11-14: the launch filter is first, so the gap is on its right.
+    // Polish 2026-11-14: the launch filter is last (right of the language toggle), gap on its left.
     .launch-filter {
-      margin-right: 1.5rem;
+      margin-left: 1.5rem;
     }
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle, the same gap.
     .language-toggle {
@@ -2919,7 +2919,7 @@ th.role-toggle-select a {
     padding-left: 0.75rem; // no measured offset here: keep Bulma's navbar-item spacing
     padding-right: 0.75rem;
     .launch-filter {
-      margin-right: 0.5rem; // first in the row since polish 2026-11-14
+      margin-left: 0.5rem; // last in the row since polish 2026-11-14
     }
   }
 }
