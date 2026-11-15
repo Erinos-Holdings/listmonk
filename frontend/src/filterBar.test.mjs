@@ -49,9 +49,11 @@ test("a page's own language (langText) replaces the global one", () => {
 test("Subscribers' caption language names the route language", () => {
   const labels = { none: 'No language', other: 'Other' };
   assert.equal(subscriberCaptionLang('en', labels), 'English+');
-  assert.equal(subscriberCaptionLang('en_only', labels), 'English');
+  // SUBSCRIBERS-FILTERS-2-SPEC D1: en_only / none are no longer toggle values (the guard drops a
+  // route carrying one) and their caption branches are deleted -- neither names a language.
+  assert.equal(subscriberCaptionLang('en_only', labels), '');
+  assert.equal(subscriberCaptionLang('none', labels), '');
   assert.equal(subscriberCaptionLang('other', labels), 'Other');
-  assert.equal(subscriberCaptionLang('none', labels), 'No language');
   assert.equal(subscriberCaptionLang('fr', labels), 'French');
   assert.equal(subscriberCaptionLang('it', labels), 'Italian');
   assert.equal(subscriberCaptionLang('', labels), '');
@@ -65,9 +67,39 @@ test("Subscribers' caption language names the route language", () => {
   // Subscribers passes it as its langText.
   const subs = readFileSync(new URL('./views/Subscribers.vue', import.meta.url), 'utf8');
   assert.match(subs, /\$filterCaption\(\{ langText: captionLang \}\)/);
-  assert.match(subs, /captionLang\(\) \{\s*return subscriberCaptionLang\(this\.queryParams\.lang, \{/);
+  assert.match(subs, /captionLang\(\) \{[\s\S]*?return subscriberCaptionLang\(this\.queryParams\.lang, \{/);
   // Other views read the folded selection.
   assert.match(readFileSync(new URL('./main.js', import.meta.url), 'utf8'), /lang: this\.\$store\.getters\.langEffective,/);
+});
+
+// SUBSCRIBERS-FILTERS-2-SPEC D4 (I8) -- under EN+ the split renders only from a response for the
+// current query; otherwise English+.
+test('EN+ caption split: only from the current query\'s answer', () => {
+  const labels = { none: 'No language', other: 'Other' };
+  const fmt = (n) => n.toLocaleString('en-US');
+  const ok = { current: true, total: 602, langNoneTotal: 219 };
+  assert.equal(subscriberCaptionLang('en', labels, ok, fmt), 'English 383 + No language 219');
+  const big = { current: true, total: 174441, langNoneTotal: 8404 };
+  assert.equal(subscriberCaptionLang('en', labels, big, fmt), 'English 166,037 + No language 8,404');
+  // Zero parts render.
+  assert.equal(subscriberCaptionLang('en', labels, { current: true, total: 219, langNoneTotal: 219 }, fmt), 'English 0 + No language 219');
+  assert.equal(subscriberCaptionLang('en', labels, { current: true, total: 0, langNoneTotal: 0 }, fmt), 'English 0 + No language 0');
+  // Not for the current query (busy, or another query's answer), absent or malformed: English+.
+  assert.equal(subscriberCaptionLang('en', labels, { ...ok, current: false }, fmt), 'English+');
+  assert.equal(subscriberCaptionLang('en', labels, { current: true, total: 602 }, fmt), 'English+');
+  assert.equal(subscriberCaptionLang('en', labels, { current: true, total: 602, langNoneTotal: 700 }, fmt), 'English+');
+  assert.equal(subscriberCaptionLang('en', labels, null, fmt), 'English+');
+  assert.equal(subscriberCaptionLang('en', labels), 'English+');
+  // Every other language is unchanged, split or not.
+  assert.equal(subscriberCaptionLang('fr', labels, ok, fmt), 'French');
+  assert.equal(subscriberCaptionLang('other', labels, ok, fmt), 'Other');
+  assert.equal(subscriberCaptionLang('', labels, ok, fmt), '');
+  // The page's wiring: current = the answered filter under en and not busy; the store's
+  // langNoneTotal (camelCased lang_none_total); the formatter is $utils.formatNumber.
+  const subs = readFileSync(new URL('./views/Subscribers.vue', import.meta.url), 'utf8');
+  assert.match(subs, /current: !this\.byQueryBusy && !!answered && answered\.lang === 'en',/);
+  assert.match(subs, /langNoneTotal: this\.subscribers\.langNoneTotal,/);
+  assert.match(subs, /split, \(n\) => this\.\$utils\.formatNumber\(n\)\)/);
 });
 
 test('the global helper and every table use the caption', () => {

@@ -41,6 +41,9 @@
 // view (never written to the pref), a dismissible "N selected campaigns" chip, cleared by exactly
 // the route status scope's interactions, and -- a fifth narrowing -- it suppresses "select all".
 
+import { storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
+import { groupLists } from './listGroups.mjs'; // eslint-disable-line import/extensions
+
 // A repeated query param arrives as an array; the first element is the one read (evergreen).
 const first = (v) => (Array.isArray(v) ? v[0] : v);
 
@@ -292,4 +295,51 @@ export function preEnablesEvergreen(evergreen) {
 // so this equals the old "any displayed row running" rule there.
 export function displayedRunning(rows) {
   return (Array.isArray(rows) ? rows : []).some((c) => c && c.status === 'running' && !c.evergreen);
+}
+
+// SUBSCRIBERS-FILTERS-2-SPEC D6 (I11) -- the Lists dropdown offers a list only when it carries a
+// campaign of the scope pill's kind: Broadcasts (evergreen false) the server's has_broadcasts,
+// Automations (true) has_automations, All (null) every list. The flags are the minimal
+// GET /api/lists booleans (any campaign status, archived included); a list without the flag does
+// not qualify under a kind.
+const flagOf = (l, wire, camel) => (l && (l[wire] === true || l[camel] === true)) === true;
+export function listQualifies(list, evergreen) {
+  if (evergreen === false) {
+    return flagOf(list, 'has_broadcasts', 'hasBroadcasts');
+  }
+  if (evergreen === true) {
+    return flagOf(list, 'has_automations', 'hasAutomations');
+  }
+  return true;
+}
+
+// D5/D6 -- the Lists dropdown's options under "All lists": the brand scope's store lists
+// (scopeListIds; null = every list) that qualify under the kind, grouped ordinary / System lists
+// (listGroups.mjs::groupLists, shared with the Subscribers page). S2-2: the selected list (listID)
+// is always an option, so the select never shows blank -- the store's row when known, else
+// `#<id>`. The route list scope (routeListIDs) is not touched here.
+export function campaignListOptions(lists, scopeListIds, evergreen, listID = null) {
+  const all = storeLists(lists);
+  const offered = all.filter((l) => l && (!Array.isArray(scopeListIds) || scopeListIds.includes(l.id))
+    && listQualifies(l, evergreen));
+  if (Number.isInteger(listID) && listID > 0 && !offered.some((l) => l.id === listID)) {
+    const known = all.find((l) => l && l.id === listID);
+    offered.push(known && typeof known.name === 'string' && known.name ? known : { id: listID, name: `#${listID}` });
+  }
+  return groupLists(offered);
+}
+
+// D6 (S2-2, I11) -- the single list filter after a scope-pill change: a selected list that does not
+// qualify under the new kind resets to All lists (null), wherever it came from; one that qualifies
+// (or no selection) is kept. The caller resets the page and the bulk selection with it, as the
+// brand reset does; routeListIDs is never touched. Not run on mount.
+export function afterScopeChange(listID, lists, evergreen) {
+  if (!Number.isInteger(listID) || listID <= 0) {
+    return null;
+  }
+  if (evergreen !== true && evergreen !== false) {
+    return listID; // All: no narrowing.
+  }
+  const l = storeLists(lists).find((x) => x && x.id === listID);
+  return l && listQualifies(l, evergreen) ? listID : null;
 }

@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  SEGMENTS, listOptions, listRoute, routeListIdOf, statusEnabled, statusQuery, subscribersRouteFix,
+  LANG_CELL_EMPTY, SEGMENTS, langCell, langColumnShown, listOptions, listRoute, routeListIdOf, statusEnabled,
+  statusQuery, subscribersRouteFix,
 } from './subscriberFilters.mjs'; // eslint-disable-line import/extensions
 import { LANG_VALUES, SUBSCRIBER_ROUTES } from './langScope.mjs'; // eslint-disable-line import/extensions
 
@@ -21,7 +22,7 @@ test('route fix', () => {
   // D3.6: agreeing values, nothing to do.
   assert.deepEqual(subscribersRouteFix(to('subscribers'), 'all', true), {});
   assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: 'fr' }), 'fr', true), {});
-  assert.deepEqual(subscribersRouteFix(LIST({ segment: 'held', lang: 'none' }), 'none', true), {});
+  assert.deepEqual(subscribersRouteFix(LIST({ segment: 'held', lang: 'other' }), 'other', true), {});
   // Not a Subscribers route: never.
   ['lists', 'campaigns', 'dashboard', undefined].forEach((n) => {
     assert.deepEqual(subscribersRouteFix(to(n, { lang: 'pt', segment: 'x' }), 'fr', true), {});
@@ -43,14 +44,32 @@ test('route fix', () => {
   LANG_VALUES.filter((v) => v !== 'all').forEach((v) => {
     assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: v }), 'all', true), { commitLang: v }, v);
   });
-  assert.deepEqual(subscribersRouteFix(LIST({ lang: 'none', segment: 'active' }), 'fr', true), { commitLang: 'none' });
+  assert.deepEqual(subscribersRouteFix(LIST({ lang: 'other', segment: 'active' }), 'fr', true), { commitLang: 'other' });
+  // A stored en_only selection (erinos.457) normalises to All: the route's en is committed.
   assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: 'en' }), 'en_only', true), { commitLang: 'en' });
+
+  // SUBSCRIBERS-FILTERS-2-SPEC I2 -- a route lang=en_only or lang=none (an erinos.457 link or
+  // bookmark) is dropped and, under a non-All selection, replaced by lang=<selection>; it never
+  // commits a toggle value.
+  ['en_only', 'none'].forEach((v) => {
+    assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: v }), 'all', true), { query: {} }, v);
+    assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: v, search: 's' }), 'fr', true), { query: { search: 's', lang: 'fr' } }, v);
+    assert.deepEqual(subscribersRouteFix(LIST({ lang: v, segment: 'active' }), 'en', true), { query: { segment: 'active', lang: 'en' } }, v);
+    assert.deepEqual(subscribersRouteFix(LIST({ lang: v }), 'other', true), { query: { lang: 'other' } }, v);
+    // A stale selection of the same value is All: dropped, nothing added, nothing committed.
+    assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: v }), v, true), { query: {} }, v);
+    SUBSCRIBER_ROUTES.forEach((r) => {
+      const fix = subscribersRouteFix(to(r, { lang: v }, { listID: '5', id: '9' }), 'de', true);
+      assert.equal(fix.commitLang, undefined, `${r} ${v}`);
+      assert.equal(fix.query.lang, 'de', `${r} ${v}`);
+    });
+  });
 
   // D3.4: no route lang, a selection -- the raw value is added (segment links included).
   assert.deepEqual(subscribersRouteFix(to('subscribers', { search: 'x' }), 'es', true), { query: { search: 'x', lang: 'es' } });
   assert.deepEqual(subscribersRouteFix(LIST({ segment: 'held' }), 'other', true), { query: { segment: 'held', lang: 'other' } });
   SUBSCRIBER_ROUTES.forEach((r) => {
-    assert.equal(subscribersRouteFix(to(r, {}, { listID: '5', id: '9' }), 'none', true).query.lang, 'none', r);
+    assert.equal(subscribersRouteFix(to(r, {}, { listID: '5', id: '9' }), 'other', true).query.lang, 'other', r);
   });
 
   // D3.5: a segment without a route list, or outside the five, is dropped.
@@ -65,7 +84,8 @@ test('route fix', () => {
   // plus a dropped segment.
   assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: 'fr', segment: 'held' }), 'fr', false), { query: {} });
   assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: 'pt', segment: 'held' }), 'de', true), { query: { lang: 'de' } });
-  assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: 'none', segment: 'held' }), 'fr', true), { commitLang: 'none', query: { lang: 'none' } });
+  assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: 'other', segment: 'held' }), 'fr', true), { commitLang: 'other', query: { lang: 'other' } });
+  assert.deepEqual(subscribersRouteFix(to('subscribers', { lang: 'none', segment: 'held' }), 'fr', true), { query: { lang: 'fr' } });
   // The input query is never edited in place.
   const q = { lang: 'pt', segment: 'held' };
   subscribersRouteFix(to('subscribers', q), 'fr', true);
@@ -214,4 +234,38 @@ test('Subscribers counts format, bodies do not', () => {
   assert.doesNotMatch(subs, /\$api\.[^\n]*formatNumber/);
   assert.doesNotMatch(subs, /parseInt\([^\n]*formatNumber/);
   assert.doesNotMatch(read('./brandScope.mjs'), /formatNumber/);
+});
+
+// SUBSCRIBERS-FILTERS-2-SPEC I9 -- the Lang column shows iff the route lang is absent, en or other;
+// a cell renders a string/number trimmed and upper-cased, an em dash for empty, whitespace, absent
+// or any other type.
+test('Lang column and cell', () => {
+  [undefined, null, '', 'en', 'other'].forEach((v) => assert.equal(langColumnShown(v), true, String(v)));
+  ['es', 'fr', 'de', 'it', 'en_only', 'none', 'pt'].forEach((v) => assert.equal(langColumnShown(v), false, v));
+
+  assert.equal(langCell({ lang: 'en' }), 'EN');
+  assert.equal(langCell({ lang: ' pt-br ' }), 'PT-BR');
+  assert.equal(langCell({ lang: 'fr-CA' }), 'FR-CA');
+  assert.equal(langCell({ lang: 5 }), '5');
+  assert.equal(langCell({ lang: 0 }), '0');
+  [{ lang: '' }, { lang: '   ' }, {}, { lang: null }, { lang: true }, { lang: {} }, { lang: ['en'] },
+    { lang: Number.NaN }, null, undefined, 'en', ['en']].forEach((a) => {
+    assert.equal(langCell(a), LANG_CELL_EMPTY, JSON.stringify(a));
+  });
+  assert.equal(LANG_CELL_EMPTY, '—');
+
+  // The page: the column on the route's lang, sortable as order_by=lang, the cell from attribs.
+  const subs = read('./views/Subscribers.vue');
+  assert.match(subs, /<b-table-column v-if="langColumnOn" v-slot="props" field="lang"[^>]*sortable>/);
+  assert.match(subs, /langColumnOn\(\) \{\s*return langColumnShown\(this\.queryParams\.lang\);/);
+  assert.match(subs, /return langCell\(row \? row\.attribs : undefined\);/);
+  assert.match(subs, /order_by: this\.queryParams\.orderBy,/);
+});
+
+// SUBSCRIBERS-FILTERS-2-SPEC I10 -- the Subscribers Lists dropdown groups through the shared
+// grouping (listGroups.mjs::groupLists, tested in listGroups.test.mjs), as the Campaigns page does.
+test('Lists dropdown uses the shared grouping', () => {
+  assert.match(read('./subscriberFilters.mjs'), /groupLists\(/);
+  assert.match(read('./campaignsRouteQuery.mjs'), /return groupLists\(offered\);/);
+  assert.deepEqual(listOptions(LISTS, RUZE, null).system.map((l) => l.name), ['RUZE First order', 'RUZE No-purchase D2']);
 });

@@ -18,18 +18,35 @@ export const CAPTION_LANG_NAMES = Object.freeze({
 });
 export const captionLangName = (code) => CAPTION_LANG_NAMES[(code || '').toLowerCase()] || '';
 
-// SUBSCRIBERS-FILTERS-SPEC D8 (I13) -- the Subscribers page's own caption language, named from its
-// route lang: '' / all -> '' (no language), en -> English+ (the send language), en_only -> English
-// (stored), other / none -> the caller's labels ({ other, none }, default Other / No language), a
-// code -> its English name. CAPTION_LANG_NAMES is untouched: the global caption under en is
+// SUBSCRIBERS-FILTERS-2-SPEC D4 (I8) -- the EN+ split's two parts, or null: only from a response
+// for the CURRENT query (split.current === true) that carries lang_none_total (an integer between
+// 0 and total). { en: total - none, none }; n + m = total, in the unit of total.
+export function enSplitOf(split) {
+  if (!split || split.current !== true) return null;
+  const { total, langNoneTotal } = split;
+  if (!Number.isInteger(total) || !Number.isInteger(langNoneTotal) || langNoneTotal < 0 || langNoneTotal > total) {
+    return null;
+  }
+  return { en: total - langNoneTotal, none: langNoneTotal };
+}
+
+// SUBSCRIBERS-FILTERS-SPEC D8 (I13), amended by SUBSCRIBERS-FILTERS-2-SPEC D1/D4 (I8) -- the
+// Subscribers page's own caption language, named from its route lang: '' / all -> '' (no
+// language); en -> `English <n> + No language <m>` once the current query's answer carries the
+// split (split = { current, total, langNoneTotal }; format = the number formatter, the page's
+// $utils.formatNumber), else English+ (the send language); other -> the caller's label
+// (labels.other, default Other); a code -> its English name. labels.none names the no-language
+// part (default No language). CAPTION_LANG_NAMES is untouched: the global caption under en is
 // "English".
-export function subscriberCaptionLang(v, labels = {}) {
+export function subscriberCaptionLang(v, labels = {}, split = null, format = String) {
   const l = typeof v === 'string' ? v.toLowerCase() : '';
   if (!l || l === 'all') return '';
-  if (l === 'en') return `${captionLangName('en')}+`;
-  if (l === 'en_only') return captionLangName('en');
+  if (l === 'en') {
+    const s = enSplitOf(split);
+    if (!s) return `${captionLangName('en')}+`;
+    return `${captionLangName('en')} ${format(s.en)} + ${labels.none || 'No language'} ${format(s.none)}`;
+  }
   if (l === 'other') return labels.other || 'Other';
-  if (l === 'none') return labels.none || 'No language';
   return captionLangName(l);
 }
 

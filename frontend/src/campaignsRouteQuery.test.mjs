@@ -1,8 +1,10 @@
 // Fork (brand usage, integrations BRAND-USAGE-V2-SPEC I8; DASHBOARDS-POLISH2-SPEC I2). Run: yarn test.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   CAMPAIGN_STATUSES, LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KINDS, SCOPE_KIND_PREF, afterBrandChange,
+  afterScopeChange, campaignListOptions, listQualifies,
   campaignsRouteQuery, canSelectAll, deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen,
   kindStatusParams, listParam, listSelectValue, pollsStats, preEnablesEvergreen, routeEvergreen, routeIdsAfter,
   routeIdsOf, routeStatusAfter, routeStatusOf, scopeKindPref, selectList, STATUS_CLEARING,
@@ -322,4 +324,68 @@ test('MATRIX-POLISH I5: cleared by exactly the STATUS_CLEARING interactions; oth
   kindStatusParams({ routeIDs: ids });
   canSelectAll({ total: 100, perPage: 20, routeIDs: ids });
   assert.deepEqual(ids, [41]);
+});
+
+// SUBSCRIBERS-FILTERS-2-SPEC I11 -- the Campaigns kind narrowing: Broadcasts offers only
+// has_broadcasts, Automations only has_automations, All everything; the selected list is always
+// present; a scope change resets a non-qualifying listID to null and leaves routeListIDs alone.
+const KIND_LISTS = {
+  results: [
+    {
+      id: 1, name: 'Ruze Emails', brand: 'ruze', hasBroadcasts: true, hasAutomations: true,
+    },
+    {
+      id: 2, name: 'Ruze winback', brand: 'ruze', has_broadcasts: true, has_automations: false,
+    },
+    {
+      id: 3, name: 'RUZE First order', brand: 'ruze', journeyLocked: true, hasBroadcasts: false, hasAutomations: true,
+    },
+    {
+      id: 4, name: 'Ruze empty', brand: 'ruze', hasBroadcasts: false, hasAutomations: false,
+    },
+    {
+      id: 5, name: 'Bnkd Emails', brand: 'bnkd', hasBroadcasts: true, hasAutomations: true,
+    },
+  ],
+};
+const optIds = (g) => [...g.ordinary.map((l) => l.id), '|', ...g.system.map((l) => l.id)];
+
+test('SUBSCRIBERS-FILTERS-2 I11: the Lists dropdown narrows to the scope pill\'s kind', () => {
+  // Broadcasts / Automations / All over every list (All brands: scopeListIds null).
+  assert.deepEqual(optIds(campaignListOptions(KIND_LISTS, null, false)), [5, 1, 2, '|']);
+  assert.deepEqual(optIds(campaignListOptions(KIND_LISTS, null, true)), [5, 1, '|', 3]);
+  assert.deepEqual(optIds(campaignListOptions(KIND_LISTS, null, null)), [5, 1, 4, 2, '|', 3]);
+  // Within a brand scope.
+  assert.deepEqual(optIds(campaignListOptions(KIND_LISTS, [1, 2, 3, 4], true)), [1, '|', 3]);
+  // The selected list is always an option, grouped by its kind of list; an unknown one is #<id>.
+  assert.deepEqual(optIds(campaignListOptions(KIND_LISTS, [1, 2, 3, 4], false, 3)), [1, 2, '|', 3]);
+  assert.deepEqual(optIds(campaignListOptions(KIND_LISTS, [1, 2, 3, 4], true, 4)), [1, 4, '|', 3]);
+  assert.deepEqual(campaignListOptions(KIND_LISTS, null, false, 99).ordinary.find((l) => l.id === 99), { id: 99, name: '#99' });
+  // The flag must be the server's true.
+  assert.equal(listQualifies({ hasBroadcasts: 'true' }, false), false);
+  assert.equal(listQualifies({}, true), false);
+  assert.equal(listQualifies({}, null), true);
+});
+
+test('SUBSCRIBERS-FILTERS-2 I11: a scope change resets a non-qualifying list, nothing else', () => {
+  assert.equal(afterScopeChange(2, KIND_LISTS, true), null); // broadcasts only
+  assert.equal(afterScopeChange(2, KIND_LISTS, false), 2);
+  assert.equal(afterScopeChange(3, KIND_LISTS, false), null);
+  assert.equal(afterScopeChange(3, KIND_LISTS, true), 3);
+  assert.equal(afterScopeChange(4, KIND_LISTS, null), 4); // All: no narrowing
+  assert.equal(afterScopeChange(99, KIND_LISTS, null), 99);
+  assert.equal(afterScopeChange(99, KIND_LISTS, true), null); // unknown: cannot qualify
+  assert.equal(afterScopeChange(null, KIND_LISTS, true), null);
+  // The page's wiring: on the pill change only (not on mount), before the page/bulk reset; the
+  // route list scope is not touched; the store lists are refreshed on mount.
+  const vue = readFileSync(new URL('./views/Campaigns.vue', import.meta.url), 'utf8');
+  const scope = vue.slice(vue.indexOf('onScopeChange() {'), vue.indexOf('this.refreshCampaigns();', vue.indexOf('onScopeChange() {')));
+  assert.match(scope, /this\.queryParams\.listID = afterScopeChange\(this\.queryParams\.listID, this\.lists, this\.queryParams\.evergreen\);/);
+  assert.match(scope, /this\.queryParams\.page = 1;/);
+  assert.match(scope, /this\.bulk\.checked = \[\];/);
+  assert.doesNotMatch(scope, /queryParams\.routeListIDs/);
+  assert.equal((vue.match(/afterScopeChange\(/g) || []).length, 1);
+  assert.match(vue, /return campaignListOptions\(this\.lists, this\.scopeListIds, this\.queryParams\.evergreen, this\.queryParams\.listID\);/);
+  const mounted = vue.slice(vue.indexOf('  mounted() {'));
+  assert.match(mounted, /this\.\$api\.getLists\(\{ minimal: true, per_page: 'all', status: 'active' \}\)/);
 });

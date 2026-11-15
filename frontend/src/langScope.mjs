@@ -1,6 +1,6 @@
 // Fork (naming standard, integrations listmonk/NAMING-STANDARD-SPEC D2 §4.4; global language
 // filter, integrations listmonk/GLOBAL-LANG-SPEC). The global language toggle
-// `All | EN+ | EN | ES | FR | DE | IT | Other | None` (SUBSCRIBERS-FILTERS-SPEC D1) beside the brand
+// `All | EN+ | ES | FR | DE | IT` plus `Other` while present (SUBSCRIBERS-FILTERS-2-SPEC D1/D2) beside the brand
 // selector: a PRESENTATION filter like the brand selector -- it never reaches a server-side
 // permission decision (GLOBAL-LANG D9). Its value is the store's `langSelection` getter, persisted
 // in the pref `brand.lang` (the `brand.launch` pattern) by the store's selectLang mutation, whose
@@ -15,28 +15,46 @@
 // (grey), each with a short description i18n key. Exhaustive: every named route in
 // router/index.js has an entry (langScope.test.mjs reads the router file).
 import { LANG_VALUES, normalizeLang } from './naming.mjs'; // eslint-disable-line import/extensions
+import { scopeListIds, storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 export { LANG_VALUES, normalizeLang };
 
 export const LANG_PREF = 'brand.lang';
 
-// SUBSCRIBERS-FILTERS-SPEC D1 -- the toggle values only the Subscribers page applies (stored
-// English, an unrecognised value, no usable language). Every other view reads them as All (D2).
-export const SUBSCRIBER_ONLY_LANGS = Object.freeze(['en_only', 'other', 'none']);
+// SUBSCRIBERS-FILTERS-SPEC D1, narrowed by SUBSCRIBERS-FILTERS-2-SPEC D1 -- the toggle value only
+// the Subscribers page applies (an unrecognised stored value). Every other view reads it as All (D2).
+export const SUBSCRIBER_ONLY_LANGS = Object.freeze(['other']);
 
 // SUBSCRIBERS-FILTERS D1 (I14) -- the button label of a value. labels: the caller's translations,
-// { all, other, none } (a string is the All label alone, the older signature). en -> EN+ (the send
-// language, the "+" convention of langs.js), en_only -> EN (stored English), other / none, a code
-// -> upper case.
+// { all, other } (a string is the All label alone, the older signature). en -> EN+ (the send
+// language, the "+" convention of langs.js), other, a code -> upper case.
 export function langLabel(v, labels = {}) {
   const l = typeof labels === 'string' ? { all: labels } : (labels || {});
   const n = normalizeLang(v);
   if (n === 'all') return l.all || 'All';
   if (n === 'en') return 'EN+';
-  if (n === 'en_only') return 'EN';
   if (n === 'other') return l.other || 'Other';
-  if (n === 'none') return l.none || 'None';
   return n.toUpperCase();
+}
+
+// SUBSCRIBERS-FILTERS-2-SPEC D2 (I3) -- whether some list in the brand scope has a member whose
+// stored language is the 'other' bucket: the server's has_other_lang (minimal GET /api/lists,
+// mat_list_subscriber_stats) on the store's lists. The scope is brandScope.mjs::scopeListIds of
+// the selection; under All brands (null) every store list counts (the store is already
+// permission-scoped by the server).
+export function otherLangPresent(lists, brandSelection) {
+  const all = storeLists(lists);
+  const ids = scopeListIds(all, brandSelection);
+  return all.some((l) => l && (ids === null || ids.includes(l.id))
+    && (l.has_other_lang === true || l.hasOtherLang === true));
+}
+
+// D2 (I4) -- the toggle's values: LANG_VALUES in order, without 'other' unless it is present in
+// scope or it is the current selection (a selection never vanishes under the user). The toggle
+// renders from this and is its only caller.
+export function toggleValues(otherPresent, langSelection) {
+  const keepOther = otherPresent === true || normalizeLang(langSelection) === 'other';
+  return LANG_VALUES.filter((v) => v !== 'other' || keepOther);
 }
 
 // D1 -- the {lang} of the grey line: the button label on Subscribers; on every other view `en`
@@ -175,21 +193,16 @@ export function langNote(selection, applicability) {
 }
 
 // D4 (stage 4 S4-7): the ONE label of a Subscribers route language value -- the by-query note of
-// Subscribers.vue. labels = { all, none, other, name(code), sendName(code) }: the caller's translations
-// (i18n and langs.js stay out of this pure module). '' / 'all' -> all; en_only -> the stored English
-// name; en -> the send-language name (EN+); none / other; a code -> its name, else the raw value.
+// Subscribers.vue. labels = { all, other, name(code), sendName(code) }: the caller's translations
+// (i18n and langs.js stay out of this pure module). '' / 'all' -> all; en -> the send-language name
+// (EN+); other; a code -> its name, else the raw value. (SUBSCRIBERS-FILTERS-2-SPEC D1: the guard
+// drops a route en_only / none, so neither reaches here.)
 export function routeLangLabel(v, labels) {
   if (!v || v === 'all') {
     return labels.all;
   }
-  if (v === 'none') {
-    return labels.none;
-  }
   if (v === 'other') {
     return labels.other;
-  }
-  if (v === 'en_only') {
-    return labels.name('en');
   }
   if (v === 'en') {
     return labels.sendName('en');

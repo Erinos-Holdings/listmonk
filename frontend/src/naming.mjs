@@ -13,11 +13,13 @@ export const CATALOG_PREFIX = 'CATALOG ';
 export const OFFICIAL_PREFIX = 'Official_';
 
 // D2 -- the language toggle's values, in display order. 'all' applies no filter. Since
-// SUBSCRIBERS-FILTERS-SPEC D1 exactly the server's subscriber lang= filter values plus 'all'
-// (models.IsSubscriberLangFilter): en is the SEND language (labelled EN+), en_only stored English
-// (EN); en_only, other and none are subscriber-only (langScope.mjs::SUBSCRIBER_ONLY_LANGS -- every
-// other view reads them as All, langScope.mjs::effectiveLang).
-export const LANG_VALUES = Object.freeze(['all', 'en', 'en_only', 'es', 'fr', 'de', 'it', 'other', 'none']);
+// SUBSCRIBERS-FILTERS-2-SPEC D1 the SEND languages only, as the Campaigns page reads them: en is
+// the send language (stored en plus no language, labelled EN+), then the four codes, and other
+// (an unrecognised stored value) -- subscriber-only (langScope.mjs::SUBSCRIBER_ONLY_LANGS; every
+// other view reads it as All, langScope.mjs::effectiveLang) and shown only while present
+// (langScope.mjs::toggleValues). The server keeps accepting en_only and none (a strict superset);
+// a stored en_only / none pref normalises to all here.
+export const LANG_VALUES = Object.freeze(['all', 'en', 'es', 'fr', 'de', 'it', 'other']);
 
 export function normalizeLang(v) {
   const s = typeof v === 'string' ? v.trim().toLowerCase() : '';

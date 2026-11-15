@@ -176,6 +176,13 @@
         </a>
       </b-table-column>
 
+      <!-- SUBSCRIBERS-FILTERS-2-SPEC D3 -- the stored language, under All, EN+ and Other (the route's
+           lang); sorted server-side by the bucket, no language first (order_by=lang). -->
+      <b-table-column v-if="langColumnOn" v-slot="props" field="lang" :label="$t('subscribers.langColumn')"
+        header-class="cy-lang" sortable>
+        <span data-cy="lang-cell">{{ langCellOf(props.row) }}</span>
+      </b-table-column>
+
       <b-table-column v-slot="props" field="lists" :label="$t('globals.terms.lists')" header-class="cy-lists" centered>
         {{ listCount(props.row.lists) }}
       </b-table-column>
@@ -273,7 +280,7 @@ import {
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { subscriberCaptionLang } from '../filterBar.mjs'; // eslint-disable-line import/extensions
 import {
-  SEGMENTS, listOptions, listRoute, routeListIdOf, statusEnabled, statusQuery,
+  SEGMENTS, langCell, langColumnShown, listOptions, listRoute, routeListIdOf, statusEnabled, statusQuery,
 } from '../subscriberFilters.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
@@ -569,11 +576,15 @@ export default Vue.extend({
     routeLangLabel(l) {
       return routeLangLabel(l, {
         all: this.$t('subscribers.langAll'),
-        none: this.$t('lists.grid.noLangChip'),
         other: this.$t('lists.grid.other'),
         name: campaignLangLabel,
         sendName: sendLangLabel,
       });
+    },
+
+    // SUBSCRIBERS-FILTERS-2-SPEC D3 -- a row's Lang cell (subscriberFilters.mjs::langCell).
+    langCellOf(row) {
+      return langCell(row ? row.attribs : undefined);
     },
 
     managePrefsUrl(sub) {
@@ -842,13 +853,27 @@ export default Vue.extend({
     },
 
     // Polish 2026-11-14 -- the filter caption's language: the route's lang (the page's own filter).
-    // SUBSCRIBERS-FILTERS D8 (I13): English+ / English / Other / No language / the English name
+    // SUBSCRIBERS-FILTERS D8 (I13), SUBSCRIBERS-FILTERS-2-SPEC D4 (I8): under EN+ `English n + No
+    // language m` once the answer to the CURRENT query (the page not busy, its answered filter
+    // under en) carries lang_none_total, else English+; Other; the English name
     // (filterBar.mjs::subscriberCaptionLang).
     captionLang() {
+      const answered = answeredFilter(this.answeredQuery);
+      const split = {
+        current: !this.byQueryBusy && !!answered && answered.lang === 'en',
+        total: this.subscribers.total,
+        langNoneTotal: this.subscribers.langNoneTotal,
+      };
       return subscriberCaptionLang(this.queryParams.lang, {
         none: this.$t('lists.grid.noLangChip'),
         other: this.$t('lists.grid.other'),
-      });
+      }, split, (n) => this.$utils.formatNumber(n));
+    },
+
+    // SUBSCRIBERS-FILTERS-2-SPEC D3 (I9) -- the Lang column, under All, EN+ and Other (the route's
+    // lang, the caption's source).
+    langColumnOn() {
+      return langColumnShown(this.queryParams.lang);
     },
 
     numSelectedSubscribers() {

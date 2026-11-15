@@ -2,8 +2,19 @@
 -- name: get-lists
 -- Fork (BRAND-PICKER-SPEC D2) -- brand is the list's brand slug, or empty when untagged.
 -- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- former_name, NULL when never renamed.
+-- Fork (integrations SUBSCRIBERS-FILTERS-2-SPEC D2/D6) -- three per-list facts for the navbar
+-- language toggle (has_other_lang: the list has a member whose subscriber_lang() is 'other', read
+-- from mat_list_subscriber_stats at its refresh cadence) and the Campaigns Lists dropdown
+-- (has_broadcasts / has_automations: the list carries a non-evergreen / evergreen campaign, any
+-- status). Selected here only; models.List holds them as pointers, omitted elsewhere.
 SELECT *, COALESCE(list_brand_tag(tags), '') AS brand,
-    (SELECT f.name FROM former_names f WHERE f.kind = 'list' AND f.id = lists.id) AS former_name
+    (SELECT f.name FROM former_names f WHERE f.kind = 'list' AND f.id = lists.id) AS former_name,
+    EXISTS (SELECT 1 FROM mat_list_subscriber_stats ms
+        WHERE ms.list_id = lists.id AND ms.lang = 'other' AND ms.subscriber_count > 0) AS has_other_lang,
+    EXISTS (SELECT 1 FROM campaign_lists hb_cl JOIN campaigns hb_c ON (hb_c.id = hb_cl.campaign_id)
+        WHERE hb_cl.list_id = lists.id AND hb_c.evergreen = FALSE) AS has_broadcasts,
+    EXISTS (SELECT 1 FROM campaign_lists ha_cl JOIN campaigns ha_c ON (ha_c.id = ha_cl.campaign_id)
+        WHERE ha_cl.list_id = lists.id AND ha_c.evergreen = TRUE) AS has_automations
     FROM lists WHERE (CASE WHEN $1 = '' THEN 1=1 ELSE type=$1::list_type END)
     AND (CASE WHEN $2 = '' THEN 1=1 ELSE status=$2::list_status END)
     AND CASE

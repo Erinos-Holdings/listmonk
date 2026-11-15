@@ -11,18 +11,22 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import {
   APPLICABILITY_STATES, LANG_APPLICABILITY, LANG_VALUES, SUBSCRIBER_ONLY_LANGS, SUBSCRIBER_ROUTES, byQueryLangNote,
   effectiveLang, langApplicability, langLabel, langNote, langNoteLabel, langToggleVisible, routeLangLabel,
-  subscriberResponseCurrent, subscribersLang, viewPaneValue, answeredFilter, bulkTarget,
+  subscriberResponseCurrent, subscribersLang, viewPaneValue, answeredFilter, bulkTarget, normalizeLang,
+  otherLangPresent, toggleValues,
 } from './langScope.mjs'; // eslint-disable-line import/extensions
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const ON = { lang_enabled: true };
 const OFF = { lang_enabled: false };
 
-// SUBSCRIBERS-FILTERS-SPEC I1 -- the toggle's values are exactly the server's subscriber lang= filter
-// values (models.IsSubscriberLangFilter: CampaignLangs + the three SubscriberLang* constants) plus
-// all, in D1 order. Read from the fork's Go source so the two cannot drift.
+// SUBSCRIBERS-FILTERS-SPEC I1, amended by SUBSCRIBERS-FILTERS-2-SPEC I1 -- the toggle's values are the
+// send languages plus other and all (the literal pin is the deliberate act), every one of them a
+// value the server's subscriber lang= filter accepts (models.IsSubscriberLangFilter: CampaignLangs +
+// the three SubscriberLang* constants) -- a STRICT subset: the server keeps en_only and none.
+// Read from the fork's Go source so the two cannot drift.
 test('toggle values = server lang filter + all', () => {
-  assert.deepEqual([...LANG_VALUES], ['all', 'en', 'en_only', 'es', 'fr', 'de', 'it', 'other', 'none']);
+  assert.deepEqual([...LANG_VALUES], ['all', 'en', 'es', 'fr', 'de', 'it', 'other']);
+  assert.deepEqual([...SUBSCRIBER_ONLY_LANGS], ['other']);
   const campaigns = read('../../models/campaigns.go');
   const m = campaigns.match(/var CampaignLangs = \[\]string\{([^}]*)\}/);
   assert.ok(m, 'CampaignLangs not found');
@@ -34,8 +38,71 @@ test('toggle values = server lang filter + all', () => {
     return c[1];
   });
   const server = new Set([...codes, ...consts]);
-  assert.deepEqual(new Set(LANG_VALUES.filter((v) => v !== 'all')), server);
-  assert.deepEqual(new Set(SUBSCRIBER_ONLY_LANGS), new Set(consts));
+  const toggle = LANG_VALUES.filter((v) => v !== 'all');
+  toggle.forEach((v) => assert.ok(server.has(v), `${v} is not a server lang filter value`));
+  assert.ok(toggle.length < server.size, 'the toggle is a strict subset of the server filter');
+  // The two the toggle withdrew stay server values (advanced use, rollbacks) and normalise to All.
+  ['en_only', 'none'].forEach((v) => {
+    assert.ok(server.has(v), v);
+    assert.ok(!LANG_VALUES.includes(v), v);
+    assert.equal(normalizeLang(v), 'all', v);
+  });
+  SUBSCRIBER_ONLY_LANGS.forEach((v) => assert.ok(server.has(v), v));
+});
+
+// SUBSCRIBERS-FILTERS-2-SPEC I3 -- otherLangPresent: true iff some in-scope list has has_other_lang;
+// every store list under All brands; a list outside the brand scope never counts.
+test('otherLangPresent over the brand scope', () => {
+  const lists = {
+    results: [
+      { id: 1, brand: 'ruze', has_other_lang: false },
+      { id: 2, brand: 'ruze' },
+      { id: 3, brand: 'bnkd', hasOtherLang: true },
+      { id: 4, brand: '', has_other_lang: false },
+    ],
+  };
+  const ALL = { kind: 'all' };
+  const RUZE = { kind: 'brand', slug: 'ruze' };
+  const BNKD = { kind: 'brand', slug: 'bnkd' };
+  const NONE = { kind: 'none' };
+  assert.equal(otherLangPresent(lists, ALL), true);
+  assert.equal(otherLangPresent(lists, BNKD), true);
+  assert.equal(otherLangPresent(lists, RUZE), false); // list 3 is out of scope
+  assert.equal(otherLangPresent(lists, NONE), false);
+  assert.equal(otherLangPresent([{ id: 4, brand: '', has_other_lang: true }], NONE), true);
+  // A truthy non-boolean is not the server's true.
+  assert.equal(otherLangPresent([{ id: 5, brand: '', has_other_lang: 'true' }], ALL), false);
+  assert.equal(otherLangPresent(null, ALL), false);
+  assert.equal(otherLangPresent({ results: [] }, ALL), false);
+});
+
+// SUBSCRIBERS-FILTERS-2-SPEC I4 -- toggleValues includes other iff present OR selected; otherwise
+// LANG_VALUES in order. The toggle renders from it and is its only caller.
+test('toggleValues shows Other only while present or selected', () => {
+  const noOther = ['all', 'en', 'es', 'fr', 'de', 'it'];
+  assert.deepEqual(toggleValues(false, 'all'), noOther);
+  assert.deepEqual(toggleValues(false, 'fr'), noOther);
+  assert.deepEqual(toggleValues(false, 'none'), noOther); // a withdrawn value reads as All
+  assert.deepEqual(toggleValues(true, 'all'), [...LANG_VALUES]);
+  assert.deepEqual(toggleValues(false, 'other'), [...LANG_VALUES]);
+  assert.deepEqual(toggleValues(false, ' Other '), [...LANG_VALUES]);
+  assert.deepEqual(toggleValues('yes', 'all'), noOther);
+  const toggle = read('./components/LanguageToggle.vue');
+  assert.match(toggle, /return toggleValues\(otherLangPresent\(this\.lists, this\.brandSelection\), this\.langSelection\);/);
+  assert.match(toggle, /v-for="v in values"/);
+  assert.ok(!toggle.includes('LANG_VALUES'), 'the toggle renders from toggleValues only');
+  const root = new URL('./', import.meta.url).pathname;
+  const callers = [];
+  const walk = (dir) => readdirSync(dir).forEach((f) => {
+    const p = `${dir}${f}`;
+    if (statSync(p).isDirectory()) {
+      walk(`${p}/`);
+    } else if (/\.(js|mjs|vue)$/.test(f) && !/\.test\.mjs$/.test(f) && readFileSync(p, 'utf8').includes('toggleValues(')) {
+      callers.push(p.slice(root.length));
+    }
+  });
+  walk(root);
+  assert.deepEqual(callers.sort(), ['components/LanguageToggle.vue', 'langScope.mjs']);
 });
 
 // I2.
@@ -109,16 +176,19 @@ test('subscriber-only selection is grey off Subscribers', () => {
 
 // I14 -- button labels (pure, translations passed in) and the note's {lang}.
 test('labels', () => {
-  const labels = { all: 'Tout', other: 'Autre', none: 'Aucune' };
-  assert.deepEqual(LANG_VALUES.map((v) => langLabel(v, labels)), ['Tout', 'EN+', 'EN', 'ES', 'FR', 'DE', 'IT', 'Autre', 'Aucune']);
-  assert.deepEqual(LANG_VALUES.map((v) => langLabel(v)), ['All', 'EN+', 'EN', 'ES', 'FR', 'DE', 'IT', 'Other', 'None']);
+  const labels = { all: 'Tout', other: 'Autre' };
+  assert.deepEqual(LANG_VALUES.map((v) => langLabel(v, labels)), ['Tout', 'EN+', 'ES', 'FR', 'DE', 'IT', 'Autre']);
+  assert.deepEqual(LANG_VALUES.map((v) => langLabel(v)), ['All', 'EN+', 'ES', 'FR', 'DE', 'IT', 'Other']);
   assert.equal(langLabel('fr', 'All'), 'FR'); // the older string signature
   assert.equal(langLabel('pt', labels), 'Tout');
+  // SUBSCRIBERS-FILTERS-2-SPEC D1 -- the withdrawn values normalise to All (their EN / None
+  // branches are deleted).
+  assert.equal(langLabel('en_only', labels), 'Tout');
+  assert.equal(langLabel('none', labels), 'Tout');
   // The note: EN+ on Subscribers, bare EN elsewhere; every other value as its button.
   assert.equal(langNoteLabel('en', true), 'EN+');
   assert.equal(langNoteLabel('en', false), 'EN');
-  assert.equal(langNoteLabel('en_only', false), 'EN');
-  assert.equal(langNoteLabel('none', false, labels), 'Aucune');
+  assert.equal(langNoteLabel('other', false, labels), 'Autre');
   assert.equal(langNoteLabel('fr', true), 'FR');
   // The note keys: send language for a toggle code, stored language for a subscriber-only value.
   ['en', 'es', 'fr', 'de', 'it'].forEach((v) => assert.equal(langApplicability('subscribers', { selection: v }).desc, 'naming.langApp.subscribers'));
@@ -126,8 +196,11 @@ test('labels', () => {
   assert.equal(en['naming.langApp.subscribers'], '{lang}: subscribers by send language');
   assert.equal(en['naming.langApp.subscribersStored'], '{lang}: subscribers by stored language');
   assert.match(en['naming.langApp.subscribersOnly'], /applies to Subscribers only/);
-  ['naming.langOther', 'naming.langNone'].forEach((k) => assert.ok(en[k], k));
+  assert.ok(en['naming.langOther'], 'naming.langOther');
+  // SUBSCRIBERS-FILTERS-2-SPEC D1 -- naming.langNone is deleted with its value.
+  assert.equal(en['naming.langNone'], undefined);
   const toggle = read('./components/LanguageToggle.vue');
+  assert.ok(!toggle.includes('naming.langNone'));
   assert.match(toggle, /return langLabel\(v, this\.labels\(\)\);/);
   assert.match(toggle, /langNoteLabel\(lang, this\.onSubscribers, this\.labels\(\)\)/);
 });
@@ -135,14 +208,16 @@ test('labels', () => {
 // Stage 4 S4-7 -- the one label mapper of a Subscribers route language value.
 test('route language label', () => {
   const labels = {
-    all: 'All languages', none: 'No language', other: 'Other', name: (c) => ({ en: 'English', fr: 'Français' }[c] || ''), sendName: (c) => `${c}+`,
+    all: 'All languages', other: 'Other', name: (c) => ({ en: 'English', fr: 'Français' }[c] || ''), sendName: (c) => `${c}+`,
   };
   assert.equal(routeLangLabel('', labels), 'All languages');
   assert.equal(routeLangLabel('all', labels), 'All languages');
   assert.equal(routeLangLabel(undefined, labels), 'All languages');
-  assert.equal(routeLangLabel('none', labels), 'No language');
   assert.equal(routeLangLabel('other', labels), 'Other');
-  assert.equal(routeLangLabel('en_only', labels), 'English');
+  // SUBSCRIBERS-FILTERS-2-SPEC D1 -- the en_only / none branches are deleted (the guard drops such
+  // a route): an unnamed value reads raw.
+  assert.equal(routeLangLabel('none', labels), 'none');
+  assert.equal(routeLangLabel('en_only', labels), 'en_only');
   assert.equal(routeLangLabel('en', labels), 'en+');
   assert.equal(routeLangLabel('fr', labels), 'Français');
   assert.equal(routeLangLabel('pt', labels), 'pt');
@@ -316,8 +391,11 @@ test('note only when filtered', () => {
   assert.equal(langNote('all', a), null);
   assert.equal(langNote(undefined, a), null);
   assert.deepEqual(langNote('es', a), { key: 'naming.langApp.dashboard', lang: 'es' });
-  const p = langApplicability('subscribers', { selection: 'none' });
-  assert.deepEqual(langNote('none', p), { key: 'naming.langApp.subscribersStored', lang: 'none' });
+  // SUBSCRIBERS-FILTERS-2-SPEC D1 (S2-3) -- Other keeps the stored-language note.
+  const p = langApplicability('subscribers', { selection: 'other' });
+  assert.deepEqual(langNote('other', p), { key: 'naming.langApp.subscribersStored', lang: 'other' });
+  // A withdrawn value is All: no note.
+  assert.equal(langNote('none', langApplicability('subscribers', { selection: 'none' })), null);
   assert.deepEqual(langNote('other', langApplicability('campaigns', { selection: 'other' })), { key: 'naming.langApp.subscribersOnly', lang: 'other' });
   // SUBSCRIBERS-FILTERS D3 retired the page-filter line: under All there is never a note.
   assert.equal(langNote('all', langApplicability('subscribers', { selection: 'all' })), null);

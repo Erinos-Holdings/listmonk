@@ -100,6 +100,15 @@ type List struct {
 	// omitted on the multi-list responses.
 	RunningAutomation *bool `db:"-" json:"running_automation,omitempty"`
 
+	// Fork (integrations SUBSCRIBERS-FILTERS-2-SPEC D2/D6, S2-5). Selected by get-lists only
+	// (minimal GET /api/lists, the store's lists); nil and omitted on every other response, so the
+	// full listing and GET /api/lists/:id never answer a false false. HasOtherLang: a member of
+	// the list has subscriber_lang() 'other' (mat_list_subscriber_stats). HasBroadcasts /
+	// HasAutomations: the list carries a non-evergreen / evergreen campaign, any status.
+	HasOtherLang   *bool `db:"has_other_lang" json:"has_other_lang,omitempty"`
+	HasBroadcasts  *bool `db:"has_broadcasts" json:"has_broadcasts,omitempty"`
+	HasAutomations *bool `db:"has_automations" json:"has_automations,omitempty"`
+
 	// This is only relevant when querying the lists of a subscriber.
 	SubscriptionStatus    string    `db:"subscription_status" json:"subscription_status,omitempty"`
 	SubscriptionCreatedAt null.Time `db:"subscription_created_at" json:"subscription_created_at,omitempty"`
@@ -132,6 +141,11 @@ const (
 	// page's language picker uses it; the Lists grid's EN line keeps linking to lang=en, the
 	// send language, because that is what its cells count.
 	SubscriberLangEnOnly = "en_only"
+
+	// SubscriberLangEn is the lang= filter value of the English SEND language (stored en plus no
+	// language). Under it GET /api/subscribers also answers lang_none_total (fork, integrations
+	// SUBSCRIBERS-FILTERS-2-SPEC D4).
+	SubscriberLangEn = "en"
 )
 
 // SubscriberFilter is the server-authored segment=/lang= filter on the subscriber query and

@@ -1,9 +1,10 @@
 <template>
   <!-- Fork (naming standard, integrations NAMING-STANDARD-SPEC D2; global language, GLOBAL-LANG-SPEC
-       D1/D2; SUBSCRIBERS-FILTERS-SPEC D1/D2). The navbar language toggle
-       All | EN+ | EN | ES | FR | DE | IT | Other | None, beside the brand selector, on every route
-       with the navbar (hidden only while app.lang_enable is off); EN, Other and None filter the
-       Subscribers page only and read grey (All) everywhere else. A presentation filter,
+       D1/D2; SUBSCRIBERS-FILTERS-SPEC D1/D2; SUBSCRIBERS-FILTERS-2-SPEC D1/D2). The navbar language
+       toggle All | EN+ | ES | FR | DE | IT, plus Other only while some list in the brand scope has an
+       unrecognised language (or Other is selected) -- langScope.mjs::toggleValues; beside the brand
+       selector, on every route with the navbar (hidden only while app.lang_enable is off); Other
+       filters the Subscribers page only and reads grey (All) everywhere else. A presentation filter,
        never a scope or a permission. The selected button wears the view's applicability
        (langScope.mjs::LANG_APPLICABILITY): blue applies, orange partly applies, grey not
        applicable; off All a grey line beside it names what is filtered (the "Filtered" marker), and
@@ -25,7 +26,8 @@
 import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import {
-  LANG_VALUES, SUBSCRIBER_ROUTES, langApplicability, langLabel, langNote, langNoteLabel, langToggleVisible,
+  SUBSCRIBER_ROUTES, langApplicability, langLabel, langNote, langNoteLabel, langToggleVisible, otherLangPresent,
+  toggleValues,
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
 
 // The Buefy button type per applicability state (the classes are style.scss's).
@@ -34,13 +36,15 @@ const BUTTON_TYPES = Object.freeze({ all: 'is-primary', partial: 'is-lang-partia
 export default Vue.extend({
   name: 'LanguageToggle',
 
-  data() {
-    return { values: LANG_VALUES };
-  },
-
   computed: {
-    ...mapGetters(['langSelection', 'viewPane']),
-    ...mapState(['serverConfig']),
+    ...mapGetters(['langSelection', 'viewPane', 'brandSelection']),
+    ...mapState(['serverConfig', 'lists']),
+
+    // SUBSCRIBERS-FILTERS-2-SPEC D2 (I3/I4) -- Other only while present in the brand scope (the
+    // store lists' has_other_lang) or selected; the one caller of toggleValues.
+    values() {
+      return toggleValues(otherLangPresent(this.lists, this.brandSelection), this.langSelection);
+    },
 
     // D1 (S2-14): hidden everywhere while app.lang_enable is off.
     shown() {
@@ -85,7 +89,7 @@ export default Vue.extend({
 
   methods: {
     labels() {
-      return { all: this.$t('naming.langAll'), other: this.$t('naming.langOther'), none: this.$t('naming.langNone') };
+      return { all: this.$t('naming.langAll'), other: this.$t('naming.langOther') };
     },
 
     // SUBSCRIBERS-FILTERS D1 (I14) -- the one label mapper, langScope.mjs::langLabel.

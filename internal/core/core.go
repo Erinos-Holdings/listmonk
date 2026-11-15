@@ -76,7 +76,9 @@ var (
 	regexFullTextQuery  = regexp.MustCompile(`\s+`)
 	regexpSpaces        = regexp.MustCompile(`[\s]+`)
 	campQuerySortFields = []string{"name", "status", "created_at", "updated_at"}
-	subQuerySortFields  = []string{"email", "status", "name", "created_at", "updated_at"}
+	// Fork (integrations SUBSCRIBERS-FILTERS-2-SPEC D3) -- lang: the Lang column, mapped by
+	// QuerySubscribers to subLangOrder (a fixed server-side expression, never request text).
+	subQuerySortFields = []string{"email", "status", "name", "created_at", "updated_at", "lang"}
 	listQuerySortFields = []string{"name", "type", "status", "created_at", "updated_at", "subscriber_count", // Fork -- type: the Lists page marks it sortable
 		// Fork (list grid, LIST-GRID-SPEC D9) -- the grid's "all" row, selected by query-lists.
 		"active_count", "held_count", "unsubscribed_count", "pending_count", "blocked_count"}

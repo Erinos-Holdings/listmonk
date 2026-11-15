@@ -96,7 +96,11 @@
                   {{ $tc('campaigns.linkedLists', queryParams.routeListIDs.length, { num: queryParams.routeListIDs.length }) }}
                 </option>
                 <option :value="null">{{ $t('campaigns.allLists') }}</option>
-                <option v-for="l in filterLists" :key="l.id" :value="l.id">{{ l.name }}</option>
+                <!-- SUBSCRIBERS-FILTERS-2-SPEC D5 -- the Subscribers page's grouping (listGroups.mjs). -->
+                <option v-for="l in filterLists.ordinary" :key="l.id" :value="l.id">{{ l.name }}</option>
+                <optgroup v-if="filterLists.system.length" :label="$t('subscribers.systemLists')">
+                  <option v-for="l in filterLists.system" :key="l.id" :value="l.id">{{ l.name }}</option>
+                </optgroup>
               </b-select>
             </b-field>
           </div>
@@ -445,7 +449,7 @@ import {
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
 import {
-  canCreateCampaign, filterByIds, storeLists,
+  canCreateCampaign, storeLists,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
   campaignBrandOf, chipsFor, cloneBaseOf, cloneName, formerNameOf, isNameBlocked, langColumnText, nameCounter,
@@ -454,8 +458,8 @@ import {
 import { langParam } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
 import {
-  LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KIND_PREF, afterBrandChange, campaignsRouteQuery, canSelectAll,
-  deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen, kindStatusParams, listParam,
+  LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KIND_PREF, afterBrandChange, afterScopeChange, campaignListOptions,
+  campaignsRouteQuery, canSelectAll, deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen, kindStatusParams, listParam,
   listSelectValue, pollsStats, preEnablesEvergreen, routeEvergreen, routeIdsAfter, routeIdsOf, routeStatusAfter,
   routeStatusOf, scopeKindPref, selectList,
 } from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
@@ -746,6 +750,9 @@ export default Vue.extend({
     // boolean is never written again); D2 -- a scope change clears the route status scope.
     onScopeChange() {
       this.$utils.setPref(SCOPE_KIND_PREF, kindOfEvergreen(this.queryParams.evergreen));
+      // SUBSCRIBERS-FILTERS-2-SPEC D6 (S2-2) -- a selected list that carries no campaign of the new
+      // kind resets to All lists (the page and bulk selection reset below); routeListIDs untouched.
+      this.queryParams.listID = afterScopeChange(this.queryParams.listID, this.lists, this.queryParams.evergreen);
       this.queryParams.routeStatus = routeStatusAfter(this.queryParams.routeStatus, 'scope');
       this.queryParams.routeIDs = routeIdsAfter(this.queryParams.routeIDs, 'scope');
       this.queryParams.page = 1;
@@ -1063,8 +1070,11 @@ export default Vue.extend({
     },
 
     // Fork (global brand, D7) -- the in-page list filter's options: the scope's lists.
+    // SUBSCRIBERS-FILTERS-2-SPEC D5/D6 -- of the scope pill's kind (a list carrying a broadcast /
+    // an automation; All: every list), grouped ordinary / System lists, the selected list always
+    // among them (campaignsRouteQuery.mjs::campaignListOptions).
     filterLists() {
-      return filterByIds(this.lists, this.scopeListIds);
+      return campaignListOptions(this.lists, this.scopeListIds, this.queryParams.evergreen, this.queryParams.listID);
     },
 
     // DASHBOARDS-POLISH2-SPEC D2 -- the Lists select's value: the route-scope placeholder while a
@@ -1143,6 +1153,10 @@ export default Vue.extend({
   mounted() {
     // Fork (global brand, D3) -- the first scoped fetch waits for the lists (I13).
     this.afterListsLoaded(() => this.refreshCampaigns());
+    // SUBSCRIBERS-FILTERS-2-SPEC D6 -- refresh the store's minimal lists (their has_broadcasts /
+    // has_automations), so a campaign created this session reaches the Lists dropdown. App.vue's
+    // request; nothing is reset on mount.
+    this.$api.getLists({ minimal: true, per_page: 'all', status: 'active' }).catch(() => {});
     // Fork (campaign send series, D9) -- the H. Bounces / Complaints tier thresholds.
     this.fetchCampaignThresholds();
   },

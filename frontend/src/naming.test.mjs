@@ -274,10 +274,14 @@ test('I4 (D8): listPrefixAddon, splitListName and joinListName', () => {
 // (Where the toggle shows and applies -- GLOBAL-LANG-SPEC, superseding the route list -- is
 // langScope.test.mjs.)
 test('langScope: values, the pref, its label and the Campaigns param', () => {
-  // SUBSCRIBERS-FILTERS-SPEC D1 (agreement with the server: langScope.test.mjs I1).
-  assert.deepEqual([...LANG_VALUES], ['all', 'en', 'en_only', 'es', 'fr', 'de', 'it', 'other', 'none']);
-  assert.equal(normalizeLang('EN_ONLY'), 'en_only');
-  assert.equal(langParam('none'), 'none');
+  // SUBSCRIBERS-FILTERS-2-SPEC D1/I1 (a literal pin -- the set is the deliberate act; agreement with
+  // the server: langScope.test.mjs I1). A stored en_only / none pref normalises to All.
+  assert.deepEqual([...LANG_VALUES], ['all', 'en', 'es', 'fr', 'de', 'it', 'other']);
+  assert.equal(normalizeLang('EN_ONLY'), 'all');
+  assert.equal(normalizeLang('en_only'), 'all');
+  assert.equal(normalizeLang('none'), 'all');
+  assert.equal(langParam('none'), '');
+  assert.equal(langParam('other'), 'other');
   assert.equal(LANG_PREF, 'brand.lang');
   assert.equal(langLabel('all', 'All'), 'All');
   assert.equal(langLabel('fr', 'All'), 'FR');

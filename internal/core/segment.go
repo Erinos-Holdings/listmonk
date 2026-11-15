@@ -14,6 +14,16 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// SubscriberLangNonePred is the ONE statement of "no usable language" in a subscriber predicate
+// (the subscriber_lang() bucket none): the lang=none filter below and the lang_none_total count of
+// GET /api/subscribers (CountSubscribersLangNone, integrations SUBSCRIBERS-FILTERS-2-SPEC D4/I7).
+const SubscriberLangNonePred = `subscriber_lang(subscribers.attribs) = 'none'`
+
+// subLangOrder is the Lang column's sort key (SUBSCRIBERS-FILTERS-2-SPEC D3): the language bucket,
+// with no language as '' so it sorts FIRST ascending (last descending). A fixed server-side
+// expression; the client sends only order_by=lang.
+const subLangOrder = `(CASE subscriber_lang(subscribers.attribs) WHEN 'none' THEN '' ELSE subscriber_lang(subscribers.attribs) END)`
+
 // subscriberFilterExp composes the segment/lang predicate with the caller's optional SQL
 // expression and returns what goes into a subscriber query template's %query% slot.
 //
@@ -59,7 +69,7 @@ func (c *Core) subscriberFilterExp(queryExp string, listIDs []int, f models.Subs
 		}
 		if f.Lang == models.SubscriberLangNone {
 			// The explicit no-language set, a subset of lang=en.
-			preds = append(preds, `subscriber_lang(subscribers.attribs) = 'none'`)
+			preds = append(preds, SubscriberLangNonePred)
 		} else if f.Lang == models.SubscriberLangEnOnly {
 			// Stored en alone: the STORAGE bucket, so lang=en = en_only + none, disjoint.
 			preds = append(preds, `subscriber_lang(subscribers.attribs) = 'en'`)

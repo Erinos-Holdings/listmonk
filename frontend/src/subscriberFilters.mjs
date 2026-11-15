@@ -9,7 +9,7 @@
 // page never issues a request the server refuses.
 import { LANG_VALUES, SUBSCRIBER_ROUTES, normalizeLang } from './langScope.mjs'; // eslint-disable-line import/extensions
 import { scopeListIds, storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
-import { journeyLockedOf } from './listTrigger.mjs'; // eslint-disable-line import/extensions
+import { groupLists } from './listGroups.mjs'; // eslint-disable-line import/extensions
 
 // D5 -- the Status dropdown's segments, in display order (the server's subscription_segment()
 // values; labels are the lists.grid.<segment> keys).
@@ -17,8 +17,9 @@ export const SEGMENTS = Object.freeze(['active', 'pending', 'held', 'unsubscribe
 
 const has = (q, k) => Object.prototype.hasOwnProperty.call(q, k);
 
-// A route language the toggle can hold (the server's lang filter values; 'all' is never a route
-// value -- All is the absent key).
+// A route language the toggle can hold ('all' is never a route value -- All is the absent key).
+// SUBSCRIBERS-FILTERS-2-SPEC D1 (I2): en_only and none are no longer toggle values, so a route
+// carrying one is dropped (rule 2) and, under a non-All selection, replaced by it (rule 4).
 function isRouteLang(v) {
   return typeof v === 'string' && v !== 'all' && LANG_VALUES.includes(v);
 }
@@ -76,7 +77,6 @@ export function subscribersRouteFix(to, selection, toggleVisible) {
 }
 
 const nameOf = (l) => (l && typeof l.name === 'string' ? l.name : '');
-const byName = (a, b) => a.name.localeCompare(b.name);
 
 // D4 -- the Lists dropdown: { enabled, ordinary, system, extra }. ordinary/system are { id, name }
 // sorted by name (system = the server's journey_locked); extra is the route's list when it is not
@@ -88,15 +88,8 @@ export function listOptions(lists, selection, routeListId) {
   const rid = Number.isInteger(routeListId) && routeListId > 0 ? routeListId : null;
   const scoped = selection && (selection.kind === 'brand' || selection.kind === 'none');
   const ids = scoped ? scopeListIds(all, selection) : null;
-  const ordinary = [];
-  const system = [];
-  if (ids) {
-    all.filter((l) => l && ids.includes(l.id)).forEach((l) => {
-      (journeyLockedOf(l) ? system : ordinary).push({ id: l.id, name: nameOf(l) });
-    });
-    ordinary.sort(byName);
-    system.sort(byName);
-  }
+  // SUBSCRIBERS-FILTERS-2-SPEC D5 -- the one grouping, shared with the Campaigns page.
+  const { ordinary, system } = groupLists(ids ? all.filter((l) => l && ids.includes(l.id)) : []);
   let extra = null;
   if (rid !== null && !(ids && ids.includes(rid))) {
     const known = all.find((l) => l && l.id === rid);
@@ -116,6 +109,26 @@ export function listRoute(query, listId) {
     return { name: 'subscribers_list', params: { listID: String(listId) }, query: rest };
   }
   return { name: 'subscribers', query: rest };
+}
+
+// SUBSCRIBERS-FILTERS-2-SPEC D3 (I9) -- the Lang column shows while the page's language (the
+// ROUTE's lang, the caption's source) is absent (All), en (EN+: stored en and no language) or other
+// (the rows differ); under es / fr / de / it every row reads the same, so it is hidden.
+export function langColumnShown(routeLang) {
+  return routeLang === undefined || routeLang === null || routeLang === '' || routeLang === 'en' || routeLang === 'other';
+}
+
+// D3 (I9) -- a subscriber's Lang cell: the stored attribs.lang -- a string or a finite number,
+// String()-ed, trimmed and upper-cased (EN, PT-BR) -- else an em dash (empty, whitespace-only,
+// absent, or any other JSON type). Display only: the bucket rule is the server's subscriber_lang().
+export const LANG_CELL_EMPTY = '—';
+export function langCell(attribs) {
+  const v = attribs && typeof attribs === 'object' && !Array.isArray(attribs) ? attribs.lang : undefined;
+  if (typeof v !== 'string' && !(typeof v === 'number' && Number.isFinite(v))) {
+    return LANG_CELL_EMPTY;
+  }
+  const s = String(v).trim().toUpperCase();
+  return s === '' ? LANG_CELL_EMPTY : s;
 }
 
 // D5 -- the Status dropdown is enabled only when the route names a list.

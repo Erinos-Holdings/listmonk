@@ -159,16 +159,38 @@ func (a *App) QuerySubscribers(c echo.Context) error {
 		maskRestrictedSubLists(user, &res[i])
 	}
 
-	out := models.PageResults{
+	out := subscriberPageResults{PageResults: models.PageResults{
 		Query:   query,
 		Search:  searchStr,
 		Results: res,
 		Total:   total,
 		Page:    pg.Page,
 		PerPage: pg.PerPage,
+	}}
+
+	// Fork (integrations SUBSCRIBERS-FILTERS-2-SPEC D4/I7) -- under lang=en (the send language:
+	// stored en + no language) the count of the same query narrowed to no language, so the page's
+	// caption can split EN+ into English n + No language m. Present iff the lang is en, 0 included
+	// (a zero total needs no second count: no language is a subset of en).
+	if filter.Lang == models.SubscriberLangEn {
+		n := 0
+		if total > 0 {
+			if n, err = a.core.CountSubscribersLangNone(searchStr, query, listIDs, subStatus, filter); err != nil {
+				return err
+			}
+		}
+		out.LangNoneTotal = &n
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// subscriberPageResults is GET /api/subscribers' page (fork, SUBSCRIBERS-FILTERS-2-SPEC D4):
+// models.PageResults plus lang_none_total, a pointer so 0 is on the wire as 0 and the key is
+// absent on every request whose lang is not en.
+type subscriberPageResults struct {
+	models.PageResults
+	LangNoneTotal *int `json:"lang_none_total,omitempty"`
 }
 
 // ExportSubscribers handles querying subscribers based on an arbitrary SQL expression.

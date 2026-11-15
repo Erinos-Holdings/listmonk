@@ -142,7 +142,7 @@ func (c *Core) QuerySubscribers(searchStr, queryExp string, listIDs []int, subSt
 
 	// stmt is the raw SQL query.
 	stmt := strings.ReplaceAll(c.q.QuerySubscribers, "%query%", cond)
-	stmt = strings.ReplaceAll(stmt, "%order%", orderBy+" "+order)
+	stmt = strings.ReplaceAll(stmt, "%order%", subOrderClause(orderBy, order))
 
 	// Validate the tables used in the query.
 	if err := validateQueryTables(c.db, stmt, allowedSubQueryTables, pq.Array(listIDs), subStatus, searchStr, offset, limit); err != nil {
@@ -185,6 +185,37 @@ func (c *Core) QuerySubscribers(searchStr, queryExp string, listIDs []int, subSt
 	}
 
 	return out, total, nil
+}
+
+// subOrderClause is the %order% of query-subscribers for a whitelisted orderBy and a validated
+// order. Fork (integrations SUBSCRIBERS-FILTERS-2-SPEC D3/I6) -- lang sorts by the language bucket
+// (subLangOrder, no language first ascending) followed by subscribers.id in the same direction, so
+// OFFSET paging over a key with few distinct values is stable. Every other field is unchanged.
+func subOrderClause(orderBy, order string) string {
+	if orderBy == "lang" {
+		return subLangOrder + " " + order + ", subscribers.id " + order
+	}
+	return orderBy + " " + order
+}
+
+// CountSubscribersLangNone (fork, integrations SUBSCRIBERS-FILTERS-2-SPEC D4/I7) counts the rows
+// of the SAME query QuerySubscribers counts -- same search, lists, subscription status, segment,
+// lang and advanced query -- further narrowed to no usable language (SubscriberLangNonePred, the
+// predicate subscriberFilterExp uses for lang=none). The caller asks it only when the filter's
+// lang is en (the send language: stored en + none), so total - this is the stored-English count.
+func (c *Core) CountSubscribersLangNone(searchStr, queryExp string, listIDs []int, subStatus string, filter models.SubscriberFilter) (int, error) {
+	if listIDs == nil {
+		listIDs = []int{}
+	}
+	exp, err := c.subscriberFilterExp(queryExp, listIDs, filter)
+	if err != nil {
+		return 0, err
+	}
+	cond := "(" + SubscriberLangNonePred + ")"
+	if exp != "" {
+		cond = "(" + exp + ") AND " + cond
+	}
+	return c.getSubscriberCount(searchStr, cond, subStatus, listIDs, true)
 }
 
 // GetSubscriberLists returns a subscriber's lists based on the given conditions.
