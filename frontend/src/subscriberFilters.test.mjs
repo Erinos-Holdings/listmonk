@@ -183,6 +183,19 @@ test('Subscribers.vue controls', () => {
   assert.match(tpl, /<optgroup v-if="listOpts\.system\.length"/);
   // Both write the route only.
   assert.doesNotMatch(tpl, /<b-select[^>]*v-model/);
+  // Stage 4 S4-3/S4-4 -- the wiring: All lists ('' value, not Buefy's null placeholder) and the
+  // extra option, the Status control shows the applied segment, a pick goes through statusQuery.
+  assert.match(tpl, /:value="queryParams\.listID \|\| ''"/);
+  assert.match(tpl, /<option value="">\{\{ \$t\('subscribers\.allLists'\) \}\}<\/option>/);
+  assert.match(tpl, /<option v-if="listOpts\.extra" :value="listOpts\.extra\.id">/);
+  assert.match(tpl, /:value="statusOn \? \(queryParams\.segment \|\| ''\) : ''"/);
+  const script = subs.slice(subs.indexOf('<script>'));
+  assert.match(script, /onStatusSelect\(segment\) \{[\s\S]*?statusQuery\(/);
+  // The mount reads the route through the guard's parser (S4-1) and hydrates lang and segment.
+  assert.match(script, /this\.queryParams\.listID = routeListIdOf\(this\.\$route\.params\);/);
+  assert.doesNotMatch(script, /parseInt\(this\.\$route\.params\.listID/);
+  assert.match(script, /this\.queryParams\.lang = /);
+  assert.match(script, /this\.queryParams\.segment = /);
 });
 
 // I12 -- every displayed count formats; request bodies take the raw number.

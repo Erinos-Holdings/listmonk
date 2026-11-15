@@ -73,6 +73,10 @@ test('only Subscribers reads the raw selection', () => {
   assert.ok(files.length > 50, `found ${files.length} files`);
   const needles = ["'langSelection'", "'langSubscribers'", 'getters.langSelection', 'getters.langSubscribers'];
   files.filter((f) => !allowed.has(f)).forEach((f) => {
+    // Stage 4 S4-3 -- the stored value itself is the store's alone.
+    if (f !== 'store/index.js') {
+      assert.ok(!readFileSync(`${root}${f}`, 'utf8').includes('langStored'), `${f} reads langStored`);
+    }
     const src = readFileSync(`${root}${f}`, 'utf8');
     needles.forEach((n) => assert.ok(!src.includes(n), `${f} reads ${n}`));
   });

@@ -16,7 +16,7 @@ export const CAMPAIGN_LANGS = [
 // the same word never means two audiences. Labels that mean the stored/content language stay
 // bare: a template's language, and the navbar toggle's "EN" (lang=en_only, stored English;
 // SUBSCRIBERS-FILTERS-SPEC D1 -- the toggle's EN+ is the send language). Each "+" label carries
-// the langs.sendPlusHelp title.
+// the langs.sendPlusHelp title, except the navbar toggle's EN+, whose note names the send language.
 export const SEND_PLUS_LANG = 'en';
 export const isSendPlus = (code) => (code || '').toLowerCase() === SEND_PLUS_LANG;
 

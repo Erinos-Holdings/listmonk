@@ -41,8 +41,8 @@
             <!-- D4 -- the lists of the brand scope, system lists grouped last; disabled under All
                  brands unless the route already names a list (then All lists + that list). -->
             <b-select data-cy="select-list" :aria-label="$t('subscribers.listFilter')"
-              :value="queryParams.listID || null" :disabled="!listOpts.enabled" @input="onListSelect">
-              <option :value="null">{{ $t('subscribers.allLists') }}</option>
+              :value="queryParams.listID || ''" :disabled="!listOpts.enabled" @input="onListSelect">
+              <option value="">{{ $t('subscribers.allLists') }}</option>
               <option v-for="l in listOpts.ordinary" :key="l.id" :value="l.id">{{ l.name }}</option>
               <optgroup v-if="listOpts.system.length" :label="$t('subscribers.systemLists')">
                 <option v-for="l in listOpts.system" :key="l.id" :value="l.id">{{ l.name }}</option>
@@ -273,7 +273,7 @@ import {
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { subscriberCaptionLang } from '../filterBar.mjs'; // eslint-disable-line import/extensions
 import {
-  SEGMENTS, listOptions, listRoute, statusEnabled, statusQuery,
+  SEGMENTS, listOptions, listRoute, routeListIdOf, statusEnabled, statusQuery,
 } from '../subscriberFilters.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
@@ -898,8 +898,10 @@ export default Vue.extend({
   mounted() {
     // Non-reactive on purpose: read only by the stale-response check.
     this.pageMounted = true;
+    // SUBSCRIBERS-FILTERS Stage 4 S4-1 -- the guard's own parser: a malformed id is no list on both
+    // sides (Status disabled, list_id from the scope), never list 5 here and "no list" there.
     if (this.$route.params.listID) {
-      this.queryParams.listID = parseInt(this.$route.params.listID, 10);
+      this.queryParams.listID = routeListIdOf(this.$route.params);
     }
     if (this.$route.query.subscription_status) {
       this.queryParams.subStatus = this.$route.query.subscription_status;
