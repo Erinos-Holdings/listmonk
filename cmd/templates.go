@@ -285,11 +285,13 @@ func officialTemplateRefusal(stored *models.Template, o *models.Template, all []
 			}
 		}
 	}
+	// The source that will be STORED: update-template keeps the stored body_source when the
+	// incoming one is NULL or '' (BRAND-FOOTER S4-2), so both checks judge that.
 	source := o.BodySource
-	if !source.Valid && stored != nil {
+	if (!source.Valid || source.String == "") && stored != nil {
 		source = stored.BodySource
 	}
-	if o.BodySource.Valid && models.HasOfficialFooterBlock(o.BodySource.String) {
+	if source.Valid && models.HasOfficialFooterBlock(source.String) {
 		return "templates.officialNested"
 	}
 	if kind == models.OfficialKindBrand && lang == "" && source.Valid && models.OfficialNeutralHasText(source.String) {

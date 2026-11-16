@@ -94,6 +94,25 @@ func TestOfficialTemplateRefusal(t *testing.T) {
 		}
 	})
 
+	// BRAND-FOOTER S4-2: an EMPTY body_source keeps the stored one (update-template), so the guards
+	// judge the stored source, exactly as for an absent one.
+	t.Run("neutral rename with an empty body_source reads the stored body", func(t *testing.T) {
+		in := tpl(35, "Official Shala Footer", "")
+		in.BodySource = null.StringFrom("")
+		if got := officialTemplateRefusal(&stored35, &in, all); got != "templates.officialNeutralText" {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("rename onto an official name without body_source reads the stored body (nested)", func(t *testing.T) {
+		for _, src := range []null.String{{}, null.StringFrom("")} {
+			in := tpl(7, "Official Footer DE", "")
+			in.BodySource = src
+			if got := officialTemplateRefusal(&stored7, &in, all); got != "templates.officialNested" {
+				t.Fatalf("source valid=%v: got %q", src.Valid, got)
+			}
+		}
+	})
+
 	if !models.IsOfficialTemplate("Official Footer EN") || models.IsOfficialTemplate("Copy of Official Footer EN") || models.IsOfficialTemplate("official Footer EN") || models.IsOfficialTemplate("Official_Footer_EN") {
 		t.Fatal("IsOfficialTemplate: the prefix is exact and case-sensitive")
 	}
