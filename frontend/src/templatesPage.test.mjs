@@ -41,10 +41,42 @@ test('brand selector: a brand and the brandless; No brand the brandless', () => 
 test('launch filter: branded rows narrowed, brandless rows always kept', () => {
   assert.deepEqual(ids({ launch: 'launched', docs: DOCS }), [1, 3]);
   assert.deepEqual(ids({ launch: 'unlaunched', docs: DOCS }), [2, 3]);
-  assert.deepEqual(ids({ launch: 'unlaunched', docs: DOCS, kind: 'footer' }), [4]);
+  // The corporate footer is curated's (no health document = launched), so not unlaunched.
+  assert.deepEqual(ids({ launch: 'unlaunched', docs: DOCS, kind: 'footer' }), []);
 });
 
 test('language toggle: that language plus the language-less', () => {
   assert.deepEqual(ids({ lang: 'fr' }), [2, 3]);
   assert.deepEqual(ids({ lang: 'en', kind: 'footer' }), [4]);
+});
+
+test('polish 2026-11-16: official footers file under their NAME\'s brand; the corporate ones under curated', () => {
+  const F = [
+    {
+      id: 10, name: 'Official Footer EN', brand: '', lang: 'en',
+    },
+    {
+      id: 11, name: 'Official Footer FR', brand: '', lang: 'fr',
+    },
+    {
+      id: 12, name: 'Official Curated Footer', brand: '', lang: '',
+    },
+    {
+      id: 13, name: 'Official BNKD Footer', brand: '', lang: '',
+    },
+    {
+      id: 14, name: 'Official Thirsty Girl Footer ES', brand: 'thirstygirl', lang: 'es',
+    },
+    {
+      id: 15, name: 'Plain', brand: '', lang: '',
+    },
+  ];
+  const f = (selection) => templateRows(F, { selection, kind: 'footer' }).map((t) => t.id);
+  assert.deepEqual(f({ kind: 'all' }), [10, 11, 12, 13, 14]);
+  assert.deepEqual(f({ kind: 'brand', slug: 'curated' }), [10, 11, 12]);
+  assert.deepEqual(f({ kind: 'brand', slug: 'bnkd' }), [13]);
+  assert.deepEqual(f({ kind: 'brand', slug: 'thirstygirl' }), [14]);
+  assert.deepEqual(f({ kind: 'none' }), []);
+  // Other rows keep the brand column rule: the brandless show under every brand.
+  assert.deepEqual(templateRows(F, { selection: { kind: 'brand', slug: 'bnkd' } }).map((t) => t.id), [15]);
 });

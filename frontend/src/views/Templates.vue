@@ -32,11 +32,14 @@
          Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
     <b-table :data="shownTemplates" :hoverable="true" :loading="loading.templates" default-sort="createdAt"
       :caption="$filterCaption()">
+      <!-- Polish 2026-11-16 (the user): ID is the first column. -->
+      <b-table-column v-slot="props" field="id" :label="$t('globals.fields.id')" sortable>
+        {{ props.row.id }}
+      </b-table-column>
+
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" :td-attrs="$utils.tdID" sortable>
-        <!-- Fork (naming standard, NAMING-STANDARD-SPEC D15/D1/D10) -- the brand and language chips
-             from the template's own columns (hidden when the selector / toggle selects them) and
-             the former name on hover. -->
-        <b-tag v-if="chipsOf(props.row).brand" class="is-small brand-chip" data-cy="brand-chip">{{ chipsOf(props.row).brand }}</b-tag>
+        <!-- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- the former name on hover. Polish
+             2026-11-16 (the user): no brand chip on this page. -->
         <a href="#" @click.prevent="showEditForm(props.row)" :title="nameTitle(props.row)">
           {{ props.row.name }}
         </a>
@@ -72,10 +75,6 @@
         <b-tag v-else :class="props.row.type" :data-cy="`type-${props.row.type}`">
           {{ $tc('templates.typeTransactional') }}
         </b-tag>
-      </b-table-column>
-
-      <b-table-column v-slot="props" field="id" :label="$t('globals.fields.id')" sortable>
-        {{ props.row.id }}
       </b-table-column>
 
       <b-table-column v-slot="props" field="createdAt" :label="$t('globals.fields.createdAt')" sortable>
@@ -158,7 +157,7 @@ import {
   TEMPLATE_KIND_PREF, normalizeTemplateKind, templateRows,
 } from '../templatesPage.mjs'; // eslint-disable-line import/extensions
 import {
-  chipsFor, cloneName, formerNameOf, isNameBlocked, langColumnText, nameCounter, nameWarnings, showLangColumn,
+  cloneName, formerNameOf, isNameBlocked, langColumnText, nameCounter, nameWarnings, showLangColumn,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -241,12 +240,6 @@ export default Vue.extend({
     // Polish 2026-11-14: the Lang column's cell.
     langText(lang) {
       return langColumnText(lang);
-    },
-
-    // Fork (naming standard, NAMING-STANDARD-SPEC D15/D10) -- the brand chip (the language is the
-    // Lang column since polish 2026-11-14).
-    chipsOf(row) {
-      return chipsFor(row, { brandSelection: this.brandSelection, langSelection: this.langSelection });
     },
 
     nameTitle(row) {
