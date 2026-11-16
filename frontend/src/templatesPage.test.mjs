@@ -16,17 +16,17 @@ const T = [
     id: 3, name: 'Plain', brand: '', lang: '',
   },
   {
-    id: 4, name: 'Official_Footer_EN', brand: '', lang: 'en',
+    id: 4, name: 'Official Footer EN', brand: '', lang: 'en',
   },
   {
-    id: 5, name: 'Official_Footer_FR', brand: 'ruze', lang: 'fr',
+    id: 5, name: 'Official RUZE Footer FR', brand: 'ruze', lang: 'fr',
   },
 ];
 // bnkd is unlaunched (status unknown); ruze launched.
 const DOCS = [{ brand: 'bnkd', status: 'unknown' }, { brand: 'ruze', status: 'ok' }];
 const ids = (opts) => templateRows(T, { selection: ALL, ...opts }).map((t) => t.id);
 
-test('Footer | Other: Official_ templates are Footer, everything else Other', () => {
+test('Footer | Other: official templates are Footer, everything else Other', () => {
   assert.deepEqual([...TEMPLATE_KINDS], ['other', 'footer']);
   assert.equal(normalizeTemplateKind('x'), 'other');
   assert.deepEqual(ids({}), [1, 2, 3]);

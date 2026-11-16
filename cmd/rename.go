@@ -66,8 +66,8 @@ func listTypeOr(typ, stored string) string {
 	return models.ListTypePrivate
 }
 
-// renameRefusal is the code-named guard (§4.2 step 2): a `CATALOG ` campaign or an `Official_`
-// template is never renamed, and no record is renamed INTO a `CATALOG `/`Official_` name (those
+// renameRefusal is the code-named guard (§4.2 step 2): a `CATALOG ` campaign or an official
+// (`Official `) template is never renamed, and no record is renamed INTO a `CATALOG `/official name (those
 // records are found by name).
 func (a *App) renameRefusal(kind, stored, next string) error {
 	if models.IsExemptName(kind, stored) {
@@ -203,8 +203,8 @@ func (a *App) RenameList(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
-// RenameTemplate handles PUT /api/templates/:id/name. An `Official_` template is never renamed
-// and no template is renamed onto an `Official_` name (renameRefusal).
+// RenameTemplate handles PUT /api/templates/:id/name. An official template is never renamed
+// and no template is renamed onto an official name (renameRefusal).
 func (a *App) RenameTemplate(c echo.Context) error {
 	if err := a.requireRenamePerm(c); err != nil {
 		return err

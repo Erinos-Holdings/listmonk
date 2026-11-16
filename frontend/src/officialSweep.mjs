@@ -1,12 +1,17 @@
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D11: the re-save sweep that runs in the browser
-// after an `Official_` template is saved. An official template is what every campaign's
+// after an official template is saved. An official template is what every campaign's
 // OfficialFooter block renders, but a campaign's stored body is compiled at Save -- so a footer
 // edit reaches nothing until each carrier is re-saved. This file is the pure planner + the
 // runner (every effect injected); TemplateForm.vue owns the confirm, the toasts and the wiring.
 //
 // Selection is by RESOLUTION, not by "has a footer": an item is re-saved only when one of its
-// OfficialFooter blocks resolves (kind + lang + brand, the builder's official/resolve.ts rule)
-// to the saved template -- so one brand's footer edit never rewrites another brand's drafts.
+// OfficialFooter blocks resolves (kind + lang + brand, the builder's official/resolve.ts rule,
+// against EVERY official template) to the saved template -- so one brand's footer edit never
+// rewrites another brand's drafts, and a language-neutral brand footer selects the carriers of
+// every language that has no override (integrations BRAND-FOOTER-SPEC D6).
+//
+// This module is the SPA's ONE home of the official-name rule (BRAND-FOOTER-SPEC D1, D6): every
+// other file under frontend/src imports isOfficialName from here (pinned by officialSweep.test.mjs).
 //
 // Payloads are the full key sets integrations' lib/listmonk-resave.ts pins
 // (CAMPAIGN_UPDATE_KEYS / TEMPLATE_UPDATE_KEYS): `PUT /api/campaigns/:id` is a full replace
@@ -15,7 +20,7 @@
 //
 // Disposable at listmonk v7, like the rest of the Vue: the Go refusals are the durable half.
 
-export const OFFICIAL_PREFIX = 'Official_';
+export const OFFICIAL_PREFIX = 'Official ';
 
 // MUST MATCH integrations lib/listmonk-resave.ts CAMPAIGN_UPDATE_KEYS (Campaign.vue's
 // updateCampaign() key set, in its order).
@@ -43,17 +48,73 @@ export const isOfficialName = (name) => typeof name === 'string' && name.startsW
 const slug = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');
 const upperLang = (l) => (String(l == null ? '' : l).trim() || 'en').toUpperCase();
 
-// Mirrors the builder's parseOfficialName (official/resolve.ts).
+// The brand segment's slug, or null when it is unusable (a leading/trailing space, or empty slug).
+const brandSlugOf = (segment) => {
+  if (segment !== segment.trim()) {
+    return null;
+  }
+  const s = slug(segment);
+  return s === '' ? null : s;
+};
+
+// Mirrors the builder's parseOfficialName (official/resolve.ts; BRAND-FOOTER-SPEC D1): corporate
+// `Official Footer <LANG>` first, then the brand override `Official <Brand> Footer <LANG>`, then the
+// language-neutral `Official <Brand> Footer` (lang ''). null for anything else.
 export function parseOfficialName(name) {
-  const corp = /^Official_Footer_([A-Za-z]+)$/.exec(String(name || ''));
+  const n = String(name || '');
+  const corp = /^Official Footer ([A-Z]{2})$/.exec(n);
   if (corp) {
     return { kind: 'corporate', brand: '', lang: corp[1] };
   }
-  const brand = /^Official_(.+)_Footer_([A-Za-z]+)$/.exec(String(name || ''));
-  if (brand) {
-    return { kind: 'brand', brand: slug(brand[1]), lang: brand[2] };
+  const over = /^Official (.+) Footer ([A-Z]{2})$/.exec(n);
+  if (over) {
+    const b = brandSlugOf(over[1]);
+    return b === null ? null : { kind: 'brand', brand: b, lang: over[2] };
+  }
+  const neutral = /^Official (.+) Footer$/.exec(n);
+  if (neutral) {
+    const b = brandSlugOf(neutral[1]);
+    return b === null ? null : { kind: 'brand', brand: b, lang: '' };
   }
   return null;
+}
+
+const pick = (hits) => {
+  const sorted = [...hits].sort((a, b) => a.id - b.id);
+  return { status: sorted.length > 1 ? 'duplicate' : 'ok', name: sorted[0].name, ref: sorted[0] };
+};
+
+// Mirrors the builder's resolveOfficial (BRAND-FOOTER-SPEC D2): corporate = the context language's
+// name; brand = the override for the context language, else the neutral footer, else missing.
+// Duplicates of one name: lowest id + `duplicate`.
+export function resolveOfficial(kind, ctx, refs) {
+  if (!ctx) {
+    return { status: 'no-context', name: '' };
+  }
+  const lang = upperLang(ctx.lang);
+  let brand = '';
+  if (kind === 'brand') {
+    if (ctx.brand === null || ctx.brand === undefined || String(ctx.brand).trim() === '') {
+      return { status: 'no-context', name: '' };
+    }
+    brand = slug(ctx.brand);
+  }
+  const parsed = [];
+  (refs || []).forEach((r) => {
+    const p = r && typeof r.name === 'string' ? parseOfficialName(r.name) : null;
+    if (p && p.kind === kind && (kind === 'corporate' || p.brand === brand)) {
+      parsed.push({ r, lang: p.lang });
+    }
+  });
+  const exact = parsed.filter((x) => x.lang === lang).map((x) => x.r);
+  if (exact.length) {
+    return pick(exact);
+  }
+  if (kind === 'corporate') {
+    return { status: 'missing', name: `Official Footer ${lang}` };
+  }
+  const neutral = parsed.filter((x) => x.lang === '').map((x) => x.r);
+  return neutral.length ? pick(neutral) : { status: 'missing', name: `Official ${brand} Footer` };
 }
 
 // A campaign's resolution context (I9's Vue twin): lang = attribs.lang (empty -> en); brand =
@@ -102,21 +163,28 @@ export function officialKinds(bodySource) {
   return [...kinds];
 }
 
-// Does a block of `kind` under `ctx` resolve to the template named `savedName`?
-export function resolvesTo(kind, ctx, savedName) {
-  const p = parseOfficialName(savedName);
-  if (!p || !ctx || p.kind !== kind || upperLang(ctx.lang) !== p.lang) {
+// Does a block of `kind` under `ctx` resolve to the saved template ({id, name})? Resolved against
+// the FULL official ref list (BRAND-FOOTER-SPEC D6) -- never by name equality alone: a neutral
+// footer is what a language resolves to only while that language has no override.
+export function resolvesTo(kind, ctx, saved, refs) {
+  if (!saved || !isOfficialName(saved.name) || !ctx) {
     return false;
   }
-  if (kind === 'corporate') {
-    return true;
-  }
-  const b = slug(ctx.brand);
-  return b !== '' && b === p.brand;
+  const res = resolveOfficial(kind, ctx, refs);
+  return !!res.ref && (typeof saved.id === 'number' ? res.ref.id === saved.id : res.ref.name === saved.name);
 }
 
-function carries(bodySource, ctx, savedName) {
-  return officialKinds(bodySource).some((k) => resolvesTo(k, ctx, savedName));
+function carries(bodySource, ctx, saved, refs) {
+  return officialKinds(bodySource).some((k) => resolvesTo(k, ctx, saved, refs));
+}
+
+// The official refs a plan resolves against: every official campaign_visual template, with the
+// saved one as just saved (its name may have changed).
+function officialRefsWith(templates, saved) {
+  const refs = (templates || []).filter((t) => t && t.type === 'campaign_visual' && isOfficialName(t.name) && t.id !== saved.id)
+    .map((t) => ({ id: t.id, name: t.name }));
+  refs.push({ id: saved.id, name: saved.name });
+  return refs;
 }
 
 // The plan. `campaigns`/`templates` are the raw (snake_case) API rows; `savedTemplate` is the
@@ -133,6 +201,7 @@ export function selectSweepItems(campaigns, templates, savedTemplate, lists) {
   if (!isOfficialName(name)) {
     return out;
   }
+  const refs = officialRefsWith(templates, savedTemplate);
 
   (campaigns || []).forEach((c) => {
     if (!c || c.content_type !== 'visual' || officialKinds(c.body_source).length === 0) {
@@ -157,7 +226,7 @@ export function selectSweepItems(campaigns, templates, savedTemplate, lists) {
       }
       return;
     }
-    if (!carries(c.body_source, ctx, name)) {
+    if (!carries(c.body_source, ctx, savedTemplate, refs)) {
       return;
     }
     const item = {
@@ -170,7 +239,7 @@ export function selectSweepItems(campaigns, templates, savedTemplate, lists) {
     if (!t || t.type !== 'campaign_visual' || isOfficialName(t.name) || t.id === savedTemplate.id) {
       return;
     }
-    if (carries(t.body_source, templateContext(t), name)) {
+    if (carries(t.body_source, templateContext(t), savedTemplate, refs)) {
       out.templates.push({ kind: 'template', id: t.id, name: t.name });
     }
   });

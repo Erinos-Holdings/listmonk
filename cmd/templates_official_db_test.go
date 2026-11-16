@@ -60,7 +60,7 @@ func TestOfficialTemplateRefusals(t *testing.T) {
 		return s
 	}
 
-	code, resp := templateReq(t, h, http.MethodPost, 0, tpl("Official_Footer_EN", plain))
+	code, resp := templateReq(t, h, http.MethodPost, 0, tpl("Official Footer EN", plain))
 	if code != http.StatusOK {
 		t.Fatalf("create official: %d %s", code, resp)
 	}
@@ -72,10 +72,10 @@ func TestOfficialTemplateRefusals(t *testing.T) {
 	draft := created(resp)
 
 	n := count()
-	if code, resp := templateReq(t, h, http.MethodPost, 0, tpl("Official_Footer_EN", plain)); code != http.StatusBadRequest || !strings.Contains(resp, "already exists") {
+	if code, resp := templateReq(t, h, http.MethodPost, 0, tpl("Official Footer EN", plain)); code != http.StatusBadRequest || !strings.Contains(resp, "already exists") {
 		t.Fatalf("duplicate official create: want 400, got %d %s", code, resp)
 	}
-	if code, resp := templateReq(t, h, http.MethodPost, 0, tpl("Official_Footer_DE", nested)); code != http.StatusBadRequest {
+	if code, resp := templateReq(t, h, http.MethodPost, 0, tpl("Official Footer DE", nested)); code != http.StatusBadRequest {
 		t.Fatalf("official create holding an OfficialFooter block: want 400, got %d %s", code, resp)
 	}
 	if count() != n {
@@ -85,18 +85,18 @@ func TestOfficialTemplateRefusals(t *testing.T) {
 	if code, resp := templateReq(t, h, http.MethodPut, official.ID, tpl("Footer EN", plain)); code != http.StatusBadRequest {
 		t.Fatalf("rename off the prefix: want 400, got %d %s", code, resp)
 	}
-	if code, resp := templateReq(t, h, http.MethodPut, official.ID, tpl("Official_Footer_EN", nested)); code != http.StatusBadRequest {
+	if code, resp := templateReq(t, h, http.MethodPut, official.ID, tpl("Official Footer EN", nested)); code != http.StatusBadRequest {
 		t.Fatalf("official update holding an OfficialFooter block: want 400, got %d %s", code, resp)
 	}
-	if code, resp := templateReq(t, h, http.MethodPut, draft.ID, tpl("Official_Footer_EN", plain)); code != http.StatusBadRequest {
+	if code, resp := templateReq(t, h, http.MethodPut, draft.ID, tpl("Official Footer EN", plain)); code != http.StatusBadRequest {
 		t.Fatalf("rename onto an existing official name: want 400, got %d %s", code, resp)
 	}
-	if name(official.ID) != "Official_Footer_EN" || name(draft.ID) != "Draft with footer" {
+	if name(official.ID) != "Official Footer EN" || name(draft.ID) != "Draft with footer" {
 		t.Fatal("a refused update wrote")
 	}
 
 	// Other updates pass.
-	if code, resp := templateReq(t, h, http.MethodPut, official.ID, tpl("Official_Footer_EN", plain)); code != http.StatusOK {
+	if code, resp := templateReq(t, h, http.MethodPut, official.ID, tpl("Official Footer EN", plain)); code != http.StatusOK {
 		t.Fatalf("official same-name update: %d %s", code, resp)
 	}
 	if code, resp := templateReq(t, h, http.MethodPut, draft.ID, tpl("Draft renamed", nested)); code != http.StatusOK {

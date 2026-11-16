@@ -8,9 +8,10 @@
 // shows (the 30 limit and the exempt prefixes). Since polish 2026-11-14 the forms also refuse a name
 // failing one of BLOCKING_CODES (below) -- a form-only rule; the server's is unchanged.
 
+import { isOfficialName } from './officialSweep.mjs'; // eslint-disable-line import/extensions
+
 export const NAME_MAX = 30;
 export const CATALOG_PREFIX = 'CATALOG ';
-export const OFFICIAL_PREFIX = 'Official_';
 
 // D2 -- the language toggle's values, in display order. 'all' applies no filter. Since
 // SUBSCRIBERS-FILTERS-2-SPEC D1 the SEND languages only, as the Campaigns page reads them: en is
@@ -136,11 +137,12 @@ export function duplicateOf(candidate, rows = []) {
     && langOf(r) === lang) || null;
 }
 
-// D3 -- a code-named record is exempt from the limit (a `CATALOG ` campaign, an `Official_` template).
+// D3 -- a code-named record is exempt from the limit (a `CATALOG ` campaign, an official template --
+// officialSweep.mjs's rule, integrations BRAND-FOOTER-SPEC D6).
 export function isExempt(kind, name) {
   const n = str(name);
   if (kind === 'campaign') return n.startsWith(CATALOG_PREFIX);
-  if (kind === 'template') return n.startsWith(OFFICIAL_PREFIX);
+  if (kind === 'template') return isOfficialName(n);
   return false;
 }
 

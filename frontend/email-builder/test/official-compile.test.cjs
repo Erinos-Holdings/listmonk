@@ -107,7 +107,7 @@ async function main() {
   // CURATED-FOOTER-SPEC I2: `curated` is an ordinary brand. A Curated reference (t14's body under
   // the Curated name stands in for t37) compiles exactly like the RUZE one, its marker carrying
   // the `curated` slug; with no Curated reference, the empty `missing` pair.
-  const curatedRefs = [...REFS, refOf({ ...t14, id: 37, name: 'Official_Curated_Footer_EN' })];
+  const curatedRefs = [...REFS, refOf({ ...t14, id: 37, name: 'Official Curated Footer' })];
   const curated = EB.compileDocument(withBlocks, { lang: 'en', brand: 'curated' }, curatedRefs);
   check('CURATED I2: curated brand block compiles to its marker pair around the reference', curated.includes(`<!-- official:brand:en:curated:${H14} -->`) && curated.includes('Asset-2RUZE.png') && (curated.match(MARKER_RE) || []).length === 4, (curated.match(MARKER_RE) || []).join(' '));
   check('CURATED I2: identical to the ruze compile but for the marker brand segment', curated.replace(`official:brand:en:curated:${H14}`, `official:brand:en:ruze:${H14}`) === official);
@@ -151,12 +151,14 @@ async function main() {
   check('I5: the editor body equals compileDocument (one compile)', hack(events[events.length - 1]) === official);
 
   events.length = 0;
-  const ES_REFS = [...REFS, refOf({ ...t30, id: 31, name: 'Official_Footer_ES' })];
+  const ES_REFS = [...REFS, refOf({ ...t30, id: 31, name: 'Official Footer ES' })];
   EB.setOfficialFooters(ES_REFS);
   check('I5: a references change re-emits', events.length >= 1);
   events.length = 0;
   EB.setOfficialContext({ lang: 'es', brand: 'ruze' });
-  check('I5: a context change re-emits with a regenerated body', events.length >= 1 && events[events.length - 1].includes('official:corporate:es:-:') && events[events.length - 1].includes('official:brand:es:ruze:missing'),
+  // integrations BRAND-FOOTER-SPEC I6: the neutral `Official RUZE Footer` serves ES; the marker's
+  // lang segment stays the CONTEXT's language.
+  check('I5: a context change re-emits with a regenerated body', events.length >= 1 && events[events.length - 1].includes('official:corporate:es:-:') && events[events.length - 1].includes(`official:brand:es:ruze:${H14}`),
     (events[events.length - 1] || '').match(MARKER_RE));
   events.length = 0;
   EB.setOfficialContext({ lang: 'es', brand: 'ruze' });

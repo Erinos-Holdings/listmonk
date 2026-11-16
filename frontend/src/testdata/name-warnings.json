@@ -13,7 +13,8 @@
     { "kind": "campaign", "name": "   ", "warnings": [] },
     { "kind": "campaign", "name": "Welcome", "warnings": [] },
     { "kind": "campaign", "name": "CATALOG catalog_01-columns", "warnings": [] },
-    { "kind": "template", "name": "Official_RUZE_Footer_EN", "warnings": [] },
+    { "kind": "template", "name": "Official RUZE Footer EN", "warnings": [] },
+    { "kind": "template", "name": "Official Thirsty Girl Footer", "warnings": [] },
     { "kind": "campaign", "name": "Official_RUZE_Footer_EN", "warnings": ["underscore", "language"] },
 
     { "kind": "campaign", "name": "Spring_Sale", "warnings": ["underscore"] },

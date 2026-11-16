@@ -185,7 +185,7 @@ export default Vue.extend({
   },
 
   methods: {
-    // Fork (official footer) -- D10: an `Official_` template has no Delete action (the server
+    // Fork (official footer) -- D10: an official template has no Delete action (the server
     // refuses it too: remove it from the seed file first).
     isOfficial(t) {
       return isOfficialName(t && t.name);

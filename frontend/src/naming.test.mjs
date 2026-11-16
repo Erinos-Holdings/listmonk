@@ -145,9 +145,20 @@ test('nameCounter / isExempt -- 30 on the handle; a list adds its prefix to maxl
     n: 14, max: 30, maxlength: 42, over: false,
   });
   assert.equal(nameCounter('campaign', 'CATALOG 01-button-outlook-word-columns').maxlength, null);
-  assert.equal(nameCounter('template', 'Official_footer_corporate_long_name_en').maxlength, null);
+  assert.equal(nameCounter('template', 'Official KNOWN FOR FRAGRANCE Footer EN').maxlength, null);
+  assert.equal(nameCounter('template', 'Official_footer_corporate_long_name_en').over, true, 'the old prefix is no longer exempt');
   assert.equal(isExempt('list', 'CATALOG x'), false);
   assert.equal(nameCounter('campaign', 'ÁÁÁ').n, 3);
+});
+
+// integrations BRAND-FOOTER-SPEC I5 (S2-10): the limit and its exemptions agree with the server's
+// rule over the ONE case table models/testdata/name-rule.json (campaign and template cases whose
+// want is valid or too long; the form mirrors nothing else of NameProblem).
+test('I5: nameCounter agrees with models/testdata/name-rule.json on the limit and the exemptions', () => {
+  const fx = JSON.parse(readFileSync(new URL('../../models/testdata/name-rule.json', import.meta.url), 'utf8'));
+  const cases = fx.cases.filter((c) => ['campaign', 'template'].includes(c.kind) && ['', 'naming.nameTooLong'].includes(c.want) && c.name.trim() !== '');
+  assert.ok(cases.length >= 10);
+  cases.forEach((c) => assert.equal(nameCounter(c.kind, c.name.trim()).over, c.want === 'naming.nameTooLong', `${c.kind} ${JSON.stringify(c.name)}`));
 });
 
 // ---- NAME-GUARDRAILS-SPEC I1-I4b: the live naming warnings, the sample and the prefill. ----

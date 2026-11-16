@@ -35,7 +35,7 @@ const (
 )
 
 // IsExemptName reports whether a name is code-named for its kind (a `CATALOG ` campaign, an
-// `Official_` template): exempt from the length rule and never renamed by the endpoints.
+// official `Official ` template): exempt from the length rule and never renamed by the endpoints.
 func IsExemptName(kind, name string) bool {
 	switch kind {
 	case NameKindCampaign:
@@ -69,7 +69,7 @@ func ListNameRemainder(name, brandSlug, brandDisplay, listType string) string {
 
 // NameProblem validates a name of the given kind. The name is judged trimmed (the callers store
 // the trimmed name): non-empty, no control character, and at most NameMaxLen runes -- a campaign
-// unless it starts with `CATALOG `, a template unless it starts with `Official_`, a list on the
+// unless it starts with `CATALOG `, a template unless it starts with `Official `, a list on the
 // part after its brand prefix (ListNameRemainder). "" = valid.
 func NameProblem(kind, name, brandSlug, brandDisplay, listType string) (string, []string) {
 	n := strings.TrimSpace(name)

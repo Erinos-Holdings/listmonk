@@ -53,7 +53,7 @@ export default function TuneMenu({ blockId, moveOnly }: Props) {
 
   // D7: Insert above/below targets the block's PARENT slot, at its index or index+1. The
   // Official-footer entry follows EditorChildrenIds' rule exactly: parent is the EmailLayout or
-  // a Container, and no Official_ template is being edited.
+  // a Container, and no official template is being edited.
   const insertIndex = position ? position.index + (insertMenu?.where === 'below' ? 1 : 0) : 0;
   const parentType = position ? document[position.parentId]?.type : undefined;
   const offerOfficial = !officialContext?.official && (parentType === 'EmailLayout' || parentType === 'Container');

@@ -19,7 +19,7 @@
 // path and hashes with the same grammar.
 //
 // `_context.json` (leading underscore: not a corpus document) carries the compile context and the
-// FIXED Official_ refs, so an Official_ template edit in the database never moves the canary.
+// FIXED official refs, so an official template edit in the database never moves the canary.
 //
 // Version 2 (integrations RENDERING-BIBLE-SPEC §3.4): `docs` adds one hash PER DOCUMENT, so a
 // change to one document moves only that document's hash (I14). The server half serves the

@@ -666,6 +666,7 @@ import {
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import { altsMessage, generateAndApply } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
 import { compileCampaignBody, loadFrameBuilder } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
+import { isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
@@ -2805,11 +2806,12 @@ export default Vue.extend({
       return attributeMenu('text').items;
     },
 
-    // The `Official_` subset of the templates this page already fetches (GET /api/templates
-    // returns body_source; no second fetch).
+    // The official subset of the templates this page already fetches (GET /api/templates
+    // returns body_source; no second fetch). The name rule is officialSweep.mjs's (integrations
+    // BRAND-FOOTER-SPEC D6).
     officialFooters() {
       return (this.templates || [])
-        .filter((t) => t.type === 'campaign_visual' && typeof t.name === 'string' && t.name.startsWith('Official_'))
+        .filter((t) => t.type === 'campaign_visual' && isOfficialName(t.name))
         .map((t) => ({ id: t.id, name: t.name, body_source: t.bodySource }));
     },
 

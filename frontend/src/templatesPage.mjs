@@ -6,7 +6,7 @@
 // - launch: a branded template whose brand does not match the launch filter is dropped; a brandless
 //   template is no brand and always stays (as No brand stays offered under every launch value).
 // - language: naming.mjs::langMatches (a language-less template shows under every language).
-// - kind: footer = the official footer templates (an `Official_` name, officialSweep.mjs), other =
+// - kind: footer = the official footer templates (an official name, officialSweep.mjs), other =
 //   everything else.
 
 import { filterTemplates, matchesLaunch } from './brandScope.mjs'; // eslint-disable-line import/extensions

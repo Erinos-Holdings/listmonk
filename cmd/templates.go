@@ -113,8 +113,8 @@ func (a *App) CreateTemplate(c echo.Context) error {
 	if err := a.validateTemplate(&o); err != nil {
 		return err
 	}
-	// Fork (naming standard, NAMING-STANDARD-SPEC D15 §4.3) -- the name rule on create (Official_
-	// exempt); stored trimmed.
+	// Fork (naming standard, NAMING-STANDARD-SPEC D15 §4.3) -- the name rule on create (official
+	// names exempt); stored trimmed.
 	o.Name = strings.TrimSpace(o.Name)
 	if err := a.nameRuleErr(models.NameKindTemplate, o.Name, "", ""); err != nil {
 		return err
@@ -250,11 +250,15 @@ func (a *App) DeleteTemplate(c echo.Context) error {
 // officialTemplateRefusal is the pure half of the official-block rules (integrations
 // OFFICIAL-FOOTER-SPEC D10): stored is the row being updated (nil on create), o the incoming
 // template, all every stored template. It returns the i18n key of the refusal, or "".
-//   - an official template may not be renamed away from the Official_ prefix;
-//   - a create, or a rename, onto an Official_ name that already exists is refused (the
+//   - an official template may not be renamed away from the official prefix (`Official `);
+//   - an official name must be one of the three shapes (integrations BRAND-FOOTER-SPEC D1,
+//     models.ParseOfficialName), and its brand segment ASCII letters, digits and spaces (D4);
+//   - a create, or a rename, onto an official name that already exists is refused (the
 //     resolver needs one row per name; the templates table has no unique constraint);
 //   - an official template's body_source may not hold an OfficialFooter block (a reference
-//     must never recurse).
+//     must never recurse);
+//   - a language-neutral brand footer (`Official <Brand> Footer`) may hold no text: no Text,
+//     Heading or Button block, no Html block with visible text (BRAND-FOOTER-SPEC D3).
 //
 // `type` needs no guard: the update SQL never writes it.
 func officialTemplateRefusal(stored *models.Template, o *models.Template, all []models.Template) string {
@@ -264,6 +268,16 @@ func officialTemplateRefusal(stored *models.Template, o *models.Template, all []
 	if !models.IsOfficialTemplate(o.Name) {
 		return ""
 	}
+	kind, _, lang, ok := models.ParseOfficialName(o.Name)
+	if !ok {
+		if !models.OfficialBrandIsASCII(o.Name) {
+			return "templates.officialBrandAscii"
+		}
+		return "templates.officialShape"
+	}
+	if !models.OfficialBrandIsASCII(o.Name) {
+		return "templates.officialBrandAscii"
+	}
 	if stored == nil || stored.Name != o.Name {
 		for _, t := range all {
 			if t.Name == o.Name && (stored == nil || t.ID != stored.ID) {
@@ -271,8 +285,15 @@ func officialTemplateRefusal(stored *models.Template, o *models.Template, all []
 			}
 		}
 	}
+	source := o.BodySource
+	if !source.Valid && stored != nil {
+		source = stored.BodySource
+	}
 	if o.BodySource.Valid && models.HasOfficialFooterBlock(o.BodySource.String) {
 		return "templates.officialNested"
+	}
+	if kind == models.OfficialKindBrand && lang == "" && source.Valid && models.OfficialNeutralHasText(source.String) {
+		return "templates.officialNeutralText"
 	}
 	return ""
 }

@@ -39,4 +39,4 @@ export function parseReference(bodySource: string | null | undefined): Record<st
   return doc;
 }
 
-export const OFFICIAL_LOCK_HINT = 'Official footer — edit the Official_… template, not the campaign.';
+export const OFFICIAL_LOCK_HINT = 'Official footer — edit the Official … Footer template, not the campaign.';

@@ -1,22 +1,30 @@
-// Fork (official footer) -- OFFICIAL-FOOTER-SPEC D2/D3. Resolve an OfficialFooter block's
-// reference BY NAME from the context the host pushes, on every render. The block stores only
-// its `kind`; the template `lang`/`brand` columns drive nothing -- the name is the marker.
+// Fork (official footer) -- OFFICIAL-FOOTER-SPEC D2/D3, amended by integrations BRAND-FOOTER-SPEC
+// D1/D2. Resolve an OfficialFooter block's reference BY NAME from the context the host pushes, on
+// every render. The block stores only its `kind`; the template `lang`/`brand` columns drive
+// nothing -- the name is the marker.
 //
 // Import-free by construction: test/run.cjs compiles this file standalone (like postProcess.ts).
 //
-//   corporate -> Official_Footer_<LANG>
-//   brand     -> Official_<Brand>_Footer_<LANG>, where slug(Brand) equals slug(context brand)
+// The name grammar (BRAND-FOOTER-SPEC D1): an official name starts with `Official ` (the word and
+// ONE space) and has exactly one of three shapes, LANG = two upper-case letters:
+//   corporate        -> Official Footer <LANG>
+//   brand, neutral   -> Official <Brand> Footer          (one footer for every language)
+//   brand, override  -> Official <Brand> Footer <LANG>   (that language only)
+// where slug(Brand) equals slug(context brand). Corporate is checked first.
 //
-// LANG is the upper-cased context lang; an empty lang resolves as `en` (a campaign stored
-// before the create-time default -- "no attribs.lang => the English send"). There is NO
-// cross-language fallback: an absent name is `missing`. Brand `curated` is an ordinary brand
-// here (CURATED-FOOTER-SPEC D1, reversing OFFICIAL-FOOTER-SPEC D3).
+// LANG is the upper-cased context lang; an empty lang resolves as `en` (a campaign stored before
+// the create-time default -- "no attribs.lang => the English send"). Corporate has no fallback.
+// Brand: the override for the context language, else the neutral footer, else `missing`. The
+// neutral footer is not a cross-language fallback: it declares it holds no language (a neutral
+// footer may carry no text -- the fork's template save and the seed writers enforce that). Brand
+// `curated` is an ordinary brand here (CURATED-FOOTER-SPEC D1). Shared case table:
+// test/fixtures/official-names.json (BRAND-FOOTER-SPEC D5).
 
-export const OFFICIAL_TEMPLATE_PREFIX = 'Official_';
+export const OFFICIAL_TEMPLATE_PREFIX = 'Official ';
 
 export type TOfficialKind = 'corporate' | 'brand';
 
-// One `Official_`-prefixed campaign_visual template, as the host pushes it.
+// One official campaign_visual template, as the host pushes it.
 export type TOfficialRef = {
   id: number;
   name: string;
@@ -25,7 +33,7 @@ export type TOfficialRef = {
 
 // `brand: null` = the brand is not known yet (a campaign with no lists, or a derivation error):
 // a brand block shows "Choose a list"; the corporate block still resolves (it needs lang only).
-// `official: true` = an Official_ template is being edited (the Insert action is hidden).
+// `official: true` = an official template is being edited (the Insert action is hidden).
 // Fork (integrations EDITOR-DEFAULTS-SPEC D2/D4) -- `campaign: true` = the campaign editor (a null
 // body_source opens with the footer pair; the template editor never sets it); `linkDefault` = the
 // campaign's own brand's default Image/Button link (frontend/src/linkDefaults.mjs), null for none.
@@ -47,7 +55,7 @@ export type TOfficialResolution = {
   ref?: TOfficialRef;
 };
 
-// Lower-case, non-alphanumerics stripped: `AcmeCo` -> `acmeco`, `ACME` -> `acme`.
+// Lower-case, non-alphanumerics stripped: `AcmeCo` -> `acmeco`, `Thirsty Girl` -> `thirstygirl`.
 // Applied to BOTH the name's brand segment and the context brand, so `acme-co` and
 // `AcmeCo` are one brand.
 export function officialSlug(s: string | null | undefined): string {
@@ -63,23 +71,48 @@ export function isOfficialName(name: string | null | undefined): boolean {
   return String(name ?? '').startsWith(OFFICIAL_TEMPLATE_PREFIX);
 }
 
-// Parse an official template name. null when it is not one of the two footer shapes.
+const RE_CORPORATE = /^Official Footer ([A-Z]{2})$/;
+const RE_OVERRIDE = /^Official (.+) Footer ([A-Z]{2})$/;
+const RE_NEUTRAL = /^Official (.+) Footer$/;
+
+// The brand segment's slug, or null when the segment is not usable (a leading/trailing space, or
+// nothing left after the slug rule).
+function brandSlugOf(segment: string): string | null {
+  if (segment !== segment.trim()) {
+    return null;
+  }
+  const s = officialSlug(segment);
+  return s === '' ? null : s;
+}
+
+// Parse an official template name (D1). null when it is none of the three shapes. `lang` is ''
+// for a language-neutral brand footer; `brand` is the segment's slug ('' for corporate).
 export function parseOfficialName(name: string): { kind: TOfficialKind; brand: string; lang: string } | null {
-  const corp = /^Official_Footer_([A-Za-z]+)$/.exec(name);
+  const n = String(name ?? '');
+  const corp = RE_CORPORATE.exec(n);
   if (corp) {
     return { kind: 'corporate', brand: '', lang: corp[1] };
   }
-  const brand = /^Official_(.+)_Footer_([A-Za-z]+)$/.exec(name);
-  if (brand) {
-    return { kind: 'brand', brand: officialSlug(brand[1]), lang: brand[2] };
+  const over = RE_OVERRIDE.exec(n);
+  if (over) {
+    const b = brandSlugOf(over[1]);
+    return b === null ? null : { kind: 'brand', brand: b, lang: over[2] };
+  }
+  const neutral = RE_NEUTRAL.exec(n);
+  if (neutral) {
+    const b = brandSlugOf(neutral[1]);
+    return b === null ? null : { kind: 'brand', brand: b, lang: '' };
   }
   return null;
 }
 
-// The name a block of this kind would resolve to (brand kind: the context brand's slug stands
-// in for the display casing, which only a matching template supplies).
-function expectedName(kind: TOfficialKind, lang: string, brand: string): string {
-  return kind === 'corporate' ? `Official_Footer_${lang}` : `Official_${brand}_Footer_${lang}`;
+function pick(matches: TOfficialRef[]): TOfficialResolution {
+  const sorted = [...matches].sort((a, b) => a.id - b.id);
+  return {
+    status: sorted.length > 1 ? 'duplicate' : 'ok',
+    name: sorted[0].name,
+    ref: sorted[0],
+  };
 }
 
 export function resolveOfficial(
@@ -99,24 +132,29 @@ export function resolveOfficial(
     brandSlug = officialSlug(context.brand);
   }
 
-  const matches = (refs ?? []).filter((r) => {
+  const parsed: { r: TOfficialRef; lang: string }[] = [];
+  for (const r of refs ?? []) {
     if (!r || typeof r.name !== 'string') {
-      return false;
+      continue;
     }
     const p = parseOfficialName(r.name);
-    if (!p || p.kind !== kind || p.lang !== lang) {
-      return false;
+    if (p && p.kind === kind && (kind === 'corporate' || p.brand === brandSlug)) {
+      parsed.push({ r, lang: p.lang });
     }
-    return kind === 'corporate' || p.brand === brandSlug;
-  });
-
-  if (matches.length === 0) {
-    return { status: 'missing', name: expectedName(kind, lang, brandSlug) };
   }
-  const sorted = [...matches].sort((a, b) => a.id - b.id);
-  return {
-    status: sorted.length > 1 ? 'duplicate' : 'ok',
-    name: sorted[0].name,
-    ref: sorted[0],
-  };
+
+  const exact = parsed.filter((x) => x.lang === lang).map((x) => x.r);
+  if (exact.length) {
+    return pick(exact);
+  }
+  if (kind === 'corporate') {
+    return { status: 'missing', name: `Official Footer ${lang}` };
+  }
+  const neutral = parsed.filter((x) => x.lang === '').map((x) => x.r);
+  if (neutral.length) {
+    return pick(neutral);
+  }
+  // The name to create: the neutral footer (the context brand's slug stands in for the display
+  // casing, which only a matching template supplies).
+  return { status: 'missing', name: `Official ${brandSlug} Footer` };
 }

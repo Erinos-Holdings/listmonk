@@ -292,7 +292,7 @@ export function templateNoticeBrand(templateBrand, selection) {
 }
 
 // D12: the Templates listing under a selection -- a brand's rows plus the brandless rows (the
-// account default and the shared/Official_ templates are every brand's); under none the brandless
+// account default and the shared/official templates are every brand's); under none the brandless
 // rows only; under all every row.
 export function filterTemplates(templates, selection) {
   const rows = Array.isArray(templates) ? templates : [];

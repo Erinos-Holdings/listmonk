@@ -25,7 +25,7 @@ export default function EditorChildrenIds({ childrenIds, onChange }: EditorChild
   // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D7. The Add menu's "Official footer" entry
   // inserts the brand + corporate pair through the pure insertOfficialFooter transform (the
   // onSelect contract inserts one block). Offered only in the root layout or a Container (a
-  // column is not a footer position), and hidden while an Official_ template is being edited
+  // column is not a footer position), and hidden while an official template is being edited
   // (context.official) -- a reference can never hold an OfficialFooter (D4).
   const parentId = useCurrentBlockId();
   const document = useDocument();

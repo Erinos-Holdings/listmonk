@@ -1,11 +1,52 @@
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC I9 (Vue twin) and I10. Run:
 // npm run test:official-sweep (node --test src/officialSweep.test.mjs). No dependency.
+// integrations BRAND-FOOTER-SPEC I1 (the shared name table + the prefix pin over frontend/src) and
+// I7 (the sweep selects by D2 resolution).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
-  CAMPAIGN_UPDATE_KEYS, TEMPLATE_UPDATE_KEYS, campaignPayload, deriveContext, runSweep,
-  selectSweepItems, templatePayload,
+  CAMPAIGN_UPDATE_KEYS, TEMPLATE_UPDATE_KEYS, campaignPayload, deriveContext, isOfficialName, parseOfficialName,
+  resolveOfficial, runSweep, selectSweepItems, templatePayload,
 } from './officialSweep.mjs'; // eslint-disable-line import/extensions
+
+const SRC = fileURLToPath(new URL('.', import.meta.url));
+const TABLE = JSON.parse(readFileSync(new URL('../email-builder/test/fixtures/official-names.json', import.meta.url), 'utf8'));
+
+test('BRAND-FOOTER I1: parseOfficialName answers every parse case of the shared table', () => {
+  assert.ok(TABLE.parse.length >= 20);
+  TABLE.parse.forEach((c) => assert.deepEqual(parseOfficialName(c.name), c.want, JSON.stringify(c.name)));
+});
+
+test('BRAND-FOOTER I1/I2: resolveOfficial answers every resolve case of the shared table', () => {
+  TABLE.resolve.forEach((c) => {
+    const r = resolveOfficial(c.kind, c.context, c.refs.map(([id, name]) => ({ id, name })));
+    assert.deepEqual({ status: r.status, name: r.name, id: r.ref ? r.ref.id : null }, c.want, c.case);
+  });
+});
+
+test('BRAND-FOOTER I1: no file under frontend/src but officialSweep.mjs carries the official prefix', () => {
+  const offenders = [];
+  const walk = (dir) => readdirSync(dir).forEach((f) => {
+    const full = join(dir, f);
+    if (statSync(full).isDirectory()) {
+      walk(full);
+      return;
+    }
+    if (!/\.(mjs|js|vue|ts)$/.test(f) || full === join(SRC, 'officialSweep.mjs') || /\.test\.mjs$/.test(f)) {
+      return;
+    }
+    const text = readFileSync(full, 'utf8');
+    if (text.includes('Official_') || text.includes("'Official '")) {
+      offenders.push(full.slice(SRC.length));
+    }
+  });
+  walk(SRC);
+  assert.deepEqual(offenders, []);
+  assert.ok(isOfficialName('Official RUZE Footer') && !isOfficialName('Official_RUZE_Footer_EN'));
+});
 
 const LISTS = [
   { id: 5, name: 'Curated', tags: ['brand:curated', 'from:Curated <hello@curatedfor.you>'] },
@@ -64,34 +105,73 @@ test('I10: selects only items whose OfficialFooter blocks resolve to the saved t
     camp(11, { lists: [{ id: 15 }, { id: 16 }] }), // two brands
   ];
   const templates = [
-    tpl(14, 'Official_RUZE_Footer_EN', { brand: 'ruze' }),
-    tpl(30, 'Official_Footer_EN'),
+    tpl(14, 'Official RUZE Footer EN', { brand: 'ruze' }),
+    tpl(30, 'Official Footer EN'),
     tpl(29, 'Shala_EN', { brand: 'shala', body_source: doc('brand', 'corporate') }),
     tpl(40, 'Ruze draft', { brand: 'ruze', body_source: doc('brand', 'corporate') }),
     tpl(41, 'Curated draft', { body_source: doc('corporate') }),
     tpl(42, 'Old html', { type: 'campaign', body_source: doc('corporate') }),
   ];
 
-  const ruze = selectSweepItems(campaigns, templates, { id: 14, name: 'Official_RUZE_Footer_EN' }, LISTS);
+  // An EN override: its language only (the ES carrier c3 is not selected).
+  const ruze = selectSweepItems(campaigns, templates, { id: 14, name: 'Official RUZE Footer EN' }, LISTS);
   assert.deepEqual(ruze.campaigns.map((c) => c.id), [1, 9]);
   assert.deepEqual(ruze.evergreens.map((c) => c.id), [6]);
   assert.deepEqual(ruze.templates.map((t) => t.id), [40], 'a RUZE edit never selects Shala or curated items');
   assert.deepEqual(ruze.unresolved.map((c) => c.id), [11]);
 
-  const corp = selectSweepItems(campaigns, templates, { id: 30, name: 'Official_Footer_EN' }, LISTS);
+  const corp = selectSweepItems(campaigns, templates, { id: 30, name: 'Official Footer EN' }, LISTS);
   assert.deepEqual(corp.campaigns.map((c) => c.id), [1, 2, 9, 10], 'every en carrier, any brand');
   assert.deepEqual(corp.evergreens.map((c) => c.id), [6]);
   assert.deepEqual(corp.templates.map((t) => t.id), [29, 40, 41]);
   assert.deepEqual(corp.unresolved.map((c) => c.id), [11]);
 
-  const es = selectSweepItems(campaigns, templates, { id: 31, name: 'Official_Footer_ES' }, LISTS);
+  const es = selectSweepItems(campaigns, templates, { id: 31, name: 'Official Footer ES' }, LISTS);
   assert.deepEqual(es.campaigns.map((c) => c.id), [3]);
 
   const none = selectSweepItems(campaigns, templates, { id: 99, name: 'Not official' }, LISTS);
   assert.equal(none.campaigns.length + none.evergreens.length + none.templates.length, 0);
+  const legacy = selectSweepItems(campaigns, templates, { id: 14, name: 'Official_RUZE_Footer_EN' }, LISTS);
+  assert.equal(legacy.campaigns.length + legacy.evergreens.length + legacy.templates.length, 0, 'the old prefix is not official');
 });
 
-test('CURATED-FOOTER-SPEC I4: a saved Official_Curated_Footer_EN selects the curated-context brand carriers only', () => {
+test('BRAND-FOOTER I7: a neutral brand footer selects every language without an override; an override its language only', () => {
+  const campaigns = [
+    camp(1), // ruze en
+    camp(2, { attribs: { lang: 'es' } }), // ruze es
+    camp(3, { attribs: { lang: 'fr' } }), // ruze fr (override exists)
+    camp(4, { attribs: { lang: 'de' }, status: 'running', evergreen: true }), // ruze de evergreen
+    camp(5, { lists: [{ id: 16 }], attribs: { lang: 'es' } }), // shala es
+    camp(6, { attribs: { lang: 'es' }, body_source: doc('corporate') }), // corporate only
+  ];
+  const templates = [
+    tpl(14, 'Official RUZE Footer', { brand: 'ruze' }),
+    tpl(60, 'Official RUZE Footer FR', { brand: 'ruze', lang: 'fr' }),
+    tpl(31, 'Official Footer ES'),
+    tpl(40, 'Ruze draft ES', { brand: 'ruze', lang: 'es', body_source: doc('brand', 'corporate') }),
+    tpl(41, 'Ruze draft FR', { brand: 'ruze', lang: 'fr', body_source: doc('brand', 'corporate') }),
+  ];
+  const neutral = selectSweepItems(campaigns, templates, { id: 14, name: 'Official RUZE Footer' }, LISTS);
+  assert.deepEqual(neutral.campaigns.map((c) => c.id), [1, 2]);
+  assert.deepEqual(neutral.evergreens.map((c) => c.id), [4]);
+  assert.deepEqual(neutral.templates.map((t) => t.id), [40]);
+
+  const fr = selectSweepItems(campaigns, templates, { id: 60, name: 'Official RUZE Footer FR' }, LISTS);
+  assert.deepEqual(fr.campaigns.map((c) => c.id), [3]);
+  assert.deepEqual(fr.evergreens, []);
+  assert.deepEqual(fr.templates.map((t) => t.id), [41]);
+
+  // The saved template's own (new) name counts, not the stale row in the list: renaming the FR
+  // override to neutral-shaped is the saved state.
+  const renamed = selectSweepItems(campaigns, [templates[1]], { id: 60, name: 'Official RUZE Footer' }, LISTS);
+  assert.deepEqual(renamed.campaigns.map((c) => c.id), [1, 2, 3]);
+
+  // A neutral footer that is a duplicate (higher id) of another neutral spelling resolves nowhere.
+  const dup = selectSweepItems(campaigns, [...templates, tpl(70, 'Official Ruze Footer')], { id: 70, name: 'Official Ruze Footer' }, LISTS);
+  assert.equal(dup.campaigns.length + dup.evergreens.length + dup.templates.length, 0);
+});
+
+test('CURATED-FOOTER-SPEC I4: a saved Curated EN footer selects the curated-context brand carriers only', () => {
   const campaigns = [
     camp(1, { lists: [{ id: 5 }] }), // brand:curated, brand + corporate
     camp(2, { lists: [{ id: 25 }] }), // untagged -> curated, brand + corporate
@@ -102,19 +182,19 @@ test('CURATED-FOOTER-SPEC I4: a saved Official_Curated_Footer_EN selects the cur
     camp(7, { lists: [{ id: 5 }], status: 'running', evergreen: true }), // curated evergreen
   ];
   const templates = [
-    tpl(37, 'Official_Curated_Footer_EN', { brand: 'curated' }),
+    tpl(37, 'Official Curated Footer EN', { brand: 'curated' }),
     tpl(50, 'Curated draft', { body_source: doc('brand', 'corporate') }), // empty brand -> curated
     tpl(51, 'Curated tagged', { brand: 'curated', body_source: doc('brand') }),
     tpl(52, 'Ruze draft', { brand: 'ruze', body_source: doc('brand', 'corporate') }),
     tpl(53, 'Curated corporate', { body_source: doc('corporate') }),
   ];
-  const cur = selectSweepItems(campaigns, templates, { id: 37, name: 'Official_Curated_Footer_EN' }, LISTS);
+  const cur = selectSweepItems(campaigns, templates, { id: 37, name: 'Official Curated Footer EN' }, LISTS);
   assert.deepEqual(cur.campaigns.map((c) => c.id), [1, 2]);
   assert.deepEqual(cur.evergreens.map((c) => c.id), [7]);
   assert.deepEqual(cur.templates.map((t) => t.id), [50, 51]);
   assert.deepEqual(cur.unresolved, []);
 
-  const ruze = selectSweepItems(campaigns, templates, { id: 14, name: 'Official_RUZE_Footer_EN' }, LISTS);
+  const ruze = selectSweepItems(campaigns, templates, { id: 14, name: 'Official RUZE Footer EN' }, LISTS);
   assert.deepEqual(ruze.campaigns.map((c) => c.id), [4], 'a RUZE edit never selects a curated carrier');
   assert.deepEqual(ruze.templates.map((t) => t.id), [52]);
 });

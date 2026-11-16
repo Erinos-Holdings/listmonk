@@ -9,7 +9,7 @@ package main
 //	   a rename back deletes the row, and a former name over 30 / with whitespace is accepted back
 //	   verbatim;
 //	I3 the endpoints refuse without campaigns:review_structure, honor the journey lock, refuse
-//	   CATALOG/Official_ renames and renames onto locked/official names;
+//	   CATALOG/official renames and renames onto locked/official names;
 //	I4 (the general-update half) an unchanged long name passes a general update, a changed one is
 //	   judged by the rule and records its former name; create applies the rule.
 
@@ -295,28 +295,28 @@ func TestRenameGuards(t *testing.T) {
 		t.Fatalf("rename onto a locked list name: %d", code)
 	}
 
-	// Code-named records: a CATALOG campaign and an Official_ template are never renamed; nothing
-	// is renamed into a CATALOG/Official_ name.
+	// Code-named records: a CATALOG campaign and an official template are never renamed; nothing
+	// is renamed into a CATALOG/official name (integrations BRAND-FOOTER-SPEC D1: `Official `).
 	cat := sqlCampaign(t, h, "CATALOG 01-button", "draft", 0)
 	if code, _ := nameCall(t, h, h.app.RenameCampaign, http.MethodPut, cat, renameBody("Button"), renamer); code != http.StatusBadRequest {
 		t.Fatalf("CATALOG rename: %d", code)
 	}
-	official := sqlTemplate(t, h, "Official_footer_corporate_en")
+	official := sqlTemplate(t, h, "Official Footer EN")
 	if code, _ := nameCall(t, h, h.app.RenameTemplate, http.MethodPut, official, renameBody("Footer"), renamer); code != http.StatusBadRequest {
-		t.Fatalf("Official_ rename: %d", code)
+		t.Fatalf("official rename: %d", code)
 	}
 	for name, c := range map[string]struct {
 		fn echo.HandlerFunc
 		id int
 	}{"campaign": {h.app.RenameCampaign, camp}, "list": {h.app.RenameList, list}, "template": {h.app.RenameTemplate, tpl}} {
-		for _, into := range []string{"CATALOG x", "Official_x"} {
+		for _, into := range []string{"CATALOG x", "Official x"} {
 			if code, _ := nameCall(t, h, c.fn, http.MethodPut, c.id, renameBody(into), renamer); code != http.StatusBadRequest {
 				t.Fatalf("%s renamed into %q: %d", name, into, code)
 			}
 		}
 	}
-	if code, _ := nameCall(t, h, h.app.RenameTemplate, http.MethodPut, tpl, renameBody("Official_footer_corporate_en"), renamer); code != http.StatusBadRequest {
-		t.Fatalf("rename onto an existing Official_ name: %d", code)
+	if code, _ := nameCall(t, h, h.app.RenameTemplate, http.MethodPut, tpl, renameBody("Official Footer EN"), renamer); code != http.StatusBadRequest {
+		t.Fatalf("rename onto an existing official name: %d", code)
 	}
 	if _, ok := formerRow(t, h, "template", official); ok {
 		t.Fatal("a refused rename recorded a former name")
@@ -388,8 +388,8 @@ func TestGeneralUpdateNameRule(t *testing.T) {
 	if code, _ := templateReq(t, h, http.MethodPost, 0, `{"name": "`+strings.Repeat("q", 31)+`", "type": "campaign", "body": "{{ template \"content\" . }}"}`); code != http.StatusBadRequest {
 		t.Fatalf("create template over 30: %d", code)
 	}
-	if code, msg := templateReq(t, h, http.MethodPost, 0, `{"name": "Official_footer_with_a_very_long_name_en", "type": "campaign_visual", "body": "<p>x</p>", "body_source": "{}"}`); code != http.StatusOK {
-		t.Fatalf("create Official_ template (exempt): %d %s", code, msg)
+	if code, msg := templateReq(t, h, http.MethodPost, 0, `{"name": "Official KNOWN FOR FRAGRANCE Footer EN", "type": "campaign_visual", "body": "<p>x</p>", "body_source": "{}"}`); code != http.StatusOK {
+		t.Fatalf("create official template (exempt): %d %s", code, msg)
 	}
 	if code, _ := nameCall(t, h, h.app.CreateCampaign, http.MethodPost, 0, `{"name": "`+strings.Repeat("q", 31)+`", "subject": "s", "from_email": "hello@acme.test", `+lists+`, "content_type": "plain", "body": "b", "messenger": "email"}`,
 		perms("m", auth.PermCampaignsManageAll, auth.PermListGetAll, auth.PermListManageAll)); code != http.StatusBadRequest {

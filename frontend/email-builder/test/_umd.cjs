@@ -12,6 +12,9 @@ const SNAPSHOT = path.join(FIXTURES, 'compile-snapshot.json');
 // Word fixes (b5ceb3ce), so a recapture of SNAPSHOT from a later commit can never re-pin it.
 const FLAG_OFF_SNAPSHOT = path.join(FIXTURES, 'compile-snapshot-flag-off.json');
 const isSnapshotFile = (f) => /^compile-snapshot.*\.json$/.test(f);
+// integrations BRAND-FOOTER-SPEC D5: the shared official-name case table lives in test/fixtures
+// too, and is no builder document.
+const NOT_DOCUMENTS = new Set(['official-names.json']);
 
 // Loads the bundle into a fresh jsdom window. `onWarn` receives console.warn lines;
 // `beforeScript(window)` runs before the bundle is evaluated (e.g. to stub localStorage).
@@ -39,10 +42,11 @@ function loadUmd(umdPath = DEFAULT_UMD, { onWarn, onError, beforeScript } = {}) 
 }
 
 // The builder-document fixtures: every .json under test/fixtures except the snapshots
-// (compile-snapshot*.json). Each is {id, name, body_source, ...}; the document is body_source.
+// (compile-snapshot*.json) and NOT_DOCUMENTS. Each is {id, name, body_source, ...}; the document
+// is body_source.
 function documentFixtures() {
   return fs.readdirSync(FIXTURES)
-    .filter((f) => f.endsWith('.json') && !isSnapshotFile(f))
+    .filter((f) => f.endsWith('.json') && !isSnapshotFile(f) && !NOT_DOCUMENTS.has(f))
     .sort()
     .map((f) => ({ file: f, document: JSON.parse(fs.readFileSync(path.join(FIXTURES, f), 'utf8')).body_source }));
 }

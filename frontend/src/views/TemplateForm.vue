@@ -30,7 +30,7 @@
           <div class="columns">
             <div class="column is-9">
               <!-- Fork (naming standard, NAMING-STANDARD-SPEC D3/D15) -- n/30 and the hint;
-                   an Official_ name is exempt (no limit).
+                   an official name is exempt (no limit).
                    Fork (name guardrails, NAME-GUARDRAILS-SPEC §4) -- live naming warnings
                    (naming.mjs::nameWarnings, warnings only) and the grey `Newsletter` sample; no prefill. -->
               <b-field :label="$t('globals.fields.name')" label-position="on-border" :message="nameMessage"
@@ -252,7 +252,7 @@ export default Vue.extend({
     },
 
     // The sweep plan for a save of `saved` ({id, name}): raw campaigns + templates, selected by
-    // resolution (officialSweep.mjs). Also returns the fresh `Official_` references.
+    // resolution (officialSweep.mjs). Also returns the fresh official references.
     async planOfficialSweep(saved) {
       const [camps, tpls] = await Promise.all([this.$api.getCampaignsRaw(), this.$api.getTemplatesRaw()]);
       const templates = Array.isArray(tpls) ? tpls : [];
@@ -510,7 +510,7 @@ export default Vue.extend({
       return namePlaceholder('template');
     },
 
-    // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10: an `Official_` template (the stored
+    // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D10: an official template (the stored
     // name, or the one being typed).
     isOfficial() {
       return isOfficialName(this.form.name) || (this.isEditing && isOfficialName(this.data && this.data.name));

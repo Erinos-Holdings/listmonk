@@ -1,5 +1,5 @@
 {
- "comment": "The naming standard's name rule (integrations listmonk/NAMING-STANDARD-SPEC §4.3, I4). Read by the fork's models/naming_test.go (models.NameProblem) and by integrations tests/lib/naming.test.ts (lib/naming.ts::nameProblem) -- one case table, change both implementations together. want is the i18n key, \"\" = valid. Names are judged trimmed.",
+ "comment": "The naming standard's name rule (integrations listmonk/NAMING-STANDARD-SPEC §4.3, I4). Read by the fork's models/naming_test.go (models.NameProblem) by integrations tests/lib/naming.test.ts (lib/naming.ts::nameProblem), and -- for the limit and its exemptions only -- by frontend/src/naming.test.mjs (nameCounter; integrations BRAND-FOOTER-SPEC I5) -- one case table, change both implementations together. want is the i18n key, \"\" = valid. Names are judged trimmed.",
  "cases": [
   { "kind": "campaign", "name": "", "want": "naming.nameEmpty" },
   { "kind": "campaign", "name": "   ", "want": "naming.nameEmpty" },
@@ -18,7 +18,11 @@
   { "kind": "campaign", "name": "CATALOG 01-button-outlook-word-columns-long", "want": "" },
   { "kind": "campaign", "name": "CATALOGUE of the whole autumn collection", "want": "naming.nameTooLong" },
   { "kind": "campaign", "name": "Official_footer_corporate_en_extra_long", "want": "naming.nameTooLong" },
-  { "kind": "template", "name": "Official_footer_corporate_en_extra_long", "want": "" },
+  { "kind": "template", "name": "Official_footer_corporate_en_extra_long", "want": "naming.nameTooLong" },
+  { "kind": "template", "name": "Official KNOWN FOR FRAGRANCE Footer", "want": "" },
+  { "kind": "template", "name": "Official KNOWN FOR FRAGRANCE Footer EN", "want": "" },
+  { "kind": "campaign", "name": "Official KNOWN FOR FRAGRANCE Footer", "want": "naming.nameTooLong" },
+  { "kind": "template", "name": "official KNOWN FOR FRAGRANCE Footer", "want": "naming.nameTooLong" },
   { "kind": "template", "name": "CATALOG 01-button-outlook-word-columns-long", "want": "naming.nameTooLong" },
   { "kind": "template", "name": "Newsletter", "want": "" },
   { "kind": "template", "name": "1234567890123456789012345678901", "want": "naming.nameTooLong" },

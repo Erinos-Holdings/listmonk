@@ -34,7 +34,7 @@ type TValue = {
 
   brandPalettes: TBrandPalette[];
 
-  // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D2/D8. Every `Official_` campaign_visual
+  // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D2/D8. Every official (`Official `) campaign_visual
   // template ({id, name, body_source}) and the resolution context ({lang, brand, official}),
   // pushed by the host through setOfficialFooters/setOfficialContext.
   officialFooters: TOfficialRef[];

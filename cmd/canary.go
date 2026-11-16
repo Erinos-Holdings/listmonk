@@ -16,7 +16,7 @@ package main
 //
 // STARTUP WRITES AND RUNTIME STATE. The canary's links go through TrackLink like any preview's,
 // so EVERY boot and every settings-save reload upserts them into the links table (create-link is
-// an upsert on url: the `canary.invalid` hrefs and the fixed Official_ refs' links, each row
+// an upsert on url: the `canary.invalid` hrefs and the fixed official refs' links, each row
 // written once and its UUID stable after). The server hashes therefore depend on those link rows
 // persisting, and on runtime settings the send path reads -- the root URL (tracked-link, pixel,
 // unsubscribe and message URLs) and privacy.individual_tracking (the subscriber UUID in tracked

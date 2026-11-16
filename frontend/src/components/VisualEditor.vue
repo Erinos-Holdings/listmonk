@@ -45,7 +45,7 @@ export default {
     mediaContext: { type: Array, default: () => [] },
 
     // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D9. The resolution context
-    // ({lang, brand, official}) and every `Official_` campaign_visual template ({id, name,
+    // ({lang, brand, official}) and every official campaign_visual template ({id, name,
     // body_source}), forwarded to the builder's store setters (same channel as the palettes).
     // A change re-emits the builder's onChange, so the compiled body follows a Language or list
     // change made after the document loaded.
@@ -123,7 +123,7 @@ export default {
       if (!source) {
         // Fork (integrations EDITOR-DEFAULTS-SPEC D2) -- a null body_source in the CAMPAIGN editor
         // (the context carries `campaign: true`; TemplateForm never sets it, nor while an
-        // Official_ template is edited) opens with the Official footer pair: the builder's
+        // official template is edited) opens with the Official footer pair: the builder's
         // firstLoadDocument returns the starter document with the pair, else the SAME object --
         // then nothing is loaded, exactly as before. Loaded through the timer below, so the pair
         // reaches the form and an untouched new campaign reads as unsaved until its first save.

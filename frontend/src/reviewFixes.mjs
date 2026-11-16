@@ -369,7 +369,7 @@ export function reviewPayload(campaign, body) {
 // integrations ALT-AUTOGEN-SPEC D5 step 6: THE recompile of a raw campaign after a fix -- the
 // window's applyStagedFixes and the campaign page's alt generation both call it (never a copy).
 // `em` is the builder UMD (EmailBuilder), `templates` the raw (snake_case) template rows (the
-// `Official_` ones are the footer refs), `lists` the lists store (deriveContext's brand). Throws when
+// official ones are the footer refs), `lists` the lists store (deriveContext's brand). Throws when
 // the builder has no compileDocument.
 export function compileCampaignBody(em, campaign, templates, lists) {
   if (!em || typeof em.compileDocument !== 'function') {

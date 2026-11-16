@@ -456,7 +456,7 @@ test('Stage 4 finding 6: only applied fixes are recorded as fixed; skipped ones 
 });
 
 // integrations ALT-AUTOGEN-SPEC D5 step 6: the one recompile both the window and the campaign page call.
-test('compileCampaignBody: the Official_ visual templates are the refs, the context is deriveContext, no builder throws', () => {
+test('compileCampaignBody: the official visual templates are the refs, the context is deriveContext, no builder throws', () => {
   const seen = [];
   const em = {
     compileDocument: (d, ctx, refs) => {
@@ -466,18 +466,21 @@ test('compileCampaignBody: the Official_ visual templates are the refs, the cont
   };
   const templates = [
     {
-      id: 1, name: 'Official_Footer_EN', type: 'campaign_visual', body_source: '{}',
+      id: 1, name: 'Official Footer EN', type: 'campaign_visual', body_source: '{}',
     },
     {
       id: 2, name: 'Ruze promo', type: 'campaign_visual', body_source: '{}',
     },
     {
-      id: 3, name: 'Official_Footer_FR', type: 'campaign', body_source: '{}',
+      id: 3, name: 'Official Footer FR', type: 'campaign', body_source: '{}',
+    },
+    {
+      id: 4, name: 'Official_Footer_ES', type: 'campaign_visual', body_source: '{}',
     },
   ];
   const lists = [{ id: 15, tags: ['brand:ruze'] }];
   assert.equal(compileCampaignBody(em, visual(), templates, lists), '<p>compiled</p>');
-  assert.deepEqual(seen[0].refs, [{ id: 1, name: 'Official_Footer_EN', body_source: '{}' }]);
+  assert.deepEqual(seen[0].refs, [{ id: 1, name: 'Official Footer EN', body_source: '{}' }]);
   assert.equal(seen[0].ctx.lang, 'en');
   assert.deepEqual(seen[0].d, doc);
   assert.throws(() => compileCampaignBody(null, visual(), templates, lists), /builder unavailable/);

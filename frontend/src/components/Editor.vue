@@ -339,7 +339,7 @@ export default {
             // Fork (integrations EDITOR-DEFAULTS-SPEC D2) -- an imported visual template gets the
             // Official footer pair (the builder's firstLoadDocument: unchanged when it carries
             // both, the missing kind added next to a lone one, the pair at the end of root when it
-            // carries neither; never while an Official_ template is edited).
+            // carries neither; never while an official template is edited).
             const em = this.$refs.visualEditor.builder();
             let doc = JSON.parse(data.bodySource);
             if (em && em.firstLoadDocument) {

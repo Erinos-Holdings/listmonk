@@ -1,77 +1,40 @@
-// OFFICIAL-FOOTER-SPEC I1. An OfficialFooter block stores only `kind`; the reference is resolved
-// from the context on every render, BY NAME: `en` for an empty lang, `curated` an ordinary brand
-// (CURATED-FOOTER-SPEC I1), absent name -> `missing` (no cross-language fallback), no context -> `no-context`,
-// two rows of one name -> lowest id + `duplicate`. The template lang/brand columns drive nothing.
+// OFFICIAL-FOOTER-SPEC I1, amended by integrations BRAND-FOOTER-SPEC I1/I2. An OfficialFooter block
+// stores only `kind`; the reference is resolved from the context on every render, BY NAME, under
+// the name grammar of BRAND-FOOTER-SPEC D1 and the resolution of D2 -- the shared case table
+// test/fixtures/official-names.json (read by the Vue, Go and integrations suites too).
+const fs = require('fs');
 const path = require('path');
-const { resolveOfficial, officialSlug, parseOfficialName } = require(path.join(__dirname, '.build', 'official', 'resolve.cjs'));
+const { resolveOfficial, officialSlug, parseOfficialName, isOfficialName } = require(path.join(__dirname, '.build', 'official', 'resolve.cjs'));
 const { insertOfficialFooter } = require(path.join(__dirname, '.build', 'official', 'insert.cjs'));
 
 let failed = 0;
 function check(name, ok, detail) { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  [' + detail + ']' : ''}`); }
 
+const TABLE = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'official-names.json'), 'utf8'));
 const ref = (id, name, extra = {}) => ({ id, name, body_source: '{"root":{"type":"EmailLayout","data":{"childrenIds":[]}}}', ...extra });
-const REFS = [
-  ref(30, 'Official_Footer_EN', { lang: 'fr', brand: 'ruze' }), // columns deliberately wrong: they drive nothing
-  ref(31, 'Official_Footer_ES'),
-  ref(14, 'Official_RUZE_Footer_EN'),
-  ref(19, 'Official_RUZE_Footer_ES'),
-  ref(24, 'Official_ThirstyGirl_Footer_EN'),
-];
 
-let r = resolveOfficial('corporate', { lang: 'en', brand: 'ruze' }, REFS);
-check('corporate en -> Official_Footer_EN', r.status === 'ok' && r.ref.id === 30 && r.name === 'Official_Footer_EN', JSON.stringify(r));
-r = resolveOfficial('corporate', { lang: '', brand: 'ruze' }, REFS);
-check('empty lang resolves as en', r.status === 'ok' && r.ref.id === 30);
-r = resolveOfficial('corporate', { lang: null, brand: null }, REFS);
-check('corporate needs lang only (brand unknown still resolves)', r.status === 'ok' && r.ref.id === 30);
-r = resolveOfficial('corporate', { lang: 'es' }, REFS);
-check('corporate es -> 31', r.status === 'ok' && r.ref.id === 31);
-r = resolveOfficial('corporate', { lang: 'de' }, REFS);
-check('absent corporate de -> missing, no fallback to EN', r.status === 'missing' && r.name === 'Official_Footer_DE' && !r.ref, JSON.stringify(r));
+check('the table has parse and resolve cases', TABLE.parse.length >= 20 && TABLE.resolve.length >= 15);
+for (const c of TABLE.parse) {
+  const got = parseOfficialName(c.name);
+  check(`parse ${JSON.stringify(c.name)}`, JSON.stringify(got) === JSON.stringify(c.want), JSON.stringify(got));
+}
+for (const c of TABLE.resolve) {
+  const r = resolveOfficial(c.kind, c.context, c.refs.map(([id, name]) => ref(id, name)));
+  const got = { status: r.status, name: r.name, id: r.ref ? r.ref.id : null };
+  check(`resolve: ${c.case}`, JSON.stringify(got) === JSON.stringify(c.want), JSON.stringify(got));
+}
 
-r = resolveOfficial('brand', { lang: 'en', brand: 'ruze' }, REFS);
-check('brand ruze en -> 14 (RUZE slug)', r.status === 'ok' && r.ref.id === 14);
-r = resolveOfficial('brand', { lang: 'es', brand: 'RUZE' }, REFS);
-check('brand context is slug-compared (RUZE)', r.status === 'ok' && r.ref.id === 19);
-r = resolveOfficial('brand', { lang: 'en', brand: 'thirstygirl' }, REFS);
-check('ThirstyGirl -> thirstygirl', r.status === 'ok' && r.ref.id === 24);
-r = resolveOfficial('brand', { lang: 'fr', brand: 'ruze' }, REFS);
-check('brand fr absent -> missing (no cross-language fallback)', r.status === 'missing' && r.name === 'Official_ruze_Footer_FR');
-r = resolveOfficial('brand', { lang: 'en', brand: 'liyora' }, REFS);
-check('brand with no template -> missing', r.status === 'missing');
-// CURATED-FOOTER-SPEC I1: `curated` is an ordinary brand -- no context yields `none`.
-const CURATED_REFS = [...REFS, ref(37, 'Official_Curated_Footer_EN'), ref(38, 'Official_Curated_Footer_ES')];
-r = resolveOfficial('brand', { lang: 'en', brand: 'curated' }, CURATED_REFS);
-check('I1: brand curated en -> Official_Curated_Footer_EN (ok)', r.status === 'ok' && r.ref.id === 37 && r.name === 'Official_Curated_Footer_EN', JSON.stringify(r));
-r = resolveOfficial('brand', { lang: 'es', brand: 'Curated' }, CURATED_REFS);
-check('I1: curated is slug-compared (Curated es -> 38)', r.status === 'ok' && r.ref.id === 38);
-r = resolveOfficial('brand', { lang: 'en', brand: 'curated' }, REFS);
-check('I1: brand curated with no template -> missing (not none)', r.status === 'missing' && r.name === 'Official_curated_Footer_EN' && !r.ref, JSON.stringify(r));
-r = resolveOfficial('brand', { lang: 'fr', brand: 'curated' }, CURATED_REFS);
-check('I1: brand curated fr absent -> missing (no cross-language fallback)', r.status === 'missing' && r.name === 'Official_curated_Footer_FR');
-r = resolveOfficial('brand', { lang: 'en', brand: 'curated' }, [...CURATED_REFS, ref(45, 'Official_Curated_Footer_EN')]);
-check('I1: two Curated EN rows -> lowest id + duplicate', r.status === 'duplicate' && r.ref.id === 37);
+// The template lang/brand columns drive nothing.
+let r = resolveOfficial('corporate', { lang: 'en', brand: 'ruze' }, [ref(30, 'Official Footer EN', { lang: 'fr', brand: 'ruze' })]);
+check('columns drive nothing', r.status === 'ok' && r.ref.id === 30, JSON.stringify(r));
+// CURATED-FOOTER-SPEC I1: no context brand yields status none.
+const REFS = TABLE.resolve.flatMap((c) => c.refs.map(([id, name]) => ref(id, name)));
 const anyNone = ['curated', 'Curated', 'ruze', 'liyora', '', null].some((b) =>
-  ['en', 'es', 'fr'].some((l) => ['brand', 'corporate'].some((k) => resolveOfficial(k, { lang: l, brand: b }, CURATED_REFS).status === 'none')));
+  ['en', 'es', 'fr'].some((l) => ['brand', 'corporate'].some((k) => resolveOfficial(k, { lang: l, brand: b }, REFS).status === 'none')));
 check('I1: no context brand yields status none', !anyNone);
-r = resolveOfficial('brand', { lang: 'en', brand: null }, REFS);
-check('brand null -> no-context', r.status === 'no-context');
-r = resolveOfficial('brand', null, REFS);
-check('no context -> no-context (brand)', r.status === 'no-context');
-r = resolveOfficial('corporate', undefined, REFS);
-check('no context -> no-context (corporate)', r.status === 'no-context');
-
-const dup = [...REFS, ref(40, 'Official_Footer_EN'), ref(12, 'Official_Footer_EN')];
-r = resolveOfficial('corporate', { lang: 'en' }, dup);
-check('duplicate name -> lowest id + duplicate', r.status === 'duplicate' && r.ref.id === 12, JSON.stringify(r && r.ref));
-
-// A non-official look-alike name never resolves.
-r = resolveOfficial('corporate', { lang: 'en' }, [ref(5, 'Copy of Official_Footer_EN')]);
-check('only the exact name resolves', r.status === 'missing');
 
 check('slug strips non-alphanumerics', officialSlug('Thirsty-Girl_2') === 'thirstygirl2');
-check('parse corporate', JSON.stringify(parseOfficialName('Official_Footer_IT')) === JSON.stringify({ kind: 'corporate', brand: '', lang: 'IT' }));
-check('parse brand', JSON.stringify(parseOfficialName('Official_ThirstyGirl_Footer_DE')) === JSON.stringify({ kind: 'brand', brand: 'thirstygirl', lang: 'DE' }));
+check('isOfficialName: the new prefix only', isOfficialName('Official RUZE Footer') && !isOfficialName('Official_RUZE_Footer_EN') && !isOfficialName('official Footer EN'));
 
 // The block stores ONLY kind: what the Insert action writes.
 const doc = { root: { type: 'EmailLayout', data: { childrenIds: [] } } };

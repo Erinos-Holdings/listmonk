@@ -45,7 +45,7 @@ export function generatedMap(keep, applied, at) {
 }
 
 // D5: the sequence. deps: { id, api: { generateAlts(id), getCampaignRaw(id), updateCampaign(id, payload) },
-// compile(campaign) -> Promise<body> (reviewFixes.mjs compileCampaignBody with the Official_ refs and
+// compile(campaign) -> Promise<body> (reviewFixes.mjs compileCampaignBody with the official refs and
 // deriveContext), notify(message) }. Resolves { saved, phase }; never rejects.
 export async function generateAndApply({
   id, api, compile, notify,

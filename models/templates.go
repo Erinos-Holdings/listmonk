@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"html/template"
 	"regexp"
 	"strings"
@@ -23,12 +24,141 @@ const (
 // Fork (official footer, integrations OFFICIAL-FOOTER-SPEC D10). A template whose name carries
 // this prefix is an OFFICIAL block: the visual builder's OfficialFooter block renders it (resolved
 // by name) inside every campaign that carries one. The prefix IS the marker -- the template's
-// lang/brand columns drive nothing -- and IsOfficialTemplate is the one rule.
-const OfficialTemplatePrefix = "Official_"
+// lang/brand columns drive nothing -- and IsOfficialTemplate is the one rule. Since integrations
+// BRAND-FOOTER-SPEC D1 the prefix is the word and ONE space (the old `Official_` is not official).
+const OfficialTemplatePrefix = "Official "
 
 // IsOfficialTemplate reports whether a template name marks an official block.
 func IsOfficialTemplate(name string) bool {
 	return strings.HasPrefix(name, OfficialTemplatePrefix)
+}
+
+// Official template kinds (ParseOfficialName).
+const (
+	OfficialKindCorporate = "corporate"
+	OfficialKindBrand     = "brand"
+)
+
+var (
+	reOfficialCorporate  = regexp.MustCompile(`^Official Footer ([A-Z]{2})$`)
+	reOfficialOverride   = regexp.MustCompile(`^Official (.+) Footer ([A-Z]{2})$`)
+	reOfficialNeutral    = regexp.MustCompile(`^Official (.+) Footer$`)
+	reOfficialSlugStrip  = regexp.MustCompile(`[^a-z0-9]`)
+	reOfficialBrandASCII = regexp.MustCompile(`^[A-Za-z0-9 ]+$`)
+)
+
+// OfficialSlug is the builder's slug rule (official/resolve.ts officialSlug): lower-case,
+// everything but [a-z0-9] stripped.
+func OfficialSlug(s string) string {
+	return reOfficialSlugStrip.ReplaceAllString(strings.ToLower(s), "")
+}
+
+// officialBrandSegment returns the raw brand segment of a brand-shaped official name ("" for
+// corporate or an unparsable name).
+func officialBrandSegment(name string) string {
+	if reOfficialCorporate.MatchString(name) {
+		return ""
+	}
+	if m := reOfficialOverride.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	if m := reOfficialNeutral.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// ParseOfficialName parses an official template name (integrations BRAND-FOOTER-SPEC D1), the Go
+// twin of the builder's parseOfficialName over the shared case table
+// frontend/email-builder/test/fixtures/official-names.json. Exactly three shapes, corporate first:
+// `Official Footer <LANG>` (corporate), `Official <Brand> Footer <LANG>` (a brand override) and
+// `Official <Brand> Footer` (language-neutral, lang ""). brand is the segment's slug; a segment
+// with a leading/trailing space or an empty slug is unparsable.
+func ParseOfficialName(name string) (kind, brand, lang string, ok bool) {
+	if m := reOfficialCorporate.FindStringSubmatch(name); m != nil {
+		return OfficialKindCorporate, "", m[1], true
+	}
+	seg, lang := "", ""
+	if m := reOfficialOverride.FindStringSubmatch(name); m != nil {
+		seg, lang = m[1], m[2]
+	} else if m := reOfficialNeutral.FindStringSubmatch(name); m != nil {
+		seg = m[1]
+	} else {
+		return "", "", "", false
+	}
+	if seg != strings.TrimSpace(seg) {
+		return "", "", "", false
+	}
+	slug := OfficialSlug(seg)
+	if slug == "" {
+		return "", "", "", false
+	}
+	return OfficialKindBrand, slug, lang, true
+}
+
+// OfficialBrandIsASCII reports whether a brand-shaped official name's brand segment holds only
+// ASCII letters, digits and spaces (BRAND-FOOTER-SPEC D4) -- `LIYORÁ` would slug to `liyor` and
+// never match. True for a corporate or unparsable name (nothing to judge).
+func OfficialBrandIsASCII(name string) bool {
+	seg := officialBrandSegment(name)
+	return seg == "" || reOfficialBrandASCII.MatchString(seg)
+}
+
+var (
+	reNeutralMsoOpen      = regexp.MustCompile(`(?i)<!--\[if[^\]]*\]>(?:<!-->)?`)
+	reNeutralMsoClose     = regexp.MustCompile(`(?i)(?:<!--)?<!\[endif\]-->`)
+	reNeutralComment      = regexp.MustCompile(`<!--[\s\S]*?-->`)
+	reNeutralStyle        = regexp.MustCompile(`(?i)<style\b[\s\S]*?</style\s*>`)
+	reNeutralScript       = regexp.MustCompile(`(?i)<script\b[\s\S]*?</script\s*>`)
+	reNeutralAction       = regexp.MustCompile(`\{\{[\s\S]*?\}\}`)
+	reNeutralTag          = regexp.MustCompile(`<[^>]*>`)
+	neutralTextBlockTypes = map[string]bool{"Text": true, "Heading": true, "Button": true}
+)
+
+// htmlVisibleText is an Html block's visible text (BRAND-FOOTER-SPEC D3): mso conditional markers
+// dropped (their content is what Outlook shows, so it stays), other comments, <style>/<script>
+// content and {{ … }} actions removed, tags removed, entities decoded, whitespace collapsed.
+func htmlVisibleText(s string) string {
+	s = reNeutralMsoOpen.ReplaceAllString(s, " ")
+	s = reNeutralMsoClose.ReplaceAllString(s, " ")
+	s = reNeutralComment.ReplaceAllString(s, " ")
+	s = reNeutralStyle.ReplaceAllString(s, " ")
+	s = reNeutralScript.ReplaceAllString(s, " ")
+	s = reNeutralAction.ReplaceAllString(s, " ")
+	s = reNeutralTag.ReplaceAllString(s, " ")
+	s = html.UnescapeString(s)
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// OfficialNeutralHasText reports whether a builder document (body_source JSON) carries text a
+// language-neutral brand footer may not hold (BRAND-FOOTER-SPEC D3): any Text, Heading or Button
+// block, or an Html block with visible text. Unparsable JSON is reported as text (refused, never
+// waved through). The TS twin is integrations lib/official-footer-seed.ts neutralHasText; both
+// answer the shared case table's neutralText cases.
+func OfficialNeutralHasText(bodySource string) bool {
+	if strings.TrimSpace(bodySource) == "" {
+		return false
+	}
+	var doc map[string]struct {
+		Type string `json:"type"`
+		Data struct {
+			Props map[string]any `json:"props"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(bodySource), &doc); err != nil {
+		return true
+	}
+	for _, b := range doc {
+		if neutralTextBlockTypes[b.Type] {
+			return true
+		}
+		if b.Type == "Html" {
+			if c, ok := b.Data.Props["contents"].(string); ok && htmlVisibleText(c) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // reOfficialFooterBlock finds an OfficialFooter block in a builder document (body_source JSON).
