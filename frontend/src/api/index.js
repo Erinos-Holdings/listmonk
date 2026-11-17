@@ -4,6 +4,7 @@ import qs from 'qs';
 import store from '../store';
 import { models } from '../constants';
 import Utils from '../utils';
+import { campaignCamel } from '../campaignKeys.mjs'; // eslint-disable-line import/extensions
 
 const http = axios.create({
   baseURL: import.meta.env.VUE_APP_ROOT_URL || '/',
@@ -499,23 +500,26 @@ export const getBounces = async (params) => http.get(
 );
 
 // Campaigns.
+// Fork (integrations ATTRIBS-CASE-SPEC D2) -- every campaign read/write keeps `headers` and the keys
+// under `attribs` / `archive_meta` verbatim (campaignKeys.mjs); the list read too, since the
+// Campaigns page's clone copies `c.attribs` / `c.archiveMeta` into a create payload.
 export const getCampaigns = async (params) => http.get('/api/campaigns', {
   params,
   loading: models.campaigns,
   store: models.campaigns,
-  camelCase: (keyPath) => !keyPath.startsWith('.results.*.headers'),
+  camelCase: campaignCamel('.results.*'),
 });
 
 export const getCampaign = async (id) => http.get(`/api/campaigns/${id}`, {
   loading: models.campaigns,
-  camelCase: (keyPath) => !keyPath.startsWith('.headers'),
+  camelCase: campaignCamel(''),
 });
 
 // Fork (campaign-page audience box): the same read without the page-wide loading overlay,
 // for the background refetch when a running broadcast finishes.
 export const getCampaignQuiet = async (id) => http.get(`/api/campaigns/${id}`, {
   params: { no_body: true },
-  camelCase: (keyPath) => !keyPath.startsWith('.headers'),
+  camelCase: campaignCamel(''),
 });
 
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D11. Raw (snake_case, NOT camelCased) reads for
@@ -577,7 +581,7 @@ export const getReviewStats = async () => http.get('/api/campaigns/reviews/stats
 export const createCampaign = async (data) => http.post(
   '/api/campaigns',
   data,
-  { loading: models.campaigns, camelCase: (keyPath) => !keyPath.startsWith('.headers') },
+  { loading: models.campaigns, camelCase: campaignCamel('') },
 );
 
 // Fork (brand analytics, integrations BRAND-ANALYTICS-SPEC D3/D4) -- the Campaign Analytics picker:
@@ -702,7 +706,7 @@ export const testCampaign = async (data) => http.post(
 export const updateCampaign = async (id, data) => http.put(
   `/api/campaigns/${id}`,
   data,
-  { loading: models.campaigns, camelCase: (keyPath) => !keyPath.startsWith('.headers') },
+  { loading: models.campaigns, camelCase: campaignCamel('') },
 );
 
 export const changeCampaignStatus = async (id, status) => http.put(
@@ -711,7 +715,7 @@ export const changeCampaignStatus = async (id, status) => http.put(
 
   // Fork: the editor assigns this response to its campaign (unschedule), so headers must
   // keep their names here too -- see createCampaign.
-  { loading: models.campaigns, camelCase: (keyPath) => !keyPath.startsWith('.headers') },
+  { loading: models.campaigns, camelCase: campaignCamel('') },
 );
 
 export const updateCampaignArchive = async (id, data) => http.put(

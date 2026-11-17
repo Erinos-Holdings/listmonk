@@ -34,9 +34,9 @@ export const toSendOf = (c, on = true) => {
 
 // Fork (smart sending, SMART-SENDING-SPEC D4/D5; Stage 4 R1) -- whether Smart Sending is on for a
 // campaign as the page reads it: the server's effective top-level field (`smart_sending`, which the
-// API client camelCases to `smartSending`), true when absent. NEVER read from `attribs`: the
-// campaign reads camelCase nested keys, so a stored `attribs.smart_sending` arrives as
-// `attribs.smartSending`.
+// API client camelCases to `smartSending`), true when absent. NEVER read from `attribs`: it holds
+// only an explicit `false`, never the effective value. (Since ATTRIBS-CASE-SPEC the campaign reads
+// keep nested attribs keys verbatim; a `smartSending` key is only legacy junk on an older row.)
 export const smartSendingOf = (c) => !(c && c.smartSending === false);
 
 // The owned-key fold for `attribs.smart_sending` (Stage 4 R1): `off` writes `smart_sending: false`,
