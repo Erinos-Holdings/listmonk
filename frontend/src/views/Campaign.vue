@@ -1776,7 +1776,7 @@ export default Vue.extend({
       // Fork (smart sending, SMART-SENDING-SPEC D4) -- the switch is the key's single owner: false
       // when shown and off, otherwise omitted (on), so an API caller that never sends it stays on.
       // Stage 4 R1: foldSmartSending removes both the stored key and the camelCased `smartSending` a
-      // round-tripped attribs JSON carries (the campaign reads camelCase nested keys).
+      // legacy row may carry (before ATTRIBS-CASE-SPEC the campaign reads camelCased nested keys).
       // Stage 4b R4: a HIDDEN switch (a broadcast whose only list is a journey trigger list) carries
       // the stored state instead of resetting it to on.
       const smartOff = this.showSmartSending ? this.form.smartSending === false : !smartSendingOf(this.data);
