@@ -1986,8 +1986,12 @@ export default Vue.extend({
     // `unsaved` (isUnsaved(), or the form's From / messenger / attachments differ from the loaded
     // copy -- so a From re-derived at load reads as unsaved, the safe side). Returns the decision.
     syncDecisionFor(fresh) {
+      // Stage 4 R1: the draft view blanks a visual campaign's `body`, so the STORED body is compared
+      // too -- both sides are server copies (the builder's own re-render never enters), and a
+      // body-only write (Fix for me `campaign.resave`, resave-listmonk-visual.ts) is a change.
       const changed = !sameDraft(this.draftFromCampaign(fresh), this.draftFromCampaign(this.data))
-        || !sameDraft(extraView(fresh), extraView(this.data));
+        || !sameDraft(extraView(fresh), extraView(this.data))
+        || (fresh.body || '') !== (this.data.body || '');
       const unsaved = this.isUnsaved() || !sameDraft(extraView(this.form), extraView(this.data));
       return syncDecision({ changed, unsaved });
     },

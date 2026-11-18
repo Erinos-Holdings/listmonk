@@ -526,10 +526,12 @@ export const getCampaign = async (id) => http.get(`/api/campaigns/${id}`, {
 // Fork (integrations EDITOR-SYNC-SPEC D1 "The read", S1) -- the campaign page's pre-save and
 // on-focus read of the server's copy: the full campaign as getCampaign reads it, with no loading
 // overlay and no toast. A failed read never blocks a save (the caller proceeds), so it must not
-// toast either.
+// toast either. Stage 4 R2: every save waits on this read, so it is bounded -- a read that hangs
+// (a half-open connection) times out, rejects, and the save proceeds as for any failed read.
 export const getCampaignSync = async (id) => http.get(`/api/campaigns/${id}`, {
   camelCase: campaignCamel(''),
   disableToast: true,
+  timeout: 8000,
 });
 
 // Fork (campaign-page audience box): the same read without the page-wide loading overlay,
