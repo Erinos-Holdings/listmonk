@@ -151,7 +151,8 @@
              #header slot drops Buefy's sort arrow, so the arrow is re-drawn from queryParams. The
              pick sets the ONE status state (campaignsRouteQuery.mjs::pickStatus). -->
         <template #header>
-          <b-dropdown class="status-filter" @click.native.stop @active-change="onStatusMenu">
+          <b-dropdown class="status-filter" :disabled="loading.campaigns" @click.native.stop
+            @active-change="onStatusMenu">
             <template #trigger>
               <b-button size="is-small" :type="queryParams.routeStatus ? 'is-primary' : null" data-cy="status-filter">
                 {{ statusHeaderText }} <span aria-hidden="true">&#9662;</span>

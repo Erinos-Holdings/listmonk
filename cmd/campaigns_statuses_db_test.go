@@ -12,6 +12,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -29,7 +30,7 @@ func TestCampaignStatusCounts(t *testing.T) {
 	listA := h.baList("Status A", "private", "single")
 	listB := h.baList("Status B", "private", "single")
 
-	mk := func(name, status string, evergreen bool, lang string, tags string, lists ...int) {
+	mk := func(name, status string, evergreen bool, lang string, tags string, lists ...int) int {
 		t.Helper()
 		attribs := `{}`
 		if lang != "" {
@@ -44,11 +45,12 @@ func TestCampaignStatusCounts(t *testing.T) {
 		for _, l := range lists {
 			h.db.MustExec(`INSERT INTO campaign_lists (campaign_id, list_id, list_name) VALUES ($1, $2, 'x')`, id, l)
 		}
+		return id
 	}
 	// No cancelled campaign at all: absent under every scope and filter.
-	mk("Spring draft", "draft", false, "en", "{}", listA)
+	idDraft := mk("Spring draft", "draft", false, "en", "{}", listA)
 	mk("Spring send", "running", false, "fr", "{}", listA)
-	mk("Paused B", "paused", false, "en", "{}", listB)
+	idPausedB := mk("Paused B", "paused", false, "en", "{}", listB)
 	mk("Paused welcome", "paused", true, "", "{}", listA, listB)
 	mk("Finished B", "finished", false, "fr", "{}", listB)
 	mk("Scheduled welcome", "scheduled", true, "de", "{}", listA)
@@ -73,6 +75,9 @@ func TestCampaignStatusCounts(t *testing.T) {
 		"tag=promo",
 		"query=paused",
 		"query=spring&list_id=" + a,
+		// The route id scope (the page sends it to the counts too) and a search the cleaner rewrites.
+		"id=" + strconv.Itoa(idDraft) + "&id=" + strconv.Itoa(idPausedB),
+		"query=spring-send",
 	}
 
 	counts := func(u auth.User, q string) map[string]int {
@@ -155,7 +160,7 @@ func TestCampaignStatusCounts(t *testing.T) {
 				t.Errorf("%s %q: cancelled present with no cancelled campaign", un, q)
 			}
 			// The status param is ignored by the counts.
-			if withStatus := counts(u, q+"&status=paused"); len(withStatus) != len(got) {
+			if withStatus := counts(u, q+"&status=paused"); !reflect.DeepEqual(withStatus, got) {
 				t.Errorf("%s %q: status param changed the counts: %v vs %v", un, q, withStatus, got)
 			}
 		}
