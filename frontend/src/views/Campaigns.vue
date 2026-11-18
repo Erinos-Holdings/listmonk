@@ -142,38 +142,67 @@
         </div>
       </template>
 
-      <b-table-column v-slot="props" cell-class="status" field="status" :label="$t('globals.fields.status')" width="10%"
+      <b-table-column cell-class="status" field="status" :label="$t('globals.fields.status')" width="10%"
         sortable :td-attrs="$utils.tdID" header-class="cy-status">
-        <div>
-          <p>
-            <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
-              <b-tag :class="props.row.status">
-                {{ $t(`campaigns.status.${props.row.status}`) }}
-              </b-tag>
-              <!-- Fork (send retry, SEND-RETRY-SPEC D6) -- a finished broadcast that did not
-                   reach every recipient is a warning, not a quiet "Finished". -->
-              <b-tooltip v-if="isShortfall(props.row)" :label="$t('campaigns.shortfallHelp')" type="is-dark"
-                multilined>
-                <b-tag type="is-warning" class="shortfall" data-cy="tag-shortfall">
-                  {{ $t('campaigns.shortfall', { sent: $utils.formatNumber(props.row.sent), toSend: $utils.formatNumber(props.row.toSend) }) }}
+        <!-- Fork (integrations CAMPAIGN-STATUS-FILTER-SPEC D6) -- the header is the Status filter: a
+             dropdown of the statuses present under the page's filters (with counts), All first. The
+             click stop sits on the dropdown ROOT (never the button: Buefy opens from a click on its
+             own trigger wrapper), so a click on it never sorts; the rest of the cell still sorts. A
+             #header slot drops Buefy's sort arrow, so the arrow is re-drawn from queryParams. The
+             pick sets the ONE status state (campaignsRouteQuery.mjs::pickStatus). -->
+        <template #header>
+          <b-dropdown class="status-filter" @click.native.stop @active-change="onStatusMenu">
+            <template #trigger>
+              <b-button size="is-small" :type="queryParams.routeStatus ? 'is-primary' : null" data-cy="status-filter">
+                {{ statusHeaderText }} <span aria-hidden="true">&#9662;</span>
+              </b-button>
+            </template>
+            <b-dropdown-item v-if="statusMenu.loading" custom data-cy="status-filter-loading">
+              {{ $t('campaigns.statusFilterLoading') }}
+            </b-dropdown-item>
+            <template v-else>
+              <b-dropdown-item v-for="o in statusOpts" :key="o.value || 'all'"
+                :class="{ 'is-active': o.value === queryParams.routeStatus }" :data-cy="`status-filter-${o.value || 'all'}`"
+                @click="onPickStatus(o.value)">
+                {{ statusOptionText(o) }}
+              </b-dropdown-item>
+            </template>
+          </b-dropdown>
+          <b-icon icon="arrow-up" both size="is-small" class="sort-icon"
+            :class="{ 'is-desc': queryParams.order !== 'asc', 'is-invisible': queryParams.orderBy !== 'status' }" />
+        </template>
+        <template #default="props">
+          <div>
+            <p>
+              <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
+                <b-tag :class="props.row.status">
+                  {{ $t(`campaigns.status.${props.row.status}`) }}
                 </b-tag>
-              </b-tooltip>
-              <span class="spinner is-tiny" v-if="isRunning(props.row.id)">
-                <b-loading :is-full-page="false" active />
+                <!-- Fork (send retry, SEND-RETRY-SPEC D6) -- a finished broadcast that did not
+                     reach every recipient is a warning, not a quiet "Finished". -->
+                <b-tooltip v-if="isShortfall(props.row)" :label="$t('campaigns.shortfallHelp')" type="is-dark"
+                  multilined>
+                  <b-tag type="is-warning" class="shortfall" data-cy="tag-shortfall">
+                    {{ $t('campaigns.shortfall', { sent: $utils.formatNumber(props.row.sent), toSend: $utils.formatNumber(props.row.toSend) }) }}
+                  </b-tag>
+                </b-tooltip>
+                <span class="spinner is-tiny" v-if="isRunning(props.row.id)">
+                  <b-loading :is-full-page="false" active />
+                </span>
+              </router-link>
+            </p>
+            <p v-if="isSheduled(props.row)">
+              <span class="is-size-7 has-text-grey scheduled">
+                <b-icon icon="alarm" size="is-small" />
+                <span v-if="!isDone(props.row) && !isRunning(props.row)">
+                  {{ $utils.duration(new Date(), props.row.sendAt, true) }}
+                  <br />
+                </span>
+                {{ $utils.niceDate(props.row.sendAt, true) }}
               </span>
-            </router-link>
-          </p>
-          <p v-if="isSheduled(props.row)">
-            <span class="is-size-7 has-text-grey scheduled">
-              <b-icon icon="alarm" size="is-small" />
-              <span v-if="!isDone(props.row) && !isRunning(props.row)">
-                {{ $utils.duration(new Date(), props.row.sendAt, true) }}
-                <br />
-              </span>
-              {{ $utils.niceDate(props.row.sendAt, true) }}
-            </span>
-          </p>
-        </div>
+            </p>
+          </div>
+        </template>
       </b-table-column>
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" width="25%" sortable
         header-class="cy-name">
@@ -233,6 +262,12 @@
           <p v-if="stats.startedAt">
             <label for="#">{{ $t('campaigns.startedAt') }}</label>
             <span>{{ $utils.niceDate(stats.startedAt, true) }}</span>
+          </p>
+          <!-- Fork (integrations CAMPAIGN-STATUS-FILTER-SPEC D4) -- the latest pause, from the raw row
+               (never the live stats); the rule is campaignStatusFilter.mjs::pausedAtOf. -->
+          <p v-if="pausedAtOf(props.row)" data-cy="paused-at">
+            <label for="#">{{ $t('campaigns.pausedAt') }}</label>
+            <span>{{ $utils.niceDate(pausedAtOf(props.row), true) }}</span>
           </p>
           <p v-if="isDone(props.row)">
             <label for="#">{{ $t('campaigns.ended') }}</label>
@@ -455,14 +490,16 @@ import {
   campaignBrandOf, chipsFor, cloneBaseOf, cloneName, formerNameOf, isNameBlocked, langColumnText, nameCounter,
   nameWarnings, showLangColumn,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
-import { langParam } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { listGlyph } from '../campaignGlyph.mjs'; // eslint-disable-line import/extensions
 import {
   LEGACY_SCOPE_PREF, ROUTE_SCOPE_OPTION, SCOPE_KIND_PREF, afterBrandChange, afterScopeChange, campaignListOptions,
-  campaignsRouteQuery, canSelectAll, deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen, kindStatusParams, listParam,
-  listSelectValue, pollsStats, preEnablesEvergreen, routeEvergreen, routeIdsAfter, routeIdsOf, routeStatusAfter,
+  campaignsRouteQuery, canSelectAll, deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen,
+  listSelectValue, pickStatus, pollsStats, preEnablesEvergreen, routeEvergreen, routeIdsAfter, routeIdsOf, routeStatusAfter,
   routeStatusOf, scopeKindPref, selectList,
 } from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
+import {
+  campaignFilterParams, pausedAtOf, statusCountParams, statusOptions,
+} from '../campaignStatusFilter.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
@@ -547,6 +584,14 @@ export default Vue.extend({
       bulk: {
         checked: [],
         all: false,
+      },
+
+      // Fork (CAMPAIGN-STATUS-FILTER-SPEC D6) -- the Status dropdown's counts (null = not loaded /
+      // failed) and its own loading flag; seq drops a response overtaken by a newer open.
+      statusMenu: {
+        counts: null,
+        loading: false,
+        seq: 0,
       },
     };
   },
@@ -790,37 +835,83 @@ export default Vue.extend({
       this.pollStats();
     },
 
-    getCampaigns() {
-      const params = {
-        page: this.queryParams.page,
-        query: this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' '),
-        order_by: this.queryParams.orderBy,
-        order: this.queryParams.order,
-        // POLISH3 D2/D3 -- evergreen omitted under All; status only under the route status scope.
-        ...kindStatusParams(this.queryParams),
-        no_body: true,
-      };
-
-      // Fork (list filter) -- "All lists" sends no param at all. Fork (global brand,
-      // GLOBAL-BRAND-SPEC D7) -- under a brand "All lists" sends the brand's list ids; a chosen
-      // list (inside the scope by construction) sends that one id. DASHBOARDS-POLISH2-SPEC D2 --
-      // a route list scope takes the chosen list's slot (it beats the brand scope).
-      const listID = listParam({
+    // Fork (integrations CAMPAIGN-STATUS-FILTER-SPEC D7) -- the page state the ONE filter-params
+    // builder reads (campaignStatusFilter.mjs::campaignFilterParams): the search, the kind pill
+    // (evergreen omitted under All, POLISH3 D2/D3), the status (the route/header status state), the
+    // route id scope, the list filter (the single filter, else the route list scope, else the
+    // GLOBAL-BRAND-SPEC D7 brand scope; "All lists" sends no param) and the language toggle
+    // (NAMING-STANDARD-SPEC D2; absent under All).
+    filterState() {
+      return {
+        query: this.queryParams.query,
+        evergreen: this.queryParams.evergreen,
+        routeStatus: this.queryParams.routeStatus,
+        routeIDs: this.queryParams.routeIDs,
         listID: this.queryParams.listID,
         routeListIDs: this.queryParams.routeListIDs,
         scopeListIds: this.scopeListIds,
-      });
-      if (listID !== undefined) {
-        params.list_id = listID;
-      }
-      // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the toggle's language (absent under All):
-      // that language plus every campaign with no language, filtered by the server.
-      const lang = langParam(this.langSelection);
-      if (lang) {
-        params.lang = lang;
-      }
+        langSelection: this.langSelection,
+      };
+    },
 
-      this.$api.getCampaigns(params);
+    getCampaigns() {
+      this.$api.getCampaigns({
+        ...campaignFilterParams(this.filterState()),
+        page: this.queryParams.page,
+        order_by: this.queryParams.orderBy,
+        order: this.queryParams.order,
+        no_body: true,
+      });
+    },
+
+    // D4 -- the Paused row's value (null = no row).
+    pausedAtOf(row) {
+      return pausedAtOf(row);
+    },
+
+    // D6 -- every open of the Status dropdown re-reads the counts for the list's filters minus
+    // status, on its own loading flag (never models.campaigns, which would blank the table). A
+    // failure offers every status uncounted. A response that lands after a newer open is dropped.
+    onStatusMenu(active) {
+      if (!active) {
+        return;
+      }
+      this.statusMenu.seq += 1;
+      const { seq } = this.statusMenu;
+      this.statusMenu.loading = true;
+      this.$api.getCampaignStatuses(statusCountParams(this.filterState())).then((counts) => {
+        if (seq === this.statusMenu.seq) {
+          this.statusMenu.counts = Array.isArray(counts) ? counts : null;
+        }
+      }).catch(() => {
+        if (seq === this.statusMenu.seq) {
+          this.statusMenu.counts = null;
+        }
+      }).finally(() => {
+        if (seq === this.statusMenu.seq) {
+          this.statusMenu.loading = false;
+        }
+      });
+    },
+
+    statusOptionText(o) {
+      if (o.value === null) {
+        return this.$t('campaigns.allStatuses');
+      }
+      const status = this.$t(`campaigns.status.${o.value}`);
+      return o.count === null ? status : this.$t('campaigns.statusOption', { status, count: this.$utils.formatNumber(o.count) });
+    },
+
+    // D6 -- a pick (a status, or All = null): the ONE status state, page 1, the selection cleared,
+    // the route id scope kept (campaignsRouteQuery.mjs::pickStatus); then the refetch.
+    onPickStatus(value) {
+      const next = pickStatus(this.queryParams, value);
+      this.queryParams.routeStatus = next.routeStatus;
+      this.queryParams.routeIDs = next.routeIDs;
+      this.queryParams.page = next.page;
+      this.bulk.checked = next.bulk.checked;
+      this.bulk.all = next.bulk.all;
+      this.refreshCampaigns();
     },
 
     // Stats returns the campaign object with stats (sent, toSend etc.)
@@ -1022,6 +1113,17 @@ export default Vue.extend({
     // Polish 2026-11-14: the Lang column only under All languages.
     showLang() {
       return showLangColumn(this.langSelection);
+    },
+
+    // Fork (CAMPAIGN-STATUS-FILTER-SPEC D6) -- the Status header's text and the dropdown's items.
+    statusHeaderText() {
+      const s = this.queryParams.routeStatus;
+      return s ? this.$t('campaigns.statusFilterActive', { status: this.$t(`campaigns.status.${s}`) })
+        : this.$t('globals.fields.status');
+    },
+
+    statusOpts() {
+      return statusOptions(this.statusMenu.counts, this.queryParams.routeStatus);
     },
 
     ...mapState(['campaigns', 'lists', 'loading', 'serverConfig']),

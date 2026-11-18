@@ -36,6 +36,14 @@ const (
 // Campaigns represents a slice of Campaigns.
 type Campaigns []Campaign
 
+// CampaignStatusCount (fork, integrations CAMPAIGN-STATUS-FILTER-SPEC D5) is one row of
+// GET /api/campaigns/statuses: a status and how many campaigns the list endpoint would return
+// with it under the same filters.
+type CampaignStatusCount struct {
+	Status string `db:"status" json:"status"`
+	Count  int    `db:"count" json:"count"`
+}
+
 // Campaign represents an e-mail campaign.
 type Campaign struct {
 	Base
@@ -146,6 +154,11 @@ type CampaignMeta struct {
 	Media types.JSONText `db:"media" json:"media"`
 
 	StartedAt null.Time `db:"started_at" json:"started_at"`
+	// Fork (campaign pause time, integrations CAMPAIGN-STATUS-FILTER-SPEC D2/D3) -- the latest
+	// transition to paused, stamped only by update-campaign-status (the API pause and the sender's
+	// auto-pause alike); never cleared. Values from before the v6.2.39 release are approximate
+	// (backfilled from updated_at).
+	PausedAt  null.Time `db:"paused_at" json:"paused_at"`
 	ToSend    int       `db:"to_send" json:"to_send"`
 	Sent      int       `db:"sent" json:"sent"`
 

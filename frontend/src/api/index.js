@@ -510,6 +510,14 @@ export const getCampaigns = async (params) => http.get('/api/campaigns', {
   camelCase: campaignCamel('.results.*'),
 });
 
+// Fork (integrations CAMPAIGN-STATUS-FILTER-SPEC D5/D6) -- the Status header dropdown's counts,
+// [{status, count}], for the list's filter params minus status (campaignStatusFilter.mjs::
+// statusCountParams). No loading model and no store: the page keeps its own loading flag, so an
+// open never blanks the table; quiet, because a failure falls back to the uncounted statuses.
+export const getCampaignStatuses = async (params) => http.get('/api/campaigns/statuses', {
+  params, camelCase: false, disableToast: true,
+});
+
 export const getCampaign = async (id) => http.get(`/api/campaigns/${id}`, {
   loading: models.campaigns,
   camelCase: campaignCamel(''),

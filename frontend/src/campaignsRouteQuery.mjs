@@ -205,6 +205,24 @@ export function routeStatusAfter(current, interaction) {
   return CAMPAIGN_STATUSES.includes(current) ? current : null;
 }
 
+// Fork (integrations CAMPAIGN-STATUS-FILTER-SPEC D6/I10) -- pickStatus is the page state after a
+// pick in the Status header dropdown (the selectList of the status filter; it sits here, after
+// CAMPAIGN_STATUSES, for the linter's no-use-before-define): the ONE status state, routeStatus,
+// set to the picked enum value (null for "All statuses"; anything else reads as All), page 1, and
+// the selection CLEARED (checked rows and the whole-query "select all") exactly as a list pick does
+// -- the by-query bulk delete sends no status, so a standing whole-query selection would delete
+// campaigns the page is not showing. The route id scope is kept. The caller assigns the result and
+// refetches through refreshCampaigns().
+export function pickStatus(state, value) {
+  const s = state || {};
+  return {
+    routeStatus: CAMPAIGN_STATUSES.includes(value) ? value : null,
+    routeIDs: s.routeIDs ?? null,
+    page: 1,
+    bulk: { checked: [], all: false },
+  };
+}
+
 // MATRIX-POLISH-SPEC D10.2 -- routeIdsAfter is the route id scope after an interaction: cleared
 // (null) by exactly the route status scope's clearing interactions (STATUS_CLEARING: the chip's
 // dismissal, a real list pick, a brand-selector change, the kind pill -- whose click then applies

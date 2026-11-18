@@ -55,65 +55,107 @@ var (
 	reSlug        = regexp.MustCompile(`[^\p{L}\p{M}\p{N}]`)
 )
 
-// GetCampaigns handles retrieval of campaigns.
-func (a *App) GetCampaigns(c echo.Context) error {
+// campaignListFilters (fork, integrations CAMPAIGN-STATUS-FILTER-SPEC D5) is the permission scope
+// and the filter params of GET /api/campaigns, parsed once by parseCampaignListFilters for both
+// that handler and GET /api/campaigns/statuses -- a 400 on one is a 400 on the other, and the two
+// can never scope a user differently.
+type campaignListFilters struct {
+	hasAllPerm     bool
+	permittedLists []int
+
+	tags      []string
+	query     string
+	evergreen *bool
+	listIDs   []int
+	ids       []int
+	lang      string
+}
+
+// parseCampaignListFilters reads the user's scope and the list endpoint's filter params
+// (query, tag, evergreen, list_id, id, lang). status, paging and ordering are not filters here.
+func (a *App) parseCampaignListFilters(c echo.Context) (campaignListFilters, error) {
 	// Get the authenticated user.
 	user := auth.GetUser(c)
 
-	var (
-		hasAllPerm     = user.HasPerm(auth.PermCampaignsGetAll)
-		permittedLists []int
-	)
-
-	if !hasAllPerm {
+	f := campaignListFilters{hasAllPerm: user.HasPerm(auth.PermCampaignsGetAll)}
+	if !f.hasAllPerm {
 		// Either the user has campaigns:get_all permissions and can view all campaigns,
 		// or the campaigns are filtered by the lists the user has get|manage access to.
-		hasAllPerm, permittedLists = user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
+		f.hasAllPerm, f.permittedLists = user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
 	}
 
-	var (
-		pg = a.pg.NewFromURL(c.Request().URL.Query())
-
-		status    = c.QueryParams()["status"]
-		tags      = c.QueryParams()["tag"]
-		query     = strings.TrimSpace(c.FormValue("query"))
-		orderBy   = c.FormValue("order_by")
-		order     = c.FormValue("order")
-		noBody, _ = strconv.ParseBool(c.QueryParam("no_body"))
-	)
+	f.tags = c.QueryParams()["tag"]
+	f.query = strings.TrimSpace(c.FormValue("query"))
 
 	// Fork (evergreen) -- optional scope on the campaign kind (absent = no filter).
 	evergreen, err := a.parseEvergreenParam(c)
 	if err != nil {
-		return err
+		return f, err
 	}
+	f.evergreen = evergreen
 
 	// Fork (list filter) -- optional, repeatable list_id (absent = no filter). Intersects
 	// with the permitted-list scoping above; it never widens what a user may see.
-	listIDs, err := parseStringIDs(c.QueryParams()["list_id"])
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest,
+	if f.listIDs, err = parseStringIDs(c.QueryParams()["list_id"]); err != nil {
+		return f, echo.NewHTTPError(http.StatusBadRequest,
 			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
 	}
 
 	// Fork (matrix polish, integrations MATRIX-POLISH-SPEC D10.2) -- optional, repeatable id (absent =
 	// no filter): only those campaigns, ANDed with every filter and the permission scope above.
-	ids, err := parseStringIDs(c.QueryParams()["id"])
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest,
+	if f.ids, err = parseStringIDs(c.QueryParams()["id"]); err != nil {
+		return f, echo.NewHTTPError(http.StatusBadRequest,
 			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
 	}
 
 	// Fork (naming standard, NAMING-STANDARD-SPEC D2) -- optional lang (absent = no filter): that
 	// language plus every campaign with no language. A presentation filter only (the toggle); it
 	// intersects with the permission scope and never widens it.
-	lang := strings.ToLower(strings.TrimSpace(c.QueryParam("lang")))
-	if lang != "" && !models.IsCampaignLang(lang) {
-		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "lang"))
+	f.lang = strings.ToLower(strings.TrimSpace(c.QueryParam("lang")))
+	if f.lang != "" && !models.IsCampaignLang(f.lang) {
+		return f, echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "lang"))
 	}
 
+	return f, nil
+}
+
+// GetCampaignStatuses (fork, integrations CAMPAIGN-STATUS-FILTER-SPEC D5) handles
+// GET /api/campaigns/statuses: per status, how many campaigns GET /api/campaigns would return to
+// this user under the same filter params (status, paging and ordering ignored). Only statuses
+// with a count above zero. Read-only; no body, template or review data.
+func (a *App) GetCampaignStatuses(c echo.Context) error {
+	f, err := a.parseCampaignListFilters(c)
+	if err != nil {
+		return err
+	}
+
+	out, err := a.core.CountCampaignStatuses(f.query, f.tags, f.hasAllPerm, f.permittedLists, f.evergreen, f.listIDs, f.ids, f.lang)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// GetCampaigns handles retrieval of campaigns.
+func (a *App) GetCampaigns(c echo.Context) error {
+	f, err := a.parseCampaignListFilters(c)
+	if err != nil {
+		return err
+	}
+
+	var (
+		pg = a.pg.NewFromURL(c.Request().URL.Query())
+
+		status    = c.QueryParams()["status"]
+		query     = f.query
+		orderBy   = c.FormValue("order_by")
+		order     = c.FormValue("order")
+		noBody, _ = strconv.ParseBool(c.QueryParam("no_body"))
+	)
+
 	// Query and retrieve campaigns from the DB.
-	res, total, err := a.core.QueryCampaigns(query, status, tags, orderBy, order, hasAllPerm, permittedLists, evergreen, listIDs, ids, lang, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryCampaigns(query, status, f.tags, orderBy, order, f.hasAllPerm, f.permittedLists, f.evergreen, f.listIDs, f.ids, f.lang, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}

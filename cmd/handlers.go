@@ -200,6 +200,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.DELETE("/api/lists/:id", hasID(a.DeleteList))
 
 		g.GET("/api/campaigns", pm(a.GetCampaigns, "campaigns:get_all", "campaigns:get"))
+		// Fork (integrations CAMPAIGN-STATUS-FILTER-SPEC D5) -- the Status header dropdown's counts.
+		// Exactly GET /api/campaigns' permission middleware; no hasID (a static segment).
+		g.GET("/api/campaigns/statuses", pm(a.GetCampaignStatuses, "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/running/stats", pm(a.GetRunningCampaignStats, "campaigns:get_all", "campaigns:get"))
 		// Fork (campaign review, CAMPAIGN-INSPECT-SPEC §3.1). Static segments before :id.
 		g.GET("/api/campaigns/reviews/stats", pm(a.GetReviewStats, "campaigns:get_all"))

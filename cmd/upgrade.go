@@ -121,6 +121,8 @@ var migList = []migFunc{
 	{"v6.2.37", migrations.V6_2_37},
 	// Fork migration (erinos): naming standard -- the former_names table (per campaign, list or template, its ORIGINAL name before the first rename; written by the name-only rename endpoints and the name-changing update paths, read as former_name and by core.CurrentReview) (NAMING-STANDARD-SPEC) — see internal/migrations/v6.2.38.go.
 	{"v6.2.38", migrations.V6_2_38},
+	// Fork migration (erinos): campaign pause time -- campaigns.paused_at (the latest transition to paused, written only by update-campaign-status), paused campaigns backfilled from updated_at (approximate) (CAMPAIGN-STATUS-FILTER-SPEC) — see internal/migrations/v6.2.39.go.
+	{"v6.2.39", migrations.V6_2_39},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

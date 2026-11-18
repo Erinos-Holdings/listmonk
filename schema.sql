@@ -1308,3 +1308,8 @@ CREATE TABLE IF NOT EXISTS former_names (
     renamed_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     PRIMARY KEY (kind, id)
 );
+
+-- Fork (campaign pause time, integrations listmonk/CAMPAIGN-STATUS-FILTER-SPEC D1): the instant of
+-- the campaign's latest transition to paused, written only by update-campaign-status. Mirrored in
+-- internal/migrations/v6.2.39.go.
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS paused_at TIMESTAMP WITH TIME ZONE NULL;

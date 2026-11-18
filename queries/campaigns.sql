@@ -1530,6 +1530,7 @@ UPDATE campaigns SET
             ELSE frozen_template_body
         END
     ),
+    paused_at=(CASE WHEN $2 = 'paused' THEN NOW() ELSE paused_at END),
     updated_at=NOW()
 WHERE id = $1;
 

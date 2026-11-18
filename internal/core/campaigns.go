@@ -37,26 +37,9 @@ const (
 func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, lang string, offset, limit int) (models.Campaigns, int, error) {
 	queryStr, stmt := makeSearchQuery(searchStr, orderBy, order, c.q.QueryCampaigns, campQuerySortFields)
 
-	if statuses == nil {
-		statuses = []string{}
-	}
-
-	if tags == nil {
-		tags = []string{}
-	}
-
-	// Fork (list filter) -- must bind '{}' and never NULL. CARDINALITY(NULL) is NULL, which
-	// would make the whole predicate NULL for every campaign not on the (absent) list.
-	if listIDs == nil {
-		listIDs = []int{}
-	}
-	if ids == nil {
-		ids = []int{}
-	}
-
 	// Unsafe to ignore scanning fields not present in models.Campaigns.
 	var out models.Campaigns
-	if err := c.db.Select(&out, stmt, 0, pq.StringArray(statuses), pq.StringArray(tags), queryStr, getAll, pq.Array(permittedLists), offset, limit, evergreen, pq.Array(listIDs), pq.Array(ids), lang); err != nil {
+	if err := c.db.Select(&out, stmt, queryCampaignsArgs(statuses, tags, queryStr, getAll, permittedLists, evergreen, listIDs, ids, lang, offset, limit)...); err != nil {
 		c.log.Printf("error fetching campaigns: %v", err)
 		return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
@@ -89,6 +72,62 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 	}
 
 	return out, total, nil
+}
+
+// queryCampaignsArgs binds query-campaigns' twelve parameters, in order. The ONE binding of that
+// statement: QueryCampaigns and CountCampaignStatuses both call it, so the counts can never bind a
+// filter differently from the list.
+func queryCampaignsArgs(statuses, tags []string, queryStr string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, lang string, offset, limit int) []any {
+	if statuses == nil {
+		statuses = []string{}
+	}
+
+	if tags == nil {
+		tags = []string{}
+	}
+
+	// Fork (list filter) -- must bind '{}' and never NULL. CARDINALITY(NULL) is NULL, which
+	// would make the whole predicate NULL for every campaign not on the (absent) list.
+	if listIDs == nil {
+		listIDs = []int{}
+	}
+	if ids == nil {
+		ids = []int{}
+	}
+
+	return []any{0, pq.StringArray(statuses), pq.StringArray(tags), queryStr, getAll, pq.Array(permittedLists), offset, limit, evergreen, pq.Array(listIDs), pq.Array(ids), lang}
+}
+
+// CountCampaignStatuses (fork, integrations CAMPAIGN-STATUS-FILTER-SPEC D5) returns, per campaign
+// status, how many campaigns the list (QueryCampaigns) would return under the same filters and
+// permission scope with no status filter -- only statuses with a count above zero, in the enum's
+// declaration order.
+//
+// One predicate home (D5/I6): the statement is the loaded query-campaigns text itself, put through
+// the SAME makeSearchQuery call as the list (a fixed sort, so the search string is cleaned
+// identically and %order% is replaced), its trailing ';' trimmed and wrapped in a GROUP BY. The
+// binding is queryCampaignsArgs with no status ('{}'), offset 0 and limit 0 (no LIMIT). A filter
+// added to query-campaigns reaches the counts with no second edit. No statement for the counts
+// exists in queries/campaigns.sql.
+func (c *Core) CountCampaignStatuses(searchStr string, tags []string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, lang string) ([]models.CampaignStatusCount, error) {
+	queryStr, stmt := makeSearchQuery(searchStr, "created_at", SortDesc, c.q.QueryCampaigns, campQuerySortFields)
+	stmt = statusCountsStmt(stmt)
+
+	out := []models.CampaignStatusCount{}
+	if err := c.db.Select(&out, stmt, queryCampaignsArgs(nil, tags, queryStr, getAll, permittedLists, evergreen, listIDs, ids, lang, 0, 0)...); err != nil {
+		c.log.Printf("error counting campaign statuses: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
+// statusCountsStmt wraps the (sort-substituted) query-campaigns text as a per-status count.
+// ORDER BY status sorts by the campaign_status enum's declaration order.
+func statusCountsStmt(listStmt string) string {
+	inner := strings.TrimRight(strings.TrimSpace(listStmt), "; \n\t")
+	return "SELECT status, COUNT(*) AS count FROM (" + inner + ") q GROUP BY status ORDER BY status"
 }
 
 // QueryAnalyticsCampaigns (fork, brand analytics, BRAND-ANALYTICS-SPEC D3/D4/D11) returns the
