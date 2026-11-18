@@ -192,14 +192,19 @@ export function routeStatusOf(query) {
   return typeof v === 'string' && CAMPAIGN_STATUSES.includes(v) ? v : null;
 }
 
-// The interactions that clear the route status scope: the chip's dismissal, a real Lists-select
-// pick (or All lists), any brand-selector change, and the scope pill.
+// The interactions that clear the route ID scope (routeIdsAfter): the chip's dismissal, a real
+// Lists-select pick (or All lists), any brand-selector change, and the scope pill. (The name is
+// historical: until CAMPAIGN-STATUS-FILTER-SPEC D6's amendment the status scope cleared on the same
+// four.)
 export const STATUS_CLEARING = Object.freeze(['dismiss', 'list', 'brand', 'scope']);
 
-// routeStatusAfter is the route status scope after an interaction: cleared (null) by a clearing
-// one, else unchanged (paging, sorting, a search keep it).
+// routeStatusAfter is the status filter after an interaction: cleared (null) ONLY by the chip's
+// dismissal (integrations CAMPAIGN-STATUS-FILTER-SPEC D6 amendment, the user's decision
+// 2026-11-17: a status -- picked in the Status header or carried by a route -- survives a list
+// pick, a brand change and the kind pill, like a column filter); everything else keeps it. The
+// Status header's "All statuses" (pickStatus) is the other way to clear it.
 export function routeStatusAfter(current, interaction) {
-  if (STATUS_CLEARING.includes(interaction)) {
+  if (interaction === 'dismiss') {
     return null;
   }
   return CAMPAIGN_STATUSES.includes(current) ? current : null;

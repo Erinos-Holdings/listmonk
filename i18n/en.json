@@ -312,7 +312,7 @@
     "campaigns.idScope": "{num} selected campaign | {num} selected campaigns",
     "campaigns.idScopeHelp": "Showing only the campaigns of the last send (from a Brand Usage link). Close it, or change the list, brand or scope, to show every campaign.",
     "campaigns.statusScope": "{status} only",
-    "campaigns.statusScopeHelp": "Showing only campaigns with this status. Close it, or change the list, brand or scope, to show every status.",
+    "campaigns.statusScopeHelp": "Showing only campaigns with this status. Close it, or pick All statuses in the Status header, to show every status.",
     "campaigns.allStatuses": "All statuses",
     "campaigns.statusFilterActive": "Status: {status}",
     "campaigns.statusFilterLoading": "Loading…",

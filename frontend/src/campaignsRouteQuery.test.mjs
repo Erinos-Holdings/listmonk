@@ -166,9 +166,11 @@ test('POLISH3 I2: the status scope narrows the fetch; All omits evergreen', () =
   assert.deepEqual(kindStatusParams(), { evergreen: false });
 });
 
-test('POLISH3 I2: dismissal and every list/selector/scope interaction clear the status scope; others keep it', () => {
-  ['dismiss', 'list', 'brand', 'scope'].forEach((i) => assert.equal(routeStatusAfter('finished', i), null, i));
-  ['page', 'sort', 'search', undefined].forEach((i) => assert.equal(routeStatusAfter('finished', i), 'finished', String(i)));
+// CAMPAIGN-STATUS-FILTER-SPEC D6 amendment (I12) replaces POLISH3 I2's clearing rule: only the
+// chip's dismissal clears the status; a list pick, a brand change and the kind pill keep it.
+test('STATUS-FILTER I12: only dismissal clears the status filter; list/brand/scope and the rest keep it', () => {
+  assert.equal(routeStatusAfter('finished', 'dismiss'), null);
+  ['list', 'brand', 'scope', 'page', 'sort', 'search', undefined].forEach((i) => assert.equal(routeStatusAfter('finished', i), 'finished', String(i)));
   assert.equal(routeStatusAfter(null, 'page'), null);
   assert.equal(routeStatusAfter('bogus', 'page'), null);
 });

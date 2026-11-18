@@ -62,9 +62,10 @@
               </b-radio-button>
             </b-field>
           </div>
-          <!-- DASHBOARDS-POLISH3-SPEC D2 -- the route status scope's chip (a Dashboard broadcast
-               link's status=finished): dismissal, a real list pick, a brand-selector change or the
-               scope pill clears it (campaignsRouteQuery.mjs::routeStatusAfter). -->
+          <!-- DASHBOARDS-POLISH3-SPEC D2 -- the status filter's chip (a Dashboard broadcast link's
+               status=finished, or a Status header pick): only its dismissal (or the header's "All
+               statuses") clears it; a list pick, a brand change and the scope pill keep it
+               (CAMPAIGN-STATUS-FILTER-SPEC D6 amendment; campaignsRouteQuery.mjs::routeStatusAfter). -->
           <div v-if="queryParams.routeStatus" class="column is-narrow">
             <b-tag type="is-primary" size="is-medium" closable
               :title="$t('campaigns.statusScopeHelp')" data-cy="route-status"
@@ -793,7 +794,8 @@ export default Vue.extend({
     // Fork (evergreen) -- the scope pill. Resets the page and clears any bulk
     // selection (a stale selection would carry rows of the other kind), then refetches.
     // DASHBOARDS-POLISH3-SPEC D3 -- writes the string pref campaigns.scopeKind (the legacy
-    // boolean is never written again); D2 -- a scope change clears the route status scope.
+    // boolean is never written again). A scope change clears the route id scope and KEEPS the
+    // status filter (CAMPAIGN-STATUS-FILTER-SPEC D6 amendment).
     onScopeChange() {
       this.$utils.setPref(SCOPE_KIND_PREF, kindOfEvergreen(this.queryParams.evergreen));
       // SUBSCRIBERS-FILTERS-2-SPEC D6 (S2-2) -- a selected list that carries no campaign of the new
