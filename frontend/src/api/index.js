@@ -523,6 +523,15 @@ export const getCampaign = async (id) => http.get(`/api/campaigns/${id}`, {
   camelCase: campaignCamel(''),
 });
 
+// Fork (integrations EDITOR-SYNC-SPEC D1 "The read", S1) -- the campaign page's pre-save and
+// on-focus read of the server's copy: the full campaign as getCampaign reads it, with no loading
+// overlay and no toast. A failed read never blocks a save (the caller proceeds), so it must not
+// toast either.
+export const getCampaignSync = async (id) => http.get(`/api/campaigns/${id}`, {
+  camelCase: campaignCamel(''),
+  disableToast: true,
+});
+
 // Fork (campaign-page audience box): the same read without the page-wide loading overlay,
 // for the background refetch when a running broadcast finishes.
 export const getCampaignQuiet = async (id) => http.get(`/api/campaigns/${id}`, {

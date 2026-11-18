@@ -667,6 +667,7 @@ import {
 import { altsMessage, generateAndApply } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
 import { compileCampaignBody, loadFrameBuilder } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
+import { extraView, sameDraft, syncDecision } from '../campaignSync.mjs'; // eslint-disable-line import/extensions
 import CampaignPreview from '../components/CampaignPreview.vue';
 import CopyText from '../components/CopyText.vue';
 import Editor from '../components/Editor.vue';
@@ -829,6 +830,15 @@ export default Vue.extend({
       // integrations ALT-AUTOGEN-SPEC D1: the Inspect button stays loading until the review has started
       // (save -> generate alts -> save -> start).
       inspecting: false,
+
+      // Fork (editor sync, integrations EDITOR-SYNC-SPEC D1/D2) -- set from the start of a pre-save
+      // or on-focus read of the server's copy until the PUT, the adopt or the dialog's answer
+      // settles; the in-flight save's promise (a second updateCampaign returns it) and the focus
+      // read's; and when the last focus read STARTED (5 s minimum between them).
+      syncing: false,
+      syncSavePromise: null,
+      syncFocusPromise: null,
+      syncFocusAt: 0,
 
       // Fork (review navigation, integrations REVIEW-NAVIGATION-SPEC §4.5) -- a valid `?select=`
       // read ONCE at mount (never re-read from $route.query: history.replaceState does not clear
@@ -1926,43 +1936,125 @@ export default Vue.extend({
     },
 
     getCampaign(id) {
-      return this.$api.getCampaign(id).then((data) => {
-        this.data = data;
-        this.form = {
-          ...this.form,
-          ...data,
-          headersStr: JSON.stringify(data.headers, null, 4),
-          archiveMetaStr: data.archiveMeta ? JSON.stringify(data.archiveMeta, null, 4) : '{}',
-          attribsStr: data.attribs ? JSON.stringify(data.attribs, null, 4) : '{}',
-          preheader: (data.attribs && data.attribs.preheader) || '',
-          lang: (data.attribs && data.attribs.lang) || '',
-          smartSending: smartSendingOf(data),
-          evergreen: !!data.evergreen,
-          sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
-          sendDelaySecs: data.sendDelaySecs || 0,
+      return this.$api.getCampaign(id).then((data) => this.applyCampaign(data));
+    },
 
-          // The structure that is populated by editor input event.
-          content: {
-            contentType: data.contentType,
-            body: data.body,
-            bodySource: data.bodySource,
-            templateId: data.templateId,
-          },
+    // Load a campaign read into the page (data + form). integrations EDITOR-SYNC-SPEC D1 "Timing":
+    // extracted from getCampaign so an adopt applies the pre-save read's OWN response in the same
+    // tick -- no second read.
+    applyCampaign(data) {
+      this.data = data;
+      this.form = {
+        ...this.form,
+        ...data,
+        headersStr: JSON.stringify(data.headers, null, 4),
+        archiveMetaStr: data.archiveMeta ? JSON.stringify(data.archiveMeta, null, 4) : '{}',
+        attribsStr: data.attribs ? JSON.stringify(data.attribs, null, 4) : '{}',
+        preheader: (data.attribs && data.attribs.preheader) || '',
+        lang: (data.attribs && data.attribs.lang) || '',
+        smartSending: smartSendingOf(data),
+        evergreen: !!data.evergreen,
+        sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
+        sendDelaySecs: data.sendDelaySecs || 0,
+
+        // The structure that is populated by editor input event.
+        content: {
+          contentType: data.contentType,
+          body: data.body,
+          bodySource: data.bodySource,
+          templateId: data.templateId,
+        },
+      };
+      this.isAttachFieldVisible = this.form.media.length > 0;
+
+      // Re-derive against the loaded campaign, announcing a repoint if the stored From
+      // disagrees with what its lists now say.
+      this.brandFromLoadPending = true;
+      this.syncBrandDerivation();
+
+      this.form.media = this.form.media.map((f) => {
+        if (!f.id) {
+          return { ...f, filename: `❌ ${f.filename}` };
+        }
+        return f;
+      });
+    },
+
+    // integrations EDITOR-SYNC-SPEC D1 "The compared view" -- the sync state of a fresh server read
+    // against what the page loaded, computed synchronously when the read resolves (S2): `changed`
+    // (the draft view or the From / messenger / attachments differ, campaignSync.mjs extraView) and
+    // `unsaved` (isUnsaved(), or the form's From / messenger / attachments differ from the loaded
+    // copy -- so a From re-derived at load reads as unsaved, the safe side). Returns the decision.
+    syncDecisionFor(fresh) {
+      const changed = !sameDraft(this.draftFromCampaign(fresh), this.draftFromCampaign(this.data))
+        || !sameDraft(extraView(fresh), extraView(this.data));
+      const unsaved = this.isUnsaved() || !sameDraft(extraView(this.form), extraView(this.data));
+      return syncDecision({ changed, unsaved });
+    },
+
+    // D1/D2 adopt: load the server's copy (the SAME response), re-mount the editor (it reads its
+    // source once -- the applyDraft precedent), one info toast.
+    adoptCampaign(fresh) {
+      this.applyCampaign(fresh);
+      this.editorKey += 1;
+      this.$utils.toast(this.$t('campaigns.changedElsewhereLoaded'));
+    },
+
+    // D1 ask: the "changed in another window" dialog. Resolves on "Save my version"; REJECTS with a
+    // `cancelled` error on Cancel (and on a dismissal). `onAsk` (Inspect, S4) runs synchronously
+    // just before the dialog shows.
+    askSaveOverChanged(onAsk) {
+      return new Promise((resolve, reject) => {
+        if (typeof onAsk === 'function') {
+          onAsk();
+        }
+        const cancel = () => {
+          const err = new Error('cancelled');
+          err.cancelled = true;
+          reject(err);
         };
-        this.isAttachFieldVisible = this.form.media.length > 0;
-
-        // Re-derive against the loaded campaign, announcing a repoint if the stored From
-        // disagrees with what its lists now say.
-        this.brandFromLoadPending = true;
-        this.syncBrandDerivation();
-
-        this.form.media = this.form.media.map((f) => {
-          if (!f.id) {
-            return { ...f, filename: `❌ ${f.filename}` };
-          }
-          return f;
+        // Buefy directly (the offerDraftRestore precedent) for the confirm label; the message is a
+        // fixed i18n string with no user-supplied text.
+        this.$buefy.dialog.confirm({
+          scroll: 'keep',
+          message: this.$utils.escapeHTML(this.$t('campaigns.changedElsewhereConfirm')),
+          confirmText: this.$t('campaigns.changedElsewhereSave'),
+          cancelText: this.$t('globals.buttons.cancel'),
+          onConfirm: () => resolve(),
+          onCancel: cancel,
         });
       });
+    },
+
+    // integrations EDITOR-SYNC-SPEC D2: catch up when the user comes back to the page. Skipped while
+    // inspecting or syncing, when not editing an existing campaign, when the page cannot save
+    // (!canEdit, S5), or within 5 s of the previous read's START (focus also fires on every return
+    // from the builder iframe). Adopts only a changed copy over a clean page; changed + unsaved does
+    // nothing (D1's dialog decides at save time, S8); a failed read does nothing.
+    syncFromServer() {
+      if (this.inspecting || this.syncing || !this.isEditing || !this.data.id || !this.canEdit) {
+        return Promise.resolve();
+      }
+      const now = Date.now();
+      if (now - this.syncFocusAt < 5000) {
+        return Promise.resolve();
+      }
+      this.syncFocusAt = now;
+      this.syncing = true;
+      const { id } = this.data;
+      const p = this.$api.getCampaignSync(id).then((fresh) => {
+        if (!fresh || fresh.id !== this.data.id) {
+          return;
+        }
+        if (this.syncDecisionFor(fresh) === 'adopt') {
+          this.adoptCampaign(fresh);
+        }
+      }).catch(() => {}).finally(() => {
+        this.syncing = false;
+        this.syncFocusPromise = null;
+      });
+      this.syncFocusPromise = p;
+      return p;
     },
 
     sendTest() {
@@ -2041,13 +2133,69 @@ export default Vue.extend({
     // responses carry the same computed render warnings — the save leg stays quiet there
     // so each Start surfaces them exactly once (from the status response, which also
     // carries the preheader nudge).
-    async updateCampaign(typ, suppressWarnings = false) {
+    //
+    // integrations EDITOR-SYNC-SPEC D1: before the PUT, read the server's copy (getCampaignSync) and
+    // decide (campaignSync.mjs syncDecision, after the read resolves): unchanged → the PUT as before;
+    // changed over a clean page → ADOPT (no PUT: the same response is loaded, the editor re-mounted,
+    // the promise resolves so Start / Inspect continue on the server's copy); changed over unsaved
+    // edits → ASK ("Save my version" → the PUT, resolving `{ asked: true }`; Cancel → a rejection
+    // with `cancelled: true`, no toast). `onAsk` runs just before that dialog (Inspect closes its
+    // window, S4). A failed read never blocks the save (I4). While one save is syncing, a second
+    // call returns the SAME promise; a save arriving during an on-focus read waits for it.
+    updateCampaign(typ, suppressWarnings = false, onAsk = null) {
+      if (this.syncSavePromise) {
+        return this.syncSavePromise;
+      }
+      if (this.syncFocusPromise) {
+        return this.syncFocusPromise.then(() => this.updateCampaign(typ, suppressWarnings, onAsk));
+      }
+
       const attribs = this.buildAttribs();
       if (attribs === false) {
-        throw new Error('invalid attribs');
+        return Promise.reject(new Error('invalid attribs'));
       }
       this.form.attribs = attribs;
 
+      this.syncing = true;
+      const p = this.$api.getCampaignSync(this.data.id).then(
+        (fresh) => {
+          if (!fresh || fresh.id !== this.data.id) {
+            return 'save';
+          }
+          // S2: decided and (on adopt) applied in this same tick, from THIS response -- no second read.
+          const decision = this.syncDecisionFor(fresh);
+          if (decision === 'adopt') {
+            this.adoptCampaign(fresh);
+          }
+          return decision;
+        },
+        // I4: a failed read is not evidence of a change -- save as before.
+        () => 'save',
+      ).then((decision) => {
+        if (decision === 'adopt') {
+          // No PUT: Start / Inspect continue on the server's copy.
+          return undefined;
+        }
+        if (decision === 'ask') {
+          return this.askSaveOverChanged(onAsk).then(() => this.putCampaign(typ, suppressWarnings).then(() => ({ asked: true })));
+        }
+        return this.putCampaign(typ, suppressWarnings);
+      });
+
+      this.syncSavePromise = p;
+      const clear = () => {
+        if (this.syncSavePromise === p) {
+          this.syncSavePromise = null;
+          this.syncing = false;
+        }
+      };
+      p.then(clear, clear);
+      return p;
+    },
+
+    // The PUT of the page's form (unchanged from before EDITOR-SYNC-SPEC). Resolves on success; REJECTS
+    // on a failed save (Stage 4 finding 7), so neither Start nor Inspect ever proceeds on a stale body.
+    putCampaign(typ, suppressWarnings = false) {
       const data = {
         archive_slug: this.form.archiveSlug,
         name: this.form.name,
@@ -2154,6 +2302,8 @@ export default Vue.extend({
 
     onReviewFocus() {
       this.loadReview();
+      // integrations EDITOR-SYNC-SPEC D2: catch up with a change made elsewhere (Fix for me).
+      this.syncFromServer();
     },
 
     // Fork (review navigation) -- integrations REVIEW-NAVIGATION-SPEC §4.5: tell the Inspect
@@ -2292,9 +2442,22 @@ export default Vue.extend({
       }
       this.inspecting = true;
       try {
+        // integrations EDITOR-SYNC-SPEC D1 / S4: the window is in front of this page, so a "changed
+        // in another window" dialog here would sit behind it -- close it just before the dialog.
+        const closeForAsk = () => {
+          if (win && !win.closed) {
+            win.close();
+          }
+          this.reviewWindow = null;
+        };
+        let saved;
         try {
-          await this.updateCampaign(null, true);
+          saved = await this.updateCampaign(null, true, closeForAsk);
         } catch (e) {
+          // EDITOR-SYNC-SPEC S4: Cancel in the dialog ends the click silently (the window is closed).
+          if (e && e.cancelled) {
+            return;
+          }
           // Stage 4 finding 7: the save failed, so nothing was inspected -- never leave the window
           // showing the previous inspection as if it were this one.
           this.$utils.toast(this.$t('campaigns.review.saveFailed'), 'is-danger');
@@ -2302,6 +2465,12 @@ export default Vue.extend({
             win.close();
           }
           this.reviewWindow = null;
+          return;
+        }
+        // EDITOR-SYNC-SPEC S4: "Save my version" saved, but this click ends -- no generation and no
+        // review start; the user clicks Inspect again.
+        if (saved && saved.asked) {
+          this.$utils.toast(this.$t('campaigns.review.inspectAgain'));
           return;
         }
         let seq = 0;
@@ -2364,7 +2533,9 @@ export default Vue.extend({
               this.$router.push({ name: 'campaigns' }).catch(() => {});
             });
           }).catch(() => {
-            // The failed save is already toasted; nothing is started (unchanged behaviour).
+            // The failed save is already toasted; nothing is started (unchanged behaviour). Also
+            // EDITOR-SYNC-SPEC D1: a Cancel in the "changed in another window" dialog (a
+            // `cancelled` rejection) starts nothing, silently. "Save my version" resolves and starts.
           });
         },
       );

@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import * as checklistModule from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import {
   STAGES, acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isContextConcern, isReviewDone, openEntries,
-  sectionCounts, sectionOf, structureAcknowledgeLabel, withAltsStep,
+  sectionCounts, sectionOf, splitAccepted, structureAcknowledgeLabel, withAltsStep,
 } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 
 const t = (k, p) => (p ? `${k} ${JSON.stringify(p)}` : k);
@@ -597,4 +597,59 @@ test('A1: the window -- the alt step lives inside review-checklist (no row above
   assert.match(alts, /class="expand-btn"/);
   assert.match(alts, /<b-tag type="is-success">\{\{ altTags\.total \}\}<\/b-tag>/);
   assert.match(tpl, /<b-collapse v-if="s\.key === 'alts'" :key="s\.key" :open="false" class="review-section"/);
+});
+
+// integrations EDITOR-SYNC-SPEC I5 -- a card is in Accepted exactly when its latest recorded
+// disposition is `accept` (and the item is acceptable).
+test('I5: splitAccepted -- accept moves a card to Accepted; fixme / fixed / none stay open; order preserved', () => {
+  const item = { id: 'A5.4', tier: 'A', acceptable: true };
+  const e = (key, it = item) => ({ key, item: it, finding: { key } });
+  const entries = [e('k1'), e('k2'), e('k3'), e('k4'), e('k5')];
+  const latest = {
+    k1: { item_key: 'k1', action: 'accept' },
+    k2: { item_key: 'k2', action: 'fixme' },
+    k3: { item_key: 'k3', action: 'fixed' },
+    k5: { item_key: 'k5', action: 'accept' },
+  };
+  const { open, accepted } = splitAccepted(entries, latest);
+  assert.deepEqual(accepted.map((x) => x.key), ['k1', 'k5']);
+  assert.deepEqual(open.map((x) => x.key), ['k2', 'k3', 'k4']);
+  // No dispositions at all: everything open, in order.
+  assert.deepEqual(splitAccepted(entries, {}).open.map((x) => x.key), ['k1', 'k2', 'k3', 'k4', 'k5']);
+  assert.deepEqual(splitAccepted(entries, null).accepted, []);
+  assert.deepEqual(splitAccepted(null, latest), { open: [], accepted: [] });
+});
+
+test('I5: splitAccepted -- a later fixme after an earlier accept is open (latest holds the newest of a newest-first log)', () => {
+  const log = [
+    { item_key: 'k', action: 'fixme' },
+    { item_key: 'k', action: 'accept' },
+  ];
+  // The window's `latest` rule: the first row per key of the newest-first log.
+  const latest = {};
+  log.forEach((d) => { if (!latest[d.item_key]) latest[d.item_key] = d; });
+  const entries = [{ key: 'k', item: { id: 'A5.4', acceptable: true }, finding: { key: 'k' } }];
+  const r = splitAccepted(entries, latest);
+  assert.deepEqual(r.open.map((x) => x.key), ['k']);
+  assert.deepEqual(r.accepted, []);
+});
+
+test('I5: splitAccepted -- an accept on an acceptable:false item stays open (the verdict still blocks it, S6)', () => {
+  const entries = [
+    { key: 'a', item: { id: 'D2.15', acceptable: false }, finding: { key: 'a' } },
+    { key: 'b', item: { id: 'A5.4', acceptable: true }, finding: { key: 'b' } },
+  ];
+  const latest = { a: { action: 'accept' }, b: { action: 'accept' } };
+  const r = splitAccepted(entries, latest);
+  assert.deepEqual(r.open.map((x) => x.key), ['a']);
+  assert.deepEqual(r.accepted.map((x) => x.key), ['b']);
+});
+
+test('D3: the window -- the three sections are built from open, a fourth Accepted section from accepted', () => {
+  const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  assert.match(src, /splitAccepted\(this\.entries, this\.latest\)/);
+  assert.match(src, /campaigns\.review\.sectionAccepted/);
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
+  assert.match(tpl, /data-cy="tag-accepted"/);
+  assert.match(tpl, /:disabled="sec\.key === 'accepted'"/);
 });

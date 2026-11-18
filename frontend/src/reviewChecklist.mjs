@@ -48,6 +48,27 @@ export function openEntries(items) {
   return out;
 }
 
+// Integrations EDITOR-SYNC-SPEC D3 -- the Inspect window's Accepted section, pure: `accepted` holds
+// the entries whose LATEST recorded disposition (`latest[key]`, the newest per key across bundle
+// hashes -- the server's LatestDispositions rule) is `accept`, except an `acceptable:false` item,
+// which the verdict blocks whatever its dispositions and so stays a visible blocker (S6); `open`
+// holds the rest. Order is preserved in both. A staged choice is not read here: a card moves only
+// when the save's reload brings the recorded disposition.
+export function splitAccepted(entries, latest) {
+  const open = [];
+  const accepted = [];
+  const byKey = (latest && typeof latest === 'object') ? latest : {};
+  (Array.isArray(entries) ? entries : []).forEach((e) => {
+    const d = e && Object.prototype.hasOwnProperty.call(byKey, e.key) ? byKey[e.key] : null;
+    if (d && d.action === 'accept' && !(e.item && e.item.acceptable === false)) {
+      accepted.push(e);
+    } else {
+      open.push(e);
+    }
+  });
+  return { open, accepted };
+}
+
 // Integrations REVIEW-TRIM-SPEC D8 -- the Done rule, pure: Done when the verdict is pass, or when
 // every BLOCKER and NEEDS-ACKNOWLEDGEMENT entry is decided (recorded or staged), plus -- for a
 // structure admin (`structureAcknowledge`) -- D4.2's structure finding (excluded from `entries`; its

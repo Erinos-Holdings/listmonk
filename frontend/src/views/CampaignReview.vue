@@ -119,6 +119,8 @@
             <strong>{{ e.item.id }}</strong> {{ e.item.failTitle || e.item.title }}
             <b-tag :type="tagType(e)" class="ml-2">{{ e.finding.severity || e.item.verdict }}</b-tag>
             <b-tag v-if="stillOpen(e)" type="is-warning" class="ml-1">{{ $t('campaigns.review.stillOpen') }}</b-tag>
+            <!-- integrations EDITOR-SYNC-SPEC D3: the Accepted section's card says it is decided. -->
+            <b-tag v-if="sec.key === 'accepted'" type="is-success" class="ml-1" data-cy="tag-accepted">{{ $t('campaigns.review.sectionAccepted') }}</b-tag>
           </div>
           <p class="todo">{{ e.finding.todo }}</p>
           <!-- Polish pass 2: the exact replacement text alone (report `proposal`), with Copy. -->
@@ -173,8 +175,9 @@
             <b-tooltip v-else-if="acceptStateOf(e.item) === 'override'" :label="$t('campaigns.review.overrideAdminOnly')" type="is-dark" multilined>
               <b-button size="is-small" disabled data-cy="btn-accept-override">{{ $t('campaigns.review.acceptRisk') }}</b-button>
             </b-tooltip>
+            <!-- EDITOR-SYNC-SPEC D3: already accepted -- Fix for me and I fixed it stay live, Accept is disabled. -->
             <b-button v-else size="is-small" data-cy="btn-accept" :type="stagedAction(e.key) === 'accept' ? 'is-primary' : ''"
-              @click="stage(e.key, e.item.id, 'accept')">
+              :disabled="sec.key === 'accepted'" @click="stage(e.key, e.item.id, 'accept')">
               {{ e.finding.severity === 'high' ? $t('campaigns.review.acknowledge') : $t('campaigns.review.acceptRisk') }}
             </b-button>
           </div>
@@ -420,7 +423,7 @@ import {
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 import {
   acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isReviewDone, sectionCounts, sectionOf,
-  structureAcknowledgeLabel, withAltsStep,
+  splitAccepted, structureAcknowledgeLabel, withAltsStep,
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
@@ -624,8 +627,16 @@ export default Vue.extend({
     },
 
     // The section rule is reviewChecklist.mjs `sectionOf` -- the checklist's counts use the same one.
+    // integrations EDITOR-SYNC-SPEC D3: an entry whose latest RECORDED disposition is `accept`
+    // (reviewChecklist.mjs splitAccepted) leaves the three sections for a fourth, Accepted, after
+    // them; a staged choice moves nothing until the save's reload records it.
     sections() {
-      return this.sectionList(this.entries);
+      const { open, accepted } = splitAccepted(this.entries, this.latest);
+      const out = this.sectionList(open);
+      if (accepted.length) {
+        out.push({ key: 'accepted', label: this.$t('campaigns.review.sectionAccepted'), entries: accepted });
+      }
+      return out;
     },
 
     passed() {
