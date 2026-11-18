@@ -433,7 +433,9 @@ export default Vue.extend({
 
     // Fork (launch filter, LAUNCH-FILTER-SPEC D3, I9) -- the health documents for the launch filter,
     // only for a user who holds brands:get (a Brand Analytics creator never issues the request).
-    // Not a loading gate: nothing waits on it.
+    // A stored group selection WAITS on it under every launch value (BRAND-GROUPS-SPEC D3), so
+    // this condition must stay equal to the store's canBrands(): fetched lazily or under another
+    // condition, a user with a stored group would sit on a pending selector forever.
     if (this.$can('brands:get')) {
       this.$store.dispatch('loadBrandHealth');
     }

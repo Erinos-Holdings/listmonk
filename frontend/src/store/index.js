@@ -63,7 +63,8 @@ export default new Vuex.Store({
     // narrows (Launched/Unlaunched): before the documents, every brand reads as launched, so a
     // stored brand outside that set would resolve to All brands and a page would fetch unscoped,
     // then again scoped -- and the slower unscoped response could land last (2026-10-28, BNKD under
-    // Unlaunched showed every brand's campaigns). Under All nothing waits on it.
+    // Unlaunched showed every brand's campaigns). Under All only a stored group selection waits on
+    // it (BRAND-GROUPS-SPEC D3; App.vue dispatches the read under canBrands()).
     brandHealthLoaded: false,
   },
 
