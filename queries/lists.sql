@@ -47,7 +47,7 @@ WITH ls AS (
     -- tag (list_brand_tag, the one statement of the single-brand rule), the No brand context.
     AND (NOT $12::BOOLEAN OR list_brand_tag(lists.tags) IS NULL)
     -- Fork (brand groups, integrations BRAND-GROUPS-SPEC D5) -- brand=<slug> (repeatable, bound as
-    -- one array): keep only the lists whose brand equals one of them; an empty array is no filter.
+    -- one array) keeps only the lists whose brand equals one of them; an empty array is no filter.
     -- ANDed with the permission predicate above, so it narrows and never widens. GetList binds {}.
     AND (CARDINALITY($14::TEXT[]) = 0 OR list_brand_tag(lists.tags) = ANY($14::TEXT[]))
     -- Fork (campaign lists, CAMPAIGN-LISTS-SPEC D6/D7) -- hide_system=true drops the HIDDEN system
