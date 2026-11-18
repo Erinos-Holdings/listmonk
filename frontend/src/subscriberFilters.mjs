@@ -86,7 +86,8 @@ const nameOf = (l) => (l && typeof l.name === 'string' ? l.name : '');
 export function listOptions(lists, selection, routeListId) {
   const all = storeLists(lists);
   const rid = Number.isInteger(routeListId) && routeListId > 0 ? routeListId : null;
-  const scoped = selection && (selection.kind === 'brand' || selection.kind === 'none');
+  // Fork (brand groups, integrations BRAND-GROUPS-SPEC D6) -- a group is scoped too: its lists.
+  const scoped = selection && (selection.kind === 'brand' || selection.kind === 'none' || selection.kind === 'group');
   const ids = scoped ? scopeListIds(all, selection) : null;
   // SUBSCRIBERS-FILTERS-2-SPEC D5 -- the one grouping, shared with the Campaigns page.
   const { ordinary, system } = groupLists(ids ? all.filter((l) => l && ids.includes(l.id)) : []);

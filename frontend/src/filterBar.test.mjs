@@ -17,6 +17,18 @@ test('nothing active: no caption', () => {
   }), '');
 });
 
+// Fork (integrations BRAND-GROUPS-SPEC I7) -- a group is named by its label where a brand's name would be.
+test('BRAND-GROUPS I7: a group selection names the group', () => {
+  const EST = { kind: 'group', group: 'established', slugs: ['joybelle', 'shala'] };
+  assert.equal(filterCaption({ selection: EST, lang: 'en', brands: BRANDS }), 'Established · English');
+  assert.equal(filterCaption({
+    selection: { kind: 'group', group: 'incubating', slugs: ['bnkd'] }, lang: 'all', groups: { incubating: 'Incubation' },
+  }), 'Incubation');
+  // Not applicable to the table, or the stored shape (no slugs): not named.
+  assert.equal(filterCaption({ selection: EST, lang: 'all', applies: { brand: false } }), '');
+  assert.equal(filterCaption({ selection: { kind: 'group', group: 'established' }, lang: 'all' }), '');
+});
+
 test('brand display name, English language name, separated by a dot', () => {
   assert.equal(filterCaption({ selection: BNKD, lang: 'en', brands: BRANDS }), 'BNKD Wellness · English');
   assert.equal(filterCaption({ selection: BNKD, lang: 'all', brands: BRANDS }), 'BNKD Wellness');

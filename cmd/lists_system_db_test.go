@@ -33,7 +33,7 @@ func TestQueryListsHideSystemAgreesWithGo(t *testing.T) {
 	}
 
 	// The Go function over the rows the database holds (every list, the harness's own included).
-	all, total, err := f.h.app.core.QueryLists("", "", "", "", nil, "id", "asc", true, nil, false, false, 0, 0)
+	all, total, err := f.h.app.core.QueryLists("", "", "", "", nil, "id", "asc", true, nil, false, nil, false, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestQueryListsHideSystemAgreesWithGo(t *testing.T) {
 			want = append(want, l.ID)
 		}
 	}
-	shown, shownTotal, err := f.h.app.core.QueryLists("", "", "", "", nil, "id", "asc", true, nil, false, true, 0, 0)
+	shown, shownTotal, err := f.h.app.core.QueryLists("", "", "", "", nil, "id", "asc", true, nil, false, nil, true, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

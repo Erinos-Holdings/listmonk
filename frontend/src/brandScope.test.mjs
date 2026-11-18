@@ -11,6 +11,8 @@ import {
   mediaScopeContext, presetNoticeBrand, filterBrandRows,
   launchOf, matchesLaunch, applyLaunch, launchCounts, filterRowsByLaunch, launchApplies,
   selectionLoaded, brandKeyStep, canCreateCampaign,
+  ESTABLISHED_BRANDS, BRAND_GROUPS, groupOf, groupMembers, groupsAvailable, offeredGroups, groupWaits,
+  selectorOptions,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 // Fork (integrations EDITOR-DEFAULTS-SPEC I1) -- New is enabled iff the selection is one brand; the
@@ -500,4 +502,265 @@ test('I5 filterRowsByLaunch: Brands rows by their own status; SES rows by their 
   // No document (unattributed, thirstygirl): kept under all/launched, dropped under unlaunched.
   assert.deepEqual(s('unlaunched'), ['shala']);
   assert.deepEqual(filterRowsByLaunch(undefined, 'launched', bySlug, DOCS), []);
+});
+
+// Fork (brand groups, integrations BRAND-GROUPS-SPEC I1-I10) -----------------------------------
+// The roster: the parent (curated), two established brands (joybelle, younique; joybelle
+// UNLAUNCHED), shala established and launched here, two launched others (ruze, bnkd), one
+// unlaunched other (zeta), and brandless lists.
+const G_BRANDS = [
+  { slug: 'curated', display_name: 'Curated' },
+  { slug: 'joybelle', display_name: 'JoyBelle' },
+  { slug: 'shala', display_name: 'Shala' },
+  { slug: 'younique', display_name: 'Younique' },
+  { slug: 'ruze', display_name: 'Ruze Pouches' },
+  { slug: 'bnkd', display_name: 'BNKD Wellness' },
+  { slug: 'zeta', display_name: 'Zeta' },
+];
+const G_LISTS = [
+  { id: 1, brand: 'curated' },
+  { id: 2, brand: 'joybelle' },
+  { id: 3, brand: 'shala' },
+  { id: 4, brand: 'younique' },
+  { id: 5, brand: 'younique' },
+  { id: 6, brand: 'ruze' },
+  { id: 7, brand: 'bnkd' },
+  { id: 8, brand: 'zeta' },
+  { id: 9, brand: '' },
+];
+const G_DOCS = [
+  { brand: 'curated', status: 'ok' },
+  { brand: 'joybelle', status: 'unknown' },
+  { brand: 'shala', status: 'ok' },
+  { brand: 'ruze', status: 'warn' },
+  { brand: 'zeta', status: 'unknown' },
+  // younique, bnkd: no document -- launched.
+];
+const G_ROSTER = rosterFrom(G_LISTS, G_BRANDS);
+const group = (g, slugs) => (slugs ? { kind: 'group', group: g, slugs } : { kind: 'group', group: g });
+const INC = group('incubating', ['bnkd', 'ruze']);
+const EST = group('established', ['joybelle', 'shala', 'younique']);
+
+test('BRAND-GROUPS I11: the established list is the one constant, frozen', () => {
+  assert.deepEqual([...ESTABLISHED_BRANDS], ['joybelle', 'shala', 'younique']);
+  assert.ok(Object.isFrozen(ESTABLISHED_BRANDS));
+  assert.deepEqual([...BRAND_GROUPS], ['incubating', 'established']);
+});
+
+test('BRAND-GROUPS I1 groupOf: parent none; established whatever its launch; launched other incubating; unlaunched other none', () => {
+  const rows = [
+    ['curated', null],
+    ['joybelle', 'established'], // unlaunched
+    ['shala', 'established'],
+    ['younique', 'established'], // no document
+    ['ruze', 'incubating'],
+    ['bnkd', 'incubating'], // no document = launched
+    ['zeta', null], // unlaunched
+  ];
+  rows.forEach(([slug, want]) => assert.equal(groupOf(slug, G_DOCS), want, slug));
+  // No documents at all (a failed first read): every non-established, non-parent brand is incubating.
+  assert.equal(groupOf('zeta', []), 'incubating');
+  assert.equal(groupOf('curated', []), null);
+});
+
+test('BRAND-GROUPS I2 groupMembers: the full roster\'s brands of the group, sorted; never a brand outside the roster', () => {
+  assert.deepEqual(groupMembers('incubating', G_ROSTER, G_DOCS), ['bnkd', 'ruze']);
+  assert.deepEqual(groupMembers('established', G_ROSTER, G_DOCS), ['joybelle', 'shala', 'younique']);
+  // A narrowed roster (a user permitted only ruze and shala lists): younique/joybelle/bnkd are absent.
+  const narrow = rosterFrom([{ id: 6, brand: 'ruze' }, { id: 3, brand: 'shala' }], G_BRANDS);
+  assert.deepEqual(groupMembers('incubating', narrow, G_DOCS), ['ruze']);
+  assert.deepEqual(groupMembers('established', narrow, G_DOCS), ['shala']);
+  assert.deepEqual(groupMembers('bogus', G_ROSTER, G_DOCS), []);
+  assert.deepEqual(groupMembers('incubating', undefined, G_DOCS), []);
+});
+
+test('BRAND-GROUPS I2 offeredGroups: whole or absent under each launch value; the value never changes members', () => {
+  const off = (launch, docs = G_DOCS) => offeredGroups(G_ROSTER, applyLaunch(G_ROSTER, launch, docs), docs, true);
+  // All: both groups, whole -- Established includes the unlaunched joybelle.
+  assert.deepEqual(off('all'), [
+    { group: 'incubating', slugs: ['bnkd', 'ruze'] },
+    { group: 'established', slugs: ['joybelle', 'shala', 'younique'] },
+  ]);
+  // Launched: joybelle (an unlaunched established brand) is filtered out, so Established is NOT
+  // offered -- never offered without it. Incubating is whole.
+  assert.deepEqual(off('launched'), [{ group: 'incubating', slugs: ['bnkd', 'ruze'] }]);
+  // Unlaunched: neither (Incubating's members are launched by definition; Established is partial).
+  assert.deepEqual(off('unlaunched'), []);
+  // Every established brand launched (today's state): both under Launched, neither under Unlaunched.
+  const docsAllLaunched = G_DOCS.map((d) => (d.brand === 'joybelle' ? { ...d, status: 'ok' } : d));
+  assert.deepEqual(off('launched', docsAllLaunched).map((g) => g.group), ['incubating', 'established']);
+  assert.deepEqual(off('unlaunched', docsAllLaunched), []);
+  // Unavailable: none at all.
+  assert.deepEqual(offeredGroups(G_ROSTER, G_ROSTER, G_DOCS, false), []);
+  // An empty group is not offered (a roster with no established brand).
+  const noEst = rosterFrom([{ id: 6, brand: 'ruze' }, { id: 7, brand: 'bnkd' }], G_BRANDS);
+  assert.deepEqual(offeredGroups(noEst, noEst, G_DOCS, true).map((g) => g.group), ['incubating']);
+});
+
+test('BRAND-GROUPS D2 groupsAvailable: brands:get, a shown and unlocked selector, the documents loaded', () => {
+  assert.equal(groupsAvailable(true, G_ROSTER, true), true);
+  assert.equal(groupsAvailable(false, G_ROSTER, true), false);
+  assert.equal(groupsAvailable(true, G_ROSTER, false), false);
+  // Locked (one brand, no brandless list) and hidden (empty roster).
+  assert.equal(groupsAvailable(true, { brands: [{ slug: 'ruze' }], none: false }, true), false);
+  assert.equal(groupsAvailable(true, { brands: [], none: false }, true), false);
+});
+
+test('BRAND-GROUPS I3 resolveSelection: a stored group resolves to its offered members, else all', () => {
+  const groups = offeredGroups(G_ROSTER, G_ROSTER, G_DOCS, true);
+  const r = (stored, gs = groups, roster = G_ROSTER) => resolveSelection(stored, roster, true, roster, gs);
+  assert.deepEqual(r(group('incubating')).selection, INC);
+  assert.deepEqual(r(group('established')).selection, EST);
+  // The stored slugs are ignored: resolution adds them.
+  assert.deepEqual(r(group('incubating', ['zeta'])).selection, INC);
+  // Unavailable (no groups offered) or not offered: all, pref untouched.
+  assert.deepEqual(r(group('incubating'), []).selection, ALL);
+  assert.deepEqual(r(group('established'), [groups[0]]).selection, ALL);
+  // An empty group from the caller is never resolved to (slugs never empty).
+  assert.deepEqual(r(group('incubating'), [{ group: 'incubating', slugs: [] }]).selection, ALL);
+  // An unknown group name is invalid.
+  assert.deepEqual(r(group('bogus'), [{ group: 'bogus', slugs: ['ruze'] }]).selection, ALL);
+  // Locked and hidden resolve exactly as before.
+  const locked = { brands: [{ slug: 'ruze', label: 'Ruze' }], none: false };
+  assert.deepEqual(r(group('incubating'), groups, locked), {
+    pending: false, selection: brand('ruze'), locked: true, hidden: false,
+  });
+  const hidden = { brands: [], none: false };
+  assert.deepEqual(r(group('incubating'), groups, hidden), {
+    pending: false, selection: ALL, locked: false, hidden: true,
+  });
+  // Omitting groups: today's behaviour (a stored group is all).
+  assert.deepEqual(resolveSelection(group('incubating'), G_ROSTER).selection, ALL);
+});
+
+test('BRAND-GROUPS I4 selectionLoaded + groupWaits: a stored group waits for the documents, and only then', () => {
+  // A brands:get user, unlocked selector: pending until the documents load, under every launch value.
+  assert.equal(groupWaits(group('incubating'), true, G_ROSTER), true);
+  assert.equal(selectionLoaded(true, 'all', false, true), false);
+  assert.equal(selectionLoaded(true, 'all', true, true), true);
+  assert.equal(selectionLoaded(true, 'launched', false, true), false);
+  // No brands:get: never waits (the group resolves to all at once).
+  assert.equal(groupWaits(group('incubating'), false, G_ROSTER), false);
+  // A locked or hidden selector: never waits because of the group.
+  assert.equal(groupWaits(group('incubating'), true, { brands: [{ slug: 'ruze' }], none: false }), false);
+  assert.equal(groupWaits(group('incubating'), true, { brands: [], none: false }), false);
+  // Not a group: never waits because of it.
+  assert.equal(groupWaits(brand('ruze'), true, G_ROSTER), false);
+  assert.equal(groupWaits(ALL, true, G_ROSTER), false);
+  assert.equal(groupWaits(group('bogus'), true, G_ROSTER), false);
+  // The store's composition: pending, then the group.
+  const scope = (healthLoaded, can = true) => resolveSelection(
+    group('established'),
+    G_ROSTER,
+    selectionLoaded(true, 'all', healthLoaded, groupWaits(group('established'), can, G_ROSTER)),
+    G_ROSTER,
+    offeredGroups(G_ROSTER, G_ROSTER, G_DOCS, groupsAvailable(can, G_ROSTER, healthLoaded)),
+  );
+  assert.deepEqual(scope(false), { pending: true });
+  assert.deepEqual(scope(true).selection, EST);
+  assert.deepEqual(scope(false, false).selection, ALL);
+  // The lists gate still comes first.
+  assert.equal(selectionLoaded(false, 'all', true, false), false);
+});
+
+test('BRAND-GROUPS I5 scopeListIds: exactly the members\' lists; null (never []) without slugs', () => {
+  assert.deepEqual(scopeListIds(G_LISTS, INC), [6, 7]);
+  assert.deepEqual(scopeListIds(G_LISTS, EST), [2, 3, 4, 5]);
+  // No brandless list, no other brand's list.
+  assert.ok(!scopeListIds(G_LISTS, INC).includes(9));
+  assert.ok(!scopeListIds(G_LISTS, INC).includes(1));
+  // The stored shape (missing or empty slugs) is no scope.
+  assert.equal(scopeListIds(G_LISTS, group('incubating')), null);
+  assert.equal(scopeListIds(G_LISTS, group('incubating', [])), null);
+  assert.equal(scopeListIds(G_LISTS, group('incubating', [''])), null);
+  // The by-query bodies and the export are built from that set.
+  const qp = {
+    search: '', queryExp: '', listID: 0, subStatus: '',
+  };
+  const ids = scopeListIds(G_LISTS, EST);
+  assert.deepEqual(subscriberQueryBody(qp, ids).list_ids, [2, 3, 4, 5]);
+  assert.deepEqual(subscriberExportParams(qp, ids), [['list_id', '2'], ['list_id', '3'], ['list_id', '4'], ['list_id', '5']]);
+  // A group without slugs carries no list_ids at all (null), as All brands.
+  assert.equal(subscriberQueryBody(qp, scopeListIds(G_LISTS, group('incubating'))).list_ids, null);
+  assert.deepEqual(subscriberExportParams(qp, scopeListIds(G_LISTS, group('incubating'))), []);
+});
+
+test('BRAND-GROUPS I6 the resolved key differs exactly when the members differ', () => {
+  const key = (docs) => {
+    const gs = offeredGroups(G_ROSTER, G_ROSTER, docs, true);
+    return JSON.stringify(resolveSelection(group('incubating'), G_ROSTER, true, G_ROSTER, gs).selection);
+  };
+  // zeta launches: Incubating gains a member, the key changes.
+  const launchedZeta = G_DOCS.map((d) => (d.brand === 'zeta' ? { ...d, status: 'ok' } : d));
+  assert.notEqual(key(G_DOCS), key(launchedZeta));
+  // The same members (documents in another order): the same key -- slugs are sorted.
+  assert.equal(key(G_DOCS), key([...G_DOCS].reverse()));
+  assert.equal(key(G_DOCS), JSON.stringify(INC));
+});
+
+test('BRAND-GROUPS I8 listsScopeParams: brand=<members> for a group and nothing else', () => {
+  assert.deepEqual(listsScopeParams(EST), { brand: ['joybelle', 'shala', 'younique'] });
+  assert.deepEqual(listsScopeParams(group('established')), {});
+  // Unchanged for the other kinds.
+  assert.deepEqual(listsScopeParams(brand('ruze')), { tag: ['brand:ruze'] });
+  assert.deepEqual(listsScopeParams(NONE), { nobrand: true });
+  assert.deepEqual(listsScopeParams(ALL), {});
+});
+
+test('BRAND-GROUPS I7: every one-brand predicate is false under a group; every row rule follows the members', () => {
+  // canCreateCampaign
+  assert.equal(canCreateCampaign(INC), false);
+  assert.equal(canCreateCampaign(group('incubating')), false);
+  // formBrandDefault: as all, on both forms.
+  assert.deepEqual(formBrandDefault(EST, 'template'), { value: null, locked: false });
+  assert.deepEqual(formBrandDefault(EST, 'list'), { value: null, locked: false });
+  // mediaScopeContext: All (media tags are AND-matched).
+  assert.deepEqual(mediaScopeContext(EST), { context: [], untagged: false });
+  // filterTemplates: the brandless rows plus the members'.
+  const T = [{ id: 1, brand: '' }, { id: 2, brand: 'shala' }, { id: 3, brand: 'ruze' }, { id: 4, brand: 'younique' }, { id: 5 }];
+  assert.deepEqual(filterTemplates(T, EST).map((t) => t.id), [1, 2, 4, 5]);
+  assert.deepEqual(filterTemplates(T, INC).map((t) => t.id), [1, 3, 5]);
+  assert.equal(filterTemplates(T, group('incubating')).length, 5);
+  // templateNoticeBrand: a brandless template is in scope (undefined), a branded one keeps its brand.
+  assert.equal(templateNoticeBrand('', EST), undefined);
+  assert.equal(templateNoticeBrand('ruze', EST), 'ruze');
+  // filterBrandRows: the members' rows.
+  const R = [{ brand: 'ruze' }, { brand: 'shala' }, { brand: 'younique' }, { brand: 'bnkd' }];
+  assert.deepEqual(filterBrandRows(R, INC), [{ brand: 'ruze' }, { brand: 'bnkd' }]);
+  assert.deepEqual(filterBrandRows(R, EST), [{ brand: 'shala' }, { brand: 'younique' }]);
+  assert.equal(filterBrandRows(R, group('established')).length, 4);
+  // contextNotice: null for a member; else the notice named by the group's label.
+  assert.equal(contextNotice('shala', EST, G_BRANDS), null);
+  assert.deepEqual(contextNotice('ruze', EST, G_BRANDS), { record: 'Ruze Pouches', selected: 'Established' });
+  assert.deepEqual(contextNotice('', INC, G_BRANDS, { noneLabel: 'Sans marque', groupLabels: { incubating: 'Incubation' } }), { record: 'Sans marque', selected: 'Incubation' });
+  assert.equal(contextNotice('ruze', group('established'), G_BRANDS), null);
+  assert.equal(contextNotice(undefined, EST, G_BRANDS), null);
+});
+
+test('BRAND-GROUPS I10 selectorOptions: groups, parent, rest and the divider rule', () => {
+  const offered = G_ROSTER.brands;
+  const groups = offeredGroups(G_ROSTER, G_ROSTER, G_DOCS, true);
+  const o = selectorOptions(offered, groups, true);
+  assert.deepEqual(o.groups.map((g) => g.group), ['incubating', 'established']);
+  assert.equal(o.parent.slug, 'curated');
+  assert.deepEqual(o.rest.map((b) => b.label), ['BNKD Wellness', 'JoyBelle', 'Ruze Pouches', 'Shala', 'Younique', 'Zeta']);
+  assert.equal(o.divider, true);
+  // Groups given out of order keep BRAND_GROUPS order; empty ones are dropped.
+  assert.deepEqual(selectorOptions(offered, [groups[1], { group: 'incubating', slugs: [] }]).groups.map((g) => g.group), ['established']);
+  // Groups absent, parent present: the divider as before.
+  assert.equal(selectorOptions(offered, []).divider, true);
+  // Groups present, parent absent: still a divider.
+  const noParent = offered.filter((b) => b.slug !== 'curated');
+  const np = selectorOptions(noParent, groups);
+  assert.equal(np.parent, null);
+  assert.equal(np.divider, true);
+  // Neither groups nor parent: no divider.
+  assert.equal(selectorOptions(noParent, []).divider, false);
+  // Nothing below: no divider, unless No brand is shown.
+  const onlyParent = offered.filter((b) => b.slug === 'curated');
+  assert.equal(selectorOptions(onlyParent, groups).divider, false);
+  assert.equal(selectorOptions(onlyParent, groups, true).divider, true);
+  assert.deepEqual(selectorOptions(undefined, undefined), {
+    groups: [], parent: null, rest: [], divider: false,
+  });
 });

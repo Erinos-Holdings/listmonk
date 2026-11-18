@@ -14,8 +14,15 @@
         <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D5) -- the roster the launch filter
              leaves offered; locked/hidden stay the full roster's (brandScope). -->
         <!-- 2026-11-02 (user): the parent brand first, then a grey divider, then the rest by display
-             name (brandScope.mjs::selectorBrands); No brand stays last. -->
-        <option v-if="options.parent" :value="`brand:${options.parent.slug}`">{{ options.parent.label }}</option>
+             name (brandScope.mjs::selectorOptions); No brand stays last. -->
+        <!-- Fork (brand groups, integrations BRAND-GROUPS-SPEC D7) -- the offered groups (whole or
+             absent, brandScope.mjs::offeredGroups), then the parent labelled "<name> (corp.)". -->
+        <option v-for="g in options.groups" :key="g.group" :value="`group:${g.group}`">
+          {{ $t(`brand.selector.${g.group}`) }}
+        </option>
+        <option v-if="options.parent" :value="`brand:${options.parent.slug}`">
+          {{ $t('brand.selector.parent', { name: options.parent.label }) }}
+        </option>
         <option v-if="divider" value="-" disabled class="brand-divider" aria-hidden="true">──────────</option>
         <option v-for="b in options.rest" :key="b.slug" :value="`brand:${b.slug}`">{{ b.label }}</option>
         <option v-if="showNone" value="none">{{ $t('brand.selector.none') }}</option>
@@ -27,25 +34,25 @@
 <script>
 import Vue from 'vue';
 import { mapGetters } from 'vuex';
-import { selectorBrands } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { selectorOptions } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   name: 'BrandSelector',
 
   computed: {
-    ...mapGetters(['brandScope', 'offeredRoster']),
-
-    options() {
-      return selectorBrands(this.offeredRoster.brands);
-    },
+    ...mapGetters(['brandScope', 'offeredRoster', 'brandGroups']),
 
     showNone() {
       return this.offeredRoster.none && !this.brandScope.locked;
     },
 
-    // The divider only between the parent and something below it.
+    // Fork (brand groups, BRAND-GROUPS-SPEC D7) -- groups, parent, rest and the divider rule.
+    options() {
+      return selectorOptions(this.offeredRoster.brands, this.brandGroups, this.showNone);
+    },
+
     divider() {
-      return !!this.options.parent && (this.options.rest.length > 0 || this.showNone);
+      return this.options.divider;
     },
 
     value() {
@@ -53,6 +60,9 @@ export default Vue.extend({
         return '';
       }
       const s = this.brandScope.selection;
+      if (s.kind === 'group') {
+        return `group:${s.group}`;
+      }
       return s.kind === 'brand' ? `brand:${s.slug}` : s.kind;
     },
   },
@@ -64,6 +74,9 @@ export default Vue.extend({
         selection = { kind: 'none' };
       } else if (typeof v === 'string' && v.startsWith('brand:')) {
         selection = { kind: 'brand', slug: v.slice('brand:'.length) };
+      } else if (typeof v === 'string' && v.startsWith('group:')) {
+        // No slugs: resolution adds them (BRAND-GROUPS-SPEC D7).
+        selection = { kind: 'group', group: v.slice('group:'.length) };
       }
       this.$store.commit('selectBrand', selection);
     },

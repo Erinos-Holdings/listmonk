@@ -79,4 +79,9 @@ test('polish 2026-11-16: official footers file under their NAME\'s brand; the co
   assert.deepEqual(f({ kind: 'none' }), []);
   // Other rows keep the brand column rule: the brandless show under every brand.
   assert.deepEqual(templateRows(F, { selection: { kind: 'brand', slug: 'bnkd' } }).map((t) => t.id), [15]);
+  // Fork (integrations BRAND-GROUPS-SPEC I7) -- a group: the members' footers (curated's corporate
+  // ones only when curated is a member -- it never is), the brandless Other rows kept.
+  const grp = { kind: 'group', group: 'incubating', slugs: ['bnkd', 'thirstygirl'] };
+  assert.deepEqual(f(grp), [13, 14]);
+  assert.deepEqual(templateRows(F, { selection: grp }).map((t) => t.id), [15]);
 });

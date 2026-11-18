@@ -4,10 +4,12 @@
 // `node --test src/brandScope.test.mjs` (yarn test:brand-scope).
 //
 // The selector is a PRESENTATION filter, never a security boundary (S1): nothing here is read by
-// the server. A scope reaches it only as the existing repeatable list_id (or tag=/nobrand= on the
+// the server. A scope reaches it only as the existing repeatable list_id (or tag=/nobrand=/brand= on the
 // Lists listing), which the server intersects with the user's permission per endpoint.
 //
 // selection: { kind: 'all' } | { kind: 'brand', slug } | { kind: 'none' }
+//   | { kind: 'group', group, slugs } (Fork (brand groups, integrations BRAND-GROUPS-SPEC D3) --
+//   stored without slugs; resolveSelection adds them, never empty)
 // lists: the lists store's rows ({ id, brand, ... }; GET /api/lists?minimal=true&status=active,
 //   already permission-filtered by the server). brand is the list's slug, '' when brandless.
 // brands: the GET /api/brands rows ({ slug, display_name, ... }), used for labels and order only.
@@ -81,6 +83,40 @@ export function selectorBrands(brands) {
   };
 }
 
+// Fork (brand groups, integrations BRAND-GROUPS-SPEC D1). The two group options of the selector.
+// ESTABLISHED_BRANDS is the ONE home of the established list (I11): a brand that becomes
+// established is a fork release, and adding it here moves it out of Incubating in the same change.
+// A group is never a permission and never read by the server (I12): it reaches the server only as
+// list_id (scopeListIds) and the Lists listing's brand parameter (listsScopeParams).
+export const ESTABLISHED_BRANDS = Object.freeze(['joybelle', 'shala', 'younique']);
+export const BRAND_GROUPS = Object.freeze(['incubating', 'established']);
+
+function slugsOf(roster) {
+  const brands = roster && Array.isArray(roster.brands) ? roster.brands : [];
+  return brands.filter((b) => b && typeof b.slug === 'string' && b.slug !== '').map((b) => b.slug);
+}
+
+// D7: the selector's options from the offered roster's brands and the offered groups
+// ([{ group, slugs }], offeredGroups) -- { groups, parent, rest, divider }. groups keeps
+// BRAND_GROUPS order and only groups with members; divider is true only when something besides All
+// brands is above it (a group or the parent) and something is below it (rest, or No brand shown).
+export function selectorOptions(offeredBrands, groups, showNone = false) {
+  const { parent, rest } = selectorBrands(offeredBrands);
+  const given = Array.isArray(groups) ? groups : [];
+  const out = BRAND_GROUPS
+    .map((g) => given.find((x) => x && x.group === g))
+    .filter((x) => x && Array.isArray(x.slugs) && x.slugs.length > 0);
+  return {
+    groups: out,
+    parent,
+    rest,
+    divider: (out.length > 0 || !!parent) && (rest.length > 0 || !!showNone),
+  };
+}
+
+// A selection valid as a SCOPE. Fork (brand groups, BRAND-GROUPS-SPEC D4) -- a group only with a
+// non-empty slugs array (the resolved shape); a stored group without slugs is no scope, so every
+// scope function treats it as All brands (scopeListIds null, never []).
 function isValidSelection(s) {
   if (!s || typeof s !== 'object') {
     return false;
@@ -88,7 +124,29 @@ function isValidSelection(s) {
   if (s.kind === 'all' || s.kind === 'none') {
     return true;
   }
+  if (s.kind === 'group') {
+    return BRAND_GROUPS.includes(s.group) && Array.isArray(s.slugs) && s.slugs.length > 0
+      && s.slugs.every((x) => typeof x === 'string' && x !== '');
+  }
   return s.kind === 'brand' && typeof s.slug === 'string' && s.slug !== '';
+}
+
+// Fork (brand groups, BRAND-GROUPS-SPEC D3) -- a STORED selection is valid when it is one of the
+// four kinds (a group only for a name in BRAND_GROUPS, slugs not required: resolution adds them).
+function isStoredSelection(s) {
+  if (s && typeof s === 'object' && s.kind === 'group') {
+    return BRAND_GROUPS.includes(s.group);
+  }
+  return isValidSelection(s);
+}
+
+// Fork (brand groups, BRAND-GROUPS-SPEC D6) -- the family rule's row test: is a brand slug in a
+// (scope-valid) brand or group selection? Used only after the all/none/invalid cases are handled.
+function inSelection(slug, selection) {
+  if (selection.kind === 'group') {
+    return selection.slugs.includes(slug);
+  }
+  return slug === selection.slug;
 }
 
 // D2 + D3 (listsLoaded): resolveSelection returns
@@ -101,7 +159,11 @@ function isValidSelection(s) {
 // filter leaves offered (applyLaunch). hidden and locked are decided by the FULL roster; a stored
 // brand is valid only when it is in the OFFERED roster, else all (S7, against the offered set).
 // Omitted, offered is the roster: today's behaviour exactly.
-export function resolveSelection(stored, roster, loaded = true, offered = roster) {
+// Fork (brand groups, BRAND-GROUPS-SPEC D3, I3) -- `groups` is the offered groups
+// ([{ group, slugs }], offeredGroups; [] when groups are unavailable). A stored group resolves to
+// { kind: 'group', group, slugs } -- slugs copied, never empty -- when that group is offered, else
+// to all (the pref is not rewritten). A locked or hidden selector resolves exactly as before.
+export function resolveSelection(stored, roster, loaded = true, offered = roster, groups = []) {
   if (!loaded) {
     return { pending: true };
   }
@@ -122,11 +184,16 @@ export function resolveSelection(stored, roster, loaded = true, offered = roster
   }
 
   let selection = ALL;
-  if (isValidSelection(stored)) {
+  if (isStoredSelection(stored)) {
+    const g = stored.kind === 'group'
+      ? (Array.isArray(groups) ? groups : []).find((x) => x && x.group === stored.group)
+      : null;
     if (stored.kind === 'brand' && offeredBrands.some((b) => b.slug === stored.slug)) {
       selection = { kind: 'brand', slug: stored.slug };
     } else if (stored.kind === 'none' && r.none) {
       selection = NONE;
+    } else if (g && Array.isArray(g.slugs) && g.slugs.length > 0) {
+      selection = { kind: 'group', group: stored.group, slugs: [...g.slugs] };
     }
   }
   return {
@@ -137,22 +204,30 @@ export function resolveSelection(stored, roster, loaded = true, offered = roster
 // D3: scopeListIds is null for all (send no parameter -- every screen behaves exactly as today),
 // else the ids of the permitted active lists whose brand equals the slug ('' for none). For a
 // resolved brand/none selection the set is never empty (D2 resolves an empty one to all).
+// Fork (brand groups, BRAND-GROUPS-SPEC D4, I5) -- a group: the lists whose brand is a member (a
+// brandless list never is); a group without slugs is no scope (null, never []).
 export function scopeListIds(lists, selection) {
   if (!selection || selection.kind === 'all' || !isValidSelection(selection)) {
     return null;
   }
-  const want = selection.kind === 'none' ? '' : selection.slug;
-  return storeLists(lists).filter((l) => brandOf(l) === want).map((l) => l.id);
+  if (selection.kind === 'none') {
+    return storeLists(lists).filter((l) => brandOf(l) === '').map((l) => l.id);
+  }
+  return storeLists(lists).filter((l) => brandOf(l) !== '' && inSelection(brandOf(l), selection)).map((l) => l.id);
 }
 
 // D6: the Lists listing's parameters for a selection -- tag=brand:<slug> for a brand, nobrand=true
-// for none, nothing for all.
+// for none, nothing for all. Fork (brand groups, BRAND-GROUPS-SPEC D5, I8) -- a group is
+// brand=<slug> per member (tag is AND-matched, so a group cannot use it).
 export function listsScopeParams(selection) {
   if (!selection || selection.kind === 'all' || !isValidSelection(selection)) {
     return {};
   }
   if (selection.kind === 'none') {
     return { nobrand: true };
+  }
+  if (selection.kind === 'group') {
+    return { brand: [...selection.slugs] };
   }
   return { tag: [`brand:${selection.slug}`] };
 }
@@ -264,6 +339,10 @@ export function campaignBrand(campaignLists, lists) {
 // notice text needs ({ record, selected }), or null: under all, when the record's brand equals the
 // selection, when the record has no brand under none, or when the record's brand cannot be
 // derived (recordBrand undefined). opts.noneLabel labels the brandless side.
+// Fork (brand groups, BRAND-GROUPS-SPEC D6) -- under a group: null for a record whose brand is a
+// member, else the notice with selected = the group's label (opts.groupLabels, English defaults).
+export const GROUP_LABELS = Object.freeze({ incubating: 'Incubating', established: 'Established' });
+
 export function contextNotice(recordBrand, selection, brands, opts = {}) {
   if (!selection || selection.kind === 'all' || !isValidSelection(selection)) {
     return null;
@@ -271,21 +350,29 @@ export function contextNotice(recordBrand, selection, brands, opts = {}) {
   if (recordBrand === undefined || recordBrand === null) {
     return null;
   }
+  const noneLabel = opts.noneLabel || 'No brand';
+  const label = (slug) => (slug === '' ? noneLabel : brandLabelOf(slug, brands));
+  if (selection.kind === 'group') {
+    if (recordBrand !== '' && selection.slugs.includes(recordBrand)) {
+      return null;
+    }
+    const labels = { ...GROUP_LABELS, ...(opts.groupLabels || {}) };
+    return { record: label(recordBrand), selected: labels[selection.group] || selection.group };
+  }
   const want = selection.kind === 'none' ? '' : selection.slug;
   if (recordBrand === want) {
     return null;
   }
-  const noneLabel = opts.noneLabel || 'No brand';
-  const label = (slug) => (slug === '' ? noneLabel : brandLabelOf(slug, brands));
   return { record: label(recordBrand), selected: label(want) };
 }
 
 // D11 + D12: the record brand the template form hands contextNotice. A brandless template is
 // every brand's (D12), so under a named brand it is in scope -- undefined, no notice. Under none
 // a branded template still gets its notice; under a brand a template of another brand does.
+// Fork (brand groups, BRAND-GROUPS-SPEC D6) -- under a group a brandless template is in scope too.
 export function templateNoticeBrand(templateBrand, selection) {
   const b = typeof templateBrand === 'string' ? templateBrand : '';
-  if (b === '' && selection && selection.kind === 'brand') {
+  if (b === '' && selection && (selection.kind === 'brand' || selection.kind === 'group')) {
     return undefined;
   }
   return b;
@@ -303,14 +390,17 @@ export function filterTemplates(templates, selection) {
   if (selection.kind === 'none') {
     return rows.filter((t) => tb(t) === '');
   }
-  return rows.filter((t) => tb(t) === '' || tb(t) === selection.slug);
+  // Fork (brand groups, BRAND-GROUPS-SPEC D6) -- a group: the brandless rows plus the members'.
+  return rows.filter((t) => tb(t) === '' || inSelection(tb(t), selection));
 }
 
 // Phase 2 (integrations GLOBAL-BRAND-PHASE2-SPEC D1, I2): the Media page's seed under a
 // selection -- a brand opens on its slug as one context chip (tag=<slug>); none opens on Untagged
 // (untagged=true; the brandless context is the untagged media); all opens on All, today's.
+// Fork (brand groups, BRAND-GROUPS-SPEC D6) -- a group opens on All: media tags are AND-matched,
+// so several brands cannot be one context.
 export function mediaScopeContext(selection) {
-  if (!selection || selection.kind === 'all' || !isValidSelection(selection)) {
+  if (!selection || selection.kind === 'all' || selection.kind === 'group' || !isValidSelection(selection)) {
     return { context: [], untagged: false };
   }
   if (selection.kind === 'none') {
@@ -340,17 +430,22 @@ export function presetNoticeBrand(previewList, lists) {
 
 // Phase 2 (D6, I6): the Brands health table under a selection -- a brand shows its own row only;
 // none and all show every row (a brand row is never brandless, so none has nothing to narrow to).
+// Fork (brand groups, BRAND-GROUPS-SPEC D6) -- a group shows its members' rows.
 export function filterBrandRows(rows, selection) {
   const r = Array.isArray(rows) ? rows : [];
-  if (!selection || selection.kind !== 'brand' || !isValidSelection(selection)) {
+  if (!selection || (selection.kind !== 'brand' && selection.kind !== 'group') || !isValidSelection(selection)) {
     return r;
   }
-  return r.filter((x) => x && x.brand === selection.slug);
+  return r.filter((x) => x && typeof x.brand === 'string' && inSelection(x.brand, selection));
 }
 
 // Fork (launch filter, integrations LAUNCH-FILTER-SPEC D1/D2). The navbar's All | Launched |
-// Unlaunched filter: a PRESENTATION filter on the selector's options and the two health tables,
-// never a scope (D7 -- no scope function here takes a launch value). docs are the
+// Unlaunched filter: a PRESENTATION filter on the selector's options and the two health tables;
+// the filter's VALUE is never a scope (D7 -- no scope function here takes a launch value). Fork
+// (brand groups, integrations BRAND-GROUPS-SPEC D1, amending LAUNCH-FILTER-SPEC D7/I6 for groups
+// only): launch STATE is -- the Incubating group's members are read from the health documents
+// through launchOf, and reach the server as list_id and the Lists brand parameter. The filter's
+// value only decides whether a group is offered, never what it contains. docs are the
 // GET /api/brands/health rows ({ brand, status, ... }).
 export const LAUNCH_VALUES = Object.freeze(['all', 'launched', 'unlaunched']);
 
@@ -362,8 +457,10 @@ export function normalizeLaunch(launch) {
 // D3 (amended 2026-10-28): whether the selection may resolve. The lists must have loaded and,
 // while the launch filter narrows, the health documents too -- before them every brand reads as
 // launched, so a stored brand outside that set would resolve to All brands for one fetch.
-export function selectionLoaded(listsLoaded, launch, healthLoaded) {
-  return !!listsLoaded && (normalizeLaunch(launch) === 'all' || !!healthLoaded);
+// Fork (brand groups, BRAND-GROUPS-SPEC D3, I4) -- groupWait (groupWaits) also holds the selection
+// for the health documents: a stored group's members are read from them.
+export function selectionLoaded(listsLoaded, launch, healthLoaded, groupWait = false) {
+  return !!listsLoaded && ((normalizeLaunch(launch) === 'all' && !groupWait) || !!healthLoaded);
 }
 
 // A page's brandKey watcher decision: { seen, changed } from the key it last fetched under
@@ -395,6 +492,53 @@ export function launchApplies(roster) {
 export function launchOf(slug, docs) {
   const doc = (Array.isArray(docs) ? docs : []).find((d) => d && d.brand === slug);
   return isUnlaunchedBrandDoc(doc) ? 'unlaunched' : 'launched';
+}
+
+// Fork (brand groups, integrations BRAND-GROUPS-SPEC D1, I1) -- a brand's group: the parent is in
+// none; an established brand is Established whatever its launch state; a launched other brand is
+// Incubating; an unlaunched other brand is in none (selectable one by one).
+export function groupOf(slug, docs) {
+  if (slug === PARENT_BRAND) {
+    return null;
+  }
+  if (ESTABLISHED_BRANDS.includes(slug)) {
+    return 'established';
+  }
+  return launchOf(slug, docs) === 'launched' ? 'incubating' : null;
+}
+
+// D1 (I2): a group's members -- the FULL roster's brands (so never a brand with no permitted
+// active list) whose group it is, sorted by slug (so equal sets give one brandKey, I6).
+export function groupMembers(group, roster, docs) {
+  if (!BRAND_GROUPS.includes(group)) {
+    return [];
+  }
+  return slugsOf(roster).filter((s) => groupOf(s, docs) === group).sort();
+}
+
+// D2: groups are available only for a brands:get user (canBrands), with the selector shown and
+// unlocked (the full roster), once the health documents have loaded (a failed read releases it).
+export function groupsAvailable(canBrands, roster, healthLoaded) {
+  return !!canBrands && launchApplies(roster) && !!healthLoaded;
+}
+
+// D1/D2: the offered groups, [{ group, slugs }] in BRAND_GROUPS order. A group is whole or absent:
+// offered only when available, its members non-empty and every member in the offered roster (the
+// launch filter's applyLaunch). The filter's value never changes a group's members.
+export function offeredGroups(roster, offered, docs, available) {
+  if (!available) {
+    return [];
+  }
+  const offeredSlugs = slugsOf(offered);
+  return BRAND_GROUPS
+    .map((group) => ({ group, slugs: groupMembers(group, roster, docs) }))
+    .filter((g) => g.slugs.length > 0 && g.slugs.every((s) => offeredSlugs.includes(s)));
+}
+
+// D3 (I4): a stored group waits for the health documents -- for a brands:get user with the selector
+// shown and unlocked only; a user without brands:get never waits (the group resolves to all).
+export function groupWaits(stored, canBrands, roster) {
+  return isStoredSelection(stored) && stored.kind === 'group' && !!canBrands && launchApplies(roster);
 }
 
 // D2: 'all' (and any unknown value) matches every brand.
@@ -444,8 +588,9 @@ export function canCreateCampaign(selection) {
 // nothing is preset (value null, locked false). Under a brand the slug, locked, on both forms.
 // Under none: the template form presets '' and locks; the list form stays enabled and required
 // as today (form 'list' -- a brandless list is never created by the form, buildListRequest throws).
+// Fork (brand groups, BRAND-GROUPS-SPEC D6) -- a group is several brands: as all.
 export function formBrandDefault(selection, form = 'template') {
-  if (!selection || selection.kind === 'all' || !isValidSelection(selection)) {
+  if (!selection || selection.kind === 'all' || selection.kind === 'group' || !isValidSelection(selection)) {
     return { value: null, locked: false };
   }
   if (selection.kind === 'none') {

@@ -7,7 +7,7 @@
 // The pure half; tested by filterBar.test.mjs.
 
 import { normalizeLang } from './naming.mjs'; // eslint-disable-line import/extensions
-import { brandLabelOf } from './brandScope.mjs'; // eslint-disable-line import/extensions
+import { GROUP_LABELS, brandLabelOf } from './brandScope.mjs'; // eslint-disable-line import/extensions
 
 export const CAPTION_SEPARATOR = ' · ';
 
@@ -56,16 +56,22 @@ export function subscriberCaptionLang(v, labels = {}, split = null, format = Str
 // applies: { brand, lang } -- whether that filter narrows this table (both default true);
 // langText: a page's OWN language filter, named by the page (Subscribers' route lang) -- used in
 // place of the global language when given; '' names no language.
+// Fork (brand groups, integrations BRAND-GROUPS-SPEC D6) -- a group selection ({ kind: 'group',
+// group, slugs }) is named by its label (groups: { incubating, established }, English defaults)
+// where a brand's name would be.
 export function filterCaption({
-  selection, lang, brands = [], noBrand = 'No brand', applies = {}, langText,
+  selection, lang, brands = [], noBrand = 'No brand', groups = {}, applies = {}, langText,
 } = {}) {
   const ap = { brand: true, lang: true, ...applies };
   const parts = [];
   const sel = selection || { kind: 'all' };
+  const groupLabels = { ...GROUP_LABELS, ...groups };
   if (ap.brand && sel.kind === 'brand' && sel.slug) {
     parts.push(brandLabelOf(sel.slug, brands));
   } else if (ap.brand && sel.kind === 'none') {
     parts.push(noBrand);
+  } else if (ap.brand && sel.kind === 'group' && Array.isArray(sel.slugs) && sel.slugs.length > 0 && groupLabels[sel.group]) {
+    parts.push(groupLabels[sel.group]);
   }
   if (typeof langText === 'string') {
     if (ap.lang && langText) parts.push(langText);

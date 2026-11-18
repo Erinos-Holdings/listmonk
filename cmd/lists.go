@@ -64,8 +64,14 @@ func (a *App) GetLists(c echo.Context) error {
 		// Fork (campaign lists, CAMPAIGN-LISTS-SPEC D7) -- hide_system=true drops the hidden system
 		// lists (the Lists page with "View system lists" off). Totals and pagination follow it.
 		hideSystem, _ = strconv.ParseBool(c.QueryParam("hide_system"))
+
+		// Fork (brand groups, integrations BRAND-GROUPS-SPEC D5) -- repeatable brand=<slug>: keep
+		// only the lists whose brand is one of them (the selector's group; tag is AND-matched and
+		// cannot express it). Blank values are dropped; none = no filter. Narrows, never widens,
+		// the permission scoping above.
+		brands = nonBlank(c.QueryParams()["brand"])
 	)
-	res, total, err := a.core.QueryLists(query, typ, optin, status, tags, orderBy, order, hasAllPerm, permittedIDs, noBrand, hideSystem, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryLists(query, typ, optin, status, tags, orderBy, order, hasAllPerm, permittedIDs, noBrand, brands, hideSystem, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}
@@ -80,6 +86,18 @@ func (a *App) GetLists(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// nonBlank returns the values with surrounding whitespace trimmed and blank ones dropped; never nil.
+// Fork (brand groups, integrations BRAND-GROUPS-SPEC D5) -- the brand=<slug> values.
+func nonBlank(vals []string) []string {
+	out := []string{}
+	for _, v := range vals {
+		if s := strings.TrimSpace(v); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // GetList retrieves a single list by id.

@@ -30,6 +30,8 @@ Vue.prototype.$filterCaption = function filterCaptionOf(opts = {}) {
     lang: this.$store.getters.langEffective,
     brands: this.$store.state.brandRows,
     noBrand: this.$t('brand.selector.none'),
+    // Fork (brand groups, integrations BRAND-GROUPS-SPEC D6).
+    groups: { incubating: this.$t('brand.selector.incubating'), established: this.$t('brand.selector.established') },
     applies,
     langText,
   });

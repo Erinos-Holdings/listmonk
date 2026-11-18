@@ -45,6 +45,16 @@ test('I11: chipsFor -- brand in capitals, language from attribs.lang or the lang
   assert.equal(langOf({ attribs: { lang: 'DE' } }), 'de');
 });
 
+// Fork (integrations BRAND-GROUPS-SPEC I7) -- under a group (several brands) the brand chip shows and
+// the list name stays whole, as under All brands -- even for a member's row.
+test('BRAND-GROUPS I7: chipsFor and listDisplayName under a group are as All brands', () => {
+  const G = { kind: 'group', group: 'incubating', slugs: ['ruze', 'thirstygirl'] };
+  const camp = { brand: 'thirstygirl', attribs: { lang: 'en' } };
+  assert.deepEqual(chipsFor(camp, { brandSelection: G, langSelection: 'all' }), { brand: 'THIRSTYGIRL', lang: 'EN' });
+  const brands = [{ slug: 'thirstygirl', display_name: 'Thirsty Girl' }];
+  assert.equal(listDisplayName({ name: 'THIRSTYGIRL No-purchase D2', brand: 'thirstygirl' }, G, brands), 'THIRSTYGIRL No-purchase D2');
+});
+
 test('campaignBrandOf: the row\'s own brand, else the one brand of its lists, else none', () => {
   const map = { 1: 'ruze', 2: 'ruze', 3: 'shala' };
   assert.equal(campaignBrandOf({ brand: 'bnkd', lists: [{ id: 3 }] }, map), 'bnkd');

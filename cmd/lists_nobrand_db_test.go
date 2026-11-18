@@ -37,6 +37,9 @@ func TestListsNoBrand(t *testing.T) {
 	acme := mk("acme", "{brand:acme,site:https://acme.example.test}")
 	acme2 := mk("acme two", "{brand:acme,other}")
 	beta := mk("beta", "{brand:beta}")
+	// Fork (brand groups, integrations BRAND-GROUPS-SPEC I9) -- a third brand, so brand=acme&brand=beta
+	// is shown to return both brands and nothing else.
+	gamma := mk("gamma", "{brand:gamma}")
 
 	get := func(u auth.User, q string) []int {
 		t.Helper()
@@ -74,19 +77,40 @@ func TestListsNoBrand(t *testing.T) {
 		q    string
 		want []int
 	}{
-		{"no filter", all, "", sortedInts(none, free, acme, acme2, beta)},
+		{"no filter", all, "", sortedInts(none, free, acme, acme2, beta, gamma)},
 		{"nobrand=true", all, "&nobrand=true", sortedInts(none, free)},
-		{"nobrand=false is no filter", all, "&nobrand=false", sortedInts(none, free, acme, acme2, beta)},
+		{"nobrand=false is no filter", all, "&nobrand=false", sortedInts(none, free, acme, acme2, beta, gamma)},
 		{"tag=brand:acme", all, "&tag=brand:acme", sortedInts(acme, acme2)},
 		{"tag=brand:beta", all, "&tag=brand:beta", []int{beta}},
 		{"tag=brand:ac is exact, not a prefix", all, "&tag=brand:ac", []int{}},
 		// Both compose with the permission scoping and never widen it.
 		{"per-list user, nobrand", baUser(nil, free, acme), "&nobrand=true", []int{free}},
 		{"per-list user, tag=brand:beta", baUser(nil, free, acme), "&tag=brand:beta", []int{}},
+		// Fork (brand groups, BRAND-GROUPS-SPEC D5, I9) -- brand=<slug>, repeatable: the union of the
+		// named brands' lists, compared by equality; blank values dropped; ANDed with nobrand and
+		// with the permission scoping (narrows, never widens).
+		{"brand=acme&brand=beta", all, "&brand=acme&brand=beta", sortedInts(acme, acme2, beta)},
+		{"brand=gamma", all, "&brand=gamma", []int{gamma}},
+		{"brand=ac is exact, not a prefix", all, "&brand=ac", []int{}},
+		{"brand= (blank) is no filter", all, "&brand=", sortedInts(none, free, acme, acme2, beta, gamma)},
+		{"brand=acme&brand= drops the blank", all, "&brand=acme&brand=", sortedInts(acme, acme2)},
+		{"brand=acme&nobrand=true is empty", all, "&brand=acme&nobrand=true", []int{}},
+		{"per-list user, brand=acme&brand=beta", baUser(nil, free, acme), "&brand=acme&brand=beta", []int{acme}},
+		{"per-list user, brand=beta", baUser(nil, free, acme), "&brand=beta", []int{}},
 	}
 	for _, tc := range cases {
 		if got := get(tc.u, tc.q); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: ids %v, want %v", tc.name, got, tc.want)
 		}
+	}
+
+	// I9 -- the single-list read binds query-lists positionally too (GetList binds an empty brand
+	// array): it still returns the list by id.
+	l, err := h.app.core.GetList(acme, "")
+	if err != nil {
+		t.Fatalf("GetList %d: %v", acme, err)
+	}
+	if l.ID != acme {
+		t.Errorf("GetList: id %d, want %d", l.ID, acme)
 	}
 }

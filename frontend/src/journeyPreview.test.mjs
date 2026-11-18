@@ -126,4 +126,6 @@ test('helpers: listBrandOf, pickBrand, frameScale, usageTarget', () => {
   assert.deepEqual(usageTarget({ kind: 'brand', slug: 'ruze' }), { name: 'journeyPreview', query: { brand: 'ruze' } });
   assert.deepEqual(usageTarget({ kind: 'all' }), { name: 'journeyPreview' });
   assert.deepEqual(usageTarget({ kind: 'none' }), { name: 'journeyPreview' });
+  // Fork (integrations BRAND-GROUPS-SPEC I7) -- a group is several brands: no brand.
+  assert.deepEqual(usageTarget({ kind: 'group', group: 'incubating', slugs: ['ruze'] }), { name: 'journeyPreview' });
 });

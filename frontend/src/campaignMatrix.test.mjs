@@ -186,6 +186,8 @@ test('MATRIX-POLISH I8: the Brand column is hidden only under a single-brand sel
   assert.equal(showBrandColumn({ kind: 'none' }), true);
   assert.equal(showBrandColumn(null), true);
   assert.equal(showBrandColumn({ kind: 'brand', slug: 'ruze' }), false);
+  // Fork (integrations BRAND-GROUPS-SPEC I7) -- a group is several brands: the column shows.
+  assert.equal(showBrandColumn({ kind: 'group', group: 'established', slugs: ['joybelle', 'shala'] }), true);
 });
 
 test('MATRIX-POLISH I8 (widened 2026-11-06): the name shows 60 characters then …, the stored name in the title', () => {

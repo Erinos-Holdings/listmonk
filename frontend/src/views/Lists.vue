@@ -610,6 +610,7 @@ export default Vue.extend({
         order: this.queryParams.order,
         status: this.queryParams.status,
         // Fork (global brand, D6) -- tag=brand:<slug> / nobrand=true; nothing under All brands.
+        // Fork (brand groups, integrations BRAND-GROUPS-SPEC D5) -- brand=<slug> per member for a group.
         ...listsScopeParams(this.brandSelection),
         // Fork (campaign lists, D7) -- hide_system=true while "View system lists" is off.
         ...systemListsParams(this.showSystem),

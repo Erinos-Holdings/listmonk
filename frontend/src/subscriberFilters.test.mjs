@@ -135,6 +135,14 @@ test('list options', () => {
     enabled: false, ordinary: [], system: [], extra: null,
   });
   assert.equal(listOptions(LISTS, undefined, null).enabled, false);
+  // Fork (integrations BRAND-GROUPS-SPEC I7) -- a group is scoped: enabled, the members' lists.
+  const g = listOptions(LISTS, { kind: 'group', group: 'incubating', slugs: ['ruze', 'shala'] }, null);
+  assert.equal(g.enabled, true);
+  assert.deepEqual(ids(g.ordinary), [2, 5, 1]);
+  assert.deepEqual(ids(g.system), [4, 3]);
+  assert.equal(listOptions(LISTS, { kind: 'group', group: 'incubating', slugs: ['ruze', 'shala'] }, 6).extra.id, 6);
+  // The stored shape (no slugs) is no scope: as All brands.
+  assert.equal(listOptions(LISTS, { kind: 'group', group: 'incubating' }, null).enabled, false);
   // All brands, a route list: enabled with exactly that list (All lists is the template's own).
   assert.deepEqual(listOptions(LISTS, { kind: 'all' }, 5), {
     enabled: true, ordinary: [], system: [], extra: { id: 5, name: 'Shala' },

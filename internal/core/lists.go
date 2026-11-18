@@ -41,18 +41,23 @@ func (c *Core) GetLists(typ, status string, getAll bool, permittedIDs []int) ([]
 // results, the total number of lists in the DB is returned. Fork (global brand, GLOBAL-BRAND-SPEC
 // D6) -- noBrand keeps only the lists with no brand tag. Fork (campaign lists, CAMPAIGN-LISTS-SPEC
 // D7) -- hideSystem drops the hidden system lists (the SQL twin of cmd isHiddenSystemList).
-func (c *Core) QueryLists(searchStr, typ, optin, status string, tags []string, orderBy, order string, getAll bool, permittedIDs []int, noBrand, hideSystem bool, offset, limit int) ([]models.List, int, error) {
+// Fork (brand groups, integrations BRAND-GROUPS-SPEC D5) -- brands: keep only the lists whose
+// brand (list_brand_tag) equals one of them; empty = no filter. ANDed with the permission scoping.
+func (c *Core) QueryLists(searchStr, typ, optin, status string, tags []string, orderBy, order string, getAll bool, permittedIDs []int, noBrand bool, brands []string, hideSystem bool, offset, limit int) ([]models.List, int, error) {
 	_ = c.refreshCache(matListSubStats, false)
 
 	if tags == nil {
 		tags = []string{}
+	}
+	if brands == nil {
+		brands = []string{}
 	}
 
 	var (
 		out            = []models.List{}
 		queryStr, stmt = makeSearchQuery(searchStr, orderBy, order, c.q.QueryLists, listQuerySortFields)
 	)
-	if err := c.db.Select(&out, stmt, 0, "", queryStr, typ, optin, status, pq.StringArray(tags), getAll, pq.Array(permittedIDs), offset, limit, noBrand, hideSystem); err != nil {
+	if err := c.db.Select(&out, stmt, 0, "", queryStr, typ, optin, status, pq.StringArray(tags), getAll, pq.Array(permittedIDs), offset, limit, noBrand, hideSystem, pq.StringArray(brands)); err != nil {
 		c.log.Printf("error fetching lists: %v", err)
 		return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))
@@ -82,9 +87,10 @@ func (c *Core) GetList(id int, uuid string) (models.List, error) {
 
 	var res []models.List
 	queryStr, stmt := makeSearchQuery("", "", "", c.q.QueryLists, nil)
-	// The last bind is hide_system, always false here (CAMPAIGN-LISTS-SPEC D7) -- a hidden list is
-	// always readable by id.
-	if err := c.db.Select(&res, stmt, id, uu, queryStr, "", "", "", pq.StringArray{}, true, nil, 0, 1, false, false); err != nil {
+	// The hide_system bind is always false here (CAMPAIGN-LISTS-SPEC D7) -- a hidden list is
+	// always readable by id. Fork (brand groups, integrations BRAND-GROUPS-SPEC D5) -- the last
+	// bind is the brand filter ($14), always empty here (no filter).
+	if err := c.db.Select(&res, stmt, id, uu, queryStr, "", "", "", pq.StringArray{}, true, nil, 0, 1, false, false, pq.StringArray{}); err != nil {
 		c.log.Printf("error fetching lists: %v", err)
 		return models.List{}, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.lists}", "error", pqErrMsg(err)))

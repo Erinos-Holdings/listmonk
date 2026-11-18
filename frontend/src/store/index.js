@@ -3,7 +3,8 @@ import Vuex from 'vuex';
 import { models } from '../constants';
 import Utils from '../utils';
 import {
-  ALL, applyLaunch, launchApplies, normalizeLaunch, resolveSelection, rosterFrom, scopeListIds, selectionLoaded,
+  ALL, applyLaunch, groupWaits, groupsAvailable, launchApplies, normalizeLaunch, offeredGroups, resolveSelection,
+  rosterFrom, scopeListIds, selectionLoaded,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
   LANG_PREF, effectiveLang, normalizeLang, subscribersLang,
@@ -15,6 +16,14 @@ Vue.use(Vuex);
 // `brand.global` and here, never in the URL. The pref's ONE writer is the selectBrand mutation
 // (I9), which only the BrandSelector calls.
 const prefs = new Utils();
+
+// Whether the user holds brands:get (the health documents are fetched only then). A call, not a
+// getter: $can is no reactive state (set on the prototype before the app mounts, main.js), so a
+// cached getter could keep a value read before it was set. Fork (brand groups, integrations
+// BRAND-GROUPS-SPEC D2) -- shared by the launch value and the group rules.
+function canBrands() {
+  return typeof Vue.prototype.$can === 'function' && Vue.prototype.$can('brands:get');
+}
 
 export default new Vuex.Store({
   state: {
@@ -172,18 +181,31 @@ export default new Vuex.Store({
     // The launch value is 'all' wherever the control is not on screen (D4: the selector hidden or
     // locked, or no brands:get -- no documents, every brand launched), so a stored value can never
     // narrow anything invisibly. $can is set on the prototype before the app mounts (main.js).
-    launch: (state, getters) => {
-      const can = typeof Vue.prototype.$can === 'function' && Vue.prototype.$can('brands:get');
-      return can && launchApplies(getters.brandRoster) ? normalizeLaunch(state.launchStored) : 'all';
-    },
+    launch: (state, getters) => (canBrands() && launchApplies(getters.brandRoster)
+      ? normalizeLaunch(state.launchStored) : 'all'),
     brandHealth: (state) => state.brandHealth,
     offeredRoster: (state, getters) => applyLaunch(getters.brandRoster, getters.launch, state.brandHealth),
-    // Pending also while a narrowing launch filter waits for the health documents (brandHealthLoaded).
+    // Fork (brand groups, BRAND-GROUPS-SPEC D1/D2) -- the offered groups ([{ group, slugs }]; [] when
+    // unavailable). The selector renders them; brandScope resolves a stored group against them.
+    brandGroups: (state, getters) => offeredGroups(
+      getters.brandRoster,
+      getters.offeredRoster,
+      state.brandHealth,
+      groupsAvailable(canBrands(), getters.brandRoster, state.brandHealthLoaded),
+    ),
+    // Pending also while a narrowing launch filter waits for the health documents (brandHealthLoaded),
+    // and while a stored group does (BRAND-GROUPS-SPEC D3, groupWaits).
     brandScope: (state, getters) => resolveSelection(
       state.brandStored,
       getters.brandRoster,
-      selectionLoaded(state.listsLoaded, getters.launch, state.brandHealthLoaded),
+      selectionLoaded(
+        state.listsLoaded,
+        getters.launch,
+        state.brandHealthLoaded,
+        groupWaits(state.brandStored, canBrands(), getters.brandRoster),
+      ),
       getters.offeredRoster,
+      getters.brandGroups,
     ),
 
     // The resolved selection (All brands while pending) and its effective list set (D3): null =

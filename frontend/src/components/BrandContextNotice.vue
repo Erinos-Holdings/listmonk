@@ -31,7 +31,11 @@ export default Vue.extend({
       if (this.brandScope.pending) {
         return null;
       }
-      const opts = { noneLabel: this.$t('brand.selector.none') };
+      // Fork (brand groups, BRAND-GROUPS-SPEC D6) -- the group labels name a group selection.
+      const opts = {
+        noneLabel: this.$t('brand.selector.none'),
+        groupLabels: { incubating: this.$t('brand.selector.incubating'), established: this.$t('brand.selector.established') },
+      };
       return contextNotice(this.recordBrand, this.brandSelection, this.brandRows, opts);
     },
   },
