@@ -148,7 +148,7 @@
     "brand.selector.incubating": "Incubating",
     "brand.selector.label": "Brand",
     "brand.selector.none": "No brand",
-    "brand.selector.parent": "{name} (corp.)",
+    "brand.selector.parent": "{name} (cust.)",
     "brands.actions": "Recommended actions",
     "brands.asOf": "as of {date}",
     "brands.asOfCol": "As of",

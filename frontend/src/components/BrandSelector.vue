@@ -16,7 +16,7 @@
         <!-- 2026-11-02 (user): the parent brand first, then a grey divider, then the rest by display
              name (brandScope.mjs::selectorOptions); No brand stays last. -->
         <!-- Fork (brand groups, integrations BRAND-GROUPS-SPEC D7) -- the offered groups (whole or
-             absent, brandScope.mjs::offeredGroups), then the parent labelled "<name> (corp.)". -->
+             absent, brandScope.mjs::offeredGroups), then the parent labelled "<name> (cust.)". -->
         <option v-for="g in options.groups" :key="g.group" :value="`group:${g.group}`">
           {{ $t(`brand.selector.${g.group}`) }}
         </option>

@@ -18,8 +18,9 @@
           <!-- 2026-11-02 (user): the parent brand's band, above the header and out of the sort --
                the Loyalty Rewards block (this month and next, per language: EN over SKU, FR..IT over
                their Skipped columns; brandUsage.mjs::loyaltyLayout), the parent's row (the same
-               BrandUsageRow as the body), then a gap. Shown on every brand selection the user's
-               lists permit (fetchParent). Placeholder red 0s until the Loyalty journeys exist. -->
+               BrandUsageRow as the body), then a gap. 2026-11-19 (user): shown only under All
+               brands and with the parent itself selected -- never under a group, another brand or
+               No brand. Placeholder red 0s until the Loyalty journeys exist. -->
           <template v-if="parentRow">
             <template v-if="loyalty">
               <tr class="bu-lr" data-cy="usage-loyalty">
@@ -297,7 +298,7 @@ import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import
 import {
   GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, circleName, clickSort, columnMeta, computedAtText, guideColumnsFit, headerLayout, hoverText, linePad, pageWidth,
   loadState, saveState, seriesGuide, shapeRows, sortRows,
-  LOYALTY_PLACEHOLDER, brandListIds, loyaltyLayout, loyaltyMonths, loyaltyShift, splitParent,
+  LOYALTY_PLACEHOLDER, loyaltyLayout, loyaltyMonths, loyaltyShift, splitParent,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PARENT_BRAND } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import BrandUsageRow from './BrandUsageRow.vue';
@@ -319,9 +320,6 @@ export default Vue.extend({
   data() {
     return {
       apiRows: [],
-      // 2026-11-02 (user): the parent brand's API row when the selection scopes it out of apiRows
-      // (fetchParent); null otherwise.
-      parentApiRow: null,
       // The Loyalty block's measured shifts (alignLoyalty): EN one step left of FR, the title's
       // right edge on the IT circle's.
       enShiftPx: 0,
@@ -365,10 +363,11 @@ export default Vue.extend({
       return sortRows(splitParent(rows).rest, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en');
     },
 
-    // The parent brand's row on every selection, whatever the launch filter: from apiRows when the
-    // selection includes it, else the separate fetch. null when the user's lists hold none of it.
+    // The parent brand's row, whatever the launch filter -- only under All brands or with the parent
+    // selected (2026-11-19, user), where apiRows carries it. null when the user's lists hold none of it.
     parentRow() {
-      const source = this.apiRows.find((r) => r && r.brand === PARENT_BRAND) || this.parentApiRow;
+      const source = (this.brandSelection.kind === 'all' || this.parentSelected)
+        ? this.apiRows.find((r) => r && r.brand === PARENT_BRAND) : null;
       if (!source) {
         return null;
       }
@@ -490,24 +489,6 @@ export default Vue.extend({
         this.apiRows = (data && Array.isArray(data.rows)) ? data.rows : [];
       }).finally(() => {
         this.loading = false;
-      });
-      this.fetchParent();
-    },
-
-    // 2026-11-02 (user): the parent brand's row when the selection scopes it out -- the same
-    // endpoint narrowed to the parent's lists in the user's (permission-filtered) lists store; none
-    // there, no band. Under All brands, or with the parent selected, apiRows carries it.
-    fetchParent() {
-      const ids = brandListIds(this.$store.state.lists, PARENT_BRAND);
-      if (!this.scopeListIds || this.parentSelected || !ids.length) {
-        this.parentApiRow = null;
-        return;
-      }
-      this.$api.getDashboardBrandMatrix({ list_id: ids }).then((data) => {
-        const rows = (data && Array.isArray(data.rows)) ? data.rows : [];
-        this.parentApiRow = rows.find((r) => r && r.brand === PARENT_BRAND) || null;
-      }).catch(() => {
-        this.parentApiRow = null;
       });
     },
 
