@@ -78,9 +78,10 @@ func BodyActionsFailure(text string) BodyActionReport {
 //     in it, unless it is the literal form below in a visual body), else `engine` (a field
 //     chain names the compiled template: Tpl, SubjectTpl, PreheaderTpl, AltBodyTpl,
 //     HeaderTpls, CompileTemplate), else `string` (a string literal whose quoted source holds
-//     `}}` or `<` — it is longer than the stored `{{ … }}` or hides markup — except an
-//     interpreted string that is TrackLink's first argument, where the href wraps put a
-//     personalised link's expression), else nothing (a plain value); if/range/with are
+//     `}}` or `<` — it is longer than the stored `{{ … }}` or hides markup; an interpreted string
+//     that is TrackLink's first argument, where the href wraps put a personalised link's
+//     expression, is exempt from the `}}` test only, never from `<`), else nothing (a plain
+//     value); if/range/with are
 //     reported with their keyword and pipeline (and their pipeline also tested for `engine`,
 //     then `string`), template, comment, break and continue by kind; any other node is
 //     `node` (fail closed on a Go release that adds one).
@@ -94,7 +95,8 @@ func BodyActionsFailure(text string) BodyActionReport {
 // reads it, so there it is `safe`.
 //
 // A body that is only `{{define "content"}}…{{end}}` in white space is not reported: Go lets
-// that define supply the root tree, so the markup sent is the markup stored in place.
+// that define supply the root tree, so the markup sent is the markup stored in place. A comment
+// beside such a define (the top-level tree may hold text and comments) is walked and reported.
 func BodyActions(body, contentType string, f template.FuncMap) (rep BodyActionReport) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -123,7 +125,7 @@ func BodyActions(body, contentType string, f template.FuncMap) (rep BodyActionRe
 	}
 
 	// 4. Agreement check.
-	set, err := parseBodyActionText(text, parse.SkipFuncCheck)
+	set, _, err := parseBodyActionText(text, parse.SkipFuncCheck)
 	if err != nil {
 		return BodyActionsFailure(err.Error())
 	}
@@ -138,7 +140,7 @@ func BodyActions(body, contentType string, f template.FuncMap) (rep BodyActionRe
 	}
 
 	// 5. The walk, comments kept.
-	set, err = parseBodyActionText(text, parse.SkipFuncCheck|parse.ParseComments)
+	set, top, err := parseBodyActionText(text, parse.SkipFuncCheck|parse.ParseComments)
 	if err != nil {
 		return BodyActionsFailure(err.Error())
 	}
@@ -153,6 +155,12 @@ func BodyActions(body, contentType string, f template.FuncMap) (rep BodyActionRe
 	for _, name := range names {
 		w.add("define", name)
 	}
+	// Stage 4 V3: when a {{define "content"}} supplies the root, the top-level tree Parse returned is
+	// not walked as `content` — it can hold only text and comments (Go reads such a tree as empty),
+	// and a comment there can swallow markup. Walk it too.
+	if top != nil && top.Root != nil && (set[ContentTpl] == nil || top.Root != set[ContentTpl].Root) {
+		w.walk(top.Root)
+	}
 	if t := set[ContentTpl]; t != nil && t.Root != nil {
 		w.walk(t.Root)
 	}
@@ -166,14 +174,15 @@ func BodyActions(body, contentType string, f template.FuncMap) (rep BodyActionRe
 
 // parseBodyActionText parses text as the compile does (default delimiters, a fresh tree set,
 // no functions — SkipFuncCheck) and returns the tree set.
-func parseBodyActionText(text string, mode parse.Mode) (map[string]*parse.Tree, error) {
+func parseBodyActionText(text string, mode parse.Mode) (map[string]*parse.Tree, *parse.Tree, error) {
 	set := map[string]*parse.Tree{}
 	t := parse.New(ContentTpl)
 	t.Mode = mode
-	if _, err := t.Parse(text, "", "", set); err != nil {
-		return nil, err
+	top, err := t.Parse(text, "", "", set)
+	if err != nil {
+		return nil, nil, err
 	}
-	return set, nil
+	return set, top, nil
 }
 
 func printedRoot(t *parse.Tree) string {
@@ -387,13 +396,11 @@ func pipeHasEngine(p *parse.PipeNode) bool {
 }
 
 // pipeHasString is rule 4: a string literal anywhere in the pipeline whose quoted source holds
-// `}}` or `<`, other than skip (the visual literal form's own string) and the interpreted-string
-// first argument of a command whose first word is the identifier TrackLink.
+// `}}` or `<`, other than skip (the visual literal form's own string). The interpreted-string first
+// argument of a command whose first word is the identifier TrackLink is exempt from the `}}` test
+// only: it is `string` when it holds `<` (Stage 4 V2).
 func pipeHasString(p *parse.PipeNode, skip *parse.StringNode) bool {
 	exempt := map[*parse.StringNode]bool{}
-	if skip != nil {
-		exempt[skip] = true
-	}
 	var collect func(parse.Node)
 	collectPipe := func(p *parse.PipeNode) {
 		for _, c := range p.Cmds {
@@ -425,8 +432,13 @@ func pipeHasString(p *parse.PipeNode, skip *parse.StringNode) bool {
 	collectPipe(p)
 	return pipeHas(p, func(n parse.Node) bool {
 		s, ok := n.(*parse.StringNode)
-		if !ok || exempt[s] {
+		if !ok || s == skip {
 			return false
+		}
+		// Stage 4 V2: TrackLink's exemption covers `}}` only (the wrapped expression's own braces);
+		// such a string holding `<` still hides markup — the wraps never need one.
+		if exempt[s] {
+			return strings.Contains(s.Quoted, "<")
 		}
 		return strings.Contains(s.Quoted, "}}") || strings.Contains(s.Quoted, "<")
 	})

@@ -147,6 +147,15 @@ func bodyActionRows() []bodyActionRow {
 		{"range int", v, `<p>{{ range 3 }}x{{ end }}</p>`, []string{"range"}, ""},
 		// R7: a body that is only {{define "content"}} — pinned, so the stated gap is deliberate.
 		{"define content only", v, "\n{{define \"content\"}}<b>x</b>{{end}}\n", nil, ""},
+		// Stage 4 V2: TrackLink's exemption covers `}}` only — a first-argument string with `<` is `string`.
+		{"tracklink swallows markup", v, `<p>{{ TrackLink "}}<table><tr><td>x</td></tr></table>{{" . }}</p>`, []string{"string"}, ""},
+		{"nested tracklink markup", v, `<p>{{ print (TrackLink "<b>}}" .) }}</p>`, []string{"string"}, ""},
+		{"static href wrap", v, `<a href="https://a.example/?a=1&amp;b=2">x</a>`, nil, ""},
+		// Stage 4 V3: a comment beside a {{define "content"}} (the top-level tree) is walked.
+		{"comment beside define content", CampaignContentTypeHTML, `{{define "content"}}<p>a</p>{{end}}{{/* }}<table><tr><td>BIG</td></tr></table>{{ */}}`, []string{"comment"}, ""},
+		// Stage 4 V7(a): Safe and strings under a chain.
+		{"safe under chain", v, `<p>{{ (Safe "x").Y }}</p>`, []string{"safe"}, ""},
+		{"string under chain", v, `<p>{{ (print "<b>").Y }}</p>`, []string{"string"}, ""},
 	}
 }
 

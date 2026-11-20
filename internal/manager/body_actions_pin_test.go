@@ -37,20 +37,36 @@ func pinManager() *Manager {
 	return m
 }
 
+// htmlContentTypes are html/template's seven content types (printed unescaped).
+var htmlContentTypes = map[reflect.Type]bool{
+	reflect.TypeOf(template.HTML("")):     true,
+	reflect.TypeOf(template.HTMLAttr("")): true,
+	reflect.TypeOf(template.JS("")):       true,
+	reflect.TypeOf(template.JSStr("")):    true,
+	reflect.TypeOf(template.CSS("")):      true,
+	reflect.TypeOf(template.URL("")):      true,
+	reflect.TypeOf(template.Srcset("")):   true,
+}
+
+// TestBodyActionsPlainPinType -- Stage 4 V7(b): a field typed as a content type (or a slice of one)
+// is not plain, so a new such field on the data fails the data pin until it is listed.
+func TestBodyActionsPlainPinType(t *testing.T) {
+	for ct := range htmlContentTypes {
+		if plainPinType(ct) || plainPinType(reflect.SliceOf(ct)) {
+			t.Errorf("%s reads as plain", ct)
+		}
+	}
+	if !plainPinType(reflect.TypeOf("")) {
+		t.Error("string reads as not plain")
+	}
+}
+
 func TestBodyActionsRawMarkupFunctions(t *testing.T) {
 	m := pinManager()
 	camp := models.Campaign{}
 	funcs := m.TemplateFuncs(&camp)
 
-	content := map[reflect.Type]bool{
-		reflect.TypeOf(template.HTML("")):     true,
-		reflect.TypeOf(template.HTMLAttr("")): true,
-		reflect.TypeOf(template.JS("")):       true,
-		reflect.TypeOf(template.JSStr("")):    true,
-		reflect.TypeOf(template.CSS("")):      true,
-		reflect.TypeOf(template.URL("")):      true,
-		reflect.TypeOf(template.Srcset("")):   true,
-	}
+	content := htmlContentTypes
 	var raw []string
 	for name, fn := range funcs {
 		ft := reflect.TypeOf(fn)
@@ -105,7 +121,11 @@ var bodyActionsDataPin = map[string]string{
 // plainPinType is a field type a template reads as a value (no method or field below it that
 // reaches the engine): scalars, strings, times, null.*, the JSON maps, Headers, and slices of
 // those.
+// Stage 4 V7(b): the seven html/template content types are strings that print UNESCAPED — never plain.
 func plainPinType(t reflect.Type) bool {
+	if htmlContentTypes[t] {
+		return false
+	}
 	switch t {
 	case reflect.TypeOf(time.Time{}), reflect.TypeOf(models.JSON{}), reflect.TypeOf(models.StringIntMap{}),
 		reflect.TypeOf(models.Headers{}), reflect.TypeOf(json.RawMessage{}):
