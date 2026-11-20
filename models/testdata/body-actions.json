@@ -1,0 +1,96 @@
+{
+  "about": "SAFE-ACTION-BODY-SPEC I6: the wire shape of models.BodyActions (POST /api/campaigns/actions), one fixture on both sides. Read by the fork's models/body_actions_test.go (with that file's stub function map plus sprig) and, as the byte-identical copy tests/fixtures/campaign-review/body-actions.json, by the integrations repo's tests/lib/campaign-review/body-actions.test.ts. Change both copies together.",
+  "cases": [
+    {
+      "name": "plain value",
+      "content_type": "visual",
+      "body": "<p>Hi {{ .Subscriber.FirstName }}</p>",
+      "report": {
+        "v": 1,
+        "total": 0,
+        "digest": "",
+        "actions": []
+      }
+    },
+    {
+      "name": "safe pipeline",
+      "content_type": "visual",
+      "body": "<p>A {{ print \"<div>BIG</div>\" | Safe }} z</p>",
+      "report": {
+        "v": 1,
+        "total": 1,
+        "digest": "c0f7d603d9b739e6486221eac4a13a044df94c7725ec28fc1d3ce5fefc7c63e6",
+        "actions": [
+          {
+            "kind": "safe",
+            "text": "{{print \"<div>BIG</div>\" | Safe}}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "condition",
+      "content_type": "visual",
+      "body": "<p>Open {{ if false }} one</p><p>Close {{ end }} three</p>",
+      "report": {
+        "v": 1,
+        "total": 1,
+        "digest": "702b82603199fc8e152b603b16a896240624c4f34b6ab9856eff2e4624f8203a",
+        "actions": [
+          {
+            "kind": "if",
+            "text": "{{if false}}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "F1 button url",
+      "content_type": "visual",
+      "body": "<span data-lm-vml-href=\"https://a.example/&amp;quot; . | or (printf &amp;quot;--%c%cdiv style=font-size:80px;width:2000px%cBIG%c/div%c%c!--&amp;quot; 62 60 62 60 62 60 | Safe) &amp;quot;\"></span>",
+      "report": {
+        "v": 1,
+        "total": 1,
+        "digest": "a9787f8a4d4e9ec42008e06f5669a5a59ad45073d22eaae0cdf4f660f258318f",
+        "actions": [
+          {
+            "kind": "safe",
+            "text": "{{TrackLink \"https://a.example/\" . | or (printf \"--%c%cdiv style=font-size:80px;width:2000px%cBIG%c/div%c%c!--\" 62 60 62 60 62 60 | Safe) \"\" .}}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "compile-error",
+      "content_type": "html",
+      "body": "<p>{{ NoSuchFunc }}</p>",
+      "report": {
+        "v": 1,
+        "total": 1,
+        "digest": "6822049fa40774af9d0cca7f96ceeb0ae05401a56d52e4b3f205004b18944d43",
+        "actions": [
+          {
+            "kind": "compile-error",
+            "text": "error compiling message: template: content:1: function \"NoSuchFunc\" not defined"
+          }
+        ]
+      }
+    },
+    {
+      "name": "literal safe in html",
+      "content_type": "html",
+      "body": "<p>{{ Safe \"x\" }}</p>",
+      "report": {
+        "v": 1,
+        "total": 1,
+        "digest": "9e2ddbd004461381162dae357fe0e006b3d13b63855e7820df1f9afcf33cc44b",
+        "actions": [
+          {
+            "kind": "safe",
+            "text": "{{Safe \"x\"}}"
+          }
+        ]
+      }
+    }
+  ]
+}

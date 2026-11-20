@@ -209,6 +209,7 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// INSPECT-SCOPE-SPEC §2.4: recording an inspection is structure-admin only.
 		g.PUT("/api/campaigns/structure-verifications", pm(a.PutStructureVerification, "campaigns:review_structure"))
 		g.GET("/api/campaigns/render-canary", pm(a.GetRenderCanary, "campaigns:review"))
+		g.POST("/api/campaigns/actions", pm(a.PostCampaignActions, "campaigns:get_all", "campaigns:get")) // Fork (SAFE-ACTION-BODY-SPEC D2): report-only, GET /api/campaigns/:id's permissions.
 		g.GET("/api/campaigns/structure-verifications/:fingerprint", pm(a.GetStructureVerification, "campaigns:get_all", "campaigns:get"))
 		g.POST("/api/campaigns/:id/reviews", pm(hasID(a.StartCampaignReview), "campaigns:manage_all", "campaigns:manage"))
 		// integrations ALT-AUTOGEN-SPEC D2: the alt generation Inspect runs before the inspection.
