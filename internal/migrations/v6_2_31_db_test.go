@@ -59,6 +59,10 @@ func TestSmartSendingMigration_V6_2_31(t *testing.T) {
 	if err := V6_2_32(h.db, nil, nil, lo); err != nil {
 		t.Fatalf("V6_2_32 after V6_2_31: %v", err)
 	}
+	// Fork (60-day opens) -- v6.2.40 adds campaign_smart_skips.reason (SIXTY-DAY-OPENS-SPEC D3).
+	if err := V6_2_40(h.db, nil, nil, lo); err != nil {
+		t.Fatalf("V6_2_40 after V6_2_32: %v", err)
+	}
 	if got := h.smartSendingShape(); got != fresh {
 		t.Fatalf("migration shape differs from schema.sql\n migration %s\n schema    %s", got, fresh)
 	}

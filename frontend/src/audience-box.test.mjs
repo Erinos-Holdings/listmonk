@@ -2,8 +2,10 @@
 // (node --test src/audience-box.test.mjs). No dependency: Node's built-in runner.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-  audienceBox, hasEnSplit, enSplit, foldSmartSending, smartSendingOf, toSendOf,
+  audienceBox, cloneAttribs, hasEnSplit, enSplit, foldSilentSkip, foldSmartSending, silentSkipOf, skipSplitOf,
+  smartSendingOf, toSendOf,
 } from './audience-box.mjs'; // eslint-disable-line import/extensions
 
 test('no box for a new campaign or an estimate the server could not make', () => {
@@ -150,4 +152,61 @@ test('the switch previews live: off = nothing skipped and the whole audience (us
   assert.equal(audienceBox(c, false).skipped, 0);
   // A sending or finished campaign ignores the flag (no preview to make).
   assert.equal(audienceBox({ id: 9, status: 'finished', sent: 5 }, false).count, 5);
+});
+
+// --- integrations SIXTY-DAY-OPENS-SPEC D4 (frontend tests) ---
+
+test('60-day opens: the three-way arithmetic -- audience minus Smart Sending skips minus silent skips', () => {
+  // Stored toggle on: audience_skipped is the TOTAL (6 Smart Sending + 40 silent).
+  const on = {
+    id: 9, status: 'draft', evergreen: false, audience: 1000, audienceSkipped: 46, audienceSilentSkipped: 40, silentSkip: true,
+  };
+  assert.deepEqual(skipSplitOf(on), { smart: 6, silent: 40 });
+  assert.deepEqual(toSendOf(on), { count: 954, skipped: 46, total: 1000 }, 'the Campaigns list: the stored total');
+  assert.deepEqual(toSendOf(on, true, { on: true, count: null }), { count: 954, skipped: 46, total: 1000 }, 'served share when count is null');
+  // The form's 60-day switch turned off before the save: only Smart Sending's 6.
+  assert.deepEqual(toSendOf(on, true, { on: false, count: null }), { count: 994, skipped: 6, total: 1000 });
+  // Both form switches off: the whole audience.
+  assert.deepEqual(toSendOf(on, false, { on: false, count: null }), { count: 1000, skipped: 0, total: 1000 });
+  // Smart Sending off on the form, 60-day still on: audience - silent skips (the lower bound).
+  assert.deepEqual(toSendOf(on, false, { on: true, count: null }), { count: 960, skipped: 40, total: 1000 });
+  // Never negative; the skips never exceed the audience.
+  assert.deepEqual(toSendOf({ audience: 10, audienceSkipped: 4, audienceSilentSkipped: 2 }, true, { on: true, count: 50 }), { count: 0, skipped: 10, total: 10 });
+  // A server that predates the field: no silent share, the whole skipped count is Smart Sending's.
+  assert.deepEqual(skipSplitOf({ audienceSkipped: 6 }), { smart: 6, silent: 0 });
+});
+
+test('60-day opens: the live-switch preview -- the form switch on over a stored off uses the preview count', () => {
+  const off = {
+    id: 9, status: 'draft', evergreen: false, audience: 1000, audienceSkipped: 6, audienceSilentSkipped: 0, silentSkip: false,
+  };
+  // Before the preview answers: nothing extra skipped.
+  assert.deepEqual(toSendOf(off, true, { on: true, count: null }), { count: 994, skipped: 6, total: 1000 });
+  // The preview answers 120 (Smart Sending skips already excluded by the server).
+  assert.deepEqual(toSendOf(off, true, { on: true, count: 120 }), { count: 874, skipped: 126, total: 1000 });
+  assert.equal(audienceBox(off, true, { on: true, count: 120 }).count, 874);
+  assert.equal(audienceBox(off, true, { on: true, count: 120 }).skipped, 126);
+  assert.equal(audienceBox(off, true, { on: false, count: 120 }).count, 994);
+  // A sending campaign ignores the switch.
+  assert.equal(audienceBox({ id: 9, status: 'paused', sent: 5 }, true, { on: true, count: 120 }).count, 5);
+});
+
+test('60-day opens: the switch reads the top-level field; the fold owns silent_skip; a clone drops it', () => {
+  assert.equal(silentSkipOf({ silentSkip: true }), true);
+  assert.equal(silentSkipOf({ silentSkip: false, attribs: { silent_skip: true } }), false, 'attribs is never read');
+  assert.equal(silentSkipOf({}), false, 'absent = off');
+  assert.equal(silentSkipOf(null), false);
+  // On: exactly silent_skip true; off: both keys removed; other keys kept; input not mutated.
+  assert.deepEqual(foldSilentSkip({ lang: 'en', silentSkip: true }, true), { lang: 'en', silent_skip: true });
+  assert.deepEqual(foldSilentSkip({ lang: 'en', silent_skip: true, silentSkip: true }, false), { lang: 'en' });
+  assert.deepEqual(foldSilentSkip(null, true), { silent_skip: true });
+  assert.deepEqual(foldSilentSkip(null, false), {});
+  const src = { silent_skip: true, smart_sending: false };
+  assert.deepEqual(cloneAttribs(src), { smart_sending: false });
+  assert.deepEqual(src, { silent_skip: true, smart_sending: false });
+  assert.deepEqual(cloneAttribs({ preheader: 'p', silentSkip: true }), { preheader: 'p' });
+  assert.equal(cloneAttribs(null), null);
+  // The clone path posts the copied attribs through cloneAttribs.
+  const view = readFileSync(new URL('./views/Campaigns.vue', import.meta.url), 'utf8');
+  assert.match(view, /attribs: cloneAttribs\(c\.attribs\)/);
 });

@@ -541,6 +541,13 @@ export const getCampaignQuiet = async (id) => http.get(`/api/campaigns/${id}`, {
   camelCase: campaignCamel(''),
 });
 
+// Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) -- the switch's live preview,
+// {skipped, gmail, yahoo}: the audience members the toggle would skip with it on (stored value
+// ignored), Smart Sending skips excluded. Quiet: no overlay, no toast (the box keeps its count).
+export const getCampaignSilentAudience = async (id) => http.get(`/api/campaigns/${id}/silent-audience`, {
+  camelCase: false, disableToast: true,
+});
+
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D11. Raw (snake_case, NOT camelCased) reads for
 // the re-save sweep: its PUT payloads are built from these rows verbatim, and camelCasing would
 // rewrite nested keys (archive_meta, attribs) the full-replace PUT then stores.

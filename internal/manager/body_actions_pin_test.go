@@ -108,6 +108,7 @@ var bodyActionsDataPin = map[string]string{
 	"Campaign.Preheader":         "inert: returns a string",
 	"Campaign.Lang":              "inert: returns a string",
 	"Campaign.SmartSending":      "inert: returns a bool",
+	"Campaign.SilentSkip":        "inert: returns a bool",
 	"Subscriber.Base":            "inert: id and timestamps",
 	"Subscriber.FirstName":       "inert: returns a string",
 	"Subscriber.LastName":        "inert: returns a string",

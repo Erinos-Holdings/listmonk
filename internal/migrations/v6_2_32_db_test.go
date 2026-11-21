@@ -68,7 +68,8 @@ func TestSmartSendingLookaheadMigration_V6_2_32(t *testing.T) {
 	h.db.MustExec(`DROP FUNCTION brand_journey_due_24h(INT)`)
 	h.db.MustExec(`DROP TABLE journey_due`)
 	h.db.MustExec(`DELETE FROM settings WHERE key = 'app.smart_sending_lookahead'`)
-	h.db.MustExec(`ALTER TABLE campaign_smart_skips DROP COLUMN due_list_id, DROP COLUMN due_at`)
+	// Fork (60-day opens) -- and no v6.2.40 reason column (re-added below, as an upgrade would).
+	h.db.MustExec(`ALTER TABLE campaign_smart_skips DROP COLUMN due_list_id, DROP COLUMN due_at, DROP COLUMN reason`)
 	h.db.MustExec(`ALTER TABLE campaign_smart_skips ALTER COLUMN journey_campaign_id SET NOT NULL, ALTER COLUMN journey_sent_at SET NOT NULL`)
 	if err := V6_2_31(h.db, nil, nil, lo); err != nil { // restores the v6.2.31 look-back body
 		t.Fatal(err)
@@ -82,6 +83,9 @@ func TestSmartSendingLookaheadMigration_V6_2_32(t *testing.T) {
 		if err := V6_2_32(h.db, nil, nil, lo); err != nil {
 			t.Fatalf("V6_2_32 run %d: %v", i+1, err)
 		}
+	}
+	if err := V6_2_40(h.db, nil, nil, lo); err != nil {
+		t.Fatalf("V6_2_40 after V6_2_32: %v", err)
 	}
 	if got := h.lookaheadShape(); got != fresh {
 		t.Fatalf("migration shape differs from schema.sql\n migration %s\n schema    %s", got, fresh)

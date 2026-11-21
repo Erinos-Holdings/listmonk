@@ -345,6 +345,10 @@ type AnalyticsCampaign struct {
 	// per-campaign switch-off, derived as get-campaign-matrix derives them.
 	Skipped  null.Int `db:"skipped" json:"skipped"`
 	SmartOff bool     `db:"smart_off" json:"smart_off"`
+	// Integrations SIXTY-DAY-OPENS-SPEC D5 -- Skipped by reason (they sum to it; null for a journey).
+	SkippedLookback  null.Int `db:"skipped_lookback" json:"skipped_lookback"`
+	SkippedLookahead null.Int `db:"skipped_lookahead" json:"skipped_lookahead"`
+	SkippedSilent    null.Int `db:"skipped_silent" json:"skipped_silent"`
 }
 
 type CampaignViewExport struct {

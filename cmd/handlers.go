@@ -219,6 +219,8 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST("/api/campaigns/:id/reviews/dispositions", pm(hasID(a.PostReviewDispositions), "campaigns:manage_all", "campaigns:manage"))
 		g.PATCH("/api/campaigns/:id/reviews/:jobId", pm(hasID(a.PatchCampaignReview), "campaigns:review"))
 		g.GET("/api/campaigns/:id", pm(hasID(a.GetCampaign), "campaigns:get_all", "campaigns:get"))
+		// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4): the switch's live preview, read-only, the campaign GET's permissions.
+		g.GET("/api/campaigns/:id/silent-audience", pm(hasID(a.GetCampaignSilentAudience), "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/analytics/:type", pm(a.GetCampaignViewAnalytics, "campaigns:get_analytics"))
 		// Fork (campaign conversions, integrations CAMPAIGN-CONVERSIONS-SPEC D7, conversions.go). The
 		// click export is SUBSCRIBER data: subscribers:get_all, never campaigns:get_analytics (the

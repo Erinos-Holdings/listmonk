@@ -172,7 +172,14 @@
          Campaign Matrix's own cell (a journey '—', a switched-off broadcast "off"). Display only. -->
     <p v-if="skippedRows.length" class="is-size-7 mt-5 analytics-skipped" data-cy="analytics-skipped">
       <span class="has-text-weight-bold" :title="$t('campaigns.skippedHelp')">{{ $t('campaigns.skipped') }}</span>
-      <span v-for="s in skippedRows" :key="s.id" class="ml-3" :data-cy="`analytics-skipped-${s.id}`">{{ s.name }}: {{ s.text }}</span>
+      <!-- Integrations SIXTY-DAY-OPENS-SPEC D5 -- the Matrix's glyph: expanded, each campaign's figure
+           is followed by its three reason counts (component state, collapsed on every load). -->
+      <a href="#" class="ml-1" data-cy="analytics-skipped-expand"
+        :title="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
+        :aria-label="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
+        :aria-expanded="skippedExpanded ? 'true' : 'false'" @click.prevent="skippedExpanded = !skippedExpanded">{{ skippedExpanded ? '−' : '+' }}</a>
+      <span v-for="s in skippedRows" :key="s.id" class="ml-3" :data-cy="`analytics-skipped-${s.id}`">{{ s.name }}: {{ s.text }}<template
+        v-if="s.reasons"> (<span v-for="(r, i) in s.reasons" :key="r.field" :title="$t(`${r.label}Help`)">{{ i ? ', ' : '' }}{{ $t(r.label) }} {{ r.text }}</span>)</template></span>
     </p>
 
     <section class="charts mt-5">
@@ -406,6 +413,8 @@ export default Vue.extend({
 
   data() {
     return {
+      // Integrations SIXTY-DAY-OPENS-SPEC D5 -- the Skipped line's reason breakdown (never persisted).
+      skippedExpanded: false,
       // Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D3) -- ?id= forces Campaign (the URL
       // is read once: a matrix row's link remounts this view). Fork (matrix polish, MATRIX-POLISH-SPEC
       // D2) -- Matrix | Campaign, Matrix by default, kept per browser session (sessionStorage).
@@ -1000,7 +1009,7 @@ export default Vue.extend({
     // rows themselves (GET /api/analytics/campaigns carries skipped / smart_off), through the
     // Campaign Matrix's own cell function (campaignMatrix.mjs::analyticsSkippedRows).
     skippedRows() {
-      return analyticsSkippedRows(this.form.campaigns, (n) => this.$utils.formatNumber(n), (k, p) => this.$t(k, p));
+      return analyticsSkippedRows(this.form.campaigns, (n) => this.$utils.formatNumber(n), (k, p) => this.$t(k, p), this.skippedExpanded);
     },
 
     // Fork (shop-link rate, integrations SHOP-LINK-RATE-SPEC D6/D7) -- the toggle's model: the only

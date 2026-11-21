@@ -131,8 +131,16 @@ ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 --   skipped and smart_off (integrations DOC-ALIGNMENT-SPEC D7) are derived exactly as
 --   get-campaign-matrix derives them -- a broadcast's campaign_smart_skips rows (NULL for a
 --   journey) and a broadcast switched off -- so the Campaign Analytics Skipped figure is the Matrix's.
+--   skipped_lookback / skipped_lookahead / skipped_silent (integrations SIXTY-DAY-OPENS-SPEC D5) are
+--   the matrix's reason counts, by the same NULL-reason column test.
 SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.created_at, c.sent,
     CASE WHEN NOT c.evergreen THEN (SELECT COUNT(*) FROM campaign_smart_skips sk WHERE sk.campaign_id = c.id) END AS skipped,
+    CASE WHEN NOT c.evergreen THEN (SELECT COUNT(*) FROM campaign_smart_skips sk WHERE sk.campaign_id = c.id
+        AND COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'lookback') END AS skipped_lookback,
+    CASE WHEN NOT c.evergreen THEN (SELECT COUNT(*) FROM campaign_smart_skips sk WHERE sk.campaign_id = c.id
+        AND COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'lookahead') END AS skipped_lookahead,
+    CASE WHEN NOT c.evergreen THEN (SELECT COUNT(*) FROM campaign_smart_skips sk WHERE sk.campaign_id = c.id
+        AND COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'silent') END AS skipped_silent,
     (NOT c.evergreen AND (c.attribs->'smart_sending') IS NOT DISTINCT FROM 'false'::JSONB) AS smart_off
 FROM campaigns c
 WHERE (
@@ -380,17 +388,38 @@ jsends AS (
     CROSS JOIN LATERAL brand_journey_skips(camps.id) j
     WHERE NOT camps.evergreen
 ),
+-- Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC D1/D3) -- the silent set, computed ONCE per
+-- claimed broadcast (brand_silent_skips, the one definition; no rows unless attribs.silent_skip is the
+-- JSONB true, so a toggle-off campaign scans nothing). MATERIALIZED for the held CTE's reason.
+silent AS MATERIALIZED (
+    SELECT camps.id AS campaign_id, x.subscriber_id
+    FROM camps
+    CROSS JOIN LATERAL brand_silent_skips(camps.id, FALSE) x
+    WHERE NOT camps.evergreen
+),
+-- The Smart Sending rows first, unchanged, with their reason (lookahead when the due pair is set,
+-- else lookback); then a silent row ONLY for an audience member with no Smart Sending row in this
+-- claim (precedence -- the toggle never changes a Smart Sending row or count). Same checkpoint bound.
 skips AS (
     SELECT a.campaign_id, a.subscriber_id, js.journey_campaign_id, js.journey_sent_at,
-        js.due_list_id, js.due_at
+        js.due_list_id, js.due_at,
+        (CASE WHEN js.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) AS reason
     FROM aud a
     JOIN camps ON (camps.id = a.campaign_id)
     JOIN jsends js ON (js.campaign_id = a.campaign_id AND js.subscriber_id = a.subscriber_id)
     WHERE a.subscriber_id > camps.last_subscriber_id
+    UNION ALL
+    SELECT a.campaign_id, a.subscriber_id, NULL::INT, NULL::TIMESTAMP WITH TIME ZONE,
+        NULL::INT, NULL::TIMESTAMP WITH TIME ZONE, 'silent'
+    FROM aud a
+    JOIN camps ON (camps.id = a.campaign_id)
+    JOIN silent si ON (si.campaign_id = a.campaign_id AND si.subscriber_id = a.subscriber_id)
+    WHERE a.subscriber_id > camps.last_subscriber_id
+        AND NOT EXISTS (SELECT 1 FROM jsends js WHERE js.campaign_id = a.campaign_id AND js.subscriber_id = a.subscriber_id)
 ),
 insSkips AS (
-    INSERT INTO campaign_smart_skips (campaign_id, subscriber_id, journey_campaign_id, journey_sent_at, due_list_id, due_at)
-    SELECT campaign_id, subscriber_id, journey_campaign_id, journey_sent_at, due_list_id, due_at FROM skips
+    INSERT INTO campaign_smart_skips (campaign_id, subscriber_id, journey_campaign_id, journey_sent_at, due_list_id, due_at, reason)
+    SELECT campaign_id, subscriber_id, journey_campaign_id, journey_sent_at, due_list_id, due_at, reason FROM skips
     ON CONFLICT DO NOTHING
 ),
 -- to_send = the audience minus every skip: this claim's (the skips CTE) and an earlier claim's (the
@@ -972,7 +1001,10 @@ SELECT JSON_BUILD_OBJECT(
 --   hard_bounces / soft_bounces / complaints = raw bounces rows of that type in [lo, t1).
 --   skipped (integrations SMART-SENDING-SPEC D5) = a broadcast's campaign_smart_skips rows (the
 --     recipients its claim withheld), NULL for a journey; smart_off = a broadcast switched off
---     (attribs smart_sending is the JSONB false -- the Matrix shows off).
+--     (attribs smart_sending is the JSONB false -- the Matrix shows off). skipped_lookback /
+--     skipped_lookahead / skipped_silent (integrations SIXTY-DAY-OPENS-SPEC D5) = those rows by
+--     reason, a NULL reason read as lookahead when due_list_id is set, else lookback; they sum to
+--     skipped, NULL for a journey.
 --   tracked / matched = campaign_conversions in [lo, t1) as orders and sales, NULL when the latest
 --     conversions doc does not cover the campaign (get-campaign-conversions' coverage rule).
 --   the GMAIL GAP group's counts are NOT here (integrations GMAIL-GAP-SPEC) -- the Matrix fills them
@@ -1109,7 +1141,11 @@ bnc AS (
     GROUP BY b.campaign_id
 ),
 skp AS (
-    SELECT sk.campaign_id, COUNT(*) AS n FROM campaign_smart_skips sk
+    SELECT sk.campaign_id, COUNT(*) AS n,
+        COUNT(*) FILTER (WHERE COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'lookback') AS lookback,
+        COUNT(*) FILTER (WHERE COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'lookahead') AS lookahead,
+        COUNT(*) FILTER (WHERE COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'silent') AS silent
+    FROM campaign_smart_skips sk
     WHERE sk.campaign_id IN (SELECT id FROM camps WHERE NOT evergreen)
     GROUP BY sk.campaign_id
 ),
@@ -1179,6 +1215,9 @@ SELECT JSON_BUILD_OBJECT(
             'brand', cb.brand,
             'sent', k.sent,
             'skipped', CASE WHEN NOT k.evergreen THEN COALESCE(sk.n, 0) END,
+            'skipped_lookback', CASE WHEN NOT k.evergreen THEN COALESCE(sk.lookback, 0) END,
+            'skipped_lookahead', CASE WHEN NOT k.evergreen THEN COALESCE(sk.lookahead, 0) END,
+            'skipped_silent', CASE WHEN NOT k.evergreen THEN COALESCE(sk.silent, 0) END,
             'smart_off', k.smart_off,
             'views', COALESCE(v.n, 0),
             'clicks', COALESCE(c.n, 0),
@@ -1322,10 +1361,17 @@ campLists AS (
 -- (brand_journey_skips, both halves -- integrations SMART-SENDING-LOOKAHEAD-SPEC D4).
 jsends AS (
     SELECT subscriber_id FROM brand_journey_skips($1)
+),
+-- Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) -- the would-be silent skips under the
+-- STORED toggle (zero while it is off), counted only for audience members Smart Sending does not skip
+-- (the claim's precedence). The served total skip count is skipped + silent_skipped.
+silent AS MATERIALIZED (
+    SELECT subscriber_id FROM brand_silent_skips($1, FALSE)
 )
 SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
        COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE subscriber_lang(s.attribs) = 'none') AS no_lang,
-       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE j.subscriber_id IS NOT NULL) AS skipped
+       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE j.subscriber_id IS NOT NULL) AS skipped,
+       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE j.subscriber_id IS NULL AND si.subscriber_id IS NOT NULL) AS silent_skipped
     FROM camp
     JOIN campLists cl ON TRUE
     JOIN subscriber_lists sl ON sl.list_id = cl.list_id
@@ -1339,8 +1385,51 @@ SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
     JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
     LEFT JOIN jsends j ON (j.subscriber_id = sl.subscriber_id)
+    LEFT JOIN silent si ON (si.subscriber_id = sl.subscriber_id)
     -- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- the claim's brand-hold rule.
     WHERE NOT EXISTS (SELECT 1 FROM brand_hold_rows($1) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id);
+
+-- name: get-campaign-silent-audience
+-- Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) -- the live preview behind the page's
+-- switch. Of campaign $1's audience (get-campaign-lang-audience's join and brand-hold rule), the
+-- members brand_silent_skips($1, TRUE) returns -- the toggle's stored value ignored -- who are not
+-- Smart Sending skips, in all and by provider. Read-only.
+WITH camp AS (
+    SELECT id, type, attribs->>'lang' AS lang FROM campaigns WHERE id = $1
+),
+campLists AS (
+    SELECT lists.id AS list_id, optin FROM lists
+    INNER JOIN campaign_lists ON (campaign_lists.list_id = lists.id)
+    WHERE campaign_lists.campaign_id = $1
+),
+jsends AS (
+    SELECT subscriber_id FROM brand_journey_skips($1)
+),
+silent AS MATERIALIZED (
+    SELECT subscriber_id, provider FROM brand_silent_skips($1, TRUE)
+),
+aud AS (
+    SELECT DISTINCT si.subscriber_id, si.provider
+    FROM camp
+    JOIN campLists cl ON TRUE
+    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
+        AND (
+            CASE
+                WHEN camp.type = 'optin' THEN sl.status = 'unconfirmed' AND cl.optin = 'double'
+                WHEN cl.optin = 'double' THEN sl.status = 'confirmed'
+                ELSE sl.status != 'unsubscribed'
+            END
+        )
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+        AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
+    JOIN silent si ON (si.subscriber_id = sl.subscriber_id)
+    WHERE NOT EXISTS (SELECT 1 FROM jsends j WHERE j.subscriber_id = sl.subscriber_id)
+        AND NOT EXISTS (SELECT 1 FROM brand_hold_rows($1) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id)
+)
+SELECT COUNT(*) AS skipped,
+    COUNT(*) FILTER (WHERE provider = 'gmail') AS gmail,
+    COUNT(*) FILTER (WHERE provider = 'yahoo') AS yahoo
+FROM aud;
 
 -- name: get-evergreen-sent-split
 -- Fork (campaign-page audience box). Of the subscribers evergreen campaign $1 has SENT to

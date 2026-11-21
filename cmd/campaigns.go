@@ -231,6 +231,25 @@ func (a *App) GetCampaign(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+// GetCampaignSilentAudience (fork, 60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) is the live
+// preview behind the Campaign page's 60-day opens switch: {skipped, gmail, yahoo}, the audience
+// members brand_silent_skips would skip with the toggle on (its stored value ignored) who are not
+// Smart Sending skips. Read-only; the campaign GET's permission check, exactly.
+func (a *App) GetCampaignSilentAudience(c echo.Context) error {
+	id := getID(c)
+
+	if err := a.checkCampaignPerm(auth.PermTypeGet, id, c); err != nil {
+		return err
+	}
+
+	out, err := a.core.CampaignSilentAudience(id)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
 // PreviewCampaign renders the HTML preview of a campaign body.
 func (a *App) PreviewCampaign(c echo.Context) error {
 	// Get the campaign ID.
@@ -638,6 +657,11 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 				}
 				if aud.Skipped > 0 {
 					w = append(w, a.i18n.Ts("campaigns.warnSmartSkip", "n", strconv.Itoa(aud.Skipped)))
+				}
+				// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the toggle's share, its own toast, so
+				// the two toasts together are the claim's total.
+				if aud.SilentSkipped > 0 {
+					w = append(w, a.i18n.Ts("campaigns.warnSilentSkip", "n", strconv.Itoa(aud.SilentSkipped)))
 				}
 			}
 		}
@@ -1718,6 +1742,11 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 	// only refusal of another value: the SQL rule reads any non-false value as on and never raises.
 	if !models.ValidSmartSending(c.Attribs) {
 		return c, errors.New(a.i18n.T("campaigns.invalidSmartSending"))
+	}
+	// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- attribs.silent_skip is absent or a boolean. The
+	// only refusal of another value: the SQL rule reads anything but the JSONB true as off.
+	if !models.ValidSilentSkip(c.Attribs) {
+		return c, errors.New(a.i18n.T("campaigns.invalidSilentSkip"))
 	}
 
 	if len(c.ArchiveMeta) == 0 {

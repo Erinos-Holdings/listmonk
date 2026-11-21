@@ -161,6 +161,19 @@
         </b-tooltip>
         <b-switch v-model="form.smartSending" size="is-small" type="is-success" :disabled="!canEdit" />
       </div>
+      <!-- Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) -- directly under Smart Sending,
+           the same visibility. Off by default. Editable while draft or paused only: on a scheduled
+           campaign it is disabled (the review gate refuses a save that changes a scheduled campaign's
+           hash, and this key is hashed) and the hover says to unschedule. Turning it on over a stored
+           off previews live (silent-audience; audience-box.mjs toSendOf's `silent`). Folded into
+           attribs.silent_skip (foldAttribs). -->
+      <div v-if="showSilentSkip" class="audience-switch" :style="audienceBoxStyle" data-cy="btn-silent-skip">
+        <b-tooltip :label="silentSkipEditable ? $t('campaigns.silentSkipHelp') : $t('campaigns.silentSkipScheduled')"
+          type="is-dark" multilined position="is-left" append-to-body>
+          <span class="audience-switch-label" tabindex="0">{{ $t('campaigns.silentSkip') }}</span>
+        </b-tooltip>
+        <b-switch v-model="form.silentSkip" size="is-small" type="is-success" :disabled="!silentSkipEditable" />
+      </div>
     </div>
 
     <b-tabs type="is-boxed" :animated="false" v-model="activeTab" @input="onTab">
@@ -659,7 +672,7 @@ import {
   CAMPAIGN_LANGS, campaignLangLabel, isSendPlus, sendLangLabel,
 } from '../langs';
 import {
-  audienceBox, hasEnSplit, enSplit, foldSmartSending, smartSendingOf,
+  audienceBox, hasEnSplit, enSplit, foldSilentSkip, foldSmartSending, silentSkipOf, skipSplitOf, smartSendingOf,
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import {
   OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, runMessage, selectFromQuery,
@@ -821,6 +834,10 @@ export default Vue.extend({
       // strip (syncAudienceBox); the CSS fallbacks apply until the first measurement.
       audienceLayout: { width: null, tabsHeight: null },
       audiencePollID: null,
+      // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the live preview's answer ({skipped, gmail,
+      // yahoo}) for the loaded campaign, or null; and the id it belongs to.
+      silentPreview: null,
+      silentPreviewFor: null,
 
       // Fork (campaign review, D11/D12) -- the latest inspection state (GET .../reviews/latest,
       // verbatim), the checklist window this page opened, and its poll.
@@ -949,6 +966,8 @@ export default Vue.extend({
         sendLater: false,
         // Fork (smart sending, SMART-SENDING-SPEC D4) -- on unless attribs.smart_sending is false.
         smartSending: true,
+        // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- off unless attribs.silent_skip is true.
+        silentSkip: false,
         // Fork (evergreen) -- "send automatically to new subscribers", delay in days.
         evergreen: false,
         sendDelayDays: 0,
@@ -1194,6 +1213,7 @@ export default Vue.extend({
         preheader: f.preheader,
         lang: f.lang,
         smartSending: f.smartSending,
+        silentSkip: f.silentSkip,
         altbody: f.altbody,
         tags: f.tags,
         headersStr: f.headersStr,
@@ -1218,6 +1238,7 @@ export default Vue.extend({
         preheader: (c.attribs && c.attribs.preheader) || '',
         lang: (c.attribs && c.attribs.lang) || '',
         smartSending: smartSendingOf(c),
+        silentSkip: silentSkipOf(c),
         altbody: c.altbody,
         tags: c.tags,
         headersStr: JSON.stringify(c.headers, null, 4),
@@ -1248,6 +1269,7 @@ export default Vue.extend({
         preheader: f.preheader || '',
         lang: f.lang || '',
         smartSending: f.smartSending !== false,
+        silentSkip: f.silentSkip === true,
         altbody: f.altbody || null,
         tags: f.tags || [],
         headersStr: f.headersStr,
@@ -1338,6 +1360,7 @@ export default Vue.extend({
         preheader: d.preheader,
         lang: d.lang || '',
         smartSending: d.smartSending !== false,
+        silentSkip: d.silentSkip === true,
         altbody: d.altbody,
         tags: d.tags,
         headersStr: d.headersStr,
@@ -1793,6 +1816,13 @@ export default Vue.extend({
       if (smartOff || (attribs && ('smart_sending' in attribs || 'smartSending' in attribs))) {
         attribs = foldSmartSending(attribs, smartOff);
       }
+      // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the 60-day opens switch owns silent_skip the
+      // same way: true when shown and on, otherwise removed (off); a hidden switch carries the stored
+      // state.
+      const silentOn = this.showSilentSkip ? this.form.silentSkip === true : silentSkipOf(this.data);
+      if (silentOn || (attribs && ('silent_skip' in attribs || 'silentSkip' in attribs))) {
+        attribs = foldSilentSkip(attribs, silentOn);
+      }
       return attribs;
     },
 
@@ -1953,6 +1983,7 @@ export default Vue.extend({
         preheader: (data.attribs && data.attribs.preheader) || '',
         lang: (data.attribs && data.attribs.lang) || '',
         smartSending: smartSendingOf(data),
+        silentSkip: silentSkipOf(data),
         evergreen: !!data.evergreen,
         sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
         sendDelaySecs: data.sendDelaySecs || 0,
@@ -2245,6 +2276,7 @@ export default Vue.extend({
           this.form.preheader = (d.attribs && d.attribs.preheader) || '';
           this.form.lang = (d.attribs && d.attribs.lang) || '';
           this.form.smartSending = smartSendingOf(d);
+          this.form.silentSkip = silentSkipOf(d);
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
           if (!suppressWarnings) {
@@ -2742,8 +2774,8 @@ export default Vue.extend({
     audienceBox() {
       // The form's switch previews live (off = nothing skipped); the server's stored value agrees
       // after a save. Only meaningful where the switch shows; elsewhere the stored state applies.
-      const on = this.showSmartSending ? this.form.smartSending !== false : smartSendingOf(this.data);
-      return this.isEditing ? audienceBox(this.data, on) : null;
+      // Fork (60-day opens) -- and the 60-day opens switch, previewed the same way (silentArg).
+      return this.isEditing ? audienceBox(this.data, this.smartSendingFormOn, this.silentArg) : null;
     },
 
     audienceBoxStyle() {
@@ -2791,9 +2823,60 @@ export default Vue.extend({
         none: this.$utils.formatNumber(enSplit(b.total, b.noLang).none),
       }) : '';
       const base = audSplit || this.$t('campaigns.toSendHelp');
-      return b.skipped > 0 ? `${base} ${this.$t('campaigns.toSendSkipped', {
-        n: this.$utils.formatNumber(b.skipped), total: this.$utils.formatNumber(b.total),
+      // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the Smart Sending sentence carries Smart
+      // Sending's share only; the 60-day opens sentence follows with its own count and, when the live
+      // preview has answered, the Gmail / Yahoo split (the three numbers).
+      const sp = skipSplitOf(this.data, this.smartSendingFormOn, this.silentArg);
+      let out = sp.smart > 0 ? `${base} ${this.$t('campaigns.toSendSkipped', {
+        n: this.$utils.formatNumber(sp.smart), total: this.$utils.formatNumber(b.total),
       })}` : base;
+      if (sp.silent > 0) {
+        const pv = this.silentPreview;
+        out = `${out} ${this.$t('campaigns.toSendSilent', {
+          n: this.$utils.formatNumber(sp.silent),
+          gmail: pv ? this.$utils.formatNumber(pv.gmail) : '—',
+          yahoo: pv ? this.$utils.formatNumber(pv.yahoo) : '—',
+        })}`;
+      }
+      return out;
+    },
+
+    // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the switch shows where Smart Sending's does, on
+    // a saved campaign; editable while draft or paused only (a scheduled one shows it disabled).
+    showSilentSkip() {
+      return this.showSmartSending && this.isEditing;
+    },
+
+    // The preview's key: the campaign id and its stored update time while the form's switch is on
+    // over a draft or scheduled broadcast (null otherwise -- no request).
+    silentPreviewKey() {
+      const d = this.data;
+      if (!this.showSilentSkip || this.form.silentSkip !== true || !d || !d.id || d.evergreen
+        || (d.status !== 'draft' && d.status !== 'scheduled')) {
+        return null;
+      }
+      return `${d.id}:${d.updatedAt || ''}`;
+    },
+
+    silentSkipEditable() {
+      const s = this.data && this.data.status;
+      return this.canEdit && (s === 'draft' || s === 'paused');
+    },
+
+    // The Smart Sending switch as the box reads it (the form's where shown, else the stored state).
+    smartSendingFormOn() {
+      return this.showSmartSending ? this.form.smartSending !== false : smartSendingOf(this.data);
+    },
+
+    // The 60-day opens switch for the box (audience-box.mjs toSendOf's `silent`): the form's value;
+    // over a STORED on the served share counts (count null), over a stored off the live preview's.
+    silentArg() {
+      const on = this.showSilentSkip ? this.form.silentSkip === true : silentSkipOf(this.data);
+      if (!on || silentSkipOf(this.data)) {
+        return { on, count: null };
+      }
+      const pv = this.silentPreview;
+      return { on, count: pv ? pv.skipped : 0 };
     },
 
     // Fork (send retry, SEND-RETRY-SPEC D6) -- mirrors Campaigns.vue's isShortfall.
@@ -3169,6 +3252,27 @@ export default Vue.extend({
   },
 
   watch: {
+    // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the live preview: fetched when the form's switch
+    // is on for a draft or scheduled broadcast (over a stored off for the count, over a stored on for
+    // the hover's Gmail / Yahoo split), once per campaign load; re-fetched after a save (the lists or
+    // language may have changed).
+    silentPreviewKey: {
+      immediate: true,
+      handler(key) {
+        if (!key || this.silentPreviewFor === key) {
+          return;
+        }
+        this.silentPreviewFor = key;
+        this.silentPreview = null;
+        const { id } = this.data;
+        this.$api.getCampaignSilentAudience(id).then((r) => {
+          if (this.silentPreviewFor === key && r) {
+            this.silentPreview = { skipped: Number(r.skipped) || 0, gmail: Number(r.gmail) || 0, yahoo: Number(r.yahoo) || 0 };
+          }
+        }).catch(() => {});
+      },
+    },
+
     selectedLists() {
       // Fork (journey form UX, A1.12) -- a new campaign's preselected lists (?list_id=) re-derive
       // like a user's pick; a store reload that leaves the ids as they are does not, and a stored

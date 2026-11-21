@@ -76,11 +76,17 @@
           <tr>
             <th v-for="c in leftCols" :key="c.field"
               :class="[bmTh(c.field), {
-                'has-text-right': c.field === 'sent' || c.field === 'skipped', 'has-text-centered': c.field === 'lang',
+                'has-text-right': c.field === 'sent' || c.field === 'skipped' || isReason(c.field), 'has-text-centered': c.field === 'lang',
               }]"
               :title="c.help ? $t(c.help) : null"
               :aria-sort="bmAria(c.field)" @click="onSort(c.field)" :data-cy="`cm-head-${c.field}`">
               {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
+              <!-- SIXTY-DAY-OPENS-SPEC D5: the glyph expands Skipped by reason (component state,
+                   collapsed on every load; collapsed, the table is as wide as before). -->
+              <a v-if="c.field === 'skipped'" href="#" class="cm-skip-glyph ml-1" data-cy="cm-skipped-expand"
+                :title="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
+                :aria-label="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
+                :aria-expanded="skippedExpanded ? 'true' : 'false'" @click.prevent.stop="toggleSkipped">{{ skippedExpanded ? '−' : '+' }}</a>
             </th>
             <th v-for="c in midCols" :key="c.field" class="has-text-right" :class="[bmTh(c.field), c.group]"
               :title="c.help ? $t(c.help) : null" :aria-sort="bmAria(c.field)" @click="onSort(c.field)"
@@ -135,6 +141,11 @@
                 :data-cy="`cm-skipped-${row.totals ? 'totals' : row.id}`">
                 {{ cell(row, 'skipped') }}
               </td>
+              <!-- SIXTY-DAY-OPENS-SPEC D5: Look-back, Look-ahead, 60-day opens (expanded only). -->
+              <td v-else-if="isReason(c.field)" :key="c.field" class="has-text-right" :class="bmTd(c.field)"
+                :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
+                {{ cell(row, c.field) }}
+              </td>
             </template>
             <td v-for="c in midCols" :key="c.field" class="has-text-right" :class="[bmTd(c.field), c.group]"
               :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
@@ -167,7 +178,7 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
-  CONVERSION_FIELDS, GAP_FAILED, GAP_FIELDS, GAP_PENDING, GAP_READY, brandCell, cellText, clickSort, conversionValue,
+  CONVERSION_FIELDS, GAP_FAILED, GAP_FIELDS, GAP_PENDING, GAP_READY, REASON_FIELDS, brandCell, cellText, clickSort, conversionValue,
   dateCell, filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, langCell, leftColumns, loadState,
   mergeGapCounts, midColumns, nameCell, saveState, shapeRows, showBrandColumn, showLangColumn, sortForView, statusCell,
   tableRows,
@@ -197,6 +208,8 @@ export default Vue.extend({
       loading: false,
       // The name filter's text (never persisted).
       nameQuery: '',
+      // SIXTY-DAY-OPENS-SPEC D5: Skipped by reason, expanded -- component state, never persisted.
+      skippedExpanded: false,
       // Sort, %/$ | # mode, kind and view (MATRIX-VIEWS-SPEC D2), per browser session
       // (sessionStorage key analytics.matrix).
       state: loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
@@ -222,7 +235,7 @@ export default Vue.extend({
     // Polish 2026-11-14: Status, Started, Brand, Campaign, Lang (All languages only), Sent, Skipped
     // (campaignMatrix.mjs::leftColumns).
     leftCols() {
-      return leftColumns(this.showBrand, this.showLang);
+      return leftColumns(this.showBrand, this.showLang, this.skippedExpanded);
     },
 
     showLang() {
@@ -332,8 +345,19 @@ export default Vue.extend({
 
     // MATRIX-VIEWS-SPEC D2: a sort on a column the view hides falls back to Date desc.
     onView() {
-      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang);
+      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang, this.skippedExpanded);
       this.saveState();
+    },
+
+    // SIXTY-DAY-OPENS-SPEC D5: a sort on a reason sub-column falls back to Started desc on collapse.
+    toggleSkipped() {
+      this.skippedExpanded = !this.skippedExpanded;
+      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang, this.skippedExpanded);
+      this.saveState();
+    },
+
+    isReason(field) {
+      return REASON_FIELDS.includes(field);
     },
 
     onSort(field) {
@@ -451,7 +475,7 @@ export default Vue.extend({
     // Polish 2026-11-14 (review R5): a Lang sort falls back to Started desc when a language hides
     // the column.
     showLang() {
-      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang);
+      this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang, this.skippedExpanded);
       this.saveState();
     },
   },

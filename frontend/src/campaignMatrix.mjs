@@ -44,7 +44,11 @@ export const CONVERSION_FIELDS = Object.freeze(['tracked', 'matched']);
 // (gmailGap.mjs); null counts = a journey.
 export const GAP_FIELDS = Object.freeze(['gmail_open', 'yahoo_open', 'gmail_gap']);
 
-export const SORT_FIELDS = Object.freeze(['name', 'brand', 'lang', 'date', 'status', 'sent', 'skipped', ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
+// Integrations SIXTY-DAY-OPENS-SPEC D5 -- Skipped by reason (the server's three counts, which sum to
+// skipped): the sub-columns the Skipped header's glyph expands, in this order.
+export const REASON_FIELDS = Object.freeze(['skipped_lookback', 'skipped_lookahead', 'skipped_silent']);
+
+export const SORT_FIELDS = Object.freeze(['name', 'brand', 'lang', 'date', 'status', 'sent', 'skipped', ...REASON_FIELDS, ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
 
 // The Matrix's day zone: the window's and the send day's (the get-campaign-matrix zone CTE).
 const MATRIX_ZONE = 'America/Denver';
@@ -92,7 +96,15 @@ export function statusRank(status) {
 // MATRIX-POLISH D6), Campaign, Lang (only under All languages -- otherwise the filter bar says
 // which language the rows are; it replaces the old language chip), Sent, Skipped (integrations
 // SMART-SENDING-SPEC D5 -- a count, not a rate over Sent).
-export function leftColumns(showBrand = true, showLang = false) {
+// SIXTY-DAY-OPENS-SPEC D5: `expanded` (the Skipped glyph; component state, collapsed on every load)
+// adds the three reason sub-columns right of Skipped; collapsed, the list is exactly as before.
+const REASON_COLUMNS = Object.freeze([
+  { field: 'skipped_lookback', label: 'analytics.matrix.skippedLookback', help: 'analytics.matrix.skippedLookbackHelp' },
+  { field: 'skipped_lookahead', label: 'analytics.matrix.skippedLookahead', help: 'analytics.matrix.skippedLookaheadHelp' },
+  { field: 'skipped_silent', label: 'analytics.matrix.skippedSilent', help: 'analytics.matrix.skippedSilentHelp' },
+]);
+
+export function leftColumns(showBrand = true, showLang = false, expanded = false) {
   const cols = [
     { field: 'status', label: 'analytics.matrix.status' },
     { field: 'date', label: 'analytics.matrix.started' },
@@ -101,6 +113,7 @@ export function leftColumns(showBrand = true, showLang = false) {
     { field: 'lang', label: 'analytics.matrix.lang' },
     { field: 'sent', label: 'dashboard.matrix.sent' },
     { field: 'skipped', label: 'analytics.matrix.skipped', help: 'analytics.matrix.skippedHelp' },
+    ...(expanded ? REASON_COLUMNS.map((c) => ({ ...c })) : []),
   ];
   return cols.filter((c) => (showBrand || c.field !== 'brand') && (showLang || c.field !== 'lang'));
 }
@@ -261,8 +274,8 @@ export function groupHeaders(showGp, view = DEFAULT_STATE.view) {
 // MATRIX-VIEWS D2: a sort on a column the view does not show falls back to DEFAULT_STATE.sort (Date
 // desc); a visible one is kept. Applied when the view changes, when a stored state is loaded and
 // (polish 2026-11-14, review R5) when the language selection shows or hides the Lang column.
-export function sortForView(sort, view = DEFAULT_STATE.view, showGp = false, showLang = true) {
-  const visible = [...leftColumns(true, showLang), ...midColumns(showGp, view)].map((c) => c.field);
+export function sortForView(sort, view = DEFAULT_STATE.view, showGp = false, showLang = true, expanded = false) {
+  const visible = [...leftColumns(true, showLang, expanded), ...midColumns(showGp, view)].map((c) => c.field);
   if (sort && visible.includes(sort.field) && (sort.order === 'asc' || sort.order === 'desc')) {
     return { field: sort.field, order: sort.order };
   }
@@ -323,6 +336,10 @@ export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null, gapStat
     // SMART-SENDING-SPEC D5: a broadcast's recorded skips (null for a journey -- '—') and its bypass.
     skipped: r.evergreen === true ? null : numOrNull(r.skipped),
     smartOff: r.evergreen !== true && r.smart_off === true,
+    // SIXTY-DAY-OPENS-SPEC D5: the three reason counts, null for a journey (as skipped is).
+    skipped_lookback: r.evergreen === true ? null : numOrNull(r.skipped_lookback),
+    skipped_lookahead: r.evergreen === true ? null : numOrNull(r.skipped_lookahead),
+    skipped_silent: r.evergreen === true ? null : numOrNull(r.skipped_silent),
     views: num(r.views),
     clicks: num(r.clicks),
     hard_bounces: num(r.hard_bounces),
@@ -425,6 +442,11 @@ export function totalsRow(rows, label = 'Total') {
   const skips = r.map((x) => x.skipped).filter((v) => typeof v === 'number');
   out.skipped = skips.length ? skips.reduce((t, v) => t + v, 0) : null;
   out.smartOff = false;
+  // SIXTY-DAY-OPENS-SPEC D5: each reason summed over the rows carrying it.
+  REASON_FIELDS.forEach((k) => {
+    const vs = r.map((x) => x[k]).filter((v) => typeof v === 'number');
+    out[k] = vs.length ? vs.reduce((t, v) => t + v, 0) : null;
+  });
   COUNT_FIELDS.forEach((k) => {
     const valued = r.filter((x) => typeof x[k] === 'number');
     out[k] = valued.length ? valued.reduce((t, x) => t + x[k], 0) : null;
@@ -490,7 +512,7 @@ export function displayValue(row, field, mode = DEFAULT_STATE.mode) {
     }
     return mode === 'num' ? m.orders : m.sales;
   }
-  if (field === 'sent' || field === 'skipped' || field === 'gp_rate') {
+  if (field === 'sent' || field === 'skipped' || field === 'gp_rate' || REASON_FIELDS.includes(field)) {
     return numOrNull(row[field]);
   }
   if (GAP_FIELDS.includes(field)) {
@@ -564,14 +586,31 @@ export function analyticsSkippedCell(c, fmt = (n) => String(n), t = (k) => k) {
 // passes no camelCase option, so the interceptor converts every key): the flag arrives as
 // `smartOff` and is handed to the cell function under the server's name. A row from a server that
 // predates the fields (no `smartOff` key) has no entry rather than a false count.
-export function analyticsSkippedRows(selected, fmt = (n) => String(n), t = (k) => k) {
+// SIXTY-DAY-OPENS-SPEC D5: `expanded` (the Skipped line's glyph) adds `reasons` to each entry -- the
+// Matrix's three sub-column cells ({ field, label, text }), from the row's skippedLookback /
+// skippedLookahead / skippedSilent (camel-cased by the API module). Collapsed, the entries are as before.
+export function analyticsSkippedRows(selected, fmt = (n) => String(n), t = (k) => k, expanded = false) {
   return (Array.isArray(selected) ? selected : [])
     .filter((s) => isObj(s) && Object.prototype.hasOwnProperty.call(s, 'smartOff'))
-    .map((s) => ({
-      id: s.id,
-      name: str(s.name),
-      text: analyticsSkippedCell({ ...s, smart_off: s.smartOff === true }, fmt, t),
-    }));
+    .map((s) => {
+      const server = {
+        ...s,
+        smart_off: s.smartOff === true,
+        skipped_lookback: s.skippedLookback,
+        skipped_lookahead: s.skippedLookahead,
+        skipped_silent: s.skippedSilent,
+      };
+      const out = {
+        id: s.id,
+        name: str(s.name),
+        text: analyticsSkippedCell(server, fmt, t),
+      };
+      if (expanded) {
+        const row = shapeRow(server);
+        out.reasons = REASON_COLUMNS.map((c) => ({ field: c.field, label: c.label, text: cellText(row, c.field, 'num', fmt, undefined, t) }));
+      }
+      return out;
+    });
 }
 
 // D7: the GP S% cell's class -- a mechanical comparison of the send day's rate against the

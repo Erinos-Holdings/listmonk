@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  analyticsSkippedCell, analyticsSkippedRows,
+  analyticsSkippedCell, analyticsSkippedRows, REASON_FIELDS,
   COUNT_FIELDS, DEFAULT_STATE, GAP_FAILED, GAP_PENDING, MISSING, NAME_MAX, PENDING_MARK, SHOP_FIELDS, SORT_FIELDS,
   STATUS_ORDER, STORAGE_KEY, cellText, clickSort, conversionValue, dateCell, displayValue, filterByLaunch, filterByName,
   gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
@@ -836,9 +836,11 @@ test('matrix views wiring', () => {
   const vue = read('./components/CampaignMatrix.vue');
   assert.match(vue, /midColumns\(this\.showGp, this\.state\.view\)/);
   assert.match(vue, /groupHeaders\(this\.showGp, this\.state\.view\)/);
-  assert.match(vue, /onView\(\) \{\s*this\.state\.sort = sortForView\(this\.state\.sort, this\.state\.view, this\.showGp, this\.showLang\);/);
+  // SIXTY-DAY-OPENS-SPEC D5: the Skipped expansion is passed on, so a reason-column sort survives
+  // only while the sub-columns show.
+  assert.match(vue, /onView\(\) \{\s*this\.state\.sort = sortForView\(this\.state\.sort, this\.state\.view, this\.showGp, this\.showLang, this\.skippedExpanded\);/);
   // Review R5: a language change re-checks the sort.
-  assert.match(vue, /showLang\(\) \{\s*this\.state\.sort = sortForView\(this\.state\.sort, this\.state\.view, this\.showGp, this\.showLang\);/);
+  assert.match(vue, /showLang\(\) \{\s*this\.state\.sort = sortForView\(this\.state\.sort, this\.state\.view, this\.showGp, this\.showLang, this\.skippedExpanded\);/);
   assert.match(vue, /created\(\) \{[^}]*sortForView\(/);
   // The totals label sits in whichever left column is first (Status since polish 2026-11-14).
   assert.match(vue, /<template v-if="row\.totals">\{\{ firstField === 'status' \? row\.name : '' \}\}<\/template>/);
@@ -846,4 +848,75 @@ test('matrix views wiring', () => {
   // Analytics sits between the Campaigns group and Users (polish 2026-11-14).
   const at = (s) => nav.indexOf(s);
   assert.ok(at('<!-- campaigns -->') < at('data-cy="analytics"') && at('data-cy="analytics"') < at('data-cy="users"'));
+});
+
+// --- integrations SIXTY-DAY-OPENS-SPEC D5 (frontend tests) ---
+
+test('SIXTY-DAY-OPENS D5: collapsed columns are today\'s; expanded adds exactly the three reasons right of Skipped', () => {
+  const today = ['status', 'date', 'brand', 'name', 'lang', 'sent', 'skipped'];
+  assert.deepEqual(leftColumns(true, true).map((c) => c.field), today);
+  assert.deepEqual(leftColumns(true, true, false).map((c) => c.field), today);
+  const exp = leftColumns(true, true, true).map((c) => c.field);
+  assert.deepEqual(exp, [...today, 'skipped_lookback', 'skipped_lookahead', 'skipped_silent']);
+  assert.deepEqual(exp.slice(today.length), [...REASON_FIELDS]);
+  assert.deepEqual(leftColumns(false, false, true).map((c) => c.field).slice(-4), ['skipped', ...REASON_FIELDS]);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  leftColumns(true, true, true).forEach((c) => {
+    assert.ok(en[c.label], c.label);
+    if (c.help) assert.ok(en[c.help], c.help);
+  });
+  ['analytics.matrix.skippedExpand', 'analytics.matrix.skippedCollapse', 'campaigns.silentSkip', 'campaigns.silentSkipHelp',
+    'campaigns.silentSkipScheduled', 'campaigns.toSendSilent', 'campaigns.warnSilentSkip', 'campaigns.invalidSilentSkip']
+    .forEach((k) => assert.ok(en[k], k));
+  // Each is sortable; a sort on one falls back to the default when collapsed.
+  REASON_FIELDS.forEach((f) => {
+    assert.ok(SORT_FIELDS.includes(f), f);
+    assert.equal(clickSort(DEFAULT_STATE.sort, f).order, 'desc');
+    assert.deepEqual(sortForView({ field: f, order: 'asc' }, 'health', false, true, true), { field: f, order: 'asc' });
+    assert.deepEqual(sortForView({ field: f, order: 'asc' }, 'health', false, true, false), DEFAULT_STATE.sort);
+  });
+});
+
+test('SIXTY-DAY-OPENS D5: reason cells, totals and the journey; they sum to Skipped', () => {
+  const fmt = (n) => `n${n}`;
+  const b1 = shapeRow({
+    ...api[0], id: 51, skipped: 10, skipped_lookback: 3, skipped_lookahead: 2, skipped_silent: 5, smart_off: false,
+  });
+  const b2 = shapeRow({
+    ...api[0], id: 52, skipped: 7, skipped_lookback: 0, skipped_lookahead: 0, skipped_silent: 7, smart_off: true,
+  });
+  const j = shapeRow({
+    ...api[0], id: 53, evergreen: true, skipped: null, skipped_lookback: 4, skipped_lookahead: 4, skipped_silent: 4,
+  });
+  assert.equal(cellText(b1, 'skipped_silent', 'pct', fmt), 'n5', 'a count in %/$ mode, never a rate');
+  assert.equal(cellText(b1, 'skipped_lookback', 'num', fmt), 'n3');
+  assert.equal(cellText(j, 'skipped_silent', 'num', fmt), MISSING, 'a journey has none');
+  // Smart Sending off with 60-day skips: the aggregate shows the count, not "off".
+  assert.equal(cellText(b2, 'skipped', 'num', fmt), 'n7');
+  [b1, b2].forEach((r) => assert.equal(r.skipped_lookback + r.skipped_lookahead + r.skipped_silent, r.skipped));
+  const t = totalsRow([b1, b2, j]);
+  assert.deepEqual([t.skipped, t.skipped_lookback, t.skipped_lookahead, t.skipped_silent], [17, 3, 2, 12]);
+  assert.equal(cellText(t, 'skipped_silent', 'num', fmt), 'n12');
+  assert.deepEqual(sortRows([b1, b2, j], { field: 'skipped_silent', order: 'desc' }).map((r) => r.id), [52, 51, 53]);
+  // An older server without the fields: null, '—'.
+  assert.equal(cellText(shapeRow({ ...api[0], id: 54, skipped: 2 }), 'skipped_silent', 'num', fmt), MISSING);
+});
+
+test('SIXTY-DAY-OPENS D5: Campaign Analytics -- the Skipped line expands to the Matrix\'s three reason cells', () => {
+  const fmt = (n) => `n${n}`;
+  const sel = [{
+    id: 61, name: 'Mid', evergreen: false, skipped: 9, smartOff: false, skippedLookback: 1, skippedLookahead: 2, skippedSilent: 6,
+  }, {
+    id: 62, name: 'Welcome', evergreen: true, skipped: null, smartOff: false, skippedLookback: null, skippedLookahead: null, skippedSilent: null,
+  }];
+  // Collapsed: exactly the earlier entries.
+  assert.deepEqual(analyticsSkippedRows(sel, fmt), [
+    { id: 61, name: 'Mid', text: 'n9' }, { id: 62, name: 'Welcome', text: MISSING },
+  ]);
+  const exp = analyticsSkippedRows(sel, fmt, undefined, true);
+  assert.deepEqual(exp[0].reasons.map((r) => [r.field, r.text]), [['skipped_lookback', 'n1'], ['skipped_lookahead', 'n2'], ['skipped_silent', 'n6']]);
+  assert.deepEqual(exp[1].reasons.map((r) => r.text), [MISSING, MISSING, MISSING]);
+  const view = readFileSync(new URL('./views/CampaignAnalytics.vue', import.meta.url), 'utf8');
+  assert.match(view, /analyticsSkippedRows\(this\.form\.campaigns, \(n\) => this\.\$utils\.formatNumber\(n\), \(k, p\) => this\.\$t\(k, p\), this\.skippedExpanded\)/);
+  assert.match(view, /skippedExpanded: false,/);
 });

@@ -481,7 +481,7 @@ import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus } from '../langs';
 import {
-  hasEnSplit, enSplit, smartSendingOf, toSendOf,
+  cloneAttribs, hasEnSplit, enSplit, smartSendingOf, toSendOf,
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
@@ -1035,7 +1035,9 @@ export default Vue.extend({
         altbody: c.altbody,
         headers: c.headers,
         // attribs carry the preheader; without them a clone silently loses it.
-        attribs: c.attribs,
+        // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- but never the 60-day opens toggle: every
+        // new campaign, cloned or not, starts off (audience-box.mjs::cloneAttribs).
+        attribs: cloneAttribs(c.attribs),
         send_later: sendLater,
         send_at: sendAt,
         archive: c.archive,

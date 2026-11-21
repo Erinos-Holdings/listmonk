@@ -219,6 +219,8 @@ func (c *Core) FillAudience(cm *models.Campaign) {
 	// Fork (smart sending, SMART-SENDING-SPEC D5) -- the attrib's effective value, on every served
 	// campaign JSON.
 	cm.SmartSendingOn = cm.SmartSending()
+	// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- likewise the toggle's effective value.
+	cm.SilentSkipOn = cm.SilentSkip()
 	if !wantsAudience(*cm) {
 		return
 	}
@@ -229,8 +231,11 @@ func (c *Core) FillAudience(cm *models.Campaign) {
 	}
 	cm.Audience = null.IntFrom(a.Total)
 	cm.AudienceNoLang = null.IntFrom(a.NoLang)
-	// D3 -- null exactly when Audience is: both come from the one row.
-	cm.AudienceSkipped = null.IntFrom(a.Skipped)
+	// D3 -- null exactly when Audience is: both come from the one row. 60-day opens (D4) --
+	// audience_skipped is the TOTAL would-skip count (Smart Sending + silent), so the To send the
+	// list and the box show agrees with the claim; the silent share is served beside it.
+	cm.AudienceSkipped = null.IntFrom(a.Skipped + a.SilentSkipped)
+	cm.AudienceSilentSkipped = null.IntFrom(a.SilentSkipped)
 }
 
 // wantsSentNoLang (fork, campaign-page audience box) reports whether cm carries the
@@ -604,6 +609,29 @@ type LangAudience struct {
 	Total   int `db:"total"`
 	NoLang  int `db:"no_lang"`
 	Skipped int `db:"skipped"`
+	// SilentSkipped (fork, 60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the audience members the STORED
+	// toggle would skip who are not Smart Sending skips (0 while it is off). Skipped stays Smart
+	// Sending's alone.
+	SilentSkipped int `db:"silent_skipped"`
+}
+
+// SilentAudience (fork, 60-day opens, SIXTY-DAY-OPENS-SPEC D4) is one get-campaign-silent-audience
+// row: the live preview's would-be silent skips, the stored toggle ignored, in all and by provider.
+type SilentAudience struct {
+	Skipped int `db:"skipped" json:"skipped"`
+	Gmail   int `db:"gmail" json:"gmail"`
+	Yahoo   int `db:"yahoo" json:"yahoo"`
+}
+
+// CampaignSilentAudience runs the live preview for campaign id (read-only).
+func (c *Core) CampaignSilentAudience(id int) (SilentAudience, error) {
+	var row SilentAudience
+	if err := c.q.GetCampaignSilentAudience.Get(&row, id); err != nil {
+		c.log.Printf("error counting silent audience (%d): %v", id, err)
+		return SilentAudience{}, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+	return row, nil
 }
 
 // CampaignUnreachableLang (fork, LIST-GRID-SPEC D13) counts the ACTIVE subscribers on a

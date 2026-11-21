@@ -129,6 +129,11 @@ type Campaign struct {
 	// attribs.smart_sending (SmartSending) wherever the campaign JSON is served (core.FillAudience).
 	// Never stored: the attrib is the one record.
 	SmartSendingOn bool `db:"-" json:"smart_sending"`
+
+	// SilentSkipOn (fork, 60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) is the effective value
+	// of attribs.silent_skip (SilentSkip) wherever the campaign JSON is served (core.FillAudience).
+	// Never stored: the attrib is the one record.
+	SilentSkipOn bool `db:"-" json:"silent_skip"`
 }
 
 // CampaignMeta contains fields tracking a campaign's progress.
@@ -176,6 +181,10 @@ type CampaignMeta struct {
 	// Sending would skip if the campaign went out now (same function, same audience join as the
 	// claim); null exactly when Audience is. The page shows Audience - AudienceSkipped.
 	AudienceSkipped null.Int `db:"-" json:"audience_skipped"`
+	// AudienceSilentSkipped (fork, 60-day opens, SIXTY-DAY-OPENS-SPEC D4) is the share of
+	// AudienceSkipped the 60-day opens toggle would skip under its STORED value (0 while off);
+	// AudienceSkipped is the TOTAL (Smart Sending + silent). Null exactly when Audience is.
+	AudienceSilentSkipped null.Int `db:"-" json:"audience_silent_skipped"`
 	// SentEn / SentNoLang: on a not-done ENGLISH evergreen only, how many of the subscribers
 	// it has sent to carry English / no language today (get-evergreen-sent-split) -- the
 	// split shown under its sent count. Null everywhere else.
@@ -590,6 +599,29 @@ func (c *Campaign) SmartSending() bool {
 // boolean -- the API refuses any other value (the SQL treats any other value as on, never raising).
 func ValidSmartSending(attribs JSON) bool {
 	v, present := attribs[SmartSendingAttrib]
+	if !present {
+		return true
+	}
+	_, ok := v.(bool)
+	return ok
+}
+
+// SilentSkipAttrib (fork, 60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) is the campaign attribs
+// key that switches the 60-day opens toggle ON for one broadcast: absent or false = off, true = on.
+const SilentSkipAttrib = "silent_skip"
+
+// SilentSkip reports whether the 60-day opens toggle is on as far as the attribs go: on only when
+// attribs.silent_skip is exactly the boolean true (brand_silent_skips reads only the JSONB true as
+// on). Whether it can skip anyone is the SQL function's (a regular, non-evergreen, branded campaign).
+func (c *Campaign) SilentSkip() bool {
+	v, ok := c.Attribs[SilentSkipAttrib].(bool)
+	return ok && v
+}
+
+// ValidSilentSkip (fork, 60-day opens, D4) reports whether attribs.silent_skip is absent or a
+// boolean -- the API refuses any other value (the SQL treats any other value as off, never raising).
+func ValidSilentSkip(attribs JSON) bool {
+	v, present := attribs[SilentSkipAttrib]
 	if !present {
 		return true
 	}

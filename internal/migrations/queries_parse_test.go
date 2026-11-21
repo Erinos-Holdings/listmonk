@@ -493,3 +493,44 @@ func TestGmailGapRecipientsAgree(t *testing.T) {
 		}
 	}
 }
+
+// Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC T7/I7) -- the open-observable providers have
+// ONE definition, schema.sql's open_observable_provider, and get-campaign-gmail-gap (which keeps its
+// own text for speed) carries the same two patterns verbatim.
+func TestObservableProviderPatternsAgree(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := os.ReadFile(filepath.Join(root, "schema.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(schema)
+	i := strings.Index(s, "CREATE OR REPLACE FUNCTION open_observable_provider(")
+	if i < 0 {
+		t.Fatal("schema.sql has no open_observable_provider")
+	}
+	j := strings.Index(s[i:], "$$ LANGUAGE")
+	if j < 0 {
+		t.Fatal("open_observable_provider has no body end")
+	}
+	pats := regexp.MustCompile(`~\* '([^']+)'`).FindAllStringSubmatch(s[i:i+j], -1)
+	if len(pats) != 2 {
+		t.Fatalf("open_observable_provider carries %d patterns, want 2: %v", len(pats), pats)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "queries", "campaigns.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	qs, err := goyesql.ParseBytes(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gap := qs["get-campaign-gmail-gap"].Query
+	for _, p := range pats {
+		if !strings.Contains(gap, "s.email ~* '"+p[1]+"'") {
+			t.Errorf("get-campaign-gmail-gap lacks the provider pattern %s", p[1])
+		}
+	}
+}

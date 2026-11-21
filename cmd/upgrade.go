@@ -123,6 +123,8 @@ var migList = []migFunc{
 	{"v6.2.38", migrations.V6_2_38},
 	// Fork migration (erinos): campaign pause time -- campaigns.paused_at (the latest transition to paused, written only by update-campaign-status), paused campaigns backfilled from updated_at (approximate) (CAMPAIGN-STATUS-FILTER-SPEC) — see internal/migrations/v6.2.39.go.
 	{"v6.2.39", migrations.V6_2_39},
+	// Fork migration (erinos): 60-day opens -- campaign_smart_skips.reason (lookback / lookahead / silent; existing rows backfilled by due_list_id), open_observable_provider (gmail / yahoo, the one provider set) and brand_silent_skips (the one definition of a silent member, read by the claim only while attribs.silent_skip is the JSONB true) (SIXTY-DAY-OPENS-SPEC) — see internal/migrations/v6.2.40.go.
+	{"v6.2.40", migrations.V6_2_40},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

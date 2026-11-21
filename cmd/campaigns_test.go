@@ -79,6 +79,79 @@ func TestSmartSendingValidation(t *testing.T) {
 	}
 }
 
+// Fork (60-day opens) -- integrations listmonk/SIXTY-DAY-OPENS-SPEC T9 (I10, I13): attribs.silent_skip
+// is accepted absent / true / false only at the API; the accessor is on only for the boolean true.
+func TestValidSilentSkip(t *testing.T) {
+	for name, tc := range map[string]struct {
+		attribs models.JSON
+		ok      bool
+	}{
+		"nil attribs": {nil, true},
+		"absent":      {models.JSON{"lang": "en"}, true},
+		"true":        {models.JSON{"silent_skip": true}, true},
+		"false":       {models.JSON{"silent_skip": false}, true},
+		"string yes":  {models.JSON{"silent_skip": "yes"}, false},
+		"string true": {models.JSON{"silent_skip": "true"}, false},
+		"number":      {models.JSON{"silent_skip": 1.0}, false},
+		"null":        {models.JSON{"silent_skip": nil}, false},
+	} {
+		if got := models.ValidSilentSkip(tc.attribs); got != tc.ok {
+			t.Errorf("%s: %v, want %v", name, got, tc.ok)
+		}
+	}
+	for attribs, want := range map[string]bool{`{}`: false, `{"silent_skip": true}`: true, `{"silent_skip": false}`: false, `{"silent_skip": "yes"}`: false} {
+		var c models.Campaign
+		if err := json.Unmarshal([]byte(attribs), &c.Attribs); err != nil {
+			t.Fatal(err)
+		}
+		if got := c.SilentSkip(); got != want {
+			t.Errorf("%s: SilentSkip() = %v, want %v", attribs, got, want)
+		}
+	}
+}
+
+// T9 (DB-backed) -- the API refuses a non-boolean silent_skip with a 400 naming the field and stores
+// nothing; true and false are stored; a new campaign is off (served silent_skip false).
+func TestSilentSkipValidation(t *testing.T) {
+	h := newLinkHarness(t)
+	var list int
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Acme', 'public', 'single') RETURNING id`)
+	lists := fmt.Sprintf(`"lists": [%d]`, list)
+	c := newLangCampaign(t, h, list, models.JSON{"lang": "en"})
+
+	fresh, err := h.app.core.GetCampaign(c.ID, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.app.core.FillAudience(&fresh)
+	if _, present := fresh.Attribs["silent_skip"]; present || fresh.SilentSkipOn {
+		t.Fatalf("a new campaign: attribs %v served %v, want off", fresh.Attribs, fresh.SilentSkipOn)
+	}
+
+	code, msg := putCampaign(t, h, c.ID, `{`+lists+`, "attribs": {"lang": "en", "silent_skip": "yes"}}`)
+	if code != http.StatusBadRequest || msg != h.app.i18n.T("campaigns.invalidSilentSkip") {
+		t.Fatalf("silent_skip \"yes\": %d %q, want 400 %q", code, msg, h.app.i18n.T("campaigns.invalidSilentSkip"))
+	}
+	if h.app.i18n.T("campaigns.invalidSilentSkip") == "campaigns.invalidSilentSkip" {
+		t.Fatal("campaigns.invalidSilentSkip is missing from en.json")
+	}
+	if got, _ := h.app.core.GetCampaign(c.ID, "", ""); got.Attribs["silent_skip"] != nil {
+		t.Fatalf("a refused value was stored: %v", got.Attribs)
+	}
+	for _, v := range []string{"true", "false"} {
+		if code, msg := putCampaign(t, h, c.ID, `{`+lists+`, "attribs": {"lang": "en", "silent_skip": `+v+`}}`); code != http.StatusOK {
+			t.Fatalf("silent_skip %s: %d %s", v, code, msg)
+		}
+		got, err := h.app.core.GetCampaign(c.ID, "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b, ok := got.Attribs["silent_skip"].(bool); !ok || fmt.Sprint(b) != v {
+			t.Fatalf("stored silent_skip %v, want %s", got.Attribs["silent_skip"], v)
+		}
+	}
+}
+
 // Fork (naming standard) -- integrations listmonk/NAMING-STANDARD-SPEC I12: the Campaigns page's
 // lang filter (query-campaigns $12) over the SHARED case table frontend/src/testdata/lang-filter.json
 // that naming.test.mjs reads for langMatches -- no-language campaigns are always included, and the

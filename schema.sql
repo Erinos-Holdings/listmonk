@@ -1313,3 +1313,109 @@ CREATE TABLE IF NOT EXISTS former_names (
 -- the campaign's latest transition to paused, written only by update-campaign-status. Mirrored in
 -- internal/migrations/v6.2.39.go.
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS paused_at TIMESTAMP WITH TIME ZONE NULL;
+
+-- Fork (60-day opens, integrations listmonk/SIXTY-DAY-OPENS-SPEC D1/D3). Mirrored in
+-- internal/migrations/v6.2.40.go (keep the two identical; the migration also backfills reason).
+--
+-- campaign_smart_skips.reason -- the campaign's skip record now holds every reason: lookback,
+-- lookahead (Smart Sending's two halves) or silent (the 60-day opens toggle). NULL is reachable
+-- (an older image's claim names no reason) and is read as lookahead when due_list_id is set, else
+-- lookback. NO CHECK constraint -- a raise inside next-campaigns would stall every claim.
+--
+-- open_observable_provider -- the ONE set of providers where an open is reliably observable:
+-- gmail, yahoo (the Yahoo/AOL family), NULL otherwise. The two patterns are the Gmail-gap query's
+-- (queries_parse_test asserts they agree).
+--
+-- brand_silent_skips -- the ONE definition of "silent". For broadcast camp_id, the members of its
+-- lists at an observable provider who (2) were sent at least floor observable finished broadcasts
+-- of the brand started inside the window (brand_eligible_sends' "sent" with the window and the
+-- row-unchanged-since-the-send test in place of the sunset anchor), (3) have no view, no click and
+-- no starter stamp (attribs.open_seed.<brand>.at, compared as text) of the brand inside the window,
+-- and (4) have never had a view from an image-blocking client. Window and floor are the two
+-- literals of the cfg CTE. No rows unless the campaign is regular, not evergreen, has a brand and
+-- -- when p_preview is false -- attribs.silent_skip is the JSONB true (an uncorrelated one-time
+-- filter, so a toggle-off campaign scans nothing). No checkpoint bound (the claim applies it).
+-- Callers intersect the rows with the campaign's audience. Nothing here casts a stored value.
+ALTER TABLE campaign_smart_skips ADD COLUMN IF NOT EXISTS reason TEXT NULL;
+CREATE OR REPLACE FUNCTION open_observable_provider(p_email TEXT) RETURNS TEXT AS $$
+    SELECT CASE
+        WHEN p_email ~* '@(gmail|googlemail)\.com$' THEN 'gmail'
+        WHEN p_email ~* '@(yahoo|aol|ymail|rocketmail)\.' THEN 'yahoo'
+        ELSE NULL END;
+$$ LANGUAGE sql IMMUTABLE PARALLEL SAFE;
+CREATE OR REPLACE FUNCTION brand_silent_skips(camp_id INT, p_preview BOOLEAN)
+RETURNS TABLE (subscriber_id INT, provider TEXT) AS $$
+    WITH cfg AS (
+        SELECT NOW() - INTERVAL '60 days' AS since, 3 AS floor
+    ),
+    camp AS MATERIALIZED (
+        SELECT c.id, (
+            SELECT MIN(list_brand_tag(l.tags)) FROM campaign_lists cl
+            JOIN lists l ON (l.id = cl.list_id)
+            WHERE cl.campaign_id = c.id
+        ) AS brand
+        FROM campaigns c
+        WHERE c.id = camp_id AND c.type = 'regular' AND NOT c.evergreen
+            AND (p_preview IS TRUE OR (c.attribs->'silent_skip') = 'true'::JSONB)
+    ),
+    mem AS MATERIALIZED (
+        SELECT DISTINCT sl.subscriber_id, open_observable_provider(s.email) AS provider,
+            COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') AS lang
+        FROM campaign_lists cl
+        JOIN subscriber_lists sl ON (sl.list_id = cl.list_id AND sl.status <> 'unsubscribed')
+        JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status <> 'blocklisted')
+        WHERE EXISTS (SELECT 1 FROM camp WHERE camp.brand IS NOT NULL)
+            AND cl.campaign_id = camp_id
+            AND open_observable_provider(s.email) IS NOT NULL
+    ),
+    blists AS (
+        SELECT l.id, l.optin FROM lists l
+        WHERE l.transactional = FALSE AND list_brand_tag(l.tags) = (SELECT camp.brand FROM camp)
+    ),
+    bcasts AS MATERIALIZED (
+        SELECT DISTINCT c.id, c.started_at, c.max_subscriber_id, c.attribs->>'lang' AS lang, bl.id AS list_id, bl.optin
+        FROM campaigns c
+        JOIN campaign_lists cl ON (cl.campaign_id = c.id)
+        JOIN blists bl ON (bl.id = cl.list_id)
+        WHERE EXISTS (SELECT 1 FROM mem)
+            AND c.type = 'regular' AND c.status = 'finished' AND c.evergreen = FALSE
+            AND c.started_at >= (SELECT cfg.since FROM cfg)
+            AND EXISTS (SELECT 1 FROM campaign_views v WHERE v.campaign_id = c.id AND v.subscriber_id IS NOT NULL)
+    ),
+    fair AS MATERIALIZED (
+        SELECT m.subscriber_id, m.provider
+        FROM mem m
+        JOIN subscriber_lists r ON (r.subscriber_id = m.subscriber_id)
+        JOIN bcasts b ON (b.list_id = r.list_id)
+        WHERE r.created_at <= b.started_at AND r.updated_at <= b.started_at
+            AND ((b.optin = 'double' AND r.status = 'confirmed') OR (b.optin <> 'double' AND r.status <> 'unsubscribed'))
+            AND m.subscriber_id <= b.max_subscriber_id
+            AND (b.lang IS NULL OR m.lang = b.lang)
+            AND NOT EXISTS (SELECT 1 FROM campaign_send_failures f
+                WHERE f.campaign_id = b.id AND f.subscriber_id = m.subscriber_id)
+            AND NOT EXISTS (SELECT 1 FROM campaign_smart_skips k
+                WHERE k.campaign_id = b.id AND k.subscriber_id = m.subscriber_id)
+        GROUP BY m.subscriber_id, m.provider
+        HAVING COUNT(DISTINCT b.id) >= (SELECT cfg.floor FROM cfg)
+    ),
+    bcamps AS MATERIALIZED (
+        SELECT DISTINCT cl.campaign_id AS id FROM campaign_lists cl
+        JOIN lists l ON (l.id = cl.list_id)
+        WHERE EXISTS (SELECT 1 FROM fair) AND list_brand_tag(l.tags) = (SELECT camp.brand FROM camp)
+    )
+    SELECT f.subscriber_id, f.provider
+    FROM fair f
+    WHERE NOT EXISTS (SELECT 1 FROM campaign_views v
+            WHERE v.subscriber_id = f.subscriber_id AND v.created_at >= (SELECT cfg.since FROM cfg)
+                AND v.campaign_id IN (SELECT bcamps.id FROM bcamps))
+        AND NOT EXISTS (SELECT 1 FROM link_clicks k
+            WHERE k.subscriber_id = f.subscriber_id AND k.created_at >= (SELECT cfg.since FROM cfg)
+                AND k.campaign_id IN (SELECT bcamps.id FROM bcamps))
+        AND NOT EXISTS (SELECT 1 FROM subscribers s
+            WHERE s.id = f.subscriber_id
+                AND (s.attribs->'open_seed'->(SELECT camp.brand FROM camp)->>'at') COLLATE "C"
+                    >= TO_CHAR((SELECT cfg.since FROM cfg) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') COLLATE "C")
+        AND NOT EXISTS (SELECT 1 FROM campaign_views v
+            WHERE v.subscriber_id = f.subscriber_id
+                AND v.client = ANY(ARRAY['outlook-windows', 'outlook-mac', 'outlook-mobile', 'thunderbird']));
+$$ LANGUAGE sql STABLE;
