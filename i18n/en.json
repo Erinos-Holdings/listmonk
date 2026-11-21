@@ -69,6 +69,7 @@
     "analytics.matrix.conversionsComputed": "Conversions computed {time}",
     "analytics.matrix.status": "Status",
     "analytics.matrix.skipped": "Skipped",
+    "analytics.matrix.skippedTotal": "Total",
     "analytics.matrix.off": "off",
     "analytics.matrix.skippedHelp": "Recipients skipped at send time: by Smart Sending (a journey email from this brand in the last 24 hours, or a journey step due in the next 24 hours) or by 60-day engaged when it was switched on, or because they already bought the promo (steps 2 and 3 with Purchase tags); expand for the count by reason; off = Smart Sending was switched off on the campaign and nobody was skipped; — for a journey.",
     "analytics.matrix.skippedExpand": "Show Skipped by reason",

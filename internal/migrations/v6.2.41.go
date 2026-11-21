@@ -41,6 +41,15 @@ func V6_2_41(db *sqlx.DB, fs stuffbin.FileSystem, ko *koanf.Koanf, lo *log.Logge
 	if _, err := tx.Exec(promoSeriesDDL); err != nil {
 		return err
 	}
+	// The expression index has NO planner statistics until subscribers is analyzed, and without them
+	// the planner prices an index probe as hundreds of rows and reads every subscriber instead
+	// (production, 2026-11-21: 4.5 s per lookup with a valid index; 0.13 s after ANALYZE --
+	// integrations PROMO-SERIES-SPEC G6). So the migration analyzes the table it just indexed.
+	// Not part of the DDL mirrored in schema.sql (a fresh install has no rows to analyze; autovacuum
+	// keeps the statistics from then on).
+	if _, err := tx.Exec(`ANALYZE subscribers`); err != nil {
+		return err
+	}
 
 	return tx.Commit()
 }

@@ -105,6 +105,7 @@ export function statusRank(status) {
 // SMART-SENDING-SPEC D5 -- a count, not a rate over Sent).
 // SIXTY-DAY-OPENS-SPEC D5: `expanded` (the Skipped glyph; component state, collapsed on every load)
 // adds the three reason sub-columns right of Skipped; collapsed, the list is exactly as before.
+const SKIP_GROUP = 'bm-skip';
 const REASON_COLUMNS = Object.freeze([
   { field: 'skipped_lookback', label: 'analytics.matrix.skippedLookback', help: 'analytics.matrix.skippedLookbackHelp' },
   { field: 'skipped_lookahead', label: 'analytics.matrix.skippedLookahead', help: 'analytics.matrix.skippedLookaheadHelp' },
@@ -119,15 +120,34 @@ export function leftColumns(showBrand = true, showLang = false, expanded = false
     { field: 'date', label: 'analytics.matrix.started' },
     { field: 'brand', label: 'dashboard.matrix.brand' },
     { field: 'name', label: 'analytics.matrix.campaign' },
-    // PROMO-SERIES-SPEC D7: Code and Step after Campaign (blank for a journey and the totals row).
+    // The user, 2026-11-21: Campaign | Lang | Code | Step (PROMO-SERIES-SPEC D7's Code and Step,
+    // blank for a journey and the totals row, now follow Lang).
+    { field: 'lang', label: 'analytics.matrix.lang' },
     { field: 'promo_code', label: 'analytics.matrix.promoCode' },
     { field: 'promo_step', label: 'analytics.matrix.promoStep' },
-    { field: 'lang', label: 'analytics.matrix.lang' },
     { field: 'sent', label: 'dashboard.matrix.sent' },
-    { field: 'skipped', label: 'analytics.matrix.skipped', help: 'analytics.matrix.skippedHelp' },
-    ...(expanded ? REASON_COLUMNS.map((c) => ({ ...c })) : []),
+    // The user, 2026-11-21: SKIPPED is a group in the top row (leftGroupHeaders), light red
+    // (`bm-skip`); its first column's sub-header reads "Total", the reasons follow when expanded.
+    {
+      field: 'skipped', label: 'analytics.matrix.skippedTotal', help: 'analytics.matrix.skippedHelp', group: SKIP_GROUP,
+    },
+    ...(expanded ? REASON_COLUMNS.map((c) => ({ ...c, group: SKIP_GROUP })) : []),
   ];
   return cols.filter((c) => (showBrand || c.field !== 'brand') && (showLang || c.field !== 'lang'));
+}
+
+// The top (group) row over the left columns, DERIVED from leftColumns so a span can never disagree
+// with the columns shown: one empty cell over the plain columns, then the SKIPPED group over Total
+// and (expanded) the reasons. `expand: true` marks the cell that carries the expand/collapse box.
+export function leftGroupHeaders(showBrand = true, showLang = false, expanded = false) {
+  const cols = leftColumns(showBrand, showLang, expanded);
+  const skip = cols.filter((c) => c.group === SKIP_GROUP).length;
+  return [
+    { label: '', span: cols.length - skip, cls: '' },
+    {
+      label: 'analytics.matrix.skipped', span: skip, cls: `${SKIP_GROUP} bm-group`, expand: true,
+    },
+  ];
 }
 
 // The Lang column is shown only when the language selection is All (naming.mjs, the one rule).

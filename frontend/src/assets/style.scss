@@ -1134,6 +1134,42 @@ section.dashboard (which reopens after them). */
     thead th.bm-gap {
       background-color: rgba(122, 122, 122, 0.12);
     }
+    /* The user, 2026-11-21 -- the Campaign Matrix's SKIPPED group (Total and, expanded, the
+    reasons): the same translucent-tint pair, in a light red. */
+    th.bm-skip, td.bm-skip {
+      background-color: rgba(241, 70, 104, 0.07);
+    }
+    thead th.bm-skip {
+      background-color: rgba(241, 70, 104, 0.14);
+    }
+    /* Its expand/collapse box, left of the group label: the Lists grid's +/- box (the standard
+    .expand-btn; the glyph centring is the global rule at the top of this file). */
+    .expand-btn.cm-skip-box {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.15rem;
+      height: 1.15rem;
+      margin-right: 0.4rem;
+      padding: 0;
+      border: 1px solid $grey-light;
+      border-radius: 3px;
+      background: $white;
+      color: $grey;
+      line-height: 1;
+      vertical-align: middle;
+      cursor: pointer;
+
+      .icon {
+        width: 1rem;
+        height: 1rem;
+        font-size: 0.7rem;
+      }
+      &:hover {
+        border-color: $primary;
+        color: $primary;
+      }
+    }
     th.bm-sorted, td.bm-sorted {
       background-image: linear-gradient(rgba(54, 54, 54, 0.07), rgba(54, 54, 54, 0.07));
     }

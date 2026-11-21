@@ -12,7 +12,8 @@ import {
   analyticsSkippedCell, analyticsSkippedRows, REASON_FIELDS, PROMO_FIELDS, promoCell,
   COUNT_FIELDS, DEFAULT_STATE, GAP_FAILED, GAP_PENDING, MISSING, NAME_MAX, PENDING_MARK, SHOP_FIELDS, SORT_FIELDS,
   STATUS_ORDER, STORAGE_KEY, cellText, clickSort, conversionValue, dateCell, displayValue, filterByLaunch, filterByName,
-  gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
+  gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, leftGroupHeaders, loadState,
+  mergeGapCounts,
   midColumns, nameCell, normalizeState, saveState, shapeRow, shapeRows, showBrandColumn,
   sortRows, statusCell, statusRank, tableRows, totalsRow,
   brandCell, langCell, mountainDay, showLangColumn, sortForView,
@@ -727,14 +728,46 @@ test('groupHeaders agree with midColumns', () => {
 });
 
 // Polish 2026-11-14: Status far left, Started (the date field), Brand, Campaign, Lang (All only).
-// Integrations PROMO-SERIES-SPEC D7: Code and Step follow Campaign.
+// Integrations PROMO-SERIES-SPEC D7 as re-ordered by the user 2026-11-21: Campaign | Lang | Code | Step.
 test('leftColumns order', () => {
-  assert.deepEqual(leftColumns(true, true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'promo_code', 'promo_step', 'lang', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(true, true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'lang', 'promo_code', 'promo_step', 'sent', 'skipped']);
   assert.deepEqual(leftColumns(true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'promo_code', 'promo_step', 'sent', 'skipped']);
-  assert.deepEqual(leftColumns(false, true).map((c) => c.field), ['status', 'date', 'name', 'promo_code', 'promo_step', 'lang', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(false, true).map((c) => c.field), ['status', 'date', 'name', 'lang', 'promo_code', 'promo_step', 'sent', 'skipped']);
   assert.equal(leftColumns(true).find((c) => c.field === 'date').label, 'analytics.matrix.started');
   const first = leftColumns(true, true).map((c) => clickSort({ field: 'views', order: 'desc' }, c.field).order);
-  assert.deepEqual(first, ['asc', 'desc', 'asc', 'asc', 'asc', 'desc', 'asc', 'desc', 'desc']);
+  assert.deepEqual(first, ['asc', 'desc', 'asc', 'asc', 'asc', 'asc', 'desc', 'desc', 'desc']);
+});
+
+// The user, 2026-11-21: SKIPPED is a group in the top row (beside CONVERSIONS), its first column's
+// sub-header reads "Total", and the group spans Total plus the reasons when expanded.
+test('the SKIPPED group: top-row span derived from the columns; Total sub-header; light-red class', () => {
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  [[true, true], [true, false], [false, true], [false, false]].forEach(([brand, lang]) => {
+    [false, true].forEach((expanded) => {
+      const cols = leftColumns(brand, lang, expanded);
+      const g = leftGroupHeaders(brand, lang, expanded);
+      assert.equal(g.length, 2);
+      assert.equal(g[0].span + g[1].span, cols.length, 'the two spans cover the left columns');
+      assert.equal(g[1].span, expanded ? 5 : 1);
+      assert.deepEqual([g[0].label, g[0].cls], ['', '']);
+      assert.deepEqual([g[1].label, g[1].cls, g[1].expand], ['analytics.matrix.skipped', 'bm-skip bm-group', true]);
+      // The group's columns are the LAST columns, contiguous, and only they carry the class.
+      const skip = cols.slice(cols.length - g[1].span);
+      skip.forEach((c) => assert.equal(c.group, 'bm-skip', c.field));
+      cols.slice(0, cols.length - g[1].span).forEach((c) => assert.equal(c.group, undefined, c.field));
+      assert.equal(skip[0].field, 'skipped');
+    });
+  });
+  const total = leftColumns(true).find((c) => c.field === 'skipped');
+  assert.equal(total.label, 'analytics.matrix.skippedTotal');
+  assert.equal(en['analytics.matrix.skippedTotal'], 'Total');
+  assert.equal(en['analytics.matrix.skipped'], 'Skipped');
+  // The component renders the box in the group cell, left of the label, never in a sort header.
+  const vue = readFileSync(new URL('./components/CampaignMatrix.vue', import.meta.url), 'utf8');
+  const box = vue.indexOf('data-cy="cm-skipped-expand"');
+  assert.ok(box > 0 && box < vue.indexOf('{{ $t(g.label) }}'), 'the box precedes the group label');
+  assert.match(vue.slice(vue.lastIndexOf('<button', box), box), /class="expand-btn cm-skip-box"/);
+  assert.equal((vue.match(/cm-skipped-expand/g) || []).length, 1);
 });
 
 test('loadState view', () => {
@@ -856,7 +889,7 @@ test('matrix views wiring', () => {
 // PROMO-SERIES-SPEC T14: collapsed, the Skipped section is one column (as before); expanded adds
 // exactly FOUR reasons -- Purchased after 60-day engaged.
 test('SIXTY-DAY-OPENS D5 / PROMO-SERIES T14: collapsed columns are today\'s; expanded adds exactly the four reasons right of Skipped', () => {
-  const today = ['status', 'date', 'brand', 'name', 'promo_code', 'promo_step', 'lang', 'sent', 'skipped'];
+  const today = ['status', 'date', 'brand', 'name', 'lang', 'promo_code', 'promo_step', 'sent', 'skipped'];
   assert.deepEqual(leftColumns(true, true).map((c) => c.field), today);
   assert.deepEqual(leftColumns(true, true, false).map((c) => c.field), today);
   const exp = leftColumns(true, true, true).map((c) => c.field);

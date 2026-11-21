@@ -88,11 +88,27 @@ func TestPromoSeriesMigration_V6_2_41(t *testing.T) {
 	h.db.MustExec(`DROP FUNCTION promo_email_hash(TEXT)`)
 	h.db.MustExec(`DROP TABLE promo_purchases`)
 
+	// PROMO-SERIES-SPEC G6 -- the migration ANALYZEs subscribers, so the new expression index has
+	// planner statistics from the start (without them production read every subscriber per lookup).
+	// Rows must exist for statistics to exist.
+	h.db.MustExec(`INSERT INTO subscribers (uuid, email, name)
+		SELECT gen_random_uuid(), 'g6-stats-' || g || '@example.com', 'g6' FROM generate_series(1, 50) g`)
+	var statsBefore int
+	h.db.Get(&statsBefore, `SELECT COUNT(*) FROM pg_stats WHERE tablename = 'idx_subs_promo_email_hash'`)
+	if statsBefore != 0 {
+		t.Fatalf("the dropped index still has %d statistics row(s)", statsBefore)
+	}
+
 	if err := V6_2_41(h.db, nil, nil, lo); err != nil {
 		t.Fatalf("V6_2_41 run 1: %v", err)
 	}
 	if got := h.promoShape(); got != fresh {
 		t.Fatalf("migration shape differs from schema.sql\n migration %s\n schema    %s", got, fresh)
+	}
+	var statsAfter int
+	h.db.Get(&statsAfter, `SELECT COUNT(*) FROM pg_stats WHERE tablename = 'idx_subs_promo_email_hash'`)
+	if statsAfter != 1 {
+		t.Fatalf("after the migration the expression index has %d statistics row(s), want 1 (ANALYZE subscribers missing?)", statsAfter)
 	}
 	h.db.MustExec(`INSERT INTO promo_purchases (order_id, kind, value, value_lc, email_hash, ordered_at) VALUES ('o1', 'sku', 'X', 'x', 'h', NOW())`)
 	if err := V6_2_41(h.db, nil, nil, lo); err != nil {

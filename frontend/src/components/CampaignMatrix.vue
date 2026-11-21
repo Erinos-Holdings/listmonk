@@ -70,23 +70,32 @@
                Clicks, then the view's groups (campaignMatrix.mjs::groupHeaders, derived from the
                same column list as the header cells -- MATRIX-VIEWS-SPEC D2). -->
           <tr class="bm-groups">
-            <th :colspan="leftCols.length" />
+            <!-- The user, 2026-11-21: SKIPPED is a group in this row beside CONVERSIONS (light red,
+                 campaignMatrix.mjs::leftGroupHeaders -- spans derived from the columns). Its
+                 expand/collapse box (the standard .expand-btn plus/minus, as on the Lists grid) sits
+                 LEFT of the label, away from the sub-header's sort arrow. SIXTY-DAY-OPENS-SPEC D5:
+                 component state, collapsed on every load; collapsed, the table is as wide as before. -->
+            <th v-for="(g, i) in leftGroupCols" :key="`l${i}`" :colspan="g.span" :class="g.cls"
+              :data-cy="g.expand ? 'cm-group-skipped' : null">
+              <template v-if="g.expand">
+                <button type="button" class="expand-btn cm-skip-box" data-cy="cm-skipped-expand"
+                  :title="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
+                  :aria-label="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
+                  :aria-expanded="skippedExpanded ? 'true' : 'false'" @click.stop="toggleSkipped">
+                  <b-icon :icon="skippedExpanded ? 'minus' : 'plus'" size="is-small" />
+                </button>{{ $t(g.label) }}
+              </template>
+            </th>
             <th v-for="(g, i) in groupCols" :key="i" :colspan="g.span" :class="g.cls">{{ groupLabel(g) }}</th>
           </tr>
           <tr>
             <th v-for="c in leftCols" :key="c.field"
-              :class="[bmTh(c.field), {
+              :class="[bmTh(c.field), c.group || null, {
                 'has-text-right': c.field === 'sent' || c.field === 'skipped' || isReason(c.field), 'has-text-centered': c.field === 'lang',
               }]"
               :title="c.help ? $t(c.help) : null"
               :aria-sort="bmAria(c.field)" @click="onSort(c.field)" :data-cy="`cm-head-${c.field}`">
               {{ $t(c.label) }}<span class="bm-arrow">{{ bmArrow(c.field) }}</span>
-              <!-- SIXTY-DAY-OPENS-SPEC D5: the glyph expands Skipped by reason (component state,
-                   collapsed on every load; collapsed, the table is as wide as before). -->
-              <a v-if="c.field === 'skipped'" href="#" class="cm-skip-glyph ml-1" data-cy="cm-skipped-expand"
-                :title="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
-                :aria-label="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
-                :aria-expanded="skippedExpanded ? 'true' : 'false'" @click.prevent.stop="toggleSkipped">{{ skippedExpanded ? '−' : '+' }}</a>
             </th>
             <th v-for="c in midCols" :key="c.field" class="has-text-right" :class="[bmTh(c.field), c.group]"
               :title="c.help ? $t(c.help) : null" :aria-sort="bmAria(c.field)" @click="onSort(c.field)"
@@ -142,13 +151,13 @@
                 {{ cell(row, 'sent') }}
               </td>
               <!-- SMART-SENDING-SPEC D5: the recorded skips, "off" for a bypass, '—' for a journey. -->
-              <td v-else-if="c.field === 'skipped'" :key="c.field" class="has-text-right" :class="bmTd('skipped')"
+              <td v-else-if="c.field === 'skipped'" :key="c.field" class="has-text-right bm-skip" :class="bmTd('skipped')"
                 :data-cy="`cm-skipped-${row.totals ? 'totals' : row.id}`">
                 {{ cell(row, 'skipped') }}
               </td>
               <!-- SIXTY-DAY-OPENS-SPEC D5: Look-back, Look-ahead, 60-day engaged and (PROMO-SERIES-SPEC
                    D5) Purchased (expanded only). -->
-              <td v-else-if="isReason(c.field)" :key="c.field" class="has-text-right" :class="bmTd(c.field)"
+              <td v-else-if="isReason(c.field)" :key="c.field" class="has-text-right bm-skip" :class="bmTd(c.field)"
                 :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
                 {{ cell(row, c.field) }}
               </td>
@@ -185,7 +194,8 @@ import { mapGetters, mapState } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   CONVERSION_FIELDS, GAP_FAILED, GAP_FIELDS, GAP_PENDING, GAP_READY, REASON_FIELDS, brandCell, cellText, clickSort, conversionValue,
-  dateCell, filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, langCell, leftColumns, loadState,
+  dateCell, filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, langCell, leftColumns, leftGroupHeaders,
+  loadState,
   mergeGapCounts, midColumns, nameCell, promoCell, saveState, shapeRows, showBrandColumn, showLangColumn, sortForView,
   statusCell, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
@@ -258,6 +268,10 @@ export default Vue.extend({
     // Attribution (Founder, Self, Creator, Corp) -- campaignMatrix.mjs::midColumns.
     midCols() {
       return midColumns(this.showGp, this.state.view);
+    },
+
+    leftGroupCols() {
+      return leftGroupHeaders(this.showBrand, this.showLang, this.skippedExpanded);
     },
 
     groupCols() {
