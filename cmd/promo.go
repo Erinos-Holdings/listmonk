@@ -80,8 +80,10 @@ func validatePromoPurchases(req promoPurchasesReq, now time.Time) ([]core.PromoP
 	seen := map[key]bool{}
 	out := []core.PromoPurchaseRow{}
 	for i, o := range orders {
-		if n := utf8.RuneCountInString(o.OrderID); n < 1 || n > promoMaxOrderIDLen {
-			return nil, fmt.Errorf("order %d: order_id must be 1-%d characters", i, promoMaxOrderIDLen)
+		// Stage 4 V4 -- the id goes through the values' check too (1-128 characters, no control
+		// character), so a control character is a 400, never a 500 from PostgreSQL.
+		if n := utf8.RuneCountInString(o.OrderID); n < 1 || n > promoMaxOrderIDLen || !promoValueOK(o.OrderID) {
+			return nil, fmt.Errorf("order %d: order_id must be 1-%d characters with no control character", i, promoMaxOrderIDLen)
 		}
 		if !promoHashRe.MatchString(o.EmailHash) {
 			return nil, fmt.Errorf("order %d: email_hash must be 64 lower-case hex characters", i)

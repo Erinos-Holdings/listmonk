@@ -71,6 +71,8 @@ func TestValidatePromoPurchases(t *testing.T) {
 		"201 values":       req(ord("A", "2026-11-20T10:00:00Z", many[:150], many[150:])),
 		"empty order id":   req(ord("", "2026-11-20T10:00:00Z", []string{"x"}, nil)),
 		"129-char id":      req(ord(strings.Repeat("é", 129), "2026-11-20T10:00:00Z", []string{"x"}, nil)),
+		"NUL in id":        req(ord("A\x00B", "2026-11-20T10:00:00Z", []string{"x"}, nil)),
+		"control in id":    req(ord("A\tB", "2026-11-20T10:00:00Z", []string{"x"}, nil)),
 		"value too long":   req(ord("A", "2026-11-20T10:00:00Z", []string{strings.Repeat("v", 129)}, nil)),
 		"blank value":      req(ord("A", "2026-11-20T10:00:00Z", nil, []string{" "})),
 		"control value":    req(ord("A", "2026-11-20T10:00:00Z", []string{"a\x00b"}, nil)),

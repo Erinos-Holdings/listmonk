@@ -203,6 +203,35 @@ export const silentDefaultOnStep = ({
   return silentDefaultFor(nextStep);
 };
 
+// D6 -- a Step change applied to the form: { promoStep, silentSkip } after the user picks `nextStep`
+// (blank as ''), the 60-day engaged default re-applied by silentDefaultOnStep. `ctx` is
+// { draft, touched }. A new object; the form is not mutated.
+export const applyStepChange = (form, nextStep, ctx) => {
+  const promoStep = nextStep === null || nextStep === undefined ? '' : nextStep;
+  const next = silentDefaultOnStep({
+    draft: !!(ctx && ctx.draft),
+    prevStep: form.promoStep,
+    nextStep: promoStep,
+    silentOn: form.silentSkip === true,
+    touched: !!(ctx && ctx.touched),
+  });
+  return { promoStep, silentSkip: next === null ? form.silentSkip === true : next };
+};
+
+// Stage 4 V3 / 4b W1 -- what the SAVE folds when the Code is empty while a Step is set: the Step
+// counts as blank exactly as if the user had picked blank (applyStepChange(form, '')), so a 60-day
+// default the Step set never outlives its series. Decided at the fold, never while typing: a Code
+// field emptied for a moment and retyped keeps its Step (a watcher that reset it lost the Step for
+// good). Returns { promoStep, silentSkip } as the fold should read them; the form is not mutated.
+export const settleForFold = (form, ctx) => {
+  const hasCode = String(form.promoCode || '').trim() !== '';
+  const hasStep = !(form.promoStep === '' || form.promoStep === null || form.promoStep === undefined);
+  if (hasCode || !hasStep) {
+    return { promoStep: form.promoStep, silentSkip: form.silentSkip === true };
+  }
+  return applyStepChange(form, '', ctx);
+};
+
 // D6, Stage 2 S1 -- which value the fold writes for silent_skip: the form's whenever the Smart Sending
 // row applies (showSmartSending -- a new campaign included), else the stored one.
 export const silentSkipForFold = ({ showSmartSending, formSilent, storedSilent }) => (showSmartSending

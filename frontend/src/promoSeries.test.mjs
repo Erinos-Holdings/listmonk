@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  codeCounter, codeProblem, foldPromo, parseTags, pickerLabel, previewKey, previewQuery, promoCells,
-  promoEditable, promoFormOf, promoNotes, purchasedArg, samePromo, silentDefaultOnStep, silentSkipForFold, tagProblem,
+  applyStepChange, codeCounter, codeProblem, foldPromo, parseTags, pickerLabel, previewKey, previewQuery, promoCells,
+  promoEditable, promoFormOf, promoNotes, purchasedArg, samePromo, settleForFold, silentDefaultOnStep, silentSkipForFold, tagProblem,
 } from './promoSeries.mjs'; // eslint-disable-line import/extensions
 
 test('the tag parser mirrors D1 for display: trim, drop empties, case-insensitive dedupe, the shape rules', () => {
@@ -93,6 +93,35 @@ test('silentDefaultOnStep (I15): the D6 table', () => {
     };
     assert.equal(silentDefaultOnStep(args), want, JSON.stringify(args));
   });
+});
+
+test('Stage 4 V3: emptying the Code resets the Step as picking blank does -- a new campaign posts no silent_skip and no promo key', () => {
+  const ctx = { draft: true, touched: false }; // a new campaign: a draft, the switch not shown
+  let form = {
+    promoCode: '', promoStep: '', promoTagsText: '', silentSkip: false,
+  };
+  form = { ...form, promoCode: 'BFCM-D3' };
+  form = { ...form, ...applyStepChange(form, 2, ctx) };
+  assert.deepEqual([form.promoStep, form.silentSkip], [2, true], 'step 2 turns 60-day engaged on');
+  assert.deepEqual(settleForFold(form, ctx), { promoStep: 2, silentSkip: true }, 'with a Code the fold reads the form');
+  // Saved with the Code emptied: the fold reads a blank Step and its default (off).
+  form = { ...form, promoCode: '' };
+  const r = settleForFold(form, ctx);
+  assert.deepEqual(r, { promoStep: '', silentSkip: false });
+  const attribs = foldPromo({ lang: 'en' }, form, true);
+  const silent = silentSkipForFold({ showSmartSending: true, formSilent: r.silentSkip, storedSilent: undefined });
+  assert.equal(silent, false, 'no silent_skip is posted');
+  assert.deepEqual(attribs, { lang: 'en' }, 'no promo key is posted');
+  // Stage 4b W1 -- nothing is reset WHILE TYPING: the form keeps its Step through an empty Code, so
+  // a Code emptied and retyped saves with the Step and the switch it had.
+  assert.deepEqual([form.promoStep, form.silentSkip], [2, true], 'the form itself is untouched');
+  form = { ...form, promoCode: 'BFCM-D4' };
+  assert.deepEqual(settleForFold(form, ctx), { promoStep: 2, silentSkip: true });
+  assert.deepEqual(foldPromo({}, form, true), { promo_code: 'BFCM-D4', promo_step: 2 });
+  // No Step set: the form's values, whatever the Code.
+  assert.deepEqual(settleForFold({ promoCode: '', promoStep: '', silentSkip: true }, ctx), { promoStep: '', silentSkip: true });
+  // A switch the user touched is kept even when the Step counts as blank.
+  assert.deepEqual(settleForFold({ promoCode: ' ', promoStep: 2, silentSkip: true }, { draft: true, touched: true }), { promoStep: '', silentSkip: true });
 });
 
 test('silentSkipForFold (D6, S1): the form value whenever the Smart Sending row applies, a new campaign included', () => {

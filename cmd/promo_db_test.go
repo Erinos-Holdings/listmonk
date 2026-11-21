@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 	"github.com/lib/pq"
 )
@@ -148,6 +149,42 @@ func skipKeys(t *testing.T, h *linkHarness, camp int) string {
 	return strings.Join(out, " ")
 }
 
+// claimOnce runs the path's claim for camp (every other campaign excluded) -- drain's first step.
+func (p claimPath) claimOnce(t *testing.T, h *linkHarness, camp int, others []int) {
+	t.Helper()
+	zeros := make([]int64, len(others))
+	ids := make([]int64, len(others))
+	for i, o := range others {
+		ids[i] = int64(o)
+	}
+	if _, err := p.nextCampaigns.Exec(pq.Int64Array(ids), pq.Int64Array(zeros)); err != nil {
+		t.Fatalf("next-campaigns: %v", err)
+	}
+}
+
+// batch fetches ONE batch of size n for a claimed camp through the path's batch statement.
+func (p claimPath) batch(t *testing.T, h *linkHarness, camp, n int) []int {
+	t.Helper()
+	var camps []runningCamp
+	if err := h.q.GetRunningCampaign.Select(&camps, camp); err != nil || len(camps) == 0 {
+		t.Fatalf("campaign %d not running: %v", camp, err)
+	}
+	var listIDs []int
+	for _, c := range camps {
+		listIDs = append(listIDs, c.ListID)
+	}
+	var out []models.Subscriber
+	if err := p.nextSubscribers.Select(&out, camps[0].CampaignID, camps[0].CampaignType, camps[0].LastSubscriberID,
+		camps[0].MaxSubscriberID, pq.Array(listIDs), n, camps[0].Lang); err != nil {
+		t.Fatalf("next-campaign-subscribers: %v", err)
+	}
+	ids := []int{}
+	for _, s := range out {
+		ids = append(ids, s.ID)
+	}
+	return ids
+}
+
 // --- T1 (I1) -- the differential over the real claim path ---
 
 func TestPromoDifferential(t *testing.T) {
@@ -240,6 +277,80 @@ func TestPromoDifferential(t *testing.T) {
 		}
 		h.db.MustExec(`UPDATE campaigns SET status = 'cancelled' WHERE id IN ($1, $2)`, a, b)
 	}
+
+	// Stage 4 V5 -- the same assertions for an opt-in campaign (no promo attribs, and step 2 + tags
+	// with a Code, which an opt-in never applies), and for a pause and re-claim: both paths claim,
+	// send one batch, are paused, see the same new purchases (one below both checkpoints, one above),
+	// are resumed and re-claimed, then batched to exhaustion.
+	compare := func(label string, a, b int, gotOld, gotNew []int) {
+		t.Helper()
+		if fmt.Sprint(gotOld) != fmt.Sprint(gotNew) {
+			t.Fatalf("%s: recipients differ\n old %v\n new %v", label, gotOld, gotNew)
+		}
+		var toOld, toNew int
+		h.db.Get(&toOld, `SELECT to_send FROM campaigns WHERE id = $1`, a)
+		h.db.Get(&toNew, `SELECT to_send FROM campaigns WHERE id = $1`, b)
+		if toOld != toNew || toNew != len(gotNew) {
+			t.Fatalf("%s: to_send old %d new %d, recipients %d", label, toOld, toNew, len(gotNew))
+		}
+		if o, n := skipKeys(t, h, a), skipKeys(t, h, b); o != n {
+			t.Fatalf("%s: skip rows differ\n old %s\n new %s", label, o, n)
+		} else if strings.Contains(n, "purchased") {
+			t.Fatalf("%s: a purchased row was written: %s", label, n)
+		}
+		h.db.MustExec(`UPDATE campaigns SET status = 'cancelled' WHERE id IN ($1, $2)`, a, b)
+	}
+	others := func(a, b int) []int {
+		var all []int
+		h.db.Select(&all, `SELECT id FROM campaigns WHERE id NOT IN ($1, $2)`, a, b)
+		return all
+	}
+	for _, attribs := range []string{`{}`, promoAttribs(`"BFCM-D3"`, "2", promoTags, false)} {
+		a := f.camp("Old optin "+attribs, false, "optin", "running", attribs, w.target, double)
+		b := f.camp("New optin "+attribs, false, "optin", "running", attribs, w.target, double)
+		gotOld := old.drain(t, h, a, append(others(a, b), b))
+		gotNew := cur.drain(t, h, b, append(others(a, b), a))
+		if !has(gotNew, dblPending) || has(gotNew, dblConfirmed) {
+			t.Fatalf("opt-in %s: recipients %v (pending %d confirmed %d)", attribs, gotNew, dblPending, dblConfirmed)
+		}
+		compare("opt-in "+attribs, a, b, gotOld, gotNew)
+	}
+
+	late := w.member("late@acme.test")
+	for i, attribs := range []string{`{}`, promoAttribs(`"BFCM-D3"`, "1", promoTags, true), promoAttribs("", "2", promoTags, false)} {
+		a := f.camp("Old pause "+attribs, false, "regular", "running", attribs, w.target, double)
+		b := f.camp("New pause "+attribs, false, "regular", "running", attribs, w.target, double)
+		exA, exB := append(others(a, b), b), append(others(a, b), a)
+		first := map[int][]int{}
+		for _, run := range []struct {
+			p    claimPath
+			camp int
+			ex   []int
+		}{{old, a, exA}, {cur, b, exB}} {
+			run.p.claimOnce(t, h, run.camp, run.ex)
+			first[run.camp] = run.p.batch(t, h, run.camp, 2)
+		}
+		if fmt.Sprint(first[a]) != fmt.Sprint(first[b]) || len(first[a]) == 0 {
+			t.Fatalf("pause %s: first batches %v / %v", attribs, first[a], first[b])
+		}
+		// New purchases while paused: the first batch's recipient (below both checkpoints) and a member
+		// above them.
+		var e1 string
+		h.db.Get(&e1, `SELECT email FROM subscribers WHERE id = $1`, first[a][0])
+		w.buy(fmt.Sprintf("late-a-%d", i), "promotion", "deal-3", e1, "1 minute")
+		w.buy(fmt.Sprintf("late-b-%d", i), "sku", "BFCM-9", "late@acme.test", "1 minute")
+		h.db.MustExec(`UPDATE campaigns SET status = 'paused' WHERE id IN ($1, $2)`, a, b)
+		h.db.MustExec(`UPDATE campaigns SET status = 'running' WHERE id IN ($1, $2)`, a, b)
+		gotOld := append(first[a], old.drain(t, h, a, exA)...)
+		gotNew := append(first[b], cur.drain(t, h, b, exB)...)
+		sort.Ints(gotOld)
+		sort.Ints(gotNew)
+		if !has(gotNew, late) {
+			t.Fatalf("pause %s: the member who bought while paused was not sent: %v", attribs, gotNew)
+		}
+		compare("pause "+attribs, a, b, gotOld, gotNew)
+	}
+
 	var n int
 	h.db.Get(&n, `SELECT COUNT(*) FROM campaign_smart_skips WHERE reason = 'purchased'`)
 	if n != 0 {
@@ -750,6 +861,7 @@ func TestPromoFeedRoutes(t *testing.T) {
 		"2 days ahead":       `{"orders": [{"order_id": "B1", "email_hash": "` + hash + `", "ordered_at": "` + time.Now().Add(49*time.Hour).Format(time.RFC3339) + `", "promotions": ["x"]}]}`,
 		"empty order id":     `{"orders": [` + order("", `["x"]`, `[]`) + `]}`,
 		"129-char order id":  `{"orders": [` + order(strings.Repeat("o", 129), `["x"]`, `[]`) + `]}`,
+		"NUL in order id":    `{"orders": [{"order_id": "B\u00001", "email_hash": "` + hash + `", "ordered_at": "` + at.Format(time.RFC3339) + `", "promotions": ["x"]}]}`,
 		"129-char value":     `{"orders": [` + order("B1", `["`+strings.Repeat("v", 129)+`"]`, `[]`) + `]}`,
 		"blank value":        `{"orders": [` + order("B1", `["  "]`, `[]`) + `]}`,
 		"control value":      `{"orders": [` + order("B1", `["a\u0007b"]`, `[]`) + `]}`,
@@ -968,5 +1080,88 @@ func TestPromoReasonCounts(t *testing.T) {
 		if x.ID == odd && (x.PromoCode.Valid || x.PromoStep.Valid || !x.SkippedPurchased.Valid || x.SkippedPurchased.Int != 0) {
 			t.Fatalf("odd attribs %+v", x)
 		}
+	}
+}
+
+// --- Stage 4 V1 -- the purchaser lookup probes idx_subs_promo_email_hash ---
+
+// With a few thousand subscribers on the campaign's list, the plan of promo_purchasers for an
+// applicable campaign uses the expression index (never hashes every member), returns the same rows
+// with and without the index, and a non-applicable campaign still never reaches the subscribers.
+func TestPromoPurchasersUsesHashIndex(t *testing.T) {
+	h := newLinkHarness(t)
+	f := ssFixture{t: t, h: h}
+	list := f.list("Acme newsletter", "brand:acme")
+	h.db.MustExec(`INSERT INTO subscribers (uuid, email, name, status)
+		SELECT gen_random_uuid(), 'member' || g || '@acme.test', 'S', 'enabled' FROM generate_series(1, 5000) g`)
+	h.db.MustExec(`INSERT INTO subscriber_lists (subscriber_id, list_id, status)
+		SELECT id, $1, 'confirmed' FROM subscribers WHERE email LIKE 'member%'`, list)
+	h.db.MustExec(`INSERT INTO promo_purchases (order_id, kind, value, value_lc, email_hash, ordered_at)
+		SELECT 'o' || g, 'promotion', 'Deal-3', 'deal-3', promo_email_hash('member' || g || '@acme.test'), NOW() - INTERVAL '1 day'
+		FROM generate_series(1, 5000, 50) g`)
+	h.db.MustExec(`ANALYZE subscribers`)
+	h.db.MustExec(`ANALYZE subscriber_lists`)
+	h.db.MustExec(`ANALYZE promo_purchases`)
+	on := f.camp("On", false, "regular", "draft", promoAttribs(`"C"`, "2", `["deal-3"]`, false), list)
+	off := f.camp("Off", false, "regular", "draft", promoAttribs(`"C"`, "1", `["deal-3"]`, false), list)
+
+	// The function is inlined into the query, so EXPLAIN shows its plan.
+	plan := func(camp int) string {
+		t.Helper()
+		var lines []string
+		if err := h.db.Select(&lines, `EXPLAIN SELECT * FROM promo_purchasers($1, promo_campaign_tags($1))`, camp); err != nil {
+			t.Fatal(err)
+		}
+		return strings.Join(lines, "\n")
+	}
+	p := plan(on)
+	if !strings.Contains(p, "idx_subs_promo_email_hash") {
+		t.Fatalf("the applicable campaign's plan does not probe idx_subs_promo_email_hash:\n%s", p)
+	}
+	if strings.Contains(p, "Seq Scan on subscribers") {
+		t.Fatalf("the plan still scans every subscriber:\n%s", p)
+	}
+
+	timed := func(camp int) ([]int, time.Duration) {
+		t.Helper()
+		ids := []int{}
+		start := time.Now()
+		if err := h.db.Select(&ids, `SELECT subscriber_id FROM promo_purchasers($1, promo_campaign_tags($1)) ORDER BY 1`, camp); err != nil {
+			t.Fatal(err)
+		}
+		return ids, time.Since(start)
+	}
+	with, dWith := timed(on)
+	if len(with) != 100 {
+		t.Fatalf("purchasers %d, want 100", len(with))
+	}
+	// The same rows without the index (inside a transaction, rolled back).
+	tx := h.db.MustBegin()
+	tx.MustExec(`DROP INDEX idx_subs_promo_email_hash`)
+	var without []int
+	start := time.Now()
+	if err := tx.Select(&without, `SELECT subscriber_id FROM promo_purchasers($1, promo_campaign_tags($1)) ORDER BY 1`, on); err != nil {
+		t.Fatal(err)
+	}
+	dWithout := time.Since(start)
+	tx.Rollback()
+	if fmt.Sprint(with) != fmt.Sprint(without) {
+		t.Fatalf("rows differ with and without the index: %d vs %d", len(with), len(without))
+	}
+	t.Logf("promo_purchasers over 5,000 members, 100 matching orders: %v with the index, %v without", dWith, dWithout)
+
+	// A non-applicable campaign never reaches the subscribers (the one-time filter on an empty m).
+	var analyzed []string
+	if err := h.db.Select(&analyzed, `EXPLAIN ANALYZE SELECT * FROM promo_purchasers($1, promo_campaign_tags($1))`, off); err != nil {
+		t.Fatal(err)
+	}
+	a := strings.Join(analyzed, "\n")
+	for _, l := range analyzed {
+		if strings.Contains(l, "subscribers") && !strings.Contains(l, "never executed") {
+			t.Fatalf("a step-1 campaign reached the subscribers:\n%s", a)
+		}
+	}
+	if ids, _ := timed(off); len(ids) != 0 {
+		t.Fatalf("step 1: %v", ids)
 	}
 }

@@ -1445,8 +1445,18 @@ $$ LANGUAGE sql STABLE;
 -- promo_feed_stale -- rule 4 and the 24-hour literal: no feed row was written in the last 24 hours.
 -- promo_purchasers -- the subscribers on the campaign's lists, any status, whose canonical-email hash
 -- is a matching order's; no rows when the tags are empty or the feed is stale (fail open). The
--- matching orders first, then the list members joined on the computed hash. No checkpoint bound
+-- matching orders first, then the subscribers holding those hashes (by idx_subs_promo_email_hash,
+-- one probe per matching hash), then their membership of the campaign's lists. No checkpoint bound
 -- (the claim applies it); callers intersect the rows with the campaign's audience.
+--
+-- idx_subs_promo_email_hash -- the expression index the purchaser lookup probes (integrations
+-- PROMO-SERIES-SPEC Stage 4 V1). It depends on promo_email_hash's definition: CHANGING THAT FUNCTION
+-- REQUIRES `REINDEX INDEX idx_subs_promo_email_hash` IN THE SAME MIGRATION (a stale index answers
+-- the old hashes). So does a PostgreSQL major-version upgrade or any change of the database's
+-- collation / lc_ctype (Stage 4b W2: the function is declared IMMUTABLE, but LOWER follows lc_ctype,
+-- so stored entries for non-ASCII addresses can go stale). Its build takes a write lock on
+-- subscribers for its duration (seconds), so the migration runs only inside the release gate's
+-- no-broadcast window.
 CREATE TABLE IF NOT EXISTS promo_purchases (
     order_id TEXT NOT NULL,
     kind TEXT NOT NULL,
@@ -1469,6 +1479,7 @@ CREATE OR REPLACE FUNCTION promo_email_hash(email TEXT) RETURNS TEXT AS $$
         FROM (SELECT LOWER(BTRIM(COALESCE(email, ''), ' ')) AS e) y
     ) x;
 $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE;
+CREATE INDEX IF NOT EXISTS idx_subs_promo_email_hash ON subscribers (promo_email_hash(email));
 CREATE OR REPLACE FUNCTION promo_applicable_tags(p_type TEXT, p_evergreen BOOLEAN, p_code JSONB, p_step JSONB, p_tags JSONB)
 RETURNS TEXT[] AS $$
     SELECT CASE
@@ -1508,12 +1519,15 @@ CREATE OR REPLACE FUNCTION promo_purchasers(p_camp_id INT, p_tags TEXT[]) RETURN
     WITH m AS MATERIALIZED (
         SELECT DISTINCT o.email_hash FROM promo_matching_orders(p_tags) o
         WHERE COALESCE(CARDINALITY(p_tags), 0) > 0 AND NOT promo_feed_stale()
+    ),
+    s AS MATERIALIZED (
+        SELECT x.id FROM m
+        CROSS JOIN LATERAL (
+            SELECT sb.id FROM subscribers sb WHERE promo_email_hash(sb.email) = m.email_hash
+        ) x
     )
     SELECT DISTINCT sl.subscriber_id
-    FROM campaign_lists cl
-    JOIN subscriber_lists sl ON (sl.list_id = cl.list_id)
-    JOIN subscribers s ON (s.id = sl.subscriber_id)
-    WHERE cl.campaign_id = p_camp_id
-        AND EXISTS (SELECT 1 FROM m)
-        AND promo_email_hash(s.email) IN (SELECT m.email_hash FROM m);
+    FROM s
+    JOIN subscriber_lists sl ON (sl.subscriber_id = s.id)
+    WHERE EXISTS (SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = p_camp_id AND cl.list_id = sl.list_id);
 $$ LANGUAGE sql STABLE;

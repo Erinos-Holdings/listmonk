@@ -33,7 +33,8 @@ func (h *evergreenHarness) promoShape() string {
 		FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'promo_purchases'
 		ORDER BY ordinal_position`)
 	var idx []string
-	h.db.Select(&idx, `SELECT indexdef FROM pg_indexes WHERE tablename = 'promo_purchases' ORDER BY indexname`)
+	h.db.Select(&idx, `SELECT indexdef FROM pg_indexes WHERE tablename = 'promo_purchases'
+		OR indexname = 'idx_subs_promo_email_hash' ORDER BY indexname`)
 	return strings.Join(cols, ", ") + " | " + strings.Join(idx, "; ") + " | " + strings.Join(fn, "; ")
 }
 
@@ -56,6 +57,8 @@ func TestPromoSeriesMigration_V6_2_41(t *testing.T) {
 		"promo_email_hash(email text)", "promo_applicable_tags(p_type text, p_evergreen boolean, p_code jsonb, p_step jsonb, p_tags jsonb)",
 		"promo_campaign_tags(camp_id integer)", "promo_matching_orders(p_tags text[])", "promo_feed_stale()",
 		"promo_purchasers(p_camp_id integer, p_tags text[])", "IMMUTABLE",
+		// Stage 4 V1 -- the expression index the purchaser lookup probes.
+		"CREATE INDEX idx_subs_promo_email_hash ON public.subscribers USING btree (promo_email_hash(email))",
 	} {
 		if !strings.Contains(fresh, want) {
 			t.Fatalf("fresh schema lacks %q: %s", want, fresh)
@@ -75,7 +78,8 @@ func TestPromoSeriesMigration_V6_2_41(t *testing.T) {
 		t.Fatalf("promo_purchases carries %d CHECK constraint(s)", checks)
 	}
 
-	// A v6.2.40 database: no table, no functions.
+	// A v6.2.40 database: no table, no functions, no index.
+	h.db.MustExec(`DROP INDEX idx_subs_promo_email_hash`)
 	h.db.MustExec(`DROP FUNCTION promo_purchasers(INT, TEXT[])`)
 	h.db.MustExec(`DROP FUNCTION promo_feed_stale()`)
 	h.db.MustExec(`DROP FUNCTION promo_matching_orders(TEXT[])`)
@@ -101,5 +105,12 @@ func TestPromoSeriesMigration_V6_2_41(t *testing.T) {
 	}
 	if got := h.promoShape(); got != fresh {
 		t.Fatalf("second run shape differs")
+	}
+	// The index exists after both runs, exactly once, and is valid.
+	var idxN int
+	h.db.Get(&idxN, `SELECT COUNT(*) FROM pg_index i JOIN pg_class c ON (c.oid = i.indexrelid)
+		WHERE c.relname = 'idx_subs_promo_email_hash' AND i.indisvalid`)
+	if idxN != 1 {
+		t.Fatalf("idx_subs_promo_email_hash: %d valid index(es) after two runs, want 1", idxN)
 	}
 }

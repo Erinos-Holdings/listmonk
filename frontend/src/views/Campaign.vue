@@ -726,7 +726,7 @@ import {
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import {
   codeCounter, codeProblem, foldPromo, parseTags, previewKey as promoPreviewKeyOf, previewQuery, promoEditable as promoEditableOf,
-  promoFormOf, promoNotes, purchasedArg, silentDefaultOnStep, silentSkipForFold,
+  promoFormOf, promoNotes, purchasedArg, applyStepChange, settleForFold, silentSkipForFold,
 } from '../promoSeries.mjs'; // eslint-disable-line import/extensions
 import {
   OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, runMessage, selectFromQuery,
@@ -1871,18 +1871,13 @@ export default Vue.extend({
     // unless the user clicked it this session or it differs from the default of the step being left
     // (promoSeries.mjs::silentDefaultOnStep).
     onPromoStep(v) {
-      const prev = this.form.promoStep;
-      this.form.promoStep = v === null || v === undefined ? '' : v;
-      const next = silentDefaultOnStep({
-        draft: this.isNew || (this.data && this.data.status === 'draft'),
-        prevStep: prev,
-        nextStep: this.form.promoStep,
-        silentOn: this.form.silentSkip === true,
-        touched: this.silentTouched,
-      });
-      if (next !== null) {
-        this.form.silentSkip = next;
-      }
+      const r = applyStepChange(this.form, v, this.promoStepCtx());
+      this.form.promoStep = r.promoStep;
+      this.form.silentSkip = r.silentSkip;
+    },
+
+    promoStepCtx() {
+      return { draft: this.isNew || (this.data && this.data.status === 'draft'), touched: this.silentTouched };
     },
 
     foldAttribs(base) {
@@ -1915,8 +1910,12 @@ export default Vue.extend({
       // Promo series (PROMO-SERIES-SPEC D6, Stage 2 S1): the form's value is read whenever the Smart
       // Sending row applies -- a new campaign included, whose Step change may have set it
       // (promoSeries.mjs::silentSkipForFold). A campaign created without a Step posts what it did.
+      // Stage 4 V3 / 4b W1 -- with the Code empty the Step counts as blank AT THE SAVE (D6 re-applied,
+      // promoSeries.mjs::settleForFold), so a 60-day default a Step set never outlives its series;
+      // nothing is reset while the Code is being typed.
+      const settled = settleForFold(this.form, this.promoStepCtx());
       const silentOn = silentSkipForFold({
-        showSmartSending: this.showSmartSending, formSilent: this.form.silentSkip, storedSilent: silentSkipOf(this.data),
+        showSmartSending: this.showSmartSending, formSilent: settled.silentSkip, storedSilent: silentSkipOf(this.data),
       });
       if (silentOn || (attribs && ('silent_skip' in attribs || 'silentSkip' in attribs))) {
         attribs = foldSilentSkip(attribs, silentOn);
@@ -3461,9 +3460,13 @@ export default Vue.extend({
           this.promoPreview = null;
           return;
         }
-        if (this.promoPreviewFor === key) {
+        if (this.promoPreviewFor === key && this.promoPreview) {
           return;
         }
+        // Stage 4 V2: the previous values' numbers are never shown for new values -- cleared as the
+        // timer is armed (and the answer's owner forgotten, so returning to it refetches).
+        this.promoPreview = null;
+        this.promoPreviewFor = null;
         this.promoPreviewTimer = setTimeout(() => {
           this.promoPreviewTimer = null;
           this.promoPreviewFor = key;
@@ -3472,7 +3475,12 @@ export default Vue.extend({
             if (this.promoPreviewFor === key && r) {
               this.promoPreview = { orders: Number(r.orders) || 0, skipped: Number(r.skipped) || 0, stale: r.stale === true };
             }
-          }).catch(() => {});
+          }).catch(() => {
+            // A failed request leaves no answer.
+            if (this.promoPreviewFor === key) {
+              this.promoPreview = null;
+            }
+          });
         }, 400);
       },
     },
