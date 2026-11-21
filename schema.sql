@@ -1329,7 +1329,7 @@ ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS paused_at TIMESTAMP WITH TIME ZON
 -- brand_silent_skips -- the ONE definition of "silent". For broadcast camp_id, the members of its
 -- lists at an observable provider who (2) were sent at least floor observable finished broadcasts
 -- of the brand started inside the window (brand_eligible_sends' "sent" with the window and the
--- row-unchanged-since-the-send test in place of the sunset anchor), (3) have no view, no click and
+-- row-unchanged-and-confirmed-before-the-send test in place of the sunset anchor), (3) have no view, no click and
 -- no starter stamp (attribs.open_seed.<brand>.at, compared as text) of the brand inside the window,
 -- and (4) have never had a view from an image-blocking client. Window and floor are the two
 -- literals of the cfg CTE. No rows unless the campaign is regular, not evergreen, has a brand and
@@ -1388,6 +1388,7 @@ RETURNS TABLE (subscriber_id INT, provider TEXT) AS $$
         JOIN subscriber_lists r ON (r.subscriber_id = m.subscriber_id)
         JOIN bcasts b ON (b.list_id = r.list_id)
         WHERE r.created_at <= b.started_at AND r.updated_at <= b.started_at
+            AND COALESCE(r.confirmed_at, r.created_at) <= b.started_at
             AND ((b.optin = 'double' AND r.status = 'confirmed') OR (b.optin <> 'double' AND r.status <> 'unsubscribed'))
             AND m.subscriber_id <= b.max_subscriber_id
             AND (b.lang IS NULL OR m.lang = b.lang)

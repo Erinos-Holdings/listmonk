@@ -104,6 +104,7 @@ RETURNS TABLE (subscriber_id INT, provider TEXT) AS $$
         JOIN subscriber_lists r ON (r.subscriber_id = m.subscriber_id)
         JOIN bcasts b ON (b.list_id = r.list_id)
         WHERE r.created_at <= b.started_at AND r.updated_at <= b.started_at
+            AND COALESCE(r.confirmed_at, r.created_at) <= b.started_at
             AND ((b.optin = 'double' AND r.status = 'confirmed') OR (b.optin <> 'double' AND r.status <> 'unsubscribed'))
             AND m.subscriber_id <= b.max_subscriber_id
             AND (b.lang IS NULL OR m.lang = b.lang)

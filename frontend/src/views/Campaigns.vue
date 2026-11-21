@@ -481,7 +481,7 @@ import CopyText from '../components/CopyText.vue';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import { isSendPlus } from '../langs';
 import {
-  cloneAttribs, hasEnSplit, enSplit, smartSendingOf, toSendOf,
+  cloneAttribs, hasEnSplit, enSplit, skipSplitOf, smartSendingOf, toSendOf,
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
@@ -734,10 +734,20 @@ export default Vue.extend({
           none: this.$utils.formatNumber(parts.none),
         });
       }
+      // 60-day opens (integrations SIXTY-DAY-OPENS-SPEC D4; Stage 4 V3) -- the served skip count is
+      // the TOTAL, so each cause gets its own sentence with its own share, as on the Campaign page.
       const ts = toSendOf(c);
-      return ts && ts.skipped > 0 ? `${base} ${this.$t('campaigns.toSendSkipped', {
-        n: this.$utils.formatNumber(ts.skipped), total: this.$utils.formatNumber(ts.total),
+      if (!ts) {
+        return base;
+      }
+      const sp = skipSplitOf(c);
+      let out = sp.smart > 0 ? `${base} ${this.$t('campaigns.toSendSkipped', {
+        n: this.$utils.formatNumber(sp.smart), total: this.$utils.formatNumber(ts.total),
       })}` : base;
+      if (sp.silent > 0) {
+        out = `${out} ${this.$t('campaigns.toSendSilentList', { n: this.$utils.formatNumber(sp.silent) })}`;
+      }
+      return out;
     },
 
     toSendCount(c) {

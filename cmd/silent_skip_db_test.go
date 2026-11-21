@@ -98,7 +98,8 @@ func (w *silentWorld) member(email string, history ...int) int {
 	w.f.join(s, w.target, "confirmed")
 	for _, l := range history {
 		w.f.join(s, l, "confirmed")
-		w.h.db.MustExec(`UPDATE subscriber_lists SET created_at = NOW() - INTERVAL '90 days', updated_at = NOW() - INTERVAL '90 days'
+		w.h.db.MustExec(`UPDATE subscriber_lists SET created_at = NOW() - INTERVAL '90 days', updated_at = NOW() - INTERVAL '90 days',
+			confirmed_at = NOW() - INTERVAL '90 days'
 			WHERE subscriber_id = $1 AND list_id = $2`, s, l)
 	}
 	return s
@@ -199,6 +200,18 @@ func TestSilentSkipRule(t *testing.T) {
 	w.h.db.MustExec(`UPDATE subscriber_lists SET status = 'confirmed' WHERE subscriber_id = $1 AND list_id = $2`, held, w.three)
 	w.h.db.MustExec(`UPDATE subscriber_lists SET updated_at = NOW() - INTERVAL '1 day' WHERE subscriber_id = $1 AND list_id = $2`, held, w.three)
 	sent["held during the three broadcasts, returned yesterday"] = held
+
+	// Unsubscribed 40 days ago, re-opted in today through the REAL writer (add-subscribers-to-lists
+	// with an explicit status -- the storefront re-join and the Manage Preferences tick). That writer
+	// does not move updated_at, so the row still carries the unsubscribe's time; the re-confirmation
+	// stamps confirmed_at, which is what keeps the three broadcasts sent meanwhile from counting
+	// (integrations SIXTY-DAY-OPENS-SPEC Stage 4 V1).
+	back := w.member("back@gmail.com", w.three)
+	w.h.db.MustExec(`UPDATE subscriber_lists SET status = 'unsubscribed', updated_at = NOW() - INTERVAL '40 days' WHERE subscriber_id = $1 AND list_id = $2`, back, w.three)
+	if _, err := w.h.q.AddSubscribersToLists.Exec(pq.Array([]int{back}), pq.Array([]int{w.three}), "confirmed"); err != nil {
+		t.Fatalf("re-add through add-subscribers-to-lists: %v", err)
+	}
+	sent["unsubscribed 40 days ago, re-opted in today through the real writer"] = back
 
 	on := f.camp("Acme mid", false, "regular", "draft", `{"silent_skip": true}`, w.target)
 	got := w.fn(on, false)
@@ -482,7 +495,8 @@ func TestSilentSkipClaim(t *testing.T) {
 				t.Fatalf("first batch %v, want [%d]", got, o1)
 			}
 			f.join(o1, w.three, "confirmed")
-			h.db.MustExec(`UPDATE subscriber_lists SET created_at = NOW() - INTERVAL '90 days', updated_at = NOW() - INTERVAL '90 days'
+			h.db.MustExec(`UPDATE subscriber_lists SET created_at = NOW() - INTERVAL '90 days', updated_at = NOW() - INTERVAL '90 days',
+				confirmed_at = NOW() - INTERVAL '90 days'
 				WHERE subscriber_id = $1 AND list_id = $2`, o1, w.three)
 			probe := f.camp("Probe", false, "regular", "draft", `{"silent_skip": true}`, w.target)
 			if !has(w.fn(probe, false), o1) {
