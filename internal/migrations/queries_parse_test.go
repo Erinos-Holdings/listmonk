@@ -534,3 +534,58 @@ func TestObservableProviderPatternsAgree(t *testing.T) {
 		}
 	}
 }
+
+// Fork (promo series, integrations PROMO-SERIES-SPEC D2/D3/D5, I17) -- the promo statements parse
+// under their names with no stray tag; every reader of "who is a purchaser" goes through
+// promo_purchasers over promo_campaign_tags (the stored values) or promo_applicable_tags (the
+// preview), and no query re-states the matching rule or either literal (the window and the
+// staleness limit live only in their schema.sql functions).
+func TestPromoQueriesParse(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "queries", "campaigns.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	qs, err := goyesql.ParseBytes(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"get-campaign-promo-audience", "upsert-promo-purchases", "get-promo-purchases-summary", "get-promo-purchases-order"} {
+		q, ok := qs[name]
+		if !ok || !strings.Contains(q.Query, "promo_purchases") && !strings.Contains(q.Query, "promo_purchasers") {
+			t.Errorf("%s missing or empty after parse", name)
+			continue
+		}
+		if len(q.Tags) != 0 {
+			t.Errorf("%s carries tags %v (a colon-bearing comment line?)", name, q.Tags)
+		}
+	}
+	for name, want := range map[string]string{
+		"next-campaigns":               "promo_purchasers(camps.id, promo_campaign_tags(camps.id))",
+		"get-campaign-lang-audience":   "promo_purchasers($1, promo_campaign_tags($1))",
+		"get-campaign-silent-audience": "promo_purchasers($1, promo_campaign_tags($1))",
+		"get-campaign-promo-audience":  "promo_purchasers($1, promo_applicable_tags(c.type, c.evergreen, c.code, c.step, c.tags))",
+	} {
+		if !strings.Contains(qs[name].Query, want) {
+			t.Errorf("%s does not read the purchasers through %s", name, want)
+		}
+	}
+	if !strings.Contains(qs["next-campaigns"].Query, "'purchased'") {
+		t.Error("next-campaigns records no purchased reason")
+	}
+	for _, name := range []string{"get-campaign-promo-audience", "get-campaign-lang-audience", "get-promo-purchases-summary"} {
+		if !strings.Contains(qs[name].Query, "promo_feed_stale()") {
+			t.Errorf("%s does not take stale from promo_feed_stale()", name)
+		}
+	}
+	for name, q := range qs {
+		for _, banned := range []string{"p.value_lc =", "INTERVAL '60 days'", "INTERVAL '24 hours'", "LEFT(p.value_lc"} {
+			if strings.Contains(q.Query, banned) && strings.Contains(q.Query, "promo") {
+				t.Errorf("%s re-states the purchaser rule (%s)", name, banned)
+			}
+		}
+	}
+}

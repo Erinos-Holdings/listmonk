@@ -125,6 +125,8 @@ var migList = []migFunc{
 	{"v6.2.39", migrations.V6_2_39},
 	// Fork migration (erinos): 60-day opens -- campaign_smart_skips.reason (lookback / lookahead / silent; existing rows backfilled by due_list_id), open_observable_provider (gmail / yahoo, the one provider set) and brand_silent_skips (the one definition of a silent member, read by the claim only while attribs.silent_skip is the JSONB true) (SIXTY-DAY-OPENS-SPEC) — see internal/migrations/v6.2.40.go.
 	{"v6.2.40", migrations.V6_2_40},
+	// Fork migration (erinos): promo series -- promo_purchases (the purchase feed, buyers as canonical-email hashes) and six functions: promo_email_hash, promo_applicable_tags (the one applicability rule), promo_campaign_tags, promo_matching_orders (the 60-day window), promo_feed_stale (the 24-hour limit) and promo_purchasers (the one definition of a purchaser, read by the claim as reason purchased) (PROMO-SERIES-SPEC) — see internal/migrations/v6.2.41.go.
+	{"v6.2.41", migrations.V6_2_41},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

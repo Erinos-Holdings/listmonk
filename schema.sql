@@ -1420,3 +1420,100 @@ RETURNS TABLE (subscriber_id INT, provider TEXT) AS $$
             WHERE v.subscriber_id = f.subscriber_id
                 AND v.client = ANY(ARRAY['outlook-windows', 'outlook-mac', 'outlook-mobile', 'thunderbird']));
 $$ LANGUAGE sql STABLE;
+
+-- Fork (promo series, integrations listmonk/PROMO-SERIES-SPEC D2-D4). Mirrored in
+-- internal/migrations/v6.2.41.go (keep the two identical; v6_2_41_db_test.go asserts it verbatim).
+--
+-- promo_purchases -- the purchase feed the order leg of the integrations HandleListmonkSync writes
+-- (PUT /api/promo/purchases): one row per (order, kind, value), kind promotion or sku (validated by
+-- the API, no CHECK), the buyer as a hash of the canonical email only (most buyers never subscribe).
+-- Never deleted; canceled or refunded orders still count.
+--
+-- promo_email_hash -- lower-case hex SHA-256 of integrations lib/email-canonical.ts canonicalEmail,
+-- re-stated (trimmed of spaces, lower-cased; a gmail.com / googlemail.com domain after the LAST @,
+-- not at position 1, loses the local part's dots and becomes gmail.com; +tags kept). One case file,
+-- models/testdata/email-canonical.json, pins both homes.
+--
+-- promo_applicable_tags -- the ONE applicability rule: the lower-cased, trimmed string tags when the
+-- campaign is regular, not evergreen, carries a non-empty JSONB string Code and the JSONB Step 2 or
+-- 3; else an empty array. JSONB comparison and jsonb_typeof guards only -- no stored value can raise.
+-- promo_campaign_tags is that rule over a campaign's stored values (the claim's and the counts' entry).
+--
+-- promo_matching_orders -- rule 1 and the 60-day window literal: feed rows inside the window that are
+-- a promotion EQUAL to a tag without * or a SKU STARTING WITH the prefix of a tag ending in * (left()
+-- comparison, so no character of a tag is a pattern). Not gated on staleness.
+-- promo_feed_stale -- rule 4 and the 24-hour literal: no feed row was written in the last 24 hours.
+-- promo_purchasers -- the subscribers on the campaign's lists, any status, whose canonical-email hash
+-- is a matching order's; no rows when the tags are empty or the feed is stale (fail open). The
+-- matching orders first, then the list members joined on the computed hash. No checkpoint bound
+-- (the claim applies it); callers intersect the rows with the campaign's audience.
+CREATE TABLE IF NOT EXISTS promo_purchases (
+    order_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    value TEXT NOT NULL,
+    value_lc TEXT NOT NULL,
+    email_hash TEXT NOT NULL,
+    ordered_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    received_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (order_id, kind, value)
+);
+CREATE INDEX IF NOT EXISTS idx_promo_purchases_ordered_at ON promo_purchases (ordered_at);
+CREATE OR REPLACE FUNCTION promo_email_hash(email TEXT) RETURNS TEXT AS $$
+    SELECT ENCODE(SHA256(CONVERT_TO(
+        CASE WHEN x.p > 1 AND SUBSTR(x.e, x.p + 1) IN ('gmail.com', 'googlemail.com')
+            THEN REPLACE(LEFT(x.e, x.p - 1), '.', '') || '@gmail.com'
+            ELSE x.e END, 'UTF8')), 'hex')
+    FROM (
+        SELECT y.e, (CASE WHEN STRPOS(REVERSE(y.e), '@') > 0
+            THEN LENGTH(y.e) - STRPOS(REVERSE(y.e), '@') + 1 ELSE 0 END) AS p
+        FROM (SELECT LOWER(BTRIM(COALESCE(email, ''), ' ')) AS e) y
+    ) x;
+$$ LANGUAGE sql IMMUTABLE PARALLEL SAFE;
+CREATE OR REPLACE FUNCTION promo_applicable_tags(p_type TEXT, p_evergreen BOOLEAN, p_code JSONB, p_step JSONB, p_tags JSONB)
+RETURNS TEXT[] AS $$
+    SELECT CASE
+        WHEN p_type = 'regular' AND p_evergreen IS FALSE
+            AND JSONB_TYPEOF(p_code) = 'string' AND BTRIM(p_code #>> '{}', ' ') <> ''
+            AND (p_step = '2'::JSONB OR p_step = '3'::JSONB)
+        THEN COALESCE((
+            SELECT ARRAY_AGG(DISTINCT LOWER(BTRIM(t.v #>> '{}', ' ')))
+            FROM JSONB_ARRAY_ELEMENTS(CASE WHEN JSONB_TYPEOF(p_tags) = 'array' THEN p_tags ELSE '[]'::JSONB END) t(v)
+            WHERE JSONB_TYPEOF(t.v) = 'string' AND BTRIM(t.v #>> '{}', ' ') <> ''
+        ), ARRAY[]::TEXT[])
+        ELSE ARRAY[]::TEXT[] END;
+$$ LANGUAGE sql IMMUTABLE;
+CREATE OR REPLACE FUNCTION promo_campaign_tags(camp_id INT) RETURNS TEXT[] AS $$
+    SELECT COALESCE((
+        SELECT promo_applicable_tags(c.type::TEXT, c.evergreen,
+            c.attribs->'promo_code', c.attribs->'promo_step', c.attribs->'promo_tags')
+        FROM campaigns c WHERE c.id = camp_id
+    ), ARRAY[]::TEXT[]);
+$$ LANGUAGE sql STABLE;
+CREATE OR REPLACE FUNCTION promo_matching_orders(p_tags TEXT[]) RETURNS TABLE (order_id TEXT, email_hash TEXT) AS $$
+    SELECT DISTINCT p.order_id, p.email_hash
+    FROM promo_purchases p
+    WHERE COALESCE(CARDINALITY(p_tags), 0) > 0
+        AND p.ordered_at >= NOW() - INTERVAL '60 days'
+        AND EXISTS (
+            SELECT 1 FROM UNNEST(p_tags) t(tag)
+            WHERE (p.kind = 'promotion' AND RIGHT(t.tag, 1) <> '*' AND p.value_lc = LOWER(t.tag))
+                OR (p.kind = 'sku' AND RIGHT(t.tag, 1) = '*' AND LENGTH(t.tag) > 3
+                    AND LEFT(p.value_lc, LENGTH(t.tag) - 1) = LOWER(LEFT(t.tag, LENGTH(t.tag) - 1)))
+        );
+$$ LANGUAGE sql STABLE;
+CREATE OR REPLACE FUNCTION promo_feed_stale() RETURNS BOOLEAN AS $$
+    SELECT NOT EXISTS (SELECT 1 FROM promo_purchases p WHERE p.received_at >= NOW() - INTERVAL '24 hours');
+$$ LANGUAGE sql STABLE;
+CREATE OR REPLACE FUNCTION promo_purchasers(p_camp_id INT, p_tags TEXT[]) RETURNS TABLE (subscriber_id INT) AS $$
+    WITH m AS MATERIALIZED (
+        SELECT DISTINCT o.email_hash FROM promo_matching_orders(p_tags) o
+        WHERE COALESCE(CARDINALITY(p_tags), 0) > 0 AND NOT promo_feed_stale()
+    )
+    SELECT DISTINCT sl.subscriber_id
+    FROM campaign_lists cl
+    JOIN subscriber_lists sl ON (sl.list_id = cl.list_id)
+    JOIN subscribers s ON (s.id = sl.subscriber_id)
+    WHERE cl.campaign_id = p_camp_id
+        AND EXISTS (SELECT 1 FROM m)
+        AND promo_email_hash(s.email) IN (SELECT m.email_hash FROM m);
+$$ LANGUAGE sql STABLE;

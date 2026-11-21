@@ -245,6 +245,14 @@
       <b-table-column v-if="showLang" v-slot="props" field="lang" :label="$t('analytics.matrix.lang')" width="5%" centered>
         <span data-cy="campaign-lang" :title="langChipTitle(props.row)">{{ langText(props.row) }}</span>
       </b-table-column>
+      <!-- Fork (promo series, integrations PROMO-SERIES-SPEC D7) -- Code and Step, from the served
+           fields; blank for a journey (promoSeries.mjs::promoCells). Columns only. -->
+      <b-table-column v-slot="props" field="promo_code" :label="$t('campaigns.promoCode')" width="7%">
+        <span data-cy="campaign-promo-code">{{ promoCellsOf(props.row).code }}</span>
+      </b-table-column>
+      <b-table-column v-slot="props" field="promo_step" :label="$t('campaigns.promoStepShort')" width="4%" centered>
+        <span data-cy="campaign-promo-step">{{ promoCellsOf(props.row).step }}</span>
+      </b-table-column>
       <b-table-column v-slot="props" cell-class="lists" field="lists" :label="$t('globals.terms.lists')" width="15%">
         <ul>
           <li v-for="l in props.row.lists" :key="l.id">
@@ -483,6 +491,7 @@ import { isSendPlus } from '../langs';
 import {
   cloneAttribs, hasEnSplit, enSplit, skipSplitOf, smartSendingOf, toSendOf,
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
+import { promoCells } from '../promoSeries.mjs'; // eslint-disable-line import/extensions
 import { rateCell, rateTipKey } from '../campaignRates.mjs'; // eslint-disable-line import/extensions
 import { thresholdsFromDocs, tierClass, tierOf } from '../campaignTiers.mjs'; // eslint-disable-line import/extensions
 import {
@@ -744,10 +753,19 @@ export default Vue.extend({
       let out = sp.smart > 0 ? `${base} ${this.$t('campaigns.toSendSkipped', {
         n: this.$utils.formatNumber(sp.smart), total: this.$utils.formatNumber(ts.total),
       })}` : base;
+      // Promo series (integrations PROMO-SERIES-SPEC D5) -- the purchased share's own sentence.
+      if (sp.purchased > 0) {
+        out = `${out} ${this.$t('campaigns.toSendPurchasedList', { n: this.$utils.formatNumber(sp.purchased) })}`;
+      }
       if (sp.silent > 0) {
         out = `${out} ${this.$t('campaigns.toSendSilentList', { n: this.$utils.formatNumber(sp.silent) })}`;
       }
       return out;
+    },
+
+    // Fork (promo series, PROMO-SERIES-SPEC D7) -- the Code and Step cells.
+    promoCellsOf(c) {
+      return promoCells(c);
     },
 
     toSendCount(c) {

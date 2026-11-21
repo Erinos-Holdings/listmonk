@@ -374,6 +374,7 @@ import {
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import { viewPaneValue } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { analyticsSkippedRows } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
+import { pickerLabel } from '../promoSeries.mjs'; // eslint-disable-line import/extensions
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
 // Fork (shop-link header total, 2026-10-19) -- shopLinks joins the rate headers: the shop-link
@@ -774,7 +775,9 @@ export default Vue.extend({
         this.queriedCampaigns = data.map((c) => {
           // Change the name to include the ID in the auto-suggest results.
           const camp = c;
-          camp.name = `#${c.id}: ${c.name}`;
+          // Fork (promo series, integrations PROMO-SERIES-SPEC D7) -- and ` · <Code> S<step>` when
+          // a Code is set (promoSeries.mjs::pickerLabel).
+          camp.name = pickerLabel(`#${c.id}: ${c.name}`, c.promoCode, c.promoStep);
           return camp;
         });
       });

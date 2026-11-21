@@ -177,7 +177,10 @@
             type="is-dark" multilined position="is-left" append-to-body>
             <span class="audience-switch-label" tabindex="0">{{ $t('campaigns.silentSkip') }}</span>
           </b-tooltip>
-          <b-switch v-model="form.silentSkip" size="is-small" type="is-success" :disabled="!silentSkipEditable" />
+          <!-- Promo series (PROMO-SERIES-SPEC D6): a user click marks the switch touched for this page
+               session, so a later Step change never overrides it. -->
+          <b-switch v-model="form.silentSkip" size="is-small" type="is-success" :disabled="!silentSkipEditable"
+            @input="silentTouched = true" />
         </div>
       </div>
     </div>
@@ -426,6 +429,47 @@
                         horizontal-time-picker />
                     </b-field>
                   </div>
+                </div>
+
+                <!-- Fork (promo series, integrations PROMO-SERIES-SPEC D1/D5) -- the Promo series group, in
+                     the form's flow (never positioned at the audience box's measured top). Shown where
+                     Smart Sending's switch is (a non-evergreen regular campaign), new or saved; editable
+                     while draft or paused, disabled on a scheduled campaign with the unschedule hover.
+                     Step and Purchase tags are disabled while Code is empty. Every decision is
+                     promoSeries.mjs; folded into attribs by foldPromo (foldAttribs). -->
+                <div v-if="showPromo" class="promo-series mb-4" data-cy="promo-series"
+                  :title="promoEditable ? null : $t('campaigns.promoScheduled')">
+                  <p class="label is-size-7 mb-2">{{ $t('campaigns.promoSeries') }}</p>
+                  <div class="columns mb-0">
+                    <div class="column is-5">
+                      <b-field :label="$t('campaigns.promoCode')" label-position="on-border"
+                        :message="promoCodeMessage" :type="promoCodeProblem ? 'is-danger' : ''">
+                        <b-input v-model="form.promoCode" name="promo_code" :disabled="!promoEditable"
+                          :maxlength="60" :has-counter="false" data-cy="promo-code" />
+                      </b-field>
+                    </div>
+                    <div class="column is-7">
+                      <b-field :label="$t('campaigns.promoStep')" label-position="on-border"
+                        :message="$t('campaigns.promoStepHelp')">
+                        <b-select :value="form.promoStep" @input="onPromoStep" name="promo_step" expanded
+                          :disabled="!promoEditable || !promoHasCode" data-cy="promo-step">
+                          <option value="">—</option>
+                          <option v-for="s in [1, 2, 3]" :key="s" :value="s">{{ $t(`campaigns.promoStep${s}`) }}</option>
+                        </b-select>
+                      </b-field>
+                    </div>
+                  </div>
+                  <b-field :label="$t('campaigns.promoTags')" label-position="on-border"
+                    :message="promoTagsMessage" :type="promoTagsParsed.problem ? 'is-danger' : ''">
+                    <b-input v-model="form.promoTagsText" name="promo_tags" :disabled="!promoEditable || !promoHasCode"
+                      :placeholder="$t('campaigns.promoTagsPlaceholder')" data-cy="promo-tags" />
+                  </b-field>
+                  <p v-if="promoOrdersText" class="help" data-cy="promo-orders">{{ promoOrdersText }}</p>
+                  <p v-if="promoNoteFlags.noTags" class="help" data-cy="promo-no-tags">{{ $t('campaigns.promoNoTags') }}</p>
+                  <b-message v-if="promoNoteFlags.stale" type="is-warning" class="is-size-7 mt-2" :closable="false"
+                    data-cy="promo-stale">
+                    {{ $t('campaigns.promoFeedStale') }}
+                  </b-message>
                 </div>
                 <hr />
 
@@ -681,6 +725,10 @@ import {
   audienceBox, hasEnSplit, enSplit, foldSilentSkip, foldSmartSending, silentSkipOf, skipSplitOf, smartSendingOf,
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import {
+  codeCounter, codeProblem, foldPromo, parseTags, previewKey as promoPreviewKeyOf, previewQuery, promoEditable as promoEditableOf,
+  promoFormOf, promoNotes, purchasedArg, silentDefaultOnStep, silentSkipForFold,
+} from '../promoSeries.mjs'; // eslint-disable-line import/extensions
+import {
   OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, runMessage, selectFromQuery,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import { altsMessage, generateAndApply } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
@@ -844,6 +892,12 @@ export default Vue.extend({
       // yahoo}) for the loaded campaign, or null; and the id it belongs to.
       silentPreview: null,
       silentPreviewFor: null,
+      // Fork (promo series, PROMO-SERIES-SPEC D5/D6) -- the group's live preview ({orders, skipped,
+      // stale}) and its key; whether the user clicked the 60-day engaged switch this page session.
+      promoPreview: null,
+      promoPreviewFor: null,
+      promoPreviewTimer: null,
+      silentTouched: false,
 
       // Fork (campaign review, D11/D12) -- the latest inspection state (GET .../reviews/latest,
       // verbatim), the checklist window this page opened, and its poll.
@@ -974,6 +1028,10 @@ export default Vue.extend({
         smartSending: true,
         // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- off unless attribs.silent_skip is true.
         silentSkip: false,
+        // Fork (promo series, PROMO-SERIES-SPEC D1) -- the group's three fields (promoSeries.mjs::promoFormOf).
+        promoCode: '',
+        promoStep: '',
+        promoTagsText: '',
         // Fork (evergreen) -- "send automatically to new subscribers", delay in days.
         evergreen: false,
         sendDelayDays: 0,
@@ -1220,6 +1278,9 @@ export default Vue.extend({
         lang: f.lang,
         smartSending: f.smartSending,
         silentSkip: f.silentSkip,
+        promoCode: f.promoCode,
+        promoStep: f.promoStep,
+        promoTagsText: f.promoTagsText,
         altbody: f.altbody,
         tags: f.tags,
         headersStr: f.headersStr,
@@ -1245,6 +1306,7 @@ export default Vue.extend({
         lang: (c.attribs && c.attribs.lang) || '',
         smartSending: smartSendingOf(c),
         silentSkip: silentSkipOf(c),
+        ...promoFormOf(c),
         altbody: c.altbody,
         tags: c.tags,
         headersStr: JSON.stringify(c.headers, null, 4),
@@ -1276,6 +1338,9 @@ export default Vue.extend({
         lang: f.lang || '',
         smartSending: f.smartSending !== false,
         silentSkip: f.silentSkip === true,
+        promoCode: f.promoCode || '',
+        promoStep: f.promoStep || '',
+        promoTagsText: f.promoTagsText || '',
         altbody: f.altbody || null,
         tags: f.tags || [],
         headersStr: f.headersStr,
@@ -1367,6 +1432,9 @@ export default Vue.extend({
         lang: d.lang || '',
         smartSending: d.smartSending !== false,
         silentSkip: d.silentSkip === true,
+        promoCode: d.promoCode || '',
+        promoStep: d.promoStep || '',
+        promoTagsText: d.promoTagsText || '',
         altbody: d.altbody,
         tags: d.tags,
         headersStr: d.headersStr,
@@ -1798,6 +1866,25 @@ export default Vue.extend({
       this.$utils.toast(this.$t('campaigns.langImported', { lang: name }));
     },
 
+    // Fork (promo series, PROMO-SERIES-SPEC D6) -- a USER Step change (the select's input; a load never
+    // reaches here): on a draft, new or saved, the 60-day engaged switch follows the new step's default
+    // unless the user clicked it this session or it differs from the default of the step being left
+    // (promoSeries.mjs::silentDefaultOnStep).
+    onPromoStep(v) {
+      const prev = this.form.promoStep;
+      this.form.promoStep = v === null || v === undefined ? '' : v;
+      const next = silentDefaultOnStep({
+        draft: this.isNew || (this.data && this.data.status === 'draft'),
+        prevStep: prev,
+        nextStep: this.form.promoStep,
+        silentOn: this.form.silentSkip === true,
+        touched: this.silentTouched,
+      });
+      if (next !== null) {
+        this.form.silentSkip = next;
+      }
+    },
+
     foldAttribs(base) {
       let attribs = base;
       const preheader = (this.form.preheader || '').trim();
@@ -1825,9 +1912,22 @@ export default Vue.extend({
       // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the 60-day opens switch owns silent_skip the
       // same way: true when shown and on, otherwise removed (off); a hidden switch carries the stored
       // state.
-      const silentOn = this.showSilentSkip ? this.form.silentSkip === true : silentSkipOf(this.data);
+      // Promo series (PROMO-SERIES-SPEC D6, Stage 2 S1): the form's value is read whenever the Smart
+      // Sending row applies -- a new campaign included, whose Step change may have set it
+      // (promoSeries.mjs::silentSkipForFold). A campaign created without a Step posts what it did.
+      const silentOn = silentSkipForFold({
+        showSmartSending: this.showSmartSending, formSilent: this.form.silentSkip, storedSilent: silentSkipOf(this.data),
+      });
       if (silentOn || (attribs && ('silent_skip' in attribs || 'silentSkip' in attribs))) {
         attribs = foldSilentSkip(attribs, silentOn);
+      }
+      // Fork (promo series, PROMO-SERIES-SPEC D1) -- the group owns promo_code / promo_step /
+      // promo_tags (foldPromo, the only normaliser): written when set, removed when blank, junk keys
+      // removed, all three removed on an evergreen or opt-in campaign. A form that never shows the
+      // group mirrors the stored values, so it re-posts them unchanged.
+      const owned = ['promo_code', 'promo_step', 'promo_tags', 'promoCode', 'promoStep', 'promoTags'];
+      if (this.form.promoCode || (attribs && owned.some((k) => k in attribs))) {
+        attribs = foldPromo(attribs, this.form, !this.form.evergreen && !this.isOptin);
       }
       return attribs;
     },
@@ -1990,6 +2090,7 @@ export default Vue.extend({
         lang: (data.attribs && data.attribs.lang) || '',
         smartSending: smartSendingOf(data),
         silentSkip: silentSkipOf(data),
+        ...promoFormOf(data),
         evergreen: !!data.evergreen,
         sendDelayDays: Math.round((data.sendDelaySecs || 0) / 86400),
         sendDelaySecs: data.sendDelaySecs || 0,
@@ -2283,6 +2384,7 @@ export default Vue.extend({
           this.form.lang = (d.attribs && d.attribs.lang) || '';
           this.form.smartSending = smartSendingOf(d);
           this.form.silentSkip = silentSkipOf(d);
+          Object.assign(this.form, promoFormOf(d));
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
           if (!suppressWarnings) {
@@ -2781,7 +2883,8 @@ export default Vue.extend({
       // The form's switch previews live (off = nothing skipped); the server's stored value agrees
       // after a save. Only meaningful where the switch shows; elsewhere the stored state applies.
       // Fork (60-day opens) -- and the 60-day opens switch, previewed the same way (silentArg).
-      return this.isEditing ? audienceBox(this.data, this.smartSendingFormOn, this.silentArg) : null;
+      // Fork (promo series, PROMO-SERIES-SPEC D5) -- and the purchased share (promoPurchased).
+      return this.isEditing ? audienceBox(this.data, this.smartSendingFormOn, this.silentArg, this.promoPurchased) : null;
     },
 
     audienceBoxStyle() {
@@ -2832,10 +2935,14 @@ export default Vue.extend({
       // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the Smart Sending sentence carries Smart
       // Sending's share only; the 60-day opens sentence follows with its own count and, when the live
       // preview has answered, the Gmail / Yahoo split (the three numbers).
-      const sp = skipSplitOf(this.data, this.smartSendingFormOn, this.silentArg);
+      const sp = skipSplitOf(this.data, this.smartSendingFormOn, this.silentArg, this.promoPurchased);
       let out = sp.smart > 0 ? `${base} ${this.$t('campaigns.toSendSkipped', {
         n: this.$utils.formatNumber(sp.smart), total: this.$utils.formatNumber(b.total),
       })}` : base;
+      // Promo series (PROMO-SERIES-SPEC D5) -- the purchased sentence, its own share.
+      if (sp.purchased > 0) {
+        out = `${out} ${this.$t('campaigns.toSendPurchased', { n: this.$utils.formatNumber(sp.purchased) })}`;
+      }
       if (sp.silent > 0) {
         const pv = this.silentPreview;
         out = `${out} ${this.$t('campaigns.toSendSilent', {
@@ -2883,6 +2990,67 @@ export default Vue.extend({
       }
       const pv = this.silentPreview;
       return { on, count: pv ? pv.skipped : 0 };
+    },
+
+    // Fork (promo series, PROMO-SERIES-SPEC D1/D5) -- the group shows where Smart Sending's switch does.
+    showPromo() {
+      return this.showSmartSending;
+    },
+
+    promoEditable() {
+      return promoEditableOf(this.data && this.data.status, this.canEdit, this.isNew);
+    },
+
+    promoHasCode() {
+      return String(this.form.promoCode || '').trim() !== '';
+    },
+
+    promoCodeProblem() {
+      return codeProblem(this.form.promoCode);
+    },
+
+    // `n/30` and the naming standard's hint, or the problem.
+    promoCodeMessage() {
+      if (this.promoCodeProblem) {
+        return this.$t(this.promoCodeProblem, { name: String(this.form.promoCode || '').trim(), max: 30 });
+      }
+      return `${codeCounter(this.form.promoCode)} · ${this.$t('campaigns.promoCodeHelp')}`;
+    },
+
+    promoTagsParsed() {
+      return parseTags(this.form.promoTagsText);
+    },
+
+    promoTagsMessage() {
+      const p = this.promoTagsParsed.problem;
+      return p ? this.$t(`campaigns.promoTagsProblem.${p}`) : this.$t('campaigns.promoTagsHelp');
+    },
+
+    // "N paid orders match so far" -- on a saved campaign, once the preview has answered.
+    promoOrdersText() {
+      const pv = this.promoPreview;
+      if (!this.isEditing || !pv || !this.promoPreviewKey) {
+        return '';
+      }
+      return this.$t('campaigns.promoOrders', { n: this.$utils.formatNumber(pv.orders) });
+    },
+
+    promoNoteFlags() {
+      return promoNotes(this.form, this.promoPreviewKey ? this.promoPreview : null);
+    },
+
+    // The preview's key (null = no request): promoSeries.mjs::previewKey.
+    promoPreviewKey() {
+      return promoPreviewKeyOf(this.data, this.form, this.showPromo && this.isEditing);
+    },
+
+    // The box's purchased share (audience-box.mjs skipSplitOf's `purchased`): null while the form's
+    // promo fields equal the stored ones (the served share), else the preview's skipped.
+    promoPurchased() {
+      if (!this.showPromo) {
+        return null;
+      }
+      return purchasedArg(this.form, this.data, this.promoPreviewKey ? this.promoPreview : null);
     },
 
     // Fork (send retry, SEND-RETRY-SPEC D6) -- mirrors Campaigns.vue's isShortfall.
@@ -3276,6 +3444,36 @@ export default Vue.extend({
             this.silentPreview = { skipped: Number(r.skipped) || 0, gmail: Number(r.gmail) || 0, yahoo: Number(r.yahoo) || 0 };
           }
         }).catch(() => {});
+      },
+    },
+
+    // Fork (promo series, PROMO-SERIES-SPEC D5) -- the group's live preview, fetched (after a short
+    // pause in typing) whenever its key changes: the form's Code / Step / tags over a saved broadcast.
+    promoPreviewKey: {
+      immediate: true,
+      handler(key) {
+        if (this.promoPreviewTimer) {
+          clearTimeout(this.promoPreviewTimer);
+          this.promoPreviewTimer = null;
+        }
+        if (!key) {
+          this.promoPreviewFor = null;
+          this.promoPreview = null;
+          return;
+        }
+        if (this.promoPreviewFor === key) {
+          return;
+        }
+        this.promoPreviewTimer = setTimeout(() => {
+          this.promoPreviewTimer = null;
+          this.promoPreviewFor = key;
+          const { id } = this.data;
+          this.$api.getCampaignPromoAudience(id, previewQuery(this.form)).then((r) => {
+            if (this.promoPreviewFor === key && r) {
+              this.promoPreview = { orders: Number(r.orders) || 0, skipped: Number(r.skipped) || 0, stale: r.stale === true };
+            }
+          }).catch(() => {});
+        }, 400);
       },
     },
 

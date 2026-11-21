@@ -548,6 +548,13 @@ export const getCampaignSilentAudience = async (id) => http.get(`/api/campaigns/
   camelCase: false, disableToast: true,
 });
 
+// Fork (promo series, integrations PROMO-SERIES-SPEC D5) -- the Promo series group's live preview,
+// {orders, skipped, stale, last_received_at}, for the form's code / step / tags (promoSeries.mjs
+// previewQuery). Quiet, raw keys.
+export const getCampaignPromoAudience = async (id, params) => http.get(`/api/campaigns/${id}/promo-audience`, {
+  params, camelCase: false, disableToast: true,
+});
+
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D11. Raw (snake_case, NOT camelCased) reads for
 // the re-save sweep: its PUT payloads are built from these rows verbatim, and camelCasing would
 // rewrite nested keys (archive_meta, attribs) the full-replace PUT then stores.

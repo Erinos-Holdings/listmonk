@@ -134,6 +134,13 @@ type Campaign struct {
 	// of attribs.silent_skip (SilentSkip) wherever the campaign JSON is served (core.FillAudience).
 	// Never stored: the attrib is the one record.
 	SilentSkipOn bool `db:"-" json:"silent_skip"`
+
+	// Fork (promo series, integrations PROMO-SERIES-SPEC D1) -- the three promo fields' served values
+	// (core.FillAudience, models/promo.go): Code "" when absent, Step null when absent, Purchase tags
+	// [] when absent. Never stored: the attribs are the one record; the page never reads attribs.
+	PromoCodeOut string   `db:"-" json:"promo_code"`
+	PromoStepOut null.Int `db:"-" json:"promo_step"`
+	PromoTagsOut []string `db:"-" json:"promo_tags"`
 }
 
 // CampaignMeta contains fields tracking a campaign's progress.
@@ -185,6 +192,11 @@ type CampaignMeta struct {
 	// AudienceSkipped the 60-day opens toggle would skip under its STORED value (0 while off);
 	// AudienceSkipped is the TOTAL (Smart Sending + silent). Null exactly when Audience is.
 	AudienceSilentSkipped null.Int `db:"-" json:"audience_silent_skipped"`
+	// AudiencePurchasedSkipped (fork, promo series, PROMO-SERIES-SPEC D5) is the share of
+	// AudienceSkipped the STORED promo fields would skip as already bought (0 unless the campaign is
+	// step 2/3 with tags and the feed is current); AudienceSkipped is the TOTAL (Smart Sending +
+	// purchased + silent). Null exactly when Audience is.
+	AudiencePurchasedSkipped null.Int `db:"-" json:"audience_purchased_skipped"`
 	// SentEn / SentNoLang: on a not-done ENGLISH evergreen only, how many of the subscribers
 	// it has sent to carry English / no language today (get-evergreen-sent-split) -- the
 	// split shown under its sent count. Null everywhere else.

@@ -660,6 +660,14 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 				}
 				// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the toggle's share, its own toast, so
 				// the two toasts together are the claim's total.
+				// Fork (promo series, PROMO-SERIES-SPEC D5) -- the purchased share and a stale feed on an
+				// applicable campaign, here so an API or scheduled start gets them too.
+				if aud.PurchasedSkipped > 0 {
+					w = append(w, a.i18n.Ts("campaigns.warnPurchasedSkip", "n", strconv.Itoa(aud.PurchasedSkipped)))
+				}
+				if aud.PromoStale {
+					w = append(w, a.i18n.T("campaigns.warnPromoFeedStale"))
+				}
 				if aud.SilentSkipped > 0 {
 					w = append(w, a.i18n.Ts("campaigns.warnSilentSkip", "n", strconv.Itoa(aud.SilentSkipped)))
 				}
@@ -1747,6 +1755,12 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 	// only refusal of another value: the SQL rule reads anything but the JSONB true as off.
 	if !models.ValidSilentSkip(c.Attribs) {
 		return c, errors.New(a.i18n.T("campaigns.invalidSilentSkip"))
+	}
+	// Fork (promo series, PROMO-SERIES-SPEC D1) -- attribs.promo_code / promo_step / promo_tags are
+	// validated only (models.ValidatePromo, the one rule): any other shape, a Step or tags without a
+	// Code, and every non-normal form are refused. Never rewritten; no silent_skip default from Step.
+	if key := models.ValidatePromo(c.Attribs); key != "" {
+		return c, errors.New(a.i18n.T(key))
 	}
 
 	if len(c.ArchiveMeta) == 0 {

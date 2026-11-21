@@ -110,6 +110,75 @@ func TestValidSilentSkip(t *testing.T) {
 	}
 }
 
+// Fork (promo series) -- integrations listmonk/PROMO-SERIES-SPEC T8 (I8; the cmd half): through the
+// UpdateCampaign handler (validateCampaignFields), a malformed Code, Step or tag list and a Step or
+// tags without a Code are a 400 with nothing stored, a valid set is stored verbatim (never rewritten,
+// and no silent_skip default from Step); the served top-level fields and their defaults.
+func TestPromoFieldsValidationAndServed(t *testing.T) {
+	h := newLinkHarness(t)
+	var list int
+	h.db.Get(&list, `INSERT INTO lists (uuid, name, type, optin) VALUES (gen_random_uuid(), 'Acme', 'public', 'single') RETURNING id`)
+	lists := fmt.Sprintf(`"lists": [%d]`, list)
+	c := newLangCampaign(t, h, list, models.JSON{"lang": "en"})
+
+	served := func() map[string]any {
+		t.Helper()
+		got, err := h.app.core.GetCampaign(c.ID, "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.app.core.FillAudience(&got)
+		b, _ := json.Marshal(got)
+		var m map[string]any
+		json.Unmarshal(b, &m)
+		return m
+	}
+	// Defaults: Code "", Step null, tags [].
+	if m := served(); m["promo_code"] != "" || m["promo_step"] != nil || fmt.Sprint(m["promo_tags"]) != "[]" {
+		t.Fatalf("defaults code %#v step %#v tags %#v", m["promo_code"], m["promo_step"], m["promo_tags"])
+	}
+
+	for name, tc := range map[string]struct {
+		attribs string
+		key     string
+	}{
+		"untrimmed code":   {`"promo_code": " BFCM "`, "campaigns.invalidPromoCode"},
+		"31-char code":     {`"promo_code": "1234567890123456789012345678901"`, "campaigns.invalidPromoCode"},
+		"string step":      {`"promo_code": "C", "promo_step": "2"`, "campaigns.invalidPromoStep"},
+		"step 4":           {`"promo_code": "C", "promo_step": 4`, "campaigns.invalidPromoStep"},
+		"empty tags":       {`"promo_code": "C", "promo_tags": []`, "campaigns.invalidPromoTags"},
+		"duplicate tag":    {`"promo_code": "C", "promo_tags": ["a-1", "A-1"]`, "campaigns.invalidPromoTags"},
+		"short prefix":     {`"promo_code": "C", "promo_tags": ["ab*"]`, "campaigns.invalidPromoTags"},
+		"step without code": {`"promo_step": 2`, "campaigns.promoNeedsCode"},
+		"tags without code": {`"promo_tags": ["BFCM*"]`, "campaigns.promoNeedsCode"},
+	} {
+		code, msg := putCampaign(t, h, c.ID, `{`+lists+`, "attribs": {"lang": "en", `+tc.attribs+`}}`)
+		if code != http.StatusBadRequest || msg != h.app.i18n.T(tc.key) {
+			t.Fatalf("%s: %d %q, want 400 %q", name, code, msg, h.app.i18n.T(tc.key))
+		}
+		if h.app.i18n.T(tc.key) == tc.key {
+			t.Fatalf("%s is missing from en.json", tc.key)
+		}
+		if got, _ := h.app.core.GetCampaign(c.ID, "", ""); got.Attribs["promo_code"] != nil || got.Attribs["promo_step"] != nil || got.Attribs["promo_tags"] != nil {
+			t.Fatalf("%s: a refused value was stored: %v", name, got.Attribs)
+		}
+	}
+
+	if code, msg := putCampaign(t, h, c.ID, `{`+lists+`, "attribs": {"lang": "en", "promo_code": "BFCM-D3", "promo_step": 2, "promo_tags": ["BFCM-Deal-3", "BFCM*"]}}`); code != http.StatusOK {
+		t.Fatalf("valid set: %d %s", code, msg)
+	}
+	got, _ := h.app.core.GetCampaign(c.ID, "", "")
+	if got.Attribs["promo_code"] != "BFCM-D3" || got.Attribs["promo_step"] != 2.0 || fmt.Sprint(got.Attribs["promo_tags"]) != "[BFCM-Deal-3 BFCM*]" {
+		t.Fatalf("stored %v", got.Attribs)
+	}
+	if _, present := got.Attribs["silent_skip"]; present {
+		t.Fatalf("the server applied a silent_skip default from Step: %v", got.Attribs)
+	}
+	if m := served(); m["promo_code"] != "BFCM-D3" || m["promo_step"] != 2.0 || fmt.Sprint(m["promo_tags"]) != "[BFCM-Deal-3 BFCM*]" || m["silent_skip"] != false {
+		t.Fatalf("served code %#v step %#v tags %#v silent %#v", m["promo_code"], m["promo_step"], m["promo_tags"], m["silent_skip"])
+	}
+}
+
 // T9 (DB-backed) -- the API refuses a non-boolean silent_skip with a 400 naming the field and stores
 // nothing; true and false are stored; a new campaign is off (served silent_skip false).
 func TestSilentSkipValidation(t *testing.T) {

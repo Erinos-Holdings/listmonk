@@ -349,6 +349,11 @@ type AnalyticsCampaign struct {
 	SkippedLookback  null.Int `db:"skipped_lookback" json:"skipped_lookback"`
 	SkippedLookahead null.Int `db:"skipped_lookahead" json:"skipped_lookahead"`
 	SkippedSilent    null.Int `db:"skipped_silent" json:"skipped_silent"`
+	// Integrations PROMO-SERIES-SPEC D5/D7 -- the purchased reason count (the four sum to Skipped)
+	// and the picker label's Code / Step (null when absent).
+	SkippedPurchased null.Int    `db:"skipped_purchased" json:"skipped_purchased"`
+	PromoCode        null.String `db:"promo_code" json:"promo_code"`
+	PromoStep        null.Int    `db:"promo_step" json:"promo_step"`
 }
 
 type CampaignViewExport struct {

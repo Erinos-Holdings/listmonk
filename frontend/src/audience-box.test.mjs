@@ -161,7 +161,7 @@ test('60-day opens: the three-way arithmetic -- audience minus Smart Sending ski
   const on = {
     id: 9, status: 'draft', evergreen: false, audience: 1000, audienceSkipped: 46, audienceSilentSkipped: 40, silentSkip: true,
   };
-  assert.deepEqual(skipSplitOf(on), { smart: 6, silent: 40 });
+  assert.deepEqual(skipSplitOf(on), { smart: 6, purchased: 0, silent: 40 });
   assert.deepEqual(toSendOf(on), { count: 954, skipped: 46, total: 1000 }, 'the Campaigns list: the stored total');
   assert.deepEqual(toSendOf(on, true, { on: true, count: null }), { count: 954, skipped: 46, total: 1000 }, 'served share when count is null');
   // The form's 60-day switch turned off before the save: only Smart Sending's 6.
@@ -173,7 +173,7 @@ test('60-day opens: the three-way arithmetic -- audience minus Smart Sending ski
   // Never negative; the skips never exceed the audience.
   assert.deepEqual(toSendOf({ audience: 10, audienceSkipped: 4, audienceSilentSkipped: 2 }, true, { on: true, count: 50 }), { count: 0, skipped: 10, total: 10 });
   // A server that predates the field: no silent share, the whole skipped count is Smart Sending's.
-  assert.deepEqual(skipSplitOf({ audienceSkipped: 6 }), { smart: 6, silent: 0 });
+  assert.deepEqual(skipSplitOf({ audienceSkipped: 6 }), { smart: 6, purchased: 0, silent: 0 });
 });
 
 test('60-day opens: the live-switch preview -- the form switch on over a stored off uses the preview count', () => {
@@ -252,4 +252,49 @@ test('the 60-day switch is labelled "60-day engaged" everywhere it is shown', ()
   assert.equal(en['campaigns.silentSkip'], '60-day engaged');
   assert.equal(en['analytics.matrix.skippedSilent'], '60-day engaged');
   Object.entries(en).forEach(([k, v]) => assert.doesNotMatch(String(v), /60-day opens/i, k));
+});
+
+// --- integrations PROMO-SERIES-SPEC T14 (I6, I14) ---
+
+test('promo series: the four-way arithmetic -- audience minus Smart Sending, purchased and silent skips', () => {
+  // Served: the TOTAL 66 = 6 Smart Sending + 20 purchased + 40 silent.
+  const c = {
+    id: 9, status: 'draft', evergreen: false, audience: 1000, audienceSkipped: 66, audiencePurchasedSkipped: 20, audienceSilentSkipped: 40, silentSkip: true,
+  };
+  assert.deepEqual(skipSplitOf(c), { smart: 6, purchased: 20, silent: 40 });
+  assert.deepEqual(toSendOf(c), { count: 934, skipped: 66, total: 1000 }, 'the Campaigns list agrees with the claim');
+  // Smart Sending off on the form: its share is zero; a purchaser is never labelled a Smart Sending
+  // skip and does not vanish (S8).
+  assert.deepEqual(skipSplitOf(c, false), { smart: 0, purchased: 20, silent: 40 });
+  assert.deepEqual(toSendOf(c, false), { count: 940, skipped: 60, total: 1000 });
+  // An unsaved promo edit: the preview's skipped replaces the served share.
+  assert.deepEqual(skipSplitOf(c, true, null, 55), { smart: 6, purchased: 55, silent: 40 });
+  assert.deepEqual(toSendOf(c, true, null, 0), { count: 954, skipped: 46, total: 1000 });
+  assert.equal(audienceBox(c, true, null, 55).count, 899);
+  assert.equal(audienceBox(c, true, null, 55).skipped, 101);
+  // Never negative, never above the audience.
+  assert.deepEqual(toSendOf({ audience: 10, audienceSkipped: 3, audiencePurchasedSkipped: 3 }, true, null, 50), { count: 0, skipped: 10, total: 10 });
+  // A server that predates the field: no purchased share.
+  assert.deepEqual(skipSplitOf({ audienceSkipped: 6, audienceSilentSkipped: 2 }), { smart: 4, purchased: 0, silent: 2 });
+});
+
+test('promo series: a clone keeps Code and Purchase tags and drops the Step (I14)', () => {
+  const src = {
+    promo_code: 'BFCM-D3', promo_step: 2, promo_tags: ['BFCM*'], silent_skip: true, lang: 'en',
+  };
+  assert.deepEqual(cloneAttribs(src), { promo_code: 'BFCM-D3', promo_tags: ['BFCM*'], lang: 'en' });
+  assert.deepEqual(src.promo_step, 2, 'input not mutated');
+  assert.deepEqual(cloneAttribs({ promoStep: 3, promo_code: 'X' }), { promo_code: 'X' });
+});
+
+test('promo series: the Promo series group sits in the Campaign tab form flow, never in the positioned stack', () => {
+  const view = readFileSync(new URL('./views/Campaign.vue', import.meta.url), 'utf8');
+  const group = view.indexOf('data-cy="promo-series"');
+  assert.ok(group > 0, 'the group exists');
+  assert.ok(group > view.indexOf('<b-tabs'), 'inside the tabs (the Campaign tab), after the audience anchor');
+  assert.ok(group < view.indexOf('</form>'), 'inside the Campaign form');
+  const tag = view.slice(view.lastIndexOf('<', group), view.indexOf('>', group));
+  assert.doesNotMatch(tag, /audienceBoxStyle/, 'not positioned at the measured top');
+  // Still exactly the two switch rows in the stack.
+  assert.equal((view.match(/class="audience-switch"/g) || []).length, 2);
 });

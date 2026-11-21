@@ -105,12 +105,15 @@ func TestLangBroadcastPredicate(t *testing.T) {
 
 		// The statement returns total and no_lang (the audience box's EN+ split, 0ecfa27e), and
 		// skipped (integrations SMART-SENDING-SPEC D3; 0 here, no journey sends), and silent_skipped
-		// (integrations SIXTY-DAY-OPENS-SPEC D4; 0 here, the toggle is off).
+		// (integrations SIXTY-DAY-OPENS-SPEC D4; 0 here, the toggle is off), and purchased_skipped /
+		// promo_stale (integrations PROMO-SERIES-SPEC D5; 0 / false here, no promo fields).
 		var aud struct {
-			Total         int `db:"total"`
-			NoLang        int `db:"no_lang"`
-			Skipped       int `db:"skipped"`
-			SilentSkipped int `db:"silent_skipped"`
+			Total            int  `db:"total"`
+			NoLang           int  `db:"no_lang"`
+			Skipped          int  `db:"skipped"`
+			SilentSkipped    int  `db:"silent_skipped"`
+			PurchasedSkipped int  `db:"purchased_skipped"`
+			PromoStale       bool `db:"promo_stale"`
 		}
 		if err := audience.Get(&aud, camp); err != nil {
 			t.Fatalf("audience %q: %v", c.lang, err)

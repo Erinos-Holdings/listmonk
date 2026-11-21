@@ -46,9 +46,16 @@ export const GAP_FIELDS = Object.freeze(['gmail_open', 'yahoo_open', 'gmail_gap'
 
 // Integrations SIXTY-DAY-OPENS-SPEC D5 -- Skipped by reason (the server's three counts, which sum to
 // skipped): the sub-columns the Skipped header's glyph expands, in this order.
-export const REASON_FIELDS = Object.freeze(['skipped_lookback', 'skipped_lookahead', 'skipped_silent']);
+// Integrations PROMO-SERIES-SPEC D5 -- a fourth reason, Purchased, after 60-day engaged.
+export const REASON_FIELDS = Object.freeze(['skipped_lookback', 'skipped_lookahead', 'skipped_silent', 'skipped_purchased']);
 
-export const SORT_FIELDS = Object.freeze(['name', 'brand', 'lang', 'date', 'status', 'sent', 'skipped', ...REASON_FIELDS, ...COUNT_FIELDS, ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS]);
+// Integrations PROMO-SERIES-SPEC D7 -- the Code and Step columns after Campaign.
+export const PROMO_FIELDS = Object.freeze(['promo_code', 'promo_step']);
+
+export const SORT_FIELDS = Object.freeze([
+  'name', ...PROMO_FIELDS, 'brand', 'lang', 'date', 'status', 'sent', 'skipped', ...REASON_FIELDS, ...COUNT_FIELDS,
+  ...CONVERSION_FIELDS, 'gp_rate', ...GAP_FIELDS,
+]);
 
 // The Matrix's day zone: the window's and the send day's (the get-campaign-matrix zone CTE).
 const MATRIX_ZONE = 'America/Denver';
@@ -102,6 +109,8 @@ const REASON_COLUMNS = Object.freeze([
   { field: 'skipped_lookback', label: 'analytics.matrix.skippedLookback', help: 'analytics.matrix.skippedLookbackHelp' },
   { field: 'skipped_lookahead', label: 'analytics.matrix.skippedLookahead', help: 'analytics.matrix.skippedLookaheadHelp' },
   { field: 'skipped_silent', label: 'analytics.matrix.skippedSilent', help: 'analytics.matrix.skippedSilentHelp' },
+  // PROMO-SERIES-SPEC D5: already bought this promo (steps 2 and 3 with Purchase tags).
+  { field: 'skipped_purchased', label: 'analytics.matrix.skippedPurchased', help: 'analytics.matrix.skippedPurchasedHelp' },
 ]);
 
 export function leftColumns(showBrand = true, showLang = false, expanded = false) {
@@ -110,6 +119,9 @@ export function leftColumns(showBrand = true, showLang = false, expanded = false
     { field: 'date', label: 'analytics.matrix.started' },
     { field: 'brand', label: 'dashboard.matrix.brand' },
     { field: 'name', label: 'analytics.matrix.campaign' },
+    // PROMO-SERIES-SPEC D7: Code and Step after Campaign (blank for a journey and the totals row).
+    { field: 'promo_code', label: 'analytics.matrix.promoCode' },
+    { field: 'promo_step', label: 'analytics.matrix.promoStep' },
     { field: 'lang', label: 'analytics.matrix.lang' },
     { field: 'sent', label: 'dashboard.matrix.sent' },
     { field: 'skipped', label: 'analytics.matrix.skipped', help: 'analytics.matrix.skippedHelp' },
@@ -340,6 +352,10 @@ export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null, gapStat
     skipped_lookback: r.evergreen === true ? null : numOrNull(r.skipped_lookback),
     skipped_lookahead: r.evergreen === true ? null : numOrNull(r.skipped_lookahead),
     skipped_silent: r.evergreen === true ? null : numOrNull(r.skipped_silent),
+    // PROMO-SERIES-SPEC D5/D7: the fourth reason count; the Code and Step (blank for a journey).
+    skipped_purchased: r.evergreen === true ? null : numOrNull(r.skipped_purchased),
+    promo_code: r.evergreen === true ? '' : str(r.promo_code),
+    promo_step: r.evergreen !== true && [1, 2, 3].includes(r.promo_step) ? r.promo_step : null,
     views: num(r.views),
     clicks: num(r.clicks),
     hard_bounces: num(r.hard_bounces),
@@ -422,6 +438,8 @@ export function totalsRow(rows, label = 'Total') {
     brand: '',
     label: '',
     lang: '',
+    promo_code: '',
+    promo_step: null,
     date: null,
     lastSent: null,
     startedAt: null,
@@ -512,7 +530,7 @@ export function displayValue(row, field, mode = DEFAULT_STATE.mode) {
     }
     return mode === 'num' ? m.orders : m.sales;
   }
-  if (field === 'sent' || field === 'skipped' || field === 'gp_rate' || REASON_FIELDS.includes(field)) {
+  if (field === 'sent' || field === 'skipped' || field === 'gp_rate' || field === 'promo_step' || REASON_FIELDS.includes(field)) {
     return numOrNull(row[field]);
   }
   if (GAP_FIELDS.includes(field)) {
@@ -580,6 +598,18 @@ export function analyticsSkippedCell(c, fmt = (n) => String(n), t = (k) => k) {
   return cellText(shapeRow(c), 'skipped', 'num', fmt, undefined, t);
 }
 
+// PROMO-SERIES-SPEC D7: the Code / Step cell text -- the value, blank when absent, for a journey and
+// in the totals row (never '—').
+export function promoCell(row, field) {
+  if (!row || row.totals) {
+    return '';
+  }
+  if (field === 'promo_step') {
+    return typeof row.promo_step === 'number' ? String(row.promo_step) : '';
+  }
+  return typeof row.promo_code === 'string' ? row.promo_code : '';
+}
+
 // The view's pure half (CampaignAnalytics.vue): one { id, name, text } per selected picker row, in
 // the selection's order -- no second read and no further permission (every selected row came from
 // the picker endpoint). The view's rows are CAMEL-CASED by the API module (getAnalyticsCampaigns
@@ -587,7 +617,7 @@ export function analyticsSkippedCell(c, fmt = (n) => String(n), t = (k) => k) {
 // `smartOff` and is handed to the cell function under the server's name. A row from a server that
 // predates the fields (no `smartOff` key) has no entry rather than a false count.
 // SIXTY-DAY-OPENS-SPEC D5: `expanded` (the Skipped line's glyph) adds `reasons` to each entry -- the
-// Matrix's three sub-column cells ({ field, label, text }), from the row's skippedLookback /
+// Matrix's reason sub-column cells (four since PROMO-SERIES-SPEC D5) ({ field, label, text }), from the row's skippedLookback /
 // skippedLookahead / skippedSilent (camel-cased by the API module). Collapsed, the entries are as before.
 export function analyticsSkippedRows(selected, fmt = (n) => String(n), t = (k) => k, expanded = false) {
   return (Array.isArray(selected) ? selected : [])
@@ -599,6 +629,8 @@ export function analyticsSkippedRows(selected, fmt = (n) => String(n), t = (k) =
         skipped_lookback: s.skippedLookback,
         skipped_lookahead: s.skippedLookahead,
         skipped_silent: s.skippedSilent,
+        // PROMO-SERIES-SPEC D5: the fourth reason.
+        skipped_purchased: s.skippedPurchased,
       };
       const out = {
         id: s.id,
@@ -711,7 +743,7 @@ export function dateCell(row) {
 // The first-click direction: text columns and Status (still moving first) ascending, every other
 // descending.
 export function defaultOrder(field) {
-  return field === 'name' || field === 'brand' || field === 'lang' || field === 'status' ? 'asc' : 'desc';
+  return field === 'name' || field === 'promo_code' || field === 'brand' || field === 'lang' || field === 'status' ? 'asc' : 'desc';
 }
 
 // clickSort: a NEW column takes its default direction, the current column toggles, an unknown field
@@ -747,7 +779,7 @@ export function sortRows(rows, sort = DEFAULT_STATE.sort, mode = DEFAULT_STATE.m
     if (field === 'name') {
       return (cmpText(a.name, b.name, locale) * dir) || (a.id - b.id);
     }
-    if (field === 'brand' || field === 'lang') {
+    if (field === 'brand' || field === 'lang' || field === 'promo_code') {
       // MATRIX-VIEWS D4: by the slug the cell shows, not the display name; Lang by its code. A row
       // without one sorts last in both orders.
       const va = a[field] || null;

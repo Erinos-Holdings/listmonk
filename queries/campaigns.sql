@@ -141,6 +141,13 @@ SELECT c.id, c.name, c.status, c.evergreen, c.started_at, c.created_at, c.sent,
         AND COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'lookahead') END AS skipped_lookahead,
     CASE WHEN NOT c.evergreen THEN (SELECT COUNT(*) FROM campaign_smart_skips sk WHERE sk.campaign_id = c.id
         AND COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'silent') END AS skipped_silent,
+    -- Fork (promo series, integrations PROMO-SERIES-SPEC D5/D7) -- the purchased reason count (the four
+    -- sum to skipped) and the picker label's Code and Step, read without a cast.
+    CASE WHEN NOT c.evergreen THEN (SELECT COUNT(*) FROM campaign_smart_skips sk WHERE sk.campaign_id = c.id
+        AND sk.reason = 'purchased') END AS skipped_purchased,
+    CASE WHEN JSONB_TYPEOF(c.attribs->'promo_code') = 'string' THEN c.attribs->>'promo_code' END AS promo_code,
+    CASE WHEN c.attribs->'promo_step' = '1'::JSONB THEN 1 WHEN c.attribs->'promo_step' = '2'::JSONB THEN 2
+        WHEN c.attribs->'promo_step' = '3'::JSONB THEN 3 END AS promo_step,
     (NOT c.evergreen AND (c.attribs->'smart_sending') IS NOT DISTINCT FROM 'false'::JSONB) AS smart_off
 FROM campaigns c
 WHERE (
@@ -397,9 +404,20 @@ silent AS MATERIALIZED (
     CROSS JOIN LATERAL brand_silent_skips(camps.id, FALSE) x
     WHERE NOT camps.evergreen
 ),
+-- Fork (promo series, integrations PROMO-SERIES-SPEC D3/D5) -- the purchasers, computed ONCE per
+-- claimed broadcast (promo_purchasers, the one definition, over promo_campaign_tags -- an empty array,
+-- and so no rows and no feed read, unless the campaign is a regular non-evergreen step 2 or 3 with a
+-- Code and Purchase tags). MATERIALIZED for the held CTE's reason.
+promo AS MATERIALIZED (
+    SELECT camps.id AS campaign_id, x.subscriber_id
+    FROM camps
+    CROSS JOIN LATERAL promo_purchasers(camps.id, promo_campaign_tags(camps.id)) x
+    WHERE NOT camps.evergreen
+),
 -- The Smart Sending rows first, unchanged, with their reason (lookahead when the due pair is set,
--- else lookback); then a silent row ONLY for an audience member with no Smart Sending row in this
--- claim (precedence -- the toggle never changes a Smart Sending row or count). Same checkpoint bound.
+-- else lookback); then a purchased row ONLY for an audience member with no Smart Sending row in this
+-- claim; then a silent row ONLY for one with neither (precedence -- Smart Sending, purchased, silent;
+-- neither promo nor the toggle ever changes a Smart Sending row or count). Same checkpoint bound.
 skips AS (
     SELECT a.campaign_id, a.subscriber_id, js.journey_campaign_id, js.journey_sent_at,
         js.due_list_id, js.due_at,
@@ -410,12 +428,21 @@ skips AS (
     WHERE a.subscriber_id > camps.last_subscriber_id
     UNION ALL
     SELECT a.campaign_id, a.subscriber_id, NULL::INT, NULL::TIMESTAMP WITH TIME ZONE,
+        NULL::INT, NULL::TIMESTAMP WITH TIME ZONE, 'purchased'
+    FROM aud a
+    JOIN camps ON (camps.id = a.campaign_id)
+    JOIN promo pr ON (pr.campaign_id = a.campaign_id AND pr.subscriber_id = a.subscriber_id)
+    WHERE a.subscriber_id > camps.last_subscriber_id
+        AND NOT EXISTS (SELECT 1 FROM jsends js WHERE js.campaign_id = a.campaign_id AND js.subscriber_id = a.subscriber_id)
+    UNION ALL
+    SELECT a.campaign_id, a.subscriber_id, NULL::INT, NULL::TIMESTAMP WITH TIME ZONE,
         NULL::INT, NULL::TIMESTAMP WITH TIME ZONE, 'silent'
     FROM aud a
     JOIN camps ON (camps.id = a.campaign_id)
     JOIN silent si ON (si.campaign_id = a.campaign_id AND si.subscriber_id = a.subscriber_id)
     WHERE a.subscriber_id > camps.last_subscriber_id
         AND NOT EXISTS (SELECT 1 FROM jsends js WHERE js.campaign_id = a.campaign_id AND js.subscriber_id = a.subscriber_id)
+        AND NOT EXISTS (SELECT 1 FROM promo pr WHERE pr.campaign_id = a.campaign_id AND pr.subscriber_id = a.subscriber_id)
 ),
 insSkips AS (
     INSERT INTO campaign_smart_skips (campaign_id, subscriber_id, journey_campaign_id, journey_sent_at, due_list_id, due_at, reason)
@@ -1004,7 +1031,10 @@ SELECT JSON_BUILD_OBJECT(
 --     (attribs smart_sending is the JSONB false -- the Matrix shows off). skipped_lookback /
 --     skipped_lookahead / skipped_silent (integrations SIXTY-DAY-OPENS-SPEC D5) = those rows by
 --     reason, a NULL reason read as lookahead when due_list_id is set, else lookback; they sum to
---     skipped, NULL for a journey.
+--     skipped, NULL for a journey. skipped_purchased (integrations PROMO-SERIES-SPEC D5) = the rows
+--     of reason purchased (a NULL reason is never purchased); the four sum to skipped.
+--   promo_code / promo_step (integrations PROMO-SERIES-SPEC D7) = the stored Code when a string and
+--     the stored Step when the JSONB 1, 2 or 3, else NULL (no cast, so no stored value can raise).
 --   tracked / matched = campaign_conversions in [lo, t1) as orders and sales, NULL when the latest
 --     conversions doc does not cover the campaign (get-campaign-conversions' coverage rule).
 --   the GMAIL GAP group's counts are NOT here (integrations GMAIL-GAP-SPEC) -- the Matrix fills them
@@ -1144,7 +1174,8 @@ skp AS (
     SELECT sk.campaign_id, COUNT(*) AS n,
         COUNT(*) FILTER (WHERE COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'lookback') AS lookback,
         COUNT(*) FILTER (WHERE COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'lookahead') AS lookahead,
-        COUNT(*) FILTER (WHERE COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'silent') AS silent
+        COUNT(*) FILTER (WHERE COALESCE(sk.reason, CASE WHEN sk.due_list_id IS NOT NULL THEN 'lookahead' ELSE 'lookback' END) = 'silent') AS silent,
+        COUNT(*) FILTER (WHERE sk.reason = 'purchased') AS purchased
     FROM campaign_smart_skips sk
     WHERE sk.campaign_id IN (SELECT id FROM camps WHERE NOT evergreen)
     GROUP BY sk.campaign_id
@@ -1218,6 +1249,13 @@ SELECT JSON_BUILD_OBJECT(
             'skipped_lookback', CASE WHEN NOT k.evergreen THEN COALESCE(sk.lookback, 0) END,
             'skipped_lookahead', CASE WHEN NOT k.evergreen THEN COALESCE(sk.lookahead, 0) END,
             'skipped_silent', CASE WHEN NOT k.evergreen THEN COALESCE(sk.silent, 0) END,
+            'skipped_purchased', CASE WHEN NOT k.evergreen THEN COALESCE(sk.purchased, 0) END,
+            'promo_code', (SELECT CASE WHEN JSONB_TYPEOF(cp.attribs->'promo_code') = 'string' THEN cp.attribs->>'promo_code' END
+                FROM campaigns cp WHERE cp.id = k.id),
+            'promo_step', (SELECT CASE WHEN cp.attribs->'promo_step' = '1'::JSONB THEN 1
+                    WHEN cp.attribs->'promo_step' = '2'::JSONB THEN 2
+                    WHEN cp.attribs->'promo_step' = '3'::JSONB THEN 3 END
+                FROM campaigns cp WHERE cp.id = k.id),
             'smart_off', k.smart_off,
             'views', COALESCE(v.n, 0),
             'clicks', COALESCE(c.n, 0),
@@ -1367,11 +1405,22 @@ jsends AS (
 -- (the claim's precedence). The served total skip count is skipped + silent_skipped.
 silent AS MATERIALIZED (
     SELECT subscriber_id FROM brand_silent_skips($1, FALSE)
+),
+-- Fork (promo series, integrations PROMO-SERIES-SPEC D5) -- the would-be purchased skips under the
+-- STORED promo fields (none unless the campaign is applicable and the feed is current), counted only
+-- for audience members Smart Sending does not skip; silent_skipped excludes them (the claim's
+-- precedence). The served total skip count is skipped + purchased_skipped + silent_skipped.
+-- promo_stale -- the campaign is applicable and the feed is stale (the start warning); CASE keeps the
+-- feed read off every campaign that is not applicable.
+promo AS MATERIALIZED (
+    SELECT subscriber_id FROM promo_purchasers($1, promo_campaign_tags($1))
 )
 SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
        COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE subscriber_lang(s.attribs) = 'none') AS no_lang,
        COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE j.subscriber_id IS NOT NULL) AS skipped,
-       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE j.subscriber_id IS NULL AND si.subscriber_id IS NOT NULL) AS silent_skipped
+       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE j.subscriber_id IS NULL AND pr.subscriber_id IS NOT NULL) AS purchased_skipped,
+       COUNT(DISTINCT sl.subscriber_id) FILTER (WHERE j.subscriber_id IS NULL AND pr.subscriber_id IS NULL AND si.subscriber_id IS NOT NULL) AS silent_skipped,
+       (CASE WHEN CARDINALITY(promo_campaign_tags($1)) > 0 THEN promo_feed_stale() ELSE FALSE END) AS promo_stale
     FROM camp
     JOIN campLists cl ON TRUE
     JOIN subscriber_lists sl ON sl.list_id = cl.list_id
@@ -1386,6 +1435,7 @@ SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
     LEFT JOIN jsends j ON (j.subscriber_id = sl.subscriber_id)
     LEFT JOIN silent si ON (si.subscriber_id = sl.subscriber_id)
+    LEFT JOIN promo pr ON (pr.subscriber_id = sl.subscriber_id)
     -- Fork (hold scope, integrations HOLD-SCOPE-SPEC D1) -- the claim's brand-hold rule.
     WHERE NOT EXISTS (SELECT 1 FROM brand_hold_rows($1) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id);
 
@@ -1393,7 +1443,9 @@ SELECT COUNT(DISTINCT sl.subscriber_id) AS total,
 -- Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) -- the live preview behind the page's
 -- switch. Of campaign $1's audience (get-campaign-lang-audience's join and brand-hold rule), the
 -- members brand_silent_skips($1, TRUE) returns -- the toggle's stored value ignored -- who are not
--- Smart Sending skips, in all and by provider. Read-only.
+-- Smart Sending skips, in all and by provider. Read-only. Promo series (integrations
+-- PROMO-SERIES-SPEC D5) -- the purchasers under the STORED promo fields are excluded the same way
+-- (the claim's precedence -- purchased before silent).
 WITH camp AS (
     SELECT id, type, attribs->>'lang' AS lang FROM campaigns WHERE id = $1
 ),
@@ -1407,6 +1459,9 @@ jsends AS (
 ),
 silent AS MATERIALIZED (
     SELECT subscriber_id, provider FROM brand_silent_skips($1, TRUE)
+),
+promo AS MATERIALIZED (
+    SELECT subscriber_id FROM promo_purchasers($1, promo_campaign_tags($1))
 ),
 aud AS (
     SELECT DISTINCT si.subscriber_id, si.provider
@@ -1424,12 +1479,91 @@ aud AS (
         AND (camp.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = camp.lang)
     JOIN silent si ON (si.subscriber_id = sl.subscriber_id)
     WHERE NOT EXISTS (SELECT 1 FROM jsends j WHERE j.subscriber_id = sl.subscriber_id)
+        AND NOT EXISTS (SELECT 1 FROM promo pr WHERE pr.subscriber_id = sl.subscriber_id)
         AND NOT EXISTS (SELECT 1 FROM brand_hold_rows($1) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id)
 )
 SELECT COUNT(*) AS skipped,
     COUNT(*) FILTER (WHERE provider = 'gmail') AS gmail,
     COUNT(*) FILTER (WHERE provider = 'yahoo') AS yahoo
 FROM aud;
+
+-- name: get-campaign-promo-audience
+-- Fork (promo series, integrations PROMO-SERIES-SPEC D5) -- the live preview behind the Promo series
+-- group. $2 / $3 / $4 are the Code, Step and Purchase tags as JSONB text standing in for the stored
+-- values (NULL = the stored value), so stored and unsaved values go through the same SQL
+-- (promo_applicable_tags, lower-casing included).
+--   orders = distinct order ids promo_matching_orders returns for the tags given, whatever the step
+--     and whether or not the feed is stale (the tags reach it through promo_applicable_tags called as
+--     applicable, the one home of the tag extraction and lower-casing).
+--   skipped = audience members (get-campaign-lang-audience's join and brand-hold rule) who would be
+--     recorded purchased -- promo_purchasers under the given values, not Smart Sending skips.
+--   stale = promo_feed_stale(); last_received_at = the newest feed write. Read-only, counts only.
+WITH c AS (
+    SELECT id, type::TEXT AS type, evergreen, attribs->>'lang' AS lang,
+        COALESCE($2::JSONB, attribs->'promo_code') AS code,
+        COALESCE($3::JSONB, attribs->'promo_step') AS step,
+        COALESCE($4::JSONB, attribs->'promo_tags') AS tags
+    FROM campaigns WHERE id = $1
+),
+campLists AS (
+    SELECT lists.id AS list_id, optin FROM lists
+    INNER JOIN campaign_lists ON (campaign_lists.list_id = lists.id)
+    WHERE campaign_lists.campaign_id = $1
+),
+jsends AS (
+    SELECT subscriber_id FROM brand_journey_skips($1)
+),
+promo AS MATERIALIZED (
+    SELECT x.subscriber_id FROM c
+    CROSS JOIN LATERAL promo_purchasers($1, promo_applicable_tags(c.type, c.evergreen, c.code, c.step, c.tags)) x
+),
+aud AS (
+    SELECT DISTINCT sl.subscriber_id
+    FROM c
+    JOIN campLists cl ON TRUE
+    JOIN subscriber_lists sl ON sl.list_id = cl.list_id
+        AND (
+            CASE
+                WHEN c.type = 'optin' THEN sl.status = 'unconfirmed' AND cl.optin = 'double'
+                WHEN cl.optin = 'double' THEN sl.status = 'confirmed'
+                ELSE sl.status != 'unsubscribed'
+            END
+        )
+    JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status != 'blocklisted')
+        AND (c.lang IS NULL OR COALESCE(NULLIF(LOWER(LEFT(s.attribs->>'lang', 2)), ''), 'en') = c.lang)
+    JOIN promo pr ON (pr.subscriber_id = sl.subscriber_id)
+    WHERE NOT EXISTS (SELECT 1 FROM jsends j WHERE j.subscriber_id = sl.subscriber_id)
+        AND NOT EXISTS (SELECT 1 FROM brand_hold_rows($1) bh WHERE bh.list_id = sl.list_id AND bh.subscriber_id = sl.subscriber_id)
+)
+SELECT
+    (SELECT COUNT(DISTINCT o.order_id) FROM c
+        CROSS JOIN LATERAL promo_matching_orders(promo_applicable_tags('regular', FALSE, '"x"'::JSONB, '2'::JSONB, c.tags)) o) AS orders,
+    (SELECT COUNT(*) FROM aud) AS skipped,
+    promo_feed_stale() AS stale,
+    (SELECT MAX(received_at) FROM promo_purchases) AS last_received_at;
+
+-- name: upsert-promo-purchases
+-- Fork (promo series, integrations PROMO-SERIES-SPEC D4) -- the feed write, one statement (so one
+-- transaction). $1..$5 are parallel arrays (order id, kind, value, email hash, ordered at), already
+-- validated and de-duplicated by (order id, kind, value) in Go. Idempotent; never deletes.
+INSERT INTO promo_purchases (order_id, kind, value, value_lc, email_hash, ordered_at, received_at)
+SELECT x.o, x.k, x.v, LOWER(x.v), x.h, x.t, NOW()
+    FROM UNNEST($1::TEXT[], $2::TEXT[], $3::TEXT[], $4::TEXT[], $5::TIMESTAMP WITH TIME ZONE[]) AS x(o, k, v, h, t)
+ON CONFLICT (order_id, kind, value) DO UPDATE SET email_hash = EXCLUDED.email_hash,
+    ordered_at = EXCLUDED.ordered_at, value_lc = EXCLUDED.value_lc, received_at = NOW();
+
+-- name: get-promo-purchases-summary
+-- Fork (promo series, integrations PROMO-SERIES-SPEC D4) -- the freshness read and the dark proof.
+-- stale is promo_feed_stale(), the one home of the staleness limit.
+SELECT COUNT(*) AS "rows", COUNT(DISTINCT order_id) AS orders, MAX(received_at) AS last_received_at,
+    promo_feed_stale() AS stale, MIN(ordered_at) AS oldest_ordered_at
+FROM promo_purchases;
+
+-- name: get-promo-purchases-order
+-- Fork (promo series, integrations PROMO-SERIES-SPEC D4) -- one order's rows (the backfill's canary
+-- read-back). No address is stored, so none is served.
+SELECT kind, value, email_hash, ordered_at, received_at FROM promo_purchases
+WHERE order_id = $1 ORDER BY kind, value;
 
 -- name: get-evergreen-sent-split
 -- Fork (campaign-page audience box). Of the subscribers evergreen campaign $1 has SENT to

@@ -1,0 +1,17 @@
+{
+ "comment": "The canonical-email hash (integrations listmonk/PROMO-SERIES-SPEC D4, I9): one definition across two homes -- the fork's SQL promo_email_hash (schema.sql; asserted by cmd/promo_db_test.go over every row) and integrations lib/promo-purchases.ts promoEmailHash over lib/email-canonical.ts canonicalEmail (asserted by tests/lib/promo-purchases.test.ts, which reads THIS file from the fork checkout, FORK=). canonical = trimmed, lower-cased; a gmail.com / googlemail.com domain after the LAST @ (not at position 0) loses the local part's dots and becomes gmail.com; +tags kept. hash = lower-case hex SHA-256 of canonical (UTF-8). Outside the contract: non-ASCII case folding and white-space other than the space character. Change both implementations together.",
+ "cases": [
+  { "note": "upper-case ASCII", "email": "Jane.Doe@Example.COM", "canonical": "jane.doe@example.com", "hash": "86e0b9e56c17cc4d12387e1949b85053fbe73bc3ce5a1188713a9d300cc6133d" },
+  { "note": "surrounding spaces", "email": "  jane@example.com  ", "canonical": "jane@example.com", "hash": "8c87b489ce35cf2e2f39f80e282cb2e804932a56a213983eeeb428407d43b52d" },
+  { "note": "no @", "email": "janeexample.com", "canonical": "janeexample.com", "hash": "76afd6569ddfcd5236f8e1cab3f4a8701ce95ec63d2ea787df870abfacb85f5a" },
+  { "note": "a leading @", "email": "@gmail.com", "canonical": "@gmail.com", "hash": "29630d82ffa90155f4db96bee440f47635564c31475ff86474e1bb38c1668ad9" },
+  { "note": "two @ with a gmail domain", "email": "j.a@ne@gmail.com", "canonical": "ja@ne@gmail.com", "hash": "c6471dc82af26f8423689c2ae01aec0c40e8ad07d31ae01da33357ad853b002d" },
+  { "note": "gmail dots", "email": "J.A.N.E@gmail.com", "canonical": "jane@gmail.com", "hash": "988b074286b20c503e3015c2076533f3bf4ce5ca6f8a507ab52c2e0f98d620b7" },
+  { "note": "googlemail.com", "email": "jane.doe@googlemail.com", "canonical": "janedoe@gmail.com", "hash": "d6117306485ed0e50afab3ac871e98f81699151f30281527d63ff5f233656c69" },
+  { "note": "a +tag kept", "email": "jane+promo@gmail.com", "canonical": "jane+promo@gmail.com", "hash": "e85af12814cd0fdaf47c791414b23cc8f53053eacce6c73b8a6ab4617ca160b2" },
+  { "note": "a +tag at another domain", "email": "Jane+BFCM@example.com", "canonical": "jane+bfcm@example.com", "hash": "cec1efb7a9c0bfb18b30e692640aee08156279793d5357c18d0329b169bd18b9" },
+  { "note": "a lower-case non-ASCII local part", "email": "josé.núñez@example.com", "canonical": "josé.núñez@example.com", "hash": "5fe8191e76142f8b6a2f33e29a4d68974f55dd3faf93f2dcead68830dcec7b76" },
+  { "note": "dots outside gmail kept", "email": "jane.doe@example.com", "canonical": "jane.doe@example.com", "hash": "86e0b9e56c17cc4d12387e1949b85053fbe73bc3ce5a1188713a9d300cc6133d" },
+  { "note": "the empty string", "email": "", "canonical": "", "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }
+ ]
+}

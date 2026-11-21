@@ -31,25 +31,34 @@ const isNotStarted = (c) => c.status === 'draft' || c.status === 'scheduled';
 // Sending share is audienceSkipped - audienceSilentSkipped. With the form's Smart Sending off but
 // unsaved, the preview's silent count still excludes the stored Smart Sending skips -- a lower bound on
 // skips until saved (the overlap is unknown to the page).
-export const skipSplitOf = (c, on = true, silent = null) => {
+// Fork (promo series, integrations PROMO-SERIES-SPEC D5, Stage 2 S8) -- THREE shares: the server's
+// `audienceSkipped` is the TOTAL (Smart Sending + purchased + silent), so Smart Sending's share is
+// audienceSkipped - audiencePurchasedSkipped - audienceSilentSkipped (zero when the form's Smart
+// Sending is off) -- a purchaser is never labelled a Smart Sending skip and does not vanish when Smart
+// Sending is switched off. `purchased` is null (the served `audiencePurchasedSkipped` -- the form's
+// promo fields equal the stored ones) or the live preview's `skipped` (an unsaved promo edit;
+// promoSeries.mjs::purchasedArg decides which).
+export const skipSplitOf = (c, on = true, silent = null, purchased = null) => {
   const storedSilent = Math.max(0, Number(c && c.audienceSilentSkipped) || 0);
+  const storedPurchased = Math.max(0, Number(c && c.audiencePurchasedSkipped) || 0);
   const storedTotal = Math.max(0, Number(c && c.audienceSkipped) || 0);
-  const smart = on ? Math.max(0, storedTotal - storedSilent) : 0;
+  const smart = on ? Math.max(0, storedTotal - storedPurchased - storedSilent) : 0;
   let quiet = storedSilent;
   if (silent) {
     const n = silent.count === null || silent.count === undefined ? storedSilent : Math.max(0, Number(silent.count) || 0);
     quiet = silent.on ? n : 0;
   }
-  return { smart, silent: quiet };
+  const bought = purchased === null || purchased === undefined ? storedPurchased : Math.max(0, Number(purchased) || 0);
+  return { smart, purchased: bought, silent: quiet };
 };
 
-export const toSendOf = (c, on = true, silent = null) => {
+export const toSendOf = (c, on = true, silent = null, purchased = null) => {
   if (!c || c.audience === null || c.audience === undefined) {
     return null;
   }
   const total = Number(c.audience) || 0;
-  const split = skipSplitOf(c, on, silent);
-  const skipped = Math.min(total, split.smart + split.silent);
+  const split = skipSplitOf(c, on, silent, purchased);
+  const skipped = Math.min(total, split.smart + split.purchased + split.silent);
   return { count: total - skipped, skipped, total };
 };
 
@@ -71,6 +80,8 @@ export const foldSilentSkip = (attribs, on) => {
 
 // D4 -- a clone never carries the toggle: the copied attribs without `silent_skip` / `silentSkip`, so
 // every new campaign, cloned or not, starts off. A new object; null stays null.
+// Fork (promo series, integrations PROMO-SERIES-SPEC D1) -- nor the promo Step: Code and Purchase
+// tags carry over, the Step is blank on every clone (`promo_step` / `promoStep` dropped).
 export const cloneAttribs = (attribs) => {
   if (!attribs) {
     return attribs;
@@ -78,6 +89,8 @@ export const cloneAttribs = (attribs) => {
   const out = { ...attribs };
   delete out.silent_skip;
   delete out.silentSkip;
+  delete out.promo_step;
+  delete out.promoStep;
   return out;
 };
 
@@ -102,12 +115,12 @@ export const foldSmartSending = (attribs, off) => {
   return out;
 };
 
-export const audienceBox = (c, on = true, silent = null) => {
+export const audienceBox = (c, on = true, silent = null, purchased = null) => {
   if (!c || !c.id) {
     return null;
   }
   if (!c.evergreen && isNotStarted(c)) {
-    const ts = toSendOf(c, on, silent);
+    const ts = toSendOf(c, on, silent, purchased);
     if (!ts) {
       return null;
     }

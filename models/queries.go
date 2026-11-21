@@ -186,6 +186,11 @@ type Queries struct {
 	GetCampaignLangAudience    *sqlx.Stmt `query:"get-campaign-lang-audience"`
 	// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the switch's live preview.
 	GetCampaignSilentAudience *sqlx.Stmt `query:"get-campaign-silent-audience"`
+	// Fork (promo series, PROMO-SERIES-SPEC D4/D5) -- the group's live preview and the purchase feed.
+	GetCampaignPromoAudience *sqlx.Stmt `query:"get-campaign-promo-audience"`
+	UpsertPromoPurchases     *sqlx.Stmt `query:"upsert-promo-purchases"`
+	GetPromoPurchasesSummary *sqlx.Stmt `query:"get-promo-purchases-summary"`
+	GetPromoPurchasesOrder   *sqlx.Stmt `query:"get-promo-purchases-order"`
 	GetCampaignUnreachableLang *sqlx.Stmt `query:"get-campaign-unreachable-lang"`
 	GetEvergreenSentSplit      *sqlx.Stmt `query:"get-evergreen-sent-split"`
 	// Fork (SHALA-CUTOVER-SPEC D9/I8) -- non-English subscribers on a campaign's lists.

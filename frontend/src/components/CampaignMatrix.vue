@@ -111,6 +111,11 @@
 {{ nameOf(row).text }}
 </router-link>
               </td>
+              <!-- PROMO-SERIES-SPEC D7: the promo Code and Step (blank for a journey and the totals row). -->
+              <td v-else-if="c.field === 'promo_code' || c.field === 'promo_step'" :key="c.field" :class="bmTd(c.field)"
+                :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
+                {{ promoOf(row, c.field) }}
+              </td>
               <!-- Polish 2026-11-14: the language code in plain text, under All languages only. -->
               <td v-else-if="c.field === 'lang'" :key="c.field" class="has-text-centered" :class="bmTd('lang')"
                 :data-cy="`cm-lang-${row.totals ? 'totals' : row.id}`">
@@ -141,7 +146,8 @@
                 :data-cy="`cm-skipped-${row.totals ? 'totals' : row.id}`">
                 {{ cell(row, 'skipped') }}
               </td>
-              <!-- SIXTY-DAY-OPENS-SPEC D5: Look-back, Look-ahead, 60-day opens (expanded only). -->
+              <!-- SIXTY-DAY-OPENS-SPEC D5: Look-back, Look-ahead, 60-day engaged and (PROMO-SERIES-SPEC
+                   D5) Purchased (expanded only). -->
               <td v-else-if="isReason(c.field)" :key="c.field" class="has-text-right" :class="bmTd(c.field)"
                 :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
                 {{ cell(row, c.field) }}
@@ -180,8 +186,8 @@ import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import
 import {
   CONVERSION_FIELDS, GAP_FAILED, GAP_FIELDS, GAP_PENDING, GAP_READY, REASON_FIELDS, brandCell, cellText, clickSort, conversionValue,
   dateCell, filterByName, gapClass, gapRequestIds, gapTip, gpClass, gpTip, groupHeaders, langCell, leftColumns, loadState,
-  mergeGapCounts, midColumns, nameCell, saveState, shapeRows, showBrandColumn, showLangColumn, sortForView, statusCell,
-  tableRows,
+  mergeGapCounts, midColumns, nameCell, promoCell, saveState, shapeRows, showBrandColumn, showLangColumn, sortForView,
+  statusCell, tableRows,
 } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -354,6 +360,11 @@ export default Vue.extend({
       this.skippedExpanded = !this.skippedExpanded;
       this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang, this.skippedExpanded);
       this.saveState();
+    },
+
+    // PROMO-SERIES-SPEC D7 -- the Code / Step cell text (campaignMatrix.mjs::promoCell).
+    promoOf(row, field) {
+      return promoCell(row, field);
     },
 
     isReason(field) {

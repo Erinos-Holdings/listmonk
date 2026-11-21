@@ -238,6 +238,13 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// the GET is the switch and the per-feed counts (no subscriber ids).
 		g.PUT("/api/journeys/due", pm(a.PutJourneyDue, "subscribers:manage"))
 		g.GET("/api/journeys/due", pm(a.GetJourneyDue, "subscribers:get_all"))
+		// Fork (promo series, integrations PROMO-SERIES-SPEC D4/D5, promo.go) -- the purchase feed (the
+		// order leg's listmonk_sync writes; the GET is the freshness read, no address) and the Promo
+		// series group's live preview (campaigns:manage -- it answers order counts for arbitrary tags,
+		// so editors only -- plus the campaign's list permission in the handler).
+		g.PUT("/api/promo/purchases", pm(a.PutPromoPurchases, "subscribers:manage"))
+		g.GET("/api/promo/purchases", pm(a.GetPromoPurchases, "subscribers:get_all"))
+		g.GET("/api/campaigns/:id/promo-audience", pm(hasID(a.GetCampaignPromoAudience), "campaigns:manage_all", "campaigns:manage"))
 		// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker, list-scoped.
 		g.GET("/api/analytics/campaigns", pm(a.GetAnalyticsCampaigns, "campaigns:get_analytics"))
 		// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D10) -- the Campaign Matrix pane,

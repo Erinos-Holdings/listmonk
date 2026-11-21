@@ -221,6 +221,14 @@ func (c *Core) FillAudience(cm *models.Campaign) {
 	cm.SmartSendingOn = cm.SmartSending()
 	// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- likewise the toggle's effective value.
 	cm.SilentSkipOn = cm.SilentSkip()
+	// Fork (promo series, PROMO-SERIES-SPEC D1) -- the three promo fields' served values.
+	cm.PromoCodeOut = cm.PromoCode()
+	if s := cm.PromoStep(); s > 0 {
+		cm.PromoStepOut = null.IntFrom(s)
+	} else {
+		cm.PromoStepOut = null.Int{}
+	}
+	cm.PromoTagsOut = cm.PromoTags()
 	if !wantsAudience(*cm) {
 		return
 	}
@@ -234,8 +242,10 @@ func (c *Core) FillAudience(cm *models.Campaign) {
 	// D3 -- null exactly when Audience is: both come from the one row. 60-day opens (D4) --
 	// audience_skipped is the TOTAL would-skip count (Smart Sending + silent), so the To send the
 	// list and the box show agrees with the claim; the silent share is served beside it.
-	cm.AudienceSkipped = null.IntFrom(a.Skipped + a.SilentSkipped)
+	// Promo series (PROMO-SERIES-SPEC D5) -- the purchased share joins the total the same way.
+	cm.AudienceSkipped = null.IntFrom(a.Skipped + a.PurchasedSkipped + a.SilentSkipped)
 	cm.AudienceSilentSkipped = null.IntFrom(a.SilentSkipped)
+	cm.AudiencePurchasedSkipped = null.IntFrom(a.PurchasedSkipped)
 }
 
 // wantsSentNoLang (fork, campaign-page audience box) reports whether cm carries the
@@ -613,6 +623,33 @@ type LangAudience struct {
 	// toggle would skip who are not Smart Sending skips (0 while it is off). Skipped stays Smart
 	// Sending's alone.
 	SilentSkipped int `db:"silent_skipped"`
+	// PurchasedSkipped (fork, promo series, PROMO-SERIES-SPEC D5) -- the audience members
+	// promo_purchasers returns under the STORED promo fields who are not Smart Sending skips (0 unless
+	// the campaign is applicable and the feed is current). SilentSkipped excludes them (precedence).
+	PurchasedSkipped int `db:"purchased_skipped"`
+	// PromoStale -- the campaign is applicable (D2) and promo_feed_stale() (the start warning).
+	PromoStale bool `db:"promo_stale"`
+}
+
+// PromoAudience (fork, promo series, PROMO-SERIES-SPEC D5) is one get-campaign-promo-audience row:
+// the live preview of the Promo series group. Counts only, never an identity.
+type PromoAudience struct {
+	Orders         int       `db:"orders" json:"orders"`
+	Skipped        int       `db:"skipped" json:"skipped"`
+	Stale          bool      `db:"stale" json:"stale"`
+	LastReceivedAt null.Time `db:"last_received_at" json:"last_received_at"`
+}
+
+// CampaignPromoAudience runs the live preview for campaign id with the stand-in values (each a
+// JSONB text, or nil to use the stored value). Read-only.
+func (c *Core) CampaignPromoAudience(id int, code, step, tags *string) (PromoAudience, error) {
+	var row PromoAudience
+	if err := c.q.GetCampaignPromoAudience.Get(&row, id, code, step, tags); err != nil {
+		c.log.Printf("error counting promo audience (%d): %v", id, err)
+		return PromoAudience{}, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+	return row, nil
 }
 
 // SilentAudience (fork, 60-day opens, SIXTY-DAY-OPENS-SPEC D4) is one get-campaign-silent-audience

@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  analyticsSkippedCell, analyticsSkippedRows, REASON_FIELDS,
+  analyticsSkippedCell, analyticsSkippedRows, REASON_FIELDS, PROMO_FIELDS, promoCell,
   COUNT_FIELDS, DEFAULT_STATE, GAP_FAILED, GAP_PENDING, MISSING, NAME_MAX, PENDING_MARK, SHOP_FIELDS, SORT_FIELDS,
   STATUS_ORDER, STORAGE_KEY, cellText, clickSort, conversionValue, dateCell, displayValue, filterByLaunch, filterByName,
   gapClass, gapRequestIds, gapTip, gpClass, gpLevel, gpTip, groupHeaders, leftColumns, loadState, mergeGapCounts,
@@ -727,13 +727,14 @@ test('groupHeaders agree with midColumns', () => {
 });
 
 // Polish 2026-11-14: Status far left, Started (the date field), Brand, Campaign, Lang (All only).
+// Integrations PROMO-SERIES-SPEC D7: Code and Step follow Campaign.
 test('leftColumns order', () => {
-  assert.deepEqual(leftColumns(true, true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'lang', 'sent', 'skipped']);
-  assert.deepEqual(leftColumns(true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'sent', 'skipped']);
-  assert.deepEqual(leftColumns(false, true).map((c) => c.field), ['status', 'date', 'name', 'lang', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(true, true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'promo_code', 'promo_step', 'lang', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'promo_code', 'promo_step', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(false, true).map((c) => c.field), ['status', 'date', 'name', 'promo_code', 'promo_step', 'lang', 'sent', 'skipped']);
   assert.equal(leftColumns(true).find((c) => c.field === 'date').label, 'analytics.matrix.started');
   const first = leftColumns(true, true).map((c) => clickSort({ field: 'views', order: 'desc' }, c.field).order);
-  assert.deepEqual(first, ['asc', 'desc', 'asc', 'asc', 'asc', 'desc', 'desc']);
+  assert.deepEqual(first, ['asc', 'desc', 'asc', 'asc', 'asc', 'desc', 'asc', 'desc', 'desc']);
 });
 
 test('loadState view', () => {
@@ -852,14 +853,17 @@ test('matrix views wiring', () => {
 
 // --- integrations SIXTY-DAY-OPENS-SPEC D5 (frontend tests) ---
 
-test('SIXTY-DAY-OPENS D5: collapsed columns are today\'s; expanded adds exactly the three reasons right of Skipped', () => {
-  const today = ['status', 'date', 'brand', 'name', 'lang', 'sent', 'skipped'];
+// PROMO-SERIES-SPEC T14: collapsed, the Skipped section is one column (as before); expanded adds
+// exactly FOUR reasons -- Purchased after 60-day engaged.
+test('SIXTY-DAY-OPENS D5 / PROMO-SERIES T14: collapsed columns are today\'s; expanded adds exactly the four reasons right of Skipped', () => {
+  const today = ['status', 'date', 'brand', 'name', 'promo_code', 'promo_step', 'lang', 'sent', 'skipped'];
   assert.deepEqual(leftColumns(true, true).map((c) => c.field), today);
   assert.deepEqual(leftColumns(true, true, false).map((c) => c.field), today);
   const exp = leftColumns(true, true, true).map((c) => c.field);
-  assert.deepEqual(exp, [...today, 'skipped_lookback', 'skipped_lookahead', 'skipped_silent']);
+  assert.deepEqual(exp, [...today, 'skipped_lookback', 'skipped_lookahead', 'skipped_silent', 'skipped_purchased']);
+  assert.equal(exp.length - today.length, 4);
   assert.deepEqual(exp.slice(today.length), [...REASON_FIELDS]);
-  assert.deepEqual(leftColumns(false, false, true).map((c) => c.field).slice(-4), ['skipped', ...REASON_FIELDS]);
+  assert.deepEqual(leftColumns(false, false, true).map((c) => c.field).slice(-5), ['skipped', ...REASON_FIELDS]);
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   leftColumns(true, true, true).forEach((c) => {
     assert.ok(en[c.label], c.label);
@@ -905,18 +909,75 @@ test('SIXTY-DAY-OPENS D5: reason cells, totals and the journey; they sum to Skip
 test('SIXTY-DAY-OPENS D5: Campaign Analytics -- the Skipped line expands to the Matrix\'s three reason cells', () => {
   const fmt = (n) => `n${n}`;
   const sel = [{
-    id: 61, name: 'Mid', evergreen: false, skipped: 9, smartOff: false, skippedLookback: 1, skippedLookahead: 2, skippedSilent: 6,
+    id: 61, name: 'Mid', evergreen: false, skipped: 11, smartOff: false, skippedLookback: 1, skippedLookahead: 2, skippedSilent: 6, skippedPurchased: 2,
   }, {
-    id: 62, name: 'Welcome', evergreen: true, skipped: null, smartOff: false, skippedLookback: null, skippedLookahead: null, skippedSilent: null,
+    id: 62, name: 'Welcome', evergreen: true, skipped: null, smartOff: false, skippedLookback: null, skippedLookahead: null, skippedSilent: null, skippedPurchased: null,
   }];
   // Collapsed: exactly the earlier entries.
   assert.deepEqual(analyticsSkippedRows(sel, fmt), [
-    { id: 61, name: 'Mid', text: 'n9' }, { id: 62, name: 'Welcome', text: MISSING },
+    { id: 61, name: 'Mid', text: 'n11' }, { id: 62, name: 'Welcome', text: MISSING },
   ]);
   const exp = analyticsSkippedRows(sel, fmt, undefined, true);
-  assert.deepEqual(exp[0].reasons.map((r) => [r.field, r.text]), [['skipped_lookback', 'n1'], ['skipped_lookahead', 'n2'], ['skipped_silent', 'n6']]);
-  assert.deepEqual(exp[1].reasons.map((r) => r.text), [MISSING, MISSING, MISSING]);
+  assert.deepEqual(exp[0].reasons.map((r) => [r.field, r.text]), [['skipped_lookback', 'n1'], ['skipped_lookahead', 'n2'], ['skipped_silent', 'n6'], ['skipped_purchased', 'n2']]);
+  assert.deepEqual(exp[1].reasons.map((r) => r.text), [MISSING, MISSING, MISSING, MISSING]);
   const view = readFileSync(new URL('./views/CampaignAnalytics.vue', import.meta.url), 'utf8');
   assert.match(view, /analyticsSkippedRows\(this\.form\.campaigns, \(n\) => this\.\$utils\.formatNumber\(n\), \(k, p\) => this\.\$t\(k, p\), this\.skippedExpanded\)/);
   assert.match(view, /skippedExpanded: false,/);
+});
+
+// --- integrations PROMO-SERIES-SPEC T14 / I13 (the Matrix half) and D7 ---
+
+test('PROMO-SERIES D5: the Purchased sub-column -- a count, in the totals, sortable, the four sum to Skipped', () => {
+  const fmt = (n) => `n${n}`;
+  const b1 = shapeRow({
+    ...api[0], id: 71, skipped: 10, skipped_lookback: 3, skipped_lookahead: 1, skipped_silent: 2, skipped_purchased: 4,
+  });
+  const b2 = shapeRow({
+    ...api[0], id: 72, skipped: 5, skipped_lookback: 0, skipped_lookahead: 0, skipped_silent: 0, skipped_purchased: 5,
+  });
+  const j = shapeRow({
+    ...api[0], id: 73, evergreen: true, skipped: null, skipped_purchased: 3,
+  });
+  [b1, b2].forEach((r) => assert.equal(REASON_FIELDS.reduce((t, k) => t + r[k], 0), r.skipped));
+  assert.equal(cellText(b1, 'skipped_purchased', 'pct', fmt), 'n4', 'a count, never a rate');
+  assert.equal(cellText(j, 'skipped_purchased', 'num', fmt), MISSING, 'a journey has none');
+  const t = totalsRow([b1, b2, j]);
+  assert.equal(t.skipped_purchased, 9);
+  assert.equal(t.skipped, 15);
+  assert.ok(SORT_FIELDS.includes('skipped_purchased'));
+  assert.deepEqual(sortRows([b1, b2, j], { field: 'skipped_purchased', order: 'desc' }).map((r) => r.id), [72, 71, 73]);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['analytics.matrix.skippedPurchased', 'analytics.matrix.skippedPurchasedHelp', 'analytics.matrix.promoCode', 'analytics.matrix.promoStep']
+    .forEach((k) => assert.ok(en[k], k));
+  assert.match(en['analytics.matrix.skippedHelp'], /already bought/);
+  assert.match(en['campaigns.skippedHelp'], /already bought/);
+});
+
+test('PROMO-SERIES D7: the Code and Step columns -- the served values, blank for a journey and the totals, sortable', () => {
+  const a = shapeRow({
+    ...api[0], id: 81, name: 'A', promo_code: 'BFCM-D3', promo_step: 2,
+  });
+  const b = shapeRow({
+    ...api[0], id: 82, name: 'B', promo_code: 'AAA', promo_step: 3,
+  });
+  const c = shapeRow({ ...api[0], id: 83, name: 'C' });
+  const j = shapeRow({
+    ...api[0], id: 84, name: 'J', evergreen: true, promo_code: 'X', promo_step: 1,
+  });
+  const odd = shapeRow({
+    ...api[0], id: 85, name: 'O', promo_code: 7, promo_step: 4,
+  });
+  assert.equal(promoCell(a, 'promo_code'), 'BFCM-D3');
+  assert.equal(promoCell(a, 'promo_step'), '2');
+  assert.equal(promoCell(c, 'promo_code'), '');
+  assert.equal(promoCell(c, 'promo_step'), '');
+  assert.equal(promoCell(j, 'promo_code'), '', 'blank for a journey');
+  assert.equal(promoCell(odd, 'promo_step'), '');
+  assert.equal(promoCell(odd, 'promo_code'), '');
+  const t = totalsRow([a, b, c]);
+  assert.equal(promoCell(t, 'promo_code'), '');
+  assert.equal(promoCell(t, 'promo_step'), '');
+  PROMO_FIELDS.forEach((f) => assert.ok(SORT_FIELDS.includes(f), f));
+  assert.deepEqual(sortRows([a, b, c], { field: 'promo_code', order: 'asc' }).map((r) => r.id), [82, 81, 83], 'missing last');
+  assert.deepEqual(sortRows([a, b, c], { field: 'promo_step', order: 'desc' }).map((r) => r.id), [82, 81, 83]);
 });
