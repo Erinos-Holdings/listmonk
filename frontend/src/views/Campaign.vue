@@ -154,25 +154,31 @@
            non-evergreen regular campaign only, editable while canEdit (a scheduled launch can still be
            switched; a paused one applies from the re-claim). The description is the hover on the
            label. Folded into attribs.smart_sending (foldAttribs). -->
-      <div v-if="showSmartSending" class="audience-switch" :style="audienceBoxStyle" data-cy="btn-smart-sending">
-        <b-tooltip :label="$t('campaigns.smartSendingHelp')" type="is-dark" multilined position="is-left"
-          append-to-body>
-          <span class="audience-switch-label" tabindex="0">{{ $t('campaigns.smartSending') }}</span>
-        </b-tooltip>
-        <b-switch v-model="form.smartSending" size="is-small" type="is-success" :disabled="!canEdit" />
-      </div>
-      <!-- Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) -- directly under Smart Sending,
-           the same visibility. Off by default. Editable while draft or paused only: on a scheduled
-           campaign it is disabled (the review gate refuses a save that changes a scheduled campaign's
-           hash, and this key is hashed) and the hover says to unschedule. Turning it on over a stored
-           off previews live (silent-audience; audience-box.mjs toSendOf's `silent`). Folded into
-           attribs.silent_skip (foldAttribs). -->
-      <div v-if="showSilentSkip" class="audience-switch" :style="audienceBoxStyle" data-cy="btn-silent-skip">
-        <b-tooltip :label="silentSkipEditable ? $t('campaigns.silentSkipHelp') : $t('campaigns.silentSkipScheduled')"
-          type="is-dark" multilined position="is-left" append-to-body>
-          <span class="audience-switch-label" tabindex="0">{{ $t('campaigns.silentSkip') }}</span>
-        </b-tooltip>
-        <b-switch v-model="form.silentSkip" size="is-small" type="is-success" :disabled="!silentSkipEditable" />
+      <!-- ONE positioned stack holds every switch row, in order (Smart Sending first, 60-day engaged
+           directly under it). The rows themselves are in the stack's flow: two rows each positioned
+           at the measured top painted over one another (erinos.476 hid Smart Sending under the
+           60-day row). Pinned by audience-box.test.mjs. -->
+      <div v-if="showSmartSending" class="audience-switches" :style="audienceBoxStyle" data-cy="audience-switches">
+        <div class="audience-switch" data-cy="btn-smart-sending">
+          <b-tooltip :label="$t('campaigns.smartSendingHelp')" type="is-dark" multilined position="is-left"
+            append-to-body>
+            <span class="audience-switch-label" tabindex="0">{{ $t('campaigns.smartSending') }}</span>
+          </b-tooltip>
+          <b-switch v-model="form.smartSending" size="is-small" type="is-success" :disabled="!canEdit" />
+        </div>
+        <!-- Fork (60-day engaged, integrations SIXTY-DAY-OPENS-SPEC D4) -- directly under Smart
+             Sending, the same visibility. Off by default. Editable while draft or paused only: on a
+             scheduled campaign it is disabled (the review gate refuses a save that changes a scheduled
+             campaign's hash, and this key is hashed) and the hover says to unschedule. Turning it on
+             over a stored off previews live (silent-audience; audience-box.mjs toSendOf's `silent`).
+             Folded into attribs.silent_skip (foldAttribs). -->
+        <div v-if="showSilentSkip" class="audience-switch" data-cy="btn-silent-skip">
+          <b-tooltip :label="silentSkipEditable ? $t('campaigns.silentSkipHelp') : $t('campaigns.silentSkipScheduled')"
+            type="is-dark" multilined position="is-left" append-to-body>
+            <span class="audience-switch-label" tabindex="0">{{ $t('campaigns.silentSkip') }}</span>
+          </b-tooltip>
+          <b-switch v-model="form.silentSkip" size="is-small" type="is-success" :disabled="!silentSkipEditable" />
+        </div>
       </div>
     </div>
 

@@ -210,3 +210,46 @@ test('60-day opens: the switch reads the top-level field; the fold owns silent_s
   const view = readFileSync(new URL('./views/Campaigns.vue', import.meta.url), 'utf8');
   assert.match(view, /attribs: cloneAttribs\(c\.attribs\)/);
 });
+
+// erinos.476 hid Smart Sending: its row and the 60-day row were each `position: absolute` at the same
+// measured top, so the second painted over the first. Both rows must render, in order, inside ONE
+// positioned stack, and a row must never be positioned itself.
+test('both switches render: Smart Sending first, 60-day engaged directly under it, in one stack', () => {
+  const view = readFileSync(new URL('./views/Campaign.vue', import.meta.url), 'utf8');
+  const open = view.indexOf('class="audience-switches"');
+  assert.ok(open > 0, 'the stack exists');
+  // The stack's markup: from its opening tag to the anchor's closing tag (the tabs follow).
+  const stack = view.slice(view.lastIndexOf('<div', open), view.indexOf('<b-tabs', open));
+  assert.match(stack.slice(0, stack.indexOf('>')), /v-if="showSmartSending"/);
+  assert.match(stack.slice(0, stack.indexOf('>')), /:style="audienceBoxStyle"/);
+  const smart = stack.indexOf('data-cy="btn-smart-sending"');
+  const silent = stack.indexOf('data-cy="btn-silent-skip"');
+  assert.ok(smart > 0 && silent > smart, 'Smart Sending first, the 60-day row after it, both in the stack');
+  // Exactly two rows, and neither carries the measured (positioning) style.
+  const rows = stack.match(/<div[^>]*class="audience-switch"[^>]*>/g) || [];
+  assert.equal(rows.length, 2);
+  rows.forEach((r) => assert.doesNotMatch(r, /audienceBoxStyle/));
+  assert.match(rows[0], /btn-smart-sending/);
+  assert.doesNotMatch(rows[0], /v-if/, 'Smart Sending shows whenever the stack does');
+  assert.match(rows[1], /btn-silent-skip/);
+  // No switch row exists outside the stack.
+  assert.equal((view.match(/class="audience-switch"/g) || []).length, 2);
+
+  // The stylesheet: the stack is the positioned element; a row is never absolute.
+  const css = readFileSync(new URL('./assets/style.scss', import.meta.url), 'utf8');
+  const block = (sel) => {
+    const at = css.indexOf(`\n  ${sel} {`);
+    assert.ok(at > 0, `${sel} rule exists`);
+    return css.slice(at, css.indexOf('\n  }', at));
+  };
+  assert.match(block('.audience-switches'), /position: absolute/);
+  assert.match(block('.audience-switches'), /flex-direction: column/);
+  assert.doesNotMatch(block('.audience-switch'), /position:/);
+});
+
+test('the 60-day switch is labelled "60-day engaged" everywhere it is shown', () => {
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en['campaigns.silentSkip'], '60-day engaged');
+  assert.equal(en['analytics.matrix.skippedSilent'], '60-day engaged');
+  Object.entries(en).forEach(([k, v]) => assert.doesNotMatch(String(v), /60-day opens/i, k));
+});

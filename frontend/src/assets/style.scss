@@ -3067,12 +3067,20 @@ section.campaign {
   /* Smart Sending switch (SMART-SENDING-SPEC D4; user 2026-11-07): a compact row right under the
   To-send box, the same width and right edge (the measured style), label left (its hover is the
   description), switch right -- so the toggle sits beside the number it changes. */
-  .audience-switch {
+  .audience-switches {
     position: absolute;
     right: 0;
-    top: 2.6rem; /* the box's anchor; the box ends here, this row starts 0.35rem below it */
+    top: 2.6rem; /* the box's anchor; the box ends here, the stack starts 0.35rem below it */
     width: 12rem;
     margin-top: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  /* One row per switch, in the stack's flow -- never positioned itself (two rows positioned at the
+  same top paint over one another). */
+  .audience-switch {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -3169,7 +3177,7 @@ over the last tab and take its clicks), so the box drops into the flow above the
       width: 100% !important;
       margin-bottom: 1rem;
     }
-    .audience-switch {
+    .audience-switches {
       position: static;
       width: 100% !important;
       margin: -0.65rem 0 1rem;
