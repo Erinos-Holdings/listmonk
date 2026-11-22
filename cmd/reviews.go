@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -76,6 +77,49 @@ func (a *App) GenerateCampaignAlts(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadGateway, a.i18n.T("campaigns.altsUnavailable"))
 	}
 	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// GenerateAltsDraft (POST /api/campaigns/alts) -- integrations ALT-ON-INSERT-SPEC D4: the campaign
+// page's in-editor alt generation over its UNSAVED visual campaign. Body `{snapshot: {...}}`; the
+// fork checks only that `snapshot` is a JSON object and that the request is at most 2 MiB (413
+// over) -- the review Lambda owns every other validation. No campaign is read, so there is no
+// per-campaign check (the route's permission is the whole check). Signed by the same helper as
+// GenerateCampaignAlts and relayed as {data: <the Lambda's JSON>}; 503 while the gate is off, any
+// other failure a 502. Nothing is stored and nothing of the body is logged.
+func (a *App) GenerateAltsDraft(c echo.Context) error {
+	cfg := reviewConfig()
+	if cfg.URL == "" {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, a.i18n.T("campaigns.reviewNotConfigured"))
+	}
+	raw, err := io.ReadAll(io.LimitReader(c.Request().Body, core.MaxAltsSnapshotBytes+1))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
+	}
+	if len(raw) > core.MaxAltsSnapshotBytes {
+		return echo.NewHTTPError(http.StatusRequestEntityTooLarge, a.i18n.T("campaigns.altsTooLarge"))
+	}
+	var req struct {
+		Snapshot json.RawMessage `json:"snapshot"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil || !isJSONObject(req.Snapshot) {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
+	}
+	out, err := core.RequestAltsSnapshot(cfg, req.Snapshot)
+	if errors.Is(err, core.ErrReviewNotConfigured) {
+		return echo.NewHTTPError(http.StatusServiceUnavailable, a.i18n.T("campaigns.reviewNotConfigured"))
+	}
+	if err != nil {
+		// The error only: never the snapshot.
+		a.log.Printf("draft alt generation failed: %v", err)
+		return echo.NewHTTPError(http.StatusBadGateway, a.i18n.T("campaigns.altsUnavailable"))
+	}
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// isJSONObject reports whether raw is a JSON object (not null, an array or a scalar).
+func isJSONObject(raw json.RawMessage) bool {
+	t := bytes.TrimSpace(raw)
+	return len(t) > 0 && t[0] == '{' && json.Valid(t)
 }
 
 // GetCampaignReviewLatest (GET /api/campaigns/:id/reviews/latest) -- the window's and the campaign

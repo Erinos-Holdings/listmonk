@@ -397,6 +397,8 @@
     "campaigns.reviewNotConfigured": "Campaign review is not configured (Settings → General → Campaign review).",
     "campaigns.reviewUnavailable": "The review service did not accept the inspection. Try again; if it keeps failing, tell Robbie.",
     "campaigns.altsUnavailable": "Alt tags could not be generated.",
+    "campaigns.altsTooLarge": "The campaign is too large to generate alt tags for.",
+    "campaigns.altsGenerated": "{num} alt tag generated | {num} alt tags generated",
     "campaigns.reviewNotAcceptable": "{id} cannot be accepted: it must be fixed before this campaign can be sent.",
     "campaigns.reviewOverrideOnly": "{id} can be accepted only by a user with the {perm} permission.",
     "campaigns.reviewNotRunning": "This inspection is no longer running.",

@@ -210,6 +210,8 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/campaigns/structure-verifications", pm(a.PutStructureVerification, "campaigns:review_structure"))
 		g.GET("/api/campaigns/render-canary", pm(a.GetRenderCanary, "campaigns:review"))
 		g.POST("/api/campaigns/actions", pm(a.PostCampaignActions, "campaigns:get_all", "campaigns:get")) // Fork (SAFE-ACTION-BODY-SPEC D2): report-only, GET /api/campaigns/:id's permissions.
+		// integrations ALT-ON-INSERT-SPEC D4: the in-editor alt generation over an unsaved snapshot.
+		g.POST("/api/campaigns/alts", pm(a.GenerateAltsDraft, "campaigns:manage_all", "campaigns:manage"))
 		g.GET("/api/campaigns/structure-verifications/:fingerprint", pm(a.GetStructureVerification, "campaigns:get_all", "campaigns:get"))
 		g.POST("/api/campaigns/:id/reviews", pm(hasID(a.StartCampaignReview), "campaigns:manage_all", "campaigns:manage"))
 		// integrations ALT-AUTOGEN-SPEC D2: the alt generation Inspect runs before the inspection.

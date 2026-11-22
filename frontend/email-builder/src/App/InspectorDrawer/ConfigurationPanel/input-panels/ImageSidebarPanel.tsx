@@ -12,6 +12,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { isAltMissing } from '../../../../documents/blocks/Img/altText';
 import { autoFillCap, createImageSizeMeasurer, decideWidth, decideWidthForHeight, TImageSize } from '../../../../documents/blocks/Img/imageWidth';
 import { ImgPropsSchema, ListmonkImageProps } from '../../../../documents/editor/core';
+import { useAltWriteSeq } from '../../../../documents/editor/EditorContext';
 import BaseSidebarPanel from './helpers/BaseSidebarPanel';
 import RadioGroupInput from './helpers/inputs/RadioGroupInput';
 import TextDimensionInput from './helpers/inputs/TextDimensionInput';
@@ -46,6 +47,7 @@ export default function ImageSidebarPanel({ data, setData }: ImageSidebarPanelPr
   const naturalRef = useRef<TImageSize | null>(null);
   const measureRef = useRef(createImageSizeMeasurer());
   const [widthFillSeq, setWidthFillSeq] = useState(0);
+  const altWriteSeq = useAltWriteSeq();
   const urlFieldRef = useRef<HTMLDivElement>(null);
   // A typed URL measures after a short pause (every keystroke would otherwise request a
   // partial URL from whatever host it resolves to); the media picker path is immediate.
@@ -140,7 +142,9 @@ export default function ImageSidebarPanel({ data, setData }: ImageSidebarPanelPr
         e.preventDefault();
       }}><CloudUploadIcon style={{fontSize: '1rem'}} /> Select media</a>
 
+      {/* Fork (integrations ALT-ON-INSERT-SPEC D6): re-keyed on an external alt write (applyAlts). */}
       <TextInput
+        key={`alt-${altWriteSeq}`}
         label="Alt text"
         defaultValue={data.props?.alt ?? ''}
         onChange={(alt) => updateData({ ...data, props: { ...data.props, alt } })}

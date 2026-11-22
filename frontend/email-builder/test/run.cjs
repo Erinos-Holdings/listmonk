@@ -56,6 +56,8 @@ const STANDALONE = [
   [path.join('documents', 'structure.ts'), path.join('documents', 'structure')],
   // Fork (integrations EDITOR-DEFAULTS-SPEC I4/I5): the insert-time link default.
   ['linkDefaults.ts', 'linkDefaults'],
+  // Fork (integrations ALT-ON-INSERT-SPEC I9): the in-place alt write's pure half.
+  [path.join('documents', 'applyAlts.ts'), path.join('documents', 'applyAlts')],
 ];
 // CONTAINER-NESTING-SPEC I9: "import-free" is asserted, not assumed -- tsc would otherwise
 // happily compile (and emit) a relative import alongside the file.

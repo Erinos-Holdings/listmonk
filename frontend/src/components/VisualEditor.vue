@@ -205,6 +205,18 @@ export default {
       return em.selectBlock(id) === true;
     },
 
+    // integrations ALT-ON-INSERT-SPEC D6: set the review Lambda's alt fixes in the live document
+    // (the builder's store, one update -- never the URL input's DOM path, onMediaSelect). null when
+    // the builder is not loaded or a stale cached bundle predates applyAlts (existence-guarded, like
+    // setBrandPalettes): the caller then does nothing with the answer.
+    applyAlts(fixes) {
+      const em = this.builder();
+      if (!em || typeof em.applyAlts !== 'function' || !em.isRendered('visual-editor-container')) {
+        return null;
+      }
+      return em.applyAlts(fixes);
+    },
+
     // OFFICIAL-FOOTER-SPEC D11: the headless compile the re-save sweep uses -- another item's
     // document under its own context, never touching this editor's document or context. null
     // when the loaded bundle predates compileDocument.

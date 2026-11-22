@@ -43,6 +43,11 @@ type TValue = {
   // Fork (container structure) -- CONTAINER-NESTING-SPEC D8/§2.5: the canvas "Show structure"
   // toggle. Editor chrome only; remembered per browser under SHOW_STRUCTURE_KEY.
   showStructure: boolean;
+
+  // Fork (campaign review) -- integrations ALT-ON-INSERT-SPEC D6: bumped by applyAlts (an alt
+  // written from outside the sidebar), so the Image panel's uncontrolled Alt input re-keys and a
+  // selected block shows the new alt at once (the widthFillSeq pattern).
+  altWriteSeq: number;
 };
 
 export const SHOW_STRUCTURE_KEY = 'lm-eb-show-structure';
@@ -74,7 +79,28 @@ const editorStateStore = create(subscribeWithSelector<TValue>(() => ({
   officialContext: null,
 
   showStructure: readShowStructure(),
+
+  altWriteSeq: 0,
 })));
+
+export function useAltWriteSeq() {
+  return editorStateStore((s) => s.altWriteSeq);
+}
+
+// Fork (campaign review) -- integrations ALT-ON-INSERT-SPEC D6: the store half of the host's
+// in-editor alt write (main.tsx applyAlts). ONE document update through the channel setDocument
+// uses (a merged document: the document subscription -- the host's onChange -- fires once, and the
+// selection is kept; never resetDocument), with altWriteSeq bumped in the same update.
+export function setDocumentFromAltWrite(document: TValue['document']) {
+  const s = editorStateStore.getState();
+  return editorStateStore.setState({
+    document: {
+      ...s.document,
+      ...document,
+    },
+    altWriteSeq: s.altWriteSeq + 1,
+  });
+}
 
 export function useShowStructure() {
   return editorStateStore((s) => s.showStructure);

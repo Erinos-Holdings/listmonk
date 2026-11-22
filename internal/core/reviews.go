@@ -199,6 +199,37 @@ var ErrReviewNotConfigured = errors.New("campaign review is not configured")
 // a transport error or a timeout, a body that is not JSON -- is an error. Nothing is stored (D2).
 // cfg.Client overrides the 28 s client (tests).
 func RequestAlts(cfg ReviewConfig, campaignID int) (json.RawMessage, error) {
+	body, _ := json.Marshal(struct {
+		Mode       string `json:"mode"`
+		CampaignID int    `json:"campaignId"`
+	}{"alts", campaignID})
+	return postAlts(cfg, body)
+}
+
+// MaxAltsSnapshotBytes caps the request body of POST /api/campaigns/alts (integrations
+// ALT-ON-INSERT-SPEC D4): 2 MiB; over it the handler answers 413.
+const MaxAltsSnapshotBytes = 2 << 20
+
+// RequestAltsSnapshot POSTs the signed `{mode: "alts", snapshot}` (integrations ALT-ON-INSERT-SPEC
+// D3/D4): the campaign page's unsaved visual campaign, relayed verbatim -- the Lambda owns every
+// validation of its shape. Signed and relayed exactly as RequestAlts (postAlts, the one helper).
+// Nothing is stored and nothing of the body is logged.
+func RequestAltsSnapshot(cfg ReviewConfig, snapshot json.RawMessage) (json.RawMessage, error) {
+	if !json.Valid(snapshot) {
+		return nil, errors.New("the snapshot is not JSON")
+	}
+	// Spliced, not json.Marshal'd: Marshal would HTML-escape the RawMessage (`<` -> <) --
+	// equal JSON, but the snapshot is forwarded byte for byte.
+	body := make([]byte, 0, len(snapshot)+32)
+	body = append(body, `{"mode":"alts","snapshot":`...)
+	body = append(body, bytes.TrimSpace(snapshot)...)
+	body = append(body, '}')
+	return postAlts(cfg, body)
+}
+
+// postAlts is the one signing and relay helper for both alt bodies (ALT-ON-INSERT-SPEC D4): the
+// review.Sign headers over the body, a 200 relayed verbatim, anything else an error.
+func postAlts(cfg ReviewConfig, body []byte) (json.RawMessage, error) {
 	if cfg.URL == "" {
 		return nil, ErrReviewNotConfigured
 	}
@@ -210,10 +241,6 @@ func RequestAlts(cfg ReviewConfig, campaignID int) (json.RawMessage, error) {
 	if cfg.Client != nil {
 		client = cfg.Client
 	}
-	body, _ := json.Marshal(struct {
-		Mode       string `json:"mode"`
-		CampaignID int    `json:"campaignId"`
-	}{"alts", campaignID})
 	ts := now().Unix()
 	req, err := http.NewRequest(http.MethodPost, cfg.URL, bytes.NewReader(body))
 	if err != nil {

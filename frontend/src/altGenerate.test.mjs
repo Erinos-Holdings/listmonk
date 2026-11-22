@@ -214,6 +214,39 @@ test('A1-I2: generatedMap writes from (omitted when undecided) and the answer\'s
   }
 });
 
+// integrations ALT-ON-INSERT-SPEC I7 (Inspect's write path): new entries carry the answer's `lang`;
+// keep entries keep theirs; an answer without `lang` (an older Lambda) writes none.
+test('ALT-ON-INSERT I7: generatedMap writes the answer\'s lang on each new entry', () => {
+  const kept = { src: 'k.jpg', alt: 'K', lang: 'en' };
+  const legacy = { src: 'l.jpg', alt: 'L' };
+  assert.deepEqual(generatedMap({ 'block:k': kept, 'block:l': legacy }, [fixA], AT, 'es'), {
+    'block:k': kept,
+    'block:l': legacy,
+    'block:a': {
+      src: 'https://e/a.jpg', alt: 'Shop the drop', at: AT, lang: 'es',
+    },
+  });
+  assert.deepEqual(generatedMap({}, [fixA], AT), { 'block:a': { src: 'https://e/a.jpg', alt: 'Shop the drop', at: AT } });
+  assert.deepEqual(generatedMap({}, [fixA], AT, ''), { 'block:a': { src: 'https://e/a.jpg', alt: 'Shop the drop', at: AT } });
+});
+
+test('ALT-ON-INSERT I7: generateAndApply writes res.lang on the new entries it saves', async () => {
+  const h = harness({
+    api: {
+      generateAlts: async () => ({
+        status: 'ok', fixes: [fixA], keep: {}, rejected: 0, at: AT, lang: 'fr',
+      }),
+    },
+  });
+  await generateAndApply(h.deps);
+  const put = h.calls.find((c) => c[0] === 'updateCampaign')[2];
+  assert.deepEqual(put.attribs.alt_generated, {
+    'block:a': {
+      src: 'https://e/a.jpg', alt: 'Shop the drop', at: AT, lang: 'fr',
+    },
+  });
+});
+
 test('I11: the window accepts only a same-origin lm-review:alts for its campaign from its opener', () => {
   const opener = { name: 'opener' };
   const data = altsMessage(7, 'run1', 1, { phase: 'generating' });

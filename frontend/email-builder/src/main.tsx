@@ -10,7 +10,9 @@ import {
   getDocument,
   setSelectedBlockId,
   setSelectedMainTab,
+  setDocumentFromAltWrite,
 } from './documents/editor/EditorContext';
+import { applyAltsToDocument, TAltFix } from './documents/applyAlts';
 import { blockNumbers } from './documents/structure';
 import { remapColors } from './remapColors';
 import { officialProjection } from './official/projection';
@@ -69,6 +71,19 @@ function selectBlock(id: string): boolean {
   return true;
 }
 
+// Fork (campaign review) -- integrations ALT-ON-INSERT-SPEC D6: set the review Lambda's alt fixes
+// in the LIVE document. A fix applies only when its block exists, is an Image block, its trimmed url
+// equals `src` and its current alt equals `from` (documents/applyAlts.ts); every applied fix goes
+// into the store as ONE update (onChange fires once, the selection is kept, never resetDocument).
+// Nothing applied: no store write, no onChange. Returns {applied, skipped} (the fix objects).
+function applyAlts(fixes: TAltFix[]): { applied: TAltFix[]; skipped: TAltFix[] } {
+  const r = applyAltsToDocument(getDocument() as unknown as Record<string, any>, fixes);
+  if (r.changed) {
+    setDocumentFromAltWrite(r.document as any);
+  }
+  return { applied: r.applied, skipped: r.skipped };
+}
+
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC §3.1: setOfficialFooters/setOfficialContext
 // (the host's references + resolution context, D2/D8), officialProjection (the ONE projection
 // and hash, D5), compileDocument (the headless compile the re-save sweep uses, D11) and
@@ -92,4 +107,6 @@ export {
   // and on a template import (the host's VisualEditor.render / Editor.vue onImportVisualTpl).
   firstLoadDocument,
   withOfficialFooters,
+  // Fork (integrations ALT-ON-INSERT-SPEC D6): the in-editor alt write (VisualEditor.vue applyAlts).
+  applyAlts,
 };

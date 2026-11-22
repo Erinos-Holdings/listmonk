@@ -219,7 +219,8 @@
                   JOURNEY-UX-SPEC A1.10: between Name and Subject -- it decides the content below. -->
                 <b-field :label="$t('campaigns.lang')" label-position="on-border" :message="$t('campaigns.langHelp')"
                   v-if="showLang">
-                  <b-select v-model="form.lang" name="lang" :disabled="!canEdit || isStarted" expanded data-cy="lang"
+                  <!-- integrations ALT-ON-INSERT-SPEC D5: the change goes through setLang (the alt stamp). -->
+                  <b-select :value="form.lang" @input="setLang" name="lang" :disabled="!canEdit || isStarted" expanded data-cy="lang"
                     :title="sendLangTitle(form.lang)"
                     :required="!isOptin">
                     <option v-if="showLangAll" value="">{{ $t('campaigns.langAll') }}</option>
@@ -567,6 +568,7 @@
         <editor v-if="data.id" ref="editor" :key="editorKey" v-model="form.content" :id="data.id" :title="data.name"
           :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes"
           :media-context="mediaContext" :attribs="previewAttribs" @template-imported="onTemplateImported"
+          @visual-change="onVisualChange"
           :official-context="officialContext" :official-footers="officialFooters"
           :preview-layout="previewLayout" />
 
@@ -733,6 +735,7 @@ import {
   OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, runMessage, selectFromQuery,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import { altsMessage, generateAndApply } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
+import { createAltInsert } from '../altInsert.mjs'; // eslint-disable-line import/extensions
 import { compileCampaignBody, loadFrameBuilder } from '../reviewFixes.mjs'; // eslint-disable-line import/extensions
 import { isOfficialName } from '../officialSweep.mjs'; // eslint-disable-line import/extensions
 import { extraView, sameDraft, syncDecision } from '../campaignSync.mjs'; // eslint-disable-line import/extensions
@@ -1867,8 +1870,45 @@ export default Vue.extend({
         this.$utils.toast(this.$t('campaigns.langImportLocked', { lang: name }), 'is-warning');
         return;
       }
-      this.form.lang = lang;
+      this.setLang(lang);
       this.$utils.toast(this.$t('campaigns.langImported', { lang: name }));
+    },
+
+    // integrations ALT-ON-INSERT-SPEC D5 Trigger 2: a USER language change (the select, or a template
+    // import that sets it -- a load never comes here). The legacy map entries are stamped with the
+    // language being left, synchronously, then the generation is triggered (altInsert.mjs).
+    setLang(lang) {
+      const from = this.form.lang;
+      this.form.lang = lang;
+      if (this.altInsert) {
+        this.altInsert.onLangChange(from, lang);
+      }
+    },
+
+    // integrations ALT-ON-INSERT-SPEC D5 Trigger 1: every builder change (Editor.vue `visual-change`),
+    // tagged with the editor mount it came from.
+    onVisualChange({ source }) {
+      if (this.altInsert) {
+        this.altInsert.onBuilderChange({ mount: this.editorKey, source });
+      }
+    },
+
+    // ALT-ON-INSERT-SPEC D5: the page as the in-editor sequence reads it.
+    altInsertState() {
+      return {
+        mount: this.editorKey,
+        contentType: this.form.content && this.form.content.contentType,
+        editable: this.canEdit && (this.data.status === 'draft' || this.data.status === 'paused'),
+        status: this.data.status,
+        name: this.form.name,
+        attribsStr: this.form.attribsStr,
+        lang: this.form.lang || '',
+        source: this.form.content && this.form.content.bodySource,
+        body: this.form.content && this.form.content.body,
+        saving: !!this.syncSavePromise || !!(this.loading && this.loading.campaigns),
+        syncing: this.syncing,
+        inspecting: this.inspecting,
+      };
     },
 
     // Fork (promo series, PROMO-SERIES-SPEC D6) -- a USER Step change (the select's input; a load never
@@ -2595,6 +2635,11 @@ export default Vue.extend({
     // token, also its alts messages' run) so it renders the starting state at first render and never
     // the previous report; a start failure (409/503 included) posts the run's `failed` message.
     async inspectCampaign() {
+      // integrations ALT-ON-INSERT-SPEC D5: an Inspect click cancels a pending in-editor generation
+      // (Inspect generates itself).
+      if (this.altInsert) {
+        this.altInsert.onInspect();
+      }
       if (this.refuseBlockedName()) {
         return;
       }
@@ -3610,6 +3655,17 @@ export default Vue.extend({
   mounted() {
     window.onbeforeunload = () => this.isUnsaved() || null;
 
+    // integrations ALT-ON-INSERT-SPEC D5: the in-editor alt generation (altInsert.mjs). Not reactive
+    // state: it holds timers. Its only API is the snapshot route (it never saves); its writes are the
+    // open editor (applyAlts) and the form's attribs text.
+    this.altInsert = createAltInsert({
+      api: { generateAltsDraft: (snapshot) => this.$api.generateAltsDraft(snapshot) },
+      getState: () => this.altInsertState(),
+      setAttribsStr: (text) => { this.form.attribsStr = text; },
+      applyAlts: (fixes) => (this.$refs.editor && typeof this.$refs.editor.applyAlts === 'function' ? this.$refs.editor.applyAlts(fixes) : null),
+      toast: (num) => this.$utils.toast(this.$tc('campaigns.altsGenerated', num, { num })),
+    });
+
     // Fill default form fields.
     this.form.fromEmail = this.serverConfig.from_email;
 
@@ -3722,6 +3778,10 @@ export default Vue.extend({
   },
 
   beforeDestroy() {
+    if (this.altInsert) {
+      this.altInsert.destroy();
+      this.altInsert = null;
+    }
     this.$events.$off('review.select', this.onReviewSelect);
     clearTimeout(this.selectPollID);
     this.$events.$off('campaign.update');

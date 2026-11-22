@@ -29,7 +29,10 @@ const keyOf = (f) => (f.block ? `block:${f.block}` : `index:${f.index}`);
 // {src, alt, from?, at?} per applied fix. `from` is the replaced alt (omitted when the image had none,
 // the fix's `undecided`); `at` is the Lambda's answer time, the same value on every new entry -- never
 // this browser's clock (A1-S2-3). An answer without `at` (an older Lambda) writes no `at`.
-export function generatedMap(keep, applied, at) {
+// integrations ALT-ON-INSERT-SPEC D7: `lang` is the answer's language (the campaign language the
+// generation ran under), written on each new entry when the answer carries one; `keep` entries keep
+// whatever `lang` they have. Shared by Inspect's sequence and the in-editor one (altInsert.mjs).
+export function generatedMap(keep, applied, at, lang) {
   const out = { ...((keep && typeof keep === 'object' && !Array.isArray(keep)) ? keep : {}) };
   (applied || []).forEach((f) => {
     if (f && f.kind === 'alt.set' && (f.block || Number.isInteger(f.index))) {
@@ -38,6 +41,7 @@ export function generatedMap(keep, applied, at) {
         alt: f.to,
         ...(!f.undecided && typeof f.from === 'string' ? { from: f.from } : {}),
         ...(typeof at === 'string' && at !== '' ? { at } : {}),
+        ...(typeof lang === 'string' && lang !== '' ? { lang } : {}),
       };
     }
   });
@@ -107,7 +111,7 @@ export async function generateAndApply({
       return failed();
     }
   }
-  campaign.attribs = { ...(campaign.attribs || {}), alt_generated: generatedMap(res.keep, applied, res.at) };
+  campaign.attribs = { ...(campaign.attribs || {}), alt_generated: generatedMap(res.keep, applied, res.at, res.lang) };
   try {
     await api.updateCampaign(id, reviewPayload(campaign, body));
   } catch (e) {

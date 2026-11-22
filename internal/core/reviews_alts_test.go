@@ -12,7 +12,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +82,72 @@ func TestRequestAltsSignsAndRelays(t *testing.T) {
 	status, reply = http.StatusOK, "not json"
 	if _, err := RequestAlts(cfg, 179); err == nil {
 		t.Fatalf("a 200 with no JSON: no error")
+	}
+}
+
+// integrations ALT-ON-INSERT-SPEC I13: the snapshot body `{"mode":"alts","snapshot":{...}}` is
+// signed and relayed exactly as the campaign-id body -- by the one helper, postAlts: unconfigured is
+// ErrReviewNotConfigured, the snapshot is forwarded verbatim, the signature is review.Sign over the
+// body, a non-200 and a non-JSON answer are errors; and both RequestAlts and RequestAltsSnapshot
+// call postAlts, which is the only alts code that sets the signature header.
+func TestRequestAltsSnapshotOneSigner(t *testing.T) {
+	const secret = "review-test-secret"
+	at := time.Unix(1790000000, 0)
+	snapshot := json.RawMessage(`{"content_type":"visual","body_source":"{}","body":"<p>x</p>","attribs":null,"status":"draft","name":"C"}`)
+	if _, err := RequestAltsSnapshot(ReviewConfig{}, snapshot); !errors.Is(err, ErrReviewNotConfigured) {
+		t.Fatalf("empty URL: %v, want ErrReviewNotConfigured", err)
+	}
+
+	var status int
+	var gotTS, gotSig string
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotTS = r.Header.Get("X-Review-Timestamp")
+		gotSig = r.Header.Get("X-Review-Signature")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"status":"none","fixes":[],"keep":{},"rejected":0,"lang":"en"}`))
+	}))
+	defer srv.Close()
+	cfg := ReviewConfig{URL: srv.URL, Secret: secret, Now: func() time.Time { return at }}
+
+	status = http.StatusOK
+	out, err := RequestAltsSnapshot(cfg, snapshot)
+	if err != nil || string(out) != `{"status":"none","fixes":[],"keep":{},"rejected":0,"lang":"en"}` {
+		t.Fatalf("200: %s %v", out, err)
+	}
+	var b struct {
+		Mode     string          `json:"mode"`
+		Snapshot json.RawMessage `json:"snapshot"`
+	}
+	if err := json.Unmarshal(gotBody, &b); err != nil || b.Mode != "alts" || string(b.Snapshot) != string(snapshot) {
+		t.Fatalf("body %s (%v)", gotBody, err)
+	}
+	if gotTS != strconv.FormatInt(at.Unix(), 10) || gotSig != review.Sign(secret, at.Unix(), gotBody) {
+		t.Fatalf("headers %q %q", gotTS, gotSig)
+	}
+	status = http.StatusBadRequest
+	if _, err := RequestAltsSnapshot(cfg, snapshot); err == nil {
+		t.Fatal("400: no error")
+	}
+
+	src, err := os.ReadFile("reviews.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	for _, fn := range []string{"func RequestAlts(", "func RequestAltsSnapshot("} {
+		i := strings.Index(s, fn)
+		if i < 0 {
+			t.Fatalf("%s not found", fn)
+		}
+		end := strings.Index(s[i:], "\n}\n")
+		if body := s[i : i+end]; !strings.Contains(body, "return postAlts(cfg, body)") || strings.Contains(body, "X-Review-Signature") {
+			t.Fatalf("%s does not sign through postAlts", fn)
+		}
+	}
+	if n := strings.Count(s, `"X-Review-Signature"`); n != 2 {
+		t.Fatalf("X-Review-Signature set in %d places, want 2 (the job poster and postAlts)", n)
 	}
 }
 

@@ -593,6 +593,15 @@ export const generateAlts = async (id) => http.post(
   { camelCase: false, disableToast: true },
 );
 
+// integrations ALT-ON-INSERT-SPEC D4: the in-editor alt generation over the page's UNSAVED visual
+// campaign (POST /api/campaigns/alts, the review Lambda's `{mode: "alts", snapshot}`); the Lambda's
+// JSON verbatim. Silent: a failure shows nothing (altInsert.mjs).
+export const generateAltsDraft = async (snapshot) => http.post(
+  '/api/campaigns/alts',
+  { snapshot },
+  { camelCase: false, disableToast: true },
+);
+
 export const getCampaignReview = async (id, quiet = false) => http.get(
   `/api/campaigns/${id}/reviews/latest`,
   quiet ? { camelCase: false, disableToast: true } : { loading: models.reviews, camelCase: false },

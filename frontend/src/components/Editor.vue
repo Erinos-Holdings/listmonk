@@ -277,6 +277,15 @@ export default {
     onVisualEditorChange({ body, source }) {
       this.self.body = body;
       this.self.bodySource = source;
+      // integrations ALT-ON-INSERT-SPEC D5: every builder change, for the page's image trigger.
+      this.$emit('visual-change', { body, source });
+    },
+
+    // integrations ALT-ON-INSERT-SPEC D6: the in-editor alt write. null when there is no visual
+    // editor or its builder cannot apply (not loaded, a stale bundle).
+    applyAlts(fixes) {
+      const ve = this.$refs.visualEditor;
+      return ve ? ve.applyAlts(fixes) : null;
     },
 
     // Rebrand sweep passthrough: Campaign.vue owns the prompt and the provenance state, the
