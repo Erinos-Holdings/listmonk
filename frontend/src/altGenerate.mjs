@@ -24,6 +24,24 @@ export const MSG_ALTS = 'lm-review:alts';
 export const ALT_PHASES = Object.freeze(['generating', 'done', 'failed']);
 
 const keyOf = (f) => (f.block ? `block:${f.block}` : `index:${f.index}`);
+const isObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+// Deep equality over JSON values, key order ignored. integrations ALT-STAMP-SAVE-SPEC D4: the one
+// definition -- altInsert.mjs imports and re-exports it (it already imports generatedMap from here).
+export function sameJSON(a, b) {
+  if (a === b) {
+    return true;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => sameJSON(x, b[i]));
+  }
+  if (isObject(a) && isObject(b)) {
+    const ka = Object.keys(a).sort();
+    const kb = Object.keys(b).sort();
+    return ka.length === kb.length && ka.every((k, i) => k === kb[i] && sameJSON(a[k], b[k]));
+  }
+  return false;
+}
 
 // D4 / A1.4: the map the generation save writes -- the Lambda's `keep` plus one
 // {src, alt, from?, at?} per applied fix. `from` is the replaced alt (omitted when the image had none,
@@ -80,8 +98,30 @@ export async function generateAndApply({
   const fixes = Array.isArray(res.fixes) ? res.fixes : [];
   const rejected = Number.isInteger(res.rejected) && res.rejected > 0 ? res.rejected : 0;
   if (!fixes.length) {
+    // integrations ALT-STAMP-SAVE-SPEC D1/D2: an answer with no fixes at all saves `keep` on its own
+    // when it differs from the stored map (stale entries dropped, refreshed or language-stamped), so
+    // the next Inspect does not ask again. Never a stop: a failed read or PUT is still `done`.
+    // (Every-fix-skipped is NOT this path -- its `keep` is from an older copy.)
+    let saved = false;
+    if (res.locked !== true && isObject(res.keep)) {
+      try {
+        const stored = await api.getCampaignRaw(id);
+        const attribs = (stored && isObject(stored.attribs)) ? stored.attribs : {};
+        const storedMap = isObject(attribs.alt_generated) ? attribs.alt_generated : {};
+        if (!sameJSON(res.keep, storedMap)) {
+          const campaign = {
+            ...stored,
+            attribs: { ...attribs, alt_generated: generatedMap(res.keep, [], res.at, res.lang) },
+          };
+          await api.updateCampaign(id, reviewPayload(campaign, stored.body));
+          saved = true;
+        }
+      } catch (e) {
+        saved = false;
+      }
+    }
     say({ phase: 'done', alts: [], rejected });
-    return { saved: false, phase: 'done' };
+    return { saved, phase: 'done' };
   }
 
   let raw;

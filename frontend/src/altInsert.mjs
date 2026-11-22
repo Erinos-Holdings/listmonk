@@ -14,7 +14,7 @@
 //                generateAltsDraft, and the only writes it makes are to the open editor (applyAlts)
 //                and to the form's attribs text.
 
-import { generatedMap } from './altGenerate.mjs'; // eslint-disable-line import/extensions
+import { generatedMap, sameJSON } from './altGenerate.mjs'; // eslint-disable-line import/extensions
 
 export const ALT_INSERT_DEBOUNCE_MS = 1500;
 // How often a dropped (b)/(d)/(e) answer looks for the page to settle before its one queued run.
@@ -83,21 +83,9 @@ export function parseAttribs(str) {
 
 const mapOf = (attribs) => (attribs && isObject(attribs.alt_generated) ? attribs.alt_generated : {});
 
-// Deep equality over JSON values, key order ignored.
-export function sameJSON(a, b) {
-  if (a === b) {
-    return true;
-  }
-  if (Array.isArray(a) || Array.isArray(b)) {
-    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => sameJSON(x, b[i]));
-  }
-  if (isObject(a) && isObject(b)) {
-    const ka = Object.keys(a).sort();
-    const kb = Object.keys(b).sort();
-    return ka.length === kb.length && ka.every((k, i) => k === kb[i] && sameJSON(a[k], b[k]));
-  }
-  return false;
-}
+// Deep equality over JSON values, key order ignored: defined once in altGenerate.mjs
+// (integrations ALT-STAMP-SAVE-SPEC D4), re-exported here.
+export { sameJSON };
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 

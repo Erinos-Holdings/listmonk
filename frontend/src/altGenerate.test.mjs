@@ -108,11 +108,15 @@ test('I9: a failed call, a non-ok status, or a throw notifies failed, never save
   }));
 });
 
+// Edited by integrations ALT-STAMP-SAVE-SPEC I5: `keep` is the harness's stored map (an unchanged
+// map is never saved), and the assertion is "no PUT" (the stamp-save path reads the stored map).
+const storedMap = () => raw().attribs.alt_generated;
+
 test('I9: no fixes -> done with no save; rejected > 0 is not "none needed"', async () => {
-  const none = harness({ api: { generateAlts: async () => ({ status: 'none', fixes: [], keep: {} }) } });
+  const none = harness({ api: { generateAlts: async () => ({ status: 'none', fixes: [], keep: storedMap() }) } });
   await generateAndApply(none.deps);
   assert.deepEqual(none.notes[1], { phase: 'done', alts: [], rejected: 0 });
-  assert.equal(none.calls.some((c) => c[0] === 'getCampaignRaw' || c[0] === 'updateCampaign'), false);
+  assert.equal(none.calls.some((c) => c[0] === 'updateCampaign'), false);
   const step = (m) => altsStep({
     live: altsRowState(null, altsMessage(7, 'r', 2, m), null), report: null, reportJob: null, running: false, t,
   });
@@ -122,7 +126,7 @@ test('I9: no fixes -> done with no save; rejected > 0 is not "none needed"', asy
   assert.equal(step(none.notes[1]).label, 'campaigns.review.checklist.altsReviewed');
 
   const rejAnswer = {
-    status: 'ok', fixes: [], keep: {}, rejected: 2,
+    status: 'ok', fixes: [], keep: storedMap(), rejected: 2,
   };
   const rej = harness({ api: { generateAlts: async () => rejAnswer } });
   await generateAndApply(rej.deps);
@@ -140,6 +144,142 @@ test('I9: nothing applied -> done with skipped, no save', async () => {
     phase: 'done', alts: [], skipped: 1, rejected: 0,
   });
   assert.equal(h.calls.some((c) => c[0] === 'updateCampaign'), false);
+});
+
+// integrations ALT-STAMP-SAVE-SPEC: an answer with no fixes saves a changed `keep` on its own.
+const stampedKeep = () => ({
+  'block:a': {
+    src: 'https://e/a.jpg', alt: 'Compra ahora', from: '', at: '2026-10-01T00:00:00.000Z', lang: 'es',
+  },
+  'block:b': { src: 'https://e/b.jpg', alt: 'Rebajas', lang: 'es' },
+});
+const storedWith = (map) => {
+  const r = raw();
+  r.attribs = { lang: 'es', preheader: 'P', other: { x: 1 } };
+  if (map !== undefined) r.attribs.alt_generated = map;
+  return r;
+};
+const expectedPut = (stored, keep) => reviewPayload(
+  { ...stored, attribs: { ...stored.attribs, alt_generated: keep } },
+  stored.body,
+);
+
+test('ALT-STAMP-SAVE I1: no fixes and a changed keep -> exactly one PUT of the campaign as read, map replaced by keep', async () => {
+  const answers = [
+    {
+      status: 'none', fixes: [], keep: stampedKeep(), rejected: 0, at: AT, lang: 'es',
+    },
+    {
+      status: 'ok', fixes: [], keep: stampedKeep(), rejected: 1, at: AT, lang: 'es',
+    },
+  ];
+  await Promise.all(answers.map(async (answer) => {
+    const stored = storedWith({ 'block:a': { src: 'https://e/a.jpg', alt: 'Compra ahora' }, 'block:gone': { src: 'x', alt: 'y' } });
+    const h = harness({
+      api: {
+        generateAlts: async () => answer,
+        getCampaignRaw: async (id) => { h.calls.push(['getCampaignRaw', id]); return JSON.parse(JSON.stringify(stored)); },
+      },
+    });
+    const out = await generateAndApply(h.deps);
+    assert.deepEqual(out, { saved: true, phase: 'done' });
+    const puts = h.calls.filter((c) => c[0] === 'updateCampaign');
+    assert.equal(puts.length, 1);
+    assert.deepEqual(puts[0][2], expectedPut(stored, stampedKeep()));
+    // Every entry's lang/from/at preserved; every other attribs key as stored; no recompile.
+    assert.deepEqual(puts[0][2].attribs, {
+      lang: 'es', preheader: 'P', other: { x: 1 }, alt_generated: stampedKeep(),
+    });
+    assert.equal(puts[0][2].body, '<p>old</p>');
+    assert.equal(puts[0][2].body_source, stored.body_source);
+    assert.deepEqual(h.notes[1], { phase: 'done', alts: [], rejected: answer.rejected });
+  }));
+});
+
+test('ALT-STAMP-SAVE I2: keep equal to the stored map (key order ignored; absent/non-object ≡ {}) -> no PUT', async () => {
+  const reordered = () => {
+    const k = stampedKeep();
+    return { 'block:b': { lang: 'es', alt: k['block:b'].alt, src: k['block:b'].src }, 'block:a': k['block:a'] };
+  };
+  const cases = [
+    { keep: stampedKeep(), map: stampedKeep() },
+    { keep: stampedKeep(), map: reordered() },
+    { keep: {}, map: undefined },
+    { keep: {}, map: 'not an object' },
+    { keep: {}, map: {} },
+  ];
+  await Promise.all(cases.map(async ({ keep, map }) => {
+    const h = harness({
+      api: {
+        generateAlts: async () => ({
+          status: 'none', fixes: [], keep, rejected: 0, at: AT, lang: 'es',
+        }),
+        getCampaignRaw: async (id) => { h.calls.push(['getCampaignRaw', id]); return storedWith(map); },
+      },
+    });
+    assert.deepEqual(await generateAndApply(h.deps), { saved: false, phase: 'done' });
+    assert.equal(h.calls.some((c) => c[0] === 'updateCampaign'), false);
+    assert.deepEqual(h.notes.map((n) => n.phase), ['generating', 'done']);
+  }));
+});
+
+test('ALT-STAMP-SAVE I3: a locked answer, or a keep that is not a plain object -> no read and no PUT', async () => {
+  const answers = [
+    {
+      status: 'none', fixes: [], keep: stampedKeep(), rejected: 0, at: AT, locked: true,
+    },
+    { status: 'none', fixes: [], keep: null },
+    { status: 'ok', fixes: [], keep: ['block:a'] },
+    { status: 'none', fixes: [] },
+  ];
+  await Promise.all(answers.map(async (answer) => {
+    const h = harness({ api: { generateAlts: async () => answer } });
+    assert.deepEqual(await generateAndApply(h.deps), { saved: false, phase: 'done' });
+    assert.equal(h.calls.some((c) => c[0] === 'getCampaignRaw' || c[0] === 'updateCampaign'), false);
+  }));
+});
+
+test('ALT-STAMP-SAVE I4: a failed read or a failed PUT on this path -> saved false, the window told done', async () => {
+  const answer = {
+    status: 'none', fixes: [], keep: stampedKeep(), rejected: 0, at: AT, lang: 'es',
+  };
+  const read = harness({
+    api: { generateAlts: async () => answer, getCampaignRaw: async () => { throw new Error('502'); } },
+  });
+  assert.deepEqual(await generateAndApply(read.deps), { saved: false, phase: 'done' });
+  assert.deepEqual(read.notes.map((n) => n.phase), ['generating', 'done']);
+  assert.equal(read.calls.some((c) => c[0] === 'updateCampaign'), false);
+
+  const put = harness({
+    api: {
+      generateAlts: async () => answer,
+      updateCampaign: async () => { throw new Error('Unschedule the campaign first'); },
+    },
+  });
+  assert.deepEqual(await generateAndApply(put.deps), { saved: false, phase: 'done' });
+  assert.deepEqual(put.notes.map((n) => n.phase), ['generating', 'done']);
+  assert.deepEqual(put.notes[1], { phase: 'done', alts: [], rejected: 0 });
+});
+
+test('ALT-STAMP-SAVE I7: a second run after a stamp save does nothing', async () => {
+  let stored = storedWith({ 'block:a': { src: 'https://e/a.jpg', alt: 'Compra ahora' } });
+  const h = harness({
+    api: {
+      generateAlts: async () => ({
+        status: 'none', fixes: [], keep: stampedKeep(), rejected: 0, at: AT, lang: 'es',
+      }),
+      getCampaignRaw: async (id) => { h.calls.push(['getCampaignRaw', id]); return JSON.parse(JSON.stringify(stored)); },
+      updateCampaign: async (id, payload) => {
+        h.calls.push(['updateCampaign', id, payload]);
+        stored = { ...stored, ...JSON.parse(JSON.stringify(payload)) };
+        return {};
+      },
+    },
+  });
+  assert.deepEqual(await generateAndApply(h.deps), { saved: true, phase: 'done' });
+  assert.deepEqual(await generateAndApply(h.deps), { saved: false, phase: 'done' });
+  assert.equal(h.calls.filter((c) => c[0] === 'updateCampaign').length, 1);
+  assert.deepEqual(stored.attribs.alt_generated, stampedKeep());
 });
 
 test('I9: a builder failure never saves; a rejected PUT notifies failed', async () => {
