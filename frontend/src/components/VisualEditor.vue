@@ -292,6 +292,21 @@ export default {
       if (msg.data === 'visualeditor.select-media') {
         this.isMediaVisible = true;
       }
+
+      // Fork (preview glyph) -- the builder's Preview glyph asks the host page for its server
+      // preview (Editor.vue / TemplateForm.vue open their F9 modal). Only from this editor's iframe.
+      if (msg.data === 'visualeditor.preview' && msg.source === this.$refs.visualEditor?.contentWindow) {
+        this.$emit('preview');
+      }
+    },
+
+    // Fork (preview glyph) -- F9 pressed inside the builder iframe never reaches the page's window
+    // keydown handler; forward it as the same preview request.
+    onBuilderKeydown(e) {
+      if (e.key === 'F9') {
+        e.preventDefault();
+        this.$emit('preview');
+      }
     },
   },
 
@@ -317,6 +332,7 @@ export default {
     `;
 
     iframe.onload = () => {
+      iframe.contentWindow.addEventListener('keydown', this.onBuilderKeydown);
       this.loadScript().then(() => {
         let source = null;
         if (this.$props.source) {

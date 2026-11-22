@@ -9,7 +9,8 @@
 //     via setDocument would keep the removed keys);
 //   - Insert above at the top of a flush container lands in the PARENT slot;
 //   - storage that throws means Show structure off (and a remembered '1' means on);
-//   - the Preview and HTML tabs, and the emitted HTML, carry no chrome markers.
+//   - the HTML tab and the emitted HTML carry no chrome markers (the Preview glyph opens the
+//     host page's server preview, so it has no pane of its own).
 // Pixel overlap, hover, the depth colours and real-browser persistence are the human gate
 // (I10b / G5).
 const path = require('path');
@@ -216,7 +217,7 @@ async function main() {
     const target = NINE[NINE.length - 1];
     const before = ui.events.length;
     const tabsNow = $$('[role="tab"]').filter((t) => !['Styles', 'Inspect'].includes(t.textContent));
-    await click(tabsNow[1]); // Preview: selectBlock must bring the editor back
+    await click(tabsNow[2]); // HTML: selectBlock must bring the editor back
     const ok = ui.EB.selectBlock(target);
     await tick(120);
     const box = $(`[data-lm-block-id="${target}"]`);
@@ -264,13 +265,21 @@ async function main() {
   await click($('[data-lm-structure-flag]'));
   const tabs = $$('[role="tab"]');
   const mainTab = (i) => tabs.filter((t) => !['Styles', 'Inspect'].includes(t.textContent))[i];
-  await click(mainTab(1));
   const canvasArea = () => {
     const drawer = $('.sidebar');
     const html = $('#visual-editor-container').innerHTML;
     return drawer ? html.replace(drawer.outerHTML, '') : html;
   };
-  check('I10: Preview carries no chrome markers', !CHROME.test(canvasArea()) && /RUZE/i.test(canvasArea()), (canvasArea().match(CHROME) || [])[0]);
+  // Fork (preview glyph): the Preview glyph no longer renders in the pane -- it asks the host page
+  // for its server preview and the editor stays on Edit.
+  const posted = [];
+  const onMsg = (e) => posted.push(e.data);
+  ui.dom.window.addEventListener('message', onMsg);
+  await click(mainTab(1));
+  await tick(50);
+  ui.dom.window.removeEventListener('message', onMsg);
+  check('Preview glyph posts visualeditor.preview and leaves the editor on Edit',
+    posted.includes('visualeditor.preview') && CHROME.test(canvasArea()), posted);
   await click(mainTab(2));
   const htmlText = canvasArea();
   check('I10: the HTML tab carries no chrome markers', !CHROME.test(htmlText.replace(/<[^>]+>/g, '')) && /&lt;|<!DOCTYPE|html/i.test(htmlText), (htmlText.replace(/<[^>]+>/g, '').match(CHROME) || [])[0]);

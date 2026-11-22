@@ -7,15 +7,10 @@ import EditorBlock from '../../documents/editor/EditorBlock';
 import {
   setSelectedScreenSize,
   setShowStructure,
-  useDocument,
-  useOfficialContext,
-  useOfficialFooters,
   useSelectedMainTab,
   useSelectedScreenSize,
   useShowStructure,
 } from '../../documents/editor/EditorContext';
-import { OfficialRenderContext } from '../../documents/blocks/OfficialFooter/OfficialContext';
-import { Reader } from '../../documents/reader/core';
 import ToggleInspectorPanelButton from '../InspectorDrawer/ToggleInspectorPanelButton';
 
 import DownloadJson from './DownloadJson';
@@ -25,11 +20,8 @@ import JsonPanel from './JsonPanel';
 import MainTabsGroup from './MainTabsGroup';
 
 export default function TemplatePanel() {
-  const document = useDocument();
   const selectedMainTab = useSelectedMainTab();
   const selectedScreenSize = useSelectedScreenSize();
-  const officialFooters = useOfficialFooters();
-  const officialContext = useOfficialContext();
   const showStructure = useShowStructure();
 
   let mainBoxSx: SxProps = {
@@ -63,14 +55,6 @@ export default function TemplatePanel() {
         return (
           <Box sx={mainBoxSx}>
             <EditorBlock id="root" />
-          </Box>
-        );
-      case 'preview':
-        return (
-          <Box sx={mainBoxSx}>
-            <OfficialRenderContext.Provider value={{ refs: officialFooters, context: officialContext }}>
-              <Reader document={document} rootBlockId="root" />
-            </OfficialRenderContext.Provider>
           </Box>
         );
       case 'html':

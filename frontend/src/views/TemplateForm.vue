@@ -95,7 +95,7 @@
 
             <b-field v-if="form.type === 'campaign_visual'" label-position="on-border" class="mb-1">
               <visual-editor v-if="form.type === 'campaign_visual'" ref="visualEditor" name="body"
-                :source="form.bodySource" @change="onChangeVisualEditor" height="70vh"
+                :source="form.bodySource" @change="onChangeVisualEditor" @preview="onTogglePreview" height="70vh"
                 :brand-palettes="brandPalettes" :media-context="mediaContext"
                 :official-context="officialContext" :official-footers="officialFooters" />
             </b-field>

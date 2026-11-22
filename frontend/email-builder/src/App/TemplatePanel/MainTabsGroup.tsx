@@ -9,8 +9,14 @@ export default function MainTabsGroup() {
   const selectedMainTab = useSelectedMainTab();
   const handleChange = (_: unknown, v: unknown) => {
     switch (v) {
-      case 'json':
+      // Fork (preview glyph) -- the glyph opens the host page's server preview (the F9 modal:
+      // the compiled email through the template, merge tags resolved, dark simulation) instead of
+      // the builder's in-pane React render, which could differ from what is sent. The tab never
+      // becomes selected. Same channel as the image picker ('visualeditor.select-media').
       case 'preview':
+        window.parent.postMessage('visualeditor.preview', '*');
+        return;
+      case 'json':
       case 'editor':
       case 'html':
         setSelectedMainTab(v);
@@ -33,7 +39,7 @@ export default function MainTabsGroup() {
       <Tab
         value="preview"
         label={
-          <Tooltip title="Preview">
+          <Tooltip title="Preview (F9)">
             <PreviewOutlined fontSize="small" />
           </Tooltip>
         }

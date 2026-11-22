@@ -50,8 +50,9 @@
         </div>
       </div>
       <div class="column is- has-text-right" :style="previewLayout ? { position: 'relative' } : null">
-        <b-button @click="onTogglePreview" type="is-primary" icon-left="file-find-outline" data-cy="btn-preview"
-          aria-keyshortcuts="F9" :style="previewStyle">
+        <!-- Fork (preview glyph): a visual campaign previews from the builder's Preview glyph (or F9). -->
+        <b-button v-if="self.contentType !== 'visual'" @click="onTogglePreview" type="is-primary"
+          icon-left="file-find-outline" data-cy="btn-preview" aria-keyshortcuts="F9" :style="previewStyle">
           <span class="has-kbd">{{ $t('campaigns.preview') }} <span class="kbd">F9</span></span>
         </b-button>
       </div>
@@ -62,7 +63,7 @@
 
     <!-- visual editor //-->
     <visual-editor v-if="self.contentType === 'visual'" :source="self.bodySource" :stored-body="self.body || ''" @change="onVisualEditorChange"
-      height="65vh" :brand-palettes="brandPalettes" :media-context="mediaContext" ref="visualEditor"
+      @preview="onTogglePreview" height="65vh" :brand-palettes="brandPalettes" :media-context="mediaContext" ref="visualEditor"
       :official-context="officialContext" :official-footers="officialFooters" />
 
     <!-- raw html editor //-->
