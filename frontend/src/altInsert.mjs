@@ -119,6 +119,8 @@ export function createAltInsert(deps) {
     inFlight: false,
     queued: false,
     settleTimer: null,
+    // Set by destroy(): no run, no use of an answer and no poll after the page is gone.
+    destroyed: false,
   };
   const setT = deps.setTimeout || setTimeout;
   const clearT = deps.clearTimeout || clearTimeout;
@@ -142,11 +144,15 @@ export function createAltInsert(deps) {
 
   // A dropped (b)/(d)/(e) answer: one run once the page is not saving, syncing or inspecting.
   const queueSettled = () => {
-    if (st.settleTimer !== null) {
+    // A pending debounce already runs on the settled page: one follow-up run, never two.
+    if (st.destroyed || st.settleTimer !== null || st.timer !== null) {
       return;
     }
     const poll = () => {
       st.settleTimer = null;
+      if (st.destroyed) {
+        return;
+      }
       if (settled(state())) {
         run();
         return;
@@ -157,6 +163,9 @@ export function createAltInsert(deps) {
   };
 
   const use = (res, snap) => {
+    if (st.destroyed) {
+      return;
+    }
     const s = state();
     // (a) the same editor mount; (c) the When conditions; (f) an ok/none answer -- else dropped, nothing queued.
     if (s.mount !== snap.mount || !whenHolds(s) || !res || (res.status !== 'ok' && res.status !== 'none')) {
@@ -191,6 +200,9 @@ export function createAltInsert(deps) {
   };
 
   run = async () => {
+    if (st.destroyed) {
+      return;
+    }
     if (st.inFlight) {
       st.queued = true;
       return;
@@ -296,6 +308,8 @@ export function createAltInsert(deps) {
 
     // The page is going away: no timer outlives it.
     destroy() {
+      st.destroyed = true;
+      st.queued = false;
       this.onInspect();
       if (st.settleTimer !== null) {
         clearT(st.settleTimer);

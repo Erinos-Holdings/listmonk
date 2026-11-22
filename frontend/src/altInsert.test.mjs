@@ -395,6 +395,68 @@ CLAUSES.forEach(([clause, what, during, queues]) => {
   });
 });
 
+// integrations ALT-ON-INSERT-SPEC Stage 4 S4-1: nothing outlives the page.
+test('destroy: an answer that arrives afterwards is not used, a queued run does not start, and no timer is left', async () => {
+  // A request out with one run queued, the page saving (so the answer would poll for it to settle).
+  const h = harness();
+  const gate = deferred();
+  h.setAnswer(() => gate.p.then(() => ({
+    status: 'ok',
+    fixes: [{
+      kind: 'alt.set', block: 'b', from: '', to: 'Botella', undecided: true, src: 'https://e/b.jpg',
+    }],
+    keep: {},
+    rejected: 0,
+    at: AT,
+    lang: 'es',
+  })));
+  arrive(h);
+  await h.timers.flush();
+  assert.equal(h.requests.length, 1);
+  h.ai.onBuilderChange({ mount: 0, source: doc({ a: 'https://e/a.jpg', b: 'https://e/b.jpg', c: 'https://e/c.jpg' }) });
+  await h.timers.flush(); // queued behind the request
+  h.page.saving = true;
+  const attribs = h.page.attribsStr;
+  h.ai.destroy();
+  gate.resolve();
+  await flushMicro();
+  await flushMicro();
+  await flushMicro();
+  h.page.saving = false;
+  await h.timers.flush();
+  assert.equal(h.requests.length, 1, 'no request after destroy');
+  assert.equal(h.applied.length, 0);
+  assert.equal(h.page.attribsStr, attribs);
+  assert.deepEqual(h.toasts, []);
+  assert.equal(h.timers.pending().length, 0, 'no timer outlives the page');
+});
+
+// Stage 4 S4-2: a language change while a request is out -> ONE follow-up run (the debounce), not two.
+test('a language change during a request: the dropped answer queues nothing beside the pending debounce', async () => {
+  const h = harness();
+  const gate = deferred();
+  h.setAnswer(() => gate.p.then(() => ({
+    status: 'none', fixes: [], keep: {}, rejected: 0, at: AT, lang: 'es',
+  })));
+  arrive(h);
+  await h.timers.flush();
+  assert.equal(h.requests.length, 1);
+  h.page.lang = 'fr';
+  h.ai.onLangChange('es', 'fr');
+  assert.equal(h.timers.pending().length, 1, 'the debounce');
+  gate.resolve();
+  await flushMicro();
+  await flushMicro();
+  assert.equal(h.timers.pending().length, 1, 'the dropped answer added no settle poll');
+  h.setAnswer(() => ({
+    status: 'none', fixes: [], keep: mapOf(h), rejected: 0, at: AT, lang: 'fr',
+  }));
+  await h.timers.flush();
+  await h.timers.flush();
+  assert.equal(h.requests.length, 2, 'one follow-up run in all');
+  assert.equal(h.timers.pending().length, 0);
+});
+
 test('I16 (f): a failed or non-ok answer -> dropped whole, nothing queued', async () => {
   const answers = [
     () => Promise.reject(new Error('502')),
