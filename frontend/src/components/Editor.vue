@@ -49,9 +49,9 @@
           </b-field>
         </div>
       </div>
-      <div class="column is- has-text-right">
+      <div class="column is- has-text-right" :style="previewLayout ? { position: 'relative' } : null">
         <b-button @click="onTogglePreview" type="is-primary" icon-left="file-find-outline" data-cy="btn-preview"
-          aria-keyshortcuts="F9">
+          aria-keyshortcuts="F9" :style="previewStyle">
           <span class="has-kbd">{{ $t('campaigns.preview') }} <span class="kbd">F9</span></span>
         </b-button>
       </div>
@@ -121,6 +121,10 @@ export default {
 
     // Fork (multi-language campaigns) -- JSON attribs (lang, preheader) the preview posts.
     attribs: { type: String, default: '' },
+
+    // Fork (user 2026-11-21) -- {width, height, right} in px from the campaign page, or null: the
+    // Preview button's size and its gap from the right edge, so it clears the audience switches.
+    previewLayout: { type: Object, default: null },
 
     // value is provided by the parent component.
     // Throught the editor, `this.self` (a mutable clone of `value`) is used,
@@ -387,6 +391,24 @@ export default {
   },
 
   computed: {
+    previewStyle() {
+      const p = this.previewLayout;
+      if (!p) {
+        return null;
+      }
+      // Anchored to the column's right edge, not pushed by a margin: the quarter-width column can be
+      // narrower than the offset plus the button, and inline overflow would run right, back under
+      // the switches. The columns' -0.75rem margin puts the column edge 0.75rem past the measured
+      // inner edge; its 0.75rem top padding keeps the button where it sat.
+      return {
+        position: 'absolute',
+        top: '0.75rem',
+        right: `calc(${p.right}px + 0.75rem)`,
+        width: `${p.width}px`,
+        height: `${p.height}px`,
+      };
+    },
+
     ...mapState(['serverConfig', 'loading']),
 
     // This is a clone of the incoming `value` prop that's mutated here.

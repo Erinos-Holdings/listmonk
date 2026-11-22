@@ -567,7 +567,8 @@
         <editor v-if="data.id" ref="editor" :key="editorKey" v-model="form.content" :id="data.id" :title="data.name"
           :disabled="!canEdit" :templates="templates" :content-types="contentTypes" :brand-palettes="brandPalettes"
           :media-context="mediaContext" :attribs="previewAttribs" @template-imported="onTemplateImported"
-          :official-context="officialContext" :official-footers="officialFooters" />
+          :official-context="officialContext" :official-footers="officialFooters"
+          :preview-layout="previewLayout" />
 
         <div class="columns">
           <div class="column is-6">
@@ -887,6 +888,10 @@ export default Vue.extend({
       // Fork (audience box) -- measured from the header's right-most button and the tab
       // strip (syncAudienceBox); the CSS fallbacks apply until the first measurement.
       audienceLayout: { width: null, tabsHeight: null },
+      // Fork (user 2026-11-21) -- the Content tab's Preview button, moved out from under the switch
+      // stack: the measured size and right edge of the header button left of the right-most
+      // (Inspect, else Save), or null (syncAudienceBox).
+      previewLayout: null,
       audiencePollID: null,
       // Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- the live preview's answer ({skipped, gmail,
       // yahoo}) for the loaded campaign, or null; and the id it belongs to.
@@ -2027,6 +2032,7 @@ export default Vue.extend({
     // upward translate lands the box's bottom on the strip's bottom.
     syncAudienceBox() {
       if (!this.audienceBox) {
+        this.previewLayout = null;
         return;
       }
       const btns = this.$refs.headerButtons ? this.$refs.headerButtons.querySelectorAll('.button') : [];
@@ -2036,6 +2042,29 @@ export default Vue.extend({
       const tabsHeight = tabs ? Math.round(tabs.getBoundingClientRect().height) : null;
       if (width !== this.audienceLayout.width || tabsHeight !== this.audienceLayout.tabsHeight) {
         this.audienceLayout = { width, tabsHeight };
+      }
+
+      // Preview (user 2026-11-21): while the switch stack hangs over the Content tab's top-right
+      // corner (wide screens only -- below 1001px the stack is in the flow), the Preview button
+      // takes the size of the header button left of the right-most (Inspect) and its right edge,
+      // so it sits left of the switches, lined up under that button. The tab content box is
+      // always laid out (the hidden tab's own column is not), and the editor's columns' negative
+      // margins cancel the column padding, so its inner right edge is the Preview column's.
+      let preview = null;
+      const pane = this.$el.querySelector('.b-tabs > .tab-content');
+      const wide = window.matchMedia('(min-width: 1001px)').matches;
+      if (this.showSmartSending && wide && btns.length >= 2 && pane) {
+        const ref = btns[btns.length - 2].getBoundingClientRect();
+        const pr = pane.getBoundingClientRect();
+        const innerRight = pr.right - parseFloat(window.getComputedStyle(pane).paddingRight || '0');
+        preview = {
+          width: Math.round(ref.width),
+          height: Math.round(ref.height),
+          right: Math.max(0, Math.round(innerRight - ref.right)),
+        };
+      }
+      if (JSON.stringify(preview) !== JSON.stringify(this.previewLayout)) {
+        this.previewLayout = preview;
       }
     },
 
@@ -3545,6 +3574,11 @@ export default Vue.extend({
     },
 
     audienceBox() {
+      this.$nextTick(this.syncAudienceBox);
+    },
+
+    // The Preview button's placement follows the switch stack (syncAudienceBox).
+    showSmartSending() {
       this.$nextTick(this.syncAudienceBox);
     },
 
