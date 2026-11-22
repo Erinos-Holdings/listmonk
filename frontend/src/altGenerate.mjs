@@ -117,7 +117,7 @@ export async function generateAndApply({
           saved = true;
         }
       } catch (e) {
-        saved = false;
+        // D2: a failed read or PUT is still `done` (saved stays false).
       }
     }
     say({ phase: 'done', alts: [], rejected });
