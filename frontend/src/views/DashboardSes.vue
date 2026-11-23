@@ -8,7 +8,7 @@
   notification), body text at the page size, the reputation series as full-width charts stacked
   one per rate (sesRateChart.mjs), and no Recompute button (the navbar health glyph,
   HealthSync.vue, is the one on-demand recompute). -->
-  <section class="dashboard-ses">
+  <section class="dashboard-ses wrap">
     <b-loading v-if="loading.systemHealth" active :is-full-page="false" />
 
     <p v-if="!doc && !loading.systemHealth" class="has-text-grey" data-cy="ses-empty">
@@ -17,6 +17,30 @@
 
     <div v-if="doc" class="tile is-ancestor">
       <div class="tile is-vertical is-12">
+        <!-- Fork (integrations BRAND-OVERLAP-SPEC D3) -- the multi-brand overlap, the document's
+        `overlap` sub-input verbatim: status, counts, shares and thresholds are all the document's
+        (sesOverlap.mjs formats them); nothing is computed or held here. First on the pane
+        (2026-11-23, user). -->
+        <div class="tile is-parent">
+          <article class="tile is-child notification" data-cy="ses-overlap">
+            <h3 class="title is-size-6 mb-1">
+              {{ $t('dashboard.ses.overlap') }} <health-chip :status="sub('overlap').status" :note="reasonOf(sub('overlap'))" />
+            </h3>
+            <p v-if="reasonOf(sub('overlap'))" class="mb-2">{{ reasonOf(sub('overlap')) }}</p>
+            <template v-if="overlap">
+              <p>{{ $t('dashboard.ses.overlapLine', overlap) }}</p>
+              <p class="has-text-grey mb-1">
+                {{ $t('dashboard.ses.overlapThresholds', { warn: overlap.warn, issues: overlap.issues }) }}
+              </p>
+              <!-- The bar's full width is the document's issues line; the mark is its warn line. -->
+              <div class="rate-track">
+                <span :class="['rate-fill', `health-${sub('overlap').status}`]" :style="{ width: overlap.fill }" />
+                <span class="rate-mark" :style="{ left: overlap.mark }" />
+              </div>
+            </template>
+          </article>
+        </div>
+
         <!-- Headline: overall + enforcement + quota -->
         <div class="tile is-parent">
           <article class="tile is-child notification" data-cy="ses-headline">
@@ -93,29 +117,6 @@
           </article>
         </div>
 
-        <!-- Fork (integrations BRAND-OVERLAP-SPEC D3) -- the multi-brand overlap, the document's
-        `overlap` sub-input verbatim: status, counts, shares and thresholds are all the document's
-        (sesOverlap.mjs formats them); nothing is computed or held here. -->
-        <div class="tile is-parent">
-          <article class="tile is-child notification" data-cy="ses-overlap">
-            <h3 class="title is-size-6 mb-1">
-              {{ $t('dashboard.ses.overlap') }} <health-chip :status="sub('overlap').status" :note="reasonOf(sub('overlap'))" />
-            </h3>
-            <p v-if="reasonOf(sub('overlap'))" class="mb-2">{{ reasonOf(sub('overlap')) }}</p>
-            <template v-if="overlap">
-              <p>{{ $t('dashboard.ses.overlapLine', overlap) }}</p>
-              <p class="has-text-grey mb-1">
-                {{ $t('dashboard.ses.overlapThresholds', { warn: overlap.warn, issues: overlap.issues }) }}
-              </p>
-              <!-- The bar's full width is the document's issues line; the mark is its warn line. -->
-              <div class="rate-track">
-                <span :class="['rate-fill', `health-${sub('overlap').status}`]" :style="{ width: overlap.fill }" />
-                <span class="rate-mark" :style="{ left: overlap.mark }" />
-              </div>
-            </template>
-          </article>
-        </div>
-
         <!-- Fork (integrations BLOCKLIST-COMPOSITION-SPEC D5) -- the account-wide blocklist
         composition, the document's `composition` verbatim; nothing when the field is absent. -->
         <div v-if="doc.composition" class="tile is-parent">
@@ -162,12 +163,15 @@ import Chart from '../components/Chart.vue';
 import HealthChip from '../components/HealthChip.vue';
 import BlocklistComposition from '../components/BlocklistComposition.vue';
 import { overlapView } from '../sesOverlap.mjs'; // eslint-disable-line import/extensions
-import { shapeSesRate, sesRateOptions, refLines } from '../sesRateChart.mjs'; // eslint-disable-line import/extensions
+import {
+  shapeSesRate, sesRateOptions, refLines, pctText,
+} from '../sesRateChart.mjs'; // eslint-disable-line import/extensions
 
 const RATE_KEYS = ['accountRates', 'listmonkRates'];
+// Complaints first (2026-11-23, user): the rate that moves.
 const RATES = [
-  { key: 'bounceRate', kind: 'bounce', digits: 2 },
   { key: 'complaintRate', kind: 'complaint', digits: 3 },
+  { key: 'bounceRate', kind: 'bounce', digits: 2 },
 ];
 const LINE_KEYS = { review: 'dashboard.ses.lineReview', gmail: 'dashboard.ses.lineGmail', pause: 'dashboard.ses.linePause' };
 
@@ -262,11 +266,9 @@ export default Vue.extend({
       return v >= warn ? 'warn' : 'ok';
     },
 
+    // One percent format with the charts (sesRateChart.mjs: trailing zeros dropped).
     pct(v, digits) {
-      if (typeof v !== 'number') {
-        return '—';
-      }
-      return `${(v * 100).toFixed(digits)}%`;
+      return pctText(v, digits);
     },
 
     num(v) {
@@ -338,7 +340,7 @@ export default Vue.extend({
   .rate-track {
     position: relative;
     height: 8px;
-    background: #fff;
+    background: #f2f2f2; // the empty part of the bar, visible on the white tile
     border-radius: 2px;
   }
   .quota-fill {

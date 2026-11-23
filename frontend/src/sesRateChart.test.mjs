@@ -66,10 +66,10 @@ test('options: percent ticks, the axis max, labelled lines in their colors', () 
     lineLabel: (k, v) => `${k} ${v}`,
   });
   assert.equal(o.scales.y.max, 0.006);
-  assert.equal(o.scales.y.ticks.callback(0.003), '0.300%');
+  assert.equal(o.scales.y.ticks.callback(0.003), '0.3%');
   assert.equal(o.plugins.tooltip.callbacks.label({ raw: 0.00032 }), 'Complaint rate 0.032%');
   assert.deepEqual(o.plugins.refLines.lines.map((l) => [l.text, l.color]), [
-    ['review 0.100%', LINE_COLOR.review], ['gmail 0.300%', LINE_COLOR.gmail], ['pause 0.500%', LINE_COLOR.pause],
+    ['review 0.1%', LINE_COLOR.review], ['gmail 0.3%', LINE_COLOR.gmail], ['pause 0.5%', LINE_COLOR.pause],
   ]);
   assert.equal(sesRateOptions({
     lines: [], digits: 2, valueLabel: '', lineLabel: () => '',
@@ -78,6 +78,8 @@ test('options: percent ticks, the axis max, labelled lines in their colors', () 
 
 test('pctText', () => {
   assert.equal(pctText(0.00024, 3), '0.024%');
+  assert.equal(pctText(0.1, 2), '10%');
+  assert.equal(pctText(0, 2), '0%');
   assert.equal(pctText(undefined, 2), '—');
 });
 

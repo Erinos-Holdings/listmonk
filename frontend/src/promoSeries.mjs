@@ -24,9 +24,8 @@ export const stepOf = (v) => {
   return PROMO_STEPS.includes(n) ? n : null;
 };
 
-// The Code's counter text (`n/30`) and its problem (an i18n key, '' when valid). A blank Code is
-// valid -- it means "no promo series".
-export const codeCounter = (code) => `${chars(String(code || '').trim())}/${PROMO_CODE_MAX}`;
+// The Code's problem (an i18n key, '' when valid). A blank Code is valid -- it means "no promo
+// series". (Its `n/30` counter was dropped from the hint 2026-11-22, user.)
 
 export const codeProblem = (code) => {
   const c = String(code || '').trim();

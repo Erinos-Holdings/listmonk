@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  applyStepChange, codeCounter, codeProblem, foldPromo, parseTags, pickerLabel, previewKey, previewQuery, promoCells,
+  applyStepChange, codeProblem, foldPromo, parseTags, pickerLabel, previewKey, previewQuery, promoCells,
   promoEditable, promoFormOf, promoNotes, purchasedArg, samePromo, settleForFold, silentDefaultOnStep, silentSkipForFold, tagProblem,
 } from './promoSeries.mjs'; // eslint-disable-line import/extensions
 
@@ -25,8 +25,7 @@ test('the tag parser mirrors D1 for display: trim, drop empties, case-insensitiv
   assert.equal(parseTags('ok, ab*').problem, 'prefix');
 });
 
-test('the Code: n/30 and the naming standard\'s rule (blank = no series)', () => {
-  assert.equal(codeCounter(' BFCM-D3 '), '7/30');
+test('the Code: the naming standard\'s rule (blank = no series)', () => {
   assert.equal(codeProblem(''), '');
   assert.equal(codeProblem('x'.repeat(30)), '');
   assert.equal(codeProblem('x'.repeat(31)), 'naming.nameTooLong');

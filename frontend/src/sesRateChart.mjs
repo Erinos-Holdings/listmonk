@@ -92,9 +92,10 @@ export function shapeSesRate(series, key, {
   };
 }
 
-// '0.032%' at `digits` decimals; '—' for no value.
+// '0.032%' at up to `digits` decimals, trailing zeros dropped ('0.5%', '10%' -- 2026-11-23, user);
+// '—' for no value.
 export function pctText(v, digits) {
-  return num(v) === null ? '—' : `${(v * 100).toFixed(digits)}%`;
+  return num(v) === null ? '—' : `${parseFloat((v * 100).toFixed(digits))}%`;
 }
 
 // chart.js options merged over Chart.vue's line defaults: a percent y axis to `max`, no legend,
