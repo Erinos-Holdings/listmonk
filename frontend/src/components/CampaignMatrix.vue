@@ -108,8 +108,7 @@
           <!-- Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D7) -- in Campaign mode the rows are
                campaignGroups.mjs::groupedTableRows: group rows (a series, a set) with their numbers from
                the totals row's rule, children following when expanded (in-page state), indented. -->
-          <tr v-for="row in tableRows" :key="row.totals ? 'totals' : (row.rowKey || row.id)"
-            :class="[row.totals ? 'bm-totals' : '', { 'cm-group': row.group, 'cm-child': row.depth > 0 }]">
+          <tr v-for="row in tableRows" :key="row.totals ? 'totals' : (row.rowKey || row.id)" :class="row.totals ? 'bm-totals' : ''">
             <!-- MATRIX-VIEWS-SPEC D3: the left cells in leftCols' order (Date, Brand, Campaign, Status,
                  Sent, Skipped); MATRIX-POLISH-SPEC D6: no Brand column under a single-brand selection. -->
             <template v-for="c in leftCols">
@@ -117,7 +116,7 @@
                 :style="row.depth > 0 ? { paddingLeft: `${0.75 + row.depth * 1.25}rem` } : null">
                 <!-- Campaign mode (D7): a group row's expand box and its name (the newest member's). -->
                 <template v-if="row.group">
-                  <button type="button" class="expand-btn cm-group-box" :data-cy="`cm-group-toggle-${row.rowKey}`"
+                  <button type="button" class="expand-btn" :data-cy="`cm-group-toggle-${row.rowKey}`"
                     :aria-expanded="row.expanded ? 'true' : 'false'"
                     :aria-label="$t(row.expanded ? 'campaigns.group.collapse' : 'campaigns.group.expand')"
                     @click.stop="toggleGroup(row.rowKey)">

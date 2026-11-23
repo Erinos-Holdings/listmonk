@@ -179,7 +179,7 @@
         </template>
         <template #default="props">
           <!-- Campaign mode (D8/D9): a group row's status summary, e.g. "4 finished, 1 draft". -->
-          <p v-if="props.row.group" class="is-size-7 group-status" data-cy="group-status">
+          <p v-if="props.row.group" class="is-size-7" data-cy="group-status">
             {{ groupStatusText(props.row) }}
           </p>
           <div v-else>
@@ -218,9 +218,9 @@
         header-class="cy-name">
         <!-- Campaign mode (D9): the expand chevron, the group brand's chip (the row's returned brand;
              members keep their own chip, review R9) and the newest member's name, with the count. -->
-        <div v-if="props.row.group" class="campaign-group-name">
+        <div v-if="props.row.group">
           <p>
-            <a href="#" class="group-toggle" :aria-expanded="props.row.expanded ? 'true' : 'false'"
+            <a href="#" :aria-expanded="props.row.expanded ? 'true' : 'false'"
               :aria-label="$t(props.row.expanded ? 'campaigns.group.collapse' : 'campaigns.group.expand')"
               data-cy="group-toggle" @click.prevent="toggleGroup(props.row)">
               <b-icon :icon="props.row.expanded ? 'chevron-down' : 'chevron-right'" size="is-small" />
@@ -919,6 +919,11 @@ export default Vue.extend({
       if (data.group) {
         return ['campaign-group'];
       }
+      // Review S1 -- a member of an expanded group is indented under its group row.
+      // Re-review T1 -- a running member keeps its running highlight.
+      if (this.expandedMemberIds.has(data.id)) {
+        return ['campaign-group-member', ...(data.status === 'running' ? ['running'] : [])];
+      }
       if (data.status === 'running') {
         return ['running'];
       }
@@ -1310,6 +1315,16 @@ export default Vue.extend({
       // A response of the other mode can sit in the store until the re-fetch lands: flattenGroups
       // passes ungrouped rows through, memberRows unwraps grouped ones.
       return this.groupMode ? flattenGroups(results, new Set(this.expandedGroups)) : memberRows(results);
+    },
+
+    // Review S1 -- the member ids of the expanded group rows (the row-class function's input).
+    expandedMemberIds() {
+      const results = (this.campaigns && this.campaigns.results) || [];
+      if (!this.groupMode) {
+        return new Set();
+      }
+      return new Set(flattenGroups(results, new Set(this.expandedGroups))
+        .filter((r) => r.group && r.expanded).flatMap((r) => r.memberIds));
     },
 
     // D1 -- list id -> brand slug from the lists store (the brand chip's source).

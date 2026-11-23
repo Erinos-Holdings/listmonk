@@ -124,6 +124,8 @@ type Queries struct {
 	// built at boot (cmd/init.go) from the query-analytics-campaigns text by core.GroupedStmt. Not in
 	// any SQL file.
 	QueryAnalyticsCampaignsGrouped *sqlx.Stmt `query:"query-analytics-campaigns-grouped"`
+	// Review S2 -- the grouped picker's hit step: the same text as its id set (core.IDsStmt).
+	QueryAnalyticsCampaignIDs *sqlx.Stmt `query:"query-analytics-campaign-ids"`
 	// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) -- the Campaign Matrix pane,
 	// interpolated at boot with the Brand Matrix's tracking-mode constant.
 	GetCampaignMatrix *sqlx.Stmt `query:"get-campaign-matrix"`

@@ -130,7 +130,8 @@ const maxBy = (rows, f) => rows.reduce((best, r) => (best === null || f(r) > f(b
 // the numbers are sumRows (the totals row's rule -- counts sum, rates over each column's own Sent,
 // conversions sum, the gap pooled); Status the summary, sorting as the most active member; Started
 // the earliest; Lang the codes; Code for a series, Step for a set when every member agrees; GP shown
-// only when every broadcast member carrying a GP value shares one send day (else gpMixed); views and
+// only when every broadcast member carrying a GP value shares one send day (else, with broadcasts on
+// several send days, gpMixed -- review S3); views and
 // clicks are counted per campaign (perCampaign). The name is the newest member's (max id -- the
 // Matrix rows carry no created_at).
 export function groupRow(members, { kind = 'set', key = '' } = {}) {
@@ -165,7 +166,8 @@ export function groupRow(members, { kind = 'set', key = '' } = {}) {
     started: started ? started.started : null,
     gp_rate: gpOne ? gpRows[0].gp_rate : null,
     gpThresholds: gpOne ? gpRows[0].gpThresholds : null,
-    gpMixed: gpRows.length > 0 && gpDays.length > 1,
+    // Review S3 -- any group with no shown value whose broadcasts span several send days.
+    gpMixed: !gpOne && sendDays.length > 1,
     perCampaign: true,
     totals: false,
     ...sumRows(m),
@@ -408,17 +410,20 @@ export function memberLabel(c) {
   return promoPickerLabel(`#${c.id}: ${c.name}`, c.promoCode, c.promoStep);
 }
 
-// D6 (I16) -- a grouped picker row's label: a series its Code plus `· N steps`, a set its name plus
-// `· N campaigns`, a single campaign its existing label. nSteps / nCampaigns are the caller's
+// D6 (I16) -- a grouped picker row's label: `<slug> · <Code> · N steps` for a series,
+// `<slug> · <name> · N campaigns` for a set, a single campaign its existing label. nSteps / nCampaigns are the caller's
 // translations. Never "N languages" (review R2).
 export function pickerLabel(row, { nSteps = (n) => `${n} steps`, nCampaigns = (n) => `${n} campaigns` } = {}) {
   const members = row && Array.isArray(row.campaigns) ? row.campaigns : [];
+  // Review S4 -- a group row leads with its brand slug, so the same Code or name in two brands reads
+  // as two options.
+  const slug = row && typeof row.brand === 'string' && row.brand ? `${row.brand} · ` : '';
   if (row && row.kind === 'series') {
     const steps = Array.isArray(row.sets) ? row.sets.length : 0;
-    return `${typeof row.code === 'string' ? row.code : ''} · ${nSteps(steps)}`;
+    return `${slug}${typeof row.code === 'string' ? row.code : ''} · ${nSteps(steps)}`;
   }
   if (row && row.kind === 'set') {
-    return `${row.name} · ${nCampaigns(members.length)}`;
+    return `${slug}${row.name} · ${nCampaigns(members.length)}`;
   }
   return members.length ? memberLabel(members[0]) : String((row && row.name) || '');
 }

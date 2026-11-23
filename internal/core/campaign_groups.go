@@ -165,7 +165,7 @@ func (c *Core) QueryCampaignGroups(searchStr string, statuses, tags []string, or
 	hits := []int{}
 	if hitOn {
 		queryStr, stmt := makeSearchQuery(searchStr, "created_at", SortDesc, c.q.QueryCampaigns, campQuerySortFields)
-		if err := c.db.Select(&hits, idsStmt(stmt), queryCampaignsArgs(statuses, tags, queryStr, getAll, permittedLists, evergreen, listIDs, ids, lang, 0, 0)...); err != nil {
+		if err := c.db.Select(&hits, IDsStmt(stmt), queryCampaignsArgs(statuses, tags, queryStr, getAll, permittedLists, evergreen, listIDs, ids, lang, 0, 0)...); err != nil {
 			c.log.Printf("error fetching campaign group hits: %v", err)
 			return nil, 0, echo.NewHTTPError(http.StatusInternalServerError,
 				c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))
@@ -222,14 +222,16 @@ func (c *Core) QueryCampaignGroups(searchStr string, statuses, tags []string, or
 	return groups, groups[0].Total, nil
 }
 
-// idsStmt wraps the (sort-substituted) query-campaigns text as its id set.
-func idsStmt(listStmt string) string {
+// IDsStmt wraps a campaign statement's text (its trailing ';' trimmed) as its id set, so the planner
+// drops every output but id: the grouped list's hit step and (cmd/init.go,
+// QueryAnalyticsCampaignIDs) the grouped picker's (review S2).
+func IDsStmt(listStmt string) string {
 	return "SELECT id FROM (" + strings.TrimRight(strings.TrimSpace(listStmt), "; \n\t") + ") q"
 }
 
 // QueryAnalyticsCampaignGroups (fork, campaign mode, integrations CAMPAIGN-MODE-SPEC D6) is the
 // picker's grouped search: the three steps of QueryCampaignGroups over query-analytics-campaigns --
-// the hits with the search, the groups (QueryAnalyticsCampaignsGrouped, prepared at boot) over the
+// the hits with the search (ids only, QueryAnalyticsCampaignIDs), the groups (QueryAnalyticsCampaignsGrouped, prepared at boot) over the
 // empty search, BOTH with $7 NULL (no hit cap, so an older matching member is never cut), and only
 // limit (per_page) limiting top-level rows; then the members' picker rows by id. Scoping (the
 // permission lists, started-only, the brand scope) is the inner statement's, unchanged.
@@ -249,16 +251,13 @@ func (c *Core) QueryAnalyticsCampaignGroups(searchStr string, allCampaigns bool,
 	hitOn := strings.TrimSpace(searchStr) != ""
 	hits := []int{}
 	if hitOn {
-		var rows []models.AnalyticsCampaign
-		if err := c.q.QueryAnalyticsCampaigns.Select(&rows, pq.Array([]int{}), makeSearchString(searchStr), analyticsIDMatch(searchStr),
+		// The ids only (QueryAnalyticsCampaignIDs, review S2): no per-row skip counts for every match.
+		if err := c.q.QueryAnalyticsCampaignIDs.Select(&hits, pq.Array([]int{}), makeSearchString(searchStr), analyticsIDMatch(searchStr),
 			allCampaigns, pq.Array(permittedLists), startedOnly, nil, pq.Array(scopeLists)); err != nil {
 			return nil, fail(err)
 		}
-		if len(rows) == 0 {
+		if len(hits) == 0 {
 			return []models.AnalyticsCampaignGroup{}, nil
-		}
-		for _, r := range rows {
-			hits = append(hits, r.ID)
 		}
 	}
 

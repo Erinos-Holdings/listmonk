@@ -490,6 +490,11 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 		Query: core.GroupedStmt(qMap["query-analytics-campaigns"].Query, 8, core.AnalyticsGroupedOrderSQL),
 		Tags:  map[string]string{"name": "query-analytics-campaigns-grouped"},
 	}
+	// Review S2 -- its hit step reads the ids only: the same text as its id set.
+	qMap["query-analytics-campaign-ids"] = &goyesql.Query{
+		Query: core.IDsStmt(qMap["query-analytics-campaigns"].Query),
+		Tags:  map[string]string{"name": "query-analytics-campaign-ids"},
+	}
 
 	// Scan and prepare all queries.
 	var q models.Queries

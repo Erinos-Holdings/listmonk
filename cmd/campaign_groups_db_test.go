@@ -651,6 +651,16 @@ func TestCampaignGroupsScopedUser(t *testing.T) {
 	t.Run("picker", func(t *testing.T) {
 		u := baUser([]string{auth.PermCampaignsGetAnalytics}, f.listA)
 		assertScoped("picker", f.pickerGroups(t, u, url.Values{"per_page": {"50"}}))
+		// The ids-only hit step (review S2) prepares, binds its eight parameters ($7 NULL) and
+		// returns whole permitted groups for a search. (What is RETURNED is scoped by the groups and
+		// members steps -- assertScoped above; hits only select among scoped groups, re-review T2.)
+		rows := f.pickerGroups(t, u, url.Values{"query": {"spring"}})
+		if len(rows) != 1 || !reflect.DeepEqual(sortedInts(rows[0].memberIDs(t)...), sortedInts(ok1, ok2)) {
+			t.Fatalf("picker search: %+v", rows)
+		}
+		if rows := f.pickerGroups(t, u, url.Values{"query": {"promo two"}}); len(rows) != 0 {
+			t.Fatalf("picker search of an unpermitted campaign: %+v", rows)
+		}
 	})
 	t.Run("matrix", func(t *testing.T) {
 		u := baUser([]string{auth.PermCampaignsGetAnalytics}, f.listA)

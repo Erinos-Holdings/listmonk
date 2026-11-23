@@ -176,6 +176,25 @@ test('groupRow aggregation', () => {
   assert.equal(one.gp_rate, 0.001);
   assert.equal(one.gpMixed, false);
   assert.deepEqual(one.gpThresholds, { warn: 0.001, issues: 0.003 });
+  // Review S3 -- several send days and no GP value: still the mixed-days hover, never gpNone's
+  // empty date.
+  const noGp = groupRow([
+    shapeRow(api({ id: 10, gp_rate: null, send_day: '2026-11-01' })),
+    shapeRow(api({
+      id: 11, gp_rate: null, send_day: '2026-11-02', lang: 'fr',
+    })),
+    shapeRow(api({
+      id: 12, gp_rate: null, send_day: '2026-11-02', lang: 'de',
+    })),
+  ], { kind: 'set' });
+  assert.equal(noGp.gp_rate, null);
+  assert.equal(noGp.gpMixed, true);
+  assert.deepEqual(gpTip(noGp), { key: 'analytics.matrix.gpMixedDays', params: {} });
+  // One send day and no GP value: gpNone with that day.
+  const oneNoGp = groupRow([shapeRow(api({ id: 13, gp_rate: null })), shapeRow(api({ id: 14, gp_rate: null, lang: 'fr' }))], { kind: 'set' });
+  assert.equal(oneNoGp.gpMixed, false);
+  assert.equal(gpTip(oneNoGp).key, 'analytics.matrix.gpNone');
+  assert.equal(gpTip(oneNoGp).params.date, '2026-11-01');
   // The per-campaign hover on every group row's Views and Clicks.
   [g, one, groupRow([a], { kind: 'series' })].forEach((r) => {
     assert.deepEqual(groupCellTip(r, 'views'), { key: 'analytics.matrix.perCampaign' });
@@ -316,7 +335,9 @@ const member = (id, over) => ({
   ...over,
 });
 test('flattenGroups and memberRows', () => {
-  const running = member(3, { status: 'running', attribs: { lang: 'fr' }, lists: [{ id: 2, name: 'L2' }, { id: 1, name: 'L1' }] });
+  const running = member(3, {
+    status: 'running', attribs: { lang: 'fr' }, lists: [{ id: 2, name: 'L2' }, { id: 1, name: 'L1' }], clicks: 5, hardBounces: 2, complaints: 1,
+  });
   const results = [
     {
       kind: 'set', brand: 'alpha', name: 'C3', ids: [3, 1], campaigns: [running, member(1)],
@@ -347,6 +368,10 @@ test('flattenGroups and memberRows', () => {
   assert.equal(v.startedAt, '2026-11-01T00:00:00Z');
   assert.equal(v.sent, 20);
   assert.equal(v.views, 4);
+  // Review S6 -- every summed Stats field.
+  assert.equal(v.clicks, 6);
+  assert.equal(v.hardBounces, 2);
+  assert.equal(v.complaints, 1);
   assert.deepEqual(v.statusSummary, [{ status: 'running', n: 1 }, { status: 'finished', n: 1 }]);
   assert.equal(flat[2].code, 'BF');
   assert.deepEqual(groupAnalyticsRoute(v), { name: 'campaignAnalytics', query: { id: [3, 1] } });
@@ -374,6 +399,11 @@ test('flattenGroups and memberRows', () => {
   assert.match(page, /displayedRunning\(memberRows\(this\.campaigns\.results\)\)/);
   assert.match(page, /const stale = memberRows\(this\.campaigns\.results\)\.some\(/);
   assert.match(page, /let names = memberRows\(/);
+  // Review S6 -- the page's group Views and Clicks carry the per-campaign hover (groupRateTip).
+  const tip = page.slice(page.indexOf('groupRateTip(row, f) {'), page.indexOf('groupRateTip(row, f) {') + 300);
+  assert.match(tip, /f\.field === 'views' \|\| f\.field === 'clicks'/);
+  assert.match(tip, /this\.\$t\('analytics\.matrix\.perCampaign'\)/);
+  assert.match(page, /:title="groupRateTip\(props\.row, f\)"/);
 });
 
 // I16 -- the picker's fill and labels.
@@ -381,14 +411,20 @@ test('pickerFill and pickerLabel', () => {
   const pick = (id, over) => ({
     id, name: `N${id}`, promoCode: null, promoStep: null, ...over,
   });
-  const set = { kind: 'set', name: 'Spring Sale', campaigns: [pick(3), pick(1)] };
-  const series = {
-    kind: 'series', code: 'BF', name: 'Promo', sets: [{}, {}], campaigns: [pick(5, { promoCode: 'BF', promoStep: 1 }), pick(4)],
+  const set = {
+    kind: 'set', brand: 'ruze', name: 'Spring Sale', campaigns: [pick(3), pick(1)],
   };
-  const single = { kind: 'campaign', name: 'N7', campaigns: [pick(7, { promoCode: 'CM', promoStep: 2 })] };
+  const series = {
+    kind: 'series', brand: 'ruze', code: 'BF', name: 'Promo', sets: [{}, {}], campaigns: [pick(5, { promoCode: 'BF', promoStep: 1 }), pick(4)],
+  };
+  const single = {
+    kind: 'campaign', brand: 'ruze', name: 'N7', campaigns: [pick(7, { promoCode: 'CM', promoStep: 2 })],
+  };
   const labels = { nSteps: (n) => `${n} steps`, nCampaigns: (n) => `${n} campaigns` };
-  assert.equal(pickerLabel(set, labels), 'Spring Sale · 2 campaigns');
-  assert.equal(pickerLabel(series, labels), 'BF · 2 steps');
+  // Review S4 -- a group row leads with its brand slug; a single campaign keeps its own label.
+  assert.equal(pickerLabel(set, labels), 'ruze · Spring Sale · 2 campaigns');
+  assert.equal(pickerLabel(series, labels), 'ruze · BF · 2 steps');
+  assert.equal(pickerLabel({ ...series, brand: 'bnkd' }, labels), 'bnkd · BF · 2 steps');
   assert.equal(pickerLabel(single, labels), '#7: N7 · CM S2');
   assert.ok(!/language/i.test(pickerLabel(set, labels)));
 
