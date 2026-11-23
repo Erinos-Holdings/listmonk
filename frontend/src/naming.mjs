@@ -9,6 +9,7 @@
 // failing one of BLOCKING_CODES (below) -- a form-only rule; the server's is unchanged.
 
 import { isOfficialName } from './officialSweep.mjs'; // eslint-disable-line import/extensions
+import { nameKey } from './nameKey.mjs'; // eslint-disable-line import/extensions
 
 export const NAME_MAX = 30;
 export const CATALOG_PREFIX = 'CATALOG ';
@@ -120,11 +121,14 @@ export function cloneName(name, existingNames = []) {
 }
 
 export const OPEN_STATUSES = Object.freeze(['draft', 'scheduled', 'paused', 'running']);
-const fold = (s) => str(s).trim().toLowerCase();
+// Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D3) -- the duplicate check folds a name with
+// the grouping's name key (campaignGroups.mjs::nameKey, defined in nameKey.mjs; pinned with the server's by
+// testdata/campaign-groups.json): whitespace runs collapse; only U+0020 ends are dropped.
+const fold = (s) => nameKey(str(s));
 
-// D8 -- the other OPEN campaign with the same name (trimmed, case-insensitive), brand and language,
-// or null. A warning only: saving is never blocked. candidate/rows carry { id, name, status, brand,
-// lang or attribs.lang }.
+// D8 -- the other OPEN campaign with the same name (by the name key, case-insensitive), brand and
+// language, or null. A warning only: saving is never blocked. candidate/rows carry { id, name,
+// status, brand, lang or attribs.lang }.
 export function duplicateOf(candidate, rows = []) {
   const name = fold(candidate && candidate.name);
   if (!name) return null;

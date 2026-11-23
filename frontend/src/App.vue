@@ -24,10 +24,14 @@
           <!-- Fork (naming standard, NAMING-STANDARD-SPEC D2; GLOBAL-LANG-SPEC D1) -- the language
                toggle, beside the selector, on every navbar route (hidden with app.lang_enable off). -->
           <language-toggle />
+          <!-- Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D1) -- immediately right of the
+               language toggle. -->
+          <campaign-mode-toggle />
           <launch-filter />
         </div>
         <div v-else class="navbar-item brand-context">
           <language-toggle />
+          <campaign-mode-toggle />
         </div>
       </template>
       <template #end>
@@ -149,6 +153,7 @@ import Navigation from './components/Navigation.vue';
 import BrandSelector from './components/BrandSelector.vue';
 import LaunchFilter from './components/LaunchFilter.vue';
 import LanguageToggle from './components/LanguageToggle.vue';
+import CampaignModeToggle from './components/CampaignModeToggle.vue';
 import HealthSync from './components/HealthSync.vue';
 
 export default Vue.extend({
@@ -159,6 +164,7 @@ export default Vue.extend({
     BrandSelector,
     LaunchFilter,
     LanguageToggle,
+    CampaignModeToggle,
     HealthSync,
   },
 

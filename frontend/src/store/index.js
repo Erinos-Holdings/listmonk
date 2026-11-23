@@ -9,6 +9,7 @@ import {
 import {
   LANG_PREF, effectiveLang, normalizeLang, subscribersLang,
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
+import { MODE_PREF, normalizeMode } from '../campaignGroups.mjs'; // eslint-disable-line import/extensions
 
 Vue.use(Vuex);
 
@@ -53,6 +54,9 @@ export default new Vuex.Store({
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the language toggle's stored value
     // (pref `brand.lang`); the langSelection getter resolves an unknown one to 'all'.
     langStored: prefs.getPref(LANG_PREF) || 'all',
+    // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D1) -- the Campaign mode toggle's stored
+    // value (pref `campaigns.mode`); the campaignMode getter resolves an unknown one to 'off'.
+    campaignModeStored: prefs.getPref(MODE_PREF) || 'off',
     // Fork (global language, GLOBAL-LANG-SPEC D2) -- the current pane of a paned view the navbar
     // cannot see ('brands:usage', 'analytics:campaign'); '' when none is mounted.
     viewPane: '',
@@ -114,6 +118,15 @@ export default new Vuex.Store({
       const v = normalizeLang(lang);
       state.langStored = v;
       prefs.setPref(LANG_PREF, v);
+    },
+
+    // Fork (campaign mode, CAMPAIGN-MODE-SPEC D1, I14) -- the toggle's change: the store and the
+    // pref, no reload. The `campaigns.mode` pref's one writer; only CampaignModeToggle.vue calls it.
+    // A presentation choice, never a permission input.
+    selectCampaignMode(state, mode) {
+      const v = normalizeMode(mode);
+      state.campaignModeStored = v;
+      prefs.setPref(MODE_PREF, v);
     },
 
     // Fork (global language, GLOBAL-LANG-SPEC D2, S2-5) -- a paned view commits its pane here
@@ -227,6 +240,8 @@ export default new Vuex.Store({
     // apply: the normalised value while the toggle is visible, else All.
     langSubscribers: (state) => subscribersLang(state.langStored, state[models.serverConfig]),
     viewPane: (state) => state.viewPane,
+    // Fork (campaign mode, CAMPAIGN-MODE-SPEC D1) -- 'off' | 'groups'.
+    campaignMode: (state) => normalizeMode(state.campaignModeStored),
   },
 
   modules: {

@@ -120,6 +120,10 @@ type Queries struct {
 
 	// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker.
 	QueryAnalyticsCampaigns *sqlx.Stmt `query:"query-analytics-campaigns"`
+	// Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D2/D6) -- the picker's grouped statement,
+	// built at boot (cmd/init.go) from the query-analytics-campaigns text by core.GroupedStmt. Not in
+	// any SQL file.
+	QueryAnalyticsCampaignsGrouped *sqlx.Stmt `query:"query-analytics-campaigns-grouped"`
 	// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) -- the Campaign Matrix pane,
 	// interpolated at boot with the Brand Matrix's tracking-mode constant.
 	GetCampaignMatrix *sqlx.Stmt `query:"get-campaign-matrix"`

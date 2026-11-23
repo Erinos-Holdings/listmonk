@@ -97,6 +97,8 @@ test('I2: every D2 campaign read/write in api/index.js uses campaignCamel', () =
   };
   const want = {
     getCampaigns: "'.results.*'",
+    // Integrations CAMPAIGN-MODE-SPEC D5 -- the grouped list's member rows, one level down.
+    getCampaignGroups: "'.results.*.campaigns.*'",
     getCampaign: "''",
     getCampaignQuiet: "''",
     createCampaign: "''",

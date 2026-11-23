@@ -344,7 +344,7 @@
 <script>
 import dayjs from 'dayjs';
 import Vue from 'vue';
-import { mapState } from 'vuex';
+import { mapGetters, mapState } from 'vuex';
 import { colors } from '../constants';
 import Chart from '../components/Chart.vue';
 import { DEFAULT_SORT, shapeCountryRows, sortCountryRows } from '../countryRows.mjs'; // eslint-disable-line import/extensions
@@ -375,6 +375,9 @@ import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import
 import { viewPaneValue } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { analyticsSkippedRows } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { pickerLabel } from '../promoSeries.mjs'; // eslint-disable-line import/extensions
+import {
+  memberLabel, pickerFill, pickerLabel as groupPickerLabel,
+} from '../campaignGroups.mjs'; // eslint-disable-line import/extensions
 
 // Fork (campaign rates) -- decimals per metric, the campaigns list's (views/clicks 1, bounces 2).
 // Fork (shop-link header total, 2026-10-19) -- shopLinks joins the rate headers: the shop-link
@@ -632,6 +635,14 @@ export default Vue.extend({
     },
 
     isCampaignSelected(camp) {
+      // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D6) -- a group row is never a chip:
+      // choosing it puts every member into the input (de-duplicated, campaignGroups.mjs::pickerFill)
+      // and the default dates follow the selection, as an @add would.
+      if (camp && camp.groupRow) {
+        this.form.campaigns = pickerFill(this.form.campaigns, camp.groupRow);
+        this.applyDefaultDates();
+        return false;
+      }
       return !this.form.campaigns.find(({ id }) => id === camp.id);
     },
 
@@ -769,6 +780,29 @@ export default Vue.extend({
       const params = { query };
       if (this.scopeListIds) {
         params.list_id = this.scopeListIds;
+      }
+      // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D6) -- the dropdown lists top-level rows:
+      // a group row labelled with its name (a series its Code) and its count; a single campaign as
+      // today. The input still holds campaigns.
+      if (this.campaignMode === 'groups') {
+        params.grouped = true;
+        this.$api.getAnalyticsCampaigns(params).then((data) => {
+          this.isSearchLoading = false;
+          this.queriedCampaigns = (Array.isArray(data) ? data : []).map((g, i) => {
+            if (g.kind === 'campaign' && g.campaigns.length === 1) {
+              return { ...g.campaigns[0], name: memberLabel(g.campaigns[0]) };
+            }
+            return {
+              id: `group-${i}`,
+              name: groupPickerLabel(g, {
+                nSteps: (n) => this.$tc('campaigns.group.nSteps', n, { num: n }),
+                nCampaigns: (n) => this.$tc('campaigns.group.nCampaigns', n, { num: n }),
+              }),
+              groupRow: g,
+            };
+          });
+        });
+        return;
       }
       this.$api.getAnalyticsCampaigns(params).then((data) => {
         this.isSearchLoading = false;
@@ -1003,6 +1037,8 @@ export default Vue.extend({
   computed: {
     ...mapState(['serverConfig']),
     ...mapState({ storeLists: 'lists' }),
+    // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D6) -- the navbar toggle.
+    ...mapGetters(['campaignMode']),
 
     locale() {
       return (this.$i18n && this.$i18n.locale) || 'en';
@@ -1188,6 +1224,14 @@ export default Vue.extend({
         return;
       }
       this.queryCampaigns(this.lastQuery);
+    },
+
+    // Fork (campaign mode, CAMPAIGN-MODE-SPEC D1/D6) -- the toggle re-runs the picker's last search;
+    // the picked campaigns stay.
+    campaignMode() {
+      if (this.lastQuery !== null) {
+        this.queryCampaigns(this.lastQuery);
+      }
     },
   },
 

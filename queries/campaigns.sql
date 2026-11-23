@@ -997,8 +997,9 @@ SELECT JSON_BUILD_OBJECT(
 -- raw: true
 -- Fork (campaign matrix, integrations listmonk/CAMPAIGN-MATRIX-SPEC D4-D10). The Campaign Matrix
 -- pane of Campaigns > Analytics -- one row per campaign in scope with activity in the window, live.
--- Prepared on boot (cmd/init.go) with the Brand Matrix's tracking-mode constant as the one
--- interpolated value -- so this text holds no bare percent sign (the house rule for raw statements).
+-- Prepared on boot (cmd/init.go) with the Brand Matrix's tracking-mode constant as the first
+-- interpolated value and the campaign-mode grouping expressions (CAMPAIGN-MODE-SPEC D2) as the
+-- second to fourth -- so this text holds no bare percent sign (the house rule for raw statements).
 --   $1 all campaigns, else $2 the permitted list ids; $3 started campaigns only (analytics-only
 --      users); $4 the global brand's list ids (empty = no scope), ANDed with the permission scope.
 --      Exactly query-analytics-campaigns' scoping predicate (D10) -- keep the two identical.
@@ -1196,14 +1197,16 @@ conv AS (
     WHERE cc.purchased_at >= k.lo AND cc.purchased_at < (SELECT t1 FROM bounds)
     GROUP BY cc.campaign_id, cc.measure
 ),
+-- Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D2/D7) -- the brand is core.GroupBrandSQL,
+-- interpolated at boot as the second argument, so the displayed brand and the grouping brand are
+-- one expression. gkey holds the set_key / series_key columns (the third and fourth arguments,
+-- core.SetKeySQL / core.SeriesKeySQL over the code key and the name key of the campaign).
 cbrand AS (
-    SELECT cl.campaign_id,
-        CASE WHEN COUNT(DISTINCT list_brand_tag(l.tags)) = 1 THEN MIN(list_brand_tag(l.tags)) END AS brand
-    FROM campaign_lists cl
-    JOIN lists l ON (l.id = cl.list_id)
-    WHERE cl.campaign_id IN (SELECT id FROM camps) AND l.status = 'active'
-        AND list_brand_tag(l.tags) IS NOT NULL AND list_brand_tag(l.tags) <> 'unattributed'
-    GROUP BY cl.campaign_id
+    SELECT k.id AS campaign_id, %[2]s AS brand FROM camps k
+),
+gkey AS (
+    SELECT cb.campaign_id, %[3]s AS set_key, %[4]s AS series_key
+    FROM cbrand cb JOIN campaigns cp ON (cp.id = cb.campaign_id)
 ),
 gp AS (
     SELECT k.id AS campaign_id, pt.rate, pt.thresholds FROM camps k
@@ -1271,7 +1274,10 @@ SELECT JSON_BUILD_OBJECT(
             'matched', CASE WHEN EXISTS (SELECT 1 FROM cov WHERE cov.matched @> TO_JSONB(k.id))
                 THEN JSON_BUILD_OBJECT('orders', COALESCE(m.orders, 0), 'sales_usd', COALESCE(m.sales, 0)) END,
             'gp_rate', g.rate,
-            'gp_thresholds', CASE WHEN g.rate IS NOT NULL THEN g.thresholds END
+            'gp_thresholds', CASE WHEN g.rate IS NOT NULL THEN g.thresholds END,
+            -- Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D7) -- the grouping keys, every row.
+            'set_key', gk.set_key,
+            'series_key', gk.series_key
         ) ORDER BY k.id)
         FROM camps k
         LEFT JOIN views v ON (v.campaign_id = k.id)
@@ -1282,6 +1288,7 @@ SELECT JSON_BUILD_OBJECT(
         LEFT JOIN conv t ON (t.campaign_id = k.id AND t.measure = 'tracked')
         LEFT JOIN conv m ON (m.campaign_id = k.id AND m.measure = 'matched')
         LEFT JOIN cbrand cb ON (cb.campaign_id = k.id)
+        LEFT JOIN gkey gk ON (gk.campaign_id = k.id)
         LEFT JOIN gp g ON (g.campaign_id = k.id)
     ), '[]'::JSON)
 ) AS data;

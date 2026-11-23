@@ -26,10 +26,14 @@
     </header>
 
     <!-- Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
-    <b-table :data="campaigns.results" :caption="$filterCaption()" :loading="loading.campaigns" :row-class="highlightedRow"
+    <!-- Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D9) -- in Campaign mode the data is the
+         grouped response flattened (campaignGroups.mjs::flattenGroups): group rows, each followed by
+         its member rows -- the unmodified server rows, through the same column templates -- when
+         expanded. Not checkable then, and no bulk bar (bulk actions are Phase 2/3). -->
+    <b-table :data="tableData" :caption="$filterCaption()" :loading="loading.campaigns" :row-class="highlightedRow"
       @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page"
-      :per-page="campaigns.perPage" :total="campaigns.total" hoverable checkable backend-sorting @sort="onSort">
+      :per-page="campaigns.perPage" :total="campaigns.total" hoverable :checkable="!groupMode" backend-sorting @sort="onSort">
       <template #top-left>
         <!-- Fork (integrations JOURNEY-UX-SPEC A1.15) -- the scope toggle far left, then the list
              filter, then the search. -->
@@ -120,7 +124,7 @@
           </div>
         </div>
 
-        <div class="actions" v-if="bulk.checked.length > 0">
+        <div class="actions" v-if="bulk.checked.length > 0 && !groupMode">
           <a class="a" href="#" @click.prevent="deleteCampaigns" data-cy="btn-delete-campaigns">
             <b-icon icon="trash-can-outline" size="is-small" /> Delete
           </a>
@@ -174,7 +178,11 @@
             :class="{ 'is-desc': queryParams.order !== 'asc', 'is-invisible': queryParams.orderBy !== 'status' }" />
         </template>
         <template #default="props">
-          <div>
+          <!-- Campaign mode (D8/D9): a group row's status summary, e.g. "4 finished, 1 draft". -->
+          <p v-if="props.row.group" class="is-size-7 group-status" data-cy="group-status">
+            {{ groupStatusText(props.row) }}
+          </p>
+          <div v-else>
             <p>
               <router-link :to="{ name: 'campaign', params: { id: props.row.id } }">
                 <b-tag :class="props.row.status">
@@ -208,7 +216,26 @@
       </b-table-column>
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" width="25%" sortable
         header-class="cy-name">
-        <div>
+        <!-- Campaign mode (D9): the expand chevron, the group brand's chip (the row's returned brand;
+             members keep their own chip, review R9) and the newest member's name, with the count. -->
+        <div v-if="props.row.group" class="campaign-group-name">
+          <p>
+            <a href="#" class="group-toggle" :aria-expanded="props.row.expanded ? 'true' : 'false'"
+              :aria-label="$t(props.row.expanded ? 'campaigns.group.collapse' : 'campaigns.group.expand')"
+              data-cy="group-toggle" @click.prevent="toggleGroup(props.row)">
+              <b-icon :icon="props.row.expanded ? 'chevron-down' : 'chevron-right'" size="is-small" />
+            </a>
+            <b-tag v-if="groupChip(props.row)" class="is-small brand-chip" data-cy="group-brand-chip">
+              {{ groupChip(props.row) }}
+            </b-tag>
+            <strong>{{ props.row.name }}</strong>
+          </p>
+          <p class="is-size-7 has-text-grey" data-cy="group-count">
+            {{ $tc(props.row.kind === 'series' ? 'campaigns.group.seriesCount' : 'campaigns.group.setCount',
+                   props.row.count, { num: props.row.count }) }}
+          </p>
+        </div>
+        <div v-else>
           <p>
             <b-tag v-if="props.row.type === 'optin'" class="is-small">
               {{ $t('lists.optin') }}
@@ -243,15 +270,20 @@
            Name, in plain text (the send-language code, EN+ with its hover; '—' with none) -- shown only
            under All languages; otherwise the blue filter bar names the language. Replaces the chip. -->
       <b-table-column v-if="showLang" v-slot="props" field="lang" :label="$t('analytics.matrix.lang')" width="5%" centered>
-        <span data-cy="campaign-lang" :title="langChipTitle(props.row)">{{ langText(props.row) }}</span>
+        <!-- Campaign mode (D9): a group row's language codes. -->
+        <span v-if="props.row.group" data-cy="group-lang">{{ groupLangText(props.row) }}</span>
+        <span v-else data-cy="campaign-lang" :title="langChipTitle(props.row)">{{ langText(props.row) }}</span>
       </b-table-column>
       <!-- Fork (promo series, integrations PROMO-SERIES-SPEC D7) -- Code and Step, from the served
-           fields; blank for a journey (promoSeries.mjs::promoCells). Columns only. -->
+           fields; blank for a journey (promoSeries.mjs::promoCells). Columns only. Campaign mode
+           (D8/D9): a series row its Code, a set row its Step when every member agrees. -->
       <b-table-column v-slot="props" field="promo_code" :label="$t('campaigns.promoCode')" width="7%">
-        <span data-cy="campaign-promo-code">{{ promoCellsOf(props.row).code }}</span>
+        <span v-if="props.row.group" data-cy="group-promo-code">{{ props.row.code }}</span>
+        <span v-else data-cy="campaign-promo-code">{{ promoCellsOf(props.row).code }}</span>
       </b-table-column>
       <b-table-column v-slot="props" field="promo_step" :label="$t('campaigns.promoStepShort')" width="4%" centered>
-        <span data-cy="campaign-promo-step">{{ promoCellsOf(props.row).step }}</span>
+        <span v-if="props.row.group" data-cy="group-promo-step">{{ props.row.step === null ? '' : props.row.step }}</span>
+        <span v-else data-cy="campaign-promo-step">{{ promoCellsOf(props.row).step }}</span>
       </b-table-column>
       <b-table-column v-slot="props" cell-class="lists" field="lists" :label="$t('globals.terms.lists')" width="15%">
         <ul>
@@ -264,7 +296,14 @@
       </b-table-column>
       <b-table-column v-slot="props" field="created_at" :label="$t('campaigns.timestamps')" width="19%" sortable
         header-class="cy-timestamp">
-        <div class="fields timestamps" :set="stats = getCampaignStats(props.row)">
+        <!-- Campaign mode (D9): a group row's earliest Started only. -->
+        <div v-if="props.row.group" class="fields timestamps" data-cy="group-started">
+          <p v-if="props.row.startedAt">
+            <label for="#">{{ $t('campaigns.startedAt') }}</label>
+            <span>{{ $utils.niceDate(props.row.startedAt, true) }}</span>
+          </p>
+        </div>
+        <div v-else class="fields timestamps" :set="stats = getCampaignStats(props.row)">
           <p>
             <label for="#">{{ $t('globals.fields.createdAt') }}</label>
             <span>{{ $utils.niceDate(props.row.createdAt, true) }}</span>
@@ -291,7 +330,26 @@
       </b-table-column>
 
       <b-table-column v-slot="props" field="stats" :label="$t('campaigns.stats')" width="15%">
-        <div class="fields stats" :set="stats = getCampaignStats(props.row)">
+        <!-- Campaign mode (D8/D9): Sent, then Views, Clicks, H. Bounces and Complaints summed over the
+             members with rates over the summed Sent (campaignRates.mjs); Views and Clicks are counted
+             per campaign, and say so on hover. No audience, progress or send-rate line. -->
+        <div v-if="props.row.group" class="fields stats" data-cy="group-stats">
+          <p>
+            <label for="#">{{ $t('campaigns.sent') }}</label>
+            <span>{{ $utils.formatNumber(props.row.sent) }}</span>
+          </p>
+          <p v-for="f in rateFields" :key="f.field" :set="cell = rateOf(props.row, f)">
+            <label for="#">{{ $t(f.label) }}</label>
+            <span :title="groupRateTip(props.row, f)" :data-cy="`group-stat-${f.field}`">
+              <template v-if="cell.pct">
+                <span :class="tierClassOf(props.row, f)">{{ cell.pct }}</span>
+                <span class="is-size-7 has-text-grey">({{ cell.count }})</span>
+              </template>
+              <template v-else>{{ cell.count }}</template>
+            </span>
+          </p>
+        </div>
+        <div v-else class="fields stats" :set="stats = getCampaignStats(props.row)">
           <!-- Fork (list-page audience) -- a broadcast that has not started shows the LIVE
                count it would send to now (its lists, opt-in rules and language), not the
                stored to_send, which stays 0 until the send-time claim. Zero is a warning. -->
@@ -375,7 +433,27 @@
       </b-table-column>
 
       <b-table-column v-slot="props" cell-class="actions" width="15%" align="right">
-        <div>
+        <!-- Campaign mode (D9): on a group row only the analytics glyph works -- Campaign Analytics with
+             every member id of the row as shown; every other glyph is disabled with its hover (Phase 2,
+             or "Not available for a group" for Clone and Preview). The glyphs are campaignGroups.mjs's
+             GROUP_ACTIONS table. -->
+        <div v-if="props.row.group" data-cy="group-actions">
+          <template v-for="g in groupActions">
+            <router-link v-if="g.enabled && $can('campaigns:get_analytics')" :key="g.action" :to="groupAnalyticsRoute(props.row)"
+              :data-cy="`group-btn-${g.action}`" :aria-label="$t(g.label)">
+              <b-tooltip :label="$t(g.tip)" type="is-dark">
+                <b-icon :icon="g.icon" size="is-small" />
+              </b-tooltip>
+            </router-link>
+            <a v-else-if="!g.enabled" :key="g.action" href="#" data-disabled :data-cy="`group-btn-${g.action}`"
+              :aria-label="$t(g.label)" @click.prevent>
+              <b-tooltip :label="$t(g.tip)" type="is-dark">
+                <b-icon :icon="g.icon" size="is-small" />
+              </b-tooltip>
+            </a>
+          </template>
+        </div>
+        <div v-else>
           <!-- Fork (campaign review, CAMPAIGN-INSPECT-SPEC §3.2) -- with the gate on, Start/Resume/
                Schedule are replaced by one "Open to inspect" glyph, OUTSIDE the campaigns:send block
                so Marketing sees it; the status endpoint would refuse an uninspected start anyway.
@@ -511,6 +589,9 @@ import {
 import {
   campaignFilterParams, pausedAtOf, statusCountParams, statusOptions,
 } from '../campaignStatusFilter.mjs'; // eslint-disable-line import/extensions
+import {
+  GROUP_ACTIONS, flattenGroups, groupAnalyticsRoute, memberRows, statusSummaryText,
+} from '../campaignGroups.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
@@ -562,6 +643,10 @@ export default Vue.extend({
     return {
       previewItem: null,
       rateFields: RATE_FIELDS,
+      // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D9) -- a group row's glyphs, and the
+      // keys of the expanded group rows (in-page state only).
+      groupActions: GROUP_ACTIONS,
+      expandedGroups: [],
       queryParams: {
         page: 1,
         query: '',
@@ -620,12 +705,48 @@ export default Vue.extend({
       return f ? this.$t('naming.formerName', { name: f }) : row.name;
     },
 
+    // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D9) -- a group row's cells.
+    groupStatusText(row) {
+      return statusSummaryText(row.statusSummary, (s) => this.$t(`campaigns.status.${s}`));
+    },
+
+    // The group brand's chip (the row's returned brand), hidden when the brand selector selects it.
+    groupChip(row) {
+      return chipsFor({ brand: row.brand }, { brandSelection: this.brandSelection, langSelection: this.langSelection }).brand;
+    },
+
+    groupLangText(row) {
+      return row.langs.length ? row.langs.map((l) => l.toUpperCase()).join(', ') : langColumnText('');
+    },
+
+    // D8 -- Views and Clicks on a group row are counted per campaign; the other rates name Sent.
+    groupRateTip(row, f) {
+      if (f.field === 'views' || f.field === 'clicks') {
+        return this.$t('analytics.matrix.perCampaign');
+      }
+      return this.rateTip(row);
+    },
+
+    groupAnalyticsRoute(row) {
+      return groupAnalyticsRoute(row);
+    },
+
+    toggleGroup(row) {
+      const i = this.expandedGroups.indexOf(row.key);
+      if (i === -1) {
+        this.expandedGroups.push(row.key);
+      } else {
+        this.expandedGroups.splice(i, 1);
+      }
+    },
+
     // D7 -- the clone prompt: `Clone<N> <name>`, N over every campaign whose name carries the base
     // (one quiet search for the base, review S4-10 -- not only this page), 30 with the hint and count.
     // A failed search falls back to this page's names.
     async promptClone(row) {
       const base = cloneBaseOf(row.name);
-      let names = ((this.campaigns && this.campaigns.results) || []).map((c) => c.name);
+      // Campaign mode (D9, review R5): every member row of the page, expanded or not.
+      let names = memberRows((this.campaigns && this.campaigns.results) || []).map((c) => c.name);
       try {
         const res = await this.$api.findCampaignsByName(base);
         names = names.concat(((res && res.results) || []).map((c) => c.name));
@@ -794,6 +915,10 @@ export default Vue.extend({
     },
 
     highlightedRow(data) {
+      // Campaign mode (D9) -- a group row has no status of its own.
+      if (data.group) {
+        return ['campaign-group'];
+      }
       if (data.status === 'running') {
         return ['running'];
       }
@@ -887,13 +1012,20 @@ export default Vue.extend({
     },
 
     getCampaigns() {
-      this.$api.getCampaigns({
+      const params = {
         ...campaignFilterParams(this.filterState()),
         page: this.queryParams.page,
         order_by: this.queryParams.orderBy,
         order: this.queryParams.order,
         no_body: true,
-      });
+      };
+      // Fork (campaign mode, CAMPAIGN-MODE-SPEC D5/D9) -- top-level rows (grouped=true) only in
+      // Campaign mode; the ungrouped request is unchanged otherwise (G4).
+      if (this.groupMode) {
+        this.$api.getCampaignGroups(params);
+        return;
+      }
+      this.$api.getCampaigns(params);
     },
 
     // D4 -- the Paused row's value (null = no row).
@@ -990,7 +1122,9 @@ export default Vue.extend({
           // genuinely behind, and it clears after one refetch. Ids are compared as
           // strings because the response carries numbers.
           const runningIDs = new Set(data.map((c) => String(c.id)));
-          const stale = (this.campaigns.results || []).some(
+          // Campaign mode (D9, review R5) -- every member of every top-level row, expanded or not
+          // (ungrouped: the rows themselves), so a running member of a collapsed group keeps the poll.
+          const stale = memberRows(this.campaigns.results).some(
             (c) => c.status === 'running' && !runningIDs.has(String(c.id)),
           );
 
@@ -1016,7 +1150,7 @@ export default Vue.extend({
           // poll ends -- on an idle tab, after a single request. POLISH3 D3: under All the
           // displayed running EVERGREENS are not followed (they never finish), so the same rule
           // ends the poll there too (campaignsRouteQuery.mjs::displayedRunning).
-          if (!displayedRunning(this.campaigns.results)) {
+          if (!displayedRunning(memberRows(this.campaigns.results))) {
             clearInterval(this.pollID);
           }
         }, () => {
@@ -1163,7 +1297,20 @@ export default Vue.extend({
     ...mapState(['campaigns', 'lists', 'loading', 'serverConfig']),
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- the navbar language toggle; All while
     // app.lang_enable is off (GLOBAL-LANG-SPEC D1: the toggle is hidden then).
-    ...mapGetters({ langSelection: 'langEffective' }),
+    ...mapGetters({ langSelection: 'langEffective', campaignMode: 'campaignMode' }),
+
+    // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D9) -- the navbar toggle; the table's rows
+    // (flattened top-level rows in Campaign mode, the server rows otherwise).
+    groupMode() {
+      return this.campaignMode === 'groups';
+    },
+
+    tableData() {
+      const results = (this.campaigns && this.campaigns.results) || [];
+      // A response of the other mode can sit in the store until the re-fetch lands: flattenGroups
+      // passes ungrouped rows through, memberRows unwraps grouped ones.
+      return this.groupMode ? flattenGroups(results, new Set(this.expandedGroups)) : memberRows(results);
+    },
 
     // D1 -- list id -> brand slug from the lists store (the brand chip's source).
     listBrands() {
@@ -1252,6 +1399,16 @@ export default Vue.extend({
   },
 
   watch: {
+    // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D1) -- the toggle re-fetches from page 1,
+    // no reload; the selection and the expand state reset.
+    campaignMode() {
+      this.queryParams.page = 1;
+      this.bulk.checked = [];
+      this.bulk.all = false;
+      this.expandedGroups = [];
+      this.refreshCampaigns();
+    },
+
     // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- a toggle change refetches from page 1.
     langSelection() {
       this.queryParams.page = 1;

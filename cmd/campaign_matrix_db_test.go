@@ -441,6 +441,31 @@ func TestCampaignMatrixDB(t *testing.T) {
 				t.Fatalf("%s: the response still carries %s", name("tiers gone"), k)
 			}
 		}
+		// Integrations CAMPAIGN-MODE-SPEC I15 -- campaign mode adds exactly the two key columns to
+		// every row (set_key, series_key); every other key is as before.
+		var rawRows struct {
+			Data struct {
+				Rows []map[string]json.RawMessage `json:"rows"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(rawBody), &rawRows); err != nil {
+			t.Fatal(err)
+		}
+		wantKeys := []string{"brand", "clicks", "complaints", "evergreen", "former_name", "gp_rate", "gp_thresholds",
+			"hard_bounces", "id", "lang", "last_sent", "matched", "name", "promo_code", "promo_step", "send_day", "sent",
+			"series_key", "set_key", "shop_corp", "shop_creator", "shop_founder", "shop_self", "skipped", "skipped_lookahead",
+			"skipped_lookback", "skipped_purchased", "skipped_silent", "smart_off", "soft_bounces", "started_at", "status",
+			"tracked", "views"}
+		for _, r := range rawRows.Data.Rows {
+			keys := []string{}
+			for k := range r {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			if !reflect.DeepEqual(keys, wantKeys) {
+				t.Fatalf("%s: row keys %v, want %v", name("row keys"), keys, wantKeys)
+			}
+		}
 
 		// GP for a brands:get creator is the same value the admin sees.
 		_, gpGot, _ := matrix(alphaGP, url.Values{})

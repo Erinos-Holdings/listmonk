@@ -137,6 +137,23 @@ test('I11: duplicateOf -- another OPEN campaign, same trimmed case-insensitive n
   assert.equal(duplicateOf({
     id: 9, name: 'Welcome', brand: 'bnkd', lang: 'en',
   }, rows), null);
+  // Integrations CAMPAIGN-MODE-SPEC I2 -- the fold is campaignGroups.mjs::nameKey: whitespace runs
+  // (tab, NBSP) now match; a U+2003 end is no longer trimmed; the rest is unchanged.
+  const spaced = [{
+    id: 5, name: 'Spring  \t Sale', status: 'draft', brand: 'ruze', attribs: { lang: 'en' },
+  }];
+  assert.equal(duplicateOf({
+    id: 9, name: 'spring\u00a0sale', brand: 'ruze', lang: 'en',
+  }, spaced).id, 5);
+  assert.equal(duplicateOf({
+    id: 9, name: 'Spring Sale\u2003', brand: 'ruze', lang: 'en',
+  }, spaced), null);
+  assert.equal(duplicateOf({
+    id: 9, name: '\u2003', brand: 'ruze', lang: 'en',
+  }, spaced), null);
+  assert.equal(duplicateOf({
+    id: 9, name: '   ', brand: 'ruze', lang: 'en',
+  }, spaced), null); // an all-space name folds to '' -- no check
   assert.equal(duplicateOf({
     id: 9, name: '', brand: 'ruze', lang: 'en',
   }, rows), null);

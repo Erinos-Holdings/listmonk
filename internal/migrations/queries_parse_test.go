@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/knadh/goyesql/v2"
+	"github.com/knadh/listmonk/internal/core"
 )
 
 func TestShippedQueryFilesParse(t *testing.T) {
@@ -291,8 +292,9 @@ func TestDashboardBrandMatrixQueryInterpolates(t *testing.T) {
 
 // Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4/D8) -- the Campaign Matrix statement
 // shares the Brand Matrix's window: its zone literal is ONE and the SAME as the matrix's; its only
-// tag is raw; every percent sign is the boot-time %[1]s mode placeholder, and both modes interpolate
-// cleanly.
+// tag is raw; every percent sign is a boot-time placeholder -- %[1]s the mode, and (integrations
+// CAMPAIGN-MODE-SPEC D2) %[2]s..%[4]s the grouping expressions -- and both modes interpolate cleanly
+// with the same arguments cmd/init.go passes.
 func TestCampaignMatrixQueryInterpolates(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -319,8 +321,17 @@ func TestCampaignMatrixQueryInterpolates(t *testing.T) {
 	if len(got.Tags) != 1 || got.Tags["raw"] != "true" {
 		t.Errorf("get-campaign-matrix tags %v, want only raw=true (a colon-bearing comment line?)", got.Tags)
 	}
-	if n := strings.Count(got.Query, "%"); n != strings.Count(got.Query, "%[1]s") {
-		t.Errorf("query text carries %d percent signs beyond the %%[1]s placeholders", n)
+	placeholders := 0
+	for _, p := range []string{"%[1]s", "%[2]s", "%[3]s", "%[4]s"} {
+		placeholders += strings.Count(got.Query, p)
+	}
+	if n := strings.Count(got.Query, "%"); n != placeholders {
+		t.Errorf("query text carries %d percent signs, %d placeholders", n, placeholders)
+	}
+	for _, p := range []string{"%[2]s", "%[3]s", "%[4]s"} {
+		if strings.Count(got.Query, p) != 1 {
+			t.Errorf("%s appears %d times, want once", p, strings.Count(got.Query, p))
+		}
 	}
 	zoneRe := regexp.MustCompile(`'([A-Za-z_]+/[A-Za-z_]+)'::TEXT AS tz`)
 	mz, cz := zoneRe.FindAllStringSubmatch(qs["get-dashboard-brand-matrix"].Query, -1), zoneRe.FindAllStringSubmatch(got.Query, -1)
@@ -328,7 +339,9 @@ func TestCampaignMatrixQueryInterpolates(t *testing.T) {
 		t.Errorf("zone literals: brand matrix %v, campaign matrix %v -- want exactly one each, equal", mz, cz)
 	}
 	for _, mode := range []string{"TRUE", "FALSE"} {
-		s := fmt.Sprintf(got.Query, mode)
+		s := fmt.Sprintf(got.Query, mode, core.GroupBrandSQL("k.id"),
+			core.SetKeySQL("cb.brand", core.CodeKeySQL("cp"), core.NameKeySQL("cp.name")),
+			core.SeriesKeySQL("cb.brand", core.CodeKeySQL("cp")))
 		if strings.Contains(s, "%") {
 			t.Errorf("interpolated with %q: verb error or leftover percent sign", mode)
 		}

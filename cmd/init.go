@@ -476,7 +476,20 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	// and clicks with the SAME mode constant (each subscriber once under individual tracking). Fork
 	// (matrix polish, integrations MATRIX-POLISH-SPEC D5) -- its shop-link kind counts reuse the same
 	// constant through the click-pair rule, so no second argument is needed.
-	qMap["get-campaign-matrix"].Query = fmt.Sprintf(qMap["get-campaign-matrix"].Query, uniqueClicks)
+	// Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D2/D7) -- and, in the same call, the
+	// grouping rule's expressions (internal/core/campaign_groups.go, the one home): the group brand
+	// its cbrand CTE displays and groups by, and the set_key / series_key columns built from it.
+	qMap["get-campaign-matrix"].Query = fmt.Sprintf(qMap["get-campaign-matrix"].Query, uniqueClicks,
+		core.GroupBrandSQL("k.id"),
+		core.SetKeySQL("cb.brand", core.CodeKeySQL("cp"), core.NameKeySQL("cp.name")),
+		core.SeriesKeySQL("cb.brand", core.CodeKeySQL("cp")))
+	// Fork (campaign mode, CAMPAIGN-MODE-SPEC D2/D6) -- the picker's grouped statement, built from the
+	// query-analytics-campaigns text BEFORE ScanToStruct prepares it (the prepared statement keeps no
+	// text): its eight parameters, then the wrapper's four.
+	qMap["query-analytics-campaigns-grouped"] = &goyesql.Query{
+		Query: core.GroupedStmt(qMap["query-analytics-campaigns"].Query, 8, core.AnalyticsGroupedOrderSQL),
+		Tags:  map[string]string{"name": "query-analytics-campaigns-grouped"},
+	}
 
 	// Scan and prepare all queries.
 	var q models.Queries

@@ -510,6 +510,16 @@ export const getCampaigns = async (params) => http.get('/api/campaigns', {
   camelCase: campaignCamel('.results.*'),
 });
 
+// Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D5) -- the grouped list (grouped=true): the
+// results are top-level rows whose `campaigns` are the member rows, so the same key rule applies one
+// level down. Same loading model and store as getCampaigns (the Campaigns page's one table).
+export const getCampaignGroups = async (params) => http.get('/api/campaigns', {
+  params: { ...params, grouped: true },
+  loading: models.campaigns,
+  store: models.campaigns,
+  camelCase: campaignCamel('.results.*.campaigns.*'),
+});
+
 // Fork (integrations CAMPAIGN-STATUS-FILTER-SPEC D5/D6) -- the Status header dropdown's counts,
 // [{status, count}], for the list's filter params minus status (campaignStatusFilter.mjs::
 // statusCountParams). No loading model and no store: the page keeps its own loading flag, so an
@@ -629,6 +639,8 @@ export const createCampaign = async (data) => http.post(
 // Fork (brand analytics, integrations BRAND-ANALYTICS-SPEC D3/D4) -- the Campaign Analytics picker:
 // [{id, name, status, evergreen, startedAt, createdAt}], list-scoped, behind campaigns:get_analytics.
 // params: { query, per_page } to search, or { id: [...] } for the ?id= prefill (the permitted subset).
+// Fork (campaign mode, CAMPAIGN-MODE-SPEC D6) -- { query, grouped: true } returns top-level rows
+// ({ kind, brand, code, step, name, ids, count, sets, campaigns: [picker rows] }).
 export const getAnalyticsCampaigns = async (params) => http.get(
   '/api/analytics/campaigns',
   { params },

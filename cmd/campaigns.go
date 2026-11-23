@@ -154,12 +154,56 @@ func (a *App) GetCampaigns(c echo.Context) error {
 		noBody, _ = strconv.ParseBool(c.QueryParam("no_body"))
 	)
 
+	// Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D5) -- grouped=true returns top-level rows
+	// (series, sets, campaigns) carrying their member rows; absent, the response is unchanged (I15).
+	if grouped, _ := strconv.ParseBool(c.QueryParam("grouped")); grouped {
+		groups, total, err := a.core.QueryCampaignGroups(query, status, f.tags, orderBy, order, f.hasAllPerm, f.permittedLists, f.evergreen, f.listIDs, f.ids, f.lang, pg.Offset, pg.Limit)
+		if err != nil {
+			return err
+		}
+		for i := range groups {
+			if err := a.finishCampaignRows(groups[i].Campaigns, noBody); err != nil {
+				return err
+			}
+		}
+		return c.JSON(http.StatusOK, okResp{models.PageResults{
+			Query:   query,
+			Results: groups,
+			Total:   total,
+			Page:    pg.Page,
+			PerPage: pg.PerPage,
+		}})
+	}
+
 	// Query and retrieve campaigns from the DB.
 	res, total, err := a.core.QueryCampaigns(query, status, f.tags, orderBy, order, f.hasAllPerm, f.permittedLists, f.evergreen, f.listIDs, f.ids, f.lang, pg.Offset, pg.Limit)
 	if err != nil {
 		return err
 	}
 
+	if err := a.finishCampaignRows(res, noBody); err != nil {
+		return err
+	}
+
+	// Paginate the response.
+	if len(res) == 0 {
+		return c.JSON(http.StatusOK, okResp{models.PageResults{Results: []models.Campaign{}}})
+	}
+
+	out := models.PageResults{
+		Query:   query,
+		Results: res,
+		Total:   total,
+		Page:    pg.Page,
+		PerPage: pg.PerPage,
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// finishCampaignRows is the list rows' last step, shared by the ungrouped list and the grouped
+// list's member rows (CAMPAIGN-MODE-SPEC D5: a member is exactly the ungrouped list's row).
+func (a *App) finishCampaignRows(res models.Campaigns, noBody bool) error {
 	// Fork (integrations LIST-START-GLYPH-SPEC D1/D2) -- the review gate's verdict per gated row,
 	// computed by the gate's own function and BEFORE the body is stripped (the hash reads it).
 	if reviewEnabled() {
@@ -185,21 +229,7 @@ func (a *App) GetCampaigns(c echo.Context) error {
 			res[i].BodySource.Valid = false
 		}
 	}
-
-	// Paginate the response.
-	if len(res) == 0 {
-		return c.JSON(http.StatusOK, okResp{models.PageResults{Results: []models.Campaign{}}})
-	}
-
-	out := models.PageResults{
-		Query:   query,
-		Results: res,
-		Total:   total,
-		Page:    pg.Page,
-		PerPage: pg.PerPage,
-	}
-
-	return c.JSON(http.StatusOK, okResp{out})
+	return nil
 }
 
 // GetCampaign handles retrieval of campaigns.
@@ -1225,6 +1255,17 @@ func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
 		}
 	} else {
 		scopeLists = nil
+	}
+
+	// Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D6) -- grouped=true in search mode returns
+	// top-level rows (series, sets, campaigns) with their members' picker rows, per_page limiting
+	// top-level rows; the ?id= prefill ignores it and returns campaigns as before.
+	if grouped, _ := strconv.ParseBool(c.QueryParam("grouped")); grouped && len(ids) == 0 {
+		groups, err := a.core.QueryAnalyticsCampaignGroups(query, allCampaigns, permittedLists, isAnalyticsOnly(user), perPage, scopeLists)
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, okResp{groups})
 	}
 
 	out, err := a.core.QueryAnalyticsCampaigns(ids, query, allCampaigns, permittedLists, isAnalyticsOnly(user), perPage, scopeLists)

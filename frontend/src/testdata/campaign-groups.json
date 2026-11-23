@@ -1,0 +1,25 @@
+{
+  "comment": "The campaign-mode name key (integrations listmonk/CAMPAIGN-MODE-SPEC D3, I1): every run of U+0020, U+0009, U+000A, U+000D, U+000C, U+000B, U+00A0 becomes one U+0020, one leading and one trailing U+0020 are removed, then the string is lower-cased; no other character is touched (U+2003 is kept, also at the end). Latin-1 accents only. Read by frontend/src/campaignGroups.test.mjs (campaignGroups.mjs::nameKey, defined in nameKey.mjs) and by cmd/campaign_groups_db_test.go (core.NameKeySQL through Postgres) -- change both and this file together.",
+  "cases": [
+    { "name": "Spring Sale", "key": "spring sale" },
+    { "name": "why we call it ruze", "key": "why we call it ruze" },
+    { "name": "  Spring   Sale  ", "key": "spring sale" },
+    { "name": "Spring\tSale", "key": "spring sale" },
+    { "name": "Spring\t\t \nSale", "key": "spring sale" },
+    { "name": "\tSpring Sale\n", "key": "spring sale" },
+    { "name": "Spring\u00a0Sale", "key": "spring sale" },
+    { "name": "\u00a0Spring Sale\u00a0", "key": "spring sale" },
+    { "name": "Spring\r\n\f\u000bSale", "key": "spring sale" },
+    { "name": "LIYORÁ É", "key": "liyorá é" },
+    { "name": "Crème Brûlée", "key": "crème brûlée" },
+    { "name": "ÉTÉ\u00a0SOLDES", "key": "été soldes" },
+    { "name": "Ñandú ÅÄÖ Ç", "key": "ñandú åäö ç" },
+    { "name": "Spring\u2003Sale", "key": "spring\u2003sale" },
+    { "name": "Spring Sale\u2003", "key": "spring sale\u2003" },
+    { "name": "\u2003Spring", "key": "\u2003spring" },
+    { "name": "Spring Sale \u2003", "key": "spring sale \u2003" },
+    { "name": "", "key": "" },
+    { "name": " ", "key": "" },
+    { "name": " \t\u00a0 ", "key": "" }
+  ]
+}

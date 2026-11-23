@@ -148,16 +148,8 @@ func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns
 		scopeLists = []int{}
 	}
 
-	// ParseInt at 32 bits: the id is bound as INT, and a longer number (typed digit by digit into
-	// the picker) must search as text, not fail the query with an out-of-range error.
-	idMatch64, err := strconv.ParseInt(strings.TrimPrefix(strings.TrimSpace(searchStr), "#"), 10, 32)
-	if err != nil || idMatch64 < 0 {
-		idMatch64 = 0
-	}
-	idMatch := int(idMatch64)
-
 	out := []models.AnalyticsCampaign{}
-	if err := c.q.QueryAnalyticsCampaigns.Select(&out, pq.Array(ids), makeSearchString(searchStr), idMatch,
+	if err := c.q.QueryAnalyticsCampaigns.Select(&out, pq.Array(ids), makeSearchString(searchStr), analyticsIDMatch(searchStr),
 		allCampaigns, pq.Array(permittedLists), startedOnly, limit, pq.Array(scopeLists)); err != nil {
 		c.log.Printf("error fetching analytics campaigns: %v", err)
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
@@ -165,6 +157,18 @@ func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns
 	}
 
 	return out, nil
+}
+
+// analyticsIDMatch is the picker's exact-id match for a numeric search (0 = none). ParseInt at 32
+// bits: the id is bound as INT, and a longer number (typed digit by digit into the picker) must
+// search as text, not fail the query with an out-of-range error. Fork (campaign mode, integrations
+// CAMPAIGN-MODE-SPEC D6) -- shared with the grouped picker's hit step.
+func analyticsIDMatch(searchStr string) int {
+	idMatch64, err := strconv.ParseInt(strings.TrimPrefix(strings.TrimSpace(searchStr), "#"), 10, 32)
+	if err != nil || idMatch64 < 0 {
+		return 0
+	}
+	return int(idMatch64)
 }
 
 // GetCampaignMatrix (fork, campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) runs the one

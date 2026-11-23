@@ -105,17 +105,32 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in tableRows" :key="row.totals ? 'totals' : row.id" :class="row.totals ? 'bm-totals' : ''">
+          <!-- Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D7) -- in Campaign mode the rows are
+               campaignGroups.mjs::groupedTableRows: group rows (a series, a set) with their numbers from
+               the totals row's rule, children following when expanded (in-page state), indented. -->
+          <tr v-for="row in tableRows" :key="row.totals ? 'totals' : (row.rowKey || row.id)"
+            :class="[row.totals ? 'bm-totals' : '', { 'cm-group': row.group, 'cm-child': row.depth > 0 }]">
             <!-- MATRIX-VIEWS-SPEC D3: the left cells in leftCols' order (Date, Brand, Campaign, Status,
                  Sent, Skipped); MATRIX-POLISH-SPEC D6: no Brand column under a single-brand selection. -->
             <template v-for="c in leftCols">
-              <td v-if="c.field === 'name'" :key="c.field" :class="bmTd('name')" class="cm-name">
+              <td v-if="c.field === 'name'" :key="c.field" :class="bmTd('name')" class="cm-name"
+                :style="row.depth > 0 ? { paddingLeft: `${0.75 + row.depth * 1.25}rem` } : null">
+                <!-- Campaign mode (D7): a group row's expand box and its name (the newest member's). -->
+                <template v-if="row.group">
+                  <button type="button" class="expand-btn cm-group-box" :data-cy="`cm-group-toggle-${row.rowKey}`"
+                    :aria-expanded="row.expanded ? 'true' : 'false'"
+                    :aria-label="$t(row.expanded ? 'campaigns.group.collapse' : 'campaigns.group.expand')"
+                    @click.stop="toggleGroup(row.rowKey)">
+                    <b-icon :icon="row.expanded ? 'minus' : 'plus'" size="is-small" />
+                  </button>
+                  <span :title="nameOf(row).title">{{ nameOf(row).text }}</span>
+                </template>
                 <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended).
                      MATRIX-POLISH-SPEC D7 (widened 2026-11-06): the first NAME_MAX characters, then '…';
                      the stored name on hover. -->
                 <!-- Fork (naming standard, NAMING-STANDARD-SPEC D10) -- the former name on hover. No
                      chips (polish 2026-11-14: the language is the Lang column). -->
-                <router-link v-if="!row.totals" :to="{ name: 'campaignAnalytics', query: { id: row.id } }"
+                <router-link v-else-if="!row.totals" :to="{ name: 'campaignAnalytics', query: { id: row.id } }"
                   :title="nameTitle(row)" :data-cy="`cm-name-${row.id}`">
 {{ nameOf(row).text }}
 </router-link>
@@ -145,6 +160,8 @@
               <td v-else-if="c.field === 'status'" :key="c.field" :class="bmTd('status')"
                 :data-cy="`cm-status-${row.totals ? 'totals' : row.id}`">
                 <template v-if="row.totals">{{ firstField === 'status' ? row.name : '' }}</template>
+                <!-- Campaign mode (D8): a group row's status summary, e.g. "4 finished, 1 draft". -->
+                <span v-else-if="row.group" class="is-size-7">{{ groupStatusText(row) }}</span>
                 <b-tag v-else-if="statusOf(row)" :class="statusOf(row).status">{{ $t(statusOf(row).label) }}</b-tag>
               </td>
               <td v-else-if="c.field === 'sent'" :key="c.field" class="has-text-right" :class="bmTd('sent')">
@@ -171,7 +188,8 @@
                    colored against the stored line (campaignMatrix.mjs::gapClass). -->
               <span v-else-if="isGap(c.field)" :class="c.field === 'gmail_gap' ? (gapClass(row) || null) : null"
                 :title="gapTitle(row, c.field)">{{ cell(row, c.field) }}</span>
-              <span v-else>{{ cell(row, c.field) }}</span>
+              <!-- Campaign mode (D8): a group row's Views and Clicks are counted per campaign (hover). -->
+              <span v-else :title="groupTip(row, c.field)">{{ cell(row, c.field) }}</span>
             </td>
           </tr>
           <tr v-if="!loading && !tableRows.length">
@@ -202,6 +220,7 @@ import {
 import { conversionTooltip, scopedCell } from '../conversionCells.mjs'; // eslint-disable-line import/extensions
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { formerNameOf, langMatches } from '../naming.mjs'; // eslint-disable-line import/extensions
+import { groupCellTip, groupedTableRows, statusSummaryText } from '../campaignGroups.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -226,6 +245,9 @@ export default Vue.extend({
       nameQuery: '',
       // SIXTY-DAY-OPENS-SPEC D5: Skipped by reason, expanded -- component state, never persisted.
       skippedExpanded: false,
+      // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D7) -- the expanded group rows' keys
+      // (in-page only).
+      expandedGroups: [],
       // Sort, %/$ | # mode, kind and view (MATRIX-VIEWS-SPEC D2), per browser session
       // (sessionStorage key analytics.matrix).
       state: loadState(sessionStore(typeof window !== 'undefined' ? window : null)),
@@ -234,7 +256,7 @@ export default Vue.extend({
 
   computed: {
     // GLOBAL-LANG-SPEC D1 -- langSelection is All while app.lang_enable is off.
-    ...mapGetters(['launch']),
+    ...mapGetters(['launch', 'campaignMode']),
     ...mapGetters({ langSelection: 'langEffective' }),
     ...mapState({ healthDocs: 'brandHealth' }),
 
@@ -290,9 +312,23 @@ export default Vue.extend({
       // NAMING-STANDARD-SPEC D2: the language toggle, client-side (naming.mjs::langMatches, the
       // server's lang predicate -- a row with no language is always kept).
       const langRows = rows.filter((r) => langMatches(r.lang, this.langSelection));
+      const locale = (this.$i18n && this.$i18n.locale) || 'en';
+      const totalsLabel = this.$t('dashboard.matrix.total');
+      // Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D7) -- bucketed by the server's keys
+      // AFTER the language and launch filters, BEFORE the name filter (campaignGroups.mjs).
+      if (this.campaignMode === 'groups') {
+        return groupedTableRows(langRows, {
+          nameQuery: this.nameQuery,
+          sort: this.state.sort,
+          mode: this.state.mode,
+          locale,
+          totalsLabel,
+          expanded: new Set(this.expandedGroups),
+        });
+      }
       return tableRows(filterByName(langRows, this.nameQuery), this.state.sort, this.state.mode, {
-        locale: (this.$i18n && this.$i18n.locale) || 'en',
-        totalsLabel: this.$t('dashboard.matrix.total'),
+        locale,
+        totalsLabel,
       });
     },
   },
@@ -374,6 +410,26 @@ export default Vue.extend({
       this.skippedExpanded = !this.skippedExpanded;
       this.state.sort = sortForView(this.state.sort, this.state.view, this.showGp, this.showLang, this.skippedExpanded);
       this.saveState();
+    },
+
+    // Fork (campaign mode, CAMPAIGN-MODE-SPEC D7/D8) -- a group row's expand box, status summary and
+    // per-campaign hover.
+    toggleGroup(key) {
+      const i = this.expandedGroups.indexOf(key);
+      if (i === -1) {
+        this.expandedGroups.push(key);
+      } else {
+        this.expandedGroups.splice(i, 1);
+      }
+    },
+
+    groupStatusText(row) {
+      return statusSummaryText(row.statusSummary, (s) => this.$t(`campaigns.status.${s}`));
+    },
+
+    groupTip(row, field) {
+      const t = groupCellTip(row, field);
+      return t ? this.$t(t.key) : null;
     },
 
     // PROMO-SERIES-SPEC D7 -- the Code / Step cell text (campaignMatrix.mjs::promoCell).
@@ -495,6 +551,13 @@ export default Vue.extend({
       if (this.brandChanged(now)) {
         this.fetchRows();
       }
+    },
+
+    // Fork (campaign mode, CAMPAIGN-MODE-SPEC D1/D7) -- the toggle re-fetches the view (the response
+    // carries the keys in both modes) and collapses every group.
+    campaignMode() {
+      this.expandedGroups = [];
+      this.fetchRows();
     },
 
     // Polish 2026-11-14 (review R5): a Lang sort falls back to Started desc when a language hides

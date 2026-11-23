@@ -155,8 +155,9 @@ export { showLangColumn };
 
 // The Status cell: the campaign's status as the Campaigns page's tag ({ status, label } with the
 // campaigns.status.<status> key); the totals row's cell is empty (null).
+// A Campaign mode group row's cell is its status summary instead (CAMPAIGN-MODE-SPEC D8): null here.
 export function statusCell(row) {
-  if (!row || row.totals || !row.status) {
+  if (!row || row.totals || row.group || !row.status) {
     return null;
   }
   return { status: row.status, label: `campaigns.status.${row.status}` };
@@ -386,6 +387,10 @@ export function shapeRow(r, brandLabel = (s) => s, gapThresholds = null, gapStat
     gap: r.evergreen === true ? null : gapCounts(r),
     gapThresholds: parseGapThresholds(gapThresholds),
     gapState: GAP_STATES.includes(gapState) ? gapState : GAP_READY,
+    // Integrations CAMPAIGN-MODE-SPEC D7 -- the server's opaque grouping keys (null without a brand,
+    // resp. without a brand or a code); Campaign mode buckets by them (campaignGroups.mjs).
+    set_key: str(r.set_key) || null,
+    series_key: str(r.series_key) || null,
     totals: false,
   };
   SHOP_FIELDS.forEach((k) => { out[k] = numOrNull(r[k]); });
@@ -440,38 +445,20 @@ export function mergeGapCounts(rows, resp) {
   return resp && isObj(resp.gap_thresholds) ? resp.gap_thresholds : null;
 }
 
-// D5: the totals row (two or more rows, as the Brand Matrix): per count column the sum over the rows
-// carrying a value, with that column's own Sent -- the sum of those same rows' Sent (the
-// conversionCells.mjs sumCovered precedent), so a rate is never diluted by rows without the value;
-// a column with no valued row is null. Conversions sum the covered rows (null when none is). No
-// date, brand or GP.
-export function totalsRow(rows, label = 'Total') {
+// Integrations CAMPAIGN-MODE-SPEC D7/D8 -- the ONE per-column aggregation rule, shared by the totals
+// row and Campaign mode's group rows (campaignGroups.mjs::groupRow): Sent, Skipped and its reasons
+// summed over the rows carrying a value; each count column summed over the rows carrying it with
+// that column's own Sent (colSent) -- never an average of rates; conversions summed over the
+// covered rows; the four Gmail-gap counts pooled (gmailGap.mjs::poolCounts) with the first row's
+// stored line and state. smartOff is false. rows: shaped rows (shapeRow), at least one.
+export function sumRows(rows) {
   const r = Array.isArray(rows) ? rows : [];
-  if (r.length < 2) {
-    return null;
-  }
   const out = {
-    id: null,
-    name: label,
-    status: '',
-    evergreen: false,
-    brand: '',
-    label: '',
-    lang: '',
-    promo_code: '',
-    promo_step: null,
-    date: null,
-    lastSent: null,
-    startedAt: null,
-    started: null,
-    gp_rate: null,
-    gpThresholds: null,
     // GMAIL-GAP-SPEC D3: the four counts summed over the rows carrying them (broadcasts), so the
     // totals show the pooled rates and the pooled gap; the stored line is the response's one.
     gap: poolCounts(r.map((x) => x.gap)),
-    gapThresholds: r[0].gapThresholds || null,
-    gapState: r[0].gapState || GAP_READY,
-    totals: true,
+    gapThresholds: (r[0] && r[0].gapThresholds) || null,
+    gapState: (r[0] && r[0].gapState) || GAP_READY,
     colSent: {},
   };
   const sends = r.map((x) => x.sent).filter((v) => typeof v === 'number');
@@ -500,9 +487,41 @@ export function totalsRow(rows, label = 'Total') {
   return out;
 }
 
-// sentFor is a column's denominator: the totals row's per-column Sent, else the row's Sent.
+// D5: the totals row (two or more rows, as the Brand Matrix): per count column the sum over the rows
+// carrying a value, with that column's own Sent -- the sum of those same rows' Sent (the
+// conversionCells.mjs sumCovered precedent), so a rate is never diluted by rows without the value;
+// a column with no valued row is null. Conversions sum the covered rows (null when none is). No
+// date, brand or GP. The numbers are sumRows (CAMPAIGN-MODE-SPEC D7).
+export function totalsRow(rows, label = 'Total') {
+  const r = Array.isArray(rows) ? rows : [];
+  if (r.length < 2) {
+    return null;
+  }
+  return {
+    id: null,
+    name: label,
+    status: '',
+    evergreen: false,
+    brand: '',
+    label: '',
+    lang: '',
+    promo_code: '',
+    promo_step: null,
+    date: null,
+    lastSent: null,
+    startedAt: null,
+    started: null,
+    gp_rate: null,
+    gpThresholds: null,
+    totals: true,
+    ...sumRows(r),
+  };
+}
+
+// sentFor is a column's denominator: an aggregate row's per-column Sent (the totals row, or a
+// Campaign mode group row -- CAMPAIGN-MODE-SPEC D8), else the row's Sent.
 function sentFor(row, field) {
-  if (row.totals && row.colSent && Object.prototype.hasOwnProperty.call(row.colSent, field)) {
+  if ((row.totals || row.group) && row.colSent && Object.prototype.hasOwnProperty.call(row.colSent, field)) {
     return row.colSent[field];
   }
   return row.sent;
@@ -695,6 +714,10 @@ export function gpClass(row) {
 export function gpTip(row) {
   if (!row || row.totals) {
     return null;
+  }
+  // Integrations CAMPAIGN-MODE-SPEC D8 -- a group row whose broadcasts span several send days shows '—'.
+  if (row.group && row.gpMixed) {
+    return { key: 'analytics.matrix.gpMixedDays', params: {} };
   }
   if (row.evergreen) {
     return { key: 'analytics.matrix.gpJourney', params: {} };
