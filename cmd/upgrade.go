@@ -129,6 +129,8 @@ var migList = []migFunc{
 	{"v6.2.41", migrations.V6_2_41},
 	// Fork migration (erinos): brand roles -- role_brands (a list role's per-brand grants: manage or analytics, brand NULL = All brands at analytics) and role_list_grants (the one resolution of a role's grants to lists, read by get-user, get-users and get-list-roles); every list role's per-list child rows converted to brand grants once, only when the table is new, the child rows left in place and never read (BRAND-ROLES-SPEC) — see internal/migrations/v6.2.42.go.
 	{"v6.2.42", migrations.V6_2_42},
+	// Fork migration (erinos): brand roles G8 -- deletes the list roles' per-list child rows that v6.2.42 left as its rollback path (BRAND-ROLES-SPEC G8) — see internal/migrations/v6.2.43.go.
+	{"v6.2.43", migrations.V6_2_43},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files
