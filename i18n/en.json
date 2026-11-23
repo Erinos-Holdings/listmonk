@@ -530,7 +530,7 @@
     "campaigns.review.checklist.altsFailed": "Alt tags could not be generated",
     "campaigns.review.checklist.altsStillNeed": "{n} image(s) still need one; Inspect again",
     "campaigns.review.sectionAltTags": "Alt tags",
-    "campaigns.review.altTags.approved": "Approved",
+    "campaigns.review.altTags.approved": "Written by hand (not checked against the image)",
     "campaigns.review.altTags.modified": "Modified",
     "campaigns.review.altTags.generated": "Generated",
     "campaigns.review.altTags.blankNew": "(blank: part of the picture above)",
