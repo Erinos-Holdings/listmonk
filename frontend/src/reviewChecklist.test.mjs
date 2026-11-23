@@ -513,11 +513,12 @@ test('REVIEW-TRIM-2-SPEC I6: no live message -- a running job has no step; from 
   assert.equal(r({
     items: [], approved: 0, modified: 0, generated: 0, unfixed: 0, thisInspect: 0,
   }).label, `${K}altsNone`);
-  // The label itself: one string for both phases.
+  // The label itself: one string for both phases. integrations ALT-COPY-SPEC S4-4: never "reviewed"
+  // — a kept hand-written alt is not checked against its image.
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
-  assert.equal(en[`${K}altsDone`], '{n} alt tags generated/reviewed');
+  assert.equal(en[`${K}altsDone`], '{n} alt tags generated or kept');
   assert.equal(en[`${K}altsNone`], 'No images need alt tags');
-  assert.equal(en[`${K}altsReviewed`], 'Alt tags reviewed');
+  assert.equal(en[`${K}altsReviewed`], 'Alt tags up to date');
   assert.equal(en[`${K}altsChecked`], undefined);
   assert.equal(r(null), null);
   assert.equal(step({ live: null, report: null }), null);
