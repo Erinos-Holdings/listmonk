@@ -24,10 +24,10 @@
           <!-- Fork (naming standard, NAMING-STANDARD-SPEC D2; GLOBAL-LANG-SPEC D1) -- the language
                toggle, beside the selector, on every navbar route (hidden with app.lang_enable off). -->
           <language-toggle />
-          <!-- Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D1) -- immediately right of the
-               language toggle. -->
-          <campaign-mode-toggle />
           <launch-filter />
+          <!-- Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D1) -- the "Campaign mode" switch,
+               right of the launch filter. -->
+          <campaign-mode-toggle />
         </div>
         <div v-else class="navbar-item brand-context">
           <language-toggle />

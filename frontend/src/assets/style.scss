@@ -769,9 +769,7 @@ body.is-noscroll {
 .language-toggle.lang-app-partial .field.segmented.is-global > .field-body > .field.has-addons {
   border-color: var(--lang-partial);
 }
-.language-toggle.lang-app-none .field.segmented.is-global > .field-body > .field.has-addons,
-// Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D13) -- the Campaign mode toggle greys the same way.
-.campaign-mode-toggle.mode-app-none .field.segmented.is-global > .field-body > .field.has-addons {
+.language-toggle.lang-app-none .field.segmented.is-global > .field-body > .field.has-addons {
   border-color: var(--lang-none);
 }
 // Polish 2026-11-14 -- the filter caption: the table's own first row while the brand selector or

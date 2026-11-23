@@ -1284,8 +1284,6 @@
     "naming.langApp.brandLevel": "Not filtered: brand-level health",
     "naming.langApp.none": "Not filtered by language on this page",
     "naming.campaignMode": "Campaign mode",
-    "naming.campaignMode_off": "Campaigns",
-    "naming.campaignMode_groups": "Groups",
     "naming.modeApp.groups": "Language variants and promo series are each one row",
     "naming.modeApp.seriesOnly": "One language selected: only promo series group",
     "naming.modeApp.none": "Applies to Campaigns and Analytics only",
