@@ -444,6 +444,10 @@ export default Vue.extend({
     // condition, a user with a stored group would sit on a pending selector forever.
     if (this.$can('brands:get')) {
       this.$store.dispatch('loadBrandHealth');
+    } else {
+      // Fork (brand roles, integrations BRAND-ROLES-SPEC D8) -- without brands:get the launch filter
+      // reads its one bit per brand from GET /api/brands/launch (releasing the same gate).
+      this.$store.dispatch('loadBrandLaunch');
     }
 
     window.addEventListener('resize', () => {

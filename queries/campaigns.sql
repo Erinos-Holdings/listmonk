@@ -127,6 +127,9 @@ ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 --   $7 limit in search mode
 --   $8 the global brand's list ids (GLOBAL-BRAND-SPEC D9), a SEPARATE scope predicate ANDed with
 --      the permission one above (query-campaigns' list filter pattern); empty = no scope
+--   $9 (integrations BRAND-ROLES-SPEC D3, S4) the user's get|manage list ids; unless $4, a campaign
+--      none of whose lists is in $9 -- reached only through analytics-level lists -- is returned only
+--      once started (the started-only rule applied per campaign)
 --   c.sent feeds the page's rates (views / clicks / bounces over Sent, the campaigns list's rule).
 --   skipped and smart_off (integrations DOC-ALIGNMENT-SPEC D7) are derived exactly as
 --   get-campaign-matrix derives them -- a broadcast's campaign_smart_skips rows (NULL for a
@@ -172,6 +175,11 @@ WHERE (
         )
     )
     AND (NOT $6::BOOLEAN OR c.started_at IS NOT NULL)
+    AND (
+        $4::BOOLEAN OR c.started_at IS NOT NULL OR EXISTS (
+            SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($9::INT[])
+        )
+    )
     AND (
         CARDINALITY($8::INT[]) = 0 OR EXISTS (
             SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($8::INT[])
@@ -1006,6 +1014,8 @@ SELECT JSON_BUILD_OBJECT(
 --   $5 evergreen (NULL = every kind; the Campaigns page's kind pill, D4); $6 compute GP (the caller
 --      holds the brands get permission, D7; otherwise the GP fields are NULL). No comment line here
 --      may carry a colon (goyesql would read it as a tag).
+--   $7 (integrations BRAND-ROLES-SPEC D3, S4) the get or manage list ids; unless $1, a campaign none
+--      of whose lists is in $7 is in only once started -- query-analytics-campaigns' $9, identical.
 --   window = the America/Denver calendar days from 60 days back through TODAY, [t0, t1) with t1 the
 --     next Mountain midnight (integrations HOURLY-HEALTH-SPEC D1 -- a broadcast started today is a
 --     row; the Brand Matrix still ends yesterday). The zone is the ONE literal in the zone CTE below
@@ -1066,6 +1076,11 @@ scoped AS (
         )
     )
         AND (NOT $3::BOOLEAN OR c.started_at IS NOT NULL)
+        AND (
+            $1::BOOLEAN OR c.started_at IS NOT NULL OR EXISTS (
+                SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($7::INT[])
+            )
+        )
         AND (
             CARDINALITY($4::INT[]) = 0 OR EXISTS (
                 SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = c.id AND cl.list_id = ANY($4::INT[])

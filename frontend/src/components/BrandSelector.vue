@@ -20,11 +20,15 @@
         <option v-for="g in options.groups" :key="g.group" :value="`group:${g.group}`">
           {{ $t(`brand.selector.${g.group}`) }}
         </option>
-        <option v-if="options.parent" :value="`brand:${options.parent.slug}`">
-          {{ $t('brand.selector.parent', { name: options.parent.label }) }}
+        <!-- Fork (brand roles, integrations BRAND-ROLES-SPEC D4) -- an analytics-only brand is shown
+             disabled ("analytics only") off the analytics pages (brandScope.mjs::brandDisabledOn). -->
+        <option v-if="options.parent" :value="`brand:${options.parent.slug}`" :disabled="isDisabled(options.parent.slug)">
+          {{ $t('brand.selector.parent', { name: options.parent.label }) }}{{ disabledSuffix(options.parent.slug) }}
         </option>
         <option v-if="divider" value="-" disabled class="brand-divider" aria-hidden="true">──────────</option>
-        <option v-for="b in options.rest" :key="b.slug" :value="`brand:${b.slug}`">{{ b.label }}</option>
+        <option v-for="b in options.rest" :key="b.slug" :value="`brand:${b.slug}`" :disabled="isDisabled(b.slug)">
+          {{ b.label }}{{ disabledSuffix(b.slug) }}
+        </option>
         <option v-if="showNone" value="none">{{ $t('brand.selector.none') }}</option>
       </template>
     </b-select>
@@ -40,7 +44,7 @@ export default Vue.extend({
   name: 'BrandSelector',
 
   computed: {
-    ...mapGetters(['brandScope', 'offeredRoster', 'brandGroups']),
+    ...mapGetters(['brandScope', 'offeredRoster', 'brandGroups', 'disabledBrands']),
 
     showNone() {
       return this.offeredRoster.none && !this.brandScope.locked;
@@ -68,6 +72,14 @@ export default Vue.extend({
   },
 
   methods: {
+    isDisabled(slug) {
+      return this.disabledBrands.includes(slug);
+    },
+
+    disabledSuffix(slug) {
+      return this.isDisabled(slug) ? ` (${this.$t('brand.selector.analyticsOnly')})` : '';
+    },
+
     onInput(v) {
       let selection = { kind: 'all' };
       if (v === 'none') {

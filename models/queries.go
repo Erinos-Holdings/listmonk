@@ -234,6 +234,8 @@ type Queries struct {
 	UpsertBrandHealth     *sqlx.Stmt `query:"upsert-brand-health"`
 	GetBrandHealthLatest  *sqlx.Stmt `query:"get-brand-health-latest"`
 	GetBrandHealthHistory *sqlx.Stmt `query:"get-brand-health-history"`
+	// Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D8) -- the one-bit launch state.
+	GetBrandsLaunch *sqlx.Stmt `query:"get-brands-launch"`
 
 	// Fork (brand picker) -- queries/brands.sql, BRAND-PICKER-SPEC D1.
 	GetBrands           *sqlx.Stmt `query:"get-brands"`
@@ -330,8 +332,12 @@ type Queries struct {
 	GetListRoles          *sqlx.Stmt `query:"get-list-roles"`
 	UpdateRole            *sqlx.Stmt `query:"update-role"`
 	DeleteRole            *sqlx.Stmt `query:"delete-role"`
-	UpsertListPermissions *sqlx.Stmt `query:"upsert-list-permissions"`
-	DeleteListPermission  *sqlx.Stmt `query:"delete-list-permission"`
+	// Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D5) -- list-role writes take brand
+	// grants; the per-list child-row writers (upsert-list-permissions, delete-list-permission) are gone.
+	UpdateListRole   *sqlx.Stmt `query:"update-list-role"`
+	DeleteRoleBrands *sqlx.Stmt `query:"delete-role-brands"`
+	InsertRoleBrands *sqlx.Stmt `query:"insert-role-brands"`
+	GetBrandSlugsIn  *sqlx.Stmt `query:"get-brand-slugs-in"`
 }
 
 // compileSubscriberQueryTpl takes an arbitrary WHERE expressions

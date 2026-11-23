@@ -9,7 +9,7 @@ import router from './router';
 import store from './store';
 import * as api from './api';
 import Utils from './utils';
-import { routeRedirect } from './accessPolicy.mjs'; // eslint-disable-line import/extensions
+import { canList, routeRedirect } from './accessPolicy.mjs'; // eslint-disable-line import/extensions
 import { langToggleVisible } from './langScope.mjs'; // eslint-disable-line import/extensions
 import { subscribersRouteFix } from './subscriberFilters.mjs'; // eslint-disable-line import/extensions
 
@@ -98,6 +98,10 @@ router.beforeEach((to, from, next) => {
 });
 
 router.afterEach((to) => {
+  // Fork (brand roles, integrations BRAND-ROLES-SPEC D4) -- the page the brand selector resolves for
+  // (an analytics-only brand is disabled off the analytics pages). Synchronous, so the new page
+  // mounts under the page's resolution.
+  store.commit('setRouteName', to.name || '');
   Vue.nextTick(() => {
     const t = to.meta.title && i18n.te(to.meta.title) ? `${i18n.tc(to.meta.title, 0)} /` : '';
     document.title = `${t} Curated Email Campaign Manager`;
@@ -136,19 +140,9 @@ async function initConfig(app) {
     });
   };
 
-  Vue.prototype.$canList = (id, perm) => {
-    if (profile.userRole.id === 1) {
-      return true;
-    }
-
-    // If the user role has global list permissions, return true.
-    const can = Vue.prototype.$can('lists:get_all', 'lists:manage_all');
-    if (can) {
-      return true;
-    }
-
-    return profile.listRole.lists.some((list) => list.id === id && list.permissions.includes(perm));
-  };
+  // Fork (brand roles, integrations BRAND-ROLES-SPEC D4) -- the rule lives in accessPolicy.mjs::canList
+  // (node-tested): an analytics-level entry (list:analytics) is neither list:get nor list:manage.
+  Vue.prototype.$canList = (id, perm) => canList(profile, id, perm);
 
   // Fork (brand analytics, D10) -- publish the profile to the router guard, then apply the guard to
   // the route the initial navigation landed on (it ran before the profile existed). Awaited BEFORE

@@ -325,7 +325,7 @@ func TestCampaignSearchMatchesBrand(t *testing.T) {
 		if len(res) != 1 || res[0].ID != tgCamp {
 			t.Errorf("Campaigns search %q: %d rows", q, len(res))
 		}
-		pick, err := h.app.core.QueryAnalyticsCampaigns(nil, q, true, nil, false, 50, nil)
+		pick, err := h.app.core.QueryAnalyticsCampaigns(nil, q, true, nil, false, nil, 50, nil)
 		if err != nil {
 			t.Fatalf("picker %q: %v", q, err)
 		}

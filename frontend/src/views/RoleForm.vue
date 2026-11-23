@@ -19,59 +19,30 @@
             required />
         </b-field>
 
+        <!-- Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D7) -- a brand role grants by
+             brand, never by list: Read/write brands and Read-only (analytics) brands, whose first
+             option is All brands. A brand picked at one level is not offered at the other; All brands
+             clears the other read-only picks (brandRoleForm.mjs). The per-list editor is gone. -->
         <div v-if="type === 'list'" class="box">
-          <h5>{{ $t('users.listPerms') }}</h5>
-          <div class="mb-5">
-            <div class="columns">
-              <div class="column is-9">
-                <b-select :placeholder="$tc('globals.terms.list')" v-model="form.curList" name="list"
-                  :disabled="disabled || filteredLists.length < 1" expanded class="mb-3">
-                  <template v-for="l in filteredLists">
-                    <option :value="l.id" :key="l.id">
-                      {{ l.name }}
-                    </option>
-                  </template>
+          <p class="is-size-7 has-text-grey mb-4">{{ $t('users.brandsHelp') }}</p>
+          <div class="columns">
+            <div class="column">
+              <b-field :label="$t('users.brandsManage')" label-position="on-border">
+                <b-select multiple native-size="8" :value="form.manage" :disabled="disabled" expanded
+                  data-cy="brands-manage" @input="onManage">
+                  <option v-for="s in manageOpts" :key="s" :value="s">{{ brandLabel(s) }}</option>
                 </b-select>
-              </div>
-              <div class="column">
-                <b-button @click="onAddListPerm" :disabled="!form.curList" class="is-primary" expanded>
-                  {{ $t('globals.buttons.add') }}
-                </b-button>
-              </div>
+              </b-field>
             </div>
-            <span
-              v-if="form.lists.length > 0 && (form.permissions['lists:get_all'] || form.permissions['lists:manage_all'])"
-              class="is-size-6 has-text-danger">
-              <b-icon icon="warning-empty" />
-              {{ $t('users.listPermsWarning') }}
-            </span>
+            <div class="column">
+              <b-field :label="$t('users.brandsAnalytics')" label-position="on-border">
+                <b-select multiple native-size="8" :value="form.read" :disabled="disabled" expanded
+                  data-cy="brands-analytics" @input="onRead">
+                  <option v-for="s in readOpts" :key="s" :value="s">{{ brandLabel(s) }}</option>
+                </b-select>
+              </b-field>
+            </div>
           </div>
-
-          <b-table :data="form.lists">
-            <b-table-column v-slot="props" field="name" :label="$tc('globals.terms.list')">
-              <router-link :to="`/lists/${props.row.id}`" target="_blank">
-                {{ props.row.name }}
-              </router-link>
-            </b-table-column>
-
-            <b-table-column v-slot="props" field="permissions" :label="$t('users.perms')" width="40%">
-              <b-checkbox v-model="props.row.permissions" native-value="list:get">
-                {{ $t('globals.buttons.view') }}
-              </b-checkbox>
-              <b-checkbox v-model="props.row.permissions" native-value="list:manage">
-                {{ $t('globals.buttons.manage') }}
-              </b-checkbox>
-            </b-table-column>
-
-            <b-table-column v-slot="props" width="10%">
-              <a href="#" @click.prevent="onDeleteListPerm(props.row.id)" data-cy="btn-delete"
-                :aria-label="$t('globals.buttons.delete')">
-                <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
-                  <b-icon icon="trash-can-outline" size="is-small" />
-                </b-tooltip>
-              </a>
-            </b-table-column>
-          </b-table>
         </div>
 
         <template v-if="type === 'user'">
@@ -127,6 +98,10 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import CopyText from '../components/CopyText.vue';
 import stepUp, { stepUpError } from '../stepUp';
+import {
+  ALL_BRANDS, brandRolePayload, manageOptions, normalizeReadPicks, picksFromRole, readOptions,
+} from '../brandRoleForm.mjs'; // eslint-disable-line import/extensions
+import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   name: 'RoleForm',
@@ -145,10 +120,11 @@ export default Vue.extend({
     return {
       // Binds form input values.
       form: {
-        curList: null,
-        lists: [],
         name: null,
         permissions: {},
+        // Fork (brand roles, D7) -- the two pick arrays (slugs; ALL_BRANDS in read for All brands).
+        manage: [],
+        read: [],
       },
       hasToggle: false,
       disabled: false,
@@ -156,16 +132,17 @@ export default Vue.extend({
   },
 
   methods: {
-    onAddListPerm() {
-      const list = this.lists.results.find((l) => l.id === this.form.curList);
-      this.form.lists.push({ id: list.id, name: list.name, permissions: ['list:get', 'list:manage'] });
-
-      this.form.curList = (this.filteredLists.length > 0) ? this.filteredLists[0].id : null;
+    // Fork (brand roles, D7).
+    onManage(v) {
+      this.form.manage = Array.isArray(v) ? v.filter((s) => s !== ALL_BRANDS) : [];
     },
 
-    onDeleteListPerm(id) {
-      this.form.lists = this.form.lists.filter((p) => p.id !== id);
-      this.form.curList = (this.filteredLists.length > 0) ? this.filteredLists[0].id : null;
+    onRead(v) {
+      this.form.read = normalizeReadPicks(v);
+    },
+
+    brandLabel(s) {
+      return s === ALL_BRANDS ? this.$t('users.brandsAll') : brandLabelOf(s, this.brandRows);
     },
 
     onSubmit() {
@@ -201,10 +178,7 @@ export default Vue.extend({
         form.permissions = this.form.permissions;
       } else {
         fn = this.$api.createListRole;
-        form.lists = this.form.lists.reduce((acc, item) => {
-          acc.push({ id: item.id, permissions: item.permissions });
-          return acc;
-        }, []);
+        form.brands = brandRolePayload(this.form.name, this.form.manage, this.form.read).brands;
       }
 
       // Fork (integrations STEPUP-ADMIN-SPEC D4) -- every role write steps up first.
@@ -224,10 +198,7 @@ export default Vue.extend({
         form.permissions = this.form.permissions;
       } else {
         fn = this.$api.updateListRole;
-        form.lists = this.form.lists.reduce((acc, item) => {
-          acc.push({ id: item.id, permissions: item.permissions });
-          return acc;
-        }, []);
+        form.brands = brandRolePayload(this.form.name, this.form.manage, this.form.read).brands;
       }
 
       stepUp(this).then(() => fn(form)).then((data) => {
@@ -239,23 +210,26 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['loading', 'serverConfig', 'lists']),
+    ...mapState(['loading', 'serverConfig', 'brandRows']),
 
-    // Return the list of unselected lists.
-    filteredLists() {
-      if (!this.lists.results || this.type !== 'list') {
-        return [];
-      }
-
-      const subIDs = this.form.lists.reduce((obj, item) => ({ ...obj, [item.id]: true }), {});
-      return this.lists.results.filter((l) => (!(l.id in subIDs)));
+    // Fork (brand roles, D7) -- the brands rows (App.vue loads them for the navbar roster).
+    manageOpts() {
+      return manageOptions(this.brandRows, this.form.read);
     },
 
+    readOpts() {
+      return readOptions(this.brandRows, this.form.manage);
+    },
   },
 
   mounted() {
     if (this.isEditing) {
       this.form = { ...this.form, ...this.$props.data };
+      if (this.type === 'list') {
+        const p = picksFromRole(this.$props.data);
+        this.form.manage = p.manage;
+        this.form.read = p.read;
+      }
 
       // It's the superadmin role. Disable the form.
       if (this.$props.data.id === 1 || !this.$can('roles:manage')) {
@@ -277,9 +251,6 @@ export default Vue.extend({
     }
 
     this.$nextTick(() => {
-      if (this.filteredLists.length > 0) {
-        this.form.curList = this.filteredLists[0].id;
-      }
       this.$refs.focus.focus();
     });
   },

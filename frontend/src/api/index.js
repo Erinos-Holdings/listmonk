@@ -231,6 +231,14 @@ export const probeListsPending = (params) => http.get(
 // Fork (brand health, integrations BRAND-HEALTH-SPEC D2/D12). The documents are returned
 // verbatim (camelCase: false) -- the Lambda already writes camelCase keys, and a key rewrite
 // would be the page computing something.
+// Fork (brand roles, integrations BRAND-ROLES-SPEC D8). The launch filter's one bit per roster brand
+// ([{ brand, unlaunched }]) for a user without brands:get; any authenticated user. Quiet: a failure
+// leaves every brand launched and must not toast.
+export const getBrandsLaunch = async () => http.get(
+  '/api/brands/launch',
+  { camelCase: false, disableToast: true },
+);
+
 export const getBrandsHealth = async () => http.get(
   '/api/brands/health',
   { loading: models.brands, camelCase: false },

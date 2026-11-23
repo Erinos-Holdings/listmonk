@@ -127,6 +127,8 @@ var migList = []migFunc{
 	{"v6.2.40", migrations.V6_2_40},
 	// Fork migration (erinos): promo series -- promo_purchases (the purchase feed, buyers as canonical-email hashes) and six functions: promo_email_hash, promo_applicable_tags (the one applicability rule), promo_campaign_tags, promo_matching_orders (the 60-day window), promo_feed_stale (the 24-hour limit) and promo_purchasers (the one definition of a purchaser, read by the claim as reason purchased) (PROMO-SERIES-SPEC) — see internal/migrations/v6.2.41.go.
 	{"v6.2.41", migrations.V6_2_41},
+	// Fork migration (erinos): brand roles -- role_brands (a list role's per-brand grants: manage or analytics, brand NULL = All brands at analytics) and role_list_grants (the one resolution of a role's grants to lists, read by get-user, get-users and get-list-roles); every list role's per-list child rows converted to brand grants once, only when the table is new, the child rows left in place and never read (BRAND-ROLES-SPEC) — see internal/migrations/v6.2.42.go.
+	{"v6.2.42", migrations.V6_2_42},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

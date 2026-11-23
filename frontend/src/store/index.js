@@ -3,9 +3,10 @@ import Vuex from 'vuex';
 import { models } from '../constants';
 import Utils from '../utils';
 import {
-  ALL, applyLaunch, groupWaits, groupsAvailable, launchApplies, normalizeLaunch, offeredGroups, resolveSelection,
-  rosterFrom, scopeListIds, selectionLoaded,
+  ALL, analyticsOnlyBrands, applyLaunch, disabledBrands, groupWaits, groupsAvailable, launchApplies, launchDocsFrom,
+  normalizeLaunch, offeredGroups, resolveOnPage, rosterFrom, rosterLists, scopeListIds, selectionLoaded,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { analyticsListEntries } from '../accessPolicy.mjs'; // eslint-disable-line import/extensions
 import {
   LANG_PREF, effectiveLang, normalizeLang, subscribersLang,
 } from '../langScope.mjs'; // eslint-disable-line import/extensions
@@ -70,6 +71,13 @@ export default new Vuex.Store({
     // Unlaunched showed every brand's campaigns). Under All only a stored group selection waits on
     // it (BRAND-GROUPS-SPEC D3; App.vue dispatches the read under canBrands()).
     brandHealthLoaded: false,
+    // Fork (brand roles, integrations BRAND-ROLES-SPEC D8) -- GET /api/brands/launch's rows
+    // ([{ brand, unlaunched }]) for a user WITHOUT brands:get (the launch filter's state; its first
+    // response or failure also releases brandHealthLoaded).
+    brandLaunch: [],
+    // Fork (brand roles, D4) -- the current route name (main.js afterEach), for the selector's
+    // per-page rule: an analytics-only brand is disabled off the analytics pages.
+    routeName: '',
   },
 
   mutations: {
@@ -146,6 +154,17 @@ export default new Vuex.Store({
     setBrandHealthLoaded(state) {
       state.brandHealthLoaded = true;
     },
+
+    // Fork (brand roles, D8).
+    setBrandLaunch(state, rows) {
+      state.brandLaunch = Array.isArray(rows) ? rows : [];
+      state.brandHealthLoaded = true;
+    },
+
+    // Fork (brand roles, D4).
+    setRouteName(state, name) {
+      state.routeName = typeof name === 'string' ? name : '';
+    },
   },
 
   actions: {
@@ -169,6 +188,16 @@ export default new Vuex.Store({
         return rows;
       }).catch(() => null);
     },
+
+    // Fork (brand roles, integrations BRAND-ROLES-SPEC D8) -- the launch state for a user without
+    // brands:get (App.vue dispatches it exactly when it does not dispatch loadBrandHealth). A failed
+    // read releases the gate with no rows (every brand launched).
+    loadBrandLaunch({ commit }) {
+      return Vue.prototype.$api.getBrandsLaunch().then((rows) => {
+        commit('setBrandLaunch', rows);
+        return rows;
+      }).catch(() => commit('setBrandLaunch', []));
+    },
   },
 
   getters: {
@@ -188,17 +217,29 @@ export default new Vuex.Store({
     // Fork (global brand, D1/D2). The roster of the permitted active lists and the resolved
     // selection ({ pending } until listsLoaded). Recomputed when the lists store changes, so a
     // stored brand whose lists all left the store falls back to All brands.
-    brandRoster: (state) => rosterFrom(state[models.lists], state.brandRows),
+    // Fork (brand roles, integrations BRAND-ROLES-SPEC D4) -- the profile's analytics-level entries
+    // ({ id, brand }), a separate getter: they reach the roster and the scope's ids, never the lists
+    // store (every writing picker reads only the store). analyticsOnlyBrands are the brands reached
+    // only through them; disabledBrands the ones disabled on the current page.
+    analyticsLists: (state) => analyticsListEntries(state[models.profile]),
+    analyticsOnlyBrands: (state, getters) => analyticsOnlyBrands(state[models.lists], getters.analyticsLists),
+    disabledBrands: (state, getters) => disabledBrands(getters.analyticsOnlyBrands, state.routeName),
+    brandRoster: (state, getters) => rosterFrom(rosterLists(state[models.lists], getters.analyticsLists), state.brandRows),
     // Fork (launch filter, LAUNCH-FILTER-SPEC D1/D5/D6) -- the resolved launch value, the health
     // documents and the roster the selector offers (the full roster narrowed by the filter).
     // brandScope resolves against the offered roster; hidden/locked stay the full roster's.
     // The launch value is 'all' wherever the control is not on screen (D4: the selector hidden or
     // locked, or no brands:get -- no documents, every brand launched), so a stored value can never
     // narrow anything invisibly. $can is set on the prototype before the app mounts (main.js).
-    launch: (state, getters) => (canBrands() && launchApplies(getters.brandRoster)
+    // Fork (brand roles, BRAND-ROLES-SPEC D8) -- no brands:get condition: a user without it reads the
+    // launch state from GET /api/brands/launch (launchDocs), so the filter applies wherever it shows.
+    launch: (state, getters) => (launchApplies(getters.brandRoster)
       ? normalizeLaunch(state.launchStored) : 'all'),
     brandHealth: (state) => state.brandHealth,
-    offeredRoster: (state, getters) => applyLaunch(getters.brandRoster, getters.launch, state.brandHealth),
+    // The documents the launch state is read from: the health documents under brands:get, else the
+    // launch endpoint's bits as documents (launchDocsFrom).
+    launchDocs: (state) => (canBrands() ? state.brandHealth : launchDocsFrom(state.brandLaunch)),
+    offeredRoster: (state, getters) => applyLaunch(getters.brandRoster, getters.launch, getters.launchDocs),
     // Fork (brand groups, BRAND-GROUPS-SPEC D1/D2) -- the offered groups ([{ group, slugs }]; [] when
     // unavailable). The selector renders them; brandScope resolves a stored group against them.
     brandGroups: (state, getters) => offeredGroups(
@@ -209,7 +250,9 @@ export default new Vuex.Store({
     ),
     // Pending also while a narrowing launch filter waits for the health documents (brandHealthLoaded),
     // and while a stored group does (BRAND-GROUPS-SPEC D3, groupWaits).
-    brandScope: (state, getters) => resolveSelection(
+    // Fork (brand roles, BRAND-ROLES-SPEC D4) -- resolveOnPage: a stored analytics-only brand resolves
+    // to All on a non-analytics page (the pref is not rewritten).
+    brandScope: (state, getters) => resolveOnPage(
       state.brandStored,
       getters.brandRoster,
       selectionLoaded(
@@ -220,12 +263,15 @@ export default new Vuex.Store({
       ),
       getters.offeredRoster,
       getters.brandGroups,
+      getters.disabledBrands,
     ),
 
     // The resolved selection (All brands while pending) and its effective list set (D3): null =
-    // send no parameter.
+    // send no parameter. Fork (brand roles, D4) -- over the roster rows, so an analytics brand
+    // selected on an analytics page sends its own list ids (the server intersects them with the
+    // analytics scope); a list picker still filters the lists store only (filterByIds).
     brandSelection: (state, getters) => (getters.brandScope.pending ? ALL : getters.brandScope.selection),
-    scopeListIds: (state, getters) => scopeListIds(state[models.lists], getters.brandSelection),
+    scopeListIds: (state, getters) => scopeListIds(rosterLists(state[models.lists], getters.analyticsLists), getters.brandSelection),
     // A primitive the pages watch: it changes only when the resolved selection does (a lists
     // refresh that leaves the selection as it was does not re-fire a page's fetch).
     brandKey: (state, getters) => (getters.brandScope.pending ? 'pending' : JSON.stringify(getters.brandSelection)),

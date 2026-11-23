@@ -1108,9 +1108,11 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 			a.i18n.Ts("globals.messages.missingFields", "name", "`id`"))
 	}
 
-	// Ensure the user has access to campaigns via lists.
+	// Ensure the user has access to campaigns via lists. Fork (brand roles, integrations
+	// listmonk/BRAND-ROLES-SPEC D3) -- the analytics check (AnalyticsScope), never
+	// checkCampaignPerm, which also gates campaign content and writes.
 	for _, id := range ids {
-		if err := a.checkCampaignPerm(auth.PermTypeGet, id, c); err != nil {
+		if err := a.checkCampaignAnalyticsPerm(id, c); err != nil {
 			return err
 		}
 	}
@@ -1218,6 +1220,32 @@ const (
 	analyticsPickerMaxPerPage = 50
 )
 
+// checkCampaignAnalyticsPerm (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D3) is the
+// per-campaign ANALYTICS read check: campaigns:get_all, else blanket list access, else the campaign
+// must have a list in the user's AnalyticsScope (get|manage lists plus the analytics-level ones);
+// otherwise the 403 checkCampaignPerm's get branch returns. checkCampaignPerm itself is NOT an
+// analytics site and stays get|manage-only: it gates campaign content and every campaign write.
+func (a *App) checkCampaignAnalyticsPerm(id int, c echo.Context) error {
+	user := auth.GetUser(c)
+	if user.HasPerm(auth.PermCampaignsGetAll) {
+		return nil
+	}
+
+	hasAll, ids := user.AnalyticsScope()
+	if hasAll {
+		return nil
+	}
+	ok, err := a.core.CampaignHasLists(id, ids)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return echo.NewHTTPError(http.StatusForbidden,
+			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermCampaignsGet))
+	}
+	return nil
+}
+
 // GetAnalyticsCampaigns (fork, brand analytics, BRAND-ANALYTICS-SPEC D3/D4/D11) is the Campaign
 // Analytics picker: GET /api/analytics/campaigns behind campaigns:get_analytics, for every user
 // (search and the ?id= prefill). Scoped by the rule GetCampaigns and checkCampaignPerm use (D2),
@@ -1233,7 +1261,7 @@ func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
 			a.i18n.Ts("globals.messages.errorInvalidIDs", "error", err.Error()))
 	}
 
-	allCampaigns, permittedLists := analyticsCampaignScope(user)
+	allCampaigns, permittedLists, fullLists := analyticsCampaignScope(user)
 
 	// Fork (global brand, integrations GLOBAL-BRAND-SPEC D9) -- optional, repeatable list_id: the
 	// global brand's effective list set, a separate scope ANDed with the permission scoping above
@@ -1261,14 +1289,14 @@ func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
 	// top-level rows (series, sets, campaigns) with their members' picker rows, per_page limiting
 	// top-level rows; the ?id= prefill ignores it and returns campaigns as before.
 	if grouped, _ := strconv.ParseBool(c.QueryParam("grouped")); grouped && len(ids) == 0 {
-		groups, err := a.core.QueryAnalyticsCampaignGroups(query, allCampaigns, permittedLists, isAnalyticsOnly(user), perPage, scopeLists)
+		groups, err := a.core.QueryAnalyticsCampaignGroups(query, allCampaigns, permittedLists, isAnalyticsOnly(user), fullLists, perPage, scopeLists)
 		if err != nil {
 			return err
 		}
 		return c.JSON(http.StatusOK, okResp{groups})
 	}
 
-	out, err := a.core.QueryAnalyticsCampaigns(ids, query, allCampaigns, permittedLists, isAnalyticsOnly(user), perPage, scopeLists)
+	out, err := a.core.QueryAnalyticsCampaigns(ids, query, allCampaigns, permittedLists, isAnalyticsOnly(user), fullLists, perPage, scopeLists)
 	if err != nil {
 		return err
 	}
@@ -1280,11 +1308,21 @@ func (a *App) GetAnalyticsCampaigns(c echo.Context) error {
 // of the Campaign Analytics scoping: campaigns:get_all (or blanket list access) reads every
 // campaign, otherwise the campaigns on the permitted (get or manage) lists. The picker and the
 // Campaign Matrix (integrations CAMPAIGN-MATRIX-SPEC D10) both derive their scope here -- one rule.
-func analyticsCampaignScope(user auth.User) (bool, []int) {
+//
+// Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D3) -- the permitted lists are the
+// AnalyticsScope (get|manage lists plus the analytics-level ones), and full is the get|manage half
+// alone: a campaign none of whose lists is in full (reached only through analytics-level lists) is
+// offered only once started (S4), whatever the user's role.
+func analyticsCampaignScope(user auth.User) (all bool, permitted []int, full []int) {
 	if user.HasPerm(auth.PermCampaignsGetAll) {
-		return true, nil
+		return true, nil, nil
 	}
-	return user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
+	hasAll, ids := user.AnalyticsScope()
+	if hasAll {
+		return true, nil, nil
+	}
+	_, full = user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
+	return false, ids, full
 }
 
 // GetCampaignMatrix (fork, campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D4-D10) is the Campaign
@@ -1314,10 +1352,10 @@ func (a *App) GetCampaignMatrix(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "kind"))
 	}
 
-	allCampaigns, permittedLists := analyticsCampaignScope(user)
+	allCampaigns, permittedLists, fullLists := analyticsCampaignScope(user)
 	gp := user.HasPerm(auth.PermBrandsGet)
 
-	out, err := a.core.GetCampaignMatrix(allCampaigns, permittedLists, isAnalyticsOnly(user), scopeLists, evergreen, gp)
+	out, err := a.core.GetCampaignMatrix(allCampaigns, permittedLists, isAnalyticsOnly(user), fullLists, scopeLists, evergreen, gp)
 	if err != nil {
 		return err
 	}

@@ -274,8 +274,8 @@
               <tbody>
                 <tr v-for="s in detailOf('engagement').sends" :key="s.id">
                   <td>
-                    <router-link v-if="s.id" :to="{ name: 'campaign', params: { id: s.id } }">{{ s.name || s.id }}</router-link>
-                    <template v-else>{{ s.name }}</template>
+                    <router-link v-if="s.id && campaignLinks" :to="{ name: 'campaign', params: { id: s.id } }">{{ s.name || s.id }}</router-link>
+                    <template v-else>{{ s.name || s.id }}</template>
                   </td>
                   <td>{{ s.sent }}</td><td>{{ s.views }}</td>
                   <!-- Plain: the Lambda classifies only the pooled view rate above, never one campaign. -->
@@ -427,7 +427,7 @@ import { viewPaneValue } from '../langScope.mjs'; // eslint-disable-line import/
 import {
   compareDay, compareStatus, compareText, sortRows,
 } from '../health-sort';
-import { filterBrandRows, filterRowsByLaunch } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { campaignLinkable, filterBrandRows, filterRowsByLaunch } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 // Fork (SES health, SES-HEALTH-SPEC D4/M4): `ses` is the sixth input; rows written before it
 // existed lack it and render the unknown chip.
@@ -522,7 +522,13 @@ export default Vue.extend({
     // `brandRows` data (the brands rows by slug) would collide with the mixin's store mapping.
     // Fork (launch filter, LAUNCH-FILTER-SPEC D3/D8) -- the health documents are the store's
     // (one fetch path, loadBrandHealth) and the launch value is the navbar filter's.
-    ...mapGetters(['brandSelection', 'launch']),
+    ...mapGetters(['brandSelection', 'launch', 'analyticsOnlyBrands']),
+
+    // Fork (brand roles, integrations BRAND-ROLES-SPEC D4) -- an analytics-only brand's campaigns
+    // open no campaign page (checkCampaignPerm would 403), so its send rows carry no link.
+    campaignLinks() {
+      return campaignLinkable(this.brandParam, this.analyticsOnlyBrands);
+    },
     ...mapGetters({ rows: 'brandHealth' }),
 
     // Fork (global brand, D6) -- under a named brand only that brand's row; under No brand and

@@ -1017,7 +1017,7 @@ func TestPromoReasonCounts(t *testing.T) {
 	ins(6, 9, nil, nil) // NULL reason, look-back half -- never purchased
 	want := [5]int{6, 2, 1, 1, 2}
 
-	raw, err := h.app.core.GetCampaignMatrix(true, nil, false, nil, nil, false)
+	raw, err := h.app.core.GetCampaignMatrix(true, nil, false, nil, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1056,7 +1056,7 @@ func TestPromoReasonCounts(t *testing.T) {
 	if !seen {
 		t.Fatalf("matrix rows %s", raw)
 	}
-	ac, err := h.app.core.QueryAnalyticsCampaigns([]int{b}, "", true, nil, false, 10, nil)
+	ac, err := h.app.core.QueryAnalyticsCampaigns([]int{b}, "", true, nil, false, nil, 10, nil)
 	if err != nil || len(ac) != 1 {
 		t.Fatalf("analytics campaigns %v %v", ac, err)
 	}
@@ -1069,7 +1069,7 @@ func TestPromoReasonCounts(t *testing.T) {
 	// written as a string is not served.
 	j := f.camp("Acme welcome", true, "regular", "running", `{}`, acme)
 	odd := f.camp("Odd", false, "regular", "draft", `{"promo_code": 5, "promo_step": "2"}`, acme)
-	ac, _ = h.app.core.QueryAnalyticsCampaigns([]int{j, odd}, "", true, nil, false, 10, nil)
+	ac, _ = h.app.core.QueryAnalyticsCampaigns([]int{j, odd}, "", true, nil, false, nil, 10, nil)
 	if len(ac) != 2 {
 		t.Fatalf("analytics %+v", ac)
 	}

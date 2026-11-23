@@ -598,3 +598,96 @@ export function formBrandDefault(selection, form = 'template') {
   }
   return { value: selection.slug, locked: true };
 }
+
+// Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D4/D8). A brand role's analytics level
+// reaches the selector through the profile's list:analytics entries (accessPolicy.mjs::
+// analyticsListEntries, a separate getter) -- NEVER through the lists store, which every writing
+// picker reads. Those entries make an analytics brand selectable on the analytics pages only.
+
+// The analytics pages (route names): Campaign Analytics (its Matrix pane included), the Dashboard and
+// the Brands page. Every other page is a non-analytics page.
+export const ANALYTICS_PAGES = Object.freeze(['dashboard', 'campaignAnalytics', 'brands', 'brand']);
+
+export function isAnalyticsPage(routeName) {
+  return ANALYTICS_PAGES.includes(routeName);
+}
+
+// rosterLists is the selector's roster rows: the lists store's rows united with the analytics entries
+// ({ id, brand }) whose id the store does not hold. Used for the roster and the scope's ids only --
+// never handed to a list picker.
+export function rosterLists(lists, analyticsEntries) {
+  const rows = storeLists(lists);
+  const ids = new Set(rows.map((l) => l && l.id));
+  const extra = (Array.isArray(analyticsEntries) ? analyticsEntries : [])
+    .filter((e) => e && typeof e.id === 'number' && typeof e.brand === 'string' && e.brand !== '' && !ids.has(e.id))
+    .map((e) => ({ id: e.id, brand: e.brand }));
+  return [...rows, ...extra];
+}
+
+// analyticsOnlyBrands is the slugs reached ONLY through analytics entries: no list of the brand is
+// in the lists store (the user's get|manage lists). Sorted.
+export function analyticsOnlyBrands(lists, analyticsEntries) {
+  const held = new Set(storeLists(lists).map(brandOf).filter((b) => b !== ''));
+  const out = [];
+  (Array.isArray(analyticsEntries) ? analyticsEntries : []).forEach((e) => {
+    const b = e && typeof e.brand === 'string' ? e.brand : '';
+    if (b !== '' && !held.has(b) && !out.includes(b)) {
+      out.push(b);
+    }
+  });
+  return out.sort();
+}
+
+// D4 (S5): THE predicate -- an analytics-only brand is disabled in the selector on a page that is
+// not an analytics page; a stored selection of it resolves to All there (resolveSelection's
+// `disabled`), the pref not rewritten.
+export function brandDisabledOn(slug, analyticsOnly, routeName) {
+  return !isAnalyticsPage(routeName) && (Array.isArray(analyticsOnly) ? analyticsOnly : []).includes(slug);
+}
+
+// The disabled slugs for a page (brandDisabledOn over analyticsOnly).
+export function disabledBrands(analyticsOnly, routeName) {
+  return (Array.isArray(analyticsOnly) ? analyticsOnly : []).filter((s) => brandDisabledOn(s, analyticsOnly, routeName));
+}
+
+// The roster without the given slugs (none unchanged): the roster a selection may resolve against.
+export function withoutBrands(roster, slugs) {
+  const r = roster || { brands: [], none: false };
+  const drop = Array.isArray(slugs) ? slugs : [];
+  if (drop.length === 0) {
+    return r;
+  }
+  return { ...r, brands: (Array.isArray(r.brands) ? r.brands : []).filter((b) => !drop.includes(b.slug)) };
+}
+
+// resolveOnPage is resolveSelection for a page: the selection resolves against the offered roster
+// minus the page's disabled brands, and a selector LOCKED to a disabled brand resolves to All (still
+// locked, so the control stays as it was). hidden/locked stay the full roster's.
+export function resolveOnPage(stored, roster, loaded, offered, groups, disabled) {
+  const off = Array.isArray(disabled) ? disabled : [];
+  const r = resolveSelection(stored, roster, loaded, withoutBrands(offered, off), groups);
+  if (!r.pending && r.locked && r.selection.kind === 'brand' && off.includes(r.selection.slug)) {
+    return { ...r, selection: ALL };
+  }
+  return r;
+}
+
+// D4: a campaign link (to the campaign page, which checkCampaignPerm guards) is rendered only when
+// the campaign's brand is not analytics-only for the user.
+export function campaignLinkable(brand, analyticsOnly) {
+  return !(typeof brand === 'string' && brand !== '' && (Array.isArray(analyticsOnly) ? analyticsOnly : []).includes(brand));
+}
+
+// D8: GET /api/brands/launch's rows ([{ brand, unlaunched }]) as the documents launchOf reads -- an
+// unlaunched brand as a document of status unknown, a launched one as no document (launched).
+export function launchDocsFrom(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((r) => r && typeof r.brand === 'string' && r.unlaunched === true)
+    .map((r) => ({ brand: r.brand, status: 'unknown' }));
+}
+
+// D8: the launch filter is shown whenever the selector is shown and unlocked (no brands:get
+// condition: without it the launch state comes from GET /api/brands/launch).
+export function launchFilterShown(scope) {
+  return !!scope && !scope.hidden && !scope.locked;
+}

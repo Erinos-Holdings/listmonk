@@ -1531,3 +1531,32 @@ CREATE OR REPLACE FUNCTION promo_purchasers(p_camp_id INT, p_tags TEXT[]) RETURN
     JOIN subscriber_lists sl ON (sl.subscriber_id = s.id)
     WHERE EXISTS (SELECT 1 FROM campaign_lists cl WHERE cl.campaign_id = p_camp_id AND cl.list_id = sl.list_id);
 $$ LANGUAGE sql STABLE;
+
+-- Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D1/D2). Mirrored in
+-- internal/migrations/v6.2.42.go (keep the two identical; v6_2_42_db_test.go asserts it verbatim).
+--
+-- role_brands -- a list role's grants, per brand: level manage or analytics; brand NULL is All
+-- brands, analytics only (manage across every brand is lists:manage_all). Unique per
+-- (role_id, COALESCE(brand, '*')). The per-list child rows of roles (parent_id set) are never read.
+--
+-- role_list_grants -- the ONE resolution of a role's grants to lists (get-user, get-users,
+-- get-list-roles): per list carrying a brand: tag reached by a grant on its brand or an All brands
+-- grant, list:get + list:manage when any reaching grant is manage, else list:analytics. A list with
+-- no brand tag is never reached; lists of every status.
+CREATE TABLE IF NOT EXISTS role_brands (
+    role_id  INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    brand    TEXT NULL REFERENCES brands(slug) ON DELETE CASCADE ON UPDATE CASCADE,
+    level    TEXT NOT NULL CHECK (level IN ('manage', 'analytics')),
+    CHECK (brand IS NOT NULL OR level = 'analytics')
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_role_brands ON role_brands (role_id, COALESCE(brand, '*'));
+CREATE OR REPLACE FUNCTION role_list_grants(p_role_id INT) RETURNS TABLE (list_id INT, list_name TEXT, brand TEXT, permissions TEXT[]) AS $$
+    SELECT l.id, l.name::TEXT, list_brand_tag(l.tags),
+        CASE WHEN BOOL_OR(g.level = 'manage') THEN ARRAY['list:get', 'list:manage']::TEXT[]
+            ELSE ARRAY['list:analytics']::TEXT[] END
+    FROM role_brands g
+    JOIN lists l ON list_brand_tag(l.tags) IS NOT NULL AND (g.brand IS NULL OR g.brand = list_brand_tag(l.tags))
+    WHERE g.role_id = p_role_id
+    GROUP BY l.id, l.name, list_brand_tag(l.tags)
+    ORDER BY l.id;
+$$ LANGUAGE sql STABLE;

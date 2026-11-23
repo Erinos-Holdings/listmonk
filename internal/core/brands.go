@@ -43,6 +43,28 @@ func (c *Core) GetBrandHealthLatest(getAll bool, permittedIDs []int) ([]json.Raw
 	return docsOf(rows), nil
 }
 
+// BrandLaunch (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D8) is one row of GET
+// /api/brands/launch: the brand and one bit. It carries no health status by construction.
+type BrandLaunch struct {
+	Brand      string `db:"brand" json:"brand"`
+	Unlaunched bool   `db:"unlaunched" json:"unlaunched"`
+}
+
+// GetBrandsLaunch returns the launch bit for every brands row (all) or for the brands of the given
+// lists' brand tags.
+func (c *Core) GetBrandsLaunch(all bool, listIDs []int) ([]BrandLaunch, error) {
+	if listIDs == nil {
+		listIDs = []int{}
+	}
+	out := []BrandLaunch{}
+	if err := c.q.GetBrandsLaunch.Select(&out, all, pq.Array(listIDs)); err != nil {
+		c.log.Printf("error fetching brand launch state: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "brand launch", "error", pqErrMsg(err)))
+	}
+	return out, nil
+}
+
 // GetBrandHealthHistory returns one brand's documents over the last `days` days, newest first.
 func (c *Core) GetBrandHealthHistory(brand string, days int) ([]json.RawMessage, error) {
 	var rows []brandHealthDoc

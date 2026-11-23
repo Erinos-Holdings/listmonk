@@ -2,8 +2,9 @@
   <!-- Fork (launch filter, integrations LAUNCH-FILTER-SPEC D4). The navbar's All | Launched |
        Unlaunched filter, right of the brand selector. A presentation filter on the selector's
        options and the Brands / SES health tables only -- never a list scope (D7, S1). Counts are
-       over the FULL roster. Hidden when the selector is hidden or locked, or without brands:get
-       (no documents are fetched); disabled while the selection is pending. -->
+       over the FULL roster. Hidden when the selector is hidden or locked; disabled while the
+       selection is pending. Fork (brand roles, integrations BRAND-ROLES-SPEC D8) -- no brands:get
+       condition: without it the launch state is GET /api/brands/launch's one bit (launchDocs). -->
   <div v-if="shown" class="launch-filter" data-cy="launch-filter" role="group" :aria-label="$t('brand.launch.label')">
     <!-- .segmented: the shared one-control treatment (style.scss), also on the Campaigns page's
          Broadcasts | Automations toggle. is-global: the blue ring of a selector whose state follows
@@ -28,22 +29,22 @@
 <script>
 import Vue from 'vue';
 import { mapGetters } from 'vuex';
-import { launchCounts } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { launchCounts, launchFilterShown } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   name: 'LaunchFilter',
 
   computed: {
-    ...mapGetters(['brandScope', 'brandRoster', 'brandHealth', 'launch']),
+    ...mapGetters(['brandScope', 'brandRoster', 'launchDocs', 'launch']),
 
-    // D4: nothing to narrow when the selector is hidden or locked; without brands:get the
-    // documents are never fetched and every brand would read as launched.
+    // D4: nothing to narrow when the selector is hidden or locked (BRAND-ROLES-SPEC D8: shown for
+    // every user otherwise).
     shown() {
-      return this.$can('brands:get') && !this.brandScope.hidden && !this.brandScope.locked;
+      return launchFilterShown(this.brandScope);
     },
 
     counts() {
-      return launchCounts(this.brandRoster, this.brandHealth);
+      return launchCounts(this.brandRoster, this.launchDocs);
     },
 
     // D1/I7: the control is the selectLaunch mutation's only caller.

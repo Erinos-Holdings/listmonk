@@ -137,7 +137,10 @@ func statusCountsStmt(listStmt string) string {
 // startedOnly hides campaigns that never started (analytics-only users). Fork (global brand,
 // GLOBAL-BRAND-SPEC D9) -- scopeLists (empty = none) keeps the campaigns with ANY campaign_lists
 // row on it, ANDed with the permission scoping, never in its place.
-func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns bool, permittedLists []int, startedOnly bool, limit int, scopeLists []int) ([]models.AnalyticsCampaign, error) {
+// Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D3, S4) -- fullLists is the user's
+// get|manage lists: a campaign none of whose lists is in it (reached only through analytics-level
+// lists) is returned only once started. Ignored under allCampaigns.
+func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns bool, permittedLists []int, startedOnly bool, fullLists []int, limit int, scopeLists []int) ([]models.AnalyticsCampaign, error) {
 	if ids == nil {
 		ids = []int{}
 	}
@@ -147,10 +150,13 @@ func (c *Core) QueryAnalyticsCampaigns(ids []int, searchStr string, allCampaigns
 	if scopeLists == nil {
 		scopeLists = []int{}
 	}
+	if fullLists == nil {
+		fullLists = []int{}
+	}
 
 	out := []models.AnalyticsCampaign{}
 	if err := c.q.QueryAnalyticsCampaigns.Select(&out, pq.Array(ids), makeSearchString(searchStr), analyticsIDMatch(searchStr),
-		allCampaigns, pq.Array(permittedLists), startedOnly, limit, pq.Array(scopeLists)); err != nil {
+		allCampaigns, pq.Array(permittedLists), startedOnly, limit, pq.Array(scopeLists), pq.Array(fullLists)); err != nil {
 		c.log.Printf("error fetching analytics campaigns: %v", err)
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", pqErrMsg(err)))
@@ -175,7 +181,8 @@ func analyticsIDMatch(searchStr string) int {
 // Campaign Matrix statement. allCampaigns / permittedLists / startedOnly / scopeLists are exactly
 // QueryAnalyticsCampaigns' scoping arguments (the caller derives them with the picker's own helper);
 // evergreen nil = every kind; gp computes the GP send-day spam rate (the caller holds brands:get).
-func (c *Core) GetCampaignMatrix(allCampaigns bool, permittedLists []int, startedOnly bool, scopeLists []int,
+// Fork (brand roles, BRAND-ROLES-SPEC D3, S4) -- fullLists as QueryAnalyticsCampaigns.
+func (c *Core) GetCampaignMatrix(allCampaigns bool, permittedLists []int, startedOnly bool, fullLists []int, scopeLists []int,
 	evergreen *bool, gp bool) (types.JSONText, error) {
 	if permittedLists == nil {
 		permittedLists = []int{}
@@ -183,10 +190,13 @@ func (c *Core) GetCampaignMatrix(allCampaigns bool, permittedLists []int, starte
 	if scopeLists == nil {
 		scopeLists = []int{}
 	}
+	if fullLists == nil {
+		fullLists = []int{}
+	}
 
 	var out types.JSONText
 	if err := c.q.GetCampaignMatrix.Get(&out, allCampaigns, pq.Array(permittedLists), startedOnly,
-		pq.Array(scopeLists), evergreen, gp); err != nil {
+		pq.Array(scopeLists), evergreen, gp, pq.Array(fullLists)); err != nil {
 		c.log.Printf("error fetching campaign matrix: %v", err)
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "campaign matrix", "error", pqErrMsg(err)))

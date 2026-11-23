@@ -39,6 +39,8 @@ func TestBrandsBackfillMigration(t *testing.T) {
 		return strings.Join(out, "|")
 	}
 	reset := func() {
+		// A v6.2.19 database predates v6.2.42's role_brands too (its brand FK depends on brands).
+		h.db.MustExec(`DROP TABLE IF EXISTS role_brands`)
 		h.db.MustExec(`DROP TABLE IF EXISTS brands`)
 		h.db.MustExec(`DELETE FROM lists`)
 	}

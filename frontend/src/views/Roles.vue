@@ -26,6 +26,14 @@
         </a>
       </b-table-column>
 
+      <!-- Fork (brand roles, integrations BRAND-ROLES-SPEC D7) -- each brand role's brands per level. -->
+      <b-table-column v-if="isList" v-slot="props" field="brands" :label="$t('users.brandsManage')">
+        <span data-cy="role-brands-manage">{{ labelsOf(props.row).manage.join(', ') }}</span>
+      </b-table-column>
+      <b-table-column v-if="isList" v-slot="props" field="brands_analytics" :label="$t('users.brandsAnalytics')">
+        <span data-cy="role-brands-analytics">{{ labelsOf(props.row).analytics.join(', ') }}</span>
+      </b-table-column>
+
       <b-table-column v-slot="props" field="created_at" :label="$t('globals.fields.createdAt')"
         header-class="cy-created_at" sortable>
         {{ $utils.niceDate(props.row.createdAt) }}
@@ -84,6 +92,8 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import stepUp, { stepUpError } from '../stepUp';
+import { grantLabels } from '../brandRoleForm.mjs'; // eslint-disable-line import/extensions
+import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import RoleForm from './RoleForm.vue';
 
 export default Vue.extend({
@@ -145,8 +155,9 @@ export default Vue.extend({
         fn = this.$api.createUserRole;
         form.permissions = item.permissions;
       } else {
+        // Fork (brand roles, D5) -- a clone carries the grants, never lists.
         fn = this.$api.createListRole;
-        form.lists = item.lists;
+        form.brands = item.brands || [];
       }
 
       // Fork (integrations STEPUP-ADMIN-SPEC D4) -- every role write steps up first.
@@ -154,6 +165,10 @@ export default Vue.extend({
         this.fetchRoles();
         this.$utils.toast(this.$t('globals.messages.created', { name }));
       }).catch(stepUpError(this));
+    },
+
+    labelsOf(row) {
+      return grantLabels(row, (s) => brandLabelOf(s, this.brandRows), this.$t('users.brandsAll'));
     },
 
     onDeleteRole(item) {
@@ -172,7 +187,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['loading', 'userRoles', 'listRoles']),
+    ...mapState(['loading', 'userRoles', 'listRoles', 'brandRows']),
 
     isUser() {
       return this.curType === 'user';

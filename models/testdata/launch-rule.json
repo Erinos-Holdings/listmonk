@@ -1,0 +1,6 @@
+[
+  {"status": "ok", "unlaunched": false},
+  {"status": "warn", "unlaunched": false},
+  {"status": "issues", "unlaunched": false},
+  {"status": "unknown", "unlaunched": true}
+]

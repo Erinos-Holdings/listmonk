@@ -59,7 +59,8 @@ func IsReadPerm(perm string) bool {
 
 // IsTwofaEnforced is the role-based answer to "must this user hold a second factor": a
 // password-login user (never an API user) whose user role is Super Admin, or carries any
-// permission that is not a read permission, or whose list role carries anything but list:get.
+// permission that is not a read permission, or whose list role carries anything but list:get or
+// list:analytics (fork, brand roles).
 // The role id is read from UserRole.ID: setupUserFields copies UserRoleID there and zeroes it, so
 // UserRoleID is always 0 on a loaded user. A login-user row has no role at all -- load the user
 // with core.GetUser before asking.
@@ -78,7 +79,9 @@ func (u *User) IsTwofaEnforced() bool {
 	if u.ListRole != nil {
 		for _, l := range u.ListRole.Lists {
 			for _, p := range l.Permissions {
-				if p != PermListGet {
+				// Fork (brand roles, integrations BRAND-ROLES-SPEC D4, I14) -- the analytics level is
+				// a read permission exactly as list:get: a read-only grant never enforces.
+				if p != PermListGet && p != PermListAnalytics {
 					return true
 				}
 			}

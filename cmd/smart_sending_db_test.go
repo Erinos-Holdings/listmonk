@@ -289,7 +289,7 @@ func TestSmartSendingClaim(t *testing.T) {
 	// set here), the count, and smart_off on the switched-off one; a journey's skipped is null.
 	h.db.MustExec(`UPDATE campaigns SET sent = 3 WHERE id = ANY($1)`, pq.Array([]int{b, off}))
 	h.db.MustExec(`INSERT INTO campaign_send_hours (campaign_id, hour, n) VALUES ($1, DATE_TRUNC('hour', NOW(), 'UTC'), 1)`, j)
-	raw, err := h.app.core.GetCampaignMatrix(true, nil, false, nil, nil, false)
+	raw, err := h.app.core.GetCampaignMatrix(true, nil, false, nil, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -143,6 +143,26 @@ func (a *App) GetBrandHealth(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+// GetBrandsLaunch (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D8) is GET
+// /api/brands/launch: [{brand, unlaunched}] for the caller's roster brands only -- the brands of the
+// lists in the caller's get|manage|analytics scope (AnalyticsScope), every brands row for a holder of
+// lists:get_all, lists:manage_all or campaigns:get_all (or Super Admin). Any authenticated user,
+// session or token, no pm permission: the navbar launch filter reads it when the user lacks
+// brands:get. One bit per brand, never the health status (S6).
+func (a *App) GetBrandsLaunch(c echo.Context) error {
+	user := auth.GetUser(c)
+	all, ids := user.AnalyticsScope()
+	if user.HasPerm(auth.PermCampaignsGetAll) {
+		all = true
+	}
+
+	out, err := a.core.GetBrandsLaunch(all, ids)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
 // GetBrandHealthHistory returns one brand's documents, newest first. ?days=N (default 30, max 400).
 func (a *App) GetBrandHealthHistory(c echo.Context) error {
 	brand := strings.TrimSpace(c.Param("brand"))

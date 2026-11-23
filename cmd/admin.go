@@ -147,8 +147,13 @@ type dashboardScope struct {
 // the user's grants: a brand's campaigns are those with ANY campaign_lists row on the scope --
 // get_all widens which campaigns a user may read, not which are the brand's. The selector itself
 // never reaches the server (S1); this is permission ∩ request, as every other list filter.
+//
+// Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D3) -- the Dashboard is an analytics
+// site: its scope is the AnalyticsScope (get|manage lists plus the analytics-level ones), and a
+// list_id is intersected with it (FilterAnalyticsLists), never with FilterListsByPerm, so an
+// analytics brand selected in the navbar reads its own lists (S2).
 func dashboardListScope(user auth.User, qp url.Values) (dashboardScope, error) {
-	hasAll, permitted := user.GetPermittedLists(auth.PermTypeGet | auth.PermTypeManage)
+	hasAll, permitted := user.AnalyticsScope()
 
 	raw, ok := qp["list_id"]
 	if !ok || len(raw) == 0 {
@@ -165,10 +170,7 @@ func dashboardListScope(user auth.User, qp url.Values) (dashboardScope, error) {
 	if hasAll {
 		return dashboardScope{scoped: true, listIDs: ids, allCampaigns: false}, nil
 	}
-	out := user.FilterListsByPerm(auth.PermTypeGet|auth.PermTypeManage, ids)
-	if out == nil {
-		out = []int{}
-	}
+	out := user.FilterAnalyticsLists(ids)
 	return dashboardScope{scoped: true, listIDs: out, allCampaigns: false}, nil
 }
 

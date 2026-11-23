@@ -32,6 +32,18 @@ SELECT latest.doc || JSONB_BUILD_OBJECT('lists', COALESCE((
     ), '[]'::JSONB)) AS doc
     FROM latest ORDER BY latest.brand;
 
+-- name: get-brands-launch
+-- Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D8) -- the launch filter's ONE bit per
+-- brand for a user without brands get: unlaunched when the brand's latest brand_health row has
+-- status unknown, else false (a brand with no row is launched). Never the status itself. $1 = every
+-- brands row; else $2 = the caller's scope list ids, whose brand tags are the brands returned. The
+-- rule's other home is frontend health-sort.mjs isUnlaunchedBrandDoc (I11 pins their agreement).
+SELECT b.slug AS brand,
+    COALESCE((SELECT h.status = 'unknown' FROM brand_health h WHERE h.brand = b.slug ORDER BY h.day DESC LIMIT 1), FALSE) AS unlaunched
+FROM brands b
+WHERE $1::BOOLEAN OR b.slug IN (SELECT list_brand_tag(l.tags) FROM lists l WHERE l.id = ANY($2::INT[]))
+ORDER BY b.slug;
+
 -- name: get-brand-health-history
 -- One brand's rows over the last $2 days (today included), newest first.
 SELECT doc FROM brand_health WHERE brand = $1 AND day > (CURRENT_DATE - $2::INT) ORDER BY day DESC;

@@ -206,10 +206,29 @@ func (c *Core) setupUserFields(users []auth.User) []auth.User {
 				}
 			}
 
-			u.ListRole = &auth.ListRolePermissions{ID: *u.ListRoleID, Name: u.ListRoleName.String, Lists: listPerms}
+			// Fork (brand roles, integrations BRAND-ROLES-SPEC D4) -- the role's brand grants.
+			brands := []auth.BrandGrant{}
+			if u.ListBrandsRaw != nil {
+				if err := json.Unmarshal(*u.ListBrandsRaw, &brands); err != nil {
+					c.log.Printf("error unmarshalling brand grants for role %d: %v", u.ID, err)
+				}
+			}
+			if listPerms == nil {
+				listPerms = []auth.ListPermission{}
+			}
+
+			u.ListRole = &auth.ListRolePermissions{ID: *u.ListRoleID, Name: u.ListRoleName.String, Lists: listPerms, Brands: brands}
 
 			// Iterate each list in the list permissions and setup get/manage list IDs.
 			for _, p := range listPerms {
+				// Fork (brand roles, BRAND-ROLES-SPEC D3, hazard H3) -- an analytics-level entry goes
+				// to AnalyticsListIDs ONLY, never into ListPermissionsMap / GetListIDs /
+				// ManageListIDs, so no list-permission call site can read it as access.
+				if isAnalyticsEntry(p) {
+					u.AnalyticsListIDs = append(u.AnalyticsListIDs, p.ID)
+					continue
+				}
+
 				u.ListPermissionsMap[p.ID] = make(map[string]struct{})
 
 				for _, perm := range p.Permissions {
@@ -234,4 +253,17 @@ func (c *Core) setupUserFields(users []auth.User) []auth.User {
 	}
 
 	return users
+}
+
+// isAnalyticsEntry (fork, brand roles, BRAND-ROLES-SPEC D3) reports whether a resolved list entry
+// is analytics-level: it carries list:analytics. role_list_grants never puts list:analytics beside
+// list:get or list:manage (manage wins per list, D2); an entry carrying both is still treated as
+// analytics-only, so no combination can turn the analytics level into get or manage.
+func isAnalyticsEntry(p auth.ListPermission) bool {
+	for _, perm := range p.Permissions {
+		if perm == auth.PermListAnalytics {
+			return true
+		}
+	}
+	return false
 }

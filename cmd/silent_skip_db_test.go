@@ -767,7 +767,7 @@ func TestSilentSkipReasonCounts(t *testing.T) {
 	ins(6, nil, 9, nil) // NULL reason, look-ahead half
 	want := [4]int{6, 2, 2, 2}
 
-	raw, err := h.app.core.GetCampaignMatrix(true, nil, false, nil, nil, false)
+	raw, err := h.app.core.GetCampaignMatrix(true, nil, false, nil, nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -800,7 +800,7 @@ func TestSilentSkipReasonCounts(t *testing.T) {
 	if !seen {
 		t.Fatalf("matrix rows %s", raw)
 	}
-	ac, err := h.app.core.QueryAnalyticsCampaigns([]int{b}, "", true, nil, false, 10, nil)
+	ac, err := h.app.core.QueryAnalyticsCampaigns([]int{b}, "", true, nil, false, nil, 10, nil)
 	if err != nil || len(ac) != 1 {
 		t.Fatalf("analytics campaigns %v %v", ac, err)
 	}
@@ -811,7 +811,7 @@ func TestSilentSkipReasonCounts(t *testing.T) {
 	}
 	// A journey's reason counts are null, as its skipped is.
 	j := f.camp("Acme welcome", true, "regular", "running", `{}`, acme)
-	ac, _ = h.app.core.QueryAnalyticsCampaigns([]int{j}, "", true, nil, false, 10, nil)
+	ac, _ = h.app.core.QueryAnalyticsCampaigns([]int{j}, "", true, nil, false, nil, 10, nil)
 	if len(ac) != 1 || ac[0].Skipped.Valid || ac[0].SkippedSilent.Valid || ac[0].SkippedLookback.Valid || ac[0].SkippedLookahead.Valid {
 		t.Fatalf("journey %+v, want null counts", ac)
 	}

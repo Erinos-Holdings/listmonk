@@ -95,6 +95,12 @@ func TestTwofaEnforced(t *testing.T) {
 		{"read-only role with a list:manage list role", user(5, []string{"campaigns:get"}, listRole(PermListGet, PermListManage)), true},
 		{"read-only role with list:get lists", user(5, []string{"campaigns:get", "campaigns:get_analytics", "lists:get_all"}, listRole(PermListGet)), false},
 		{"read-only role, no list role", user(5, []string{"settings:get"}, nil), false},
+		// Fork (brand roles, integrations BRAND-ROLES-SPEC I14) -- the analytics level is read.
+		{"analytics-only role with list:analytics lists", user(5, []string{"campaigns:get_analytics"}, listRole(PermListAnalytics)), false},
+		{"read-only role, analytics and get lists", user(5, []string{"campaigns:get"}, &ListRolePermissions{ID: 7, Lists: []ListPermission{
+			{ID: 1, Permissions: []string{PermListAnalytics}}, {ID: 2, Permissions: []string{PermListGet}}}}), false},
+		{"read-only role, analytics lists and one manage list", user(5, []string{"campaigns:get"}, &ListRolePermissions{ID: 7, Lists: []ListPermission{
+			{ID: 1, Permissions: []string{PermListAnalytics}}, {ID: 2, Permissions: []string{PermListGet, PermListManage}}}}), true},
 	}
 	for _, tc := range cases {
 		if got := tc.u.IsTwofaEnforced(); got != tc.want {

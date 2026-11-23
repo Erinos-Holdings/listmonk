@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/knadh/listmonk/internal/auth"
 	"github.com/labstack/echo/v4"
+	null "gopkg.in/volatiletech/null.v6"
 )
 
 // GetUserRoles retrieves roles.
@@ -52,11 +54,8 @@ func (a *App) CreateUserRole(c echo.Context) error {
 
 // CreateListRole handles role creation.
 func (a *App) CreateListRole(c echo.Context) error {
-	var r auth.ListRole
-	if err := c.Bind(&r); err != nil {
-		return err
-	}
-	if err := a.validateListRole(r); err != nil {
+	r, err := a.parseListRole(c)
+	if err != nil {
 		return err
 	}
 
@@ -114,20 +113,13 @@ func (a *App) UpdateListRole(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidID"))
 	}
 
-	// Incoming params.
-	var r auth.ListRole
-	if err := c.Bind(&r); err != nil {
+	// Incoming params (fork, brand roles, BRAND-ROLES-SPEC D5: brands, never lists).
+	r, err := a.parseListRole(c)
+	if err != nil {
 		return err
 	}
 
-	if err := a.validateListRole(r); err != nil {
-		return err
-	}
-
-	// Validate.
-	r.Name.String = strings.TrimSpace(r.Name.String)
-
-	// Update the role in the DB.
+	// Update the role in the DB (a non-list role id is a 400 there).
 	out, err := a.core.UpdateListRole(id, r)
 	if err != nil {
 		return err
@@ -178,18 +170,88 @@ func (a *App) validateUserRole(r auth.Role) error {
 	return nil
 }
 
-func (a *App) validateListRole(r auth.ListRole) error {
-	if !strHasLen(r.Name.String, 1, stdInputMaxLen) {
-		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "name"))
+// listRoleReq (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D5) is the body of POST
+// /api/roles/lists and PUT /api/roles/lists/:id: a name and the brand grants. Lists is read only to
+// refuse it -- a brand role grants by brand, never by list.
+type listRoleReq struct {
+	Name   string            `json:"name"`
+	Brands []auth.BrandGrant `json:"brands"`
+	Lists  []json.RawMessage `json:"lists"`
+}
+
+// parseListRole binds and validates a list-role write (D5): a non-empty lists field, a bad name,
+// any brandGrantsProblem and an unknown brand slug are each a 400.
+func (a *App) parseListRole(c echo.Context) (auth.ListRole, error) {
+	var req listRoleReq
+	if err := c.Bind(&req); err != nil {
+		return auth.ListRole{}, err
+	}
+	bad := func(field string) (auth.ListRole, error) {
+		return auth.ListRole{}, echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", field))
 	}
 
-	for _, l := range r.Lists {
-		for _, p := range l.Permissions {
-			if p != auth.PermListGet && p != auth.PermListManage {
-				return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", fmt.Sprintf("list permission: %s", p)))
+	name := strings.TrimSpace(req.Name)
+	if !strHasLen(name, 1, stdInputMaxLen) {
+		return bad("name")
+	}
+	if len(req.Lists) > 0 {
+		return bad("lists (a brand role grants brands)")
+	}
+	if p := brandGrantsProblem(req.Brands); p != "" {
+		return bad(p)
+	}
+
+	var slugs []string
+	for _, g := range req.Brands {
+		if g.Brand != nil {
+			slugs = append(slugs, *g.Brand)
+		}
+	}
+	if len(slugs) > 0 {
+		known, err := a.core.BrandSlugsIn(slugs)
+		if err != nil {
+			return auth.ListRole{}, err
+		}
+		for _, s := range slugs {
+			if !known[s] {
+				return bad(fmt.Sprintf("brands: unknown brand %s", s))
 			}
 		}
 	}
 
-	return nil
+	grants := req.Brands
+	if grants == nil {
+		grants = []auth.BrandGrant{}
+	}
+	return auth.ListRole{Name: null.StringFrom(name), Brands: grants}, nil
+}
+
+// brandGrantsProblem (fork, brand roles, BRAND-ROLES-SPEC D5) is the pure half of the grant
+// validation: "" when the set is acceptable, else the field text for the 400. Refused: a level
+// other than manage or analytics; an empty brand slug; All brands (brand null) at manage; the same
+// brand at both levels; a duplicate entry.
+func brandGrantsProblem(grants []auth.BrandGrant) string {
+	seen := map[string]string{}
+	for _, g := range grants {
+		if g.Level != auth.BrandLevelManage && g.Level != auth.BrandLevelAnalytics {
+			return fmt.Sprintf("brands: level %q", g.Level)
+		}
+		key := "*"
+		if g.Brand != nil {
+			if strings.TrimSpace(*g.Brand) == "" || *g.Brand == "*" {
+				return "brands: empty brand"
+			}
+			key = *g.Brand
+		} else if g.Level == auth.BrandLevelManage {
+			return "brands: All brands is read-only (analytics)"
+		}
+		if prev, ok := seen[key]; ok {
+			if prev == g.Level {
+				return fmt.Sprintf("brands: duplicate %s", key)
+			}
+			return fmt.Sprintf("brands: %s at both levels", key)
+		}
+		seen[key] = g.Level
+	}
+	return ""
 }

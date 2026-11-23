@@ -485,9 +485,10 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 		core.SeriesKeySQL("cb.brand", core.CodeKeySQL("cp")))
 	// Fork (campaign mode, CAMPAIGN-MODE-SPEC D2/D6) -- the picker's grouped statement, built from the
 	// query-analytics-campaigns text BEFORE ScanToStruct prepares it (the prepared statement keeps no
-	// text): its eight parameters, then the wrapper's four.
+	// text): its nine parameters (the ninth, the get|manage lists, integrations BRAND-ROLES-SPEC D3),
+	// then the wrapper's four.
 	qMap["query-analytics-campaigns-grouped"] = &goyesql.Query{
-		Query: core.GroupedStmt(qMap["query-analytics-campaigns"].Query, 8, core.AnalyticsGroupedOrderSQL),
+		Query: core.GroupedStmt(qMap["query-analytics-campaigns"].Query, 9, core.AnalyticsGroupedOrderSQL),
 		Tags:  map[string]string{"name": "query-analytics-campaigns-grouped"},
 	}
 	// Review S2 -- its hit step reads the ids only: the same text as its id set.

@@ -87,17 +87,20 @@ func (f *bpFixture) count(q string, args ...any) int {
 	return n
 }
 
-// perListUser is a user whose user role carries userPerms and whose list role grants listPerms
-// on the given lists only.
-func (f *bpFixture) perListUser(name string, userPerms []string, listPerms []string, lists ...int) *twofaClient {
+// brandRoleUser is a user whose user role carries userPerms and whose list role is a brand role
+// with the given grants (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D1: a list role
+// grants by brand, never by list). Returns the session client and the user id.
+func (f *bpFixture) brandRoleUser(name string, userPerms []string, grants ...auth.BrandGrant) (*twofaClient, int) {
 	f.h.t.Helper()
 	var ur int
-	f.h.db.Get(&ur, `INSERT INTO roles (type, name, permissions) VALUES ('user', $1, $2) RETURNING id`, name+" user role", pq.StringArray(userPerms))
-	perms := make([]auth.ListPermission, 0, len(lists))
-	for _, l := range lists {
-		perms = append(perms, auth.ListPermission{ID: l, Permissions: listPerms})
+	if userPerms == nil {
+		userPerms = []string{}
 	}
-	lr, err := f.h.app.core.CreateListRole(auth.ListRole{Name: null.StringFrom(name + " list role"), Lists: perms})
+	f.h.db.Get(&ur, `INSERT INTO roles (type, name, permissions) VALUES ('user', $1, $2) RETURNING id`, name+" user role", pq.StringArray(userPerms))
+	if grants == nil {
+		grants = []auth.BrandGrant{}
+	}
+	lr, err := f.h.app.core.CreateListRole(auth.ListRole{Name: null.StringFrom(name + " list role"), Brands: grants})
 	if err != nil {
 		f.h.t.Fatal(err)
 	}
@@ -106,7 +109,43 @@ func (f *bpFixture) perListUser(name string, userPerms []string, listPerms []str
 	if _, err := cacheUsers(f.h.app.core, f.h.app.auth); err != nil {
 		f.h.t.Fatal(err)
 	}
-	return f.h.sessionClient(id)
+	return f.h.sessionClient(id), id
+}
+
+// grant is one brand grant (brand "" = All brands).
+func grant(brand, level string) auth.BrandGrant {
+	if brand == "" {
+		return auth.BrandGrant{Level: level}
+	}
+	return auth.BrandGrant{Brand: &brand, Level: level}
+}
+
+// perListUser is the pre-brand-roles helper's shape over brandRoleUser: the user's list role grants
+// the brand of each given list -- manage when listPerms holds list:manage, else analytics (the
+// v6.2.42 conversion rule). Every list must carry a brand: tag with a brands row.
+func (f *bpFixture) perListUser(name string, userPerms []string, listPerms []string, lists ...int) *twofaClient {
+	f.h.t.Helper()
+	level := auth.BrandLevelAnalytics
+	for _, p := range listPerms {
+		if p == auth.PermListManage {
+			level = auth.BrandLevelManage
+		}
+	}
+	seen := map[string]bool{}
+	var grants []auth.BrandGrant
+	for _, l := range lists {
+		var b *string
+		f.h.db.Get(&b, `SELECT list_brand_tag(tags) FROM lists WHERE id = $1`, l)
+		if b == nil {
+			f.h.t.Fatalf("perListUser: list %d has no brand tag (a brand role grants by brand)", l)
+		}
+		if !seen[*b] {
+			seen[*b] = true
+			grants = append(grants, grant(*b, level))
+		}
+	}
+	cl, _ := f.brandRoleUser(name, userPerms, grants...)
+	return cl
 }
 
 // message is the error body's message.
@@ -250,7 +289,8 @@ func TestBrandsReadableWithoutListsGetAll(t *testing.T) {
 	f := newBPFixture(t)
 	f.brandRow("acme", "Acme <hello@acme.test>", "")
 	f.brandRow("beta", "hello@beta.test", "")
-	mine := f.sqlList("Mine")
+	// Fork (brand roles, BRAND-ROLES-SPEC D1) -- a list role grants by brand: Mine is beta's.
+	mine := f.sqlList("Mine", "brand:beta", "from:hello@beta.test")
 
 	manager := f.perListUser("manager", []string{"campaigns:get"}, []string{auth.PermListGet, auth.PermListManage}, mine)
 	analyst := f.perListUser("analyst", []string{"brands:get"}, []string{auth.PermListGet}, mine)

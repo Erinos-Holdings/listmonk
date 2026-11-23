@@ -274,6 +274,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Fork (brand health) -- BRAND-HEALTH-SPEC D2/D10 (brands.go). The static `health`
 		// segment resolves before the :slug param, so /api/brands/health/theme is a history read.
 		g.GET("/api/brands/health", pm(a.GetBrandHealth, "brands:get"))
+		// Fork (brand roles, integrations BRAND-ROLES-SPEC D8) -- the launch filter's one bit per
+		// roster brand. No pm(): any authenticated user, session or token (the handler scopes it).
+		// Static and GET-only: no GET /api/brands/:slug exists, and PUT /api/brands/:slug still reaches
+		// a brand named launch, so the slug needs no reservation (unlike `health`).
+		g.GET("/api/brands/launch", a.GetBrandsLaunch)
 		g.GET("/api/brands/health/:brand", pm(a.GetBrandHealthHistory, "brands:get"))
 		g.PUT("/api/brands/health", pm(a.PutBrandHealth, "brands:manage"))
 		// Fork (brand picker) -- BRAND-PICKER-SPEC D1 (brands.go). GET has no pm(): the list form

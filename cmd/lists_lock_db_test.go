@@ -81,7 +81,9 @@ func TestListLocked(t *testing.T) {
 
 	// Permission first: a per-list manager of another list gets the permission error on the
 	// locked list, never the lock (which would reveal the list's name).
-	mine := f.sqlList("Mine")
+	// Fork (brand roles, BRAND-ROLES-SPEC D1) -- a list role grants by brand: Mine is the brand mine's.
+	f.brandRow("mine", "Mine <hello@acme.test>", "")
+	mine := f.sqlList("Mine", "brand:mine", "from:Mine <hello@acme.test>")
 	cl := f.perListUser("manager", []string{"campaigns:get"}, []string{auth.PermListGet, auth.PermListManage}, mine)
 	for _, c := range []struct{ what, method, target string }{
 		{"update", http.MethodPut, "/api/lists/" + itoa(cat)},

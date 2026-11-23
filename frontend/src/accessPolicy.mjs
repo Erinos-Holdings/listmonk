@@ -47,6 +47,44 @@ export function canManageList(profile, id) {
   return lists.some((l) => l && l.id === id && Array.isArray(l.permissions) && l.permissions.includes('list:manage'));
 }
 
+// Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D4). The profile's list role carries
+// `brands` ([{ brand: slug|null, level }]) and its resolved `lists`, each with `brand`; an
+// analytics-level entry's permissions are ['list:analytics'] -- NEITHER list:get NOR list:manage, so
+// canManageList and $canList (exact matches) never read it as access (hazard H3).
+export const LIST_ANALYTICS = 'list:analytics';
+
+function listRoleLists(profile) {
+  return profile && profile.listRole && Array.isArray(profile.listRole.lists) ? profile.listRole.lists : [];
+}
+
+// isAnalyticsEntry: a resolved entry at the analytics level (it carries list:analytics).
+export function isAnalyticsEntry(entry) {
+  return !!entry && Array.isArray(entry.permissions) && entry.permissions.includes(LIST_ANALYTICS);
+}
+
+// The analytics-level entries as { id, brand } -- the brand selector's roster extension (D4),
+// read through its own store getter and never put in the lists store.
+export function analyticsListEntries(profile) {
+  return listRoleLists(profile)
+    .filter((l) => isAnalyticsEntry(l) && typeof l.id === 'number' && typeof l.brand === 'string' && l.brand !== '')
+    .map((l) => ({ id: l.id, brand: l.brand }));
+}
+
+// The $canList rule (main.js), pure: Super Admin, the two all-lists permissions, or an entry carrying
+// exactly perm (list:get or list:manage). An analytics entry matches neither.
+export function canList(profile, id, perm) {
+  if (!profile) {
+    return false;
+  }
+  if (isSuperAdmin(profile) || has(profile, 'lists:get_all') || has(profile, 'lists:manage_all')) {
+    return true;
+  }
+  if (perm !== 'list:get' && perm !== 'list:manage') {
+    return false;
+  }
+  return listRoleLists(profile).some((l) => l && l.id === id && Array.isArray(l.permissions) && l.permissions.includes(perm));
+}
+
 // Fork (persona From, integrations PERSONA-FROM-SPEC D5): may add and delete a brand's sender
 // display names on the Campaign page. lists:manage_all, the permission the personas API needs
 // (canManageList's all-lists branch); a per-list list:manage is NOT enough. Choosing a sender

@@ -54,7 +54,8 @@ func newSUFixture(t *testing.T) *suFixture {
 	f.factored = h.user("factored", h.writerRole)
 	h.setTOTP(f.factored)
 	h.db.Get(&f.listID, `INSERT INTO lists (uuid, name, type) VALUES (gen_random_uuid(), 'Brand list', 'private') RETURNING id`)
-	lr, err := h.app.core.CreateListRole(auth.ListRole{Name: null.StringFrom("Brand role"), Lists: []auth.ListPermission{{ID: f.listID, Permissions: []string{auth.PermListGet}}}})
+	// Fork (brand roles, BRAND-ROLES-SPEC D5) -- a list role carries brand grants (All brands here).
+	lr, err := h.app.core.CreateListRole(auth.ListRole{Name: null.StringFrom("Brand role"), Brands: []auth.BrandGrant{{Level: auth.BrandLevelAnalytics}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +168,7 @@ func (f *suFixture) cases(t *testing.T, cl *twofaClient) []suCase {
 			`{"name": "New role", "permissions": ["campaigns:get"]}`,
 			func() bool { return f.count(`SELECT COUNT(*) FROM roles WHERE name = 'New role'`) == 1 }},
 		{http.MethodPost, "/api/roles/lists", "/api/roles/lists", echo.MIMEApplicationJSON,
-			fmt.Sprintf(`{"name": "New list role", "lists": [{"id": %d, "permissions": ["list:get"]}]}`, f.listID),
+			`{"name": "New list role", "brands": [{"brand": null, "level": "analytics"}]}`,
 			func() bool { return f.count(`SELECT COUNT(*) FROM roles WHERE name = 'New list role'`) == 1 }},
 		{http.MethodPut, "/api/roles/users/:id", "/api/roles/users/" + id(h.readerRole), echo.MIMEApplicationJSON,
 			`{"name": "Reader renamed", "permissions": ["campaigns:get"]}`,
@@ -175,7 +176,7 @@ func (f *suFixture) cases(t *testing.T, cl *twofaClient) []suCase {
 				return f.count(`SELECT COUNT(*) FROM roles WHERE id = $1 AND name = 'Reader renamed'`, h.readerRole) == 1
 			}},
 		{http.MethodPut, "/api/roles/lists/:id", "/api/roles/lists/" + id(f.listRole), echo.MIMEApplicationJSON,
-			fmt.Sprintf(`{"name": "Brand role renamed", "lists": [{"id": %d, "permissions": ["list:get", "list:manage"]}]}`, f.listID),
+			`{"name": "Brand role renamed", "brands": []}`,
 			func() bool {
 				return f.count(`SELECT COUNT(*) FROM roles WHERE id = $1 AND name = 'Brand role renamed'`, f.listRole) == 1
 			}},

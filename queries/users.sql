@@ -59,25 +59,11 @@ DELETE FROM users WHERE id = ALL($1) AND (SELECT num FROM u) > 0;
 WITH ur AS (
     SELECT id, name, permissions FROM roles WHERE type = 'user' AND parent_id IS NULL
 ),
+-- Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D2) -- a list role's lists are its brand
+-- grants resolved live by role_list_grants (the ONE resolution, shared with get-user and
+-- get-list-roles); the per-list child rows (roles.parent_id) are never read.
 lr AS (
-    SELECT r.id, r.name, r.permissions, r.list_id, l.name AS list_name
-    FROM roles r
-    LEFT JOIN lists l ON r.list_id = l.id
-    WHERE r.type = 'list' AND r.parent_id IS NULL
-),
-lp AS (
-    SELECT lr.id AS list_role_id,
-        JSONB_AGG(
-            JSONB_BUILD_OBJECT(
-                'id', COALESCE(cr.list_id, lr.list_id),
-                'name', COALESCE(cl.name, lr.list_name),
-                'permissions', COALESCE(cr.permissions, lr.permissions)
-            )
-        ) AS list_role_perms
-    FROM lr
-    LEFT JOIN roles cr ON cr.parent_id = lr.id AND cr.type = 'list'
-    LEFT JOIN lists cl ON cr.list_id = cl.id
-    GROUP BY lr.id
+    SELECT r.id, r.name FROM roles r WHERE r.type = 'list' AND r.parent_id IS NULL
 )
 SELECT
     users.*,
@@ -86,13 +72,21 @@ SELECT
     ur.id AS user_role_id,
     ur.name AS user_role_name,
     ur.permissions AS user_role_permissions,
-    lp.list_role_id,
+    lr.id AS list_role_id,
     lr.name AS list_role_name,
-    lp.list_role_perms
+    CASE WHEN lr.id IS NOT NULL THEN (
+        SELECT COALESCE(JSONB_AGG(JSONB_BUILD_OBJECT('id', g.list_id, 'name', g.list_name, 'brand', g.brand,
+            'permissions', g.permissions) ORDER BY g.list_id), '[]'::JSONB)
+        FROM role_list_grants(lr.id) g
+    ) END AS list_role_perms,
+    CASE WHEN lr.id IS NOT NULL THEN (
+        SELECT COALESCE(JSONB_AGG(JSONB_BUILD_OBJECT('brand', b.brand, 'level', b.level)
+            ORDER BY b.level DESC, b.brand NULLS FIRST), '[]'::JSONB)
+        FROM role_brands b WHERE b.role_id = lr.id
+    ) END AS list_role_brands
 FROM users
     LEFT JOIN ur ON users.user_role_id = ur.id
-    LEFT JOIN lp ON users.list_role_id = lp.list_role_id
-    LEFT JOIN lr ON lp.list_role_id = lr.id
+    LEFT JOIN lr ON users.list_role_id = lr.id
     ORDER BY users.created_at;
 
 -- name: get-user
@@ -116,28 +110,21 @@ SELECT
     ur.permissions AS user_role_permissions,
     lr.id AS list_role_id,
     lr.name AS list_role_name,
-    lp.list_role_perms
+    -- Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D2) -- get-users' projection over
+    -- role_list_grants, verbatim; the per-list child rows are never read.
+    CASE WHEN lr.id IS NOT NULL THEN (
+        SELECT COALESCE(JSONB_AGG(JSONB_BUILD_OBJECT('id', g.list_id, 'name', g.list_name, 'brand', g.brand,
+            'permissions', g.permissions) ORDER BY g.list_id), '[]'::JSONB)
+        FROM role_list_grants(lr.id) g
+    ) END AS list_role_perms,
+    CASE WHEN lr.id IS NOT NULL THEN (
+        SELECT COALESCE(JSONB_AGG(JSONB_BUILD_OBJECT('brand', b.brand, 'level', b.level)
+            ORDER BY b.level DESC, b.brand NULLS FIRST), '[]'::JSONB)
+        FROM role_brands b WHERE b.role_id = lr.id
+    ) END AS list_role_brands
 FROM sel
     LEFT JOIN roles ur ON sel.user_role_id = ur.id AND ur.type = 'user' AND ur.parent_id IS NULL
-    LEFT JOIN (
-        SELECT r.id, r.name, r.permissions, r.list_id, l.name AS list_name
-        FROM roles r
-        LEFT JOIN lists l ON r.list_id = l.id
-        WHERE r.type = 'list' AND r.parent_id IS NULL
-    ) lr ON sel.list_role_id = lr.id
-    LEFT JOIN LATERAL (
-        SELECT JSONB_AGG(
-                JSONB_BUILD_OBJECT(
-                    'id', COALESCE(cr.list_id, lr.list_id),
-                    'name', COALESCE(cl.name, lr.list_name),
-                    'permissions', COALESCE(cr.permissions, lr.permissions)
-                )
-            ) AS list_role_perms
-        FROM roles cr
-        LEFT JOIN lists cl ON cr.list_id = cl.id
-        WHERE cr.parent_id = lr.id AND cr.type = 'list'
-        GROUP BY lr.id
-    ) lp ON TRUE;
+    LEFT JOIN roles lr ON sel.list_role_id = lr.id AND lr.type = 'list' AND lr.parent_id IS NULL;
 
 
 -- name: get-api-tokens

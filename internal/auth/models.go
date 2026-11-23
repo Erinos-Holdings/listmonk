@@ -46,6 +46,7 @@ const (
 	PermListManageAll         = "lists:manage_all"
 	PermListManage            = "list:manage"
 	PermListGet               = "list:get"
+	PermListAnalytics         = "list:analytics" // Fork (brand roles) -- see the note below.
 	PermSubscribersGet        = "subscribers:get"
 	PermSubscribersGetAll     = "subscribers:get_all"
 	PermSubscribersManage     = "subscribers:manage"
@@ -99,6 +100,11 @@ const (
 	PermListJourneys = "lists:journeys"
 )
 
+// PermListAnalytics (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D2/D3) is the
+// analytics level of a brand role, on a resolved list entry only. It is NEVER placed in
+// ListPermissionsMap, GetListIDs or ManageListIDs (hazard H3): it reaches the analytics reads
+// through AnalyticsScope alone.
+
 // Base holds common fields shared across models.
 type Base struct {
 	ID        int       `db:"id" json:"id"`
@@ -130,6 +136,8 @@ type User struct {
 	ListRoleName  null.String      `db:"list_role_name" json:"-"`
 	UserRolePerms pq.StringArray   `db:"user_role_permissions" json:"-"`
 	ListsPermsRaw *json.RawMessage `db:"list_role_perms" json:"-"`
+	// Fork (brand roles, BRAND-ROLES-SPEC D4) -- the list role's brand grants, as stored.
+	ListBrandsRaw *json.RawMessage `db:"list_role_brands" json:"-"`
 
 	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D1). PasskeyCount is a get-user/get-users
 	// subselect (zero on a login-user row). TwofaEnforced is IsTwofaEnforced() and TwofaRequired is
@@ -150,19 +158,38 @@ type User struct {
 	ListPermissionsMap map[int]map[string]struct{} `db:"-" json:"-"`
 	GetListIDs         []int                       `db:"-" json:"-"`
 	ManageListIDs      []int                       `db:"-" json:"-"`
-	HasPassword        bool                        `db:"-" json:"-"`
+	// Fork (brand roles, BRAND-ROLES-SPEC D3) -- the lists reached only at the analytics level.
+	// Read only through AnalyticsScope.
+	AnalyticsListIDs []int `db:"-" json:"-"`
+	HasPassword      bool  `db:"-" json:"-"`
 }
 
 type ListPermission struct {
 	ID          int            `json:"id"`
 	Name        string         `json:"name"`
 	Permissions pq.StringArray `json:"permissions"`
+	// Fork (brand roles, BRAND-ROLES-SPEC D4) -- the list's brand on a resolved brand-role entry.
+	Brand string `json:"brand,omitempty"`
 }
+
+// BrandGrant (fork, brand roles, BRAND-ROLES-SPEC D1) is one role_brands row: Brand nil is All
+// brands (analytics level only); Level is BrandLevelManage or BrandLevelAnalytics.
+type BrandGrant struct {
+	Brand *string `json:"brand"`
+	Level string  `json:"level"`
+}
+
+const (
+	BrandLevelManage    = "manage"
+	BrandLevelAnalytics = "analytics"
+)
 
 type ListRolePermissions struct {
 	ID    int              `db:"-" json:"id"`
 	Name  string           `db:"-" json:"name"`
 	Lists []ListPermission `db:"-" json:"lists"`
+	// Fork (brand roles, BRAND-ROLES-SPEC D4) -- the role's brand grants; Lists is their resolution.
+	Brands []BrandGrant `db:"-" json:"brands"`
 }
 
 type Role struct {
@@ -187,6 +214,11 @@ type ListRole struct {
 	ParentID null.Int         `db:"parent_id" json:"-"`
 	ListsRaw json.RawMessage  `db:"list_permissions" json:"-"`
 	Lists    []ListPermission `db:"-" json:"lists"`
+
+	// Fork (brand roles, BRAND-ROLES-SPEC D5) -- the role's brand grants (role_brands); Lists is
+	// their resolution (role_list_grants), kept for display.
+	BrandsRaw json.RawMessage `db:"brand_grants" json:"-"`
+	Brands    []BrandGrant    `db:"-" json:"brands"`
 }
 
 // HasPerm checks if the user has a specific permission.
@@ -359,4 +391,53 @@ func (u *User) GetPermittedListIDs(listIDs []int) []int {
 		}
 	}
 	return listIDs
+}
+
+// AnalyticsScope (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D3) is the list scope
+// of the ANALYTICS reads only -- the Campaign Analytics picker, the Campaign Matrix, the
+// per-campaign analytics read and the Dashboard -- and the only reader of AnalyticsListIDs: the
+// existing get|manage scope (GetPermittedLists) united with the lists reached only at the analytics
+// level. hasAll is GetPermittedLists' (Super Admin, lists:get_all, lists:manage_all). Every other
+// list-permission call site keeps GetPermittedLists and never sees an analytics-only list (H3).
+func (u *User) AnalyticsScope() (bool, []int) {
+	hasAll, ids := u.GetPermittedLists(PermTypeGet | PermTypeManage)
+	if hasAll {
+		return true, nil
+	}
+
+	out := make([]int, 0, len(ids)+len(u.AnalyticsListIDs))
+	seen := make(map[int]struct{}, cap(out))
+	for _, set := range [][]int{ids, u.AnalyticsListIDs} {
+		for _, id := range set {
+			if _, ok := seen[id]; !ok {
+				seen[id] = struct{}{}
+				out = append(out, id)
+			}
+		}
+	}
+	return false, out
+}
+
+// FilterAnalyticsLists (fork, brand roles, BRAND-ROLES-SPEC D3) narrows requested list ids to the
+// AnalyticsScope -- the analytics reads' replacement for FilterListsByPerm(get|manage, ids). Under
+// blanket access the ids are returned unchanged. Never nil.
+func (u *User) FilterAnalyticsLists(listIDs []int) []int {
+	hasAll, scope := u.AnalyticsScope()
+	if hasAll {
+		if listIDs == nil {
+			return []int{}
+		}
+		return listIDs
+	}
+	in := make(map[int]struct{}, len(scope))
+	for _, id := range scope {
+		in[id] = struct{}{}
+	}
+	out := make([]int, 0, len(listIDs))
+	for _, id := range listIDs {
+		if _, ok := in[id]; ok {
+			out = append(out, id)
+		}
+	}
+	return out
 }

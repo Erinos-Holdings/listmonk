@@ -235,12 +235,15 @@ func IDsStmt(listStmt string) string {
 // empty search, BOTH with $7 NULL (no hit cap, so an older matching member is never cut), and only
 // limit (per_page) limiting top-level rows; then the members' picker rows by id. Scoping (the
 // permission lists, started-only, the brand scope) is the inner statement's, unchanged.
-func (c *Core) QueryAnalyticsCampaignGroups(searchStr string, allCampaigns bool, permittedLists []int, startedOnly bool, limit int, scopeLists []int) ([]models.AnalyticsCampaignGroup, error) {
+func (c *Core) QueryAnalyticsCampaignGroups(searchStr string, allCampaigns bool, permittedLists []int, startedOnly bool, fullLists []int, limit int, scopeLists []int) ([]models.AnalyticsCampaignGroup, error) {
 	if permittedLists == nil {
 		permittedLists = []int{}
 	}
 	if scopeLists == nil {
 		scopeLists = []int{}
+	}
+	if fullLists == nil {
+		fullLists = []int{}
 	}
 	fail := func(err error) error {
 		c.log.Printf("error fetching analytics campaign groups: %v", err)
@@ -253,7 +256,7 @@ func (c *Core) QueryAnalyticsCampaignGroups(searchStr string, allCampaigns bool,
 	if hitOn {
 		// The ids only (QueryAnalyticsCampaignIDs, review S2): no per-row skip counts for every match.
 		if err := c.q.QueryAnalyticsCampaignIDs.Select(&hits, pq.Array([]int{}), makeSearchString(searchStr), analyticsIDMatch(searchStr),
-			allCampaigns, pq.Array(permittedLists), startedOnly, nil, pq.Array(scopeLists)); err != nil {
+			allCampaigns, pq.Array(permittedLists), startedOnly, nil, pq.Array(scopeLists), pq.Array(fullLists)); err != nil {
 			return nil, fail(err)
 		}
 		if len(hits) == 0 {
@@ -263,7 +266,7 @@ func (c *Core) QueryAnalyticsCampaignGroups(searchStr string, allCampaigns bool,
 
 	var groups []models.AnalyticsCampaignGroup
 	if err := c.q.QueryAnalyticsCampaignsGrouped.Select(&groups, pq.Array([]int{}), "", 0,
-		allCampaigns, pq.Array(permittedLists), startedOnly, nil, pq.Array(scopeLists),
+		allCampaigns, pq.Array(permittedLists), startedOnly, nil, pq.Array(scopeLists), pq.Array(fullLists),
 		pq.Array(hits), hitOn, 0, limit); err != nil {
 		return nil, fail(err)
 	}
@@ -277,7 +280,7 @@ func (c *Core) QueryAnalyticsCampaignGroups(searchStr string, allCampaigns bool,
 			union = append(union, int(id))
 		}
 	}
-	members, err := c.QueryAnalyticsCampaigns(union, "", allCampaigns, permittedLists, startedOnly, 0, scopeLists)
+	members, err := c.QueryAnalyticsCampaigns(union, "", allCampaigns, permittedLists, startedOnly, fullLists, 0, scopeLists)
 	if err != nil {
 		return nil, err
 	}
