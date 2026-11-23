@@ -2869,6 +2869,9 @@ export default Vue.extend({
       let at = this.data && this.data.startedAt;
       if (this.data && this.data.status === 'scheduled') {
         at = this.form.sendLater && this.form.sendAtDate ? this.form.sendAtDate : this.data.sendAt;
+      } else if (!at && this.form.sendLater && this.form.sendAtDate) {
+        // Review R4 (D6 amended): a draft or paused campaign with a picked Send-later time.
+        at = this.form.sendAtDate;
       }
       return dateNotSend(this.form.name, at || null);
     },

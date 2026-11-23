@@ -274,6 +274,15 @@ const dateGlued = (s) => {
   return !!d && !/^(?: |$)/.test(s.slice(d.length));
 };
 
+// NAME-BLOCKS-SPEC D9 (review R3) -- a leading yearless MM-DD (a real month and day) followed by a
+// space: `11-19 BFCM Drop 2`. The standard date carries the year. Never at the end -- `11-19` is a
+// typing prefix of `11-19-26` (the I1 typing-prefix test).
+const RE_LEADING_YEARLESS = /^(\d{2})-(\d{2})(?= )/;
+const yearlessLead = (s) => {
+  const m = RE_LEADING_YEARLESS.exec(s);
+  return !!m && validStd(m[1], m[2], '00');
+};
+
 // The name minus its leading date token and the separators after it.
 const afterLeadingDate = (s) => s.slice(leadingDateLength(s)).replace(/^[ _-]+/, '');
 
@@ -334,7 +343,8 @@ export function nameWarnings(kind, name, ctx = {}) {
   if (dateGlued(s)) out.add('dateGlued');
 
   const tokens = stdTokens(s);
-  if (RE_DATE_BAD.some((re) => re.test(s)) || RE_MONTH.test(s) || tokens.some((t) => !t.valid)) out.add('dateFormat');
+  if (RE_DATE_BAD.some((re) => re.test(s)) || RE_MONTH.test(s) || tokens.some((t) => !t.valid)
+    || yearlessLead(s)) out.add('dateFormat');
   // Silent whenever a VALID standard token is at the start, whatever follows it (S4-4).
   if (!tokens.some((t) => t.valid && t.index === 0) && tokens.some((t) => t.valid && t.index !== 0)) out.add('datePosition');
 

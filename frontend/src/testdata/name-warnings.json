@@ -136,7 +136,7 @@
     { "kind": "campaign", "name": "Post-purchase D14", "warnings": [] },
     { "kind": "template", "name": "11-22-26 BFCM Drop 2", "warnings": [] },
 
-    { "kind": "campaign", "name": "11-19 BFCM Drop #2 EN", "warnings": ["language", "hash"] },
+    { "kind": "campaign", "name": "11-19 BFCM Drop #2 EN", "warnings": ["language", "hash", "dateFormat"] },
     { "kind": "campaign", "name": "BFCM Drop #2 EN", "warnings": ["language", "hash"] },
     { "kind": "campaign", "name": "ES Promo", "warnings": ["language"] },
     { "kind": "campaign", "name": "11-23-26 Promo FR Launch", "warnings": ["language"] },
@@ -170,6 +170,10 @@
     { "kind": "campaign", "name": "Clone1 11-23-26Drop 3", "warnings": ["dateGlued"] },
     { "kind": "template", "name": "11-2026Winback", "warnings": ["dateGlued"] },
     { "kind": "list", "name": "RUZE 11-14-26Sale", "ctx": { "brandSlug": "ruze", "listType": "private" }, "warnings": ["dateGlued"] },
-    { "kind": "campaign", "name": "11-23-26 Drop 3", "warnings": [] }
+    { "kind": "campaign", "name": "11-23-26 Drop 3", "warnings": [] },
+    { "kind": "campaign", "name": "11-19 BFCM Drop 2", "warnings": ["dateFormat"] },
+    { "kind": "campaign", "name": "11-19", "warnings": [] },
+    { "kind": "campaign", "name": "50-50 Raffle", "warnings": [] },
+    { "kind": "campaign", "name": "13-40 Sale", "warnings": [] }
   ]
 }
