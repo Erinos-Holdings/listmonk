@@ -554,9 +554,13 @@ export const getCampaignSync = async (id) => http.get(`/api/campaigns/${id}`, {
 
 // Fork (campaign-page audience box): the same read without the page-wide loading overlay,
 // for the background refetch when a running broadcast finishes.
-export const getCampaignQuiet = async (id) => http.get(`/api/campaigns/${id}`, {
+// Fork (brand roles, integrations BRAND-ROLES-SPEC review R2) -- noToast: a refusal is expected
+// (Campaign Analytics' prefill of a campaign reached only through an analytics-level list) and
+// handled by the caller, so it must not open a sticky error notice.
+export const getCampaignQuiet = async (id, noToast = false) => http.get(`/api/campaigns/${id}`, {
   params: { no_body: true },
   camelCase: campaignCamel(''),
+  disableToast: noToast,
 });
 
 // Fork (60-day opens, integrations SIXTY-DAY-OPENS-SPEC D4) -- the switch's live preview,

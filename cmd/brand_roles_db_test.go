@@ -308,6 +308,16 @@ func TestBrandRoleAnalyticsSites(t *testing.T) {
 	if m := matrixIDs(elizCl); !rbHas(m, r.ruzeSent) || rbHas(m, r.shalaCamp) {
 		t.Fatalf("eliz's matrix %v", m)
 	}
+	// Review R3 -- the picker and the matrix with list_id = an analytics-level list (G6's "Ruze
+	// selected"): the Ruze campaign is there, the Shala one is not.
+	ruzeQ := fmt.Sprintf("list_id=%d", r.ruze)
+	if _, body := rbGet(meganCl, "/api/analytics/campaigns?per_page=50&"+ruzeQ); !rbHas(idsOfRows(t, body), r.ruzeSent) || rbHas(idsOfRows(t, body), r.shalaCamp) {
+		t.Fatalf("megan's picker under list_id=Ruze: %s", body)
+	}
+	code, body = rbGet(meganCl, "/api/analytics/campaigns/matrix?"+ruzeQ)
+	if m := idsOfRows(t, body); code != http.StatusOK || !rbHas(m, r.ruzeSent) || rbHas(m, r.shalaCamp) {
+		t.Fatalf("megan's matrix under list_id=Ruze: %d %v", code, m)
+	}
 
 	// Every per-campaign analytics read allows a campaign on an analytics-level list, and refuses one
 	// whose lists are all outside the scope exactly as today (403).
@@ -735,6 +745,14 @@ func TestBrandsLaunch(t *testing.T) {
 	tok.hdr["Authorization"] = "token reader:" + u.Password.String
 	if got := launchRows(t, tok); !reflect.DeepEqual(got, want) {
 		t.Fatalf("lists:get_all token: %v\nwant %v", got, want)
+	}
+
+	// Review R3 -- campaigns:get_all alone (no list access, no brand role): every brands row too
+	// (GetBrandsLaunch's own branch).
+	getAllCl, _ := r.brandRoleUser("campall", []string{auth.PermCampaignsGetAll})
+	r.h.db.MustExec(`UPDATE users SET list_role_id = NULL WHERE username = 'campall'`)
+	if got := launchRows(t, getAllCl); !reflect.DeepEqual(got, want) {
+		t.Fatalf("campaigns:get_all only: %v\nwant %v", got, want)
 	}
 
 	// The roster only, for a user with no permission at all beyond a brand role: Eliz gets Ruze.

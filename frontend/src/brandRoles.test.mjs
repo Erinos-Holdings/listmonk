@@ -14,7 +14,7 @@ import {
 } from './accessPolicy.mjs'; // eslint-disable-line import/extensions
 import {
   ALL, ANALYTICS_PAGES, analyticsOnlyBrands, brandDisabledOn, campaignLinkable, disabledBrands,
-  filterByIds, isAnalyticsPage, launchDocsFrom, launchFilterShown, launchOf, resolveOnPage,
+  filterByIds, groupDisabledOn, isAnalyticsPage, launchDocsFrom, launchFilterShown, launchOf, resolveOnPage,
   rosterFrom, rosterLists, scopeListIds, scopeUnion, withoutBrands,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { isUnlaunchedBrandDoc } from './health-sort.mjs'; // eslint-disable-line import/extensions
@@ -119,6 +119,37 @@ test('I10 -- off the analytics pages an analytics-only brand is disabled and a s
   assert.deepEqual(withoutBrands(roster, ['ruze']).brands.map((b) => b.slug), ['shala']);
 });
 
+test('I10 (review R1) -- a group off the analytics pages drops its analytics-only members', () => {
+  // The reviewer's reproduction: store lists shala + younique; analytics entries ruze + bnkd.
+  const st = { results: [{ id: 1, brand: 'shala' }, { id: 2, brand: 'younique' }] };
+  const ents = [{ id: 10, brand: 'ruze' }, { id: 11, brand: 'bnkd' }];
+  const rows = rosterLists(st, ents);
+  const roster = rosterFrom(rows, []);
+  const off = disabledBrands(analyticsOnlyBrands(st, ents), 'subscribers');
+  assert.deepEqual(off, ['bnkd', 'ruze']);
+  const incubating = [{ group: 'incubating', slugs: ['bnkd', 'ruze'] }];
+  const stored = { kind: 'group', group: 'incubating' };
+
+  const r = resolveOnPage(stored, roster, true, roster, incubating, off);
+  assert.deepEqual(r.selection, ALL, 'every member disabled -> All');
+  assert.equal(scopeListIds(rows, r.selection), null, 'no analytics list ids reach Subscribers');
+  assert.deepEqual(stored, { kind: 'group', group: 'incubating' }, 'the pref is not rewritten');
+  assert.equal(groupDisabledOn(incubating[0], off), true);
+
+  // A mixed group keeps only its non-disabled members.
+  const mixed = [{ group: 'incubating', slugs: ['bnkd', 'ruze', 'shala'] }];
+  const m = resolveOnPage(stored, roster, true, roster, mixed, off);
+  assert.deepEqual(m.selection, { kind: 'group', group: 'incubating', slugs: ['shala'] });
+  assert.deepEqual(scopeListIds(rows, m.selection), [1]);
+  assert.equal(groupDisabledOn(mixed[0], off), false);
+
+  // An analytics page is unchanged.
+  const a = resolveOnPage(stored, roster, true, roster, incubating, disabledBrands(analyticsOnlyBrands(st, ents), 'dashboard'));
+  assert.deepEqual(a.selection, { kind: 'group', group: 'incubating', slugs: ['bnkd', 'ruze'] });
+  assert.deepEqual(scopeListIds(rows, a.selection), [10, 11]);
+  assert.equal(groupDisabledOn(incubating[0], []), false);
+});
+
 test('I10 -- a campaign of an analytics-only brand carries no campaign link', () => {
   assert.equal(campaignLinkable('ruze', ['ruze']), false);
   assert.equal(campaignLinkable('shala', ['ruze']), true);
@@ -127,6 +158,13 @@ test('I10 -- a campaign of an analytics-only brand carries no campaign link', ()
   // The Brands page's send rows read it.
   const view = readFileSync(new URL('./views/Brands.vue', import.meta.url), 'utf8');
   assert.match(view, /v-if="s\.id && campaignLinks" :to="\{ name: 'campaign'/);
+});
+
+test('review R2 -- the Analytics prefill reads a campaign without a toast (a 403 is expected)', () => {
+  const view = readFileSync(new URL('./views/CampaignAnalytics.vue', import.meta.url), 'utf8');
+  assert.match(view, /getCampaignQuiet\(c\.id, true\)/);
+  const api = readFileSync(new URL('./api/index.js', import.meta.url), 'utf8');
+  assert.match(api, /getCampaignQuiet = async \(id, noToast = false\)[\s\S]{0,200}disableToast: noToast/);
 });
 
 test('I11 -- the launch filter is shown for an unlocked selector, without brands:get', () => {

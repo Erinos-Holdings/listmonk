@@ -1269,10 +1269,11 @@ export default Vue.extend({
         // Fork (global brand, D9/D11) -- the prefill is never filtered by the selection (no
         // list_id above). A prefilled campaign's brand comes from its lists, readable only to a
         // user who may read the campaign itself; an analytics-only user's is underivable, so no
-        // notice (D11).
+        // notice (D11). Fork (brand roles, review R2) -- a campaign reached only through an
+        // analytics-level list is a 403 here (checkCampaignPerm): no toast, no notice.
         if (this.$can('campaigns:get_all', 'campaigns:get')) {
           this.form.campaigns.forEach((c) => {
-            this.$api.getCampaignQuiet(c.id).then((full) => {
+            this.$api.getCampaignQuiet(c.id, true).then((full) => {
               this.$set(this.prefillLists, c.id, (full && full.lists) || []);
             }).catch(() => {});
           });

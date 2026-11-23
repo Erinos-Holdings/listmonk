@@ -669,7 +669,21 @@ export function resolveOnPage(stored, roster, loaded, offered, groups, disabled)
   if (!r.pending && r.locked && r.selection.kind === 'brand' && off.includes(r.selection.slug)) {
     return { ...r, selection: ALL };
   }
+  // A group (its members come from the FULL roster, analytics-only brands included) drops the
+  // page's disabled slugs; none left resolves to All (the pref is not rewritten). Review R1.
+  if (!r.pending && r.selection.kind === 'group' && off.length > 0) {
+    const slugs = r.selection.slugs.filter((s) => !off.includes(s));
+    return { ...r, selection: slugs.length > 0 ? { ...r.selection, slugs } : ALL };
+  }
   return r;
+}
+
+// A group option is disabled on a page when every member is disabled there (Review R1): it would
+// resolve to All.
+export function groupDisabledOn(group, disabled) {
+  const off = Array.isArray(disabled) ? disabled : [];
+  const slugs = group && Array.isArray(group.slugs) ? group.slugs : [];
+  return off.length > 0 && slugs.length > 0 && slugs.every((s) => off.includes(s));
 }
 
 // D4: a campaign link (to the campaign page, which checkCampaignPerm guards) is rendered only when

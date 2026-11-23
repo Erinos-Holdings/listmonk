@@ -17,8 +17,9 @@
              name (brandScope.mjs::selectorOptions); No brand stays last. -->
         <!-- Fork (brand groups, integrations BRAND-GROUPS-SPEC D7) -- the offered groups (whole or
              absent, brandScope.mjs::offeredGroups), then the parent labelled "<name> (cust.)". -->
-        <option v-for="g in options.groups" :key="g.group" :value="`group:${g.group}`">
-          {{ $t(`brand.selector.${g.group}`) }}
+        <option v-for="g in options.groups" :key="g.group" :value="`group:${g.group}`"
+          :disabled="isGroupDisabled(g)">
+          {{ $t(`brand.selector.${g.group}`) }}{{ isGroupDisabled(g) ? ` (${$t('brand.selector.analyticsOnly')})` : '' }}
         </option>
         <!-- Fork (brand roles, integrations BRAND-ROLES-SPEC D4) -- an analytics-only brand is shown
              disabled ("analytics only") off the analytics pages (brandScope.mjs::brandDisabledOn). -->
@@ -38,7 +39,7 @@
 <script>
 import Vue from 'vue';
 import { mapGetters } from 'vuex';
-import { selectorOptions } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { groupDisabledOn, selectorOptions } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   name: 'BrandSelector',
@@ -72,6 +73,11 @@ export default Vue.extend({
   },
 
   methods: {
+    // Review R1 -- a group all of whose members are disabled on this page resolves to All there.
+    isGroupDisabled(g) {
+      return groupDisabledOn(g, this.disabledBrands);
+    },
+
     isDisabled(slug) {
       return this.disabledBrands.includes(slug);
     },
