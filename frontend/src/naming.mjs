@@ -169,9 +169,16 @@ export function nameCounter(kind, name, prefix = '') {
 // testdata/name-warnings.json (I1). Ambiguities resolve toward silence: no shape beyond §3's table.
 
 // The codes, in the fixed order they are reported (§3 table).
+// NAME-BLOCKS-SPEC D8: hash, dropGlued and dateGlued after brandFirst. The page-appended
+// `dateNotSend` (D6, campaign form only) is NOT here: nameWarnings never returns it -- the page
+// appends it last from dateNotSend() below.
 export const WARNING_CODES = Object.freeze([
-  'underscore', 'stepCode', 'language', 'brandFirst', 'dateFormat', 'datePosition', 'listPrefix', 'handleMissing',
+  'underscore', 'stepCode', 'language', 'brandFirst', 'hash', 'dropGlued', 'dateGlued', 'dateFormat', 'datePosition',
+  'listPrefix', 'handleMissing',
 ]);
+
+// D6 -- the campaign form's amber send-date code, appended after WARNING_CODES.
+export const DATE_NOT_SEND = 'dateNotSend';
 
 // Folded = lower-cased, diacritics removed (NFD, combining marks stripped).
 const foldName = (s) => str(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -184,10 +191,14 @@ const NA = '(?![\\p{L}\\p{N}])';
 const bounded = (p, flags = 'u') => new RegExp(`${NB}(?:${p})${NA}`, flags);
 
 const RE_STEP = bounded('[A-Za-z]{2}\\d{1,2}');
-// Row 3 (a): `_` + a code (any case), or `-` + an UPPER-CASE code; then `_`, `-`, a space or the end.
-const RE_LANG_A_DASH = /-(EN|ES|FR|DE|IT)(?=[_\- ]|$)/;
+// Row 3 (a): `_` + a code (any case); then `_`, `-`, a space or the end. (The `-` + UPPER-CASE form
+// is a case of RE_LANG_TOKEN below since NAME-BLOCKS-SPEC D1.)
 const RE_LANG_A_UNDER = /_(?:en|es|fr|de|it)(?=[_\- ]|$)/i;
-const LANG_CODES = ['EN', 'ES', 'FR', 'DE', 'IT'];
+// NAME-BLOCKS-SPEC D1: any standalone UPPER-CASE code anywhere (case-sensitive -- `it`, `It`, `De`
+// never fire; `Make IT Pop` does, accepted).
+const RE_LANG_TOKEN = bounded('EN|ES|FR|DE|IT');
+// D4: the word Drop (any case) at a word start, followed by anything but a space or the end.
+const RE_DROP_GLUED = new RegExp(`${NB}drop(?=[^ ])`, 'iu');
 
 // Row 5's non-standard date shapes.
 const RE_DATE_BAD = [
@@ -242,6 +253,27 @@ function leadingDateLength(s) {
   return m ? m[0].length : 0;
 }
 
+// The valid leading standard date, { mm, dd, yy, yyyy, length } (dd/yy null for MM-YYYY, yyyy null
+// for MM-DD-YY), whatever follows it; null when none or impossible.
+function leadingStdDate(s) {
+  const std = RE_LEADING_STD.exec(s);
+  if (!std) return null;
+  if (std[1] !== undefined) {
+    return validStd(std[1], std[2], std[3]) ? {
+      mm: std[1], dd: std[2], yy: std[3], yyyy: null, length: std[0].length,
+    } : null;
+  }
+  return validStd(std[4], null, null) ? {
+    mm: std[4], dd: null, yy: null, yyyy: std[5], length: std[0].length,
+  } : null;
+}
+
+// NAME-BLOCKS-SPEC D3 -- a valid leading standard date followed by anything but a space or the end.
+const dateGlued = (s) => {
+  const d = leadingStdDate(s);
+  return !!d && !/^(?: |$)/.test(s.slice(d.length));
+};
+
 // The name minus its leading date token and the separators after it.
 const afterLeadingDate = (s) => s.slice(leadingDateLength(s)).replace(/^[ _-]+/, '');
 
@@ -286,16 +318,20 @@ export function nameWarnings(kind, name, ctx = {}) {
   if (RE_STEP.test(s)) out.add('stepCode');
 
   if (!isList) {
-    const tokens = s.split(' ').filter((t) => t !== '');
-    const last = tokens[tokens.length - 1];
-    if (RE_LANG_A_UNDER.test(s) || RE_LANG_A_DASH.test(s) || LANG_CODES.includes(last)) out.add('language');
+    if (RE_LANG_A_UNDER.test(s) || RE_LANG_TOKEN.test(s)) out.add('language');
 
     const rest = foldName(afterLeadingDate(s));
     const hit = (Array.isArray(c.brands) ? c.brands : []).some((b) => [b && b.slug, b && b.display_name]
       .map(foldName).filter((p) => p !== '')
       .some((p) => rest.startsWith(p) && /^(?:[ _-]|$)/.test(rest.slice(p.length))));
     if (hit) out.add('brandFirst');
+
+    // NAME-BLOCKS-SPEC D5/D4 (campaign and template names only).
+    if (s.includes('#')) out.add('hash');
+    if (RE_DROP_GLUED.test(s)) out.add('dropGlued');
   }
+  // D3 (all three kinds).
+  if (dateGlued(s)) out.add('dateGlued');
 
   const tokens = stdTokens(s);
   if (RE_DATE_BAD.some((re) => re.test(s)) || RE_MONTH.test(s) || tokens.some((t) => !t.valid)) out.add('dateFormat');
@@ -321,7 +357,13 @@ export function nameWarnings(kind, name, ctx = {}) {
 // word of EN/ES/FR/DE/IT, so "Make IT" trips it; brandFirst: any brand's slug or display name at
 // the start) stay amber warnings, because a block with no override would stop real names. Form-only:
 // the server's rule is still models/naming.go (length, control characters, reserved prefixes).
-export const BLOCKING_CODES = Object.freeze(['underscore', 'stepCode', 'dateFormat', 'datePosition', 'listPrefix', 'handleMissing']);
+// NAME-BLOCKS-SPEC D1/D2/D8 (2026-11-23): language and brandFirst block too (the accepted false
+// positive is an upper-case word such as `Make IT Pop`), as do the three new exact checks hash,
+// dropGlued and dateGlued. dateNotSend (D6) never blocks -- a reschedule must not lock the form.
+export const BLOCKING_CODES = Object.freeze([
+  'underscore', 'stepCode', 'language', 'brandFirst', 'hash', 'dropGlued', 'dateGlued', 'dateFormat', 'datePosition',
+  'listPrefix', 'handleMissing',
+]);
 
 // Is any of the codes a blocking one?
 export function isNameBlocked(codes) {
@@ -332,6 +374,31 @@ export function isNameBlocked(codes) {
 export function nameMessageTypeOf(codes, extraWarning = false) {
   if (isNameBlocked(codes)) return 'is-danger';
   return (Array.isArray(codes) && codes.length) || extraWarning ? 'is-warning' : null;
+}
+
+// NAME-BLOCKS-SPEC D6 -- the campaign name's valid leading date against its send instant's
+// calendar date in America/Denver (the Mountain day, never the browser's zone; MM-YYYY compares
+// the month). Returns the send date written in the name's own form (MM-DD-YY or MM-YYYY) when
+// they differ -- the warning's {date} -- and '' when they agree, when there is no send instant or
+// no valid leading date, or for an exempt name. Pure; the page decides when to ask (a scheduled
+// campaign's send_at, else started_at; never an evergreen; never a form the user cannot edit).
+const MOUNTAIN_DAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+export function dateNotSend(name, sendInstant) {
+  if (sendInstant === null || sendInstant === undefined || sendInstant === '') return '';
+  const t = sendInstant instanceof Date ? sendInstant : new Date(sendInstant);
+  if (Number.isNaN(t.getTime())) return '';
+  const trimmed = str(name).trim();
+  if (trimmed === '' || isExempt('campaign', trimmed)) return '';
+  const d = leadingStdDate(cloneBaseOf(trimmed));
+  if (!d) return '';
+  const p = Object.fromEntries(MOUNTAIN_DAY.formatToParts(t).map((x) => [x.type, x.value]));
+  if (d.yyyy !== null) {
+    return d.mm === p.month && d.yyyy === p.year ? '' : `${p.month}-${p.year}`;
+  }
+  const yy = p.year.slice(-2);
+  return d.mm === p.month && d.dd === p.day && d.yy === yy ? '' : `${p.month}-${p.day}-${yy}`;
 }
 
 // §3.1 -- the one date formatter: MM-DD-YY, local date, zero-padded.

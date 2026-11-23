@@ -257,7 +257,8 @@ export default Vue.extend({
         { placeholder: this.$t('globals.fields.name'), value, maxlength: count.maxlength || 200 },
         (name) => {
           // Polish 2026-11-14 (review R7): an exact check failing refuses the clone.
-          if (isNameBlocked(nameWarnings('template', name))) {
+          // NAME-BLOCKS-SPEC D7: with the brand rows, so a leading brand (now blocking) refuses too.
+          if (isNameBlocked(nameWarnings('template', name, { brands: this.brandRows }))) {
             this.$utils.toast(this.$t('naming.cloneBlocked'), 'is-danger');
             return;
           }

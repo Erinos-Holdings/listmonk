@@ -1,5 +1,5 @@
 {
-  "_comment": "NAME-GUARDRAILS-SPEC I1/I2/I4b -- the ONE case table for naming.mjs::nameWarnings. kind campaign|template|list; ctx (optional) is merged over { brands }. Only the nine I2 names and the spec's calibration names come from live data -- never commit the live corpus (public repo).",
+  "_comment": "NAME-GUARDRAILS-SPEC I1/I2/I4b, NAME-BLOCKS-SPEC I1/I2 (the rows from 11-22-26 BFCM Drop 2 on) -- the ONE case table for naming.mjs::nameWarnings. kind campaign|template|list; ctx (optional) is merged over { brands }. Only the nine I2 names and the spec's calibration names come from live data -- never commit the live corpus (public repo).",
   "brands": [
     { "slug": "curated", "display_name": "Curated" },
     { "slug": "joybelle", "display_name": "JoyBelle" },
@@ -96,8 +96,9 @@
     { "kind": "campaign", "name": "Sale 11-14-26", "warnings": ["datePosition"] },
     { "kind": "campaign", "name": "Winback 11-2026", "warnings": ["datePosition"] },
     { "kind": "campaign", "name": "Sale 14-11-26", "warnings": ["dateFormat"] },
-    { "kind": "campaign", "name": "11-14-26–11-15-26 Sale", "warnings": [] },
-    { "kind": "campaign", "name": "11-14-26, 11-21-26 Sale", "warnings": [] },
+    { "kind": "campaign", "name": "11-14-26–11-15-26 Sale", "warnings": ["dateGlued"] },
+    { "kind": "campaign", "name": "11-14-26, 11-21-26 Sale", "warnings": ["dateGlued"] },
+    { "kind": "campaign", "name": "11-14-26 – 11-15-26 Sale", "warnings": [] },
 
     { "kind": "campaign", "name": "11-14-26", "warnings": ["handleMissing"] },
     { "kind": "campaign", "name": "11-14-26 ", "warnings": ["handleMissing"] },
@@ -127,6 +128,48 @@
     { "kind": "list", "name": "Render catalog (never send)", "ctx": { "brandSlug": "", "listType": "private" }, "warnings": [] },
     { "kind": "list", "name": "RobbieList", "ctx": { "brandSlug": "curated", "listType": "private" }, "warnings": ["listPrefix"] },
     { "kind": "list", "name": "Bounce webhook test (simulator)", "ctx": { "brandSlug": "curated", "listType": "private" }, "warnings": ["listPrefix"] },
-    { "kind": "list", "name": "SES readiness (internal seed)", "ctx": { "brandSlug": "curated", "listType": "private" }, "warnings": ["listPrefix"] }
+    { "kind": "list", "name": "SES readiness (internal seed)", "ctx": { "brandSlug": "curated", "listType": "private" }, "warnings": ["listPrefix"] },
+
+    { "kind": "campaign", "name": "11-22-26 BFCM Drop 2", "warnings": [] },
+    { "kind": "campaign", "name": "11-23-26 BFCM Drop 3", "warnings": [] },
+    { "kind": "campaign", "name": "11-19-26 BFCM Drop 1", "warnings": [] },
+    { "kind": "campaign", "name": "Post-purchase D14", "warnings": [] },
+    { "kind": "template", "name": "11-22-26 BFCM Drop 2", "warnings": [] },
+
+    { "kind": "campaign", "name": "11-19 BFCM Drop #2 EN", "warnings": ["language", "hash"] },
+    { "kind": "campaign", "name": "BFCM Drop #2 EN", "warnings": ["language", "hash"] },
+    { "kind": "campaign", "name": "ES Promo", "warnings": ["language"] },
+    { "kind": "campaign", "name": "11-23-26 Promo FR Launch", "warnings": ["language"] },
+    { "kind": "campaign", "name": "11-23-26 Drop 3 (DE)", "warnings": ["language"] },
+    { "kind": "campaign", "name": "Make IT Pop", "warnings": ["language"] },
+    { "kind": "template", "name": "IT Newsletter", "warnings": ["language"] },
+    { "kind": "campaign", "name": "Sale it", "warnings": [] },
+    { "kind": "campaign", "name": "It Is Here", "warnings": [] },
+    { "kind": "campaign", "name": "De Luxe", "warnings": [] },
+    { "kind": "campaign", "name": "11-23-26 en Vogue", "warnings": [] },
+    { "kind": "campaign", "name": "FRESH Start", "warnings": [] },
+    { "kind": "list", "name": "RUZE Drop 3 EN", "ctx": { "brandSlug": "ruze", "listType": "private" }, "warnings": [] },
+
+    { "kind": "template", "name": "Newsletter #3", "warnings": ["hash"] },
+    { "kind": "list", "name": "RUZE Promo #1", "ctx": { "brandSlug": "ruze", "listType": "private" }, "warnings": [] },
+
+    { "kind": "campaign", "name": "11-22-26 Drop3Launch", "warnings": ["dropGlued"] },
+    { "kind": "campaign", "name": "11-22-26 BFCM Drop#2", "warnings": ["hash", "dropGlued"] },
+    { "kind": "campaign", "name": "11-22-26 BFCM Drop-2", "warnings": ["dropGlued"] },
+    { "kind": "campaign", "name": "11-22-26 BFCM DROP3", "warnings": ["dropGlued"] },
+    { "kind": "template", "name": "Drop3", "warnings": ["dropGlued"] },
+    { "kind": "campaign", "name": "Dropship Week", "warnings": ["dropGlued"] },
+    { "kind": "campaign", "name": "Airdrop3", "warnings": [] },
+    { "kind": "campaign", "name": "11-23-26 BFCM Drop", "warnings": [] },
+    { "kind": "campaign", "name": "11-23-26 drop 3", "warnings": [] },
+    { "kind": "list", "name": "RUZE Drop3", "ctx": { "brandSlug": "ruze", "listType": "private" }, "warnings": [] },
+
+    { "kind": "campaign", "name": "11-23-26Drop3", "warnings": ["dateGlued"] },
+    { "kind": "campaign", "name": "11-20-26-Why Us", "warnings": ["dateGlued"] },
+    { "kind": "campaign", "name": "11-2026Winback", "warnings": ["dateGlued"] },
+    { "kind": "campaign", "name": "Clone1 11-23-26Drop 3", "warnings": ["dateGlued"] },
+    { "kind": "template", "name": "11-2026Winback", "warnings": ["dateGlued"] },
+    { "kind": "list", "name": "RUZE 11-14-26Sale", "ctx": { "brandSlug": "ruze", "listType": "private" }, "warnings": ["dateGlued"] },
+    { "kind": "campaign", "name": "11-23-26 Drop 3", "warnings": [] }
   ]
 }

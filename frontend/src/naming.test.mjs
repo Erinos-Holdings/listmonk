@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  BLOCKING_CODES, LANG_VALUES, NAME_MAX, WARNING_CODES, campaignBrandOf, chipsFor, clearsPrefill, cloneBaseOf, cloneName, duplicateOf,
+  BLOCKING_CODES, DATE_NOT_SEND, LANG_VALUES, NAME_MAX, dateNotSend, WARNING_CODES, campaignBrandOf, chipsFor, clearsPrefill, cloneBaseOf, cloneName, duplicateOf,
   formatNameDate, formerNameOf, isExempt, joinListName, langMatches, langOf, listDisplayName, listPrefixAddon, nameCounter,
   isNameBlocked, nameMessageTypeOf, namePlaceholder, namePrefill, nameWarnings, normalizeLang, splitListName,
 } from './naming.mjs'; // eslint-disable-line import/extensions
@@ -202,6 +202,12 @@ test('I1: no typing prefix of a correct name shows dateFormat', () => {
   for (let i = 1; i <= month.length; i += 1) {
     assert.ok(!nameWarnings('campaign', month.slice(0, i), { brands: WX.brands }).includes('dateFormat'), month.slice(0, i));
   }
+  // NAME-BLOCKS: typing the user's standard never lights a new blocking code on the way.
+  const drop = '11-22-26 BFCM Drop 2';
+  for (let i = 1; i <= drop.length; i += 1) {
+    const w = nameWarnings('campaign', drop.slice(0, i), { brands: WX.brands });
+    ['hash', 'dropGlued', 'dateGlued', 'language', 'brandFirst'].forEach((c) => assert.ok(!w.includes(c), `${drop.slice(0, i)} -> ${c}`));
+  }
   // A list name being typed never shows listPrefix (S2-8).
   ['RUZE Sale', 'Ruze Pouches Emails'].forEach((full, k) => {
     const ctx = { brands: WX.brands, brandSlug: 'ruze', listType: k === 0 ? 'private' : 'public' };
@@ -313,18 +319,55 @@ test('langScope: values, the pref, its label and the Campaigns param', () => {
 });
 
 // Post-release polish (2026-11-14): the exact checks block saving; the two heuristics stay amber.
-test('blocking codes: exact checks block, heuristics warn', () => {
-  assert.deepEqual([...BLOCKING_CODES].sort(), ['dateFormat', 'datePosition', 'handleMissing', 'listPrefix', 'stepCode', 'underscore']);
+// NAME-BLOCKS-SPEC D1/D2/D8 (2026-11-23): language and brandFirst block too, as do hash, dropGlued
+// and dateGlued; only the page-appended dateNotSend is amber.
+test('blocking codes: every nameWarnings code blocks; dateNotSend warns (NAME-BLOCKS I3)', () => {
+  assert.deepEqual([...WARNING_CODES], ['underscore', 'stepCode', 'language', 'brandFirst', 'hash', 'dropGlued', 'dateGlued',
+    'dateFormat', 'datePosition', 'listPrefix', 'handleMissing']);
+  assert.deepEqual([...BLOCKING_CODES].sort(), ['brandFirst', 'dateFormat', 'dateGlued', 'datePosition', 'dropGlued', 'handleMissing',
+    'hash', 'language', 'listPrefix', 'stepCode', 'underscore']);
   BLOCKING_CODES.forEach((c) => assert.ok(WARNING_CODES.includes(c), c));
-  assert.equal(isNameBlocked(['language', 'brandFirst']), false);
+  ['language', 'brandFirst', 'hash', 'dropGlued', 'dateGlued'].forEach((c) => assert.equal(isNameBlocked([c]), true, c));
+  assert.equal(DATE_NOT_SEND, 'dateNotSend');
+  assert.ok(!WARNING_CODES.includes(DATE_NOT_SEND));
+  assert.equal(isNameBlocked([DATE_NOT_SEND]), false);
+  assert.equal(nameMessageTypeOf([DATE_NOT_SEND]), 'is-warning');
+  assert.equal(nameMessageTypeOf(['hash', DATE_NOT_SEND]), 'is-danger');
   assert.equal(isNameBlocked(['language', 'underscore']), true);
   assert.equal(isNameBlocked([]), false);
   assert.equal(nameMessageTypeOf(['handleMissing']), 'is-danger');
-  assert.equal(nameMessageTypeOf(['language']), 'is-warning');
+  assert.equal(nameMessageTypeOf(['language']), 'is-danger');
   assert.equal(nameMessageTypeOf([], true), 'is-warning');
+  // The spec's two audit names are blocked; the user's standard is not.
+  ['11-19 BFCM Drop #2 EN', '11-22-26 Drop3Launch', '11-23-26Drop3'].forEach((n) => (
+    assert.equal(isNameBlocked(nameWarnings('campaign', n, { brands: WX.brands })), true, n)));
+  assert.equal(isNameBlocked(nameWarnings('campaign', '11-22-26 BFCM Drop 2', { brands: WX.brands })), false);
   assert.equal(nameMessageTypeOf([]), null);
   // An untouched new campaign (just the date prefill) and a bare list prefix are blocked.
   assert.equal(isNameBlocked(nameWarnings('campaign', namePrefill('campaign', { today: new Date(2026, 10, 14) }))), true);
   assert.equal(isNameBlocked(nameWarnings('list', joinListName('RUZE', ''), { brands: WX.brands, brandSlug: 'ruze', listType: 'private' })), true);
   assert.equal(isNameBlocked(nameWarnings('campaign', '11-14-26 Product Launch')), false);
+});
+
+// NAME-BLOCKS-SPEC I4 -- dateNotSend compares the name's leading date with the send instant's
+// Mountain calendar date (America/Denver via Intl), never the process's zone.
+test('NAME-BLOCKS I4: dateNotSend compares in America/Denver', () => {
+  const send = '2026-11-23T06:30:00Z'; // 11-22 23:30 MST
+  assert.equal(dateNotSend('11-22-26 BFCM Drop 2', send), '');
+  assert.equal(dateNotSend('11-23-26 BFCM Drop 3', send), '11-22-26');
+  assert.equal(dateNotSend('11-23-26 BFCM Drop 3', new Date(send)), '11-22-26');
+  assert.equal(dateNotSend('Clone1 11-22-26 BFCM Drop 2', send), '');
+  // Summer (MDT, UTC-6): 2026-07-01 05:30Z is 06-30 23:30 Mountain.
+  assert.equal(dateNotSend('06-30-26 Sale', '2026-07-01T05:30:00Z'), '');
+  assert.equal(dateNotSend('07-01-26 Sale', '2026-07-01T05:30:00Z'), '06-30-26');
+  // No send time -> no code.
+  [null, undefined, '', 'not a date'].forEach((t) => assert.equal(dateNotSend('11-23-26 BFCM Drop 3', t), '', String(t)));
+  // MM-YYYY compares the month.
+  assert.equal(dateNotSend('11-2026 Winback', send), '');
+  assert.equal(dateNotSend('11-2026 Winback', '2026-12-01T06:30:00Z'), ''); // still 11-30 in Mountain
+  assert.equal(dateNotSend('11-2026 Winback', '2026-12-15T18:00:00Z'), '12-2026');
+  assert.equal(dateNotSend('12-2026 Winback', '2026-12-01T06:30:00Z'), '11-2026');
+  assert.equal(dateNotSend('12-2026 Winback', '2026-12-01T08:00:00Z'), '');
+  // No valid leading date (dateless, misplaced, impossible) or an exempt name -> silent.
+  ['Welcome', 'Sale 11-14-26', '02-30-26 Sale', 'CATALOG 11-14-26 x'].forEach((n) => assert.equal(dateNotSend(n, send), '', n));
 });

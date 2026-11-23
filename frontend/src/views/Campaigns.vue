@@ -640,7 +640,8 @@ export default Vue.extend({
         (name) => {
           // Polish 2026-11-14 (review R7): the clone prompt is a name input too -- an exact check
           // failing refuses the clone, as the campaign form refuses the save.
-          if (isNameBlocked(nameWarnings('campaign', name))) {
+          // NAME-BLOCKS-SPEC D7: with the brand rows, so a leading brand (now blocking) refuses too.
+          if (isNameBlocked(nameWarnings('campaign', name, { brands: this.brandRows }))) {
             this.$utils.toast(this.$t('naming.cloneBlocked'), 'is-danger');
             return;
           }

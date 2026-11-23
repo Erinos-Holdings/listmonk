@@ -763,8 +763,8 @@ import {
   campaignBrand, filterByIds, scopeUnion, storeLists,
 } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
-  campaignBrandOf, clearsPrefill, duplicateOf, isNameBlocked, nameCounter, nameMessageTypeOf, namePlaceholder, namePrefill,
-  nameWarnings,
+  DATE_NOT_SEND, campaignBrandOf, clearsPrefill, dateNotSend, duplicateOf, isNameBlocked, nameCounter, nameMessageTypeOf,
+  namePlaceholder, namePrefill, nameWarnings,
 } from '../naming.mjs'; // eslint-disable-line import/extensions
 import { campaignLinkDefault } from '../linkDefaults.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
@@ -2852,16 +2852,31 @@ export default Vue.extend({
     // Fork (name guardrails, NAME-GUARDRAILS-SPEC §4) -- the shown warning codes: none on a form
     // the user cannot edit (legacy names on finished campaigns must not light up); handleMissing
     // only once touched (D6).
+    // NAME-BLOCKS-SPEC D6: then the amber dateNotSend, appended last (never blocking).
     nameWarningCodes() {
       if (!this.canEdit) return [];
-      return nameWarnings('campaign', this.form.name, { brands: this.brands })
+      const codes = nameWarnings('campaign', this.form.name, { brands: this.brands })
         .filter((c) => c !== 'handleMissing' || this.nameTouched);
+      return this.nameSendDate ? codes.concat(DATE_NOT_SEND) : codes;
+    },
+
+    // NAME-BLOCKS-SPEC D6 -- the send date (MM-DD-YY / MM-YYYY, Mountain) when the name's leading
+    // date differs from it; '' otherwise. The send instant: a scheduled campaign's send_at (the
+    // form's picker while Send later is on), else started_at. Never on an evergreen (dateless by
+    // convention) and never on a form the user cannot edit.
+    nameSendDate() {
+      if (!this.canEdit || this.form.evergreen || (this.data && this.data.evergreen)) return '';
+      let at = this.data && this.data.startedAt;
+      if (this.data && this.data.status === 'scheduled') {
+        at = this.form.sendLater && this.form.sendAtDate ? this.form.sendAtDate : this.data.sendAt;
+      }
+      return dateNotSend(this.form.name, at || null);
     },
 
     // The field's message: the warnings (one per line, code order), then the duplicate warning;
     // the hint (D4) when neither.
     nameMessage() {
-      const lines = this.nameWarningCodes.map((c) => this.$t(`naming.warn.${c}`));
+      const lines = this.nameWarningCodes.map((c) => this.$t(`naming.warn.${c}`, { date: this.nameSendDate }));
       if (this.duplicateName) {
         lines.push(this.$t('naming.duplicate', { name: this.duplicateName.name, id: this.duplicateName.id }));
       }
