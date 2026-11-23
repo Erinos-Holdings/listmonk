@@ -440,7 +440,8 @@
                      promoSeries.mjs; folded into attribs by foldPromo (foldAttribs). -->
                 <div v-if="showPromo" class="promo-series mb-4" data-cy="promo-series"
                   :title="promoEditable ? null : $t('campaigns.promoScheduled')">
-                  <p class="label is-size-7 mb-2">{{ $t('campaigns.promoSeries') }}</p>
+                  <!-- 2026-11-22 (user): the group label at the Automation / Send later label size. -->
+                  <p class="label mb-2">{{ $t('campaigns.promoSeries') }}</p>
                   <div class="columns mb-0">
                     <div class="column is-5">
                       <b-field :label="$t('campaigns.promoCode')" label-position="on-border"
@@ -728,7 +729,7 @@ import {
   audienceBox, hasEnSplit, enSplit, foldSilentSkip, foldSmartSending, silentSkipOf, skipSplitOf, smartSendingOf,
 } from '../audience-box.mjs'; // eslint-disable-line import/extensions
 import {
-  codeCounter, codeProblem, foldPromo, parseTags, previewKey as promoPreviewKeyOf, previewQuery, promoEditable as promoEditableOf,
+  codeProblem, foldPromo, parseTags, previewKey as promoPreviewKeyOf, previewQuery, promoEditable as promoEditableOf,
   promoFormOf, promoNotes, purchasedArg, applyStepChange, settleForFold, silentSkipForFold,
 } from '../promoSeries.mjs'; // eslint-disable-line import/extensions
 import {
@@ -3082,12 +3083,13 @@ export default Vue.extend({
       return codeProblem(this.form.promoCode);
     },
 
-    // `n/30` and the naming standard's hint, or the problem.
+    // The naming standard's hint, or the problem (2026-11-22, user: the `n/30` counter is dropped
+    // from the hint; the over-length problem still names the 30-character limit).
     promoCodeMessage() {
       if (this.promoCodeProblem) {
         return this.$t(this.promoCodeProblem, { name: String(this.form.promoCode || '').trim(), max: 30 });
       }
-      return `${codeCounter(this.form.promoCode)} · ${this.$t('campaigns.promoCodeHelp')}`;
+      return this.$t('campaigns.promoCodeHelp');
     },
 
     promoTagsParsed() {
