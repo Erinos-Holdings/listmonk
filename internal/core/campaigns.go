@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -34,7 +35,11 @@ const (
 //
 // Fork (naming standard, NAMING-STANDARD-SPEC D2) -- lang "" applies no filter; else that language
 // plus every campaign with no language (the language toggle).
-func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, lang string, offset, limit int) (models.Campaigns, int, error) {
+//
+// Fork (integrations LIST-AUDIENCE-SPEED-SPEC D1/D2) -- the per-row audience fill runs
+// audienceFillConcurrency rows at a time; noAudience skips only the audience count and marks each
+// row that would have carried one audience_pending.
+func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, lang string, offset, limit int, noAudience bool) (models.Campaigns, int, error) {
 	queryStr, stmt := makeSearchQuery(searchStr, orderBy, order, c.q.QueryCampaigns, campQuerySortFields)
 
 	// Unsafe to ignore scanning fields not present in models.Campaigns.
@@ -62,9 +67,10 @@ func (c *Core) QueryCampaigns(searchStr string, statuses, tags []string, orderBy
 	// Fork (list-page audience) -- the expected send of every not-yet-started broadcast on
 	// the page and the sent split of every English evergreen (FillAudience decides which
 	// rows carry what; no pre-filter here, or the evergreen split never reaches the list).
-	for i := range out {
-		c.FillAudience(&out[i])
-	}
+	// LIST-AUDIENCE-SPEED D1 -- bounded parallel; each call writes only its own element.
+	runBounded(len(out), audienceFillConcurrency, func(i int) {
+		c.fillAudience(&out[i], noAudience)
+	})
 
 	total := 0
 	if len(out) > 0 {
@@ -218,6 +224,40 @@ func (c *Core) GetCampaign(id int, uuid, archiveSlug string) (models.Campaign, e
 // Core.GetCampaign is the internal read every save/start/public view reuses, and the count
 // is a DISTINCT join over the lists' membership (implementation review M2).
 func (c *Core) FillAudience(cm *models.Campaign) {
+	c.fillAudience(cm, false)
+}
+
+// audienceFillConcurrency (fork, integrations LIST-AUDIENCE-SPEED-SPEC D1) is how many list rows
+// QueryCampaigns fills at once -- the one bound.
+const audienceFillConcurrency = 4
+
+// runBounded (LIST-AUDIENCE-SPEED D1, I2) calls fn once for every index in [0, n), at most limit
+// at a time, and returns once every call has returned.
+func runBounded(n, limit int, fn func(i int)) {
+	if limit < 1 {
+		limit = 1
+	}
+	var (
+		wg  sync.WaitGroup
+		sem = make(chan struct{}, limit)
+	)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int) {
+			defer func() {
+				<-sem
+				wg.Done()
+			}()
+			fn(i)
+		}(i)
+	}
+	wg.Wait()
+}
+
+// fillAudience is FillAudience with the count optional (LIST-AUDIENCE-SPEED D2): noCount skips
+// only CampaignLangAudience and marks the row audience_pending; every other field is filled.
+func (c *Core) fillAudience(cm *models.Campaign, noCount bool) {
 	if wantsSentNoLang(*cm) {
 		var row struct {
 			En     int `db:"en"`
@@ -230,20 +270,7 @@ func (c *Core) FillAudience(cm *models.Campaign) {
 			cm.SentNoLang = null.IntFrom(row.NoLang)
 		}
 	}
-	// Fork (smart sending, SMART-SENDING-SPEC D5) -- the attrib's effective value, on every served
-	// campaign JSON.
-	cm.SmartSendingOn = cm.SmartSending()
-	// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- likewise the toggle's effective value.
-	cm.SilentSkipOn = cm.SilentSkip()
-	// Fork (promo series, PROMO-SERIES-SPEC D1) -- the three promo fields' served values.
-	cm.PromoCodeOut = cm.PromoCode()
-	if s := cm.PromoStep(); s > 0 {
-		cm.PromoStepOut = null.IntFrom(s)
-	} else {
-		cm.PromoStepOut = null.Int{}
-	}
-	cm.PromoTagsOut = cm.PromoTags()
-	if !wantsAudience(*cm) {
+	if !prepareAudience(cm, noCount) {
 		return
 	}
 	a, err := c.CampaignLangAudience(cm.ID)
@@ -260,6 +287,33 @@ func (c *Core) FillAudience(cm *models.Campaign) {
 	cm.AudienceSkipped = null.IntFrom(a.Skipped + a.PurchasedSkipped + a.SilentSkipped)
 	cm.AudienceSilentSkipped = null.IntFrom(a.SilentSkipped)
 	cm.AudiencePurchasedSkipped = null.IntFrom(a.PurchasedSkipped)
+}
+
+// prepareAudience (pure, LIST-AUDIENCE-SPEED I1) sets FillAudience's served values that need no
+// query and reports whether the audience count should run: true exactly when the row wants an
+// audience and noCount is off. With noCount on, a row that wants one is marked AudiencePending.
+func prepareAudience(cm *models.Campaign, noCount bool) bool {
+	// Fork (smart sending, SMART-SENDING-SPEC D5) -- the attrib's effective value, on every served
+	// campaign JSON.
+	cm.SmartSendingOn = cm.SmartSending()
+	// Fork (60-day opens, SIXTY-DAY-OPENS-SPEC D4) -- likewise the toggle's effective value.
+	cm.SilentSkipOn = cm.SilentSkip()
+	// Fork (promo series, PROMO-SERIES-SPEC D1) -- the three promo fields' served values.
+	cm.PromoCodeOut = cm.PromoCode()
+	if s := cm.PromoStep(); s > 0 {
+		cm.PromoStepOut = null.IntFrom(s)
+	} else {
+		cm.PromoStepOut = null.Int{}
+	}
+	cm.PromoTagsOut = cm.PromoTags()
+	if !wantsAudience(*cm) {
+		return false
+	}
+	if noCount {
+		cm.AudiencePending = true
+		return false
+	}
+	return true
 }
 
 // wantsSentNoLang (fork, campaign-page audience box) reports whether cm carries the

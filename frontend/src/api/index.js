@@ -541,6 +541,15 @@ export const getCampaign = async (id) => http.get(`/api/campaigns/${id}`, {
   camelCase: campaignCamel(''),
 });
 
+// Fork (integrations LIST-AUDIENCE-SPEED-SPEC D3/D4) -- the Campaigns page's deferred To send read:
+// the Campaign page's own read without the body. No loading model (the table never blanks), no
+// store and no toast (a failed read shows "—", audienceFill.mjs).
+export const getCampaignAudience = async (id) => http.get(`/api/campaigns/${id}`, {
+  params: { no_body: true },
+  camelCase: campaignCamel(''),
+  disableToast: true,
+});
+
 // Fork (integrations EDITOR-SYNC-SPEC D1 "The read", S1) -- the campaign page's pre-save and
 // on-focus read of the server's copy: the full campaign as getCampaign reads it, with no loading
 // overlay and no toast. A failed read never blocks a save (the caller proceeds), so it must not

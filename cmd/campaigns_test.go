@@ -250,7 +250,7 @@ func TestCampaignLangFilterAgreesWithLangMatches(t *testing.T) {
 		var id int
 		h.db.Get(&id, `INSERT INTO campaigns (uuid, name, subject, from_email, body, messenger, template_id, attribs)
 			VALUES (gen_random_uuid(), 'C', 's', 'f@x', 'b', 'email', (SELECT id FROM templates LIMIT 1), $1) RETURNING id`, attribs)
-		res, _, err := h.app.core.QueryCampaigns("", nil, nil, "", "", true, nil, nil, nil, nil, c.Toggle, 0, 0)
+		res, _, err := h.app.core.QueryCampaigns("", nil, nil, "", "", true, nil, nil, nil, nil, c.Toggle, 0, 0, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -318,7 +318,7 @@ func TestCampaignSearchMatchesBrand(t *testing.T) {
 	mk("Unrelated", plain)
 
 	for _, q := range []string{"thirstygirl", "THIRSTYGIRL", "Thirsty", "Thirsty Girl", "No-purchase"} {
-		res, _, err := h.app.core.QueryCampaigns(q, nil, nil, "", "", true, nil, nil, nil, nil, "", 0, 0)
+		res, _, err := h.app.core.QueryCampaigns(q, nil, nil, "", "", true, nil, nil, nil, nil, "", 0, 0, false)
 		if err != nil {
 			t.Fatalf("%q: %v", q, err)
 		}
@@ -334,7 +334,7 @@ func TestCampaignSearchMatchesBrand(t *testing.T) {
 		}
 	}
 	// No false positive: a brand word that is neither slug nor display name.
-	if res, _, _ := h.app.core.QueryCampaigns("ruze", nil, nil, "", "", true, nil, nil, nil, nil, "", 0, 0); len(res) != 0 {
+	if res, _, _ := h.app.core.QueryCampaigns("ruze", nil, nil, "", "", true, nil, nil, nil, nil, "", 0, 0, false); len(res) != 0 {
 		t.Errorf("search ruze matched %d", len(res))
 	}
 }

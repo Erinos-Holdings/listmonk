@@ -353,7 +353,15 @@
           <!-- Fork (list-page audience) -- a broadcast that has not started shows the LIVE
                count it would send to now (its lists, opt-in rules and language), not the
                stored to_send, which stays 0 until the send-time claim. Zero is a warning. -->
-          <p v-if="hasAudience(props.row)" data-cy="stat-to-send">
+          <!-- LIST-AUDIENCE-SPEED-SPEC D4 -- "…" while the row's own read is pending, "—" when it
+               failed (unknown, never zero). -->
+          <p v-if="audienceStateOf(props.row)" data-cy="stat-to-send">
+            <label for="#">{{ $t('campaigns.toSend') }}</label>
+            <span :data-cy="`to-send-${audienceStateOf(props.row)}`">
+              {{ audienceStateOf(props.row) === 'pending' ? '…' : '—' }}
+            </span>
+          </p>
+          <p v-else-if="hasAudience(props.row)" data-cy="stat-to-send">
             <label for="#">{{ $t('campaigns.toSend') }}</label>
             <!-- Fork (smart sending, SMART-SENDING-SPEC D3) -- audience minus the would-be Smart
                  Sending skips (audience-box.mjs::toSendOf). -->
@@ -596,6 +604,9 @@ import {
 import {
   GROUP_ACTIONS, flattenGroups, groupAnalyticsRoute, memberRows, statusSummaryText,
 } from '../campaignGroups.mjs'; // eslint-disable-line import/extensions
+import {
+  audienceState, failAudience, mergeAudience, pendingIds,
+} from '../audienceFill.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5/D6) -- the rate cells, in column order after
@@ -658,6 +669,9 @@ export default Vue.extend({
       // keys of the expanded group rows (in-page state only).
       groupActions: GROUP_ACTIONS,
       expandedGroups: [],
+      // LIST-AUDIENCE-SPEED-SPEC D5 -- the list fetch generation; a deferred To send read applies
+      // only to the generation that issued it.
+      audienceGen: 0,
       // PAGE-STATE-SPEC D7 -- true while a restored list id awaits validation (mounted).
       restoredListCheck: !!restored,
       queryParams: {
@@ -830,6 +844,29 @@ export default Vue.extend({
     // (core.wantsAudience -- not-yet-started broadcasts); null means "no estimate", never zero.
     hasAudience(c) {
       return c.audience !== null && c.audience !== undefined;
+    },
+
+    // LIST-AUDIENCE-SPEED-SPEC D4 -- 'pending' ("…") until the row's own read lands, 'unknown'
+    // ("—") when it failed, else null (audienceFill.mjs::audienceState).
+    audienceStateOf(c) {
+      return audienceState(c);
+    },
+
+    // LIST-AUDIENCE-SPEED-SPEC D3/D5 -- after a plain-list fetch of generation `gen`, read every
+    // pending row's audience at once; each response is merged into its row by id, or marks it
+    // unknown, and only while no newer fetch has started.
+    fillAudiences(gen) {
+      if (gen !== this.audienceGen) {
+        return;
+      }
+      const rows = () => memberRows((this.campaigns && this.campaigns.results) || []);
+      pendingIds(rows()).forEach((id) => {
+        this.$api.getCampaignAudience(id).then((cm) => {
+          mergeAudience(rows(), gen, this.audienceGen, id, cm, Vue.set);
+        }).catch(() => {
+          failAudience(rows(), gen, this.audienceGen, id, Vue.set);
+        });
+      });
     },
 
     // Fork (campaign list rates, CAMPAIGN-RATES-SPEC D5) -- a Views/Clicks/Bounces cell's
@@ -1048,11 +1085,18 @@ export default Vue.extend({
       savePageState(sessionStore(window), CAMPAIGNS_PAGE, saveCampaignsPage(this.queryParams), pageContextOf(this.$store.getters));
       // Fork (campaign mode, CAMPAIGN-MODE-SPEC D5/D9) -- top-level rows (grouped=true) only in
       // Campaign mode; the ungrouped request is unchanged otherwise (G4).
+      // LIST-AUDIENCE-SPEED-SPEC D5 -- every fetch starts a new generation (grouped too, so a plain
+      // fetch's late reads never land on a Campaign-mode response).
+      this.audienceGen += 1;
+      const gen = this.audienceGen;
       if (this.groupMode) {
         this.$api.getCampaignGroups(params);
         return;
       }
-      this.$api.getCampaigns(params);
+      // D3 -- the plain list skips the audience count; To send is read per row after the rows land.
+      this.$api.getCampaigns({ ...params, no_audience: true }).then(() => {
+        this.fillAudiences(gen);
+      }, () => {});
     },
 
     // D4 -- the Paused row's value (null = no row).

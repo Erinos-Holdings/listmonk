@@ -175,8 +175,13 @@ func (a *App) GetCampaigns(c echo.Context) error {
 		}})
 	}
 
+	// Fork (integrations LIST-AUDIENCE-SPEED-SPEC D2) -- no_audience=true skips only the audience
+	// count and marks those rows audience_pending (the Campaigns page reads each from
+	// GET /api/campaigns/:id); absent or false, the response is unchanged.
+	noAudience, _ := strconv.ParseBool(c.QueryParam("no_audience"))
+
 	// Query and retrieve campaigns from the DB.
-	res, total, err := a.core.QueryCampaigns(query, status, f.tags, orderBy, order, f.hasAllPerm, f.permittedLists, f.evergreen, f.listIDs, f.ids, f.lang, pg.Offset, pg.Limit)
+	res, total, err := a.core.QueryCampaigns(query, status, f.tags, orderBy, order, f.hasAllPerm, f.permittedLists, f.evergreen, f.listIDs, f.ids, f.lang, pg.Offset, pg.Limit, noAudience)
 	if err != nil {
 		return err
 	}

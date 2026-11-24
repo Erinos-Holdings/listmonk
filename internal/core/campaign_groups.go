@@ -196,7 +196,7 @@ func (c *Core) QueryCampaignGroups(searchStr string, statuses, tags []string, or
 			union = append(union, int(id))
 		}
 	}
-	members, _, err := c.QueryCampaigns("", statuses, tags, "created_at", SortDesc, getAll, permittedLists, evergreen, listIDs, union, lang, 0, 0)
+	members, _, err := c.QueryCampaigns("", statuses, tags, "created_at", SortDesc, getAll, permittedLists, evergreen, listIDs, union, lang, 0, 0, false)
 	if err != nil {
 		return nil, 0, err
 	}

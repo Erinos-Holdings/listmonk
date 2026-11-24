@@ -197,6 +197,11 @@ type CampaignMeta struct {
 	// step 2/3 with tags and the feed is current); AudienceSkipped is the TOTAL (Smart Sending +
 	// purchased + silent). Null exactly when Audience is.
 	AudiencePurchasedSkipped null.Int `db:"-" json:"audience_purchased_skipped"`
+	// AudiencePending (fork, integrations LIST-AUDIENCE-SPEED-SPEC D2) is true on a list row that
+	// would carry the audience fields above when the list was read with no_audience=true: the count
+	// was skipped and the page reads it from GET /api/campaigns/:id. Omitted when false, so the
+	// default list response is unchanged (I4).
+	AudiencePending bool `db:"-" json:"audience_pending,omitempty"`
 	// SentEn / SentNoLang: on a not-done ENGLISH evergreen only, how many of the subscribers
 	// it has sent to carry English / no language today (get-evergreen-sent-split) -- the
 	// split shown under its sent count. Null everywhere else.
