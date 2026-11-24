@@ -10,6 +10,9 @@
 import { LANG_VALUES, SUBSCRIBER_ROUTES, normalizeLang } from './langScope.mjs'; // eslint-disable-line import/extensions
 import { scopeListIds, storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { groupLists } from './listGroups.mjs'; // eslint-disable-line import/extensions
+import {
+  RESTORE_PARAM, SORT_ORDERS, enumOf, isOwnRestore, keptListId, pageNumberOf, routeHasAny, textOf,
+} from './pageState.mjs'; // eslint-disable-line import/extensions
 
 // D5 -- the Status dropdown's segments, in display order (the server's subscription_segment()
 // values; labels are the lists.grid.<segment> keys).
@@ -142,4 +145,98 @@ export function statusEnabled(routeListId) {
 export function statusQuery(query, segment) {
   const { segment: _s, subscription_status: _ss, ...rest } = query || {};
   return SEGMENTS.includes(segment) ? { ...rest, segment } : rest;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Integrations PAGE-STATE-SPEC §3 -- the Subscribers page's session state (pageState.mjs)
+// ---------------------------------------------------------------------------------------------
+// Two halves. The URL-held fields (list, simple search) restore by ONE $router.replace on a bare
+// entry (D8), carrying pageState.mjs::RESTORE_PARAM in memory; the data-held fields (advanced query
+// + open, sort, page) apply on a bare entry or on the mount that replace lands on (isOwnRestore) --
+// never on a link. `segment` is a link scope (D4) and `lang` is the navbar toggle's (the guard adds
+// it): neither is kept, and `lang` does not make a route a link. The legacy `subscription_status`
+// is not kept either: only a link sets it and no control on the page clears it (D3/D4).
+
+export const SUBSCRIBERS_PAGE = 'subscribers';
+
+// D5 -- the query parameters the page reads (besides the navbar's lang); the subscribers_list
+// route's listID param is a link too.
+export const SUBSCRIBERS_LINK_KEYS = Object.freeze(['segment', 'search', 'subscription_status']);
+
+// D7 -- the sortable columns (and the default id).
+export const SUBSCRIBER_SORT_FIELDS = Object.freeze(['id', 'email', 'name', 'lang', 'created_at', 'updated_at']);
+
+const posIntOrNull = (v) => (Number.isInteger(v) && v > 0 ? v : null);
+
+// D3/D6 -- the kept fields of a fetch: `search` is the simple box's text ('' under advanced),
+// `queryExp` the applied advanced query, `advanced` whether the advanced box is open.
+export function saveSubscribersPage(s) {
+  const v = s || {};
+  const advanced = v.advanced === true;
+  return {
+    listID: posIntOrNull(v.listID),
+    search: advanced ? '' : textOf(v.search).trim(),
+    queryExp: advanced ? textOf(v.queryExp) : '',
+    advanced,
+    orderBy: enumOf(v.orderBy, SUBSCRIBER_SORT_FIELDS, 'id'),
+    order: enumOf(v.order, SORT_ORDERS, 'desc'),
+    page: pageNumberOf(v.page),
+  };
+}
+
+// D5 -- a bare entry: the plain subscribers route with none of the page's query parameters.
+export function isBareSubscribersRoute(route) {
+  return !!route && route.name === 'subscribers' && !routeHasAny(route.query, SUBSCRIBERS_LINK_KEYS);
+}
+
+// D5/I2 -- the data-held fields to apply on mount, or null (today's defaults): applied on a bare
+// entry or on the page's own restore replace, never on a link. I2: an advanced query restores OPEN
+// (no hidden SQL filter).
+export function restoreSubscribersPage(stored, route) {
+  if (!stored || typeof stored !== 'object' || !route
+    || !(isBareSubscribersRoute(route) || isOwnRestore(route.params))) {
+    return null;
+  }
+  const queryExp = textOf(stored.queryExp);
+  return {
+    queryExp,
+    advanced: stored.advanced === true || queryExp.trim() !== '',
+    orderBy: enumOf(stored.orderBy, SUBSCRIBER_SORT_FIELDS, 'id'),
+    order: enumOf(stored.order, SORT_ORDERS, 'desc'),
+    page: pageNumberOf(stored.page),
+  };
+}
+
+// D7 -- the list ids the Lists dropdown offers under the selection (listOptions without the route's
+// extra list): none under All brands, where the dropdown is disabled.
+export function offeredSubscriberListIds(lists, selection) {
+  const o = listOptions(lists, selection, null);
+  return [...o.ordinary, ...o.system].map((l) => l.id);
+}
+
+// D8/I4 -- the one replace of a bare entry to the stored URL-held fields, or null: never when the
+// route is not bare (a link, or the replace's own landing -- which is what prevents a loop), never
+// without a stored list/search. The list id is validated (D7); the route's lang (the navbar's)
+// rides along unchanged, so the router guard sees nothing to correct.
+export function subscribersRestoreRoute(stored, route, offeredIds) {
+  if (!stored || typeof stored !== 'object' || !isBareSubscribersRoute(route) || isOwnRestore(route.params)) {
+    return null;
+  }
+  const listID = keptListId(stored.listID, offeredIds);
+  const search = stored.advanced === true ? '' : textOf(stored.search).trim();
+  if (listID === null && !search) {
+    return null;
+  }
+  const query = {};
+  const rq = route.query || {};
+  if (typeof rq.lang === 'string') {
+    query.lang = rq.lang;
+  }
+  if (search) {
+    query.search = search;
+  }
+  if (listID !== null) {
+    return { name: 'subscribers_list', params: { listID: String(listID), [RESTORE_PARAM]: '1' }, query };
+  }
+  return { name: 'subscribers', params: { [RESTORE_PARAM]: '1' }, query };
 }

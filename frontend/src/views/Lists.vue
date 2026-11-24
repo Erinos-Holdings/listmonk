@@ -13,7 +13,9 @@
           <router-link v-if="queryParams.status !== 'archived'" :to="{ name: 'lists', query: { status: 'archived' } }">
             {{ $t('globals.buttons.view') }} {{ $t('lists.archived').toLowerCase() }} &rarr;
           </router-link>
-          <router-link v-else :to="{ name: 'lists' }">
+          <!-- Integrations PAGE-STATE-SPEC D5 -- an explicit ?status=active, so the link wins over the
+               session's kept archived view (a bare /lists restores it). -->
+          <router-link v-else :to="{ name: 'lists', query: { status: 'active' } }">
             {{ $t('globals.buttons.view') }} {{ $t('menu.allLists').toLowerCase() }} &rarr;
           </router-link>
         </div>
@@ -37,7 +39,7 @@
 
     <!-- Polish 2026-11-14: the filter caption -- the selected brand and language (filterBar.mjs). -->
     <b-table :data="lists.results" :caption="$filterCaption()" :loading="loading.listsFull" @check-all="onTableCheck" @check="onTableCheck"
-      :checked-rows.sync="bulk.checked" hoverable :default-sort="['created_at', 'desc']" paginated backend-pagination
+      :checked-rows.sync="bulk.checked" hoverable :default-sort="defaultSort" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page" :per-page="lists.perPage"
       :total="lists.total" checkable backend-sorting @sort="onSort" ref="table">
       <template #top-left>
@@ -327,7 +329,10 @@ import { brandLabelOf, canCreateCampaign, listsScopeParams } from '../brandScope
 import { formerNameOf, listDisplayName } from '../naming.mjs'; // eslint-disable-line import/extensions
 import { withSunsetItem } from '../listSunset.mjs'; // eslint-disable-line import/extensions
 import { journeyLockedOf, withTriggerItem, activeWordOf } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
-import { showSystemLists, systemListsParams, SHOW_SYSTEM_PREF } from '../listsPage.mjs'; // eslint-disable-line import/extensions
+import {
+  LISTS_PAGE, restoreListsPage, saveListsPage, showSystemLists, systemListsParams, SHOW_SYSTEM_PREF,
+} from '../listsPage.mjs'; // eslint-disable-line import/extensions
+import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
 // Fork (list grid; dashboard counts, integrations DASHBOARD-COUNTS-SPEC D7) -- the one lines rule,
 // shared with the Dashboard.
 import { gridLines, langGridLines } from '../gridLines.mjs'; // eslint-disable-line import/extensions
@@ -348,6 +353,9 @@ export default Vue.extend({
   mixins: [brandScopeMixin],
 
   data() {
+    // Integrations PAGE-STATE-SPEC D5 -- the session's search/status/sort/page unless the route
+    // carries ?status= (a link wins); null otherwise.
+    const restored = restoreListsPage(loadPageState(sessionStore(window), LISTS_PAGE), this.$route.query);
     return {
       // Current list item being edited.
       curItem: null,
@@ -395,14 +403,16 @@ export default Vue.extend({
       showSystem: showSystemLists(this.$utils.getPref(SHOW_SYSTEM_PREF)),
 
       queryParams: {
-        page: 1,
-        query: '',
+        page: restored ? restored.page : 1,
+        query: restored ? restored.query : '',
         // Fork -- must name a column in core.go listQuerySortFields; anything else is
         // silently replaced by created_at DESC server-side, and must match default-sort.
-        orderBy: 'created_at',
-        order: 'desc',
-        status: this.$route.query.status || 'active',
+        orderBy: restored ? restored.orderBy : 'created_at',
+        order: restored ? restored.order : 'desc',
+        status: restored ? restored.status : (this.$route.query.status || 'active'),
       },
+      // PAGE-STATE-SPEC D3 -- Buefy reads default-sort once: a restored sort shows its arrow.
+      defaultSort: restored ? [restored.orderBy, restored.order] : ['created_at', 'desc'],
 
       // Table bulk row selection states.
       bulk: {
@@ -603,6 +613,8 @@ export default Vue.extend({
     },
 
     getLists() {
+      // Integrations PAGE-STATE-SPEC D6 -- what this fetch applies is what the session keeps.
+      savePageState(sessionStore(window), LISTS_PAGE, saveListsPage(this.queryParams));
       this.$api.queryLists({
         page: this.queryParams.page,
         query: this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' '),

@@ -110,7 +110,7 @@
     <b-table :data="subscribers.results ?? []" :caption="$filterCaption({ langText: captionLang })" :loading="loading.subscribers" @check-all="onTableCheck"
       @check="onTableCheck" :checked-rows.sync="bulk.checked" paginated backend-pagination pagination-position="both"
       @page-change="onPageChange" :current-page="queryParams.page" :per-page="subscribers.perPage"
-      :total="subscribers.total" hoverable checkable backend-sorting @sort="onSort">
+      :total="subscribers.total" hoverable checkable backend-sorting :default-sort="defaultSort" @sort="onSort">
       <template #top-left>
         <!-- Fork (global language, GLOBAL-LANG-SPEC D4, S2-1) -- the export and every by-query
              action are disabled while the rows are loading (byQueryBusy), so the rows, the total in
@@ -281,7 +281,9 @@ import {
 import { subscriberCaptionLang } from '../filterBar.mjs'; // eslint-disable-line import/extensions
 import {
   SEGMENTS, langCell, langColumnShown, listOptions, listRoute, routeListIdOf, statusEnabled, statusQuery,
+  SUBSCRIBERS_PAGE, offeredSubscriberListIds, restoreSubscribersPage, saveSubscribersPage, subscribersRestoreRoute,
 } from '../subscriberFilters.mjs'; // eslint-disable-line import/extensions
+import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -298,10 +300,15 @@ export default Vue.extend({
   mixins: [brandScopeMixin],
 
   data() {
+    // Integrations PAGE-STATE-SPEC D5/D8/I2 -- the session's advanced query (open), sort and page,
+    // on a bare entry or on the page's own restore replace only (never a link); null otherwise.
+    const restored = restoreSubscribersPage(loadPageState(sessionStore(window), SUBSCRIBERS_PAGE), this.$route);
     return {
       // Current subscriber item being edited.
       curItem: null,
-      isSearchAdvanced: false,
+      isSearchAdvanced: restored ? restored.advanced : false,
+      // PAGE-STATE-SPEC D3 -- Buefy reads default-sort once: a restored sort shows its arrow.
+      defaultSort: restored ? [restored.orderBy, restored.order] : undefined,
       isEditing: false,
       isFormVisible: false,
       isBulkListFormVisible: false,
@@ -335,14 +342,14 @@ export default Vue.extend({
       // Query params to filter the getSubscribers() API call.
       queryParams: {
         // Search query expression.
-        queryExp: '',
+        queryExp: restored ? restored.queryExp : '',
         search: '',
 
         // ID of the list the current subscriber view is filtered by.
         listID: null,
-        page: 1,
-        orderBy: 'id',
-        order: 'desc',
+        page: restored ? restored.page : 1,
+        orderBy: restored ? restored.orderBy : 'id',
+        order: restored ? restored.order : 'desc',
         subStatus: null,
 
         // Fork (list grid). Server-authored filters from the Lists-page grid (?segment=&lang=).
@@ -495,7 +502,19 @@ export default Vue.extend({
       if (listId === (this.queryParams.listID || null)) {
         return;
       }
+      this.keepNavState(listId);
       this.$router.push(listRoute(this.withRouteSearch({ ...this.$route.query }), listId));
+    },
+
+    // Integrations PAGE-STATE-SPEC D5/D6 -- a list navigation of the page's own (a pick, a brand
+    // change) is kept BEFORE the push: the plain route it may land on is a bare entry, which would
+    // otherwise restore the list it is leaving. Kept as the push carries it: the list and the simple
+    // search; the advanced query, sort and page are dropped, as the remount drops them.
+    keepNavState(listId) {
+      savePageState(sessionStore(window), SUBSCRIBERS_PAGE, saveSubscribersPage({
+        listID: listId,
+        search: this.isSearchAdvanced ? '' : this.queryInput,
+      }));
     },
 
     // SUBSCRIBERS-FILTERS D5 -- a status pick ('' = All statuses) on the current list route.
@@ -541,6 +560,14 @@ export default Vue.extend({
       } else {
         delete qp.queryExp;
       }
+
+      // Integrations PAGE-STATE-SPEC D6 -- what this query applies is what the session keeps (the
+      // segment and the navbar's lang are not kept).
+      savePageState(sessionStore(window), SUBSCRIBERS_PAGE, saveSubscribersPage({
+        ...this.queryParams,
+        search: this.queryInput,
+        advanced: this.isSearchAdvanced,
+      }));
 
       // Fork (global language, D4, S2-1, I4c) -- numbered; the api layer commits the rows only
       // when this is still the mounted page's latest query.
@@ -799,6 +826,7 @@ export default Vue.extend({
         return;
       }
       if (this.$route.name === 'subscribers_list') {
+        this.keepNavState(null);
         this.$router.push(listRoute(this.withRouteSearch({ ...this.$route.query }), null));
         return;
       }
@@ -941,8 +969,12 @@ export default Vue.extend({
     }
     // The simple search a language pick carried across its reload (onLangSelect).
     if (typeof this.$route.query.search === 'string' && this.$route.query.search) {
+      // PAGE-STATE-SPEC D8 -- the input handler resets the page to 1; keep a restored page (1 on a
+      // link, where nothing is restored).
+      const { page } = this.queryParams;
       this.queryInput = this.$route.query.search;
       this.onSimpleQueryInput(this.queryInput);
+      this.queryParams.page = page;
     }
 
     if (this.$route.params.id) {
@@ -953,7 +985,25 @@ export default Vue.extend({
     // Get subscribers on load. Fork (global brand, D3) -- once the lists have loaded (I13).
     // GLOBAL-LANG stage 4 S4-1 -- the `subscriber` route too, so the table behind the form shows
     // this page's own rows (never another mount's) and by-query actions un-busy on its answer.
-    this.afterListsLoaded(() => this.querySubscribers());
+    // Integrations PAGE-STATE-SPEC D8 -- a bare entry with a stored list/search/status replaces once
+    // to it (a single remount, like opening a shared link) instead of querying here.
+    this.afterListsLoaded(() => {
+      const restoreTo = subscribersRestoreRoute(
+        loadPageState(sessionStore(window), SUBSCRIBERS_PAGE),
+        this.$route,
+        offeredSubscriberListIds(this.lists, this.brandSelection),
+      );
+      if (restoreTo) {
+        this.$router.replace(restoreTo).catch(() => {
+          // An aborted replace leaves this mount in place: query as today.
+          if (this.pageMounted) {
+            this.querySubscribers();
+          }
+        });
+        return;
+      }
+      this.querySubscribers();
+    });
   },
 });
 </script>

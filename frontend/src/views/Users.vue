@@ -17,7 +17,7 @@
     </header>
 
     <b-table :data="users" :loading="loading.users" hoverable checkable :checked-rows.sync="checked"
-      default-sort="createdAt" backend-sorting @sort="onSort" @check-all="onTableCheck" @check="onTableCheck">
+      :default-sort="defaultSort" backend-sorting @sort="onSort" @check-all="onTableCheck" @check="onTableCheck">
       <template #top-left>
         <div class="columns">
           <div class="column is-6">
@@ -148,6 +148,8 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import stepUp, { stepUpError } from '../stepUp';
+import { USERS_PAGE, restoreUsersPage, saveUsersPage } from '../usersPage.mjs'; // eslint-disable-line import/extensions
+import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
 
 import UserForm from './UserForm.vue';
 
@@ -158,13 +160,17 @@ export default Vue.extend({
   },
 
   data() {
+    // Integrations PAGE-STATE-SPEC -- the session's search, sort and page (null = defaults).
+    const restored = restoreUsersPage(loadPageState(sessionStore(window), USERS_PAGE));
     return {
+      // PAGE-STATE-SPEC D3 -- Buefy reads default-sort once: a restored sort shows its arrow.
+      defaultSort: restored ? [restored.orderBy, restored.order] : 'createdAt',
       curItem: null,
       isEditing: false,
       isFormVisible: false,
       users: [],
       checked: [],
-      queryParams: {
+      queryParams: restored || {
         page: 1,
         query: '',
         orderBy: 'id',
@@ -212,6 +218,8 @@ export default Vue.extend({
     },
 
     getUsers() {
+      // Integrations PAGE-STATE-SPEC D6 -- what this fetch applies is what the session keeps.
+      savePageState(sessionStore(window), USERS_PAGE, saveUsersPage(this.queryParams));
       this.$api.queryUsers({
         query: this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' '),
         order_by: this.queryParams.orderBy,

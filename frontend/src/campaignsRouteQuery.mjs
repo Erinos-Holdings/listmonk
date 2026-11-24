@@ -43,6 +43,9 @@
 
 import { storeLists } from './brandScope.mjs'; // eslint-disable-line import/extensions
 import { groupLists } from './listGroups.mjs'; // eslint-disable-line import/extensions
+import {
+  SORT_ORDERS, enumOf, keptListId, pageNumberOf, routeHasAny, textOf,
+} from './pageState.mjs'; // eslint-disable-line import/extensions
 
 // A repeated query param arrives as an array; the first element is the one read (evergreen).
 const first = (v) => (Array.isArray(v) ? v[0] : v);
@@ -365,4 +368,55 @@ export function afterScopeChange(listID, lists, evergreen) {
   }
   const l = storeLists(lists).find((x) => x && x.id === listID);
   return l && listQualifies(l, evergreen) ? listID : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Integrations PAGE-STATE-SPEC §3 -- the Campaigns page's session state (pageState.mjs)
+// ---------------------------------------------------------------------------------------------
+
+export const CAMPAIGNS_PAGE = 'campaigns';
+
+// D5 -- the route query parameters the page reads: any of them and the link wins.
+export const CAMPAIGNS_LINK_KEYS = Object.freeze(['list_id', 'evergreen', 'status', 'id']);
+
+// D7 -- the sortable columns (Name, Status, Timestamps); anything else restores the default.
+export const CAMPAIGN_SORT_FIELDS = Object.freeze(['created_at', 'name', 'status']);
+
+// D3/D6 -- the kept fields of the fetch's queryParams: the search, the single list filter, the
+// Status header filter, the sort and the page. Never the route id / list scopes (D4), the kind pill
+// (its own pref), a selection or a modal.
+export function saveCampaignsPage(qp) {
+  const q = qp || {};
+  return {
+    query: textOf(q.query),
+    listID: Number.isInteger(q.listID) && q.listID > 0 ? q.listID : null,
+    routeStatus: CAMPAIGN_STATUSES.includes(q.routeStatus) ? q.routeStatus : null,
+    orderBy: enumOf(q.orderBy, CAMPAIGN_SORT_FIELDS, 'created_at'),
+    order: enumOf(q.order, SORT_ORDERS, 'desc'),
+    page: pageNumberOf(q.page),
+  };
+}
+
+// D5/D7 -- the state to apply on mount, or null (apply today's route/default state): null when the
+// route carries any CAMPAIGNS_LINK_KEYS (a link wins) or nothing is stored. Each field validated;
+// the list id is kept only when it is among `offeredIds` (offeredCampaignListIds) -- passed
+// undefined (the lists not loaded yet), a positive-integer id is returned as is and the caller
+// validates it with pageState.mjs::keptListId once they are.
+export function restoreCampaignsPage(stored, query, offeredIds) {
+  if (!stored || typeof stored !== 'object' || routeHasAny(query, CAMPAIGNS_LINK_KEYS)) {
+    return null;
+  }
+  const s = saveCampaignsPage(stored);
+  return {
+    ...s,
+    listID: offeredIds === undefined ? s.listID : keptListId(s.listID, offeredIds),
+  };
+}
+
+// D7 -- the ids the Lists select offers under "All lists" (campaignListOptions without the appended
+// selected list): the brand scope's store lists that qualify under the kind.
+export function offeredCampaignListIds(lists, scopeListIds, evergreen) {
+  return storeLists(lists)
+    .filter((l) => l && (!Array.isArray(scopeListIds) || scopeListIds.includes(l.id)) && listQualifies(l, evergreen))
+    .map((l) => l.id);
 }

@@ -282,7 +282,8 @@ test('global language wiring', () => {
   // S4-1: the subscriber route queries too -- the list query is outside the params.id branch.
   const mountedAt = subs.indexOf('\n  mounted() {');
   const mounted = subs.slice(mountedAt, subs.indexOf('\n  },', mountedAt));
-  assert.match(mounted, /if \(this\.\$route\.params\.id\) \{[\s\S]*?\n {4}\}\n[\s\S]*?\n {4}this\.afterListsLoaded\(\(\) => this\.querySubscribers\(\)\);/);
+  // PAGE-STATE-SPEC D8 -- the callback first decides a bare entry's restore replace, then queries.
+  assert.match(mounted, /if \(this\.\$route\.params\.id\) \{[\s\S]*?\n {4}\}\n[\s\S]*?\n {4}this\.afterListsLoaded\(\(\) => \{[\s\S]*?\n {6}this\.querySubscribers\(\);\n {4}\}\);/);
   assert.doesNotMatch(mounted, /\} else \{/);
   // S4-3: closing the form keeps the route's lang (only lang).
   assert.match(method('onFormClose'), /\{ lang: this\.\$route\.query\.lang \}/);

@@ -10,7 +10,7 @@
     </header>
 
     <!-- Polish 2026-11-14: the filter caption (the brand only -- bounces are never by language). -->
-    <b-table :data="bounces.results" :caption="$filterCaption({ lang: false })" :hoverable="true" :loading="loading.bounces" default-sort="createdAt" checkable
+    <b-table :data="bounces.results" :caption="$filterCaption({ lang: false })" :hoverable="true" :loading="loading.bounces" :default-sort="defaultSort" checkable
       @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" detailed show-detail-icon
       paginated backend-pagination pagination-position="both" @page-change="onPageChange"
       :current-page="queryParams.page" :per-page="bounces.perPage" :total="bounces.total" backend-sorting
@@ -103,6 +103,10 @@ import Vue from 'vue';
 import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 import brandScopeMixin from '../brandScopeMixin';
+import {
+  BOUNCES_PAGE, restoreBouncesPage, saveBouncesPage,
+} from '../bouncesPage.mjs'; // eslint-disable-line import/extensions
+import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -113,8 +117,13 @@ export default Vue.extend({
   mixins: [brandScopeMixin],
 
   data() {
+    // Integrations PAGE-STATE-SPEC D5 -- the session's sort and page unless the route carries a
+    // campaign_id or source (a link wins); null otherwise.
+    const restored = restoreBouncesPage(loadPageState(sessionStore(window), BOUNCES_PAGE), this.$route.query);
     return {
       bounces: {},
+      // PAGE-STATE-SPEC D3 -- Buefy reads default-sort once: a restored sort shows its arrow.
+      defaultSort: restored ? [restored.orderBy, restored.order] : 'createdAt',
 
       // Table bulk row selection states.
       bulk: {
@@ -124,9 +133,9 @@ export default Vue.extend({
 
       // Query params to filter the getSubscribers() API call.
       queryParams: {
-        page: 1,
-        orderBy: 'created_at',
-        order: 'desc',
+        page: restored ? restored.page : 1,
+        orderBy: restored ? restored.orderBy : 'created_at',
+        order: restored ? restored.order : 'desc',
         campaignID: 0,
         source: '',
       },
@@ -166,6 +175,9 @@ export default Vue.extend({
         campaign_id: this.queryParams.campaign_id,
         source: this.queryParams.source,
       };
+      // Integrations PAGE-STATE-SPEC D6 -- what this fetch applies is what the session keeps
+      // (the sort and page; never the campaign_id link scope, D4, nor the source).
+      savePageState(sessionStore(window), BOUNCES_PAGE, saveBouncesPage(this.queryParams));
       // Fork (global brand, D5) -- a brand's bounces are the bounces of its lists' subscribers;
       // under All brands no list_id is sent (today's rows exactly).
       if (this.scopeListIds) {

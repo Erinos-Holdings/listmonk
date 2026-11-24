@@ -372,6 +372,8 @@ import {
   ANALYTICS_PANE_PREF, initialAnalyticsPane, readPane, writePane,
 } from '../paneState.mjs'; // eslint-disable-line import/extensions
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
+import { loadPageState, savePageState } from '../pageState.mjs'; // eslint-disable-line import/extensions
+import { ANALYTICS_PAGE, analyticsRestoreQuery, saveAnalyticsPage } from '../analyticsPage.mjs'; // eslint-disable-line import/extensions
 import { viewPaneValue } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { analyticsSkippedRows } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { pickerLabel } from '../promoSeries.mjs'; // eslint-disable-line import/extensions
@@ -1251,10 +1253,20 @@ export default Vue.extend({
     // Fork (hide No link, 2026-10-19) -- the remembered checkbox; default shown.
     this.shopLinksHideNone = this.$utils.getPref('analytics.shopLinksHideNone') === 'true';
 
+    // Integrations PAGE-STATE-SPEC D8 -- a bare entry on the Campaign pane replaces once to this
+    // session's last search (a single remount); never when the route has a query (a link wins).
+    const restoreQuery = analyticsRestoreQuery(loadPageState(sessionStore(window), ANALYTICS_PAGE), this.$route.query, this.pane);
+    if (restoreQuery) {
+      this.$router.replace({ query: restoreQuery }).catch(() => {});
+      return;
+    }
+
     // Fetch one or more campaigns if there are ?id params, wait for the fetches
     // to finish, add them to the campaign selector and submit the form.
     const ids = this.$utils.parseQueryIDs(this.$route.query.id);
     if (ids.length > 0) {
+      // PAGE-STATE-SPEC D6 -- the search this mount applies is the one the session keeps.
+      savePageState(sessionStore(window), ANALYTICS_PAGE, saveAnalyticsPage(this.$route.query));
       // Fork (brand analytics, D4) -- one read through the picker endpoint; ids the user may not
       // see (or that do not exist) are simply absent, so a shared link degrades to the permitted
       // subset. Kept in the URL's order.

@@ -171,6 +171,8 @@ import { BRAND_TAG_PREFIX } from '../brand';
 import { foldMediaTag, isValidMediaTag, normalizeMediaTagsLenient } from '../mediaTags';
 import brandScopeMixin from '../brandScopeMixin';
 import { mediaScopeContext } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { MEDIA_PAGE, restoreMediaPage, saveMediaPage } from '../mediaPage.mjs'; // eslint-disable-line import/extensions
+import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -207,7 +209,8 @@ export default Vue.extend({
         query: '',
       },
 
-      // Fork (media tags). Filter state -- never persisted (D5).
+      // Fork (media tags). Filter state -- on the /media page kept per browser session
+      // (integrations PAGE-STATE-SPEC, superseding MEDIA-TAGS-SPEC D5); the picker keeps nothing.
       chips: [],
       untaggedOn: false,
       allOn: false,
@@ -246,6 +249,17 @@ export default Vue.extend({
         if (this.untaggedOn) {
           params.untagged = true;
         }
+      }
+      // Integrations PAGE-STATE-SPEC D6 -- the page (never the picker) keeps what this fetch applies.
+      if (!this.isModal) {
+        savePageState(sessionStore(window), MEDIA_PAGE, saveMediaPage({
+          query: this.queryParams.query,
+          page: this.queryParams.page,
+          chips: this.chips,
+          untaggedOn: this.untaggedOn,
+          allOn: this.allOn,
+          brandKey: this.brandKey,
+        }));
       }
       this.$api.getMedia(params);
     },
@@ -563,6 +577,16 @@ export default Vue.extend({
   mounted() {
     const first = () => {
       this.initFilter();
+      // Integrations PAGE-STATE-SPEC D7 -- the page restores this session's filter, page and search
+      // when they were kept under the current brand selection.
+      const restored = this.isModal ? null : restoreMediaPage(loadPageState(sessionStore(window), MEDIA_PAGE), this.brandKey);
+      if (restored) {
+        this.queryParams.query = restored.query;
+        this.queryParams.page = restored.page;
+        this.chips = restored.chips;
+        this.untaggedOn = restored.untaggedOn;
+        this.allOn = restored.allOn;
+      }
       this.uploadTags = [...this.activeTags];
       this.getMedia();
     };

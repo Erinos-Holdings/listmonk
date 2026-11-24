@@ -585,7 +585,11 @@ import {
   campaignsRouteQuery, canSelectAll, deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen,
   listSelectValue, pickStatus, pollsStats, preEnablesEvergreen, routeEvergreen, routeIdsAfter, routeIdsOf, routeStatusAfter,
   routeStatusOf, scopeKindPref, selectList,
+  CAMPAIGNS_PAGE, offeredCampaignListIds, restoreCampaignsPage, saveCampaignsPage,
 } from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
+import {
+  keptListId, loadPageState, savePageState, sessionStore,
+} from '../pageState.mjs'; // eslint-disable-line import/extensions
 import {
   campaignFilterParams, pausedAtOf, statusCountParams, statusOptions,
 } from '../campaignStatusFilter.mjs'; // eslint-disable-line import/extensions
@@ -640,6 +644,13 @@ export default Vue.extend({
     // MATRIX-POLISH-SPEC D10.2 -- a route id scope (?id=..., repeatable): only those campaigns, the
     // kind pill at All for this view (never written to the pref).
     const routeIDs = routeIdsOf(this.$route && this.$route.query);
+    // Integrations PAGE-STATE-SPEC D5 -- this session's last search/list/status/sort/page, only on
+    // an entry with none of the page's query parameters (a link wins); null otherwise. The list id
+    // is validated once the lists have loaded (mounted, D7).
+    const restored = restoreCampaignsPage(
+      loadPageState(sessionStore(window), CAMPAIGNS_PAGE),
+      this.$route && this.$route.query,
+    );
     return {
       previewItem: null,
       rateFields: RATE_FIELDS,
@@ -647,23 +658,25 @@ export default Vue.extend({
       // keys of the expanded group rows (in-page state only).
       groupActions: GROUP_ACTIONS,
       expandedGroups: [],
+      // PAGE-STATE-SPEC D7 -- true while a restored list id awaits validation (mounted).
+      restoredListCheck: !!restored,
       queryParams: {
-        page: 1,
-        query: '',
-        orderBy: 'created_at',
-        order: 'desc',
+        page: restored ? restored.page : 1,
+        query: restored ? restored.query : '',
+        orderBy: restored ? restored.orderBy : 'created_at',
+        order: restored ? restored.order : 'desc',
         // Fork (evergreen) -- false = Broadcasts (default), true = Automations, null = All
         // (POLISH3 D3). Sticky across refresh/navigation via the shared localStorage pref (a route
         // query's evergreen=true / false / all selects Automations / Broadcasts / All for this
         // visit only).
         evergreen: routeEvergreen(fromRoute.evergreen, routeIDs),
         // DASHBOARDS-POLISH3-SPEC D2 -- the route status scope (one campaign status, or null).
-        routeStatus: routeStatusOf(this.$route && this.$route.query),
+        routeStatus: restored ? restored.routeStatus : routeStatusOf(this.$route && this.$route.query),
         // MATRIX-POLISH-SPEC D10.2 -- the route id scope (campaign ids, or null).
         routeIDs,
         // Fork (list filter) -- null = all lists (no param sent). In-page state only; a route
         // query's single list_id preselects it.
-        listID: fromRoute.listID,
+        listID: restored ? restored.listID : fromRoute.listID,
         // DASHBOARDS-POLISH2-SPEC D2 -- the route list scope (a link's several list ids), or
         // null. In-page state only, never a pref; cleared by any real list selection and by any
         // brand-selector change (campaignsRouteQuery.mjs).
@@ -1024,6 +1037,8 @@ export default Vue.extend({
         order: this.queryParams.order,
         no_body: true,
       };
+      // Integrations PAGE-STATE-SPEC D6 -- what this fetch applies is what the session keeps.
+      savePageState(sessionStore(window), CAMPAIGNS_PAGE, saveCampaignsPage(this.queryParams));
       // Fork (campaign mode, CAMPAIGN-MODE-SPEC D5/D9) -- top-level rows (grouped=true) only in
       // Campaign mode; the ungrouped request is unchanged otherwise (G4).
       if (this.groupMode) {
@@ -1460,7 +1475,17 @@ export default Vue.extend({
 
   mounted() {
     // Fork (global brand, D3) -- the first scoped fetch waits for the lists (I13).
-    this.afterListsLoaded(() => this.refreshCampaigns());
+    // PAGE-STATE-SPEC D7 -- a restored list id is kept only when the Lists select offers it.
+    this.afterListsLoaded(() => {
+      if (this.restoredListCheck) {
+        this.restoredListCheck = false;
+        this.queryParams.listID = keptListId(
+          this.queryParams.listID,
+          offeredCampaignListIds(this.lists, this.scopeListIds, this.queryParams.evergreen),
+        );
+      }
+      this.refreshCampaigns();
+    });
     // SUBSCRIBERS-FILTERS-2-SPEC D6 -- refresh the store's minimal lists (their has_broadcasts /
     // has_automations), so a campaign created this session reaches the Lists dropdown. App.vue's
     // request; nothing is reset on mount.

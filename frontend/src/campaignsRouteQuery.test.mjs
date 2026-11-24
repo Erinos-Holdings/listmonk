@@ -8,6 +8,7 @@ import {
   campaignsRouteQuery, canSelectAll, deleteEvergreenParam, displayedRunning, evergreenOfKind, kindOfEvergreen,
   kindStatusParams, listParam, listSelectValue, pollsStats, preEnablesEvergreen, routeEvergreen, routeIdsAfter,
   routeIdsOf, routeStatusAfter, routeStatusOf, scopeKindPref, selectList, STATUS_CLEARING,
+  CAMPAIGNS_LINK_KEYS, offeredCampaignListIds, restoreCampaignsPage, saveCampaignsPage,
 } from './campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 
 test('I8: a numeric list_id string selects the list; garbage is ignored', () => {
@@ -390,4 +391,59 @@ test('SUBSCRIBERS-FILTERS-2 I11: a scope change resets a non-qualifying list, no
   assert.match(vue, /return campaignListOptions\(this\.lists, this\.scopeListIds, this\.queryParams\.evergreen, this\.queryParams\.listID\);/);
   const mounted = vue.slice(vue.indexOf('  mounted() {'));
   assert.match(mounted, /this\.\$api\.getLists\(\{ minimal: true, per_page: 'all', status: 'active' \}\)/);
+});
+
+// Integrations PAGE-STATE-SPEC I3/I4/I5 -- the Campaigns page's session state.
+const PAGE_LISTS = [
+  { id: 5, name: 'A', has_broadcasts: true },
+  { id: 6, name: 'B', has_automations: true },
+  { id: 7, name: 'C', has_broadcasts: true },
+];
+
+test('PAGE-STATE I3: only the visible page-set fields round-trip -- never a link scope, selection or modal', () => {
+  const shown = {
+    query: 'bfcm', listID: 5, routeStatus: 'finished', orderBy: 'name', order: 'asc', page: 3,
+  };
+  const scopes = {
+    routeIDs: [1, 2], routeListIDs: [5, 7], evergreen: true, bulk: { checked: [{ id: 1 }], all: true }, previewItem: { id: 1 },
+  };
+  const saved = saveCampaignsPage({ ...shown, ...scopes });
+  assert.deepEqual(Object.keys(saved).sort(), ['listID', 'order', 'orderBy', 'page', 'query', 'routeStatus']);
+  assert.deepEqual(restoreCampaignsPage(JSON.parse(JSON.stringify(saved)), {}, [5, 7]), {
+    query: 'bfcm', listID: 5, routeStatus: 'finished', orderBy: 'name', order: 'asc', page: 3,
+  });
+  // Even a stored object carrying them never restores a scope or a selection.
+  const r = restoreCampaignsPage({ ...saved, ...scopes }, {}, [5]);
+  ['routeIDs', 'routeListIDs', 'bulk', 'evergreen', 'previewItem'].forEach((k) => assert.equal(k in r, false, k));
+});
+
+test('PAGE-STATE I4: any of the page\'s query parameters and the link wins', () => {
+  const stored = saveCampaignsPage({ query: 'bfcm', listID: 5, page: 2 });
+  assert.deepEqual([...CAMPAIGNS_LINK_KEYS], ['list_id', 'evergreen', 'status', 'id']);
+  CAMPAIGNS_LINK_KEYS.forEach((k) => {
+    assert.equal(restoreCampaignsPage(stored, { [k]: '1' }, [5]), null, k);
+  });
+  assert.equal(restoreCampaignsPage(stored, { list_id: ['5', '7'] }, [5]), null);
+  assert.equal(restoreCampaignsPage(null, {}, [5]), null);
+  // A bare entry restores.
+  assert.equal(restoreCampaignsPage(stored, {}, [5]).query, 'bfcm');
+  assert.equal(restoreCampaignsPage(stored, undefined, [5]).listID, 5);
+});
+
+test('PAGE-STATE I5: a stored list outside the offered set is All lists; unknown enums and bad pages default', () => {
+  const offered = offeredCampaignListIds(PAGE_LISTS, [5, 6], false);
+  assert.deepEqual(offered, [5]);
+  assert.deepEqual(offeredCampaignListIds(PAGE_LISTS, null, null), [5, 6, 7]);
+  assert.equal(restoreCampaignsPage({ listID: 7 }, {}, offered).listID, null);
+  assert.equal(restoreCampaignsPage({ listID: 6 }, {}, offered).listID, null);
+  assert.equal(restoreCampaignsPage({ listID: 5 }, {}, offered).listID, 5);
+  // Undefined offered set: the id passes through for the caller's later keptListId.
+  assert.equal(restoreCampaignsPage({ listID: 7 }, {}).listID, 7);
+  assert.equal(restoreCampaignsPage({ listID: '7' }, {}).listID, null);
+  const bad = restoreCampaignsPage({ routeStatus: 'exploded', orderBy: 'views', order: 'up' }, {}, []);
+  assert.equal(bad.routeStatus, null);
+  assert.equal(bad.orderBy, 'created_at');
+  assert.equal(bad.order, 'desc');
+  [0, -2, 'x', 1.5].forEach((p) => assert.equal(restoreCampaignsPage({ page: p }, {}, []).page, 1, String(p)));
+  assert.equal(restoreCampaignsPage({ query: 42 }, {}, []).query, '');
 });

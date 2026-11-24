@@ -2,7 +2,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { SHOW_SYSTEM_PREF, showSystemLists, systemListsParams } from './listsPage.mjs'; // eslint-disable-line import/extensions
+import {
+  LISTS_LINK_KEYS, SHOW_SYSTEM_PREF, restoreListsPage, saveListsPage, showSystemLists, systemListsParams,
+} from './listsPage.mjs'; // eslint-disable-line import/extensions
+
+// Integrations PAGE-STATE-SPEC I3/I4/I5 -- the Lists page's session state.
+test('PAGE-STATE I3: search, status, sort and page round-trip; nothing else', () => {
+  const shown = {
+    query: 'ruze', status: 'archived', orderBy: 'held_count', order: 'asc', page: 2,
+  };
+  const saved = saveListsPage({
+    ...shown, bulk: { all: true }, isFormVisible: true, expanded: { 1: true },
+  });
+  assert.deepEqual(restoreListsPage(JSON.parse(JSON.stringify({ ...saved, bulk: { all: true } })), {}), {
+    query: 'ruze', status: 'archived', orderBy: 'held_count', order: 'asc', page: 2,
+  });
+});
+
+test('PAGE-STATE I4: a route ?status= wins', () => {
+  assert.deepEqual([...LISTS_LINK_KEYS], ['status']);
+  const stored = saveListsPage({ query: 'ruze', status: 'archived', page: 3 });
+  assert.equal(restoreListsPage(stored, { status: 'active' }), null);
+  assert.equal(restoreListsPage(stored, { status: 'archived' }), null);
+  assert.equal(restoreListsPage(null, {}), null);
+  assert.equal(restoreListsPage(stored, {}).page, 3);
+});
+
+test('PAGE-STATE I5: unknown enums and bad pages default', () => {
+  const r = restoreListsPage({ status: 'deleted', orderBy: 'secret', order: 'up' }, {});
+  assert.deepEqual([r.status, r.orderBy, r.order], ['active', 'created_at', 'desc']);
+  [0, -2, 'x', 1.5].forEach((p) => assert.equal(restoreListsPage({ page: p }, {}).page, 1, String(p)));
+});
 
 test('I9: the toggle defaults off; only exactly true shows the system lists', () => {
   assert.equal(SHOW_SYSTEM_PREF, 'lists.showSystem');

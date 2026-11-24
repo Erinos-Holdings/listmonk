@@ -8,7 +8,9 @@ import { readFileSync } from 'node:fs';
 import {
   LANG_CELL_EMPTY, SEGMENTS, langCell, langColumnShown, listOptions, listRoute, routeListIdOf, statusEnabled,
   statusQuery, subscribersRouteFix,
+  isBareSubscribersRoute, offeredSubscriberListIds, restoreSubscribersPage, saveSubscribersPage, subscribersRestoreRoute,
 } from './subscriberFilters.mjs'; // eslint-disable-line import/extensions
+import { RESTORE_PARAM } from './pageState.mjs'; // eslint-disable-line import/extensions
 import { LANG_VALUES, SUBSCRIBER_ROUTES } from './langScope.mjs'; // eslint-disable-line import/extensions
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -276,4 +278,86 @@ test('Lists dropdown uses the shared grouping', () => {
   assert.match(read('./subscriberFilters.mjs'), /groupLists\(/);
   assert.match(read('./campaignsRouteQuery.mjs'), /return groupLists\(offered\);/);
   assert.deepEqual(listOptions(LISTS, RUZE, null).system.map((l) => l.name), ['RUZE First order', 'RUZE No-purchase D2']);
+});
+
+// Integrations PAGE-STATE-SPEC I2/I3/I4/I5 -- the Subscribers page's session state.
+const BARE = to('subscribers', {});
+const BARE_LANG = to('subscribers', { lang: 'fr' });
+const OWN = (query = {}, params = {}) => to('subscribers', query, { ...params, [RESTORE_PARAM]: '1' });
+
+test('PAGE-STATE I2: an advanced query always restores open -- never a hidden SQL filter', () => {
+  const r = restoreSubscribersPage({ queryExp: "name ~* 'amy'", advanced: false }, BARE);
+  assert.equal(r.advanced, true);
+  assert.equal(r.queryExp, "name ~* 'amy'");
+  assert.equal(restoreSubscribersPage({ queryExp: '  ', advanced: false }, BARE).advanced, false);
+  assert.equal(restoreSubscribersPage({ queryExp: '', advanced: true }, BARE).advanced, true);
+  // The round trip of an open advanced box keeps it open with its query.
+  const saved = saveSubscribersPage({ queryExp: 'x = 1', advanced: true, search: 'ignored' });
+  assert.equal(saved.search, '');
+  assert.deepEqual(restoreSubscribersPage(saved, BARE), {
+    queryExp: 'x = 1', advanced: true, orderBy: 'id', order: 'desc', page: 1,
+  });
+});
+
+test('PAGE-STATE I3: only the visible page-set fields round-trip -- never the segment, lang, a selection or a modal', () => {
+  const shown = {
+    listID: 2, search: ' amy ', queryExp: '', advanced: false, orderBy: 'email', order: 'asc', page: 4,
+  };
+  const others = {
+    segment: 'held', lang: 'fr', subStatus: 'confirmed', bulk: { all: true }, isFormVisible: true, curItem: { id: 1 },
+  };
+  const saved = saveSubscribersPage({ ...shown, ...others });
+  assert.deepEqual(Object.keys(saved).sort(), ['advanced', 'listID', 'order', 'orderBy', 'page', 'queryExp', 'search']);
+  const stored = JSON.parse(JSON.stringify({ ...saved, segment: 'held', subStatus: 'confirmed' }));
+  // The URL half: the list and the search, the route's own lang riding along.
+  assert.deepEqual(subscribersRestoreRoute(stored, BARE_LANG, [1, 2]), {
+    name: 'subscribers_list', params: { listID: '2', [RESTORE_PARAM]: '1' }, query: { lang: 'fr', search: 'amy' },
+  });
+  // The data half, on the replace's landing.
+  assert.deepEqual(restoreSubscribersPage(stored, OWN({ search: 'amy' }, { listID: '2' })), {
+    queryExp: '', advanced: false, orderBy: 'email', order: 'asc', page: 4,
+  });
+  // No list: the plain route; nothing URL-held: no replace.
+  assert.deepEqual(subscribersRestoreRoute({ search: 'amy' }, BARE, []), {
+    name: 'subscribers', params: { [RESTORE_PARAM]: '1' }, query: { search: 'amy' },
+  });
+  assert.equal(subscribersRestoreRoute({ orderBy: 'email', page: 3 }, BARE, []), null);
+  assert.equal(subscribersRestoreRoute({ subStatus: 'confirmed' }, BARE, []), null);
+});
+
+test('PAGE-STATE I4: a link wins, and the replace decision is false whenever the route has a page query', () => {
+  const stored = saveSubscribersPage({
+    listID: 2, search: 'amy', orderBy: 'email', page: 3,
+  });
+  ['segment', 'search', 'subscription_status'].forEach((k) => {
+    const route = to('subscribers', { [k]: 'x' });
+    assert.equal(subscribersRestoreRoute(stored, route, [2]), null, k);
+    assert.equal(restoreSubscribersPage(stored, route), null, k);
+  });
+  // A list route (the Lists-page grid link) and the subscriber form route.
+  assert.equal(subscribersRestoreRoute(stored, LIST({ segment: 'held' }), [2]), null);
+  assert.equal(restoreSubscribersPage(stored, LIST()), null);
+  assert.equal(subscribersRestoreRoute(stored, to('subscriber', {}, { id: '9' }), [2]), null);
+  assert.equal(restoreSubscribersPage(stored, to('subscriber', {}, { id: '9' })), null);
+  // The replace's own landing never replaces again (no loop).
+  assert.equal(subscribersRestoreRoute(stored, OWN(), [2]), null);
+  // The navbar's lang alone is not a link.
+  assert.notEqual(subscribersRestoreRoute(stored, BARE_LANG, [2]), null);
+  assert.notEqual(restoreSubscribersPage(stored, BARE_LANG), null);
+  assert.equal(restoreSubscribersPage(null, BARE), null);
+});
+
+test('PAGE-STATE I5: a stored list not offered is All lists; unknown enums and bad pages default', () => {
+  assert.deepEqual(offeredSubscriberListIds(LISTS, RUZE), [2, 1, 4, 3]);
+  assert.deepEqual(offeredSubscriberListIds(LISTS, { kind: 'all' }), []);
+  // List 5 is Shala's: not offered under RUZE -> All lists (and with nothing else kept, no replace).
+  assert.equal(subscribersRestoreRoute({ listID: 5 }, BARE, offeredSubscriberListIds(LISTS, RUZE)), null);
+  assert.deepEqual(subscribersRestoreRoute({ listID: 5, search: 'a' }, BARE, [1, 2]).name, 'subscribers');
+  assert.equal(subscribersRestoreRoute({ listID: 2 }, BARE, offeredSubscriberListIds(LISTS, { kind: 'all' })), null);
+  const bad = restoreSubscribersPage({ orderBy: 'password', order: 'up' }, BARE);
+  assert.equal(bad.orderBy, 'id');
+  assert.equal(bad.order, 'desc');
+  [0, -2, 'x', 1.5].forEach((p) => assert.equal(restoreSubscribersPage({ page: p }, BARE).page, 1, String(p)));
+  assert.equal(isBareSubscribersRoute(BARE), true);
+  assert.equal(isBareSubscribersRoute(LIST()), false);
 });
