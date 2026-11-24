@@ -70,6 +70,13 @@
         ]
     },
     {
+        "group": "sms",
+        "permissions":
+        [
+            "sms:manage"
+        ]
+    },
+    {
         "group": "users",
         "permissions":
         [

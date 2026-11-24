@@ -197,6 +197,13 @@ type Queries struct {
 	UpsertPromoPurchases     *sqlx.Stmt `query:"upsert-promo-purchases"`
 	GetPromoPurchasesSummary *sqlx.Stmt `query:"get-promo-purchases-summary"`
 	GetPromoPurchasesOrder   *sqlx.Stmt `query:"get-promo-purchases-order"`
+	// Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D8-D10) -- queries/sms.sql: the SMS promo
+	// code report (rows, feed, known) and the marking.
+	GetSMSPromoRows    *sqlx.Stmt `query:"get-sms-promo-rows"`
+	GetSMSPromoFeed    *sqlx.Stmt `query:"get-sms-promo-feed"`
+	GetSMSPromoKnown   *sqlx.Stmt `query:"get-sms-promo-known"`
+	InsertSMSPromoCode *sqlx.Stmt `query:"insert-sms-promo-code"`
+	DeleteSMSPromoCode *sqlx.Stmt `query:"delete-sms-promo-code"`
 	GetCampaignUnreachableLang *sqlx.Stmt `query:"get-campaign-unreachable-lang"`
 	GetEvergreenSentSplit      *sqlx.Stmt `query:"get-evergreen-sent-split"`
 	// Fork (SHALA-CUTOVER-SPEC D9/I8) -- non-English subscribers on a campaign's lists.

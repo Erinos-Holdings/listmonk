@@ -145,6 +145,9 @@ export const LANG_APPLICABILITY = Object.freeze({
   userRoles: NONE,
   listRoles: NONE,
   maintenance: NONE,
+  // Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D1) -- short links and SMS codes carry no
+  // language.
+  smsAdmin: NONE,
 });
 
 // The '<view>:<pane>' value the paned views commit (store setViewPane).

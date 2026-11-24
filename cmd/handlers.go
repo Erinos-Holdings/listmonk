@@ -247,6 +247,16 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/promo/purchases", pm(a.PutPromoPurchases, "subscribers:manage"))
 		g.GET("/api/promo/purchases", pm(a.GetPromoPurchases, "subscribers:get_all"))
 		g.GET("/api/campaigns/:id/promo-audience", pm(hasID(a.GetCampaignPromoAudience), "campaigns:manage_all", "campaigns:manage"))
+		// Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D2/D6/D9/D10, sms.go) -- the short-link
+		// proxy to the ShortlinksProd admin API and the SMS promo code report and marking. One
+		// permission for every route: sms:manage (not campaigns:get_analytics, not campaigns:manage).
+		g.GET("/api/sms/links", pm(a.GetSMSLinks, "sms:manage"))
+		g.POST("/api/sms/links", pm(a.CreateSMSLink, "sms:manage"))
+		g.PUT("/api/sms/links/:slug", pm(a.UpdateSMSLink, "sms:manage"))
+		g.DELETE("/api/sms/links/:slug", pm(a.DeleteSMSLink, "sms:manage"))
+		g.GET("/api/sms/promo-codes", pm(a.GetSMSPromoCodes, "sms:manage"))
+		g.POST("/api/sms/promo-codes", pm(a.CreateSMSPromoCode, "sms:manage"))
+		g.DELETE("/api/sms/promo-codes/:id", pm(hasID(a.DeleteSMSPromoCode), "sms:manage"))
 		// Fork (brand analytics, BRAND-ANALYTICS-SPEC D3) -- the Campaign Analytics picker, list-scoped.
 		g.GET("/api/analytics/campaigns", pm(a.GetAnalyticsCampaigns, "campaigns:get_analytics"))
 		// Fork (campaign matrix, integrations CAMPAIGN-MATRIX-SPEC D10) -- the Campaign Matrix pane,

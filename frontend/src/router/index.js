@@ -56,6 +56,14 @@ const routes = [
     meta: { title: 'brands.title' },
     component: () => import('../views/Brands.vue'),
   },
+  // Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D1) -- short links and SMS promo codes;
+  // sms:manage (the sidebar item and every /api/sms/* route).
+  {
+    path: '/sms',
+    name: 'smsAdmin',
+    meta: { title: 'sms.title' },
+    component: () => import('../views/SmsAdmin.vue'),
+  },
   {
     path: '/subscribers',
     name: 'subscribers',

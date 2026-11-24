@@ -1560,3 +1560,19 @@ CREATE OR REPLACE FUNCTION role_list_grants(p_role_id INT) RETURNS TABLE (list_i
     GROUP BY l.id, l.name, list_brand_tag(l.tags)
     ORDER BY l.id;
 $$ LANGUAGE sql STABLE;
+
+-- Fork (SMS Admin, integrations listmonk/SMS-LINKS-ADMIN-SPEC D8). Mirrored in
+-- internal/migrations/v6.2.44.go (keep the two identical; v6_2_44_db_test.go asserts it verbatim).
+--
+-- sms_promo_codes -- a promotion value is an SMS code iff it has a row. code is stored trimmed
+-- (the feed's value rule), unique case-insensitively; it matches promo_purchases rows of kind
+-- promotion by value_lc = LOWER(code). brand is the marking's (the feed carries none), NULL = All
+-- brands.
+CREATE TABLE IF NOT EXISTS sms_promo_codes (
+    id          SERIAL PRIMARY KEY,
+    code        TEXT NOT NULL,
+    brand       TEXT NULL REFERENCES brands(slug) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_by  TEXT NOT NULL,
+    created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sms_promo_codes_code ON sms_promo_codes (LOWER(code));

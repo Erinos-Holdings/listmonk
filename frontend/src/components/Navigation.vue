@@ -58,6 +58,12 @@
       :active="activeItem.campaignAnalytics" data-cy="analytics" icon="chart-bar"
       :label="$t('globals.terms.analytics')" /><!-- analytics -->
 
+    <!-- Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D1/D2) -- short links and SMS promo
+    codes; sms:manage only. The icon is from the fontello subset. -->
+    <b-menu-item v-if="$can('sms:manage')" :to="{ name: 'smsAdmin' }" tag="router-link"
+      :active="activeItem.smsAdmin" data-cy="sms-admin" icon="link-variant"
+      :label="$t('sms.title')" /><!-- sms admin -->
+
     <b-menu-item v-if="$can('users:*', 'roles:*')" :expanded="activeGroup.users" :active="activeGroup.users"
       data-cy="users" @update:active="(state) => toggleGroup('users', state)" icon="account-multiple"
       :label="$t('globals.terms.users')">

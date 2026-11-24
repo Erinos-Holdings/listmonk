@@ -64,6 +64,8 @@ export const MODE_APPLICABILITY = Object.freeze({
   userRoles: NONE,
   listRoles: NONE,
   maintenance: NONE,
+  // Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D1) -- short links and SMS codes, no campaigns.
+  smsAdmin: NONE,
 });
 
 // The applicability state ('all' | 'none') of a route (and its pane value, '<view>:<pane>').

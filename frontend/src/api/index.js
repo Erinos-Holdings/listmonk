@@ -577,6 +577,23 @@ export const getCampaignPromoAudience = async (id, params) => http.get(`/api/cam
   params, camelCase: false, disableToast: true,
 });
 
+// Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D6/D9/D10) -- sms:manage. Raw keys throughout
+// (the admin API's field names; the report's snake_case). The link list and the report are quiet
+// (the page shows the not-configured / unavailable notice in place); the link writes are quiet too:
+// the page keys its message on the HTTP status (smsAdmin.mjs linkErrorMessage). The promo marking
+// writes toast the server's message.
+export const getSmsLinks = async () => http.get('/api/sms/links', { camelCase: false, disableToast: true });
+export const createSmsLink = async (data) => http.post('/api/sms/links', data, { camelCase: false, disableToast: true });
+export const updateSmsLink = async (slug, data) => http.put(`/api/sms/links/${encodeURIComponent(slug)}`, data, {
+  camelCase: false, disableToast: true,
+});
+export const deleteSmsLink = async (slug) => http.delete(`/api/sms/links/${encodeURIComponent(slug)}`, {
+  camelCase: false, disableToast: true,
+});
+export const getSmsPromoCodes = async () => http.get('/api/sms/promo-codes', { camelCase: false });
+export const createSmsPromoCode = async (data) => http.post('/api/sms/promo-codes', data, { camelCase: false });
+export const deleteSmsPromoCode = async (id) => http.delete(`/api/sms/promo-codes/${id}`, { camelCase: false });
+
 // Fork (official footer) -- OFFICIAL-FOOTER-SPEC D11. Raw (snake_case, NOT camelCased) reads for
 // the re-save sweep: its PUT payloads are built from these rows verbatim, and camelCasing would
 // rewrite nested keys (archive_meta, attribs) the full-replace PUT then stores.

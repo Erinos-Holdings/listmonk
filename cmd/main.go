@@ -76,6 +76,10 @@ type App struct {
 	usageDecisions usageDecisionStore
 	decisionNotice *decisionNotifier
 
+	// Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D3) -- the short-link proxy target, from
+	// sms.admin_url at boot; nil turns the link routes off (503). See cmd/sms.go.
+	smsAdmin *smsAdmin
+
 	about         about
 	fnOptinNotify func(models.Subscriber, []int) (int, error)
 
@@ -353,6 +357,10 @@ func main() {
 
 	// Fork (two-factor, integrations PASSKEY-2FA-SPEC D2): a bad root URL never fails boot.
 	app.webAuthn, app.webAuthnErr = initWebAuthn(urlCfg.RootURL, cfg.SiteName)
+
+	// Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D3): read once; empty or ill-shaped turns
+	// the short-link routes off with one log line, never a boot failure.
+	app.smsAdmin = initSMSAdmin(ko.String("sms.admin_url"), lo)
 
 	// Fork (render canary, INSPECT-SCOPE-SPEC §2.1): render the packed canary through the send
 	// path now that the manager exists. A failure is logged; the endpoint then answers 503.

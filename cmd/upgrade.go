@@ -131,6 +131,8 @@ var migList = []migFunc{
 	{"v6.2.42", migrations.V6_2_42},
 	// Fork migration (erinos): brand roles G8 -- deletes the list roles' per-list child rows that v6.2.42 left as its rollback path (BRAND-ROLES-SPEC G8) — see internal/migrations/v6.2.43.go.
 	{"v6.2.43", migrations.V6_2_43},
+	// Fork migration (erinos): SMS Admin -- sms_promo_codes (a promotion value is an SMS code iff it has a row; unique LOWER(code); brand NULL = All brands) and the sms:manage grant to role 1 (SMS-LINKS-ADMIN-SPEC D8/D11) — see internal/migrations/v6.2.44.go.
+	{"v6.2.44", migrations.V6_2_44},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files
