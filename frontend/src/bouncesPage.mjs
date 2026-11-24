@@ -12,12 +12,15 @@ export const BOUNCES_LINK_KEYS = Object.freeze(['campaign_id', 'source']);
 // D7 -- the sortable columns.
 export const BOUNCE_SORT_FIELDS = Object.freeze(['email', 'campaign', 'source', 'type', 'created_at']);
 
+// Review R1(c): a fetch under a link (campaign_id or source) saves page 1 -- its page belongs to the
+// linked set, which a later bare entry does not show.
 export function saveBouncesPage(qp) {
   const q = qp || {};
+  const linked = !!q.campaign_id || !!q.source;
   return {
     orderBy: enumOf(q.orderBy, BOUNCE_SORT_FIELDS, 'created_at'),
     order: enumOf(q.order, SORT_ORDERS, 'desc'),
-    page: pageNumberOf(q.page),
+    page: linked ? 1 : pageNumberOf(q.page),
   };
 }
 
@@ -27,5 +30,5 @@ export function restoreBouncesPage(stored, query) {
   if (!stored || typeof stored !== 'object' || routeHasAny(query, BOUNCES_LINK_KEYS)) {
     return null;
   }
-  return saveBouncesPage(stored);
+  return saveBouncesPage({ orderBy: stored.orderBy, order: stored.order, page: stored.page });
 }

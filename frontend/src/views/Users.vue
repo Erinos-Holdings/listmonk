@@ -160,7 +160,7 @@ export default Vue.extend({
   },
 
   data() {
-    // Integrations PAGE-STATE-SPEC -- the session's search, sort and page (null = defaults).
+    // Integrations PAGE-STATE-SPEC -- the session's search and sort (null = defaults).
     const restored = restoreUsersPage(loadPageState(sessionStore(window), USERS_PAGE));
     return {
       // PAGE-STATE-SPEC D3 -- Buefy reads default-sort once: a restored sort shows its arrow.
@@ -170,7 +170,7 @@ export default Vue.extend({
       isFormVisible: false,
       users: [],
       checked: [],
-      queryParams: restored || {
+      queryParams: restored ? { page: 1, ...restored } : {
         page: 1,
         query: '',
         orderBy: 'id',

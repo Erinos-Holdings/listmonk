@@ -372,8 +372,10 @@ import {
   ANALYTICS_PANE_PREF, initialAnalyticsPane, readPane, writePane,
 } from '../paneState.mjs'; // eslint-disable-line import/extensions
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
-import { loadPageState, savePageState } from '../pageState.mjs'; // eslint-disable-line import/extensions
-import { ANALYTICS_PAGE, analyticsRestoreQuery, saveAnalyticsPage } from '../analyticsPage.mjs'; // eslint-disable-line import/extensions
+import { clearPageState, loadPageState, savePageState } from '../pageState.mjs'; // eslint-disable-line import/extensions
+import {
+  ANALYTICS_PAGE, analyticsClearsState, analyticsRestoreQuery, saveAnalyticsPage,
+} from '../analyticsPage.mjs'; // eslint-disable-line import/extensions
 import { viewPaneValue } from '../langScope.mjs'; // eslint-disable-line import/extensions
 import { analyticsSkippedRows } from '../campaignMatrix.mjs'; // eslint-disable-line import/extensions
 import { pickerLabel } from '../promoSeries.mjs'; // eslint-disable-line import/extensions
@@ -1259,6 +1261,10 @@ export default Vue.extend({
     if (restoreQuery) {
       this.$router.replace({ query: restoreQuery }).catch(() => {});
       return;
+    }
+    // Review R6 -- every campaign removed and submitted: the user cleared the kept search.
+    if (analyticsClearsState(this.$route.query)) {
+      clearPageState(sessionStore(window), ANALYTICS_PAGE);
     }
 
     // Fetch one or more campaigns if there are ?id params, wait for the fetches

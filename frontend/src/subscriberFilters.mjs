@@ -150,12 +150,14 @@ export function statusQuery(query, segment) {
 // ---------------------------------------------------------------------------------------------
 // Integrations PAGE-STATE-SPEC §3 -- the Subscribers page's session state (pageState.mjs)
 // ---------------------------------------------------------------------------------------------
-// Two halves. The URL-held fields (list, simple search) restore by ONE $router.replace on a bare
-// entry (D8), carrying pageState.mjs::RESTORE_PARAM in memory; the data-held fields (advanced query
-// + open, sort, page) apply on a bare entry or on the mount that replace lands on (isOwnRestore) --
-// never on a link. `segment` is a link scope (D4) and `lang` is the navbar toggle's (the guard adds
-// it): neither is kept, and `lang` does not make a route a link. The legacy `subscription_status`
-// is not kept either: only a link sets it and no control on the page clears it (D3/D4).
+// Two halves. The URL-held fields (list, its Status `segment`, simple search) restore by ONE
+// $router.replace on a bare entry (D8), carrying pageState.mjs::RESTORE_PARAM in memory; the
+// data-held fields (advanced query + open, sort, page) apply on a bare entry or on the mount that
+// replace lands on (isOwnRestore) -- never on a link. The Status (`segment`) is kept WITH its list
+// (review R2: the page's Status dropdown sets it) and restored only when that list is. `lang` is
+// the navbar toggle's (the guard adds it): not kept, and `lang` does not make a route a link. The
+// legacy `subscription_status` is not kept: only a link sets it and no control on the page clears
+// it (D3/D4).
 
 export const SUBSCRIBERS_PAGE = 'subscribers';
 
@@ -173,8 +175,11 @@ const posIntOrNull = (v) => (Number.isInteger(v) && v > 0 ? v : null);
 export function saveSubscribersPage(s) {
   const v = s || {};
   const advanced = v.advanced === true;
+  const listID = posIntOrNull(v.listID);
   return {
-    listID: posIntOrNull(v.listID),
+    listID,
+    // Review R2 -- the Status of the list (one of SEGMENTS), only with a list.
+    segment: listID !== null && SEGMENTS.includes(v.segment) ? v.segment : null,
     search: advanced ? '' : textOf(v.search).trim(),
     queryExp: advanced ? textOf(v.queryExp) : '',
     advanced,
@@ -216,8 +221,9 @@ export function offeredSubscriberListIds(lists, selection) {
 
 // D8/I4 -- the one replace of a bare entry to the stored URL-held fields, or null: never when the
 // route is not bare (a link, or the replace's own landing -- which is what prevents a loop), never
-// without a stored list/search. The list id is validated (D7); the route's lang (the navbar's)
-// rides along unchanged, so the router guard sees nothing to correct.
+// without a stored list/search. The list id is validated (D7); its Status (`segment`) rides along
+// only when the list id is kept (review R2); the route's lang (the navbar's) rides along
+// unchanged, so the router guard sees nothing to correct.
 export function subscribersRestoreRoute(stored, route, offeredIds) {
   if (!stored || typeof stored !== 'object' || !isBareSubscribersRoute(route) || isOwnRestore(route.params)) {
     return null;
@@ -236,6 +242,9 @@ export function subscribersRestoreRoute(stored, route, offeredIds) {
     query.search = search;
   }
   if (listID !== null) {
+    if (SEGMENTS.includes(stored.segment)) {
+      query.segment = stored.segment;
+    }
     return { name: 'subscribers_list', params: { listID: String(listID), [RESTORE_PARAM]: '1' }, query };
   }
   return { name: 'subscribers', params: { [RESTORE_PARAM]: '1' }, query };

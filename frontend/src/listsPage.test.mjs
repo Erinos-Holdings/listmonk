@@ -7,21 +7,27 @@ import {
 } from './listsPage.mjs'; // eslint-disable-line import/extensions
 
 // Integrations PAGE-STATE-SPEC I3/I4/I5 -- the Lists page's session state.
-test('PAGE-STATE I3: search, status, sort and page round-trip; nothing else', () => {
+test('PAGE-STATE I3: search, sort and page round-trip; never the status (R5), a selection or a form', () => {
   const shown = {
-    query: 'ruze', status: 'archived', orderBy: 'held_count', order: 'asc', page: 2,
+    query: 'ruze', status: 'active', orderBy: 'held_count', order: 'asc', page: 2,
   };
   const saved = saveListsPage({
     ...shown, bulk: { all: true }, isFormVisible: true, expanded: { 1: true },
   });
-  assert.deepEqual(restoreListsPage(JSON.parse(JSON.stringify({ ...saved, bulk: { all: true } })), {}), {
-    query: 'ruze', status: 'archived', orderBy: 'held_count', order: 'asc', page: 2,
+  assert.deepEqual(restoreListsPage(JSON.parse(JSON.stringify({ ...saved, status: 'archived', bulk: { all: true } })), {}), {
+    query: 'ruze', orderBy: 'held_count', order: 'asc', page: 2,
   });
+});
+
+test('Review R1(c): a fetch of the archived view (a link) saves page 1', () => {
+  assert.equal(saveListsPage({ status: 'archived', page: 3 }).page, 1);
+  assert.equal(saveListsPage({ status: 'active', page: 3 }).page, 3);
+  assert.equal('status' in saveListsPage({ status: 'archived' }), false);
 });
 
 test('PAGE-STATE I4: a route ?status= wins', () => {
   assert.deepEqual([...LISTS_LINK_KEYS], ['status']);
-  const stored = saveListsPage({ query: 'ruze', status: 'archived', page: 3 });
+  const stored = saveListsPage({ query: 'ruze', page: 3 });
   assert.equal(restoreListsPage(stored, { status: 'active' }), null);
   assert.equal(restoreListsPage(stored, { status: 'archived' }), null);
   assert.equal(restoreListsPage(null, {}), null);
@@ -29,8 +35,8 @@ test('PAGE-STATE I4: a route ?status= wins', () => {
 });
 
 test('PAGE-STATE I5: unknown enums and bad pages default', () => {
-  const r = restoreListsPage({ status: 'deleted', orderBy: 'secret', order: 'up' }, {});
-  assert.deepEqual([r.status, r.orderBy, r.order], ['active', 'created_at', 'desc']);
+  const r = restoreListsPage({ orderBy: 'secret', order: 'up' }, {});
+  assert.deepEqual([r.orderBy, r.order], ['created_at', 'desc']);
   [0, -2, 'x', 1.5].forEach((p) => assert.equal(restoreListsPage({ page: p }, {}).page, 1, String(p)));
 });
 

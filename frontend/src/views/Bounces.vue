@@ -106,7 +106,9 @@ import brandScopeMixin from '../brandScopeMixin';
 import {
   BOUNCES_PAGE, restoreBouncesPage, saveBouncesPage,
 } from '../bouncesPage.mjs'; // eslint-disable-line import/extensions
-import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
+import {
+  loadPageState, pageContextOf, savePageState, sessionStore,
+} from '../pageState.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -119,7 +121,10 @@ export default Vue.extend({
   data() {
     // Integrations PAGE-STATE-SPEC D5 -- the session's sort and page unless the route carries a
     // campaign_id or source (a link wins); null otherwise.
-    const restored = restoreBouncesPage(loadPageState(sessionStore(window), BOUNCES_PAGE), this.$route.query);
+    const restored = restoreBouncesPage(
+      loadPageState(sessionStore(window), BOUNCES_PAGE, pageContextOf(this.$store.getters)),
+      this.$route.query,
+    );
     return {
       bounces: {},
       // PAGE-STATE-SPEC D3 -- Buefy reads default-sort once: a restored sort shows its arrow.
@@ -177,7 +182,7 @@ export default Vue.extend({
       };
       // Integrations PAGE-STATE-SPEC D6 -- what this fetch applies is what the session keeps
       // (the sort and page; never the campaign_id link scope, D4, nor the source).
-      savePageState(sessionStore(window), BOUNCES_PAGE, saveBouncesPage(this.queryParams));
+      savePageState(sessionStore(window), BOUNCES_PAGE, saveBouncesPage(this.queryParams), pageContextOf(this.$store.getters));
       // Fork (global brand, D5) -- a brand's bounces are the bounces of its lists' subscribers;
       // under All brands no list_id is sent (today's rows exactly).
       if (this.scopeListIds) {

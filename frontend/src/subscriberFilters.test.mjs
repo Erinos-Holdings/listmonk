@@ -299,19 +299,21 @@ test('PAGE-STATE I2: an advanced query always restores open -- never a hidden SQ
   });
 });
 
-test('PAGE-STATE I3: only the visible page-set fields round-trip -- never the segment, lang, a selection or a modal', () => {
+test('PAGE-STATE I3: only the visible page-set fields round-trip -- never lang, a selection or a modal', () => {
   const shown = {
-    listID: 2, search: ' amy ', queryExp: '', advanced: false, orderBy: 'email', order: 'asc', page: 4,
+    listID: 2, segment: 'held', search: ' amy ', queryExp: '', advanced: false, orderBy: 'email', order: 'asc', page: 4,
   };
   const others = {
-    segment: 'held', lang: 'fr', subStatus: 'confirmed', bulk: { all: true }, isFormVisible: true, curItem: { id: 1 },
+    lang: 'fr', subStatus: 'confirmed', bulk: { all: true }, isFormVisible: true, curItem: { id: 1 },
   };
   const saved = saveSubscribersPage({ ...shown, ...others });
-  assert.deepEqual(Object.keys(saved).sort(), ['advanced', 'listID', 'order', 'orderBy', 'page', 'queryExp', 'search']);
-  const stored = JSON.parse(JSON.stringify({ ...saved, segment: 'held', subStatus: 'confirmed' }));
-  // The URL half: the list and the search, the route's own lang riding along.
+  assert.deepEqual(Object.keys(saved).sort(), ['advanced', 'listID', 'order', 'orderBy', 'page', 'queryExp', 'search', 'segment']);
+  const stored = JSON.parse(JSON.stringify({ ...saved, subStatus: 'confirmed' }));
+  // The URL half: the list, its Status and the search, the route's own lang riding along.
   assert.deepEqual(subscribersRestoreRoute(stored, BARE_LANG, [1, 2]), {
-    name: 'subscribers_list', params: { listID: '2', [RESTORE_PARAM]: '1' }, query: { lang: 'fr', search: 'amy' },
+    name: 'subscribers_list',
+    params: { listID: '2', [RESTORE_PARAM]: '1' },
+    query: { lang: 'fr', search: 'amy', segment: 'held' },
   });
   // The data half, on the replace's landing.
   assert.deepEqual(restoreSubscribersPage(stored, OWN({ search: 'amy' }, { listID: '2' })), {
@@ -323,6 +325,20 @@ test('PAGE-STATE I3: only the visible page-set fields round-trip -- never the se
   });
   assert.equal(subscribersRestoreRoute({ orderBy: 'email', page: 3 }, BARE, []), null);
   assert.equal(subscribersRestoreRoute({ subStatus: 'confirmed' }, BARE, []), null);
+});
+
+test('Review R2: the Status is kept with its list and restored only when the list is kept', () => {
+  // Saved only with a list, and only one of SEGMENTS.
+  assert.equal(saveSubscribersPage({ segment: 'held' }).segment, null);
+  assert.equal(saveSubscribersPage({ listID: 2, segment: 'bogus' }).segment, null);
+  assert.equal(saveSubscribersPage({ listID: 2, segment: 'unsubscribed' }).segment, 'unsubscribed');
+  const stored = saveSubscribersPage({ listID: 2, segment: 'unsubscribed', search: 'amy' });
+  assert.equal(subscribersRestoreRoute(stored, BARE, [2]).query.segment, 'unsubscribed');
+  // List not offered: the plain route, no segment (the guard would drop it anyway).
+  const r = subscribersRestoreRoute(stored, BARE, [1]);
+  assert.equal(r.name, 'subscribers');
+  assert.equal('segment' in r.query, false);
+  assert.equal(subscribersRestoreRoute({ listID: 2, segment: 'nope' }, BARE, [2]).query.segment, undefined);
 });
 
 test('PAGE-STATE I4: a link wins, and the replace decision is false whenever the route has a page query', () => {

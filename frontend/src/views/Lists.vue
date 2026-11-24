@@ -13,9 +13,7 @@
           <router-link v-if="queryParams.status !== 'archived'" :to="{ name: 'lists', query: { status: 'archived' } }">
             {{ $t('globals.buttons.view') }} {{ $t('lists.archived').toLowerCase() }} &rarr;
           </router-link>
-          <!-- Integrations PAGE-STATE-SPEC D5 -- an explicit ?status=active, so the link wins over the
-               session's kept archived view (a bare /lists restores it). -->
-          <router-link v-else :to="{ name: 'lists', query: { status: 'active' } }">
+          <router-link v-else :to="{ name: 'lists' }">
             {{ $t('globals.buttons.view') }} {{ $t('menu.allLists').toLowerCase() }} &rarr;
           </router-link>
         </div>
@@ -45,7 +43,7 @@
       <template #top-left>
         <div class="columns">
           <div class="column is-6">
-            <form @submit.prevent="getLists">
+            <form @submit.prevent="onSearch">
               <b-field>
                 <b-input v-model="queryParams.query" name="query" expanded icon="magnify" ref="query" data-cy="query" />
                 <p class="controls">
@@ -332,7 +330,9 @@ import { journeyLockedOf, withTriggerItem, activeWordOf } from '../listTrigger.m
 import {
   LISTS_PAGE, restoreListsPage, saveListsPage, showSystemLists, systemListsParams, SHOW_SYSTEM_PREF,
 } from '../listsPage.mjs'; // eslint-disable-line import/extensions
-import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
+import {
+  loadPageState, pageContextOf, savePageState, sessionStore,
+} from '../pageState.mjs'; // eslint-disable-line import/extensions
 // Fork (list grid; dashboard counts, integrations DASHBOARD-COUNTS-SPEC D7) -- the one lines rule,
 // shared with the Dashboard.
 import { gridLines, langGridLines } from '../gridLines.mjs'; // eslint-disable-line import/extensions
@@ -353,9 +353,12 @@ export default Vue.extend({
   mixins: [brandScopeMixin],
 
   data() {
-    // Integrations PAGE-STATE-SPEC D5 -- the session's search/status/sort/page unless the route
-    // carries ?status= (a link wins); null otherwise.
-    const restored = restoreListsPage(loadPageState(sessionStore(window), LISTS_PAGE), this.$route.query);
+    // Integrations PAGE-STATE-SPEC D5 -- the session's search/sort/page unless the route carries
+    // ?status= (a link wins); null otherwise. Page 1 under another brand/language (review R1).
+    const restored = restoreListsPage(
+      loadPageState(sessionStore(window), LISTS_PAGE, pageContextOf(this.$store.getters)),
+      this.$route.query,
+    );
     return {
       // Current list item being edited.
       curItem: null,
@@ -409,7 +412,7 @@ export default Vue.extend({
         // silently replaced by created_at DESC server-side, and must match default-sort.
         orderBy: restored ? restored.orderBy : 'created_at',
         order: restored ? restored.order : 'desc',
-        status: restored ? restored.status : (this.$route.query.status || 'active'),
+        status: this.$route.query.status || 'active',
       },
       // PAGE-STATE-SPEC D3 -- Buefy reads default-sort once: a restored sort shows its arrow.
       defaultSort: restored ? [restored.orderBy, restored.order] : ['created_at', 'desc'],
@@ -425,6 +428,12 @@ export default Vue.extend({
   methods: {
     onPageChange(p) {
       this.queryParams.page = p;
+      this.getLists();
+    },
+
+    // Review R1(a) -- a search starts on page 1 (a later page of the old result may be past the end).
+    onSearch() {
+      this.queryParams.page = 1;
       this.getLists();
     },
 
@@ -614,7 +623,7 @@ export default Vue.extend({
 
     getLists() {
       // Integrations PAGE-STATE-SPEC D6 -- what this fetch applies is what the session keeps.
-      savePageState(sessionStore(window), LISTS_PAGE, saveListsPage(this.queryParams));
+      savePageState(sessionStore(window), LISTS_PAGE, saveListsPage(this.queryParams), pageContextOf(this.$store.getters));
       this.$api.queryLists({
         page: this.queryParams.page,
         query: this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' '),

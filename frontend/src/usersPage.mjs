@@ -1,10 +1,8 @@
 // Fork (page state, integrations listmonk/PAGE-STATE-SPEC §3). The Users page's session state
-// (pageState.mjs): the search, the sort and the page (the listing is unpaginated today, so the page
-// is kept but inert). The page reads no route query, so no link is overridden (D5). No Vue; tested
-// by usersPage.test.mjs.
-import {
-  SORT_ORDERS, enumOf, pageNumberOf, textOf,
-} from './pageState.mjs'; // eslint-disable-line import/extensions
+// (pageState.mjs): the search and the sort. The listing is unpaginated, so no page is kept (review
+// R7; add it when Users gains pagination). The page reads no route query, so no link is overridden
+// (D5). No Vue; tested by usersPage.test.mjs.
+import { SORT_ORDERS, enumOf, textOf } from './pageState.mjs'; // eslint-disable-line import/extensions
 
 export const USERS_PAGE = 'users';
 // D7 -- the sortable columns (and the default id).
@@ -16,7 +14,6 @@ export function saveUsersPage(qp) {
     query: textOf(q.query),
     orderBy: enumOf(q.orderBy, USER_SORT_FIELDS, 'id'),
     order: enumOf(q.order, SORT_ORDERS, 'asc'),
-    page: pageNumberOf(q.page),
   };
 }
 

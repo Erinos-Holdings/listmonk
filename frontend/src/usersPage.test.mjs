@@ -5,12 +5,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { restoreUsersPage, saveUsersPage } from './usersPage.mjs'; // eslint-disable-line import/extensions
 
-test('PAGE-STATE I3: search, sort and page round-trip; never a selection or the form', () => {
+test('PAGE-STATE I3: search and sort round-trip; never a page (R7), a selection or the form', () => {
   const saved = saveUsersPage({
     query: 'amy', orderBy: 'last_login', order: 'desc', page: 2, checked: [{ id: 1 }], isFormVisible: true,
   });
   assert.deepEqual(restoreUsersPage({ ...saved, checked: [{ id: 1 }] }), {
-    query: 'amy', orderBy: 'last_login', order: 'desc', page: 2,
+    query: 'amy', orderBy: 'last_login', order: 'desc',
   });
 });
 
@@ -20,8 +20,7 @@ test('PAGE-STATE I4: the page reads no route query -- there is no link to overri
   assert.equal(restoreUsersPage(null), null);
 });
 
-test('PAGE-STATE I5: unknown sort fields and bad pages default', () => {
+test('PAGE-STATE I5: unknown sort fields default', () => {
   const r = restoreUsersPage({ orderBy: 'password', order: 'up', query: 3 });
   assert.deepEqual([r.orderBy, r.order, r.query], ['id', 'asc', '']);
-  [0, -2, 'x', 1.5].forEach((p) => assert.equal(restoreUsersPage({ page: p }).page, 1, String(p)));
 });

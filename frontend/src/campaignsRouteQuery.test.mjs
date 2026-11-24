@@ -407,7 +407,8 @@ test('PAGE-STATE I3: only the visible page-set fields round-trip -- never a link
   const scopes = {
     routeIDs: [1, 2], routeListIDs: [5, 7], evergreen: true, bulk: { checked: [{ id: 1 }], all: true }, previewItem: { id: 1 },
   };
-  const saved = saveCampaignsPage({ ...shown, ...scopes });
+  const others = { evergreen: true, bulk: { checked: [{ id: 1 }], all: true }, previewItem: { id: 1 } };
+  const saved = saveCampaignsPage({ ...shown, ...others });
   assert.deepEqual(Object.keys(saved).sort(), ['listID', 'order', 'orderBy', 'page', 'query', 'routeStatus']);
   assert.deepEqual(restoreCampaignsPage(JSON.parse(JSON.stringify(saved)), {}, [5, 7]), {
     query: 'bfcm', listID: 5, routeStatus: 'finished', orderBy: 'name', order: 'asc', page: 3,
@@ -415,6 +416,14 @@ test('PAGE-STATE I3: only the visible page-set fields round-trip -- never a link
   // Even a stored object carrying them never restores a scope or a selection.
   const r = restoreCampaignsPage({ ...saved, ...scopes }, {}, [5]);
   ['routeIDs', 'routeListIDs', 'bulk', 'evergreen', 'previewItem'].forEach((k) => assert.equal(k in r, false, k));
+  assert.equal(r.page, 3);
+});
+
+test('Review R1(c): a fetch under a route id or route list scope saves page 1', () => {
+  assert.equal(saveCampaignsPage({ page: 4, routeIDs: [1, 2] }).page, 1);
+  assert.equal(saveCampaignsPage({ page: 4, routeListIDs: [5, 7] }).page, 1);
+  assert.equal(saveCampaignsPage({ page: 4, routeIDs: null, routeListIDs: null }).page, 4);
+  assert.equal(saveCampaignsPage({ page: 4, routeIDs: [] }).page, 4);
 });
 
 test('PAGE-STATE I4: any of the page\'s query parameters and the link wins', () => {

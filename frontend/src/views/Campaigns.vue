@@ -110,7 +110,7 @@
             </b-field>
           </div>
           <div class="column is-6">
-            <form @submit.prevent="getCampaigns">
+            <form @submit.prevent="onSearch">
               <div>
                 <b-field>
                   <b-input v-model="queryParams.query" name="query" expanded
@@ -588,7 +588,7 @@ import {
   CAMPAIGNS_PAGE, offeredCampaignListIds, restoreCampaignsPage, saveCampaignsPage,
 } from '../campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 import {
-  keptListId, loadPageState, savePageState, sessionStore,
+  keptListId, loadPageState, pageContextOf, savePageState, sessionStore,
 } from '../pageState.mjs'; // eslint-disable-line import/extensions
 import {
   campaignFilterParams, pausedAtOf, statusCountParams, statusOptions,
@@ -648,7 +648,7 @@ export default Vue.extend({
     // an entry with none of the page's query parameters (a link wins); null otherwise. The list id
     // is validated once the lists have loaded (mounted, D7).
     const restored = restoreCampaignsPage(
-      loadPageState(sessionStore(window), CAMPAIGNS_PAGE),
+      loadPageState(sessionStore(window), CAMPAIGNS_PAGE, pageContextOf(this.$store.getters)),
       this.$route && this.$route.query,
     );
     return {
@@ -948,6 +948,13 @@ export default Vue.extend({
       this.refreshCampaigns();
     },
 
+    // Review R1(a) -- a search starts on page 1 (a later page of the old result may be past the
+    // end); the fetch itself is the submit's former getCampaigns().
+    onSearch() {
+      this.queryParams.page = 1;
+      this.getCampaigns();
+    },
+
     onSort(field, direction) {
       this.queryParams.orderBy = field;
       this.queryParams.order = direction;
@@ -1038,7 +1045,7 @@ export default Vue.extend({
         no_body: true,
       };
       // Integrations PAGE-STATE-SPEC D6 -- what this fetch applies is what the session keeps.
-      savePageState(sessionStore(window), CAMPAIGNS_PAGE, saveCampaignsPage(this.queryParams));
+      savePageState(sessionStore(window), CAMPAIGNS_PAGE, saveCampaignsPage(this.queryParams), pageContextOf(this.$store.getters));
       // Fork (campaign mode, CAMPAIGN-MODE-SPEC D5/D9) -- top-level rows (grouped=true) only in
       // Campaign mode; the ungrouped request is unchanged otherwise (G4).
       if (this.groupMode) {

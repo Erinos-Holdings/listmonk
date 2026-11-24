@@ -30,8 +30,10 @@
       </div>
 
       <!-- Fork (media tags) -- MEDIA-TAGS-SPEC 3.6. Tag filter row: one toggle per context tag
-           (ON when the picker opens) and per tag added below (removable), Untagged, All. OR
-           semantics server-side. No persistence: the modal starts from context, the page on All. -->
+           (ON when the picker opens) and per tag added below (removable), Untagged, All. AND
+           semantics server-side (MEDIA-TAGS-SPEC D4). The modal starts from context; the page
+           starts from the brand selection and keeps its filter per browser session
+           (integrations PAGE-STATE-SPEC). -->
       <div class="media-tag-filter mb-4" data-cy="media-tag-filter">
         <b-taglist>
           <b-tag v-for="c in chips" :key="c.tag" size="is-medium" class="is-clickable"
@@ -172,7 +174,9 @@ import { foldMediaTag, isValidMediaTag, normalizeMediaTagsLenient } from '../med
 import brandScopeMixin from '../brandScopeMixin';
 import { mediaScopeContext } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { MEDIA_PAGE, restoreMediaPage, saveMediaPage } from '../mediaPage.mjs'; // eslint-disable-line import/extensions
-import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
+import {
+  loadPageState, savePageState, sessionStore,
+} from '../pageState.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   components: {
@@ -579,7 +583,10 @@ export default Vue.extend({
       this.initFilter();
       // Integrations PAGE-STATE-SPEC D7 -- the page restores this session's filter, page and search
       // when they were kept under the current brand selection.
-      const restored = this.isModal ? null : restoreMediaPage(loadPageState(sessionStore(window), MEDIA_PAGE), this.brandKey);
+      const restored = this.isModal ? null : restoreMediaPage(
+        loadPageState(sessionStore(window), MEDIA_PAGE),
+        this.brandKey,
+      );
       if (restored) {
         this.queryParams.query = restored.query;
         this.queryParams.page = restored.page;

@@ -283,7 +283,9 @@ import {
   SEGMENTS, langCell, langColumnShown, listOptions, listRoute, routeListIdOf, statusEnabled, statusQuery,
   SUBSCRIBERS_PAGE, offeredSubscriberListIds, restoreSubscribersPage, saveSubscribersPage, subscribersRestoreRoute,
 } from '../subscriberFilters.mjs'; // eslint-disable-line import/extensions
-import { loadPageState, savePageState, sessionStore } from '../pageState.mjs'; // eslint-disable-line import/extensions
+import {
+  loadPageState, pageContextOf, savePageState, sessionStore,
+} from '../pageState.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 import BrandContextNotice from '../components/BrandContextNotice.vue';
 
@@ -302,7 +304,11 @@ export default Vue.extend({
   data() {
     // Integrations PAGE-STATE-SPEC D5/D8/I2 -- the session's advanced query (open), sort and page,
     // on a bare entry or on the page's own restore replace only (never a link); null otherwise.
-    const restored = restoreSubscribersPage(loadPageState(sessionStore(window), SUBSCRIBERS_PAGE), this.$route);
+    // Page 1 under another brand/language (review R1).
+    const restored = restoreSubscribersPage(
+      loadPageState(sessionStore(window), SUBSCRIBERS_PAGE, pageContextOf(this.$store.getters)),
+      this.$route,
+    );
     return {
       // Current subscriber item being edited.
       curItem: null,
@@ -514,7 +520,7 @@ export default Vue.extend({
       savePageState(sessionStore(window), SUBSCRIBERS_PAGE, saveSubscribersPage({
         listID: listId,
         search: this.isSearchAdvanced ? '' : this.queryInput,
-      }));
+      }), pageContextOf(this.$store.getters));
     },
 
     // SUBSCRIBERS-FILTERS D5 -- a status pick ('' = All statuses) on the current list route.
@@ -562,12 +568,15 @@ export default Vue.extend({
       }
 
       // Integrations PAGE-STATE-SPEC D6 -- what this query applies is what the session keeps (the
-      // segment and the navbar's lang are not kept).
-      savePageState(sessionStore(window), SUBSCRIBERS_PAGE, saveSubscribersPage({
-        ...this.queryParams,
-        search: this.queryInput,
-        advanced: this.isSearchAdvanced,
-      }));
+      // list's Status with its list; the navbar's lang is not kept). Review R4: never from the
+      // `subscriber` route -- its default query behind the form would wipe the kept state.
+      if (this.$route.name !== 'subscriber') {
+        savePageState(sessionStore(window), SUBSCRIBERS_PAGE, saveSubscribersPage({
+          ...this.queryParams,
+          search: this.queryInput,
+          advanced: this.isSearchAdvanced,
+        }), pageContextOf(this.$store.getters));
+      }
 
       // Fork (global language, D4, S2-1, I4c) -- numbered; the api layer commits the rows only
       // when this is still the mounted page's latest query.
@@ -985,8 +994,9 @@ export default Vue.extend({
     // Get subscribers on load. Fork (global brand, D3) -- once the lists have loaded (I13).
     // GLOBAL-LANG stage 4 S4-1 -- the `subscriber` route too, so the table behind the form shows
     // this page's own rows (never another mount's) and by-query actions un-busy on its answer.
-    // Integrations PAGE-STATE-SPEC D8 -- a bare entry with a stored list/search/status replaces once
-    // to it (a single remount, like opening a shared link) instead of querying here.
+    // Integrations PAGE-STATE-SPEC D8 -- a bare entry with a stored list (with its Status) or simple
+    // search replaces once to it (a single remount, like opening a shared link) instead of querying
+    // here.
     this.afterListsLoaded(() => {
       const restoreTo = subscribersRestoreRoute(
         loadPageState(sessionStore(window), SUBSCRIBERS_PAGE),

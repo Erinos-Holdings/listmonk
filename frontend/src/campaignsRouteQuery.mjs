@@ -385,15 +385,18 @@ export const CAMPAIGN_SORT_FIELDS = Object.freeze(['created_at', 'name', 'status
 // D3/D6 -- the kept fields of the fetch's queryParams: the search, the single list filter, the
 // Status header filter, the sort and the page. Never the route id / list scopes (D4), the kind pill
 // (its own pref), a selection or a modal.
+// Review R1(c): a fetch under a route id or route list scope saves page 1 -- its page belongs to the
+// linked set, which a later bare entry does not show.
 export function saveCampaignsPage(qp) {
   const q = qp || {};
+  const linked = hasRouteScope(q.routeIDs) || hasRouteScope(q.routeListIDs);
   return {
     query: textOf(q.query),
     listID: Number.isInteger(q.listID) && q.listID > 0 ? q.listID : null,
     routeStatus: CAMPAIGN_STATUSES.includes(q.routeStatus) ? q.routeStatus : null,
     orderBy: enumOf(q.orderBy, CAMPAIGN_SORT_FIELDS, 'created_at'),
     order: enumOf(q.order, SORT_ORDERS, 'desc'),
-    page: pageNumberOf(q.page),
+    page: linked ? 1 : pageNumberOf(q.page),
   };
 }
 
@@ -406,7 +409,14 @@ export function restoreCampaignsPage(stored, query, offeredIds) {
   if (!stored || typeof stored !== 'object' || routeHasAny(query, CAMPAIGNS_LINK_KEYS)) {
     return null;
   }
-  const s = saveCampaignsPage(stored);
+  const s = saveCampaignsPage({
+    query: stored.query,
+    listID: stored.listID,
+    routeStatus: stored.routeStatus,
+    orderBy: stored.orderBy,
+    order: stored.order,
+    page: stored.page,
+  });
   return {
     ...s,
     listID: offeredIds === undefined ? s.listID : keptListId(s.listID, offeredIds),

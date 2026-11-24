@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  PAGE_STATE_PREFIX, RESTORE_PARAM, enumOf, isOwnRestore, keptListId, loadPageState, pageNumberOf, routeHasAny,
+  PAGE_STATE_PREFIX, RESTORE_PARAM, clearPageState, enumOf, pageContextOf, isOwnRestore, keptListId, loadPageState, pageNumberOf, routeHasAny,
   savePageState, sessionStore, textOf,
 } from './pageState.mjs'; // eslint-disable-line import/extensions
 
@@ -49,6 +49,39 @@ test('I1: save never throws, writes one page.<name> JSON key, and ignores non-ob
   assert.equal(PAGE_STATE_PREFIX, 'page.');
   assert.deepEqual(Object.keys(s.m), ['page.lists']);
   assert.deepEqual(loadPageState(s, 'lists'), { query: 'a', page: 2 });
+});
+
+test('Review R1(b): state saved under another brand key or language restores page 1', () => {
+  const ctx = pageContextOf({ brandKey: '{"kind":"all"}', langSubscribers: 'all', campaignMode: 'off' });
+  assert.deepEqual(ctx, { brandKey: '{"kind":"all"}', lang: 'all', mode: 'off' });
+  assert.deepEqual(pageContextOf(undefined), { brandKey: null, lang: null, mode: null });
+  const s = memStore();
+  savePageState(s, 'campaigns', { query: 'bfcm', page: 3 }, ctx);
+  assert.deepEqual(JSON.parse(s.m['page.campaigns']).ctx, ctx);
+  // Same context: the page is kept.
+  assert.equal(loadPageState(s, 'campaigns', { ...ctx }).page, 3);
+  // Another brand, another language, an unknown (pending) brand: page 1, the rest kept.
+  const brand = loadPageState(s, 'campaigns', { ...ctx, brandKey: '{"kind":"brand","slug":"ruze"}' });
+  assert.deepEqual([brand.page, brand.query], [1, 'bfcm']);
+  assert.equal(loadPageState(s, 'campaigns', { ...ctx, lang: 'fr' }).page, 1);
+  // Stage 4b S2: Campaign mode switched on elsewhere: page 1.
+  assert.equal(loadPageState(s, 'campaigns', { ...ctx, mode: 'on' }).page, 1);
+  assert.equal(loadPageState(s, 'campaigns', { ...ctx, brandKey: 'pending' }).page, 1);
+  // A state with no recorded context (saved before this rule) is page 1 under a context.
+  savePageState(s, 'lists', { page: 4 });
+  assert.equal(loadPageState(s, 'lists', ctx).page, 1);
+  // Without a context the read is as before.
+  assert.equal(loadPageState(s, 'lists').page, 4);
+});
+
+test('Review R6: clearPageState removes the state and never throws', () => {
+  const s = memStore({ 'page.analytics': '{"id":["7"]}' });
+  s.removeItem = (k) => { delete s.m[k]; };
+  clearPageState(s, 'analytics');
+  assert.equal(loadPageState(s, 'analytics'), null);
+  assert.doesNotThrow(() => clearPageState(null, 'analytics'));
+  assert.doesNotThrow(() => clearPageState(throwing, 'analytics'));
+  assert.doesNotThrow(() => clearPageState({}, 'analytics'));
 });
 
 test('I1: sessionStore is brandMatrix.mjs::sessionStore (null when absent or throwing)', () => {
