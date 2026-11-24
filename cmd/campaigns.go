@@ -176,8 +176,9 @@ func (a *App) GetCampaigns(c echo.Context) error {
 	}
 
 	// Fork (integrations LIST-AUDIENCE-SPEED-SPEC D2) -- no_audience=true skips only the audience
-	// count and marks those rows audience_pending (the Campaigns page reads each from
-	// GET /api/campaigns/:id); absent or false, the response is unchanged.
+	// count and marks those rows audience_pending (the Campaigns page then reads them in ONE
+	// follow-up GET /api/campaigns?id=..., under this handler's own permission filter); absent or
+	// false, the response is unchanged.
 	noAudience, _ := strconv.ParseBool(c.QueryParam("no_audience"))
 
 	// Query and retrieve campaigns from the DB.

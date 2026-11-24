@@ -605,7 +605,7 @@ import {
   GROUP_ACTIONS, flattenGroups, groupAnalyticsRoute, memberRows, statusSummaryText,
 } from '../campaignGroups.mjs'; // eslint-disable-line import/extensions
 import {
-  audienceState, failAudience, mergeAudience, pendingIds,
+  audienceState, failAudience, fillFromList, pendingIds,
 } from '../audienceFill.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
@@ -669,9 +669,6 @@ export default Vue.extend({
       // keys of the expanded group rows (in-page state only).
       groupActions: GROUP_ACTIONS,
       expandedGroups: [],
-      // LIST-AUDIENCE-SPEED-SPEC D5 -- the list fetch generation; a deferred To send read applies
-      // only to the generation that issued it.
-      audienceGen: 0,
       // PAGE-STATE-SPEC D7 -- true while a restored list id awaits validation (mounted).
       restoredListCheck: !!restored,
       queryParams: {
@@ -852,20 +849,20 @@ export default Vue.extend({
       return audienceState(c);
     },
 
-    // LIST-AUDIENCE-SPEED-SPEC D3/D5 -- after a plain-list fetch of generation `gen`, read every
-    // pending row's audience at once; each response is merged into its row by id, or marks it
-    // unknown, and only while no newer fetch has started.
-    fillAudiences(gen) {
-      if (gen !== this.audienceGen) {
+    // LIST-AUDIENCE-SPEED-SPEC D3/D5 (stage-4 R1/R2) -- after a plain-list fetch, ONE follow-up
+    // list request for the pending rows' ids; each returned row is merged into the displayed row
+    // with its id (a campaign no longer on screen finds none). A failed request marks every
+    // still-pending row unknown.
+    fillAudiences() {
+      const rows = () => memberRows((this.campaigns && this.campaigns.results) || []);
+      const ids = pendingIds(rows());
+      if (ids.length === 0) {
         return;
       }
-      const rows = () => memberRows((this.campaigns && this.campaigns.results) || []);
-      pendingIds(rows()).forEach((id) => {
-        this.$api.getCampaignAudience(id).then((cm) => {
-          mergeAudience(rows(), gen, this.audienceGen, id, cm, Vue.set);
-        }).catch(() => {
-          failAudience(rows(), gen, this.audienceGen, id, Vue.set);
-        });
+      this.$api.getCampaignAudiences(ids).then((data) => {
+        fillFromList(rows(), ids, data && data.results, Vue.set);
+      }).catch(() => {
+        ids.forEach((id) => failAudience(rows(), id, Vue.set));
       });
     },
 
@@ -1085,17 +1082,14 @@ export default Vue.extend({
       savePageState(sessionStore(window), CAMPAIGNS_PAGE, saveCampaignsPage(this.queryParams), pageContextOf(this.$store.getters));
       // Fork (campaign mode, CAMPAIGN-MODE-SPEC D5/D9) -- top-level rows (grouped=true) only in
       // Campaign mode; the ungrouped request is unchanged otherwise (G4).
-      // LIST-AUDIENCE-SPEED-SPEC D5 -- every fetch starts a new generation (grouped too, so a plain
-      // fetch's late reads never land on a Campaign-mode response).
-      this.audienceGen += 1;
-      const gen = this.audienceGen;
       if (this.groupMode) {
         this.$api.getCampaignGroups(params);
         return;
       }
-      // D3 -- the plain list skips the audience count; To send is read per row after the rows land.
+      // LIST-AUDIENCE-SPEED-SPEC D3 -- the plain list skips the audience count; To send is read for
+      // the pending rows after the rows land.
       this.$api.getCampaigns({ ...params, no_audience: true }).then(() => {
-        this.fillAudiences(gen);
+        this.fillAudiences();
       }, () => {});
     },
 

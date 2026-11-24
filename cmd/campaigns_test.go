@@ -333,6 +333,18 @@ func TestCampaignSearchMatchesBrand(t *testing.T) {
 			t.Errorf("analytics picker %q: %d rows", q, len(pick))
 		}
 	}
+	// Integrations LIST-AUDIENCE-SPEED-SPEC D2 (stage-4 R4) -- the no_audience wiring through
+	// QueryCampaigns: on a draft, true marks audience_pending and skips the count; false the reverse.
+	for _, noAud := range []bool{true, false} {
+		res, _, err := h.app.core.QueryCampaigns("No-purchase", nil, nil, "", "", true, nil, nil, nil, nil, "", 0, 0, noAud)
+		if err != nil || len(res) != 1 || res[0].Status != models.CampaignStatusDraft {
+			t.Fatalf("noAudience=%v: %v, %d rows", noAud, err, len(res))
+		}
+		if res[0].AudiencePending != noAud || res[0].Audience.Valid == noAud {
+			t.Errorf("noAudience=%v: audience_pending %v, audience valid %v", noAud, res[0].AudiencePending, res[0].Audience.Valid)
+		}
+	}
+
 	// No false positive: a brand word that is neither slug nor display name.
 	if res, _, _ := h.app.core.QueryCampaigns("ruze", nil, nil, "", "", true, nil, nil, nil, nil, "", 0, 0, false); len(res) != 0 {
 		t.Errorf("search ruze matched %d", len(res))

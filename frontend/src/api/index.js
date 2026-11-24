@@ -541,12 +541,19 @@ export const getCampaign = async (id) => http.get(`/api/campaigns/${id}`, {
   camelCase: campaignCamel(''),
 });
 
-// Fork (integrations LIST-AUDIENCE-SPEED-SPEC D3/D4) -- the Campaigns page's deferred To send read:
-// the Campaign page's own read without the body. No loading model (the table never blanks), no
-// store and no toast (a failed read shows "—", audienceFill.mjs).
-export const getCampaignAudience = async (id) => http.get(`/api/campaigns/${id}`, {
-  params: { no_body: true },
-  camelCase: campaignCamel(''),
+// Fork (integrations LIST-AUDIENCE-SPEED-SPEC D3/D4, stage-4 R1) -- the Campaigns page's deferred
+// To send: ONE list request for the pending ids (repeatable `id`, ANDed with the list's permission
+// scope; no other filter, so every id the user may see comes back), with the audience count (no
+// no_audience). per_page=all -- the id filter bounds the result (stage-4b S1). No loading model and
+// no store (the table's data and loading state are untouched), no toast (a failed request shows
+// "—", audienceFill.mjs).
+export const getCampaignAudiences = async (ids) => http.get('/api/campaigns', {
+  params: {
+    id: ids,
+    no_body: true,
+    per_page: 'all',
+  },
+  camelCase: campaignCamel('.results.*'),
   disableToast: true,
 });
 
