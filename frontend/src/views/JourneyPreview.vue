@@ -14,7 +14,12 @@
       <div class="column">
         <h1 class="title is-4 mb-2">
           <router-link :to="{ name: 'brands' }">{{ $t('brands.title') }}</router-link>
-          / {{ $t('journeyPreview.title') }}
+          /
+          <!-- Under a glyph's brand, the title is the way back to the global selection. -->
+          <router-link v-if="$route.query.brand" :to="{ name: 'journeyPreview' }" data-cy="journey-all">
+            {{ $t('journeyPreview.title') }}
+          </router-link>
+          <template v-else>{{ $t('journeyPreview.title') }}</template>
           <span v-if="sections.length === 1"> / {{ sections[0].label }}</span>
         </h1>
       </div>
@@ -132,13 +137,17 @@ export default Vue.extend({
   computed: {
     ...mapGetters(['langEffective', 'brandSelection', 'launch', 'brandHealth']),
 
-    // The brands shown: those with a usage doc, narrowed by the global brand selection and the
-    // launch filter exactly as the Brands page's tables are; sorted by label.
+    // The brands shown: the Usage glyph's ?brand= (that brand alone -- the glyph is the brand
+    // filter); else those with a usage doc narrowed by the global brand selection and the launch
+    // filter exactly as the Brands page's tables are; sorted by label.
     sections() {
       const labels = this.$store.state.brandRows;
       const withUsage = new Set(usageBrands(this.rows));
-      const scoped = filterBrandRows(this.rows.filter((r) => r && withUsage.has(r.brand)), this.brandSelection);
-      return filterRowsByLaunch(scoped, this.launch, (r) => r.brand, this.brandHealth)
+      const rows = this.rows.filter((r) => r && withUsage.has(r.brand));
+      const picked = rows.filter((r) => r.brand === this.$route.query.brand);
+      const scoped = picked.length ? picked
+        : filterRowsByLaunch(filterBrandRows(rows, this.brandSelection), this.launch, (r) => r.brand, this.brandHealth);
+      return scoped
         .map((r) => ({ slug: r.brand, label: brandLabelOf(r.brand, labels), usage: r.usage }))
         .sort((x, y) => x.label.localeCompare(y.label, 'en', { sensitivity: 'base' }) || x.slug.localeCompare(y.slug))
         .map((x) => ({
@@ -192,14 +201,15 @@ export default Vue.extend({
       }).finally(() => {
         this.loading = false;
         this.queueMeasure();
-        // The Usage glyph's anchor: the section exists only now.
-        this.$nextTick(() => {
-          const el = this.$route.hash && document.getElementById(this.$route.hash.slice(1));
-          if (el) {
-            el.scrollIntoView();
-          }
-        });
       });
+    },
+
+    // A global brand or launch change while a glyph's ?brand= is in force drops it, so the page
+    // follows the selector again (never stuck on the clicked brand).
+    dropPickedBrand() {
+      if (this.$route.query.brand) {
+        this.$router.replace({ name: 'journeyPreview' });
+      }
     },
 
     // The layout from the page's width (stacked under GUIDE_MIN_COLUMN x 3), then the column's
@@ -225,6 +235,10 @@ export default Vue.extend({
     sections() {
       this.queueMeasure();
     },
+    // The user's own picks only (the stored values), never the resolved getters, which also move
+    // while the store loads and would drop the glyph's brand on a cold load.
+    '$store.state.brandStored': 'dropPickedBrand',
+    '$store.state.launchStored': 'dropPickedBrand',
   },
 
   mounted() {

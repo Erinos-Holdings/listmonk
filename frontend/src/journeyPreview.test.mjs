@@ -205,5 +205,5 @@ test('helpers: usageBrands, frameScale, previewTarget', () => {
   assert.equal(frameScale(FRAME_WIDTH * 2), 1);
   assert.equal(frameScale(300), 300 / FRAME_WIDTH);
   assert.equal(frameScale(0), 1);
-  assert.deepEqual(previewTarget('ruze'), { name: 'journeyPreview', hash: '#journey-brand-ruze' });
+  assert.deepEqual(previewTarget('ruze'), { name: 'journeyPreview', query: { brand: 'ruze' } });
 });
