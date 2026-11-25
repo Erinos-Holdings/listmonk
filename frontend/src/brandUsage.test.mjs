@@ -1565,6 +1565,16 @@ test('USAGE-PREVIEW-LANG I5: under L the circle cells render, sort and link from
   assert.match(cell(row, 'welcome:2', t, 'en').tooltip, /dashboard\.usage\.langCountedEn/);
   assert.match(cell(row, 'reengagement:180', t, 'fr').tooltip, /dashboard\.usage\.langCounted\{"lang":"FR"\}/);
   assert.doesNotMatch(cell(row, 'welcome:2', t, 'all').tooltip, /langCounted/);
+  // Stage 4 F2: under a language the detail line (welcomeTip / triggerTip rows) is dropped; the
+  // description, the narrowed words and the language line stay. Under All it is kept.
+  const lines = (f, L) => cell(row, f, t, L).tooltip.split('\n');
+  assert.deepEqual(lines('welcome:2', 'es'), [t(seriesStepKey('welcome', 2)), t('dashboard.usage.circleNone'), t('dashboard.usage.langCounted', { lang: 'ES' })]);
+  assert.doesNotMatch(cell(row, 'welcome:0', t, 'fr').tooltip, /#1 running/);
+  assert.match(cell(row, 'welcome:0', t, 'all').tooltip, /#1 running/);
+  assert.doesNotMatch(cell(row, 'welcome:2', t, 'es').tooltip, /s-21/);
+  assert.match(cell(row, 'welcome:2', t, 'all').tooltip, /s-21/);
+  assert.doesNotMatch(cell(row, 'sku', t, 'es').tooltip, /s-31/);
+  assert.match(cell(row, 'sku', t, 'all').tooltip, /s-31/);
   // Sort by langCounts[L].state's rank (active 0, idle 1, none 2).
   assert.equal(sortValue(row, 'welcome:2', 'fr'), 0);
   assert.equal(sortValue(row, 'welcome:2', 'es'), 2);

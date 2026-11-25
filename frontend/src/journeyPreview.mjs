@@ -136,9 +136,9 @@ function byPick(first) {
 }
 
 // D4 -- stepCell: one step's preview from its counted entries and the campaigns read (a Map or an
-// object keyed by id), after the status filter. null -> the guide-text placeholder (no entry at
-// all, or none after the status filter). Under a single language L (EN = EN+): the entries whose
-// stored `covers` includes L; none -> { noneInLang: true } (never an English fallback); else the
+// object keyed by id). null -> the guide-text placeholder (no entry at all, or none left after the
+// status filter). Under a single language L (EN = EN+): the entries whose stored `covers` includes
+// L; none, before any status filter -> { noneInLang: true } (never an English fallback); else the
 // pick -- an exact `lang === L` before a language-less one, then the latest updated_at, then the
 // higher id; `others` the rest. Under All: every entry; the pick -- `lang === 'en'` first, then
 // latest, then id; `otherLangs` the distinct non-null langs among the other entries that differ
@@ -146,20 +146,27 @@ function byPick(first) {
 // An id the campaigns read did not return is dropped.
 export function stepCell(entries, campaignsById, { lang = 'all', status = 'all' } = {}) {
   const get = (id) => (campaignsById instanceof Map ? campaignsById.get(id) : (campaignsById || {})[id]);
-  const cands = (Array.isArray(entries) ? entries : [])
+  const present = (Array.isArray(entries) ? entries : [])
     .map((entry) => ({ entry, campaign: get(entry.id) }))
-    .filter((c) => isObj(c.campaign) && statusMatches(c.entry, c.campaign, status));
-  if (!cands.length) {
+    .filter((c) => isObj(c.campaign));
+  if (!present.length) {
     return null;
   }
   const L = typeof lang === 'string' && lang !== '' ? lang : 'all';
+  // Stage 4 F1: "None in this language" is decided from the step's entries BEFORE the status
+  // filter (entries exist, none covers L); a step the status filter empties shows the placeholder.
+  const covering = L === 'all' ? present : present.filter((c) => Array.isArray(c.entry.covers) && c.entry.covers.includes(L));
+  if (!covering.length) {
+    return {
+      campaign: null, others: 0, otherLangs: 0, noneInLang: true,
+    };
+  }
+  const cands = covering.filter((c) => statusMatches(c.entry, c.campaign, status));
+  if (!cands.length) {
+    return null;
+  }
   if (L !== 'all') {
-    const eligible = cands.filter((c) => Array.isArray(c.entry.covers) && c.entry.covers.includes(L));
-    if (!eligible.length) {
-      return {
-        campaign: null, others: 0, otherLangs: 0, noneInLang: true,
-      };
-    }
+    const eligible = cands;
     const sorted = [...eligible].sort(byPick((e) => e.lang === L));
     return {
       campaign: sorted[0].campaign, others: sorted.length - 1, otherLangs: 0, noneInLang: false,

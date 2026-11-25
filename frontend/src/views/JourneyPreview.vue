@@ -199,6 +199,12 @@ export default Vue.extend({
       this.loading = true;
       this.$api.getDashboardBrandMatrix({}).then((data) => {
         this.rows = data && Array.isArray(data.rows) ? data.rows : [];
+        // Stage 4 F3: no valid ?brand= -- put the picked brand into the query instead of reading for
+        // it (the route is keyed on its full path: the page re-mounts with the brand fixed).
+        if (this.brand && this.brand !== this.$route.query.brand) {
+          this.$router.replace({ name: 'journeyPreview', query: { brand: this.brand } });
+          return null;
+        }
         const ids = previewIds(this.usage);
         if (!ids.length) {
           return null;

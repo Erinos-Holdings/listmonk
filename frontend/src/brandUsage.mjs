@@ -1269,7 +1269,12 @@ export function cell(row, field, t = (k) => k, lang = 'all') {
         ? welcomeTip(isObj(u.welcome) ? u.welcome : {}, t)
         : triggerTip({ rows: stepRows(stepAt(u, leaf.family, leaf.days)) }, t);
       return {
-        text: '', cls: '', tooltip: [desc, circleWords(c3, t), ll3 ? langCountedLine(lang, t) : '', detail].filter(Boolean).join('\n'), circles: circlesOf(c3),
+        text: '',
+        cls: '',
+        // Stage 4 F2: under a language the detail line (every campaign / row, all languages) is
+        // dropped -- it would list a running campaign under a red 0.
+        tooltip: (ll3 ? [desc, circleWords(c3, t), langCountedLine(lang, t)] : [desc, circleWords(c3, t), detail]).filter(Boolean).join('\n'),
+        circles: circlesOf(c3),
       };
     }
     if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
@@ -1312,7 +1317,11 @@ export function cell(row, field, t = (k) => k, lang = 'all') {
       const c3 = ll3 ? ll3.counts : all3;
       if (c3 && skuRows(u).length) {
         return {
-          text: '', cls: '', tooltip: [circleWords(c3, t), ll3 ? langCountedLine(lang, t) : '', triggerTip({ rows: skuRows(u) }, t)].filter(Boolean).join('\n'), circles: circlesOf(c3),
+          text: '',
+          cls: '',
+          // Stage 4 F2: under a language the rows' detail line is dropped.
+          tooltip: (ll3 ? [circleWords(c3, t), langCountedLine(lang, t)] : [circleWords(c3, t), triggerTip({ rows: skuRows(u) }, t)]).filter(Boolean).join('\n'),
+          circles: circlesOf(c3),
         };
       }
       if (c3) {
