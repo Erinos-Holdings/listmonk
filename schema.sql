@@ -1302,20 +1302,29 @@ $$ LANGUAGE sql STABLE;
 -- confirmed row on the brand's main list -- brand_master_list_id of the list's brand tag. Exempt (TRUE
 -- for everyone) when the target list is the main list itself, a reengage queue (its members are held
 -- by definition), transactional, or untagged. A brand tag with no single main list fails CLOSED
--- (FALSE). The ONE definition, read only by queries/evergreen.sql next-evergreen-subscribers. Mirrored
--- in internal/migrations/v6.2.45.go (keep the two identical).
-CREATE OR REPLACE FUNCTION brand_opted_in(p_subscriber_id INT, p_list_id INT) RETURNS BOOLEAN AS $$
+-- (FALSE). The rule is resolved PER LIST, once per statement (stage 4 R1): brand_opt_in_rule(list)
+-- returns (exempt, main_list_id) and is the ONE definition, read only by queries/evergreen.sql
+-- next-evergreen-subscribers, whose per-member part is a plain EXISTS on the main-list row.
+-- brand_opted_in(subscriber, list) is a thin wrapper for read-only checks (no query calls it).
+-- Mirrored in internal/migrations/v6.2.45.go (keep the two identical).
+CREATE OR REPLACE FUNCTION brand_opt_in_rule(p_list_id INT) RETURNS TABLE (exempt BOOLEAN, main_list_id INT) AS $$
     SELECT CASE
-        WHEN l.id IS NULL THEN FALSE
-        WHEN list_brand_tag(l.tags) IS NULL THEN TRUE
-        WHEN l.transactional THEN TRUE
-        WHEN EXISTS (SELECT 1 FROM UNNEST(l.tags) AS t WHERE BTRIM(t, E' \t\n\r\f\x0B') LIKE 'reengage:%') THEN TRUE
-        WHEN l.id IS NOT DISTINCT FROM brand_master_list_id(list_brand_tag(l.tags)) THEN TRUE
-        ELSE EXISTS (SELECT 1 FROM subscriber_lists m
-            WHERE m.subscriber_id = p_subscriber_id AND m.status = 'confirmed'
-                AND m.list_id = brand_master_list_id(list_brand_tag(l.tags)))
-        END
-    FROM (SELECT 1) AS one LEFT JOIN lists l ON (l.id = p_list_id);
+            WHEN l.id IS NULL THEN FALSE
+            WHEN list_brand_tag(l.tags) IS NULL THEN TRUE
+            WHEN l.transactional THEN TRUE
+            WHEN EXISTS (SELECT 1 FROM UNNEST(l.tags) AS t WHERE BTRIM(t, E' \t\n\r\f\x0B') LIKE 'reengage:%') THEN TRUE
+            ELSE l.id IS NOT DISTINCT FROM m.id
+        END,
+        m.id
+    FROM (SELECT 1) AS one
+        LEFT JOIN lists l ON (l.id = p_list_id)
+        LEFT JOIN LATERAL (SELECT brand_master_list_id(list_brand_tag(l.tags)) AS id) m ON TRUE;
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION brand_opted_in(p_subscriber_id INT, p_list_id INT) RETURNS BOOLEAN AS $$
+    SELECT r.exempt OR EXISTS (SELECT 1 FROM subscriber_lists m
+        WHERE m.subscriber_id = p_subscriber_id AND m.list_id = r.main_list_id AND m.status = 'confirmed')
+    FROM brand_opt_in_rule(p_list_id) r;
 $$ LANGUAGE sql STABLE;
 
 -- Fork (naming standard, integrations listmonk/NAMING-STANDARD-SPEC D10 §4.1): a renamed record's

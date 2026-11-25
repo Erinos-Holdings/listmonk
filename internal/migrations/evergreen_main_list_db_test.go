@@ -140,16 +140,21 @@ func TestBrandOptedInFunction_V6_2_45(t *testing.T) {
 	if !strings.Contains(string(schema), strings.TrimSpace(brandOptedInDDL)) {
 		t.Fatal("brandOptedInDDL is not in schema.sql verbatim")
 	}
-	var fresh string
-	h.db.Get(&fresh, `SELECT pg_get_functiondef('brand_opted_in(int, int)'::regprocedure)`)
+	defs := func() string {
+		var a, b string
+		h.db.Get(&a, `SELECT pg_get_functiondef('brand_opt_in_rule(int)'::regprocedure)`)
+		h.db.Get(&b, `SELECT pg_get_functiondef('brand_opted_in(int, int)'::regprocedure)`)
+		return a + b
+	}
+	fresh := defs()
 	h.db.MustExec(`DROP FUNCTION brand_opted_in(INT, INT)`)
+	h.db.MustExec(`DROP FUNCTION brand_opt_in_rule(INT)`)
 	for i := 0; i < 2; i++ {
 		if err := V6_2_45(h.db, nil, nil, lo); err != nil {
 			t.Fatalf("V6_2_45 run %d: %v", i+1, err)
 		}
 	}
-	var migrated string
-	h.db.Get(&migrated, `SELECT pg_get_functiondef('brand_opted_in(int, int)'::regprocedure)`)
+	migrated := defs()
 	if migrated != fresh {
 		t.Fatalf("migration differs from schema.sql\n migration %s\n schema    %s", migrated, fresh)
 	}
@@ -184,9 +189,23 @@ func TestBrandOptedInFunction_V6_2_45(t *testing.T) {
 		t.Fatal("an unconfirmed main row: brand_opted_in must be false")
 	}
 
-	// The ONE reader: next-evergreen-subscribers calls the function; no other shipped query does.
+	// The rule, once per list: (exempt, main_list_id).
+	var r struct {
+		Exempt bool `db:"exempt"`
+		Main   *int `db:"main_list_id"`
+	}
+	if err := h.db.Get(&r, `SELECT exempt, main_list_id FROM brand_opt_in_rule($1)`, step); err != nil || r.Exempt || r.Main == nil || *r.Main != main {
+		t.Fatalf("brand_opt_in_rule(step) = %+v, %v; want (false, %d)", r, err, main)
+	}
+	if err := h.db.Get(&r, `SELECT exempt, main_list_id FROM brand_opt_in_rule($1)`, main); err != nil || !r.Exempt {
+		t.Fatalf("brand_opt_in_rule(main) = %+v, %v; want exempt", r, err)
+	}
+
+	// The ONE reader: next-evergreen-subscribers resolves the rule (brand_opt_in_rule); no other
+	// shipped query does, and no query calls the per-member wrapper brand_opted_in (stage 4 R1).
 	files, _ := filepath.Glob(filepath.Join("..", "..", "queries", "*.sql"))
-	call := regexp.MustCompile(`\bbrand_opted_in\s*\(`)
+	call := regexp.MustCompile(`\bbrand_opt_in_rule\s*\(`)
+	wrapper := regexp.MustCompile(`\bbrand_opted_in\s*\(`)
 	readers := []string{}
 	for _, f := range files {
 		b, err := os.ReadFile(f)
@@ -201,9 +220,12 @@ func TestBrandOptedInFunction_V6_2_45(t *testing.T) {
 			if call.MatchString(q.Query) {
 				readers = append(readers, name)
 			}
+			if wrapper.MatchString(q.Query) {
+				t.Fatalf("query %s calls the per-member wrapper brand_opted_in", name)
+			}
 		}
 	}
 	if len(readers) != 1 || readers[0] != "next-evergreen-subscribers" {
-		t.Fatalf("brand_opted_in readers = %v, want exactly [next-evergreen-subscribers]", readers)
+		t.Fatalf("brand_opt_in_rule readers = %v, want exactly [next-evergreen-subscribers]", readers)
 	}
 }

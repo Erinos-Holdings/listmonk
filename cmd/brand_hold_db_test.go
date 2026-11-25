@@ -414,6 +414,15 @@ func TestBrandHoldOtherTypesUntouched(t *testing.T) {
 	f.join(f.held, dbl, "unconfirmed")
 	opt := f.camp("Acme opt-in", false, "optin", "running", `{}`, dbl)
 
+	// Stage 4 R6 -- a held-elsewhere person the evergreen still carries: held on a sibling (non-main,
+	// non-transactional) list of the brand -- the brand-wide hold drops them from broadcasts while the
+	// switch is on -- but confirmed on the main list, so D1 keeps them in the automation either way.
+	sib := f.mkList("Acme VIP", "single", false, "brand:acme")
+	sibHeld := f.sub("sibheld@acme.test", "enabled")
+	f.join(sibHeld, f.news, "confirmed")
+	f.join(sibHeld, f.seg, "confirmed")
+	f.hold(sibHeld, sib, bhNeverEngaged)
+
 	ev := f.camp("Acme segment welcome", true, "regular", "running", `{}`, f.seg)
 	f.h.db.MustExec(`UPDATE campaigns SET started_at = NOW() - INTERVAL '1 day', send_delay_secs = 0 WHERE id = $1`, ev)
 	f.h.db.MustExec(`UPDATE subscriber_lists SET confirmed_at = NOW() - INTERVAL '1 hour' WHERE list_id = $1`, f.seg)
@@ -448,7 +457,7 @@ func TestBrandHoldOtherTypesUntouched(t *testing.T) {
 	f.switchTo("true")
 	onRead := read()
 	want := fmt.Sprintf("evergreen=%s optin to_send=2 batches=%s",
-		ids(f.plain), ids(f.plain, f.held))
+		ids(f.plain, sibHeld), ids(f.plain, f.held))
 	if offRead != want || onRead != want {
 		t.Fatalf("\n off %s\n on  %s\nwant %s", offRead, onRead, want)
 	}

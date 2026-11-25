@@ -38,8 +38,10 @@
 -- later automation too (Stage 4 R4). No state is written for a skipped joiner. An untagged list
 -- never matches (list_brand_tag is NULL).
 -- Fork (automation main-list rule; integrations SKU-JOURNEYS-SPEC D1) -- THE MAIN LIST, checked at
--- send time, every tick. A subscriber is selected only while brand_opted_in(subscriber, target list)
--- holds -- a confirmed row on the brand's main list (brand_master_list_id), so a sunset hold, a final
+-- send time, every tick. The rule is resolved ONCE per statement, per target list, by
+-- brand_opt_in_rule (the d1 CTE, exempt plus main_list_id), and a subscriber is selected only while
+-- the list is exempt or they hold a confirmed row on the brand's main list (brand_master_list_id) --
+-- a plain EXISTS per member, never a per-member function call (stage 4 R1). So a sunset hold, a final
 -- hold, a Kickbox or deliverability hold and a real unsubscribe each stop every automation of the
 -- brand. The main list itself, a reengage queue, a transactional list and an untagged list are
 -- exempt; a brand with no single main list selects nobody. The function is the ONE definition --
@@ -51,6 +53,12 @@ WITH camp AS (
         INTERVAL '1 hour' AS first_order_window
     FROM campaigns
     WHERE id = $1 AND evergreen AND status = 'running'
+),
+d1 AS (
+    -- the main-list rule, once per target list (SKU-JOURNEYS-SPEC D1)
+    SELECT cl.list_id, r.exempt, r.main_list_id
+    FROM campaign_lists cl CROSS JOIN LATERAL brand_opt_in_rule(cl.list_id) r
+    WHERE cl.campaign_id = $1
 ),
 excl AS (
     -- exclusion set -- self, the variant group, and EVERY evergreen (any status, any
@@ -75,6 +83,7 @@ elig AS (
     JOIN campaign_lists cl ON cl.list_id = sl.list_id AND cl.campaign_id = $1
     JOIN subscribers s ON s.id = sl.subscriber_id AND s.status != 'blocklisted'
     JOIN lists l ON l.id = sl.list_id
+    JOIN d1 ON d1.list_id = sl.list_id
     CROSS JOIN camp
     WHERE sl.status = 'confirmed'
       AND sl.confirmed_at IS NOT NULL
@@ -100,7 +109,9 @@ elig AS (
                AND (cs.sent_at IS NOT NULL OR cs.claimed_at > NOW() - INTERVAL '1 hour')),
             '-infinity')
       -- the main list (SKU-JOURNEYS-SPEC D1)
-      AND brand_opted_in(sl.subscriber_id, sl.list_id)
+      AND (d1.exempt OR EXISTS (
+            SELECT 1 FROM subscriber_lists m
+            WHERE m.subscriber_id = sl.subscriber_id AND m.list_id = d1.main_list_id AND m.status = 'confirmed'))
     ORDER BY sl.subscriber_id, sl.confirmed_at
 ),
 batch AS (
