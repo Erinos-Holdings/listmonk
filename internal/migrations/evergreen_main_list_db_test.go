@@ -128,6 +128,27 @@ func TestEvergreenMainListRule(t *testing.T) {
 	eq(t, "returned", sorted(h.batch(onStep, 100)), []int{unsub})
 }
 
+// Stage 4b T1 -- the rule CTE must be computed once per statement. Referenced once, a plain CTE is
+// inlined by the planner and brand_opt_in_rule re-runs for every pending member (~4 s per 20,000).
+// The real statement's plan must show d1 as its own CTE node; removing AS MATERIALIZED fails this.
+func TestEvergreenD1Materialized(t *testing.T) {
+	h := newEvergreenHarness(t)
+	list := h.mlList("Acme", "public", false, "brand:acme")
+	camp := h.mlStart("main automation", list)
+	q, ok := h.qs["next-evergreen-subscribers"]
+	if !ok {
+		t.Fatal("next-evergreen-subscribers not found")
+	}
+	var lines []string
+	if err := h.db.Select(&lines, "EXPLAIN (COSTS OFF) "+q.Query, camp, 100); err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	plan := strings.Join(lines, "\n")
+	if !strings.Contains(plan, "CTE d1") {
+		t.Fatalf("d1 is not a materialized CTE in the plan:\n%s", plan)
+	}
+}
+
 // I3 -- the function itself, the migration and the one reader.
 func TestBrandOptedInFunction_V6_2_45(t *testing.T) {
 	h := newEvergreenHarness(t)

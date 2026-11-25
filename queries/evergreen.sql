@@ -41,7 +41,9 @@
 -- send time, every tick. The rule is resolved ONCE per statement, per target list, by
 -- brand_opt_in_rule (the d1 CTE, exempt plus main_list_id), and a subscriber is selected only while
 -- the list is exempt or they hold a confirmed row on the brand's main list (brand_master_list_id) --
--- a plain EXISTS per member, never a per-member function call (stage 4 R1). So a sunset hold, a final
+-- a plain EXISTS per member (stage 4 R1). d1 MUST stay AS MATERIALIZED: a CTE referenced once is
+-- otherwise inlined and the function re-runs for every pending member (stage 4b T1, measured ~4 s per
+-- 20,000 pending members; pinned by TestEvergreenD1Materialized). So a sunset hold, a final
 -- hold, a Kickbox or deliverability hold and a real unsubscribe each stop every automation of the
 -- brand. The main list itself, a reengage queue, a transactional list and an untagged list are
 -- exempt; a brand with no single main list selects nobody. The function is the ONE definition --
@@ -54,8 +56,8 @@ WITH camp AS (
     FROM campaigns
     WHERE id = $1 AND evergreen AND status = 'running'
 ),
-d1 AS (
-    -- the main-list rule, once per target list (SKU-JOURNEYS-SPEC D1)
+d1 AS MATERIALIZED (
+    -- the main-list rule, once per target list (SKU-JOURNEYS-SPEC D1; MATERIALIZED -- stage 4b T1)
     SELECT cl.list_id, r.exempt, r.main_list_id
     FROM campaign_lists cl CROSS JOIN LATERAL brand_opt_in_rule(cl.list_id) r
     WHERE cl.campaign_id = $1
