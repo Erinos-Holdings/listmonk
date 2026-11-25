@@ -99,42 +99,30 @@ func TestIsSweepFilledKind(t *testing.T) {
 	}
 }
 
-// skuPreviewDoc is a well-formed SKU-step activation preview (integrations SKU-JOURNEYS-SPEC D8).
+// skuPreviewDoc is a well-formed SKU-step activation preview as SKU-JOURNEYS-SPEC D8 wrote it.
 const skuPreviewDoc = `{"as_of":"2026-11-24T15:05:00Z","next_run_at":"2026-11-25T15:10:00Z","joins":12,` +
 	`"by_age":[{"from_days":90,"to_days":120,"joins":7},{"from_days":120,"to_days":150,"joins":5}],` +
 	`"by_lang":{"en":11,"fr":1},"skips":{"outside-window":0,"not-due":40,"already-sent":0,"no-automation-in-language":2,"consent":9}}`
 
-// integrations SKU-JOURNEYS-SPEC I17 -- the preview shape check refuses unknown keys and types.
-func TestValidateTriggerSyncPreview(t *testing.T) {
-	live := func(p string) string {
-		return `{"synced_at":"2026-11-24T15:05:00Z","state":"live","slug":"acme-sku-step-9","preview":` + p + `}`
-	}
-	if err := validateTriggerSync([]byte(live(skuPreviewDoc))); err != nil {
-		t.Fatalf("a well-formed preview: %v", err)
-	}
-	if err := validateTriggerSync([]byte(live(`{"as_of":"2026-11-24T15:05:00Z","next_run_at":"2026-11-25T15:10:00Z","joins":0,"by_age":[],"by_lang":{},"skips":{}}`))); err != nil {
-		t.Fatalf("an empty preview: %v", err)
-	}
-	for name, p := range map[string]string{
-		"not an object":     `[]`,
-		"unknown key":       strings.Replace(skuPreviewDoc, `"joins":12,`, `"joins":12,"emails":[],`, 1),
-		"missing as_of":     strings.Replace(skuPreviewDoc, `"as_of":"2026-11-24T15:05:00Z",`, ``, 1),
-		"bad next_run_at":   strings.Replace(skuPreviewDoc, `"2026-11-25T15:10:00Z"`, `"tomorrow"`, 1),
-		"joins string":      strings.Replace(skuPreviewDoc, `"joins":12,`, `"joins":"12",`, 1),
-		"joins negative":    strings.Replace(skuPreviewDoc, `"joins":12,`, `"joins":-1,`, 1),
-		"joins fraction":    strings.Replace(skuPreviewDoc, `"joins":12,`, `"joins":1.5,`, 1),
-		"by_age object":     strings.Replace(skuPreviewDoc, `"by_age":[`, `"by_age":{"x":[`, 1),
-		"bucket extra key":  strings.Replace(skuPreviewDoc, `{"from_days":90,`, `{"email":"a@example.test","from_days":90,`, 1),
-		"bucket missing":    strings.Replace(skuPreviewDoc, `,"to_days":120`, ``, 1),
-		"by_lang value str": strings.Replace(skuPreviewDoc, `"fr":1`, `"fr":"a@example.test"`, 1),
-		"skips not object":  strings.Replace(skuPreviewDoc, `"skips":{`, `"skips":[{`, 1),
+// integrations SKU-LIVE-COUNT-SPEC I13 (D8) -- the write-back refuses `preview` from this release,
+// even a well-formed one; the same doc without it is accepted.
+func TestValidateTriggerSyncRefusesPreview(t *testing.T) {
+	base := `{"synced_at":"2026-11-24T15:05:00Z","state":"live","slug":"acme-sku-step-9"`
+	for name, body := range map[string]string{
+		"well-formed preview": base + `,"preview":` + skuPreviewDoc + `}`,
+		"empty preview":       base + `,"preview":{}}`,
+		"preview on invalid":  `{"synced_at":"2026-11-24T15:05:00Z","state":"invalid","error":"e","preview":` + skuPreviewDoc + `}`,
 	} {
-		if err := validateTriggerSync([]byte(live(p))); err == nil {
-			t.Fatalf("%s: accepted", name)
+		err := validateTriggerSync([]byte(body))
+		if err == nil || !strings.Contains(err.Error(), "unknown key: preview") {
+			t.Fatalf("%s: want the unknown-key refusal, got %v", name, err)
 		}
 	}
-	if err := validateTriggerSync([]byte(`{"synced_at":"2026-11-24T15:05:00Z","state":"invalid","error":"e","preview":` + skuPreviewDoc + `}`)); err == nil {
-		t.Fatal("a preview on an invalid write-back was accepted")
+	if err := validateTriggerSync([]byte(base + `}`)); err != nil {
+		t.Fatalf("the doc minus preview (the residue clear): %v", err)
+	}
+	if maxTriggerSyncBody != 4096 {
+		t.Fatalf("maxTriggerSyncBody = %d, want 4096", maxTriggerSyncBody)
 	}
 }
 

@@ -47,8 +47,9 @@ import (
 //
 // Every route is sms:manage (handlers.go).
 
-// smsAdminURLRe is D3's accepted shape; group 1 is the region.
-var smsAdminURLRe = regexp.MustCompile(`^https://[a-z0-9]+\.lambda-url\.([a-z0-9-]+)\.on\.aws/?$`)
+// lambdaURLRe is the accepted Function URL shape (SMS Admin D3; the SKU count's
+// lists.sku_count_url, integrations SKU-LIVE-COUNT-SPEC D5); group 1 is the region.
+var lambdaURLRe = regexp.MustCompile(`^https://[a-z0-9]+\.lambda-url\.([a-z0-9-]+)\.on\.aws/?$`)
 
 const (
 	smsAdminTimeout  = 10 * time.Second
@@ -56,8 +57,11 @@ const (
 	smsCreatedByPfx  = "listmonk:"
 )
 
-// smsAdmin is the configured proxy target. nil on the App = the feature is off.
-type smsAdmin struct {
+// sigv4Lambda is the shared half of the host's SigV4 proxies to an integrations AWS_IAM Function URL
+// (SMS Admin; the Lists form's SKU journey count, integrations SKU-LIVE-COUNT-SPEC D5): the URL, its
+// region, the default-chain credentials and one signed JSON POST to the URL's root. Each feature
+// constructs its own (its own config key, timeout and error mapping).
+type sigv4Lambda struct {
 	endpoint string // the configured URL; every request POSTs to its root
 	region   string
 	creds    aws.CredentialsProvider // cached by the SDK; nil with credsErr
@@ -67,28 +71,54 @@ type smsAdmin struct {
 	now      func() time.Time
 }
 
-// parseSMSAdminURL returns the URL's region, or "" and why the URL is refused.
-func parseSMSAdminURL(raw string) (region, reason string) {
+// smsAdmin is the configured SMS Admin proxy target. nil on the App = the feature is off.
+type smsAdmin struct {
+	*sigv4Lambda
+}
+
+// parseLambdaURL returns the URL's region, or "" and why the URL (config key `key`) is refused.
+func parseLambdaURL(key, raw string) (region, reason string) {
 	if raw == "" {
-		return "", "sms.admin_url is empty"
+		return "", key + " is empty"
 	}
-	m := smsAdminURLRe.FindStringSubmatch(raw)
+	m := lambdaURLRe.FindStringSubmatch(raw)
 	if m == nil {
-		return "", "sms.admin_url is ill-shaped (want https://<id>.lambda-url.<region>.on.aws/)"
+		return "", key + " is ill-shaped (want https://<id>.lambda-url.<region>.on.aws/)"
 	}
 	return m[1], ""
 }
 
-// newSMSAdmin builds the proxy for an accepted URL with the given credentials.
-func newSMSAdmin(raw, region string, creds aws.CredentialsProvider) *smsAdmin {
-	return &smsAdmin{
+// parseSMSAdminURL returns the URL's region, or "" and why the URL is refused.
+func parseSMSAdminURL(raw string) (region, reason string) {
+	return parseLambdaURL("sms.admin_url", raw)
+}
+
+// newSigV4Lambda builds the signer half for an accepted URL with the given credentials and timeout.
+func newSigV4Lambda(raw, region string, creds aws.CredentialsProvider, timeout time.Duration) *sigv4Lambda {
+	return &sigv4Lambda{
 		endpoint: raw,
 		region:   region,
 		creds:    creds,
 		signer:   v4.NewSigner(),
-		client:   &http.Client{Timeout: smsAdminTimeout},
+		client:   &http.Client{Timeout: timeout},
 		now:      time.Now,
 	}
+}
+
+// newSMSAdmin builds the proxy for an accepted URL with the given credentials.
+func newSMSAdmin(raw, region string, creds aws.CredentialsProvider) *smsAdmin {
+	return &smsAdmin{newSigV4Lambda(raw, region, creds, smsAdminTimeout)}
+}
+
+// loadLambdaCreds is the default AWS credential chain for a Function URL's region: env -> shared
+// config -> IMDS (the host resolves to its instance role, a dev box to its own profile). Nothing is
+// fetched here; the SDK's cached provider resolves on first use.
+func loadLambdaCreds(region string) (aws.CredentialsProvider, error) {
+	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
+	if err != nil {
+		return nil, err
+	}
+	return cfg.Credentials, nil
 }
 
 // initSMSAdmin reads sms.admin_url once at boot and logs one line saying whether the link proxy is
@@ -99,9 +129,7 @@ func initSMSAdmin(raw string, lo *log.Logger) *smsAdmin {
 		lo.Printf("sms admin: off (%s); the short-link routes answer 503", reason)
 		return nil
 	}
-	// env -> shared config -> IMDS: the host resolves to its instance role, a dev box to its own
-	// profile. Nothing is fetched here; the SDK's cached provider resolves on first use.
-	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
+	creds, err := loadLambdaCreds(region)
 	if err != nil {
 		s := newSMSAdmin(raw, region, nil)
 		s.credsErr = err
@@ -109,7 +137,7 @@ func initSMSAdmin(raw string, lo *log.Logger) *smsAdmin {
 		return s
 	}
 	lo.Printf("sms admin: configured, region %s", region)
-	return newSMSAdmin(raw, region, cfg.Credentials)
+	return newSMSAdmin(raw, region, creds)
 }
 
 // smsAdminReq is the ONLY shape forwarded to the Lambda (D6): the typed fields, nothing else.
@@ -155,8 +183,8 @@ func (r smsLinkReq) fields(action, mode string) smsAdminReq {
 	}
 }
 
-// post signs and sends one admin request; it returns the Lambda's status and body.
-func (s *smsAdmin) post(ctx context.Context, payload smsAdminReq) (int, []byte, error) {
+// post signs and sends one JSON request to the URL's root; it returns the Lambda's status and body.
+func (s *sigv4Lambda) post(ctx context.Context, payload any) (int, []byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return 0, nil, err

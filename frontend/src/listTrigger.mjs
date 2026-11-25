@@ -479,58 +479,9 @@ export function pickerLabel(list) {
   return phrase ? `${name} — ${phrase}` : name;
 }
 
-// Fork (integrations SKU-JOURNEYS-SPEC D8) -- the SKU-step ACTIVATION PREVIEW: the reconciler writes
-// it onto a not-yet-Active SKU journey list's trigger_sync (`preview`: as_of, next_run_at, joins,
-// by_age [{from_days, to_days, joins}], by_lang, skips -- counts only); the form renders it under the
-// Active switch and computes nothing. Read under either key spelling (the API client camel-cases).
-export const PREVIEW_STALE_MS = 15 * 60 * 1000;
-
-const kebab = (k) => String(k).replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
-
-// previewOf is the stored preview in the wire spelling, or null (none, or not an object).
-export function previewOf(list) {
-  const ts = storedTriggerSync(list);
-  const p = isObj(ts) ? ts.preview : undefined;
-  if (!isObj(p)) return null;
-  const pick = (wire, camel) => (p[wire] !== undefined ? p[wire] : p[camel]);
-  const ages = Array.isArray(pick('by_age', 'byAge')) ? pick('by_age', 'byAge') : [];
-  const skips = isObj(p.skips) ? p.skips : {};
-  return {
-    as_of: pick('as_of', 'asOf') || '',
-    next_run_at: pick('next_run_at', 'nextRunAt') || '',
-    joins: Number(p.joins) || 0,
-    by_age: ages.filter(isObj).map((b) => ({
-      from_days: Number(b.from_days !== undefined ? b.from_days : b.fromDays) || 0,
-      to_days: Number(b.to_days !== undefined ? b.to_days : b.toDays) || 0,
-      joins: Number(b.joins) || 0,
-    })),
-    by_lang: isObj(pick('by_lang', 'byLang')) ? { ...pick('by_lang', 'byLang') } : {},
-    skips: Object.fromEntries(Object.entries(skips).map(([k, n]) => [kebab(k), Number(n) || 0])),
-  };
-}
-
-// previewState is what the form shows under the Active switch (I17a): only on a SKU journey list that
-// is NOT Active (once Active the sweep's census is the record -- no preview shown); `pending` when
-// there is no preview yet or it is older than 15 minutes (it is refreshed every 10).
-export function previewState(list, nowMs = Date.now()) {
-  const show = isSkuJourneyTrigger(triggerOption(storedTrigger(list))) && !triggerActiveOf(list);
-  if (!show) return { show: false, pending: false, preview: null };
-  const p = previewOf(list);
-  const at = p ? Date.parse(p.as_of) : NaN;
-  const pending = !p || !Number.isFinite(at) || nowMs - at > PREVIEW_STALE_MS;
-  return { show: true, pending, preview: pending ? null : p };
-}
-
-// activeConfirm is the confirm dialog turning the Active switch ON opens (D8 -- the confirmation IS
-// the approval): null when no confirm is needed (not a SKU journey list, or a fresh preview with 0
-// joins); the pending text when the preview is absent or stale; else the count and the next run.
-export function activeConfirm(list, nowMs = Date.now()) {
-  const st = previewState(list, nowMs);
-  if (!st.show) return null;
-  if (st.pending) return { key: 'lists.skuPreviewConfirmPending', params: {} };
-  if (st.preview.joins > 0) return { key: 'lists.skuPreviewConfirm', params: { n: st.preview.joins, time: st.preview.next_run_at } };
-  return null;
-}
+// (The SKU-JOURNEYS-SPEC D8 activation preview -- previewOf, previewState, activeConfirm,
+// PREVIEW_STALE_MS -- is gone: integrations SKU-LIVE-COUNT-SPEC D8. The Lists form counts on demand,
+// skuCount.mjs.)
 
 // buildListFormRequest is the body the list form sends (F3): exactly the allow-listed form keys,
 // the free tags and the brand (buildListRequest -- it throws when no brand is chosen), then

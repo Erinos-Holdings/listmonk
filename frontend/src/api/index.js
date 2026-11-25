@@ -309,6 +309,15 @@ export const putListActive = (id, active) => http.put(
   { loading: models.lists },
 );
 
+// Fork (SKU journey live count, integrations SKU-LIVE-COUNT-SPEC D5/D6) -- the on-demand count for a
+// Replenish / First purchase of SKUs trigger. Raw keys (the D1 snake_case shape skuCount.mjs reads)
+// and quiet: the form shows the 400 text or "Count unavailable" in place, never a toast.
+export const postListSkuCount = (data) => http.post(
+  '/api/lists/sku-count',
+  data,
+  { camelCase: false, disableToast: true },
+);
+
 export const deleteList = (id) => http.delete(
   `/api/lists/${id}`,
   { loading: models.lists },

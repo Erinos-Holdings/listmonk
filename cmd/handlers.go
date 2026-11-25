@@ -183,6 +183,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/lists", a.GetLists)
 		g.GET("/api/lists/:id", hasID(a.GetList))
 		g.POST("/api/lists", pm(a.CreateList, "lists:manage_all"))
+		// Fork (SKU journey live count, integrations SKU-LIVE-COUNT-SPEC D5) -- the role boundary is
+		// in the handler: manage on the list (list_id > 0, the list's brand), else lists:manage_all.
+		g.POST("/api/lists/sku-count", a.PostListSkuCount)
 		g.PUT("/api/lists/:id", hasID(a.UpdateList))
 		// Fork (sunset v2, SUNSET-V2-SPEC D8) -- the queue countdown, list manage permission
 		// checked in the handler (the UpdateList posture).

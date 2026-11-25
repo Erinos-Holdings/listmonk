@@ -104,23 +104,6 @@
             <!-- CAMPAIGN-LISTS-SPEC D9: red, not the unreadable yellow is-warning. -->
             <p v-if="activeState.hintKey" class="help is-danger" data-cy="list-active-hint">{{ $t(activeState.hintKey) }}</p>
             <p v-if="activeState.warningKey" class="help is-danger" data-cy="list-active-warning">{{ $t(activeState.warningKey) }}</p>
-            <!-- SKU-JOURNEYS-SPEC D8: the activation preview (counts only), on a SKU journey list
-            that is not Active; the reconciler writes it, the form renders it (listTrigger.mjs). -->
-            <div v-if="skuPreview.show" class="sku-preview mt-2" data-cy="list-sku-preview">
-              <p v-if="skuPreview.pending" class="help" data-cy="list-sku-preview-pending">{{ $t('lists.skuPreviewPending') }}</p>
-              <template v-else>
-                <p class="help has-text-weight-semibold">
-                  {{ $t('lists.skuPreviewTitle', { n: skuPreview.preview.joins, time: $utils.niceDate(skuPreview.preview.next_run_at, true) }) }}
-                </p>
-                <p v-for="b in skuPreview.preview.by_age" :key="b.from_days" class="help">
-                  {{ $t('lists.skuPreviewAge', { from: b.from_days, to: b.to_days, n: b.joins }) }}
-                </p>
-                <p class="help">
-                  {{ $t('lists.skuPreviewSkips') }}:
-                  <span v-for="(n, k) in skuPreview.preview.skips" :key="k" class="mr-2">{{ k }} {{ n }}</span>
-                </p>
-              </template>
-            </div>
           </div>
           <!-- JOURNEY-UX-SPEC A1.4: the help follows the selection (listTypeHelpKey). -->
           <b-field :message="$t(listTypeHelpKey(listType))" data-cy="list-campaign-type">
@@ -192,6 +175,18 @@
                   :type="daysText === '' || daysOk ? '' : 'is-danger'" data-cy="list-trigger-sku-days">
                   <b-input v-model="daysText" type="number" min="1" max="179" name="join_trigger_days" :disabled="readOnly" />
                 </b-field>
+                <!-- SKU-LIVE-COUNT-SPEC D6: the live count under the days field (skuCount.mjs), 500 ms
+                after the last change; never blocks saving. -->
+                <div v-if="skuCountLines.length" :key="`count-${k.value}`" class="sku-count mb-3" data-cy="list-sku-count">
+                  <p v-for="(l, i) in skuCountLines" :key="i"
+                    :class="['help', { 'is-danger': l.kind === 'danger', 'has-text-weight-semibold': l.kind === 'strong' }]">
+                    <a v-if="l.kind === 'suggest' && !readOnly" href="#" data-cy="list-sku-count-suggest"
+                      @click.prevent="applySuggestion(l)">{{ countLineText(l) }}</a>
+                    <template v-else>
+                      {{ countLineText(l) }}
+                    </template>
+                  </p>
+                </div>
               </template>
             </template>
             <!-- The two series step kinds (NO-PURCHASE-STEPS-SPEC D7: a No-purchase series step,
@@ -314,8 +309,11 @@ import {
   buildListFormRequest, buildListTypeTrigger, daysRadios, daysValid, journeyOption, listTypeHelpKey, listTypeOf,
   skusToText, storedDays, storedTrigger, storedTriggerSync, triggerBadge, triggerHelpKeys, triggerOption as triggerOptionOf,
   LIST_TYPE_BROADCAST, activeSwitchState, formReadOnly, journeyOptionDisabled, journeySaveBlocked,
-  triggerChangeTurnsOff, activeConfirm, isSkuJourneyTrigger, legacySkusOffered, previewState,
+  triggerChangeTurnsOff, isSkuJourneyTrigger, legacySkusOffered,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
+import {
+  confirmOf, countLines, createSkuCounter, replaceSku, skuCountRequest, storedCountRequest,
+} from '../skuCount.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
   isNameBlocked, joinListName, listPrefixAddon, nameCounter, nameMessageTypeOf, namePlaceholder, nameWarnings,
@@ -369,8 +367,10 @@ export default Vue.extend({
       // is on that response only), refreshed after an Active switch; null until read.
       fresh: null,
       activeBusy: false,
-      // SKU-JOURNEYS-SPEC D8: bumped when the Active confirm is cancelled (re-renders the switch off).
+      // SKU-LIVE-COUNT-SPEC D7: bumped when the Active confirm is cancelled (re-renders the switch off).
       activeSwitchKey: 0,
+      // SKU-LIVE-COUNT-SPEC D6: the live count's state (skuCount.mjs createSkuCounter).
+      skuCountState: { state: 'idle' },
 
       // Fork (name guardrails, NAME-GUARDRAILS-SPEC D6/D8) -- the handle typed after the fixed
       // addon (kept as typed; form.name is its trimmed join), and whether the name field has been
@@ -408,19 +408,46 @@ export default Vue.extend({
     },
 
     // JOURNEY-LISTS-SPEC D2: the switch saves on its own route; the form re-reads the list.
-    // SKU-JOURNEYS-SPEC D8: turning a SKU journey list ON with a preview of joins (or none yet)
-    // opens a confirm restating the count -- that confirmation IS the approval.
+    // SKU-LIVE-COUNT-SPEC D7: turning a SKU journey list ON first reads a FRESH count of the STORED
+    // trigger (unsaved edits are not counted; the switch is busy meanwhile) and opens the confirm only
+    // after the answer -- joins > 0 restates the count, 0 asks nothing, a failed read says so and asks
+    // to continue. That confirmation IS the approval; a failure never blocks the switch.
     onActiveToggle(on) {
-      const ask = on ? activeConfirm(this.row) : null;
-      if (ask) {
+      const req = on ? storedCountRequest(this.row) : null;
+      if (!req) {
+        this.saveActive(on);
+        return;
+      }
+      this.activeBusy = true;
+      this.$api.postListSkuCount(req).then((response) => ({ response }), (error) => ({ error })).then((result) => {
+        this.activeBusy = false;
+        const ask = confirmOf(result);
+        if (!ask) {
+          this.saveActive(on);
+          return;
+        }
         const params = ask.params.time ? { ...ask.params, time: this.$utils.niceDate(ask.params.time, true) } : ask.params;
-        this.$utils.confirm(this.$t(ask.key, params), () => this.saveActive(on), () => {
+        let msg = this.$t(ask.key, params);
+        if (ask.notCounted && ask.notCounted.length) {
+          msg = `${msg} ${this.$t('lists.skuCountConfirmNotCounted', { skus: ask.notCounted.join(', ') })}`;
+        }
+        this.$utils.confirm(msg, () => this.saveActive(on), () => {
           // Cancelled: re-mount the switch so it shows the stored (off) state again.
           this.activeSwitchKey += 1;
         });
-        return;
-      }
-      this.saveActive(on);
+      });
+    },
+
+    // SKU-LIVE-COUNT-SPEC D6: one display line's text (the due line's time formatted here).
+    countLineText(l) {
+      if (l.text) return l.text;
+      const params = l.params.time ? { ...l.params, time: this.$utils.niceDate(l.params.time, true) } : l.params;
+      return this.$t(l.key, params);
+    },
+
+    // A suggestion replaces its SKU in the text (the count re-runs on the change).
+    applySuggestion(l) {
+      this.skusText = replaceSku(this.skusText, l.from, l.to);
     },
 
     saveActive(on) {
@@ -624,9 +651,21 @@ export default Vue.extend({
       return legacySkusOffered(triggerOptionOf(storedTrigger(this.data)));
     },
 
-    // SKU-JOURNEYS-SPEC D8: the activation preview under the Active switch (edit only).
-    skuPreview() {
-      return this.isEditing ? previewState(this.row) : { show: false, pending: false, preview: null };
+    // SKU-LIVE-COUNT-SPEC D6: the count's request for the form's state (null = no count applies).
+    skuCountReq() {
+      if (this.listType !== 'journey') return null;
+      return skuCountRequest({
+        listId: this.isEditing ? this.data.id : 0,
+        brand: this.brand || '',
+        option: this.triggerOption,
+        skusText: this.skusText,
+        daysText: this.daysText,
+      });
+    },
+
+    skuCountLines() {
+      const b = this.chosenBrand;
+      return countLines(this.skuCountState, { brandName: b ? (b.display_name || b.slug) : (this.brand || '') });
     },
 
     // The badge from the STORED trigger and trigger_sync (null = no trigger, no badge).
@@ -734,6 +773,25 @@ export default Vue.extend({
         this.daysText = '';
       }
     },
+
+    // SKU-LIVE-COUNT-SPEC D6: any change of the SKU text, the days or the kind re-schedules the
+    // count (500 ms after the last one; an unchanged request never re-asks).
+    skuCountReq(req) {
+      if (this.skuCounter) this.skuCounter.schedule(req);
+    },
+  },
+
+  created() {
+    this.skuCounter = createSkuCounter({
+      send: (req) => this.$api.postListSkuCount(req),
+      onState: (st) => {
+        this.skuCountState = st;
+      },
+    });
+  },
+
+  beforeDestroy() {
+    if (this.skuCounter) this.skuCounter.cancel();
   },
 
   mounted() {
@@ -753,6 +811,10 @@ export default Vue.extend({
     // Fork (global brand, D10) -- a new list under a selected brand is that brand's.
     if (!this.isEditing && this.brandDefault.locked) {
       this.brand = this.brandDefault.value;
+    }
+    // SKU-LIVE-COUNT-SPEC D6: a stored SKU trigger is counted once on opening (no debounce).
+    if (this.isEditing && this.skuCountReq) {
+      this.skuCounter.now(this.skuCountReq);
     }
     this.$api.getBrands().then((data) => {
       this.brands = Array.isArray(data) ? data : [];

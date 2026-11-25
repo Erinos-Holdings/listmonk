@@ -80,6 +80,11 @@ type App struct {
 	// sms.admin_url at boot; nil turns the link routes off (503). See cmd/sms.go.
 	smsAdmin *smsAdmin
 
+	// Fork (SKU journey live count, integrations SKU-LIVE-COUNT-SPEC D5) -- the count proxy target,
+	// from lists.sku_count_url at boot; nil turns POST /api/lists/sku-count off (503). See
+	// cmd/lists_sku_count.go.
+	skuCountProxy *skuCountProxy
+
 	about         about
 	fnOptinNotify func(models.Subscriber, []int) (int, error)
 
@@ -361,6 +366,9 @@ func main() {
 	// Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D3): read once; empty or ill-shaped turns
 	// the short-link routes off with one log line, never a boot failure.
 	app.smsAdmin = initSMSAdmin(ko.String("sms.admin_url"), lo)
+	// Fork (SKU journey live count, integrations SKU-LIVE-COUNT-SPEC D5): the same, for
+	// lists.sku_count_url (env LISTMONK_lists__sku_count_url).
+	app.skuCountProxy = initSkuCount(ko.String("lists.sku_count_url"), lo)
 
 	// Fork (render canary, INSPECT-SCOPE-SPEC §2.1): render the packed canary through the send
 	// path now that the manager exists. A failure is logged; the endpoint then answers 503.

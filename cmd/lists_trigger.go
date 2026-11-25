@@ -40,9 +40,9 @@ const (
 	maxJoinTriggerSkus   = 200
 	maxJoinTriggerSkuLen = 100
 
-	// maxTriggerSyncBody bounds the write-back body; maxTriggerSyncError its error text (D6). 8 KiB
-	// since the SKU-step activation preview rides on it (SKU-JOURNEYS-SPEC D8).
-	maxTriggerSyncBody  = 8192
+	// maxTriggerSyncBody bounds the write-back body; maxTriggerSyncError its error text (D6). Back to
+	// 4 KiB: the SKU-step activation preview no longer rides on it (SKU-LIVE-COUNT-SPEC D8).
+	maxTriggerSyncBody  = 4096
 	maxTriggerSyncError = 500
 
 	joinTriggerFirstOrder = "first_order"
@@ -370,19 +370,13 @@ func validateTriggerSync(body []byte) error {
 	if dec.More() {
 		return fmt.Errorf("trigger_sync must be one JSON object")
 	}
+	// integrations SKU-LIVE-COUNT-SPEC D8 -- `preview` (SKU-JOURNEYS-SPEC D8's activation preview) is
+	// refused from this release like any other unknown key: the Lists form counts on demand.
 	for k := range doc {
 		switch k {
-		case "synced_at", "state", "slug", "error", "preview":
+		case "synced_at", "state", "slug", "error":
 		default:
 			return fmt.Errorf("trigger_sync has an unknown key: %s", k)
-		}
-	}
-	if p, ok := doc["preview"]; ok {
-		if doc["state"] != "live" {
-			return fmt.Errorf("trigger_sync.preview is allowed with state live only")
-		}
-		if err := validateTriggerPreview(p); err != nil {
-			return err
 		}
 	}
 	s, ok := doc["synced_at"].(string)
@@ -416,72 +410,6 @@ func validateTriggerSync(body []byte) error {
 		}
 	default:
 		return fmt.Errorf("trigger_sync.state must be \"live\" or \"invalid\"")
-	}
-	return nil
-}
-
-const (
-	// maxPreviewBuckets bounds preview.by_age; maxPreviewKeys by_lang and skips; maxPreviewKeyLen a key.
-	maxPreviewBuckets = 24
-	maxPreviewKeys    = 40
-	maxPreviewKeyLen  = 40
-)
-
-// previewCount is a non-negative whole JSON number (the decoder reads numbers as float64).
-func previewCount(v any) bool {
-	f, ok := v.(float64)
-	return ok && f >= 0 && f == float64(int64(f)) && f <= 1e9
-}
-
-// validateTriggerPreview is the shape check on the SKU-step activation preview the reconciler writes
-// onto a live write-back (integrations SKU-JOURNEYS-SPEC D8): exactly as_of and next_run_at (RFC 3339),
-// joins (a count), by_age (an array of exactly {from_days, to_days, joins}, each a count), by_lang and
-// skips (objects of short keys to counts) -- no other key, no other type. Counts only: no addresses.
-// Stored verbatim; the fork renders it and computes nothing.
-func validateTriggerPreview(v any) error {
-	p, ok := v.(map[string]any)
-	if !ok {
-		return fmt.Errorf("trigger_sync.preview must be an object")
-	}
-	for k := range p {
-		switch k {
-		case "as_of", "next_run_at", "joins", "by_age", "by_lang", "skips":
-		default:
-			return fmt.Errorf("trigger_sync.preview has an unknown key: %s", k)
-		}
-	}
-	for _, k := range []string{"as_of", "next_run_at"} {
-		s, ok := p[k].(string)
-		if !ok {
-			return fmt.Errorf("trigger_sync.preview.%s must be an RFC 3339 timestamp", k)
-		}
-		if _, err := time.Parse(time.RFC3339, s); err != nil {
-			return fmt.Errorf("trigger_sync.preview.%s must be an RFC 3339 timestamp", k)
-		}
-	}
-	if !previewCount(p["joins"]) {
-		return fmt.Errorf("trigger_sync.preview.joins must be a whole number")
-	}
-	ages, ok := p["by_age"].([]any)
-	if !ok || len(ages) > maxPreviewBuckets {
-		return fmt.Errorf("trigger_sync.preview.by_age must be an array of at most %d buckets", maxPreviewBuckets)
-	}
-	for _, b := range ages {
-		m, ok := b.(map[string]any)
-		if !ok || len(m) != 3 || !previewCount(m["from_days"]) || !previewCount(m["to_days"]) || !previewCount(m["joins"]) {
-			return fmt.Errorf("trigger_sync.preview.by_age holds a bucket other than {from_days, to_days, joins}")
-		}
-	}
-	for _, k := range []string{"by_lang", "skips"} {
-		m, ok := p[k].(map[string]any)
-		if !ok || len(m) > maxPreviewKeys {
-			return fmt.Errorf("trigger_sync.preview.%s must be an object of at most %d counts", k, maxPreviewKeys)
-		}
-		for key, n := range m {
-			if key == "" || utf8.RuneCountInString(key) > maxPreviewKeyLen || !previewCount(n) {
-				return fmt.Errorf("trigger_sync.preview.%s holds a key or count that is not allowed", k)
-			}
-		}
 	}
 	return nil
 }
