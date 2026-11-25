@@ -13,7 +13,86 @@ import {
   SERIES_REENGAGEMENT, REENGAGEMENT_DAYS, STEP_TRIGGERS, seriesOfTrigger,
   journeySaveBlocked, STANDARD_TRIGGERS, isStandardTrigger, journeyOptionDisabled, journeyLockedOf, formReadOnly,
   activeSwitchState, triggerChangeTurnsOff, activeWordOf, systemHiddenOf,
+  TRIGGER_REPLENISH, TRIGGER_FIRST_SKU, isSkuJourneyTrigger, isSweepFilledTrigger, legacySkusOffered, journeyOptions,
+  previewOf, previewState, activeConfirm, PREVIEW_STALE_MS, JOURNEY_OPTIONS,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
+
+// Fork (integrations SKU-JOURNEYS-SPEC D3/D10, I19) -- the two SKU journeys round-trip through the
+// form; the legacy "Every buyer of these SKUs" option is offered only on a list that stores it.
+test('SKU journeys: options, round trip, phrases; I19 -- the legacy skus option only when stored', () => {
+  assert.equal(triggerOption({ kind: 'replenish', skus: ['a'], days: 90 }), TRIGGER_REPLENISH);
+  assert.equal(triggerOption({ kind: 'first_sku', skus: ['a'], days: 30 }), TRIGGER_FIRST_SKU);
+  assert.equal(storedDays({ kind: 'replenish', skus: ['a'], days: 90 }), '90');
+  assert.deepEqual(buildJoinTrigger(TRIGGER_REPLENISH, 'JoyBelle-BrushOnGlue\n\n b ', ' 90 '), { kind: 'replenish', skus: ['JoyBelle-BrushOnGlue', 'b'], days: 90 });
+  assert.deepEqual(buildJoinTrigger(TRIGGER_FIRST_SKU, 'a', '30'), { kind: 'first_sku', skus: ['a'], days: 30 });
+  assert.equal(isSkuJourneyTrigger(TRIGGER_REPLENISH) && isSkuJourneyTrigger(TRIGGER_FIRST_SKU), true);
+  assert.equal(isStandardTrigger(TRIGGER_REPLENISH) || isStandardTrigger(TRIGGER_FIRST_SKU), false, 'never a standard (locked) kind');
+  assert.equal(journeyOptionDisabled(TRIGGER_REPLENISH), false);
+  ['no_purchase', 'post_purchase', 'replenish', 'first_sku'].forEach((k) => assert.equal(isSweepFilledTrigger(k), true, k));
+  ['first_order', 'skus', 'none'].forEach((k) => assert.equal(isSweepFilledTrigger(k), false, k));
+  assert.equal(JOURNEY_OPTIONS.includes(TRIGGER_SKUS), true, 'a stored legacy list still saves');
+  assert.equal(pickerLabel({ name: 'JOYBELLE Glue', join_trigger: { kind: 'replenish', skus: ['a'], days: 90 } }), 'JOYBELLE Glue — Replenish 90 days after the last purchase');
+  assert.equal(pickerLabel({ name: 'L', joinTrigger: { kind: 'first_sku', skus: ['a'], days: 30 } }), 'L — 30 days after the first purchase of SKUs');
+  assert.deepEqual(triggerHelpKeys(TRIGGER_REPLENISH), { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerReplenishHelp' });
+  // I19.
+  assert.equal(legacySkusOffered(TRIGGER_SKUS), true);
+  ['', TRIGGER_FIRST_ORDER, TRIGGER_REPLENISH, TRIGGER_NO_PURCHASE].forEach((o) => assert.equal(legacySkusOffered(o), false, o));
+  assert.deepEqual(journeyOptions(''), ['first_order', 'replenish', 'first_sku', 'no_purchase', 'post_purchase']);
+  assert.deepEqual(journeyOptions(TRIGGER_SKUS), ['first_order', 'skus', 'replenish', 'first_sku', 'no_purchase', 'post_purchase']);
+});
+
+// Fork (integrations SKU-JOURNEYS-SPEC D8, I17a) -- the activation preview under the Active switch:
+// shown only while the SKU journey list is NOT Active; absent or older than 15 minutes is pending;
+// switching on with joins > 0 confirms the count; a pending preview's confirm says so.
+test('I17a: the SKU journey activation preview and its confirm dialog', () => {
+  const NOW = Date.parse('2026-11-24T15:00:00Z');
+  const fresh = new Date(NOW - 5 * 60 * 1000).toISOString();
+  const stale = new Date(NOW - PREVIEW_STALE_MS - 1000).toISOString();
+  const jt = { kind: 'replenish', skus: ['a'], days: 90 };
+  const pv = (asOf, joins) => ({
+    as_of: asOf, next_run_at: '2026-11-25T15:10:00Z', joins, by_age: [{ from_days: 90, to_days: 120, joins }], by_lang: { en: joins }, skips: { 'not-due': 4 },
+  });
+  const list = (preview, active = false) => ({
+    join_trigger: jt,
+    trigger_active: active,
+    trigger_sync: {
+      synced_at: fresh, state: 'live', slug: 'x', ...(preview ? { preview } : {}),
+    },
+  });
+
+  // Fresh, joins > 0: shown, a confirm restating the count and the run.
+  assert.deepEqual(previewState(list(pv(fresh, 12)), NOW), { show: true, pending: false, preview: pv(fresh, 12) });
+  assert.deepEqual(activeConfirm(list(pv(fresh, 12)), NOW), { key: 'lists.skuPreviewConfirm', params: { n: 12, time: '2026-11-25T15:10:00Z' } });
+  // Fresh, 0 joins: no confirm needed.
+  assert.equal(activeConfirm(list(pv(fresh, 0)), NOW), null);
+  // Absent or stale: pending, and the confirm says so.
+  [list(null), list(pv(stale, 12))].forEach((l) => {
+    assert.deepEqual(previewState(l, NOW), { show: true, pending: true, preview: null });
+    assert.deepEqual(activeConfirm(l, NOW), { key: 'lists.skuPreviewConfirmPending', params: {} });
+  });
+  // Once Active: no preview shown, no confirm (turning OFF never asks).
+  assert.deepEqual(previewState(list(pv(fresh, 12), true), NOW), { show: false, pending: false, preview: null });
+  assert.equal(activeConfirm(list(pv(fresh, 12), true), NOW), null);
+  // Any other kind: nothing.
+  assert.equal(previewState({ join_trigger: { kind: 'no_purchase', days: 2 }, trigger_active: false }, NOW).show, false);
+  // The browser spelling (camelCased response) reads the same.
+  const camel = {
+    joinTrigger: jt,
+    triggerActive: false,
+    triggerSync: {
+      syncedAt: fresh,
+      state: 'live',
+      slug: 'x',
+      preview: {
+        asOf: fresh, nextRunAt: '2026-11-25T15:10:00Z', joins: 3, byAge: [{ fromDays: 90, toDays: 120, joins: 3 }], byLang: { en: 3 }, skips: { notDue: 4, noAutomationInLanguage: 1 },
+      },
+    },
+  };
+  assert.deepEqual(previewOf(camel), {
+    as_of: fresh, next_run_at: '2026-11-25T15:10:00Z', joins: 3, by_age: [{ from_days: 90, to_days: 120, joins: 3 }], by_lang: { en: 3 }, skips: { 'not-due': 4, 'no-automation-in-language': 1 },
+  });
+  assert.deepEqual(activeConfirm(camel, NOW), { key: 'lists.skuPreviewConfirm', params: { n: 3, time: '2026-11-25T15:10:00Z' } });
+});
 
 // CAMPAIGN-LISTS-SPEC I10 -- the sub-line as the Lists page renders it: the item's text, then
 // ' · ' and the Active switch's word (activeWordOf). The asserted strings below are the pre-D8

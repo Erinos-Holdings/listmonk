@@ -7,14 +7,16 @@
 // add a member to a step list, A1.1); this is the mirror. Tested by campaignListUx.test.mjs.
 
 import {
-  storedTrigger, triggerOption, isStepTrigger, TRIGGER_FIRST_ORDER, TRIGGER_SKUS,
+  storedTrigger, triggerOption, isSweepFilledTrigger, TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NONE,
   systemHiddenOf, journeyLockedOf,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
 export const CLASS_NONE = 'none';
 export const CLASS_PURCHASE = 'purchase';
 // The STEP class -- a list the integrations sweep fills: a no_purchase (No-purchase series) or, since
-// LIFECYCLE-SERIES-SPEC S2/F11, a post_purchase (Post-purchase series) step list. Its value keeps
+// LIFECYCLE-SERIES-SPEC S2/F11, a post_purchase (Post-purchase series) step list, and since
+// integrations SKU-JOURNEYS-SPEC D3 a SKU journey (replenish, first_sku) -- the server's guard set,
+// isSweepFilledKind (listTrigger.mjs::isSweepFilledTrigger). Its value keeps
 // the historical 'no_purchase' spelling; every step rule (the zero-delay row, the locked
 // automation, the step-list notice, isStepList, addableLists) keys on it.
 export const CLASS_NO_PURCHASE = 'no_purchase';
@@ -38,8 +40,46 @@ export const REENGAGE_TAG_PREFIX = 'reengage:';
 export function listJourneyClass(list) {
   const opt = triggerOption(storedTrigger(list));
   if (opt === TRIGGER_FIRST_ORDER || opt === TRIGGER_SKUS) return CLASS_PURCHASE;
-  if (isStepTrigger(opt)) return CLASS_NO_PURCHASE;
+  if (isSweepFilledTrigger(opt)) return CLASS_NO_PURCHASE;
   return CLASS_NONE;
+}
+
+// Fork (integrations SKU-JOURNEYS-SPEC D9) -- the delay field's label and help, by the target list's
+// entry trigger: a newsletter (public, no trigger) "Days after signup" (with the newsletter hold
+// note); first_order "Days after first order"; the legacy skus "Days after purchase"; a sweep-filled
+// list (a series step or a SKU journey) -- the field shown at 0 and locked, "This list's own day
+// setting decides when it sends" (the matrix's zeroDelay); any other list "Days after joining this
+// list". `selected` is the selection ({id, name}), `options` the list rows, `matrix` journeyMatrix's
+// answer. show is false wherever the matrix shows no delay and forces none.
+export function delayField({
+  selected, options, matrix,
+}) {
+  const m = matrix || {};
+  if (m.zeroDelay) {
+    return {
+      show: true, locked: true, labelKey: 'campaigns.evergreenDelay', helpKey: 'campaigns.evergreenDelayStepHelp',
+    };
+  }
+  if (!m.showDelay) {
+    return {
+      show: false, locked: false, labelKey: '', helpKey: '',
+    };
+  }
+  const sel = Array.isArray(selected) ? selected : [];
+  const opts = Array.isArray(options) ? options : [];
+  const row = sel.length === 1 ? opts.find((o) => o && o.id === sel[0].id) : null;
+  const opt = row ? triggerOption(storedTrigger(row)) : TRIGGER_NONE;
+  let labelKey = 'campaigns.evergreenDelay';
+  let helpKey = 'campaigns.evergreenDelayHelp';
+  if (opt === TRIGGER_FIRST_ORDER) labelKey = 'campaigns.evergreenDelayFirstOrder';
+  else if (opt === TRIGGER_SKUS) labelKey = 'campaigns.evergreenDelayPurchase';
+  else if (row && opt === TRIGGER_NONE && row.type === 'public') {
+    labelKey = 'campaigns.evergreenDelaySignup';
+    helpKey = 'campaigns.evergreenDelayHelpNewsletter';
+  }
+  return {
+    show: true, locked: false, labelKey, helpKey,
+  };
 }
 
 // selectionClasses resolves the selected lists ({id, name}) against the list options by id: one
@@ -214,8 +254,8 @@ export function journeyPayload(m, f) {
   };
 }
 
-// isStepList is a step list (no_purchase or post_purchase -- the step class): no session may add a
-// member to it (A1.1; LIFECYCLE-SERIES-SPEC S2).
+// isStepList is a step list (no_purchase, post_purchase, replenish or first_sku -- the step class): no
+// session may add a member to it (A1.1; LIFECYCLE-SERIES-SPEC S2; SKU-JOURNEYS-SPEC D3).
 export function isStepList(list) {
   return listJourneyClass(list) === CLASS_NO_PURCHASE;
 }

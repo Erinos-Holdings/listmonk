@@ -1297,6 +1297,27 @@ RETURNS TABLE (outcome TEXT, brand TEXT, list_id INT, lang TEXT) AS $$
         (SELECT b.brand FROM b), (SELECT m.list_id FROM m), (SELECT c.lang FROM c);
 $$ LANGUAGE sql STABLE;
 
+-- Fork (automation main-list rule, integrations lambda/integrations/komigo/SKU-JOURNEYS-SPEC D1): an
+-- automation (evergreen) sends to a subscriber on its target list only while that subscriber holds a
+-- confirmed row on the brand's main list -- brand_master_list_id of the list's brand tag. Exempt (TRUE
+-- for everyone) when the target list is the main list itself, a reengage queue (its members are held
+-- by definition), transactional, or untagged. A brand tag with no single main list fails CLOSED
+-- (FALSE). The ONE definition, read only by queries/evergreen.sql next-evergreen-subscribers. Mirrored
+-- in internal/migrations/v6.2.45.go (keep the two identical).
+CREATE OR REPLACE FUNCTION brand_opted_in(p_subscriber_id INT, p_list_id INT) RETURNS BOOLEAN AS $$
+    SELECT CASE
+        WHEN l.id IS NULL THEN FALSE
+        WHEN list_brand_tag(l.tags) IS NULL THEN TRUE
+        WHEN l.transactional THEN TRUE
+        WHEN EXISTS (SELECT 1 FROM UNNEST(l.tags) AS t WHERE BTRIM(t, E' \t\n\r\f\x0B') LIKE 'reengage:%') THEN TRUE
+        WHEN l.id IS NOT DISTINCT FROM brand_master_list_id(list_brand_tag(l.tags)) THEN TRUE
+        ELSE EXISTS (SELECT 1 FROM subscriber_lists m
+            WHERE m.subscriber_id = p_subscriber_id AND m.status = 'confirmed'
+                AND m.list_id = brand_master_list_id(list_brand_tag(l.tags)))
+        END
+    FROM (SELECT 1) AS one LEFT JOIN lists l ON (l.id = p_list_id);
+$$ LANGUAGE sql STABLE;
+
 -- Fork (naming standard, integrations listmonk/NAMING-STANDARD-SPEC D10 §4.1): a renamed record's
 -- ORIGINAL name (campaign, list or template), written by the rename endpoints and the name-changing
 -- update paths, read as the API rows' former_name and by core.CurrentReview. No foreign key (three

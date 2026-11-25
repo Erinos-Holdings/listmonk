@@ -405,9 +405,13 @@
                     </b-field>
                   </div>
                   <div class="column">
-                    <b-field v-if="journeyUx.showDelay" :label="$t('campaigns.evergreenDelay')" class="evergreen-delay"
-                      data-cy="evergreen-delay" :message="$t('campaigns.evergreenDelayHelp')">
-                      <b-numberinput v-model="form.sendDelayDays" :min="0" :max="365" :disabled="!canEdit"
+                    <!-- integrations SKU-JOURNEYS-SPEC D9: labelled by the target list's entry trigger
+                    (campaignListUx.mjs::delayField); on a sweep-filled list shown at 0 and locked. -->
+                    <b-field v-if="delayUx.show" :label="$t(delayUx.labelKey)" class="evergreen-delay"
+                      data-cy="evergreen-delay" :message="$t(delayUx.helpKey)">
+                      <b-numberinput v-if="delayUx.locked" :value="0" :min="0" :max="0" disabled
+                        controls-position="compact" />
+                      <b-numberinput v-else v-model="form.sendDelayDays" :min="0" :max="365" :disabled="!canEdit"
                         controls-position="compact" />
                     </b-field>
                   </div>
@@ -747,7 +751,7 @@ import ListSelector from '../components/ListSelector.vue';
 import { pickerLabel } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import {
   hasReengageList, journeyMatrix, journeyNotices, journeyPayload, selectionChange, selectionClasses,
-  selectionClassKey, selectionRow, senderSection, campaignListChoices, preselectListId,
+  selectionClassKey, selectionRow, senderSection, campaignListChoices, preselectListId, delayField,
 } from '../campaignListUx.mjs'; // eslint-disable-line import/extensions
 import Media from './Media.vue';
 import { normalizeMediaTagsLenient } from '../mediaTags';
@@ -2812,6 +2816,11 @@ export default Vue.extend({
         sendLater: this.form.sendLater,
         storedEvergreen: this.isEditing && !!this.data.evergreen,
       });
+    },
+
+    // integrations SKU-JOURNEYS-SPEC D9 -- the delay field's label, help and lock.
+    delayUx() {
+      return delayField({ selected: this.form.lists, options: this.listOptions, matrix: this.journeyUx });
     },
 
     journeyNotices() {

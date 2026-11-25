@@ -20,11 +20,31 @@ export const TRIGGER_POST_PURCHASE = 'post_purchase';
 export const DAYS_MIN = 1;
 export const DAYS_MAX = 365;
 
-// The two STEP kinds (a list the integrations sweep fills) -- the server's isStepTriggerKind.
+// The two series STEP kinds -- the server's isStepTriggerKind (standard journey kinds: locked, hidden).
 export const STEP_TRIGGERS = Object.freeze([TRIGGER_NO_PURCHASE, TRIGGER_POST_PURCHASE]);
 
 export function isStepTrigger(option) {
   return STEP_TRIGGERS.includes(option);
+}
+
+// integrations SKU-JOURNEYS-SPEC D3 -- the two SKU journeys: {kind: 'replenish', skus, days} ("remind
+// N days after their most recent purchase of these SKUs") and {kind: 'first_sku', skus, days} ("N
+// days after their first purchase of these SKUs"). Sweep-filled (the step GUARDS apply) but NOT
+// standard journey kinds: Marketing's lists, never locked or hidden.
+export const TRIGGER_REPLENISH = 'replenish';
+export const TRIGGER_FIRST_SKU = 'first_sku';
+export const SKU_JOURNEY_TRIGGERS = Object.freeze([TRIGGER_REPLENISH, TRIGGER_FIRST_SKU]);
+
+export function isSkuJourneyTrigger(option) {
+  return SKU_JOURNEY_TRIGGERS.includes(option);
+}
+
+// The sweep-filled kinds -- the server's isSweepFilledKind: the guard set (never public, delay 0,
+// no hand add). The campaign form's step class follows it (campaignListUx.mjs).
+export const SWEEP_FILLED_TRIGGERS = Object.freeze([...STEP_TRIGGERS, ...SKU_JOURNEY_TRIGGERS]);
+
+export function isSweepFilledTrigger(option) {
+  return SWEEP_FILLED_TRIGGERS.includes(option);
 }
 
 // LIFECYCLE-SERIES-SPEC S7 -- the standard step days. Cross-repo literals (the SES_DAILY_ZONE
@@ -107,13 +127,15 @@ export function triggerOption(joinTrigger) {
   if (joinTrigger.kind === TRIGGER_SKUS) return TRIGGER_SKUS;
   if (joinTrigger.kind === TRIGGER_NO_PURCHASE) return TRIGGER_NO_PURCHASE;
   if (joinTrigger.kind === TRIGGER_POST_PURCHASE) return TRIGGER_POST_PURCHASE;
+  if (joinTrigger.kind === TRIGGER_REPLENISH) return TRIGGER_REPLENISH;
+  if (joinTrigger.kind === TRIGGER_FIRST_SKU) return TRIGGER_FIRST_SKU;
   return TRIGGER_NONE;
 }
 
 // storedDays is the days input's value for a stored join_trigger: its days for a step trigger
-// (no_purchase or post_purchase), else '' (the field starts empty for every other kind).
+// (no_purchase or post_purchase) or a SKU journey, else '' (the field starts empty otherwise).
 export function storedDays(joinTrigger) {
-  if (!isStepTrigger(triggerOption(joinTrigger))) return '';
+  if (!isSweepFilledTrigger(triggerOption(joinTrigger))) return '';
   const d = joinTrigger.days;
   return Number.isInteger(d) ? String(d) : '';
 }
@@ -182,6 +204,7 @@ export function buildJoinTrigger(option, skusText, daysText) {
   if (option === TRIGGER_FIRST_ORDER) return { kind: TRIGGER_FIRST_ORDER };
   if (option === TRIGGER_SKUS) return { kind: TRIGGER_SKUS, skus: textToSkus(skusText) };
   if (isStepTrigger(option)) return { kind: option, days: textToDays(daysText) };
+  if (isSkuJourneyTrigger(option)) return { kind: option, skus: textToSkus(skusText), days: textToDays(daysText) };
   return null;
 }
 
@@ -205,8 +228,20 @@ export function journeyOption(joinTrigger) {
   return opt === TRIGGER_NONE ? '' : opt;
 }
 
-// JOURNEY_OPTIONS are the Journey pane's radio values.
-export const JOURNEY_OPTIONS = Object.freeze([TRIGGER_FIRST_ORDER, TRIGGER_SKUS, ...STEP_TRIGGERS]);
+// JOURNEY_OPTIONS are the Journey pane's radio values (the legacy skus included: a stored one saves).
+export const JOURNEY_OPTIONS = Object.freeze([TRIGGER_FIRST_ORDER, TRIGGER_SKUS, ...SKU_JOURNEY_TRIGGERS, ...STEP_TRIGGERS]);
+
+// integrations SKU-JOURNEYS-SPEC D10 -- the legacy "Every buyer of these SKUs" option is offered only
+// on a list that already stores it (labelled "(legacy)"); new SKU lists use the two SKU journeys.
+export function legacySkusOffered(storedOption) {
+  return storedOption === TRIGGER_SKUS;
+}
+
+// journeyOptions is the Journey pane's radios in form order for a list whose stored option is
+// `storedOption`: first order, the legacy SKUs only when stored, the two SKU journeys, the two steps.
+export function journeyOptions(storedOption = '') {
+  return [TRIGGER_FIRST_ORDER, ...(legacySkusOffered(storedOption) ? [TRIGGER_SKUS] : []), ...SKU_JOURNEY_TRIGGERS, ...STEP_TRIGGERS];
+}
 
 // buildListTypeTrigger is the join_trigger the form sends for the selector value and the Journey
 // pane's values: null for Broadcast; for Journey the buildJoinTrigger document -- never null. A
@@ -308,6 +343,14 @@ function normalizedTrigger(jt) {
     });
     return { kind: opt, skus: seen };
   }
+  if (isSkuJourneyTrigger(opt)) {
+    const seen = [];
+    (Array.isArray(jt.skus) ? jt.skus : []).forEach((s) => {
+      const v = String(s).trim().toLowerCase();
+      if (v && !seen.includes(v)) seen.push(v);
+    });
+    return { kind: opt, skus: seen, days: jt.days };
+  }
   if (isStepTrigger(opt)) return { kind: opt, days: jt.days };
   return { kind: opt };
 }
@@ -344,6 +387,10 @@ export function triggerHelpKeys(option) {
       return { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerNoPurchaseHelp' };
     case TRIGGER_POST_PURCHASE:
       return { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerPostPurchaseHelp' };
+    case TRIGGER_REPLENISH:
+      return { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerReplenishHelp' };
+    case TRIGGER_FIRST_SKU:
+      return { lead: 'lists.joinTriggerNoPurchaseSends', body: 'lists.joinTriggerFirstSkuHelp' };
     default:
       return null;
   }
@@ -361,10 +408,19 @@ function seriesPhrase(joinTrigger) {
 }
 
 // triggerWhat is the sub-line's kind phrase for a stored trigger ('' for none).
+// skuJourneyPhrase is the SKU journeys' phrase (SKU-JOURNEYS-SPEC D3): "Replenish N days after the
+// last purchase" / "N days after the first purchase of SKUs"; '' for any other kind.
+function skuJourneyPhrase(joinTrigger) {
+  const opt = triggerOption(joinTrigger);
+  if (opt === TRIGGER_REPLENISH) return `Replenish ${joinTrigger.days} days after the last purchase`;
+  if (opt === TRIGGER_FIRST_SKU) return `${joinTrigger.days} days after the first purchase of SKUs`;
+  return '';
+}
+
 function triggerWhat(joinTrigger) {
   const opt = triggerOption(joinTrigger);
   if (opt === TRIGGER_SKUS) return 'joins on SKU purchase';
-  return seriesPhrase(joinTrigger);
+  return skuJourneyPhrase(joinTrigger) || seriesPhrase(joinTrigger);
 }
 
 // triggerBadge is the badge beside the section title: null when the list has no trigger, else
@@ -419,8 +475,61 @@ export function pickerLabel(list) {
   const name = l.name || '';
   const opt = triggerOption(storedTrigger(l));
   if (opt === TRIGGER_SKUS) return `${name} — joins on SKU purchase`;
-  const phrase = seriesPhrase(storedTrigger(l));
+  const phrase = skuJourneyPhrase(storedTrigger(l)) || seriesPhrase(storedTrigger(l));
   return phrase ? `${name} — ${phrase}` : name;
+}
+
+// Fork (integrations SKU-JOURNEYS-SPEC D8) -- the SKU-step ACTIVATION PREVIEW: the reconciler writes
+// it onto a not-yet-Active SKU journey list's trigger_sync (`preview`: as_of, next_run_at, joins,
+// by_age [{from_days, to_days, joins}], by_lang, skips -- counts only); the form renders it under the
+// Active switch and computes nothing. Read under either key spelling (the API client camel-cases).
+export const PREVIEW_STALE_MS = 15 * 60 * 1000;
+
+const kebab = (k) => String(k).replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+
+// previewOf is the stored preview in the wire spelling, or null (none, or not an object).
+export function previewOf(list) {
+  const ts = storedTriggerSync(list);
+  const p = isObj(ts) ? ts.preview : undefined;
+  if (!isObj(p)) return null;
+  const pick = (wire, camel) => (p[wire] !== undefined ? p[wire] : p[camel]);
+  const ages = Array.isArray(pick('by_age', 'byAge')) ? pick('by_age', 'byAge') : [];
+  const skips = isObj(p.skips) ? p.skips : {};
+  return {
+    as_of: pick('as_of', 'asOf') || '',
+    next_run_at: pick('next_run_at', 'nextRunAt') || '',
+    joins: Number(p.joins) || 0,
+    by_age: ages.filter(isObj).map((b) => ({
+      from_days: Number(b.from_days !== undefined ? b.from_days : b.fromDays) || 0,
+      to_days: Number(b.to_days !== undefined ? b.to_days : b.toDays) || 0,
+      joins: Number(b.joins) || 0,
+    })),
+    by_lang: isObj(pick('by_lang', 'byLang')) ? { ...pick('by_lang', 'byLang') } : {},
+    skips: Object.fromEntries(Object.entries(skips).map(([k, n]) => [kebab(k), Number(n) || 0])),
+  };
+}
+
+// previewState is what the form shows under the Active switch (I17a): only on a SKU journey list that
+// is NOT Active (once Active the sweep's census is the record -- no preview shown); `pending` when
+// there is no preview yet or it is older than 15 minutes (it is refreshed every 10).
+export function previewState(list, nowMs = Date.now()) {
+  const show = isSkuJourneyTrigger(triggerOption(storedTrigger(list))) && !triggerActiveOf(list);
+  if (!show) return { show: false, pending: false, preview: null };
+  const p = previewOf(list);
+  const at = p ? Date.parse(p.as_of) : NaN;
+  const pending = !p || !Number.isFinite(at) || nowMs - at > PREVIEW_STALE_MS;
+  return { show: true, pending, preview: pending ? null : p };
+}
+
+// activeConfirm is the confirm dialog turning the Active switch ON opens (D8 -- the confirmation IS
+// the approval): null when no confirm is needed (not a SKU journey list, or a fresh preview with 0
+// joins); the pending text when the preview is absent or stale; else the count and the next run.
+export function activeConfirm(list, nowMs = Date.now()) {
+  const st = previewState(list, nowMs);
+  if (!st.show) return null;
+  if (st.pending) return { key: 'lists.skuPreviewConfirmPending', params: {} };
+  if (st.preview.joins > 0) return { key: 'lists.skuPreviewConfirm', params: { n: st.preview.joins, time: st.preview.next_run_at } };
+  return null;
 }
 
 // buildListFormRequest is the body the list form sends (F3): exactly the allow-listed form keys,

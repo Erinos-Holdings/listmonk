@@ -1788,7 +1788,8 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 		return c, errors.New(a.i18n.T("campaigns.evergreenInvalidDelay"))
 	}
 	// Fork (journey form UX, integrations JOURNEY-UX-SPEC D5) -- an evergreen on a step list
-	// (no_purchase or post_purchase, LIFECYCLE-SERIES-SPEC S2: isStepTriggerKind)
+	// (no_purchase or post_purchase, LIFECYCLE-SERIES-SPEC S2, or a SKU journey -- replenish or
+	// first_sku, integrations SKU-JOURNEYS-SPEC D3 -- isSweepFilledKind)
 	// sends on join: the sweep joins each member on the day they come due, so a delay would stack on
 	// the list's own days. Create and update only (the start path runs no field validation; D5.1
 	// in lists_trigger.go closes the list side). The one list is read only when a delay is set, and
@@ -1798,7 +1799,7 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 		if err != nil {
 			return c, err
 		}
-		if isStepTriggerKind(joinTriggerKind(l.JoinTrigger)) {
+		if isSweepFilledKind(joinTriggerKind(l.JoinTrigger)) {
 			return c, errors.New(a.i18n.T("campaigns.evergreenNoPurchaseDelay"))
 		}
 	}

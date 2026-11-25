@@ -37,6 +37,14 @@
 -- buyer whose first order lands after the welcome was due is an ordinary subscriber for every
 -- later automation too (Stage 4 R4). No state is written for a skipped joiner. An untagged list
 -- never matches (list_brand_tag is NULL).
+-- Fork (automation main-list rule; integrations SKU-JOURNEYS-SPEC D1) -- THE MAIN LIST, checked at
+-- send time, every tick. A subscriber is selected only while brand_opted_in(subscriber, target list)
+-- holds -- a confirmed row on the brand's main list (brand_master_list_id), so a sunset hold, a final
+-- hold, a Kickbox or deliverability hold and a real unsubscribe each stop every automation of the
+-- brand. The main list itself, a reengage queue, a transactional list and an untagged list are
+-- exempt; a brand with no single main list selects nobody. The function is the ONE definition --
+-- never restate it here. It filters and claims nothing, so a person blocked while a delayed
+-- automation was pending is eligible again with the old anchor once their main row is confirmed.
 WITH camp AS (
     SELECT id, started_at, send_delay_secs, variant_group_id, attribs->>'lang' AS lang,
         600 AS hold_secs,
@@ -91,6 +99,8 @@ elig AS (
              WHERE cs.subscriber_id = sl.subscriber_id AND cs.campaign_id IN (SELECT id FROM excl)
                AND (cs.sent_at IS NOT NULL OR cs.claimed_at > NOW() - INTERVAL '1 hour')),
             '-infinity')
+      -- the main list (SKU-JOURNEYS-SPEC D1)
+      AND brand_opted_in(sl.subscriber_id, sl.list_id)
     ORDER BY sl.subscriber_id, sl.confirmed_at
 ),
 batch AS (

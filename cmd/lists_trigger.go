@@ -40,8 +40,9 @@ const (
 	maxJoinTriggerSkus   = 200
 	maxJoinTriggerSkuLen = 100
 
-	// maxTriggerSyncBody bounds the write-back body; maxTriggerSyncError its error text (D6).
-	maxTriggerSyncBody  = 4096
+	// maxTriggerSyncBody bounds the write-back body; maxTriggerSyncError its error text (D6). 8 KiB
+	// since the SKU-step activation preview rides on it (SKU-JOURNEYS-SPEC D8).
+	maxTriggerSyncBody  = 8192
 	maxTriggerSyncError = 500
 
 	joinTriggerFirstOrder = "first_order"
@@ -53,6 +54,13 @@ const (
 	// S2): {"kind":"post_purchase","days":N}, N an integer 1-365. Shape only (hazard 110) -- the
 	// reconciler owns meaning (it accepts 5, 14 and 30 only).
 	joinTriggerPostPurchase = "post_purchase"
+	// joinTriggerReplenish and joinTriggerFirstSku are the SKU journeys (integrations
+	// SKU-JOURNEYS-SPEC D3): {"kind":"replenish","skus":[...],"days":N} -- remind N days after the
+	// buyer's most recent purchase of these SKUs -- and {"kind":"first_sku","skus":[...],"days":N} --
+	// N days after their first purchase of these SKUs. SKUs normalized as the skus kind, days 1-365.
+	// Shape only (hazard 110) -- the reconciler owns meaning (it accepts days under its reach-back).
+	joinTriggerReplenish = "replenish"
+	joinTriggerFirstSku  = "first_sku"
 
 	// minJoinTriggerDays and maxJoinTriggerDays bound a step trigger's days.
 	minJoinTriggerDays = 1
@@ -60,13 +68,58 @@ const (
 )
 
 // joinTriggerKindErr is the refusal for a missing or unknown kind.
-var joinTriggerKindErr = fmt.Errorf("join_trigger.kind must be %q, %q, %q or %q", joinTriggerFirstOrder, joinTriggerSkus, joinTriggerNoPurchase, joinTriggerPostPurchase)
+var joinTriggerKindErr = fmt.Errorf("join_trigger.kind must be %q, %q, %q, %q, %q or %q", joinTriggerFirstOrder, joinTriggerSkus, joinTriggerNoPurchase, joinTriggerPostPurchase, joinTriggerReplenish, joinTriggerFirstSku)
 
-// isStepTriggerKind reports whether a join_trigger kind is a STEP kind -- a list filled by the
-// integrations sweep alone (a No-purchase series no_purchase step or a Post-purchase series
-// post_purchase step, LIFECYCLE-SERIES-SPEC S2). The ONE helper every step-list guard calls.
+// isStepTriggerKind reports whether a join_trigger kind is a series STEP kind (a No-purchase series
+// no_purchase step or a Post-purchase series post_purchase step, LIFECYCLE-SERIES-SPEC S2) -- a
+// STANDARD journey kind: the journey lock and the hidden-system-list rule read it (through
+// isStandardTriggerKind). The step GUARDS read isSweepFilledKind instead.
 func isStepTriggerKind(kind string) bool {
 	return kind == joinTriggerNoPurchase || kind == joinTriggerPostPurchase
+}
+
+// isSweepFilledKind reports whether a join_trigger kind makes a list one the integrations sweep alone
+// fills: the two series step kinds and the two SKU journeys (integrations SKU-JOURNEYS-SPEC D3, S3).
+// The ONE helper every step-list GUARD calls -- never public, no delayed evergreen on it, no
+// session/hand add (queries/lists.sql get-step-list-add names the same four kinds). The SKU kinds are
+// NOT standard journey kinds: the lock and the hide rule do not apply (SKU lists stay Marketing's).
+func isSweepFilledKind(kind string) bool {
+	return isStepTriggerKind(kind) || kind == joinTriggerReplenish || kind == joinTriggerFirstSku
+}
+
+// normalizeTriggerSkus is the skus normalization every SKU kind shares: an array of strings --
+// trimmed, lower-cased, de-duplicated in order, none empty, each at most 100 characters, 1-200.
+func normalizeTriggerSkus(raw json.RawMessage, present bool) ([]string, error) {
+	var in []any
+	if !present || json.Unmarshal(raw, &in) != nil || in == nil {
+		return nil, fmt.Errorf("join_trigger.skus must be an array of SKUs")
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		s, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("join_trigger.skus must hold strings only")
+		}
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			return nil, fmt.Errorf("join_trigger.skus holds an empty SKU")
+		}
+		if utf8.RuneCountInString(s) > maxJoinTriggerSkuLen {
+			return nil, fmt.Errorf("a SKU is longer than %d characters", maxJoinTriggerSkuLen)
+		}
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("join_trigger.skus must hold at least one SKU")
+	}
+	if len(out) > maxJoinTriggerSkus {
+		return nil, fmt.Errorf("join_trigger.skus holds more than %d SKUs", maxJoinTriggerSkus)
+	}
+	return out, nil
 }
 
 // normalizedJoinTrigger is the stored form; field order fixes the stored key order.
@@ -117,36 +170,29 @@ func validateJoinTrigger(raw []byte) ([]byte, error) {
 				return nil, fmt.Errorf("join_trigger has an unknown key: %s", k)
 			}
 		}
-		var in []any
-		if s, ok := doc["skus"]; !ok || json.Unmarshal(s, &in) != nil || in == nil {
-			return nil, fmt.Errorf("join_trigger.skus must be an array of SKUs")
-		}
-		seen := map[string]bool{}
-		out := make([]string, 0, len(in))
-		for _, v := range in {
-			s, ok := v.(string)
-			if !ok {
-				return nil, fmt.Errorf("join_trigger.skus must hold strings only")
-			}
-			s = strings.ToLower(strings.TrimSpace(s))
-			if s == "" {
-				return nil, fmt.Errorf("join_trigger.skus holds an empty SKU")
-			}
-			if utf8.RuneCountInString(s) > maxJoinTriggerSkuLen {
-				return nil, fmt.Errorf("a SKU is longer than %d characters", maxJoinTriggerSkuLen)
-			}
-			if !seen[s] {
-				seen[s] = true
-				out = append(out, s)
-			}
-		}
-		if len(out) == 0 {
-			return nil, fmt.Errorf("join_trigger.skus must hold at least one SKU")
-		}
-		if len(out) > maxJoinTriggerSkus {
-			return nil, fmt.Errorf("join_trigger.skus holds more than %d SKUs", maxJoinTriggerSkus)
+		s, ok := doc["skus"]
+		out, err := normalizeTriggerSkus(s, ok)
+		if err != nil {
+			return nil, err
 		}
 		return json.Marshal(normalizedJoinTrigger{Kind: kind, Skus: out})
+
+	case joinTriggerReplenish, joinTriggerFirstSku:
+		for k := range doc {
+			if k != "kind" && k != "skus" && k != "days" {
+				return nil, fmt.Errorf("join_trigger has an unknown key: %s", k)
+			}
+		}
+		s, ok := doc["skus"]
+		out, err := normalizeTriggerSkus(s, ok)
+		if err != nil {
+			return nil, err
+		}
+		days, ok := jsonInt(doc["days"])
+		if !ok || days < minJoinTriggerDays || days > maxJoinTriggerDays {
+			return nil, fmt.Errorf("join_trigger.days must be a whole number from %d to %d", minJoinTriggerDays, maxJoinTriggerDays)
+		}
+		return json.Marshal(normalizedJoinTrigger{Kind: kind, Skus: out, Days: days})
 	}
 	return nil, joinTriggerKindErr
 }
@@ -268,7 +314,8 @@ func (a *App) planListTrigger(r listReq, cur models.List) (listTriggerPlan, erro
 	// is refused while a non-cancelled evergreen with a nonzero delay targets the list. Nothing
 	// re-validates the campaign when the trigger is set, and the sweep joins members on their due
 	// day, so such a delay would land the step late.
-	if r.JoinTrigger != nil && isStepTriggerKind(joinTriggerKind(p.joinTrigger)) {
+	// SKU-JOURNEYS-SPEC D3 -- the SKU journeys too (isSweepFilledKind: the guard set).
+	if r.JoinTrigger != nil && isSweepFilledKind(joinTriggerKind(p.joinTrigger)) {
 		ev, found, err := a.core.GetListDelayedEvergreen(cur.ID)
 		if err != nil {
 			return p, err
@@ -287,7 +334,7 @@ func (a *App) planListTrigger(r listReq, cur models.List) (listTriggerPlan, erro
 	if r.Type != "" {
 		typ = r.Type
 	}
-	if typ == models.ListTypePublic && isStepTriggerKind(joinTriggerKind(p.joinTrigger)) {
+	if typ == models.ListTypePublic && isSweepFilledKind(joinTriggerKind(p.joinTrigger)) {
 		return p, echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("lists.noPurchasePublic"))
 	}
 	return p, nil
@@ -325,9 +372,17 @@ func validateTriggerSync(body []byte) error {
 	}
 	for k := range doc {
 		switch k {
-		case "synced_at", "state", "slug", "error":
+		case "synced_at", "state", "slug", "error", "preview":
 		default:
 			return fmt.Errorf("trigger_sync has an unknown key: %s", k)
+		}
+	}
+	if p, ok := doc["preview"]; ok {
+		if doc["state"] != "live" {
+			return fmt.Errorf("trigger_sync.preview is allowed with state live only")
+		}
+		if err := validateTriggerPreview(p); err != nil {
+			return err
 		}
 	}
 	s, ok := doc["synced_at"].(string)
@@ -361,6 +416,72 @@ func validateTriggerSync(body []byte) error {
 		}
 	default:
 		return fmt.Errorf("trigger_sync.state must be \"live\" or \"invalid\"")
+	}
+	return nil
+}
+
+const (
+	// maxPreviewBuckets bounds preview.by_age; maxPreviewKeys by_lang and skips; maxPreviewKeyLen a key.
+	maxPreviewBuckets = 24
+	maxPreviewKeys    = 40
+	maxPreviewKeyLen  = 40
+)
+
+// previewCount is a non-negative whole JSON number (the decoder reads numbers as float64).
+func previewCount(v any) bool {
+	f, ok := v.(float64)
+	return ok && f >= 0 && f == float64(int64(f)) && f <= 1e9
+}
+
+// validateTriggerPreview is the shape check on the SKU-step activation preview the reconciler writes
+// onto a live write-back (integrations SKU-JOURNEYS-SPEC D8): exactly as_of and next_run_at (RFC 3339),
+// joins (a count), by_age (an array of exactly {from_days, to_days, joins}, each a count), by_lang and
+// skips (objects of short keys to counts) -- no other key, no other type. Counts only: no addresses.
+// Stored verbatim; the fork renders it and computes nothing.
+func validateTriggerPreview(v any) error {
+	p, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Errorf("trigger_sync.preview must be an object")
+	}
+	for k := range p {
+		switch k {
+		case "as_of", "next_run_at", "joins", "by_age", "by_lang", "skips":
+		default:
+			return fmt.Errorf("trigger_sync.preview has an unknown key: %s", k)
+		}
+	}
+	for _, k := range []string{"as_of", "next_run_at"} {
+		s, ok := p[k].(string)
+		if !ok {
+			return fmt.Errorf("trigger_sync.preview.%s must be an RFC 3339 timestamp", k)
+		}
+		if _, err := time.Parse(time.RFC3339, s); err != nil {
+			return fmt.Errorf("trigger_sync.preview.%s must be an RFC 3339 timestamp", k)
+		}
+	}
+	if !previewCount(p["joins"]) {
+		return fmt.Errorf("trigger_sync.preview.joins must be a whole number")
+	}
+	ages, ok := p["by_age"].([]any)
+	if !ok || len(ages) > maxPreviewBuckets {
+		return fmt.Errorf("trigger_sync.preview.by_age must be an array of at most %d buckets", maxPreviewBuckets)
+	}
+	for _, b := range ages {
+		m, ok := b.(map[string]any)
+		if !ok || len(m) != 3 || !previewCount(m["from_days"]) || !previewCount(m["to_days"]) || !previewCount(m["joins"]) {
+			return fmt.Errorf("trigger_sync.preview.by_age holds a bucket other than {from_days, to_days, joins}")
+		}
+	}
+	for _, k := range []string{"by_lang", "skips"} {
+		m, ok := p[k].(map[string]any)
+		if !ok || len(m) > maxPreviewKeys {
+			return fmt.Errorf("trigger_sync.preview.%s must be an object of at most %d counts", k, maxPreviewKeys)
+		}
+		for key, n := range m {
+			if key == "" || utf8.RuneCountInString(key) > maxPreviewKeyLen || !previewCount(n) {
+				return fmt.Errorf("trigger_sync.preview.%s holds a key or count that is not allowed", k)
+			}
+		}
 	}
 	return nil
 }

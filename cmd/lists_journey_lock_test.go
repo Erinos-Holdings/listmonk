@@ -178,6 +178,30 @@ func TestLockSetStandardKind(t *testing.T) {
 		map[string]any{"name": "Acme news", "join_trigger": json.RawMessage(`{"kind":"first_order"}`)}))
 }
 
+// integrations SKU-JOURNEYS-SPEC I8 (S3) -- the SKU journey kinds are NOT standard journey kinds: a
+// Marketing session without lists:journeys may set and change them, the list stays unlocked
+// (journey_locked false, editable by Marketing) and is not a hidden system list (offered in the
+// campaign Lists dropdown).
+func TestLockSkuJourneyKindsUnlocked(t *testing.T) {
+	l := newLockFixture(t)
+	for _, jt := range []string{`{"kind":"replenish","skus":["widget"],"days":90}`, `{"kind":"first_sku","skus":["widget"],"days":30}`} {
+		l.ok("marketing sets "+jt, l.mkt.json(http.MethodPut, "/api/lists/"+itoa(l.plain),
+			map[string]any{"name": "Acme news", "join_trigger": json.RawMessage(jt)}))
+		stored, err := l.h.app.core.GetList(l.plain, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if joinTriggerKind(stored.JoinTrigger) == "" || isJourneyLockedList(stored) || isHiddenSystemList(stored) {
+			t.Fatalf("%s: stored %s, locked %v, hidden %v", jt, stored.JoinTrigger, isJourneyLockedList(stored), isHiddenSystemList(stored))
+		}
+		l.ok("marketing renames the SKU journey list "+jt, l.mkt.json(http.MethodPut, "/api/lists/"+itoa(l.plain),
+			map[string]any{"name": "Acme news", "description": "d"}))
+	}
+	if isStandardTriggerKind(joinTriggerReplenish) || isStandardTriggerKind(joinTriggerFirstSku) {
+		t.Fatal("a SKU journey kind is a standard (locked) kind")
+	}
+}
+
 // L3 -- POST /api/lists with a reengage: tag is refused; any other create is allowed.
 func TestLockCreateReengage(t *testing.T) {
 	l := newLockFixture(t)

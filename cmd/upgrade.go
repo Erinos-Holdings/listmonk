@@ -133,6 +133,8 @@ var migList = []migFunc{
 	{"v6.2.43", migrations.V6_2_43},
 	// Fork migration (erinos): SMS Admin -- sms_promo_codes (a promotion value is an SMS code iff it has a row; unique LOWER(code); brand NULL = All brands) and the sms:manage grant to role 1 (SMS-LINKS-ADMIN-SPEC D8/D11) — see internal/migrations/v6.2.44.go.
 	{"v6.2.44", migrations.V6_2_44},
+	// Fork migration (erinos): the automation main-list rule -- brand_opted_in(subscriber, list) (a confirmed row on the brand's main list, brand_master_list_id; the main list, reengage queues, transactional and untagged lists exempt; no single main list fails closed), read by next-evergreen-subscribers (integrations SKU-JOURNEYS-SPEC D1) — see internal/migrations/v6.2.45.go.
+	{"v6.2.45", migrations.V6_2_45},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

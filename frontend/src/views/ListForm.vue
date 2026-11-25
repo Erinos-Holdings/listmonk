@@ -96,7 +96,7 @@
           automation (the server refuses otherwise). -->
           <div v-if="activeState.show" class="list-active-switch mb-3" data-cy="list-active">
             <b-field :message="$t('lists.activeHelp')">
-              <b-switch :value="activeState.active" :disabled="activeBusy || (!activeState.active && !activeState.canTurnOn)"
+              <b-switch :key="activeSwitchKey" :value="activeState.active" :disabled="activeBusy || (!activeState.active && !activeState.canTurnOn)"
                 type="is-success" data-cy="list-active-switch" @input="onActiveToggle">
                 {{ $t('lists.activeSwitch') }}
               </b-switch>
@@ -104,6 +104,23 @@
             <!-- CAMPAIGN-LISTS-SPEC D9: red, not the unreadable yellow is-warning. -->
             <p v-if="activeState.hintKey" class="help is-danger" data-cy="list-active-hint">{{ $t(activeState.hintKey) }}</p>
             <p v-if="activeState.warningKey" class="help is-danger" data-cy="list-active-warning">{{ $t(activeState.warningKey) }}</p>
+            <!-- SKU-JOURNEYS-SPEC D8: the activation preview (counts only), on a SKU journey list
+            that is not Active; the reconciler writes it, the form renders it (listTrigger.mjs). -->
+            <div v-if="skuPreview.show" class="sku-preview mt-2" data-cy="list-sku-preview">
+              <p v-if="skuPreview.pending" class="help" data-cy="list-sku-preview-pending">{{ $t('lists.skuPreviewPending') }}</p>
+              <template v-else>
+                <p class="help has-text-weight-semibold">
+                  {{ $t('lists.skuPreviewTitle', { n: skuPreview.preview.joins, time: $utils.niceDate(skuPreview.preview.next_run_at, true) }) }}
+                </p>
+                <p v-for="b in skuPreview.preview.by_age" :key="b.from_days" class="help">
+                  {{ $t('lists.skuPreviewAge', { from: b.from_days, to: b.to_days, n: b.joins }) }}
+                </p>
+                <p class="help">
+                  {{ $t('lists.skuPreviewSkips') }}:
+                  <span v-for="(n, k) in skuPreview.preview.skips" :key="k" class="mr-2">{{ k }} {{ n }}</span>
+                </p>
+              </template>
+            </div>
           </div>
           <!-- JOURNEY-UX-SPEC A1.4: the help follows the selection (listTypeHelpKey). -->
           <b-field :message="$t(listTypeHelpKey(listType))" data-cy="list-campaign-type">
@@ -136,7 +153,9 @@
                 <strong>{{ $t(helpFor('first_order').lead) }}</strong> {{ $t(helpFor('first_order').body) }}
               </p>
             </div>
-            <div class="trigger-option">
+            <!-- SKU-JOURNEYS-SPEC D10: the legacy "Every buyer of these SKUs" only on a list that
+            stores it, labelled (legacy); new SKU lists use the two SKU journeys below. -->
+            <div v-if="offerLegacySkus" class="trigger-option">
               <b-field>
                 <b-radio v-model="triggerOption" native-value="skus" name="join_trigger" :disabled="readOnly">
                   {{ $t('lists.joinTriggerSkus') }}
@@ -150,6 +169,31 @@
               <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="readOnly"
                 data-cy="list-trigger-skus" />
             </b-field>
+            <!-- SKU-JOURNEYS-SPEC D3: Replenish ({kind: replenish, skus, days}) and First purchase of
+            SKUs ({kind: first_sku, skus, days}) -- each with its SKUs and a free days input (the
+            reconciler refuses 180 or more: the reach-back). -->
+            <template v-for="k in skuJourneyKinds">
+              <div :key="`opt-${k.value}`" class="trigger-option">
+                <b-field>
+                  <b-radio v-model="triggerOption" :native-value="k.value" name="join_trigger" :disabled="readOnly" :data-cy="k.cy">
+                    {{ $t(k.label) }}
+                  </b-radio>
+                </b-field>
+                <p v-if="triggerOption === k.value" class="help trigger-help" :data-cy="`trigger-help-${k.value}`">
+                  <strong>{{ $t(helpFor(k.value).lead) }}</strong> {{ $t(helpFor(k.value).body) }}
+                </p>
+              </div>
+              <template v-if="triggerOption === k.value">
+                <b-field :key="`skus-${k.value}`" :message="$t('lists.joinTriggerSkusHelp')">
+                  <b-input v-model="skusText" type="textarea" name="join_trigger_skus" :disabled="readOnly"
+                    data-cy="list-trigger-skus" />
+                </b-field>
+                <b-field :key="`days-${k.value}`" class="trigger-days" :label="$t('lists.joinTriggerSkuDays')"
+                  :type="daysText === '' || daysOk ? '' : 'is-danger'" data-cy="list-trigger-sku-days">
+                  <b-input v-model="daysText" type="number" min="1" max="179" name="join_trigger_days" :disabled="readOnly" />
+                </b-field>
+              </template>
+            </template>
             <!-- The two series step kinds (NO-PURCHASE-STEPS-SPEC D7: a No-purchase series step,
             {kind: no_purchase, days}; LIFECYCLE-SERIES-SPEC S2/S7: a Post-purchase series step,
             {kind: post_purchase, days}). Each option carries its own days field directly beneath it
@@ -270,7 +314,7 @@ import {
   buildListFormRequest, buildListTypeTrigger, daysRadios, daysValid, journeyOption, listTypeHelpKey, listTypeOf,
   skusToText, storedDays, storedTrigger, storedTriggerSync, triggerBadge, triggerHelpKeys, triggerOption as triggerOptionOf,
   LIST_TYPE_BROADCAST, activeSwitchState, formReadOnly, journeyOptionDisabled, journeySaveBlocked,
-  triggerChangeTurnsOff,
+  triggerChangeTurnsOff, activeConfirm, isSkuJourneyTrigger, legacySkusOffered, previewState,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
@@ -325,6 +369,8 @@ export default Vue.extend({
       // is on that response only), refreshed after an Active switch; null until read.
       fresh: null,
       activeBusy: false,
+      // SKU-JOURNEYS-SPEC D8: bumped when the Active confirm is cancelled (re-renders the switch off).
+      activeSwitchKey: 0,
 
       // Fork (name guardrails, NAME-GUARDRAILS-SPEC D6/D8) -- the handle typed after the fixed
       // addon (kept as typed; form.name is its trimmed join), and whether the name field has been
@@ -362,7 +408,22 @@ export default Vue.extend({
     },
 
     // JOURNEY-LISTS-SPEC D2: the switch saves on its own route; the form re-reads the list.
+    // SKU-JOURNEYS-SPEC D8: turning a SKU journey list ON with a preview of joins (or none yet)
+    // opens a confirm restating the count -- that confirmation IS the approval.
     onActiveToggle(on) {
+      const ask = on ? activeConfirm(this.row) : null;
+      if (ask) {
+        const params = ask.params.time ? { ...ask.params, time: this.$utils.niceDate(ask.params.time, true) } : ask.params;
+        this.$utils.confirm(this.$t(ask.key, params), () => this.saveActive(on), () => {
+          // Cancelled: re-mount the switch so it shows the stored (off) state again.
+          this.activeSwitchKey += 1;
+        });
+        return;
+      }
+      this.saveActive(on);
+    },
+
+    saveActive(on) {
       this.activeBusy = true;
       this.$api.putListActive(this.data.id, !!on).then((row) => {
         this.fresh = row;
@@ -551,6 +612,23 @@ export default Vue.extend({
       ];
     },
 
+    // SKU-JOURNEYS-SPEC D3/D10: the two SKU journey options, and the legacy SKUs option only when stored.
+    skuJourneyKinds() {
+      return [
+        { value: 'replenish', label: 'lists.joinTriggerReplenish', cy: 'list-trigger-replenish' },
+        { value: 'first_sku', label: 'lists.joinTriggerFirstSku', cy: 'list-trigger-first-sku' },
+      ];
+    },
+
+    offerLegacySkus() {
+      return legacySkusOffered(triggerOptionOf(storedTrigger(this.data)));
+    },
+
+    // SKU-JOURNEYS-SPEC D8: the activation preview under the Active switch (edit only).
+    skuPreview() {
+      return this.isEditing ? previewState(this.row) : { show: false, pending: false, preview: null };
+    },
+
     // The badge from the STORED trigger and trigger_sync (null = no trigger, no badge).
     triggerBadge() {
       return triggerBadge(storedTrigger(this.data), storedTriggerSync(this.data));
@@ -649,7 +727,9 @@ export default Vue.extend({
 
     // LIFECYCLE-SERIES-SPEC S7: switching between the two step kinds keeps the chosen days only
     // when the new kind offers it as a radio; otherwise the field empties (no hidden value is sent).
-    triggerOption() {
+    // SKU-JOURNEYS-SPEC D3: a SKU journey's days are a free input -- never cleared here.
+    triggerOption(now) {
+      if (isSkuJourneyTrigger(now)) return;
       if (this.daysText !== '' && !this.daysOptions.some((r) => String(r.days) === this.daysText)) {
         this.daysText = '';
       }

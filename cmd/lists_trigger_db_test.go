@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -531,7 +532,11 @@ func TestListTriggerSyncEndpoint(t *testing.T) {
 		"error too long":    `{"synced_at":"2026-10-14T05:05:12Z","state":"invalid","error":"` + strings.Repeat("e", 501) + `"}`,
 		"unknown key":       `{"synced_at":"2026-10-14T05:05:12Z","state":"live","slug":"x","note":"n"}`,
 		"two objects":       live + `{}`,
-		"body over the cap": `{"synced_at":"2026-10-14T05:05:12Z","state":"live","slug":"` + strings.Repeat("s", 4100) + `"}`,
+		"body over the cap": `{"synced_at":"2026-10-14T05:05:12Z","state":"live","slug":"` + strings.Repeat("s", 8200) + `"}`,
+		// SKU-JOURNEYS-SPEC I17 -- the preview's shape check, through the endpoint.
+		"preview on invalid": `{"synced_at":"2026-10-14T05:05:12Z","state":"invalid","error":"e","preview":` + skuPreviewDoc + `}`,
+		"preview extra key":  `{"synced_at":"2026-10-14T05:05:12Z","state":"live","slug":"x","preview":` + strings.Replace(skuPreviewDoc, `"joins":12,`, `"joins":12,"emails":["a@example.test"],`, 1) + `}`,
+		"preview bad joins":  `{"synced_at":"2026-10-14T05:05:12Z","state":"live","slug":"x","preview":` + strings.Replace(skuPreviewDoc, `"joins":12,`, `"joins":"12",`, 1) + `}`,
 	} {
 		if code := th.sync(list, body, marketer); code != http.StatusBadRequest {
 			t.Fatalf("%s: want 400, got %d", name, code)
@@ -543,6 +548,18 @@ func TestListTriggerSyncEndpoint(t *testing.T) {
 	// 500 characters is the limit, not a refusal.
 	if code := th.sync(list, `{"synced_at":"2026-10-14T05:05:12Z","state":"invalid","error":"`+strings.Repeat("e", 500)+`"}`, marketer); code != http.StatusOK {
 		t.Fatalf("500-char error: %d", code)
+	}
+
+	// SKU-JOURNEYS-SPEC I17 -- a live write-back carrying a well-formed preview is stored VERBATIM.
+	withPreview := `{"synced_at":"2026-11-24T15:05:00Z","state":"live","slug":"acme-sku-step-9","preview":` + skuPreviewDoc + `}`
+	if code := th.sync(list, withPreview, marketer); code != http.StatusOK {
+		t.Fatalf("preview: %d", code)
+	}
+	var got, want any
+	json.Unmarshal(th.get(list)["trigger_sync"], &got)
+	json.Unmarshal([]byte(withPreview), &want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("preview not stored verbatim:\n got  %v\n want %v", got, want)
 	}
 
 	// lists:manage_all only: a per-list manager and a get-only user are refused; a missing list 404.

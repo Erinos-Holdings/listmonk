@@ -518,7 +518,9 @@ func (h *evergreenHarness) rowAgo(sub, list int, status string, backfill bool, s
 func TestEvergreenWelcomeHold(t *testing.T) {
 	h := newEvergreenHarness(t)
 	pub := h.list("Acme", "public", []string{"brand:acme"}, "")
-	pub2 := h.list("Acme two", "public", []string{"brand:acme"}, "")
+	// Its own brand: a brand with two public lists has no single main list, and the automation
+	// main-list rule (SKU-JOURNEYS-SPEC D1) then selects nobody.
+	pub2 := h.list("Acme two", "public", []string{"brand:acmetwo"}, "")
 
 	// I1 -- a delay-0 welcome on a public list waits 600 s.
 	w := h.campaign("welcome", true, 0, pub)
@@ -618,8 +620,11 @@ func TestEvergreenWelcomeSkipFirstOrder(t *testing.T) {
 		t.Errorf("first_order trigger on the public list skipped its own joiner (batch %v)", g)
 	}
 
-	// I7 -- the thank-you on the private first-order list is never skipped by its own row.
+	// I7 -- the thank-you on the private first-order list is never skipped by its own row. The
+	// buyer is a newsletter member: an automation on a private brand list sends only to the brand's
+	// main-list confirmed members (SKU-JOURNEYS-SPEC D1).
 	k := h.subscriber("buyer@x")
+	h.joinAgo(k, pub, join)
 	h.join(k, fo, "confirmed")
 	if g := h.batch(wt, 100); !contains(g, k) {
 		t.Errorf("private thank-you skipped its own joiner (batch %v)", g)

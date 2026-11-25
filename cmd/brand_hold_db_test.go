@@ -405,7 +405,8 @@ func TestBrandHoldSentEqualsToSend(t *testing.T) {
 
 // I5 -- evergreen and opt-in campaigns are untouched: the evergreen candidate query
 // (next-evergreen-subscribers) and an opt-in campaign's claim and batches return the same rows
-// with the switch on and off, held-elsewhere subscribers included.
+// with the switch on and off (the evergreen set is narrowed by SKU-JOURNEYS-SPEC D1's main-list
+// rule, which does not read the switch).
 func TestBrandHoldOtherTypesUntouched(t *testing.T) {
 	f := newBrandHoldFixture(t)
 	dbl := f.mkList("Acme double", "double", false, "brand:acme")
@@ -416,6 +417,13 @@ func TestBrandHoldOtherTypesUntouched(t *testing.T) {
 	ev := f.camp("Acme segment welcome", true, "regular", "running", `{}`, f.seg)
 	f.h.db.MustExec(`UPDATE campaigns SET started_at = NOW() - INTERVAL '1 day', send_delay_secs = 0 WHERE id = $1`, ev)
 	f.h.db.MustExec(`UPDATE subscriber_lists SET confirmed_at = NOW() - INTERVAL '1 hour' WHERE list_id = $1`, f.seg)
+	// integrations SKU-JOURNEYS-SPEC D1 -- an automation sends only to the brand's main-list
+	// confirmed members (brand_opted_in, its own switchless rule): the newsletter is made the brand's
+	// main (public) list and plain confirmed on it, so the evergreen set is {plain} -- the held
+	// subscribers (held on the main list, or with no main row) are out by D1, with the hold-scope
+	// switch on AND off (this test's point: the switch never touches evergreens).
+	f.h.db.MustExec(`UPDATE lists SET type = 'public' WHERE id = $1`, f.news)
+	f.join(f.plain, f.news, "confirmed")
 
 	read := func() string {
 		f.h.db.MustExec(`DELETE FROM campaign_sends WHERE campaign_id = $1`, ev)
@@ -440,7 +448,7 @@ func TestBrandHoldOtherTypesUntouched(t *testing.T) {
 	f.switchTo("true")
 	onRead := read()
 	want := fmt.Sprintf("evergreen=%s optin to_send=2 batches=%s",
-		ids(f.plain, f.held, f.finalHeld, f.kickHeld, f.betaHeld, f.txnHeld), ids(f.plain, f.held))
+		ids(f.plain), ids(f.plain, f.held))
 	if offRead != want || onRead != want {
 		t.Fatalf("\n off %s\n on  %s\nwant %s", offRead, onRead, want)
 	}

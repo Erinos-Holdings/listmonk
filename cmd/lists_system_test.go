@@ -39,6 +39,9 @@ var systemListCases = []systemListCase{
 	{"padded queue 1", "", []string{" reengage:5:1 "}, false},
 	{"padded queue 2", "", []string{"reengage:12:2 "}, false},
 	{"sku trigger", `{"kind":"skus","skus":["widget"]}`, nil, false},
+	// integrations SKU-JOURNEYS-SPEC D3 (S3) -- the SKU journeys are sweep-filled but NOT system lists.
+	{"replenish trigger", `{"kind":"replenish","skus":["widget"],"days":90}`, nil, false},
+	{"first_sku trigger", `{"kind":"first_sku","skus":["widget"],"days":30}`, nil, false},
 	{"no trigger, no tags", "", nil, false},
 	{"internal tag", "", []string{"internal"}, false},
 	{"test tag", "", []string{"test"}, false},

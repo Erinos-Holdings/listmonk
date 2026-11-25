@@ -24,6 +24,56 @@ const selOf = (...rows) => selectionClasses(pick(...rows), OPTIONS);
 const rowOf = (...rows) => selectionRow(selOf(...rows));
 const keyOf = (...rows) => selectionClassKey(selOf(...rows));
 
+// Fork (integrations SKU-JOURNEYS-SPEC D3/D9, I18) -- the SKU journeys are the step class (the
+// guard set: delay 0, no hand add), and the delay field's label and help follow the target list.
+test('I18: the delay label and help per target-list kind; SKU journeys are the step class', () => {
+  const REP = { id: 20, name: 'JOYBELLE Glue', join_trigger: { kind: 'replenish', skus: ['a'], days: 90 } };
+  const FSKU = { id: 21, name: 'JOYBELLE First', joinTrigger: { kind: 'first_sku', skus: ['a'], days: 30 } };
+  const PP = { id: 22, name: 'Ruze PP 14', joinTrigger: { kind: 'post_purchase', days: 14 } };
+  const NEWS = { id: 23, name: 'Ruze', type: 'public' };
+  const PRIV = { id: 24, name: 'Ruze VIP', type: 'private' };
+  const opts = [FIRST, SKUS, NP, REP, FSKU, PP, NEWS, PRIV];
+  assert.equal(listJourneyClass(REP), CLASS_NO_PURCHASE);
+  assert.equal(listJourneyClass(FSKU), CLASS_NO_PURCHASE);
+  assert.equal(isStepList(REP) && isStepList(FSKU), true);
+  assert.deepEqual(addableLists([REP, PRIV]).map((l) => l.id), [24]);
+
+  const E = { editable: true, evergreenEnabled: true };
+  const field = (row) => {
+    const sel = selectionClasses(pick(row), opts);
+    const m = journeyMatrix({ ...E, row: selectionRow(sel), evergreen: true });
+    return ux.delayField({ selected: pick(row), options: opts, matrix: m });
+  };
+  assert.deepEqual(field(NEWS), {
+    show: true, locked: false, labelKey: 'campaigns.evergreenDelaySignup', helpKey: 'campaigns.evergreenDelayHelpNewsletter',
+  });
+  assert.deepEqual(field(FIRST), {
+    show: true, locked: false, labelKey: 'campaigns.evergreenDelayFirstOrder', helpKey: 'campaigns.evergreenDelayHelp',
+  });
+  assert.deepEqual(field(SKUS), {
+    show: true, locked: false, labelKey: 'campaigns.evergreenDelayPurchase', helpKey: 'campaigns.evergreenDelayHelp',
+  });
+  [NP, PP, REP, FSKU].forEach((row) => assert.deepEqual(field(row), {
+    show: true, locked: true, labelKey: 'campaigns.evergreenDelay', helpKey: 'campaigns.evergreenDelayStepHelp',
+  }, row.name));
+  assert.deepEqual(field(PRIV), {
+    show: true, locked: false, labelKey: 'campaigns.evergreenDelay', helpKey: 'campaigns.evergreenDelayHelp',
+  });
+  // A step list's payload delay is 0 whatever the field held.
+  const m = journeyMatrix({ ...E, row: CLASS_NO_PURCHASE, evergreen: true });
+  assert.equal(journeyPayload(m, { evergreen: true, sendDelayDays: 7, sendDelaySecs: 7 * 86400 }).send_delay_secs, 0);
+  // No delay in the matrix (Journey off) -> no field.
+  assert.equal(ux.delayField({ selected: pick(PRIV), options: opts, matrix: journeyMatrix({ ...E, row: CLASS_NONE, evergreen: false }) }).show, false);
+  // The en.json texts exist and the generic help no longer carries the step-list sentence.
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['campaigns.evergreenDelay', 'campaigns.evergreenDelaySignup', 'campaigns.evergreenDelayFirstOrder', 'campaigns.evergreenDelayPurchase',
+    'campaigns.evergreenDelayStepHelp', 'campaigns.evergreenDelayHelp', 'campaigns.evergreenDelayHelpNewsletter']
+    .forEach((k) => assert.equal(typeof en[k], 'string', k));
+  assert.equal(en['campaigns.evergreenDelay'], 'Days after joining this list');
+  assert.equal(/step list/i.test(en['campaigns.evergreenDelayHelp']), false);
+  assert.equal(/Days after joining/.test(en['lists.joinTriggerSkusSends'] + en['lists.joinTriggerFirstOrderSends']), false);
+});
+
 // I1 -- D1 classification for both key spellings, every kind, null and garbage triggers.
 test('I1: list journey class', () => {
   assert.equal(listJourneyClass({ join_trigger: { kind: 'first_order' } }), CLASS_PURCHASE);
