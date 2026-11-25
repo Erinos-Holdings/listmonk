@@ -152,14 +152,17 @@ test('I11: the display lines per response case', () => {
     },
   };
   const d = countLines({ state: 'done', response: due });
-  assert.deepEqual(keys(d), ['lists.skuCountDue']);
-  assert.deepEqual(d[0].params, {
-    n: 5, time: '2026-11-25T15:10:00.000Z', from: 90, to: 180,
-  });
+  // Two red ('due') lines: the bold count with its un-bolded time tail, then the bought range.
+  assert.deepEqual(d, [
+    {
+      key: 'lists.skuCountDue', params: { n: 5 }, kind: 'due', tail: { key: 'lists.skuCountDueAt', params: { time: '2026-11-25T15:10:00.000Z' } },
+    },
+    { key: 'lists.skuCountDueBought', params: { from: 90, to: 180 }, kind: 'due' },
+  ]);
   // The range follows the days: 60 reads 60–180.
   const due60 = { ...due.due, days: 60, by_age: [{ from_days: 60, to_days: 90, joins: 1 }, { from_days: 150, to_days: 180, joins: 0 }] };
   const d60 = countLines({ state: 'done', response: { ...due, due: due60 } });
-  assert.deepEqual([d60[0].params.from, d60[0].params.to], [60, 180]);
+  assert.deepEqual([d60[1].params.from, d60[1].params.to], [60, 180]);
 
   // Assumed languages.
   assert.deepEqual(keys(countLines({ state: 'done', response: { ...RESP, assumed_all_languages: true } })), ['lists.skuCountWindow', 'lists.skuCountAssumed']);
@@ -246,7 +249,7 @@ test('I12: joins > 0 -> the count text; 0 -> none; a failure -> the unreadable t
 test('every key the count and the confirm render exists in en.json; the D8 preview keys are gone', () => {
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   ['lists.skuCountCounting', 'lists.skuCountWindow', 'lists.skuCountNoBuyers', 'lists.skuCountNotBrand', 'lists.skuCountSuggest',
-    'lists.skuCountSuggestNoTitle', 'lists.skuCountDue', 'lists.skuCountAssumed',
+    'lists.skuCountSuggestNoTitle', 'lists.skuCountDue', 'lists.skuCountDueAt', 'lists.skuCountDueBought', 'lists.skuCountAssumed',
     'lists.skuCountUnavailable', 'lists.skuCountNotConfigured', 'lists.skuCountInvalid', 'lists.skuCountNoBrand',
     'lists.skuCountConfirm', 'lists.skuCountConfirmNoCount', 'lists.skuCountConfirmNotCounted', 'lists.skuCountConfirmUnreadable',
   ].forEach((k) => assert.equal(typeof en[k], 'string', k));

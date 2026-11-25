@@ -179,9 +179,12 @@
                 after the last change; never blocks saving. -->
                 <div v-if="skuCountLines.length" :key="`count-${k.value}`" class="sku-count mb-3" data-cy="list-sku-count">
                   <p v-for="(l, i) in skuCountLines" :key="i"
-                    :class="['help', { 'is-danger': l.kind === 'danger', 'has-text-weight-semibold': l.kind === 'strong' }]">
+                    :class="['help', { 'is-danger': l.kind === 'danger' || l.kind === 'due', 'has-text-weight-semibold': l.kind === 'strong' }]">
                     <a v-if="l.kind === 'suggest' && !readOnly" href="#" data-cy="list-sku-count-suggest"
                       @click.prevent="applySuggestion(l)">{{ countLineText(l) }}</a>
+                    <template v-else-if="l.tail">
+                      <b>{{ countLineText(l) }}</b> {{ countLineText(l.tail) }}
+                    </template>
                     <template v-else>
                       {{ countLineText(l) }}
                     </template>

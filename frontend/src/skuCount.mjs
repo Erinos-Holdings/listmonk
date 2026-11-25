@@ -114,7 +114,8 @@ export function errorOf(error) {
 }
 
 // countLines is the block under the days field (D6) for a counter state, as display lines
-// { key, params, kind } -- kind 'plain', 'strong', 'danger' or 'suggest' (a suggestion carries
+// { key, params, kind } -- kind 'plain', 'strong', 'danger', 'due' (red; may carry an un-bolded
+// `tail` {key, params}, the line itself then bold) or 'suggest' (a suggestion carries
 // { from, to }: clicking it replaces `from` with `to` in the SKU text). `brandName` names the brand in
 // "not a <brand> SKU". A 400 shows its text as a red line; any other failure says the count is
 // unavailable (never blocks saving).
@@ -147,14 +148,16 @@ export function countLines(st, { brandName = '' } = {}) {
     });
   });
   if (r.due) {
+    // Two red lines (the user, 2026-11-25): "**N due at the next daily run** (time)", then
+    // "Bought from–to days ago". `tail` is the line's un-bolded remainder.
     const to = (r.due.by_age || []).reduce((m, b) => Math.max(m, b.to_days), r.due.days);
     out.push({
       key: 'lists.skuCountDue',
-      params: {
-        n: r.due.joins, time: r.next_run_at, from: r.due.days, to,
-      },
-      kind: 'strong',
+      params: { n: r.due.joins },
+      kind: 'due',
+      tail: { key: 'lists.skuCountDueAt', params: { time: r.next_run_at } },
     });
+    out.push({ key: 'lists.skuCountDueBought', params: { from: r.due.days, to }, kind: 'due' });
   }
   if (r.assumed_all_languages) out.push({ key: 'lists.skuCountAssumed', params: {}, kind: 'plain' });
   return out;
