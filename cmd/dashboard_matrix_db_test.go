@@ -58,6 +58,9 @@ type matrixHealth struct {
 	SpamRate    *float64 `json:"spam_rate,omitempty"`
 	SpamStatus  string   `json:"spam_status,omitempty"`
 	SpamFlagged *bool    `json:"spam_flagged,omitempty"`
+	// integrations LAUNCH-STAGE-SPEC D4/D10 -- the stored stage verbatim (a JSON null kept as
+	// `null`); nil when the doc has no stage key.
+	Stage json.RawMessage `json:"stage,omitempty"`
 }
 
 type matrixRow struct {
@@ -402,12 +405,22 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	}
 	wantThresholds := json.RawMessage(compactTh.Bytes())
 
+	// LAUNCH-STAGE-SPEC D4/D10 -- the newest doc's stage rides the health object verbatim: alpha's
+	// newest says waitlist (its older doc presend -- only the newest is projected), bravo's newest a
+	// JSON null (kept, not stripped); delta has no doc and so no stage key.
+	setStage := func(brand string, n int, stage string) {
+		h.db.MustExec(`UPDATE brand_health SET doc = doc || JSONB_BUILD_OBJECT('stage', $3::JSONB) WHERE brand = $1 AND day = $2::DATE`, brand, day(n), stage)
+	}
+	setStage("alpha", 1, `"waitlist"`)
+	setStage("alpha", 3, `"presend"`)
+	setStage("bravo", 1, `null`)
+
 	spam := 0.0012
 	flagged := true
 	alpha := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "alpha", Subscribers: matrixSubs{Total: 4, Active: 1, Held: 1, Unsubscribed: 1, Blocked: 1},
 			Sent: &alphaSent, Views: wantViews[tracking]["alpha"], Clicks: wantClicks[tracking]["alpha"], HardBounces: 5, Blocks: 1, Complaints: 1,
-			Health: matrixHealth{Status: "ok", SpamRate: &spam, SpamStatus: "issues", SpamFlagged: &flagged},
+			Health: matrixHealth{Status: "ok", SpamRate: &spam, SpamStatus: "issues", SpamFlagged: &flagged, Stage: json.RawMessage(`"waitlist"`)},
 			Usage:  wantUsage, Thresholds: wantThresholds, Skipped: zeroSkipped()}
 	}
 	// POLISH3 I6 -- these fixtures' campaigns start Denver-today (outside the window), so nothing
@@ -415,7 +428,7 @@ func TestDashboardBrandMatrixDB(t *testing.T) {
 	bravo := func(tracking bool) matrixRow {
 		return matrixRow{Brand: "bravo", Subscribers: matrixSubs{Total: 2, Active: 1},
 			Sent: &bravoSent, Views: wantViews[tracking]["bravo"], Clicks: wantClicks[tracking]["bravo"], HardBounces: 2, Blocks: 2, Complaints: 1,
-			Health: matrixHealth{Status: "unknown"}, Skipped: zeroSkipped()}
+			Health: matrixHealth{Status: "unknown", Stage: json.RawMessage(`null`)}, Skipped: zeroSkipped()}
 	}
 	delta := matrixRow{Brand: "delta", Skipped: zeroSkipped()} // neither an SES day nor a send hour: NULL
 	echo := matrixRow{Brand: "echo", Sent: &echoToday, Skipped: zeroSkipped()}

@@ -144,11 +144,12 @@ func (a *App) GetBrandHealth(c echo.Context) error {
 }
 
 // GetBrandsLaunch (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D8) is GET
-// /api/brands/launch: [{brand, unlaunched}] for the caller's roster brands only -- the brands of the
-// lists in the caller's get|manage|analytics scope (AnalyticsScope), every brands row for a holder of
-// lists:get_all, lists:manage_all or campaigns:get_all (or Super Admin). Any authenticated user,
-// session or token, no pm permission: the navbar launch filter reads it when the user lacks
-// brands:get. One bit per brand, never the health status (S6).
+// /api/brands/launch: [{brand, stage}] (integrations LAUNCH-STAGE-SPEC D9) for the caller's roster
+// brands only -- the brands of the lists in the caller's get|manage|analytics scope
+// (AnalyticsScope), every brands row for a holder of lists:get_all, lists:manage_all or
+// campaigns:get_all (or Super Admin). Any authenticated user, session or token, no pm permission:
+// the navbar launch filter reads it when the user lacks brands:get. One stage per brand, never the
+// health status (S6).
 func (a *App) GetBrandsLaunch(c echo.Context) error {
 	user := auth.GetUser(c)
 	all, ids := user.AnalyticsScope()

@@ -106,11 +106,15 @@ export function conversionValue(row, field) {
 }
 
 // healthDocs is the matrix rows' own health documents as the launch filter reads them
-// ({ brand, status }) -- a brand with no document has none, and so is launched (D2, D5).
+// ({ brand, status, stage? }) -- a brand with no document has none, and so is launched (D2, D5);
+// the stage is carried only when the row's health carries the key (integrations LAUNCH-STAGE-SPEC
+// D4: a document without it is launched -- brandScope.mjs launchOf decides).
 export function healthDocs(apiRows) {
   return (Array.isArray(apiRows) ? apiRows : [])
     .filter((r) => r && r.health && typeof r.health.status === 'string')
-    .map((r) => ({ brand: r.brand, status: r.health.status }));
+    .map((r) => (Object.prototype.hasOwnProperty.call(r.health, 'stage')
+      ? { brand: r.brand, status: r.health.status, stage: r.health.stage }
+      : { brand: r.brand, status: r.health.status }));
 }
 
 // D2: shapeRows is the API rows narrowed by the launch filter (brandScope.mjs matchesLaunch over the

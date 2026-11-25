@@ -576,6 +576,9 @@ SELECT JSON_BUILD_OBJECT(
                 'spam_flagged', CASE WHEN JSONB_PATH_EXISTS(bh.doc, '$.inputs.config.detail.rows[*] ? (@.requirement == "USER_REPORTED_SPAM_RATE" && @.status == "NEEDS_WORK")')
                     THEN TRUE END
             ))
+            -- Fork (integrations LAUNCH-STAGE-SPEC D4/D10) -- the stored stage verbatim, outside the
+            -- null strip so a JSON null stays null; a doc without the key carries none (launched).
+            || CASE WHEN bh.doc ? 'stage' THEN JSONB_BUILD_OBJECT('stage', bh.doc->'stage') ELSE '{}'::JSONB END
         ) || CASE WHEN bh.doc ? 'usage' THEN JSONB_BUILD_OBJECT('usage', bh.doc->'usage') ELSE '{}'::JSONB END
           || CASE WHEN bh.doc ? 'thresholds' THEN JSONB_BUILD_OBJECT('thresholds', bh.doc->'thresholds') ELSE '{}'::JSONB END
         ORDER BY b.brand)

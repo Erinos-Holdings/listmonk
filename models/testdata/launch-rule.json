@@ -1,6 +1,9 @@
 [
-  {"status": "ok", "unlaunched": false},
-  {"status": "warn", "unlaunched": false},
-  {"status": "issues", "unlaunched": false},
-  {"status": "unknown", "unlaunched": true}
+  {"case": "stage launched", "row": true, "doc": {"status": "ok", "stage": "launched"}, "stage": "launched"},
+  {"case": "stage waitlist", "row": true, "doc": {"status": "warn", "stage": "waitlist"}, "stage": "waitlist"},
+  {"case": "stage presend", "row": true, "doc": {"status": "unknown", "stage": "presend"}, "stage": "presend"},
+  {"case": "stage null", "row": true, "doc": {"status": "ok", "stage": null}, "stage": null},
+  {"case": "no stage key, status unknown", "row": true, "doc": {"status": "unknown"}, "stage": "launched"},
+  {"case": "no stage key, empty doc", "row": true, "doc": {}, "stage": "launched"},
+  {"case": "no row", "row": false, "doc": null, "stage": "launched"}
 ]

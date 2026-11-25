@@ -65,14 +65,14 @@ export default new Vuex.Store({
     // failed read) means every brand is launched.
     brandHealth: [],
     // Set by the first health response or its failure. A loading gate ONLY while the launch filter
-    // narrows (Launched/Unlaunched): before the documents, every brand reads as launched, so a
+    // narrows (Launched/Waitlist/Pre-send): before the documents, every brand reads as launched, so a
     // stored brand outside that set would resolve to All brands and a page would fetch unscoped,
     // then again scoped -- and the slower unscoped response could land last (2026-10-28, BNKD under
     // Unlaunched showed every brand's campaigns). Under All only a stored group selection waits on
     // it (BRAND-GROUPS-SPEC D3; App.vue dispatches the read under canBrands()).
     brandHealthLoaded: false,
     // Fork (brand roles, integrations BRAND-ROLES-SPEC D8) -- GET /api/brands/launch's rows
-    // ([{ brand, unlaunched }]) for a user WITHOUT brands:get (the launch filter's state; its first
+    // ([{ brand, stage }], LAUNCH-STAGE-SPEC D9) for a user WITHOUT brands:get (the launch filter's state; its first
     // response or failure also releases brandHealthLoaded).
     brandLaunch: [],
     // Fork (brand roles, D4) -- the current route name (main.js afterEach), for the selector's

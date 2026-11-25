@@ -4,8 +4,8 @@
 //        includes analytics brands; the writing pickers exclude them; off the analytics pages an
 //        analytics-only brand is disabled and a stored selection of one resolves to All; a campaign
 //        of an analytics-only brand carries no campaign link.
-//   I11  the launch filter is shown for an unlocked selector without brands:get; the launch rule's
-//        agreement table (models/testdata/launch-rule.json, the Go handler test's too).
+//   I11  the launch filter is shown for an unlocked selector without brands:get; the launch stage's
+//        agreement table (models/testdata/launch-rule.json, the Go handler test's too; LAUNCH-STAGE-SPEC I9).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -17,7 +17,6 @@ import {
   filterByIds, groupDisabledOn, isAnalyticsPage, launchDocsFrom, launchFilterShown, launchOf, resolveOnPage,
   rosterFrom, rosterLists, scopeListIds, scopeUnion, withoutBrands,
 } from './brandScope.mjs'; // eslint-disable-line import/extensions
-import { isUnlaunchedBrandDoc } from './health-sort.mjs'; // eslint-disable-line import/extensions
 
 // A resolved list_role entry as /api/profile serves it.
 const entry = (id, name, brand, permissions) => ({
@@ -177,14 +176,26 @@ test('I11 -- the launch filter is shown for an unlocked selector, without brands
   assert.match(vue, /launchFilterShown\(this\.brandScope\)/);
 });
 
-test('I11 -- the launch rule agrees with the server statement on every status value', () => {
+// Fork (integrations LAUNCH-STAGE-SPEC I9) -- the agreement table: the server's stage per D9 (the Go
+// handler test reads the same file) and launchOf over the documents themselves give one answer,
+// and launchDocsFrom over the endpoint's rows reads back the same stage.
+test('LAUNCH-STAGE I9 -- launchOf(launchDocsFrom(rows)) agrees with launchOf over the documents', () => {
   const cases = JSON.parse(readFileSync(new URL('../../models/testdata/launch-rule.json', import.meta.url), 'utf8'));
-  assert.ok(cases.length >= 4);
-  cases.forEach(({ status, unlaunched }) => {
-    assert.equal(isUnlaunchedBrandDoc({ brand: 'x', status }), unlaunched, status);
-    // The endpoint's bit, read back through launchDocsFrom + launchOf, is the same answer.
-    assert.equal(launchOf('x', launchDocsFrom([{ brand: 'x', unlaunched }])) === 'unlaunched', unlaunched, status);
+  assert.ok(cases.length >= 7);
+  cases.forEach(({
+    case: name, row, doc, stage,
+  }) => {
+    const docs = row ? [{ brand: 'x', ...doc }] : [];
+    assert.equal(launchOf('x', docs), stage, `${name}: launchOf over the document`);
+    // The endpoint returns { brand, stage } with the expected stage for every case.
+    assert.equal(launchOf('x', launchDocsFrom([{ brand: 'x', stage }])), stage, `${name}: launchOf over the endpoint row`);
   });
-  assert.equal(isUnlaunchedBrandDoc(undefined), false, 'no document = launched (the server: no row = false)');
-  assert.deepEqual(launchDocsFrom([{ brand: 'a', unlaunched: false }, { brand: 'b', unlaunched: true }, null]), [{ brand: 'b', status: 'unknown' }]);
+  assert.deepEqual(
+    launchDocsFrom([{ brand: 'a', stage: 'launched' }, { brand: 'b', stage: null }, { brand: 'c' }, null, { stage: 'x' }]),
+    [{ brand: 'a', stage: 'launched' }, { brand: 'b', stage: null }, { brand: 'c' }],
+  );
+  // A row with no stage key reads as launched; an unknown value as launched.
+  assert.equal(launchOf('c', launchDocsFrom([{ brand: 'c' }])), 'launched');
+  assert.equal(launchOf('c', launchDocsFrom([{ brand: 'c', unlaunched: true }])), 'launched');
+  assert.equal(launchOf('c', launchDocsFrom([{ brand: 'c', stage: 'bogus' }])), 'launched');
 });

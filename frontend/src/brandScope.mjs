@@ -14,10 +14,6 @@
 //   already permission-filtered by the server). brand is the list's slug, '' when brandless.
 // brands: the GET /api/brands rows ({ slug, display_name, ... }), used for labels and order only.
 
-// Fork (launch filter, integrations LAUNCH-FILTER-SPEC D2) -- the one unlaunched rule (a brand
-// health document whose own overall status is unknown), shared with the Brands table.
-import { isUnlaunchedBrandDoc } from './health-sort.mjs'; // eslint-disable-line import/extensions
-
 export const ALL = Object.freeze({ kind: 'all' });
 export const NONE = Object.freeze({ kind: 'none' });
 
@@ -439,17 +435,22 @@ export function filterBrandRows(rows, selection) {
   return r.filter((x) => x && typeof x.brand === 'string' && inSelection(x.brand, selection));
 }
 
-// Fork (launch filter, integrations LAUNCH-FILTER-SPEC D1/D2). The navbar's All | Launched |
-// Unlaunched filter: a PRESENTATION filter on the selector's options and the two health tables;
+// Fork (launch filter, integrations LAUNCH-FILTER-SPEC D1/D2; the values and the rule since
+// integrations listmonk/LAUNCH-STAGE-SPEC D1-D10). The navbar's All | Launched | Waitlist |
+// Pre-send filter: a PRESENTATION filter on the selector's options and the two health tables;
 // the filter's VALUE is never a scope (D7 -- no scope function here takes a launch value). Fork
 // (brand groups, integrations BRAND-GROUPS-SPEC D1, amending LAUNCH-FILTER-SPEC D7/I6 for groups
 // only): launch STATE is -- the Incubating group's members are read from the health documents
 // through launchOf, and reach the server as list_id and the Lists brand parameter. The filter's
 // value only decides whether a group is offered, never what it contains. docs are the
-// GET /api/brands/health rows ({ brand, status, ... }).
-export const LAUNCH_VALUES = Object.freeze(['all', 'launched', 'unlaunched']);
+// GET /api/brands/health rows ({ brand, stage, ... }). The stage is the integrations BrandHealth
+// Lambda's (lib/brand-stage.ts::stageOf, LAUNCH-STAGE-SPEC D2) -- stored and rendered here, never
+// computed.
+export const LAUNCH_STAGES = Object.freeze(['launched', 'waitlist', 'presend']);
+export const LAUNCH_VALUES = Object.freeze(['all', ...LAUNCH_STAGES]);
 
-// D1: an unknown value resolves to 'all'.
+// LAUNCH-STAGE-SPEC D5: an unknown value -- a stored legacy 'unlaunched' included -- resolves to
+// 'all' (the pref is not rewritten).
 export function normalizeLaunch(launch) {
   return LAUNCH_VALUES.includes(launch) ? launch : 'all';
 }
@@ -488,15 +489,30 @@ export function launchApplies(roster) {
   return !r.hidden && !r.locked;
 }
 
-// D2: a brand is unlaunched iff its document's own status is unknown; no document = launched.
+// LAUNCH-STAGE-SPEC D4: a brand's stage -- the document's own `stage` when it holds one of the
+// three stages or null (null = no stage, a domain that is not a brand); a document without a
+// `stage` key (written before the stage existed), no document, or any other value is launched.
 export function launchOf(slug, docs) {
   const doc = (Array.isArray(docs) ? docs : []).find((d) => d && d.brand === slug);
-  return isUnlaunchedBrandDoc(doc) ? 'unlaunched' : 'launched';
+  if (!doc || typeof doc !== 'object' || !Object.prototype.hasOwnProperty.call(doc, 'stage')) {
+    return 'launched';
+  }
+  if (doc.stage === null || LAUNCH_STAGES.includes(doc.stage)) {
+    return doc.stage;
+  }
+  return 'launched';
 }
 
-// Fork (brand groups, integrations BRAND-GROUPS-SPEC D1, I1) -- a brand's group: the parent is in
-// none; an established brand is Established whatever its launch state; a launched other brand is
-// Incubating; an unlaunched other brand is in none (selectable one by one).
+// LAUNCH-STAGE-SPEC D6: a stage button of the launch control is disabled when its count is 0 or
+// while the selection is pending (All is never disabled by count).
+export function launchOptionDisabled(count, pending) {
+  return !!pending || count === 0;
+}
+
+// Fork (brand groups, integrations BRAND-GROUPS-SPEC D1, I1; LAUNCH-STAGE-SPEC D8) -- a brand's
+// group: the parent is in none; an established brand is Established whatever its stage; any other
+// brand is Incubating when its stage is launched or waitlist (the brands we send for), else in
+// none (selectable one by one).
 export function groupOf(slug, docs) {
   if (slug === PARENT_BRAND) {
     return null;
@@ -504,7 +520,8 @@ export function groupOf(slug, docs) {
   if (ESTABLISHED_BRANDS.includes(slug)) {
     return 'established';
   }
-  return launchOf(slug, docs) === 'launched' ? 'incubating' : null;
+  const stage = launchOf(slug, docs);
+  return stage === 'launched' || stage === 'waitlist' ? 'incubating' : null;
 }
 
 // D1 (I2): a group's members -- the FULL roster's brands (so never a brand with no permitted
@@ -541,7 +558,8 @@ export function groupWaits(stored, canBrands, roster) {
   return isStoredSelection(stored) && stored.kind === 'group' && !!canBrands && launchApplies(roster);
 }
 
-// D2: 'all' (and any unknown value) matches every brand.
+// LAUNCH-STAGE-SPEC D7: 'all' (and any unknown value) matches every brand; a stage value matches
+// exactly that stage; a null-stage brand matches only 'all'.
 export function matchesLaunch(slug, launch, docs) {
   const l = normalizeLaunch(launch);
   return l === 'all' || launchOf(slug, docs) === l;
@@ -558,11 +576,18 @@ export function applyLaunch(roster, launch, docs) {
   return { ...r, brands: brands.filter((b) => matchesLaunch(b.slug, launch, docs)) };
 }
 
-// D4: the control's counts over the roster's brands; the two sum to the roster size.
+// LAUNCH-STAGE-SPEC D7: the control's counts over the roster's brands, one per stage; a null-stage
+// brand counts in none, so the three sum to the roster minus the null-stage brands.
 export function launchCounts(roster, docs) {
   const brands = roster && Array.isArray(roster.brands) ? roster.brands : [];
-  const unlaunched = brands.filter((b) => launchOf(b.slug, docs) === 'unlaunched').length;
-  return { launched: brands.length - unlaunched, unlaunched };
+  const out = { launched: 0, waitlist: 0, presend: 0 };
+  brands.forEach((b) => {
+    const stage = launchOf(b.slug, docs);
+    if (stage !== null) {
+      out[stage] += 1;
+    }
+  });
+  return out;
 }
 
 // D8/D9: the table rows whose brand matches, row order kept. slugOf gives a row's brand; docs is
@@ -692,12 +717,13 @@ export function campaignLinkable(brand, analyticsOnly) {
   return !(typeof brand === 'string' && brand !== '' && (Array.isArray(analyticsOnly) ? analyticsOnly : []).includes(brand));
 }
 
-// D8: GET /api/brands/launch's rows ([{ brand, unlaunched }]) as the documents launchOf reads -- an
-// unlaunched brand as a document of status unknown, a launched one as no document (launched).
+// LAUNCH-STAGE-SPEC D9: GET /api/brands/launch's rows ([{ brand, stage }]) as the documents
+// launchOf reads -- { brand, stage }; a row without a stage key maps to a document without one
+// (launched).
 export function launchDocsFrom(rows) {
   return (Array.isArray(rows) ? rows : [])
-    .filter((r) => r && typeof r.brand === 'string' && r.unlaunched === true)
-    .map((r) => ({ brand: r.brand, status: 'unknown' }));
+    .filter((r) => r && typeof r.brand === 'string')
+    .map((r) => (Object.prototype.hasOwnProperty.call(r, 'stage') ? { brand: r.brand, stage: r.stage } : { brand: r.brand }));
 }
 
 // D8: the launch filter is shown whenever the selector is shown and unlocked (no brands:get

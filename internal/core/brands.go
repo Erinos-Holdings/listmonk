@@ -43,15 +43,16 @@ func (c *Core) GetBrandHealthLatest(getAll bool, permittedIDs []int) ([]json.Raw
 	return docsOf(rows), nil
 }
 
-// BrandLaunch (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D8) is one row of GET
-// /api/brands/launch: the brand and one bit. It carries no health status by construction.
+// BrandLaunch (fork, brand roles, integrations listmonk/BRAND-ROLES-SPEC D8; LAUNCH-STAGE-SPEC D9)
+// is one row of GET /api/brands/launch: the brand and its stored stage ("launched", "waitlist",
+// "presend", or null -- no stage). It carries no health status by construction.
 type BrandLaunch struct {
-	Brand      string `db:"brand" json:"brand"`
-	Unlaunched bool   `db:"unlaunched" json:"unlaunched"`
+	Brand string  `db:"brand" json:"brand"`
+	Stage *string `db:"stage" json:"stage"`
 }
 
-// GetBrandsLaunch returns the launch bit for every brands row (all) or for the brands of the given
-// lists' brand tags.
+// GetBrandsLaunch returns the launch stage for every brands row (all) or for the brands of the
+// given lists' brand tags.
 func (c *Core) GetBrandsLaunch(all bool, listIDs []int) ([]BrandLaunch, error) {
 	if listIDs == nil {
 		listIDs = []int{}

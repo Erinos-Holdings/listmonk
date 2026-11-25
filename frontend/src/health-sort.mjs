@@ -1,5 +1,5 @@
 // Fork (brands UX, integrations BRANDS-UX-SPEC D3/D4). The ONE place the Brands table and the
-// Dashboard's SES per-brand table get their sort order and the "unlaunched" rule, so the
+// Dashboard's SES per-brand table get their sort order, so the
 // two views never re-state a rank. Pure: no Vue, no DOM, tested with Node's built-in runner
 // (`npm run test:sort`). Display order only -- every status it ranks was computed by the
 // integrations BrandHealth Lambda; nothing here decides health.
@@ -109,13 +109,5 @@ export function sortRows(rows, field, order, nameOf, comparators = {}) {
   const cmp = withBrandTiebreak(primary, nameOf);
   return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => cmp(a, b, o));
 }
-
-// Brands page (D4): "unlaunched" is the document's own overall status, and nothing else. The
-// Lambda's overallStatus returns unknown only when no input is warn/issues and no behavioural
-// input has data, so a row showing a warn/issues chip can never hide.
-export function isUnlaunchedBrandDoc(doc) {
-  return !!doc && doc.status === 'unknown';
-}
-// Fork (launch filter, integrations LAUNCH-FILTER-SPEC D2) -- the ONE unlaunched rule: the SES
-// pane's own unknown-and-no-sends variant is deleted; the navbar launch filter applies this rule
-// to the dropdown and both tables through brandScope.mjs.
+// Fork (integrations listmonk/LAUNCH-STAGE-SPEC D10) -- the launch rule is no longer here: the
+// navbar launch filter reads each document's stored `stage` through brandScope.mjs launchOf.

@@ -22,8 +22,8 @@ const T = [
     id: 5, name: 'Official RUZE Footer FR', brand: 'ruze', lang: 'fr',
   },
 ];
-// bnkd is unlaunched (status unknown); ruze launched.
-const DOCS = [{ brand: 'bnkd', status: 'unknown' }, { brand: 'ruze', status: 'ok' }];
+// bnkd is pre-send; ruze launched (LAUNCH-STAGE-SPEC: the stored stage decides).
+const DOCS = [{ brand: 'bnkd', status: 'unknown', stage: 'presend' }, { brand: 'ruze', status: 'ok', stage: 'launched' }];
 const ids = (opts) => templateRows(T, { selection: ALL, ...opts }).map((t) => t.id);
 
 test('Footer | Other: official templates are Footer, everything else Other', () => {
@@ -40,9 +40,10 @@ test('brand selector: a brand and the brandless; No brand the brandless', () => 
 
 test('launch filter: branded rows narrowed, brandless rows always kept', () => {
   assert.deepEqual(ids({ launch: 'launched', docs: DOCS }), [1, 3]);
-  assert.deepEqual(ids({ launch: 'unlaunched', docs: DOCS }), [2, 3]);
-  // The corporate footer is curated's (no health document = launched), so not unlaunched.
-  assert.deepEqual(ids({ launch: 'unlaunched', docs: DOCS, kind: 'footer' }), []);
+  assert.deepEqual(ids({ launch: 'presend', docs: DOCS }), [2, 3]);
+  assert.deepEqual(ids({ launch: 'waitlist', docs: DOCS }), [3]);
+  // The corporate footer is curated's (no health document = launched), so not pre-send.
+  assert.deepEqual(ids({ launch: 'presend', docs: DOCS, kind: 'footer' }), []);
 });
 
 test('language toggle: that language plus the language-less', () => {

@@ -47,7 +47,7 @@
                  scope KIND string (campaignsRouteQuery.mjs evergreenOfKind/kindOfEvergreen), All =
                  evergreen null = no evergreen param. -->
             <b-field class="segmented">
-              <!-- G5: All first (the Launched/Unlaunched toggle's All-first order); a fresh session
+              <!-- G5: All first (the navbar launch toggle's All-first order); a fresh session
                    still defaults to Broadcasts (campaignsRouteQuery.mjs::scopeKindPref). -->
               <b-radio-button v-model="scopeKind" native-value="all" type="is-primary"
                 :disabled="loading.campaigns"

@@ -35,7 +35,7 @@ const api = [
     hard_bounces: 5,
     blocks: 0,
     complaints: 1,
-    health: { status: 'warn' },
+    health: { status: 'warn', stage: 'waitlist' },
   },
   {
     brand: 'joybelle',
@@ -48,7 +48,7 @@ const api = [
     hard_bounces: 0,
     blocks: 0,
     complaints: 0,
-    health: { status: 'unknown' }, // unlaunched
+    health: { status: 'unknown', stage: 'presend' },
   },
   {
     brand: 'delta',
@@ -83,9 +83,17 @@ test('shapeRows: display names (slug fallback), absent sent and spam rate are nu
 });
 
 test('D2: the launch filter reads the rows\' own health documents -- no document is launched', () => {
-  assert.deepEqual(order(shapeRows(api, { brands, launch: 'launched' })), ['ruze', 'thirstygirl', 'delta']);
-  assert.deepEqual(order(shapeRows(api, { brands, launch: 'unlaunched' })), ['joybelle']);
+  // LAUNCH-STAGE-SPEC I10: the row's stored stage decides; ruze's health carries no stage key (a
+  // document written before the stage) and delta has no document -- both launched.
+  assert.deepEqual(order(shapeRows(api, { brands, launch: 'launched' })), ['ruze', 'delta']);
+  assert.deepEqual(order(shapeRows(api, { brands, launch: 'waitlist' })), ['thirstygirl']);
+  assert.deepEqual(order(shapeRows(api, { brands, launch: 'presend' })), ['joybelle']);
   assert.deepEqual(order(shapeRows(api, { brands, launch: 'bogus' })), order(api));
+  assert.deepEqual(order(shapeRows(api, { brands, launch: 'unlaunched' })), order(api));
+  // A null stage (a domain that is not a brand) is kept under All only.
+  const withNull = [...api, { ...api[3], brand: 'yq', health: { status: 'ok', stage: null } }];
+  ['launched', 'waitlist', 'presend'].forEach((l) => assert.ok(!order(shapeRows(withNull, { launch: l })).includes('yq'), l));
+  assert.ok(order(shapeRows(withNull, { launch: 'all' })).includes('yq'));
 });
 
 // I5

@@ -328,10 +328,13 @@ test('I6: clickSort -- a new column takes its default direction, a repeat toggle
 
 test('D6: the launch filter narrows by the campaign brand; an unbranded row survives only All', () => {
   const rows = shapeRows(api);
-  const docs = [{ brand: 'thirstygirl', status: 'unknown' }];
+  // LAUNCH-STAGE-SPEC I10: the store document's stage decides.
+  const docs = [{ brand: 'thirstygirl', status: 'unknown', stage: 'presend' }];
   assert.deepEqual(filterByLaunch(rows, 'all', docs).map((r) => r.id), [1, 2, 3, 4]);
   assert.deepEqual(filterByLaunch(rows, 'launched', docs).map((r) => r.id), [1, 3]);
-  assert.deepEqual(filterByLaunch(rows, 'unlaunched', docs).map((r) => r.id), [2]);
+  assert.deepEqual(filterByLaunch(rows, 'presend', docs).map((r) => r.id), [2]);
+  assert.deepEqual(filterByLaunch(rows, 'waitlist', docs).map((r) => r.id), []);
+  assert.deepEqual(filterByLaunch(rows, 'unlaunched', docs).map((r) => r.id), [1, 2, 3, 4]);
   assert.deepEqual(shapeRows(api, { launch: 'launched', docs }).map((r) => r.id), [1, 3]);
 });
 

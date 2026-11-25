@@ -3,6 +3,7 @@
 // effective list set, the S4 notice, the picker unions and every Subscribers by-query body.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   ALL, NONE,
   storeLists, rosterFrom, resolveSelection, scopeListIds, listsScopeParams,
@@ -10,6 +11,7 @@ import {
   campaignBrand, contextNotice, filterTemplates, formBrandDefault, templateNoticeBrand,
   mediaScopeContext, presetNoticeBrand, filterBrandRows,
   launchOf, matchesLaunch, applyLaunch, launchCounts, filterRowsByLaunch, launchApplies,
+  LAUNCH_VALUES, normalizeLaunch, launchOptionDisabled,
   selectionLoaded, brandKeyStep, canCreateCampaign,
   ESTABLISHED_BRANDS, BRAND_GROUPS, groupOf, groupMembers, groupsAvailable, offeredGroups, groupWaits,
   selectorOptions,
@@ -331,17 +333,49 @@ test('Phase 2 I6 filterBrandRows: a brand shows its row only; none and all every
   assert.deepEqual(contextNotice('ruze', NONE, BRANDS), { record: 'Ruze', selected: 'No brand' });
 });
 
-// Fork (launch filter, integrations LAUNCH-FILTER-SPEC I1-I5) ----------------------------------
-// The health documents: shala unlaunched; ruze, younique launched; no document for thirstygirl.
+// Fork (launch filter, integrations LAUNCH-FILTER-SPEC I1-I5; the stages since integrations
+// listmonk/LAUNCH-STAGE-SPEC I3-I8, I11) --------------------------------------------------------
+// The health documents carry the Lambda's stage: ruze launched, younique waitlist, shala presend;
+// no document for thirstygirl (launched). The status is deliberately NOT what decides: shala's
+// document reads unknown and younique's warn, as before.
 const DOCS = [
-  { brand: 'ruze', status: 'ok' },
-  { brand: 'shala', status: 'unknown' },
-  { brand: 'younique', status: 'warn' },
+  { brand: 'ruze', status: 'ok', stage: 'launched' },
+  { brand: 'shala', status: 'unknown', stage: 'presend' },
+  { brand: 'younique', status: 'warn', stage: 'waitlist' },
 ];
+
+test('LAUNCH-STAGE I4 normalizeLaunch: the four values kept; unlaunched, bogus, undefined → all', () => {
+  assert.deepEqual([...LAUNCH_VALUES], ['all', 'launched', 'waitlist', 'presend']);
+  ['all', 'launched', 'waitlist', 'presend'].forEach((v) => assert.equal(normalizeLaunch(v), v));
+  ['unlaunched', 'bogus', undefined, null, ''].forEach((v) => assert.equal(normalizeLaunch(v), 'all', String(v)));
+});
+
+test('LAUNCH-STAGE I8 launchOptionDisabled: true at count 0 or pending, false otherwise', () => {
+  assert.equal(launchOptionDisabled(0, false), true);
+  assert.equal(launchOptionDisabled(0, true), true);
+  assert.equal(launchOptionDisabled(3, true), true);
+  assert.equal(launchOptionDisabled(3, false), false);
+  assert.equal(launchOptionDisabled(1, undefined), false);
+  // The control wires every stage button through it, and All never by count.
+  const vue = readFileSync(new URL('./components/LaunchFilter.vue', import.meta.url), 'utf8');
+  ['launched', 'waitlist', 'presend'].forEach((s) => {
+    assert.match(vue, new RegExp(`native-value="${s}"[^>]*:disabled="optionDisabled\\(counts\\.${s}\\)"`), s);
+  });
+  assert.match(vue, /native-value="all"[^>]*:disabled="brandScope\.pending"/);
+  assert.doesNotMatch(vue, /unlaunched/);
+});
+
+test('LAUNCH-STAGE I11 i18n: brand.launch.waitlist and brand.launch.presend exist, brand.launch.unlaunched is gone', () => {
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en['brand.launch.waitlist'], 'Waitlist ({n})');
+  assert.equal(en['brand.launch.presend'], 'Pre-send ({n})');
+  assert.equal(en['brand.launch.launched'], 'Launched ({n})');
+  assert.equal('brand.launch.unlaunched' in en, false);
+});
 
 test('D3 selectionLoaded: under a narrowing filter the selection waits for the health documents', () => {
   // The store's brandScope composition, before and after the documents arrive (2026-10-28: a
-  // stored unlaunched brand under Unlaunched resolved to All brands for one unscoped fetch).
+  // stored not-launched brand under its filter value resolved to All brands for one unscoped fetch).
   const roster = rosterFrom(LISTS, BRANDS);
   const scope = (launch, docs, healthLoaded) => resolveSelection(
     brand('shala'),
@@ -350,12 +384,15 @@ test('D3 selectionLoaded: under a narrowing filter the selection waits for the h
     applyLaunch(roster, launch, docs),
   );
   // The defect, ungated: no documents yet, every brand reads as launched, shala is not offered.
-  assert.deepEqual(resolveSelection(brand('shala'), roster, true, applyLaunch(roster, 'unlaunched', [])).selection, ALL);
-  assert.deepEqual(scope('unlaunched', [], false), { pending: true });
-  assert.deepEqual(scope('unlaunched', DOCS, true).selection, brand('shala'));
+  assert.deepEqual(resolveSelection(brand('shala'), roster, true, applyLaunch(roster, 'presend', [])).selection, ALL);
+  assert.deepEqual(scope('presend', [], false), { pending: true });
+  assert.deepEqual(scope('presend', DOCS, true).selection, brand('shala'));
   assert.deepEqual(scope('launched', [], false), { pending: true });
+  assert.deepEqual(scope('waitlist', [], false), { pending: true });
   // A failed read releases the gate (no documents: every brand launched, as before).
-  assert.deepEqual(scope('unlaunched', [], true).selection, ALL);
+  assert.deepEqual(scope('presend', [], true).selection, ALL);
+  // A stored legacy value is All: nothing waits.
+  assert.deepEqual(scope('unlaunched', [], false).selection, brand('shala'));
   // Under All nothing waits on the documents.
   assert.deepEqual(scope('all', [], false).selection, brand('shala'));
   assert.equal(selectionLoaded(false, 'all', true), false);
@@ -381,42 +418,63 @@ test('brandKeyStep: a page refetches exactly when the resolved key differs from 
   assert.deepEqual(s, { seen: K1, changed: false });
 });
 
-test('I1 launchOf: unknown is unlaunched; ok/warn/issues, no status and no document are launched', () => {
-  assert.equal(launchOf('shala', DOCS), 'unlaunched');
+test('LAUNCH-STAGE I3 launchOf: the document\'s stage for the three values and null; no stage key, no document or another value is launched', () => {
   assert.equal(launchOf('ruze', DOCS), 'launched');
-  assert.equal(launchOf('younique', DOCS), 'launched');
+  assert.equal(launchOf('younique', DOCS), 'waitlist');
+  assert.equal(launchOf('shala', DOCS), 'presend');
+  assert.equal(launchOf('x', [{ brand: 'x', status: 'ok', stage: null }]), null);
+  // No stage key (a document written before the stage): launched, whatever its status.
+  assert.equal(launchOf('x', [{ brand: 'x', status: 'unknown' }]), 'launched');
   assert.equal(launchOf('x', [{ brand: 'x', status: 'issues' }]), 'launched');
   assert.equal(launchOf('x', [{ brand: 'x' }]), 'launched');
-  assert.equal(launchOf('x', [{ brand: 'x', status: 2 }]), 'launched');
+  // Another value: launched.
+  ['unlaunched', 'bogus', 2, true, '', {}].forEach((v) => {
+    assert.equal(launchOf('x', [{ brand: 'x', stage: v }]), 'launched', JSON.stringify(v));
+  });
+  assert.equal(launchOf('x', [{ brand: 'x', stage: undefined }]), 'launched');
   // No document at all.
   assert.equal(launchOf('thirstygirl', DOCS), 'launched');
   assert.equal(launchOf('ruze', []), 'launched');
   assert.equal(launchOf('ruze', undefined), 'launched');
-  // matchesLaunch: all (and an unknown value) matches everything.
-  assert.equal(matchesLaunch('shala', 'all', DOCS), true);
-  assert.equal(matchesLaunch('shala', 'bogus', DOCS), true);
-  assert.equal(matchesLaunch('shala', 'launched', DOCS), false);
-  assert.equal(matchesLaunch('shala', 'unlaunched', DOCS), true);
-  assert.equal(matchesLaunch('thirstygirl', 'unlaunched', DOCS), false);
 });
 
-test('I2 applyLaunch: all unchanged; launched/unlaunched the matching brands in order; none kept', () => {
+test('LAUNCH-STAGE I6 matchesLaunch: all matches every slug; a stage exactly its brands; a null stage only all', () => {
+  const docs = [...DOCS, { brand: 'yq', stage: null }];
+  ['ruze', 'shala', 'younique', 'thirstygirl', 'yq'].forEach((s) => {
+    assert.equal(matchesLaunch(s, 'all', docs), true, s);
+    assert.equal(matchesLaunch(s, 'bogus', docs), true, s);
+    assert.equal(matchesLaunch(s, 'unlaunched', docs), true, s);
+  });
+  const by = (l) => ['ruze', 'shala', 'younique', 'thirstygirl', 'yq'].filter((s) => matchesLaunch(s, l, docs));
+  assert.deepEqual(by('launched'), ['ruze', 'thirstygirl']);
+  assert.deepEqual(by('waitlist'), ['younique']);
+  assert.deepEqual(by('presend'), ['shala']);
+});
+
+test('LAUNCH-STAGE I6 applyLaunch: all unchanged; each stage the matching brands in order; none kept', () => {
   const roster = rosterFrom(LISTS, BRANDS); // ruze, shala, younique + none
   const slugs = (r) => r.brands.map((b) => b.slug);
   assert.deepEqual(applyLaunch(roster, 'all', DOCS), roster);
-  assert.deepEqual(slugs(applyLaunch(roster, 'launched', DOCS)), ['ruze', 'younique']);
-  assert.deepEqual(slugs(applyLaunch(roster, 'unlaunched', DOCS)), ['shala']);
-  ['all', 'launched', 'unlaunched', 'bogus', undefined].forEach((l) => {
+  assert.deepEqual(slugs(applyLaunch(roster, 'launched', DOCS)), ['ruze']);
+  assert.deepEqual(slugs(applyLaunch(roster, 'waitlist', DOCS)), ['younique']);
+  assert.deepEqual(slugs(applyLaunch(roster, 'presend', DOCS)), ['shala']);
+  ['all', 'launched', 'waitlist', 'presend', 'unlaunched', 'bogus', undefined].forEach((l) => {
     assert.equal(applyLaunch(roster, l, DOCS).none, true, String(l));
   });
   const noNone = rosterFrom({ results: [{ id: 9, brand: 'ruze' }, { id: 16, brand: 'shala' }] }, BRANDS);
-  assert.equal(applyLaunch(noNone, 'unlaunched', DOCS).none, false);
-  // An unknown value behaves as all.
+  assert.equal(applyLaunch(noNone, 'presend', DOCS).none, false);
+  // An unknown value (a stored legacy unlaunched included) behaves as all.
   assert.deepEqual(applyLaunch(roster, 'bogus', DOCS), roster);
+  assert.deepEqual(applyLaunch(roster, 'unlaunched', DOCS), roster);
   assert.deepEqual(applyLaunch(roster, null, DOCS), roster);
+  // A null-stage brand is dropped under every stage, kept under all.
+  const nullDocs = DOCS.map((d) => (d.brand === 'ruze' ? { ...d, stage: null } : d));
+  ['launched', 'waitlist', 'presend'].forEach((l) => assert.ok(!slugs(applyLaunch(roster, l, nullDocs)).includes('ruze'), l));
+  assert.deepEqual(slugs(applyLaunch(roster, 'all', nullDocs)), ['ruze', 'shala', 'younique']);
   // No documents: every brand launched.
   assert.deepEqual(slugs(applyLaunch(roster, 'launched', [])), ['ruze', 'shala', 'younique']);
-  assert.deepEqual(slugs(applyLaunch(roster, 'unlaunched', [])), []);
+  assert.deepEqual(slugs(applyLaunch(roster, 'waitlist', [])), []);
+  assert.deepEqual(slugs(applyLaunch(roster, 'presend', [])), []);
   // The input roster is not mutated.
   assert.deepEqual(slugs(roster), ['ruze', 'shala', 'younique']);
 });
@@ -434,7 +492,7 @@ test('I3 resolveSelection offered: hidden/locked by the full roster, a stored br
   assert.deepEqual(resolveSelection(NONE, roster, true, launched).selection, NONE);
   // A two-brand roster narrowed to one offered brand is NOT locked.
   const two = rosterFrom({ results: [{ id: 9, brand: 'ruze' }, { id: 16, brand: 'shala' }] }, BRANDS);
-  const twoOffered = applyLaunch(two, 'unlaunched', DOCS);
+  const twoOffered = applyLaunch(two, 'presend', DOCS);
   assert.equal(twoOffered.brands.length, 1);
   const r2 = resolveSelection(brand('ruze'), two, true, twoOffered);
   assert.equal(r2.locked, false);
@@ -465,49 +523,58 @@ test('D4 launchApplies: only while the selector is shown and unlocked (full rost
   assert.equal(launchApplies(undefined), false);
 });
 
-test('I4 launchCounts: unknown documents unlaunched, every other brand launched; sums to the roster', () => {
+test('LAUNCH-STAGE I5 launchCounts: one count per stage; a null-stage brand counts in none', () => {
   const roster = rosterFrom(LISTS, BRANDS);
-  assert.deepEqual(launchCounts(roster, DOCS), { launched: 2, unlaunched: 1 });
-  assert.deepEqual(launchCounts(roster, []), { launched: 3, unlaunched: 0 });
-  const withTg = rosterFrom({ results: [...LISTS.results, { id: 50, brand: 'thirstygirl' }] }, BRANDS);
-  const c = launchCounts(withTg, DOCS);
-  assert.deepEqual(c, { launched: 3, unlaunched: 1 });
-  assert.equal(c.launched + c.unlaunched, withTg.brands.length);
-  assert.deepEqual(launchCounts(undefined, DOCS), { launched: 0, unlaunched: 0 });
+  assert.deepEqual(launchCounts(roster, DOCS), { launched: 1, waitlist: 1, presend: 1 });
+  assert.deepEqual(launchCounts(roster, []), { launched: 3, waitlist: 0, presend: 0 });
+  const withTg = rosterFrom({ results: [...LISTS.results, { id: 50, brand: 'thirstygirl' }, { id: 51, brand: 'yq' }] }, BRANDS);
+  const docs = [...DOCS, { brand: 'yq', stage: null }];
+  const c = launchCounts(withTg, docs);
+  assert.deepEqual(c, { launched: 2, waitlist: 1, presend: 1 });
+  // The three sum to the roster minus the null-stage brands.
+  assert.equal(withTg.brands.length, 5);
+  assert.equal(c.launched + c.waitlist + c.presend, withTg.brands.length - 1);
+  assert.deepEqual(launchCounts(undefined, DOCS), { launched: 0, waitlist: 0, presend: 0 });
 });
 
-test('I5 filterRowsByLaunch: Brands rows by their own status; SES rows by their brand\'s document', () => {
+test('LAUNCH-STAGE I6 filterRowsByLaunch: Brands rows by their own stage; SES rows by their brand\'s document', () => {
   const bySlug = (r) => r.brand;
   const BR = [
-    { brand: 'younique', status: 'warn' },
-    { brand: 'shala', status: 'unknown' },
-    { brand: 'ruze', status: 'ok' },
-    { brand: 'zeta', status: 'unknown' },
+    { brand: 'younique', status: 'warn', stage: 'launched' },
+    { brand: 'shala', status: 'unknown', stage: 'launched' },
+    { brand: 'list.youniqueproducts.com', status: 'ok', stage: null },
+    { brand: 'ruze', status: 'ok', stage: 'waitlist' },
+    { brand: 'zeta', status: 'unknown', stage: 'presend' },
+    { brand: 'old', status: 'unknown' }, // written before the stage: launched
   ];
   const b = (l) => filterRowsByLaunch(BR, l, bySlug, BR).map(bySlug);
-  assert.deepEqual(b('all'), ['younique', 'shala', 'ruze', 'zeta']);
-  assert.deepEqual(b('launched'), ['younique', 'ruze']);
-  assert.deepEqual(b('unlaunched'), ['shala', 'zeta']);
+  assert.deepEqual(b('all'), ['younique', 'shala', 'list.youniqueproducts.com', 'ruze', 'zeta', 'old']);
+  assert.deepEqual(b('launched'), ['younique', 'shala', 'old']);
+  assert.deepEqual(b('waitlist'), ['ruze']);
+  assert.deepEqual(b('presend'), ['zeta']);
+  assert.deepEqual(b('unlaunched'), b('all'));
 
   const SES = [
     { brand: 'unattributed', status: 'ok', sends: 4 },
     { brand: 'shala', status: 'ok', sends: 120 },
     { brand: 'ruze', status: 'unknown', sends: 0 },
+    { brand: 'younique', status: 'ok', sends: 3 },
     { brand: 'thirstygirl', status: 'unknown', sends: 0 },
   ];
   const s = (l) => filterRowsByLaunch(SES, l, bySlug, DOCS).map(bySlug);
-  assert.deepEqual(s('all'), ['unattributed', 'shala', 'ruze', 'thirstygirl']);
-  // shala's DOCUMENT is unknown: dropped under launched though the SES row shows sends.
+  assert.deepEqual(s('all'), ['unattributed', 'shala', 'ruze', 'younique', 'thirstygirl']);
+  // shala's DOCUMENT is presend: dropped under launched though the SES row shows sends.
+  // No document (unattributed, thirstygirl): kept under all and launched only.
   assert.deepEqual(s('launched'), ['unattributed', 'ruze', 'thirstygirl']);
-  // No document (unattributed, thirstygirl): kept under all/launched, dropped under unlaunched.
-  assert.deepEqual(s('unlaunched'), ['shala']);
+  assert.deepEqual(s('waitlist'), ['younique']);
+  assert.deepEqual(s('presend'), ['shala']);
   assert.deepEqual(filterRowsByLaunch(undefined, 'launched', bySlug, DOCS), []);
 });
 
 // Fork (brand groups, integrations BRAND-GROUPS-SPEC I1-I10) -----------------------------------
-// The roster: the parent (curated), two established brands (joybelle, younique; joybelle
-// UNLAUNCHED), shala established and launched here, two launched others (ruze, bnkd), one
-// unlaunched other (zeta), and brandless lists.
+// The roster: the parent (curated), two established brands (joybelle, younique; joybelle at
+// PRE-SEND), shala established and launched here, two launched others (ruze, bnkd), one pre-send
+// other (zeta), and brandless lists. (Stages since LAUNCH-STAGE-SPEC D8.)
 const G_BRANDS = [
   { slug: 'curated', display_name: 'Curated' },
   { slug: 'joybelle', display_name: 'JoyBelle' },
@@ -529,11 +596,11 @@ const G_LISTS = [
   { id: 9, brand: '' },
 ];
 const G_DOCS = [
-  { brand: 'curated', status: 'ok' },
-  { brand: 'joybelle', status: 'unknown' },
-  { brand: 'shala', status: 'ok' },
-  { brand: 'ruze', status: 'warn' },
-  { brand: 'zeta', status: 'unknown' },
+  { brand: 'curated', status: 'ok', stage: 'launched' },
+  { brand: 'joybelle', status: 'unknown', stage: 'presend' },
+  { brand: 'shala', status: 'ok', stage: 'launched' },
+  { brand: 'ruze', status: 'warn', stage: 'launched' },
+  { brand: 'zeta', status: 'unknown', stage: 'presend' },
   // younique, bnkd: no document -- launched.
 ];
 const G_ROSTER = rosterFrom(G_LISTS, G_BRANDS);
@@ -547,17 +614,26 @@ test('BRAND-GROUPS I11: the established list is the one constant, frozen', () =>
   assert.deepEqual([...BRAND_GROUPS], ['incubating', 'established']);
 });
 
-test('BRAND-GROUPS I1 groupOf: parent none; established whatever its launch; launched other incubating; unlaunched other none', () => {
+test('LAUNCH-STAGE I7 groupOf: parent none; established at every stage; others incubating at launched and waitlist, none at presend and null', () => {
   const rows = [
     ['curated', null],
-    ['joybelle', 'established'], // unlaunched
+    ['joybelle', 'established'], // presend
     ['shala', 'established'],
     ['younique', 'established'], // no document
     ['ruze', 'incubating'],
     ['bnkd', 'incubating'], // no document = launched
-    ['zeta', null], // unlaunched
+    ['zeta', null], // presend
   ];
   rows.forEach(([slug, want]) => assert.equal(groupOf(slug, G_DOCS), want, slug));
+  const at = (slug, stage) => groupOf(slug, [{ brand: slug, stage }]);
+  ['launched', 'waitlist', 'presend', null].forEach((s) => {
+    assert.equal(at('curated', s), null, `curated ${s}`);
+    ESTABLISHED_BRANDS.forEach((e) => assert.equal(at(e, s), 'established', `${e} ${s}`));
+  });
+  assert.equal(at('zeta', 'launched'), 'incubating');
+  assert.equal(at('zeta', 'waitlist'), 'incubating');
+  assert.equal(at('zeta', 'presend'), null);
+  assert.equal(at('zeta', null), null);
   // No documents at all (a failed first read): every non-established, non-parent brand is incubating.
   assert.equal(groupOf('zeta', []), 'incubating');
   assert.equal(groupOf('curated', []), null);
@@ -576,20 +652,25 @@ test('BRAND-GROUPS I2 groupMembers: the full roster\'s brands of the group, sort
 
 test('BRAND-GROUPS I2 offeredGroups: whole or absent under each launch value; the value never changes members', () => {
   const off = (launch, docs = G_DOCS) => offeredGroups(G_ROSTER, applyLaunch(G_ROSTER, launch, docs), docs, true);
-  // All: both groups, whole -- Established includes the unlaunched joybelle.
+  // All: both groups, whole -- Established includes the pre-send joybelle.
   assert.deepEqual(off('all'), [
     { group: 'incubating', slugs: ['bnkd', 'ruze'] },
     { group: 'established', slugs: ['joybelle', 'shala', 'younique'] },
   ]);
-  // Launched: joybelle (an unlaunched established brand) is filtered out, so Established is NOT
+  // Launched: joybelle (a pre-send established brand) is filtered out, so Established is NOT
   // offered -- never offered without it. Incubating is whole.
   assert.deepEqual(off('launched'), [{ group: 'incubating', slugs: ['bnkd', 'ruze'] }]);
-  // Unlaunched: neither (Incubating's members are launched by definition; Established is partial).
-  assert.deepEqual(off('unlaunched'), []);
-  // Every established brand launched (today's state): both under Launched, neither under Unlaunched.
-  const docsAllLaunched = G_DOCS.map((d) => (d.brand === 'joybelle' ? { ...d, status: 'ok' } : d));
+  // Waitlist and Pre-send: neither (Incubating's members are launched here; Established is partial).
+  assert.deepEqual(off('waitlist'), []);
+  assert.deepEqual(off('presend'), []);
+  // Every established brand launched (today's state): both under Launched, neither under Pre-send.
+  const docsAllLaunched = G_DOCS.map((d) => (d.brand === 'joybelle' ? { ...d, stage: 'launched' } : d));
   assert.deepEqual(off('launched', docsAllLaunched).map((g) => g.group), ['incubating', 'established']);
-  assert.deepEqual(off('unlaunched', docsAllLaunched), []);
+  assert.deepEqual(off('presend', docsAllLaunched), []);
+  // A waitlist incubating brand: Incubating holds it, so under Launched the group is partial.
+  const ruzeWaitlist = G_DOCS.map((d) => (d.brand === 'ruze' ? { ...d, stage: 'waitlist' } : d));
+  assert.deepEqual(off('all', ruzeWaitlist)[0], { group: 'incubating', slugs: ['bnkd', 'ruze'] });
+  assert.deepEqual(off('launched', ruzeWaitlist), []);
   // Unavailable: none at all.
   assert.deepEqual(offeredGroups(G_ROSTER, G_ROSTER, G_DOCS, false), []);
   // An empty group is not offered (a roster with no established brand).
@@ -691,8 +772,11 @@ test('BRAND-GROUPS I6 the resolved key differs exactly when the members differ',
     return JSON.stringify(resolveSelection(group('incubating'), G_ROSTER, true, G_ROSTER, gs).selection);
   };
   // zeta launches: Incubating gains a member, the key changes.
-  const launchedZeta = G_DOCS.map((d) => (d.brand === 'zeta' ? { ...d, status: 'ok' } : d));
+  const launchedZeta = G_DOCS.map((d) => (d.brand === 'zeta' ? { ...d, stage: 'launched' } : d));
   assert.notEqual(key(G_DOCS), key(launchedZeta));
+  // zeta starts sending (waitlist): the same members as launched.
+  const waitlistZeta = G_DOCS.map((d) => (d.brand === 'zeta' ? { ...d, stage: 'waitlist' } : d));
+  assert.equal(key(waitlistZeta), key(launchedZeta));
   // The same members (documents in another order): the same key -- slugs are sorted.
   assert.equal(key(G_DOCS), key([...G_DOCS].reverse()));
   assert.equal(key(G_DOCS), JSON.stringify(INC));

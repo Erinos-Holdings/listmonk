@@ -654,8 +654,9 @@ func TestBrandRoleChildRowsNeverRead(t *testing.T) {
 	}
 }
 
-// launchRows decodes GET /api/brands/launch and asserts the body carries brand and unlaunched only.
-func launchRows(t *testing.T, cl *twofaClient) map[string]bool {
+// launchRows decodes GET /api/brands/launch and asserts the body carries brand and stage only
+// (integrations LAUNCH-STAGE-SPEC D9): each value is the stage string, or nil for a JSON null.
+func launchRows(t *testing.T, cl *twofaClient) map[string]any {
 	t.Helper()
 	rec := cl.json(http.MethodGet, "/api/brands/launch", nil)
 	if rec.Code != http.StatusOK {
@@ -665,17 +666,20 @@ func launchRows(t *testing.T, cl *twofaClient) map[string]bool {
 	if err := json.Unmarshal(dataOf(t, rec), &rows); err != nil {
 		t.Fatal(err)
 	}
-	out := map[string]bool{}
+	out := map[string]any{}
 	for _, row := range rows {
 		if len(row) != 2 {
-			t.Fatalf("a launch row carries more than brand and unlaunched: %v", row)
+			t.Fatalf("a launch row carries more than brand and stage: %v", row)
 		}
 		b, ok1 := row["brand"].(string)
-		u, ok2 := row["unlaunched"].(bool)
-		if !ok1 || !ok2 {
+		st, ok2 := row["stage"]
+		if _, isStr := st.(string); !ok1 || !ok2 || (st != nil && !isStr) {
 			t.Fatalf("a launch row's shape: %v", row)
 		}
-		out[b] = u
+		out[b] = st
+	}
+	if strings.Contains(rec.Body.String(), `"unlaunched"`) {
+		t.Fatalf("the launch body carries the retired unlaunched field: %s", rec.Body.String())
 	}
 	for _, s := range []string{"ok", "warn", "issues", "unknown"} {
 		if strings.Contains(rec.Body.String(), `"`+s+`"`) {
@@ -685,47 +689,61 @@ func launchRows(t *testing.T, cl *twofaClient) map[string]bool {
 	return out
 }
 
-// launchRuleCases is the shared agreement table (models/testdata/launch-rule.json), also read by
-// the frontend's health-sort test against isUnlaunchedBrandDoc.
-func launchRuleCases(t *testing.T) []struct {
-	Status     string `json:"status"`
-	Unlaunched bool   `json:"unlaunched"`
-} {
+// launchRuleCase is one row of the shared agreement table (models/testdata/launch-rule.json), also
+// read by the frontend's brandRoles test against launchOf and launchDocsFrom (LAUNCH-STAGE-SPEC I9).
+type launchRuleCase struct {
+	Case  string          `json:"case"`
+	Row   bool            `json:"row"`
+	Doc   json.RawMessage `json:"doc"`
+	Stage *string         `json:"stage"`
+}
+
+func launchRuleCases(t *testing.T) []launchRuleCase {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "models", "testdata", "launch-rule.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var cases []struct {
-		Status     string `json:"status"`
-		Unlaunched bool   `json:"unlaunched"`
-	}
+	var cases []launchRuleCase
 	if err := json.Unmarshal(b, &cases); err != nil {
 		t.Fatal(err)
 	}
 	return cases
 }
 
-// I11 -- GET /api/brands/launch.
+// stageVal is the decoded JSON value launchRows reports for a stage (a string, or nil for null).
+func stageVal(s *string) any {
+	if s == nil {
+		return nil
+	}
+	return *s
+}
+
+// I11 -- GET /api/brands/launch (the stage since integrations LAUNCH-STAGE-SPEC D9, I9).
 func TestBrandsLaunch(t *testing.T) {
 	r := newRBFixture(t)
 	elizCl, _ := r.brandRoleUser("eliz", []string{auth.PermCampaignsGetAnalytics}, grant("ruze", auth.BrandLevelAnalytics))
 	noneCl, _ := r.brandRoleUser("bare", nil)
 
-	// The agreement table: one brand per status, its latest row carrying it (an older row of
-	// another status underneath, so "latest" is exercised).
+	// The agreement table: one brand per case, its latest row carrying the case's doc (an older row
+	// with another stage underneath, so "latest" is exercised); the no-row case inserts nothing.
 	cases := launchRuleCases(t)
-	want := map[string]bool{}
+	if len(cases) < 7 {
+		t.Fatalf("the agreement table lost cases: %d", len(cases))
+	}
+	want := map[string]any{}
 	for i, c := range cases {
 		slug := fmt.Sprintf("st%d", i)
 		r.brandRow(slug, rbFrom, "")
-		r.h.db.MustExec(`INSERT INTO brand_health (brand, day, status, doc) VALUES ($1, CURRENT_DATE - 3, $2, '{}'), ($1, CURRENT_DATE, $3, '{}')`,
-			slug, map[bool]string{true: "ok", false: "unknown"}[c.Unlaunched], c.Status)
-		want[slug] = c.Unlaunched
+		if c.Row {
+			r.h.db.MustExec(`INSERT INTO brand_health (brand, day, status, doc) VALUES ($1, CURRENT_DATE - 3, 'ok', '{"stage":"older"}'), ($1, CURRENT_DATE, 'ok', $2::JSONB)`,
+				slug, string(c.Doc))
+		}
+		want[slug] = stageVal(c.Stage)
 	}
 	// No row is launched; the fixture's own brands have none.
 	for _, b := range []string{"acme", "shala", "ruze"} {
-		want[b] = false
+		want[b] = "launched"
 	}
 
 	// Every brands row for Super Admin (session), and for a token holding lists:get_all.
@@ -756,12 +774,12 @@ func TestBrandsLaunch(t *testing.T) {
 	}
 
 	// The roster only, for a user with no permission at all beyond a brand role: Eliz gets Ruze.
-	if got := launchRows(t, elizCl); !reflect.DeepEqual(got, map[string]bool{"ruze": false}) {
+	if got := launchRows(t, elizCl); !reflect.DeepEqual(got, map[string]any{"ruze": "launched"}) {
 		t.Fatalf("eliz: %v", got)
 	}
-	r.h.db.MustExec(`INSERT INTO brand_health (brand, day, status, doc) VALUES ('ruze', CURRENT_DATE, 'unknown', '{}')`)
-	if got := launchRows(t, elizCl); !reflect.DeepEqual(got, map[string]bool{"ruze": true}) {
-		t.Fatalf("eliz after Ruze went unknown: %v", got)
+	r.h.db.MustExec(`INSERT INTO brand_health (brand, day, status, doc) VALUES ('ruze', CURRENT_DATE, 'unknown', '{"stage":"presend"}')`)
+	if got := launchRows(t, elizCl); !reflect.DeepEqual(got, map[string]any{"ruze": "presend"}) {
+		t.Fatalf("eliz after Ruze went presend: %v", got)
 	}
 	// A token whose user holds the brand role reads the same roster.
 	var elizRole int
@@ -776,7 +794,7 @@ func TestBrandsLaunch(t *testing.T) {
 	}
 	tok2 := r.h.client()
 	tok2.hdr["Authorization"] = "token elizbot:" + tu.Password.String
-	if got := launchRows(t, tok2); !reflect.DeepEqual(got, map[string]bool{"ruze": true}) {
+	if got := launchRows(t, tok2); !reflect.DeepEqual(got, map[string]any{"ruze": "presend"}) {
 		t.Fatalf("eliz's token: %v", got)
 	}
 	// No grant at all: an empty list, still 200 (no pm permission).

@@ -14,7 +14,6 @@ import {
   compareName,
   withBrandTiebreak,
   sortRows,
-  isUnlaunchedBrandDoc,
 } from './health-sort.mjs'; // eslint-disable-line import/extensions
 
 const sortVals = (vals, cmp, order) => [...vals].sort((a, b) => cmp(a, b, order));
@@ -129,14 +128,7 @@ test('I1 sortRows: a field with no comparator sorts by name in the given directi
 });
 
 // I2 ------------------------------------------------------------------------------------------
-test('I2 isUnlaunchedBrandDoc: status === "unknown" and nothing else', () => {
-  assert.equal(isUnlaunchedBrandDoc({ status: 'unknown' }), true);
-  assert.equal(isUnlaunchedBrandDoc({ status: 'unknown', note: 'configured — no send data yet' }), true);
-  ['ok', 'warn', 'issues'].forEach((s) => assert.equal(isUnlaunchedBrandDoc({ status: s }), false));
-  assert.equal(isUnlaunchedBrandDoc({}), false);
-  assert.equal(isUnlaunchedBrandDoc({ status: null }), false);
-  assert.equal(isUnlaunchedBrandDoc({ status: 2 }), false);
-  assert.equal(isUnlaunchedBrandDoc(null), false);
-});
+// Fork (integrations LAUNCH-STAGE-SPEC D10) -- isUnlaunchedBrandDoc and its I2 test are deleted:
+// the launch rule is the document's stored stage (brandScope.test.mjs LAUNCH-STAGE I3).
 // Fork (launch filter, integrations LAUNCH-FILTER-SPEC I8) -- the SES pane's own hide rule and its
 // I3 test are deleted; the launch filter's rows are tested in brandScope.test.mjs (I5).

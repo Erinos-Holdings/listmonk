@@ -141,6 +141,11 @@ test('D2: rows are the Brand Matrix rows -- the launch filter over the rows\' ow
   assert.equal(r.zma, false);
   assert.equal(shapeRows(api).find((x) => x.brand === 'oldzma').zma, true);
   assert.equal(shapeRows(api).find((x) => x.brand === 'nodoc').usage, null);
+  // LAUNCH-STAGE-SPEC I10: the rows' stored stage decides (no stage key = launched).
+  const staged = api.map((x) => (x.brand === 'lux' ? { ...x, health: { status: 'ok', stage: 'waitlist' } } : x));
+  assert.deepEqual(shapeRows(staged, { launch: 'waitlist' }).map((x) => x.brand), ['lux']);
+  assert.deepEqual(shapeRows(staged, { launch: 'presend' }).map((x) => x.brand), []);
+  assert.deepEqual(shapeRows(staged, { launch: 'launched' }).map((x) => x.brand), ['ruze', 'thirstygirl', 'oldzma', 'nodoc']);
 });
 
 // LIFECYCLE-SERIES-SPEC S9 (replacing POLISH3 D4's No purchase 3d | 7d | 15d sub-group and the

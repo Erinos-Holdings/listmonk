@@ -33,14 +33,19 @@ SELECT latest.doc || JSONB_BUILD_OBJECT('lists', COALESCE((
     FROM latest ORDER BY latest.brand;
 
 -- name: get-brands-launch
--- Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D8) -- the launch filter's ONE bit per
--- brand for a user without brands get: unlaunched when the brand's latest brand_health row has
--- status unknown, else false (a brand with no row is launched). Never the status itself. $1 = every
--- brands row; else $2 = the caller's scope list ids, whose brand tags are the brands returned. The
--- rule's other home is frontend health-sort.mjs isUnlaunchedBrandDoc (I11 pins their agreement).
+-- Fork (brand roles, integrations listmonk/BRAND-ROLES-SPEC D8; the stage since integrations
+-- listmonk/LAUNCH-STAGE-SPEC D9) -- the launch filter's state per brand for a user without brands
+-- get, the stage the BrandHealth Lambda stored on the brand's latest brand_health row (doc stage).
+-- No row, or a doc without the stage key, is launched; a JSON null is NULL. Never the status
+-- itself. $1 = every brands row; else $2 = the caller's scope list ids, whose brand tags are the
+-- brands returned. The frontend reads it through brandScope.mjs launchDocsFrom and launchOf
+-- (models/testdata/launch-rule.json pins their agreement).
 SELECT b.slug AS brand,
-    COALESCE((SELECT h.status = 'unknown' FROM brand_health h WHERE h.brand = b.slug ORDER BY h.day DESC LIMIT 1), FALSE) AS unlaunched
+    CASE WHEN h.doc IS NULL OR NOT (h.doc ? 'stage') THEN 'launched' ELSE h.doc->>'stage' END AS stage
 FROM brands b
+LEFT JOIN LATERAL (
+    SELECT doc FROM brand_health WHERE brand = b.slug ORDER BY day DESC LIMIT 1
+) h ON TRUE
 WHERE $1::BOOLEAN OR b.slug IN (SELECT list_brand_tag(l.tags) FROM lists l WHERE l.id = ANY($2::INT[]))
 ORDER BY b.slug;
 
