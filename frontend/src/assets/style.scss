@@ -194,6 +194,15 @@ $trigger-label-indent: calc(2rem - 1px);
 .list-journey-pane .trigger-days {
   padding-left: $trigger-label-indent;
 }
+// The SKU journey live count (SKU-LIVE-COUNT-SPEC D6) aligns with the days field above it, a size
+// up from Bulma's .help (the user, 2026-11-25).
+.list-journey-pane .sku-count {
+  padding-left: $trigger-label-indent;
+
+  .help {
+    font-size: 0.875rem;
+  }
+}
 
 .navbar-item.user {
   .navbar-link:not(.is-arrowless)::after {

@@ -138,18 +138,28 @@ test('I11: the display lines per response case', () => {
   const noDays = countLines({ state: 'done', response: RESP });
   assert.deepEqual(noDays, [{ key: 'lists.skuCountWindow', params: { buyers: 1425, eligible: 168 }, kind: 'strong' }]);
 
-  // Days: the due line with the run's time, the age lines and the skip counts (zeros left out).
+  // Days: ONE line — who is due at those days, bought days–reach-back ago (the user, 2026-11-25: no
+  // window line, no age table, no skip counts once days are entered).
   const due = {
     ...RESP,
     due: {
-      days: 90, joins: 5, by_age: [{ from_days: 90, to_days: 120, joins: 5 }], by_lang: { en: 5 }, skips: { 'not-due': 160, 'already-sent': 0, consent: 3 }, consent: {},
+      days: 90,
+      joins: 5,
+      by_age: [{ from_days: 90, to_days: 120, joins: 2 }, { from_days: 120, to_days: 150, joins: 3 }, { from_days: 150, to_days: 180, joins: 0 }],
+      by_lang: { en: 5 },
+      skips: { 'not-due': 160, 'already-sent': 0, consent: 3 },
+      consent: {},
     },
   };
   const d = countLines({ state: 'done', response: due });
-  assert.deepEqual(keys(d), ['lists.skuCountWindow', 'lists.skuCountDue', 'lists.skuCountAge', 'lists.skuCountSkips']);
-  assert.deepEqual(d[1].params, { n: 5, time: '2026-11-25T15:10:00.000Z' });
-  assert.deepEqual(d[2].params, { from: 90, to: 120, n: 5 });
-  assert.deepEqual(d[3].params, { skips: 'not-due 160, consent 3' });
+  assert.deepEqual(keys(d), ['lists.skuCountDue']);
+  assert.deepEqual(d[0].params, {
+    n: 5, time: '2026-11-25T15:10:00.000Z', from: 90, to: 180,
+  });
+  // The range follows the days: 60 reads 60–180.
+  const due60 = { ...due.due, days: 60, by_age: [{ from_days: 60, to_days: 90, joins: 1 }, { from_days: 150, to_days: 180, joins: 0 }] };
+  const d60 = countLines({ state: 'done', response: { ...due, due: due60 } });
+  assert.deepEqual([d60[0].params.from, d60[0].params.to], [60, 180]);
 
   // Assumed languages.
   assert.deepEqual(keys(countLines({ state: 'done', response: { ...RESP, assumed_all_languages: true } })), ['lists.skuCountWindow', 'lists.skuCountAssumed']);
@@ -236,11 +246,14 @@ test('I12: joins > 0 -> the count text; 0 -> none; a failure -> the unreadable t
 test('every key the count and the confirm render exists in en.json; the D8 preview keys are gone', () => {
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   ['lists.skuCountCounting', 'lists.skuCountWindow', 'lists.skuCountNoBuyers', 'lists.skuCountNotBrand', 'lists.skuCountSuggest',
-    'lists.skuCountSuggestNoTitle', 'lists.skuCountDue', 'lists.skuCountAge', 'lists.skuCountSkips', 'lists.skuCountAssumed',
+    'lists.skuCountSuggestNoTitle', 'lists.skuCountDue', 'lists.skuCountAssumed',
     'lists.skuCountUnavailable', 'lists.skuCountNotConfigured', 'lists.skuCountInvalid', 'lists.skuCountNoBrand',
     'lists.skuCountConfirm', 'lists.skuCountConfirmNoCount', 'lists.skuCountConfirmNotCounted', 'lists.skuCountConfirmUnreadable',
   ].forEach((k) => assert.equal(typeof en[k], 'string', k));
   assert.deepEqual(Object.keys(en).filter((k) => k.startsWith('lists.skuPreview')), []);
+  // The age table and skip line were dropped from the form (2026-11-25).
+  assert.equal(en['lists.skuCountAge'], undefined);
+  assert.equal(en['lists.skuCountSkips'], undefined);
   // The view wires the module; it renders no stored preview.
   const form = readFileSync(new URL('./views/ListForm.vue', import.meta.url), 'utf8');
   assert.equal(/preview/i.test(form.replace(/journeyPreview|previewHtml/g, '')), false, 'ListForm.vue still mentions a preview');

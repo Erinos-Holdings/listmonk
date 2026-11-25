@@ -132,7 +132,9 @@ export function countLines(st, { brandName = '' } = {}) {
   }
   const r = st.response || {};
   const out = [];
-  if (r.window) {
+  // With days entered the one number is who is due at those days (bought days–180 ago); the
+  // window line is the no-days (0-day) answer only (the user, 2026-11-25).
+  if (r.window && !r.due) {
     out.push({ key: 'lists.skuCountWindow', params: { buyers: r.window.buyers, eligible: r.window.eligible }, kind: 'strong' });
   }
   (r.skus || []).forEach((s) => {
@@ -145,10 +147,14 @@ export function countLines(st, { brandName = '' } = {}) {
     });
   });
   if (r.due) {
-    out.push({ key: 'lists.skuCountDue', params: { n: r.due.joins, time: r.next_run_at }, kind: 'strong' });
-    (r.due.by_age || []).forEach((b) => out.push({ key: 'lists.skuCountAge', params: { from: b.from_days, to: b.to_days, n: b.joins }, kind: 'plain' }));
-    const skips = Object.entries(r.due.skips || {}).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`).join(', ');
-    if (skips) out.push({ key: 'lists.skuCountSkips', params: { skips }, kind: 'plain' });
+    const to = (r.due.by_age || []).reduce((m, b) => Math.max(m, b.to_days), r.due.days);
+    out.push({
+      key: 'lists.skuCountDue',
+      params: {
+        n: r.due.joins, time: r.next_run_at, from: r.due.days, to,
+      },
+      kind: 'strong',
+    });
   }
   if (r.assumed_all_languages) out.push({ key: 'lists.skuCountAssumed', params: {}, kind: 'plain' });
   return out;
