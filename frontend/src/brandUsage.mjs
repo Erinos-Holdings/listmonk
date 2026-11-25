@@ -26,6 +26,17 @@ import {
   ASSUMED_DELIVERY_DAYS, POST_PURCHASE_STEP_DAYS, REENGAGEMENT_DAYS, SERIES_POST_PURCHASE, SERIES_REENGAGEMENT, SERIES_WELCOME,
   WELCOME_STEP_DAYS, seriesStepKey,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
+import { LANG_VALUES } from './naming.mjs'; // eslint-disable-line import/extensions
+import { langLabel } from './langScope.mjs'; // eslint-disable-line import/extensions
+
+// Integrations USAGE-PREVIEW-LANG-SPEC §1 -- the usage languages: naming.mjs LANG_VALUES minus
+// all/other. Cross-repo literal (I11 -- no test spans the repos): integrations
+// lib/brand-usage.ts USAGE_LANGS (lib/language.ts SUPPORTED_LANGS) stores `langCounts` under
+// exactly these keys -- change both together.
+export const USAGE_LANGS = Object.freeze(LANG_VALUES.filter((v) => v !== 'all' && v !== 'other'));
+
+// USAGE-PREVIEW-LANG D4 -- the effective language a circle reads: one of USAGE_LANGS, else 'all'.
+const usageLang = (lang) => (USAGE_LANGS.includes(lang) ? lang : 'all');
 
 // USAGE-REENGAGEMENT-SPEC D1/D6, SUNSET-V4-SPEC D7: the Re-engagement group's four leaves (the
 // sunset queues' automations), 180d 270d 360d 365d (the Curated Sunset Policy's schedule).
@@ -895,7 +906,37 @@ function leafObjOf(u, field) {
 // D9: the leaf's three-key counts when the stored doc carries them, else null (pre-D9 path).
 const leafCounts = (u, field) => bubbleCounts(leafObjOf(u, field));
 
+// Integrations USAGE-PREVIEW-LANG-SPEC D4 -- a leaf's stored per-language entry under the effective
+// language: { state, counts } from `langCounts[L]` (the lib's tally of the counted entries covering
+// L -- L plus language-less), or null under All, on a doc without `langCounts` (an older doc: the
+// cell renders, sorts and links exactly as under All -- I5) or a malformed entry. The fork picks;
+// it never re-derives a language rule.
+export function langLeaf(leafObj, lang) {
+  const L = usageLang(lang);
+  if (L === 'all' || !isObj(leafObj) || !isObj(leafObj.langCounts)) {
+    return null;
+  }
+  const e = leafObj.langCounts[L];
+  const counts = bubbleCounts(e);
+  return counts ? { state: e.state, counts } : null;
+}
+
+// D4 -- the tooltip's language line: "ES: ES and language-less automations"; EN reads "EN+: English
+// and language-less automations".
+function langCountedLine(lang, t) {
+  const L = usageLang(lang);
+  return L === 'en' ? t('dashboard.usage.langCountedEn') : t('dashboard.usage.langCounted', { lang: langLabel(L) });
+}
+
 const posInt = (v) => typeof v === 'number' && Number.isInteger(v) && v > 0;
+
+// D4 -- the ids of a leaf's counted entries covering L with the circle's bubble, ascending.
+function langIds(leafObj, lang, color) {
+  const L = usageLang(lang);
+  const counted = isObj(leafObj) && Array.isArray(leafObj.counted) ? leafObj.counted : [];
+  return [...new Set(counted.filter((e) => isObj(e) && e.bubble === color && Array.isArray(e.covers) && e.covers.includes(L))
+    .map((e) => e.id).filter(posInt))].sort((a, b) => a - b);
+}
 
 // MATRIX-POLISH-SPEC D10.3: the usage doc's broadcasts.lastIds (the newest send event's campaign
 // ids, written by the BrandHealth Lambda) when it is a non-empty array of positive integers, else
@@ -913,14 +954,10 @@ function lastIdsOf(u) {
 // lib's isClean), amber the others -> { list_id, evergreen: 'true' }; the rows store no campaign
 // ids, so a list is the finest filter, and an invalid row with no list is counted but cannot be
 // linked (an amber circle of only such rows does not link). Red (none) never links, nor a
-// ZMA-dimmed or `—` cell.
-export function circleLink(row, field, color) {
-  const u = row && row.usage;
-  // A ZMA brand's circles are shown (dimmed with the row — ZMA_DIMMED's rule) but never link: the
-  // row is informational, listmonk runs none of its journeys.
-  if (!u || row.zma) {
-    return null;
-  }
+// ZMA-dimmed or `—` cell. (circleLinkAll is that All-languages body; circleLink below adds
+// USAGE-PREVIEW-LANG D4's language pick.) `forceShown`: the circle is shown under the selected
+// language, so the All-counts shown check is skipped (D4's red).
+function circleLinkAll(u, field, color, forceShown) {
   // Integrations DOC-ALIGNMENT-SPEC D9 (e): on a three-key doc each circle opens the automations of
   // its own colour -- grey links like amber. Day 0 and Re-engagement by their stored campaign ids
   // ({ id, evergreen: 'all' }); a row-backed leaf (series step, SKU) by the lists of its VALID rows
@@ -933,7 +970,7 @@ export function circleLink(row, field, color) {
     const lo = leafObjOf(u, field);
     const re3 = reengagementLeafOf(field);
     const s3 = seriesLeafOf(field);
-    const shown = circlesOf(counts).some((c) => c.color === color);
+    const shown = forceShown || circlesOf(counts).some((c) => c.color === color);
     if (!shown) {
       return null;
     }
@@ -1014,6 +1051,32 @@ export function circleLink(row, field, color) {
   return ids.length ? { list_id: ids.map(String), evergreen: 'true' } : null;
 }
 
+// circleLink -- ONE circle's link (circleLinkAll's rules). Integrations USAGE-PREVIEW-LANG-SPEC D4:
+// under an effective language L with the leaf's stored `langCounts`, a green/amber/grey circle
+// links the counted entries covering L with that bubble ({ id, evergreen: 'all' }); red keeps
+// today's link (the leaf's own red rule, whatever the All counts show). A doc without `langCounts`
+// links as under All.
+export function circleLink(row, field, color, lang = 'all') {
+  const u = row && row.usage;
+  // A ZMA brand's circles are shown (dimmed with the row — ZMA_DIMMED's rule) but never link: the
+  // row is informational, listmonk runs none of its journeys.
+  if (!u || row.zma) {
+    return null;
+  }
+  const ll = langLeaf(leafObjOf(u, field), lang);
+  if (ll) {
+    if (!circlesOf(ll.counts).some((c) => c.color === color)) {
+      return null;
+    }
+    if (color === 'red') {
+      return circleLinkAll(u, field, color, true);
+    }
+    const ids = langIds(leafObjOf(u, field), lang, color);
+    return ids.length ? { id: ids.map(String), evergreen: 'all' } : null;
+  }
+  return circleLinkAll(u, field, color, false);
+}
+
 // cellLink is a TEXT cell's link query (the circle cells link per circle, circleLink). DASHBOARDS-
 // POLISH2-SPEC D2/I3 + POLISH3 D2: Cadence / Last broadcast open the BRAND's active lists in the
 // Broadcasts scope with status=finished -- { evergreen: 'false', status, list_id: [ids] }, the row's
@@ -1082,15 +1145,20 @@ export function linkTip(row, field, t = (k) => k) {
 // on a ZMA-dimmed row (or a malformed entry). D4: a No purchase leaf -- the circle(s) of the step(s)
 // at exactly that day (green running, amber idle/invalid), a red 0 when none; '—' for the whole
 // sub-group on a pre-`days` doc.
-export function cell(row, field, t = (k) => k) {
-  const lang = skippedLangOf(field);
-  if (lang !== null) {
+//
+// Integrations USAGE-PREVIEW-LANG-SPEC D4: `lang` is the effective language; under L ≠ all a circle
+// cell (series leaf, Re-engagement, SKU with rows) renders the leaf's stored langCounts[L] through
+// the unchanged circlesOf, its tooltip adding the language line; a doc without langCounts renders
+// as under All. Every other cell ignores it (D5: the brand-wide columns are never narrowed).
+export function cell(row, field, t = (k) => k, lang = 'all') {
+  const skLang = skippedLangOf(field);
+  if (skLang !== null) {
     if (row && row.zma) {
       return {
         text: MISSING, cls: '', tooltip: t('dashboard.usage.zmaHelp'), circles: [],
       };
     }
-    const s = skippedOf(row, lang);
+    const s = skippedOf(row, skLang);
     if (!s) {
       return {
         text: MISSING, cls: '', tooltip: '', circles: [],
@@ -1129,11 +1197,17 @@ export function cell(row, field, t = (k) => k) {
     const st = reStepAt(u, re.days);
     // Integrations DOC-ALIGNMENT-SPEC D9 (c): a three-key doc renders the stored counts through the
     // one bubble rule (circlesOf); waiting and "Not covered" stay in the hover, never a colour.
-    const c3 = bubbleCounts(st);
+    const all3 = bubbleCounts(st);
+    // USAGE-PREVIEW-LANG D4: under a language, the stored langCounts[L] (a doc without it: All).
+    const ll3 = all3 ? langLeaf(st, lang) : null;
+    const c3 = ll3 ? ll3.counts : all3;
     if (c3) {
       const waiting3 = countOrNull(st.waiting);
       const unc3 = Array.isArray(st.uncovered) ? st.uncovered.filter((l) => typeof l === 'string' && l !== '') : [];
       const lines3 = [desc, circleWords(c3, t)];
+      if (ll3) {
+        lines3.push(langCountedLine(lang, t));
+      }
       if (waiting3 !== null) {
         lines3.push(t('dashboard.usage.reWaiting', { n: waiting3 }));
       }
@@ -1186,13 +1260,16 @@ export function cell(row, field, t = (k) => k) {
     let detail;
     // Integrations DOC-ALIGNMENT-SPEC D9: a three-key doc renders the leaf's stored counts verbatim
     // (green running, amber paused, grey draft/scheduled, red 0 when nothing counted).
-    const c3 = leafCounts(u, field);
+    const all3 = leafCounts(u, field);
+    // USAGE-PREVIEW-LANG D4: under a language, the stored langCounts[L] (a doc without it: All).
+    const ll3 = all3 ? langLeaf(leafObjOf(u, field), lang) : null;
+    const c3 = ll3 ? ll3.counts : all3;
     if (c3) {
       detail = leaf.family === SERIES_WELCOME && leaf.days === 0
         ? welcomeTip(isObj(u.welcome) ? u.welcome : {}, t)
         : triggerTip({ rows: stepRows(stepAt(u, leaf.family, leaf.days)) }, t);
       return {
-        text: '', cls: '', tooltip: [desc, circleWords(c3, t), detail].filter(Boolean).join('\n'), circles: circlesOf(c3),
+        text: '', cls: '', tooltip: [desc, circleWords(c3, t), ll3 ? langCountedLine(lang, t) : '', detail].filter(Boolean).join('\n'), circles: circlesOf(c3),
       };
     }
     if (leaf.family === SERIES_WELCOME && leaf.days === 0) {
@@ -1229,10 +1306,13 @@ export function cell(row, field, t = (k) => k) {
       // may not apply to a brand -- so its absence is not a campaign gap like the series leaves'.
       // Integrations DOC-ALIGNMENT-SPEC D9: with SKU rows, a three-key doc renders `sku.leaf`'s
       // counts (red 0 when none of their automations is counted); no rows stays '—'.
-      const c3 = leafCounts(u, field);
+      const all3 = leafCounts(u, field);
+      // USAGE-PREVIEW-LANG D4: under a language, the stored langCounts[L]; no SKU rows stays '—'.
+      const ll3 = all3 ? langLeaf(leafObjOf(u, field), lang) : null;
+      const c3 = ll3 ? ll3.counts : all3;
       if (c3 && skuRows(u).length) {
         return {
-          text: '', cls: '', tooltip: [circleWords(c3, t), triggerTip({ rows: skuRows(u) }, t)].filter(Boolean).join('\n'), circles: circlesOf(c3),
+          text: '', cls: '', tooltip: [circleWords(c3, t), ll3 ? langCountedLine(lang, t) : '', triggerTip({ rows: skuRows(u) }, t)].filter(Boolean).join('\n'), circles: circlesOf(c3),
         };
       }
       if (c3) {
@@ -1332,7 +1412,11 @@ const BADNESS = Object.freeze({ active: 0, idle: 1, none: 2 });
 // LIFECYCLE-SERIES-SPEC S9: a series leaf by badness (green 0, any amber 1, absent red 2; '—' null). D5: a
 // Skipped leaf by its count (desc = most skipped first); ZMA '—' or a missing entry null -- it
 // does not need usage.
-export function sortValue(row, field) {
+//
+// Integrations USAGE-PREVIEW-LANG-SPEC D4: under an effective language L ≠ all, a circle cell sorts
+// by its stored langCounts[L].state's rank (the SKU column too -- '—', no SKU rows, stays null); a
+// doc without langCounts sorts as under All.
+export function sortValue(row, field, selLang = 'all') {
   const lang = skippedLangOf(field);
   if (lang !== null) {
     const s = row && !row.zma ? skippedOf(row, lang) : null;
@@ -1341,6 +1425,15 @@ export function sortValue(row, field) {
   const u = row && row.usage;
   if (!u || (row.zma && ZMA_DIMMED.includes(field))) {
     return null;
+  }
+  if (CIRCLE_FIELDS.includes(field) && leafCounts(u, field)) {
+    const ll = langLeaf(leafObjOf(u, field), selLang);
+    if (ll) {
+      if (field === 'sku' && !skuRows(u).length) {
+        return null;
+      }
+      return Object.prototype.hasOwnProperty.call(BADNESS, ll.state) ? BADNESS[ll.state] : null;
+    }
   }
   // USAGE-REENGAGEMENT-SPEC D6: a Re-engagement leaf by its stored state's rank (active 0, idle 1,
   // none 2, as a series leaf sorts); '—' (no reengagement object, or an unrecognized state) null.
@@ -1403,7 +1496,7 @@ export function sortValue(row, field) {
 
 // I7 / V2 I2: sortRows -- the requested column and direction; missing last in both orders; ties
 // by name.
-export function sortRows(rows, sort = DEFAULT_STATE.sort, locale = 'en') {
+export function sortRows(rows, sort = DEFAULT_STATE.sort, locale = 'en', lang = 'all') {
   const field = SORT_FIELDS.includes(sort && sort.field) ? sort.field : DEFAULT_STATE.sort.field;
   const dir = sort && sort.order === 'asc' ? 1 : -1;
   const byName = (a, b) => a.label.localeCompare(b.label, locale, { sensitivity: 'base' }) || a.brand.localeCompare(b.brand);
@@ -1411,8 +1504,8 @@ export function sortRows(rows, sort = DEFAULT_STATE.sort, locale = 'en') {
     if (field === 'brand') {
       return byName(a, b) * dir;
     }
-    const va = sortValue(a, field);
-    const vb = sortValue(b, field);
+    const va = sortValue(a, field, lang);
+    const vb = sortValue(b, field, lang);
     if (va === null || vb === null) {
       if (va === vb) {
         return byName(a, b);
@@ -1456,4 +1549,53 @@ export function saveState(store, state) {
   } catch {
     return false;
   }
+}
+
+// Integrations USAGE-PREVIEW-LANG-SPEC D5 -- the brand-wide columns, never language-narrowed: under
+// an effective language ≠ all their header cells (and the two sections' headers) take the class
+// `bu-lang-na` and the "All languages" hover. Cells are not recoloured. Skipped is not here (it
+// narrows -- GLOBAL-LANG D8).
+export const LANG_NA_FIELDS = Object.freeze(['score', 'cadence', 'lastBroadcast', 'attribution', 'sunset', 'managePreferences']);
+export const LANG_NA_SECTIONS = Object.freeze(['broadcasts', 'configurations']);
+
+// D5 -- whether a header (a field, or a section key) is marked not-applicable under `lang`.
+export function langNotApplicable(key, lang) {
+  return usageLang(lang) !== 'all' && (LANG_NA_FIELDS.includes(key) || LANG_NA_SECTIONS.includes(key));
+}
+
+// D2 (replacing JOURNEY-PREVIEW D2's usageTarget) -- a Usage row's preview glyph route: that row's
+// brand. Defined here and re-exported by journeyPreview.mjs (which imports this module -- one
+// direction, no import cycle).
+export function previewTarget(slug) {
+  return { name: 'journeyPreview', query: { brand: slug } };
+}
+
+// D2 -- the three series the preview page renders (not SKU: the page has no SKU column).
+function previewLeaves(u) {
+  const steps = (s) => (isObj(s) && Array.isArray(s.steps) ? s.steps.filter(isObj) : []);
+  const series = isObj(u) && isObj(u.series) ? u.series : {};
+  return [...steps(series[SERIES_WELCOME]), ...steps(series[SERIES_POST_PURCHASE]), ...steps(isObj(u) ? u.reengagement : null)];
+}
+
+// D2 / I6 -- the row's preview glyph: { enabled, to, titleKey, params }. Enabled when a counted
+// entry of the three preview series' leaves covers the effective language (under All, any counted
+// entry); `to` is previewTarget(row.brand). Greyed otherwise -- and on a doc without the stored
+// `counted` keys (it cannot be known; docs are rewritten hourly) or a row without usage.
+export function previewGlyph(row, lang = 'all') {
+  const L = usageLang(lang);
+  const u = row && isObj(row.usage) ? row.usage : null;
+  const entries = previewLeaves(u).flatMap((st) => (Array.isArray(st.counted) ? st.counted.filter(isObj) : []));
+  const enabled = entries.some((e) => posInt(e.id) && (L === 'all' || (Array.isArray(e.covers) && e.covers.includes(L))));
+  if (enabled && row && typeof row.brand === 'string' && row.brand !== '') {
+    return {
+      enabled: true, to: previewTarget(row.brand), titleKey: 'dashboard.usage.previewJourneys', params: {},
+    };
+  }
+  return L === 'all'
+    ? {
+      enabled: false, to: null, titleKey: 'dashboard.usage.previewNone', params: {},
+    }
+    : {
+      enabled: false, to: null, titleKey: 'dashboard.usage.previewNoneLang', params: { lang: langLabel(L) },
+    };
 }

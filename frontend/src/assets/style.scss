@@ -1266,6 +1266,16 @@ section.dashboard (which reopens after them). */
       th.bu-pad-r, td.bu-pad-r {
         padding-right: calc(0.25em + var(--bu-line-pad, 0px));
       }
+      /* Integrations USAGE-PREVIEW-LANG-SPEC D5: a brand-wide column's header under a language --
+      GLOBAL-LANG's not-applicable grey (--lang-none, defined once above). */
+      th.bu-lang-na {
+        color: var(--lang-none);
+      }
+      /* D2: the preview glyph column, far right, outside the sections -- as narrow as its icon. */
+      th.bu-preview-head, td.bu-preview-cell {
+        width: 1%;
+        white-space: nowrap;
+      }
     }
     /* DASHBOARDS-POLISH3-SPEC D7 (user, 2026-10-25): the sorted column reads unmistakably at a
     glance -- still NEUTRAL, the wash roughly doubled (0.06 -> 0.12) and the sorted header cell a
@@ -1587,16 +1597,13 @@ section.dashboard (which reopens after them). */
     font-size: 0.875rem;
     color: $grey-dark;
   }
-  /* Fork (journey preview, integrations JOURNEY-PREVIEW-SPEC D2/D3). The Usage pane's Preview
-  button, right-aligned above the guide (BrandUsage.vue sets the guide's page width on it when split),
-  and the journey preview page (views/JourneyPreview.vue): the guide's heading, Day bubble and step
+  /* Fork (journey preview, integrations JOURNEY-PREVIEW-SPEC D3; the Usage pane's Preview button
+  retired by USAGE-PREVIEW-LANG-SPEC D1 for the row glyph). The journey preview page
+  (views/JourneyPreview.vue): the guide's heading, Day bubble and step
   title classes above; three equal columns across the FULL width of .main (no column cap -- the
   user's point is readable emails), stacked under GUIDE_MIN_COLUMN x 3. Each rendering is a 600 px
   iframe, CSS-scaled to the column (the wrapper takes the scaled box), fixed height with its own
   scroll. */
-  .bu-preview {
-    margin-top: 1.5rem;
-  }
   .journey-preview {
     .jp-columns {
       display: grid;

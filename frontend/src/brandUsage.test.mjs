@@ -10,7 +10,7 @@ import {
   skippedLangOf, sortRows, sortValue, storedCounts, triggerTip, linkTip, brandListIds,
   GUIDE_COLUMN_REM, GUIDE_MIN_COLUMN, GUIDE_SERIES, guideColumnsFit, linePad, pageWidth, parseStepText, seriesGuide, bodyColumns, circleLink, circleName,
   REENGAGEMENT_DAYS, REENGAGEMENT_FIELDS, reengagementLeafOf, reCircleName, approxClock, hoverText, splitStepTitle, stepDetail,
-  narrowSkipped,
+  narrowSkipped, LANG_NA_FIELDS, LANG_NA_SECTIONS, USAGE_LANGS, langLeaf, langNotApplicable, previewGlyph,
 } from './brandUsage.mjs'; // eslint-disable-line import/extensions
 import { seriesStepKey } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 import { PANES, initialPane, sessionStore } from './brandMatrix.mjs'; // eslint-disable-line import/extensions
@@ -1443,4 +1443,236 @@ test('USAGE-MANPRF I4: each Configurations field has its label and help keys in 
     assert.equal(typeof en[m.label], 'string', m.label);
     assert.equal(typeof en[m.help], 'string', m.help);
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Integrations USAGE-PREVIEW-LANG-SPEC I5-I7, I10 -- the language selector on the circles, the
+// preview glyph, the brand-wide columns' marking, the retired Preview button.
+const U_LANGS = ['en', 'es', 'fr', 'de', 'it'];
+const coversOf = (lang) => {
+  if (lang === null) return U_LANGS;
+  return U_LANGS.includes(lang) ? [lang] : [];
+};
+const cEnt = (id, bubble, lang = null) => ({
+  id, bubble, lang, covers: coversOf(lang),
+});
+// The lib's tally (test data only -- the fork never computes it): per language the entries covering it.
+const tallyOf = (counted) => {
+  const c = { green: 0, amber: 0, grey: 0 };
+  counted.forEach((e) => { c[e.bubble] += 1; });
+  return c;
+};
+const stateOf3 = (c) => {
+  if (c.green > 0) return 'active';
+  return c.amber + c.grey > 0 ? 'idle' : 'none';
+};
+const langLeafObj = (counted, extra = {}) => {
+  const counts = tallyOf(counted);
+  const langCounts = Object.fromEntries(U_LANGS.map((L) => {
+    const lc = tallyOf(counted.filter((e) => e.covers.includes(L)));
+    return [L, { state: stateOf3(lc), counts: lc }];
+  }));
+  return {
+    state: stateOf3(counts), counts, counted, langCounts, ...extra,
+  };
+};
+const stepRow = (listId, campaigns) => ({
+  slug: `s-${listId}`, listId, evergreen: 'running', days: 2, campaigns,
+});
+// Welcome day 0 language-less (running); day 2 one `fr` running automation; day 5 a `pt` draft;
+// post-purchase day 14 an `es` paused one; re-engagement 180 an `en` running one; SKU an `es` one.
+const langUsage = (strip = false) => {
+  const leafOf = (counted, extra) => {
+    const o = langLeafObj(counted, extra);
+    if (strip) {
+      delete o.counted;
+      delete o.langCounts;
+    }
+    return o;
+  };
+  return {
+    channel: 'listmonk',
+    welcome: {
+      state: 'active', listId: 7, campaigns: [{ id: 1, status: 'running', lang: null }], counts: { green: 1, amber: 0 },
+    },
+    series: {
+      welcome: {
+        steps: [
+          { days: 0, rows: [], ...leafOf([cEnt(1, 'green')]) },
+          { days: 2, rows: [stepRow(21, [{ id: 5, status: 'running', lang: 'fr' }])], ...leafOf([cEnt(5, 'green', 'fr')]) },
+          { days: 5, rows: [stepRow(22, [{ id: 6, status: 'draft', lang: 'pt' }])], ...leafOf([cEnt(6, 'grey', 'pt')]) },
+        ],
+        legacy: [],
+      },
+      postPurchase: {
+        steps: [
+          { days: 0, rows: [], ...leafOf([]) },
+          { days: 5, rows: [], ...leafOf([]) },
+          { days: 14, rows: [stepRow(40, [{ id: 7, status: 'paused', lang: 'es' }])], ...leafOf([cEnt(7, 'amber', 'es')]) },
+          { days: 30, rows: [], ...leafOf([]) },
+        ],
+        legacy: [],
+      },
+    },
+    reengagement: {
+      steps: [180, 270, 360, 365].map((days) => ({
+        days,
+        queue: 1,
+        listId: days === 180 ? 48 : null,
+        campaigns: days === 180 ? [{ id: 8, status: 'running', lang: 'en' }] : [],
+        circle: { color: 'red', n: 0 },
+        waiting: null,
+        byLang: {},
+        uncovered: [],
+        ...leafOf(days === 180 ? [cEnt(8, 'green', 'en')] : []),
+      })),
+    },
+    sku: {
+      rows: [stepRow(31, [{ id: 9, status: 'running', lang: 'es' }])], counts: { green: 1, amber: 0 }, leaf: leafOf([cEnt(9, 'green', 'es')]),
+    },
+    sunset: true,
+    attribution: true,
+    managePreferences: true,
+    broadcasts: {
+      lastAt: null, windowCount: 0, cadenceDays: null, daysSince: null, ratio: null, state: 'none', lastIds: [],
+    },
+    score: score(50, parts(0, 5, 0, 0, 10)),
+  };
+};
+const langRow = (strip) => shapeRows([{ brand: 'ruze', usage: langUsage(strip) }])[0];
+
+test('USAGE-PREVIEW-LANG I5: under L the circle cells render, sort and link from langCounts[L]', () => {
+  const row = langRow(false);
+  // Day 2 holds one `fr` automation: green 1 under FR and All, red 0 under ES.
+  assert.deepEqual(cell(row, 'welcome:2', t, 'fr').circles, [{ color: 'green', n: 1 }]);
+  assert.deepEqual(cell(row, 'welcome:2', t, 'es').circles, [{ color: 'red', n: 0 }]);
+  assert.deepEqual(cell(row, 'welcome:2', t, 'all').circles, [{ color: 'green', n: 1 }]);
+  // A language-less automation covers every language.
+  U_LANGS.forEach((L) => assert.deepEqual(cell(row, 'welcome:0', t, L).circles, [{ color: 'green', n: 1 }], L));
+  // The `pt` draft counts only under All.
+  assert.deepEqual(cell(row, 'welcome:5', t, 'all').circles, [{ color: 'grey', n: 1 }]);
+  assert.deepEqual(cell(row, 'welcome:5', t, 'en').circles, [{ color: 'red', n: 0 }]);
+  // Re-engagement and SKU too.
+  const plain = (cs) => cs.map(({ color, n }) => ({ color, n }));
+  assert.deepEqual(plain(cell(row, 'reengagement:180', t, 'en').circles), [{ color: 'green', n: 1 }]);
+  assert.deepEqual(plain(cell(row, 'reengagement:180', t, 'de').circles), [{ color: 'red', n: 0 }]);
+  assert.deepEqual(cell(row, 'sku', t, 'es').circles, [{ color: 'green', n: 1 }]);
+  assert.deepEqual(cell(row, 'sku', t, 'fr').circles, [{ color: 'red', n: 0 }]);
+  // The tooltip's words use the language's counts and gain the language line; EN reads EN+.
+  const es = cell(row, 'welcome:2', t, 'es').tooltip;
+  assert.match(es, /dashboard\.usage\.circleNone/);
+  assert.match(es, /dashboard\.usage\.langCounted\{"lang":"ES"\}/);
+  assert.match(cell(row, 'welcome:2', t, 'en').tooltip, /dashboard\.usage\.langCountedEn/);
+  assert.match(cell(row, 'reengagement:180', t, 'fr').tooltip, /dashboard\.usage\.langCounted\{"lang":"FR"\}/);
+  assert.doesNotMatch(cell(row, 'welcome:2', t, 'all').tooltip, /langCounted/);
+  // Sort by langCounts[L].state's rank (active 0, idle 1, none 2).
+  assert.equal(sortValue(row, 'welcome:2', 'fr'), 0);
+  assert.equal(sortValue(row, 'welcome:2', 'es'), 2);
+  assert.equal(sortValue(row, 'postPurchase:14', 'es'), 1);
+  assert.equal(sortValue(row, 'postPurchase:14', 'fr'), 2);
+  assert.equal(sortValue(row, 'sku', 'fr'), 2);
+  // Links: a coloured circle opens the counted entries covering L with that bubble.
+  assert.deepEqual(circleLink(row, 'welcome:2', 'green', 'fr'), { id: ['5'], evergreen: 'all' });
+  assert.deepEqual(circleLink(row, 'postPurchase:14', 'amber', 'es'), { id: ['7'], evergreen: 'all' });
+  assert.deepEqual(circleLink(row, 'reengagement:180', 'green', 'en'), { id: ['8'], evergreen: 'all' });
+  assert.deepEqual(circleLink(row, 'welcome:0', 'green', 'it'), { id: ['1'], evergreen: 'all' });
+  // A circle not shown under L never links.
+  assert.equal(circleLink(row, 'welcome:2', 'green', 'es'), null);
+  // Red keeps today's link: a row-backed leaf opens its valid rows' lists; welcome day 0 never.
+  assert.deepEqual(circleLink(row, 'welcome:2', 'red', 'es'), { list_id: ['21'], evergreen: 'all' });
+  assert.deepEqual(circleLink(row, 'reengagement:180', 'red', 'de'), { list_id: ['48'], evergreen: 'all' });
+  // Sorting the rows by a circle column under L.
+  const other = shapeRows([{ brand: 'aaa', usage: langUsage(false) }])[0];
+  other.usage.series.welcome.steps[1].langCounts.es = { state: 'active', counts: { green: 1, amber: 0, grey: 0 } };
+  assert.deepEqual(sortRows([row, other], { field: 'welcome:2', order: 'asc' }, 'en', 'es').map((r) => r.brand), ['aaa', 'ruze']);
+});
+
+test('USAGE-PREVIEW-LANG I5: a doc without langCounts renders, sorts and links as under All, never throws', () => {
+  const row = langRow(true);
+  const fields = [...CIRCLE_FIELDS];
+  U_LANGS.forEach((L) => fields.forEach((f) => {
+    assert.doesNotThrow(() => cell(row, f, t, L));
+    assert.deepEqual(cell(row, f, t, L), cell(row, f, t, 'all'), `${f} ${L}`);
+    assert.equal(sortValue(row, f, L), sortValue(row, f), `${f} ${L}`);
+    ['green', 'amber', 'grey', 'red'].forEach((c) => assert.deepEqual(circleLink(row, f, c, L), circleLink(row, f, c), `${f} ${L} ${c}`));
+  }));
+  // Under All nothing changes: the 4-argument call equals the 3-argument one.
+  const full = langRow(false);
+  fields.forEach((f) => {
+    assert.deepEqual(cell(full, f, t, 'all'), cell(full, f, t), f);
+    assert.equal(sortValue(full, f, 'all'), sortValue(full, f), f);
+    ['green', 'amber', 'grey', 'red'].forEach((c) => assert.deepEqual(circleLink(full, f, c, 'all'), circleLink(full, f, c), `${f} ${c}`));
+  });
+  // The usage languages are the five (naming.mjs LANG_VALUES minus all/other).
+  assert.deepEqual([...USAGE_LANGS], U_LANGS);
+  assert.equal(langLeaf({ langCounts: {} }, 'es'), null);
+  assert.equal(langLeaf({ langCounts: { es: { state: 'active', counts: { green: 1 } } } }, 'es'), null);
+  assert.equal(langLeaf(langLeafObj([cEnt(1, 'green')]), 'other'), null);
+});
+
+test('USAGE-PREVIEW-LANG I6: previewGlyph', () => {
+  const row = langRow(false);
+  const on = previewGlyph(row, 'all');
+  assert.deepEqual(on, {
+    enabled: true, to: { name: 'journeyPreview', query: { brand: 'ruze' } }, titleKey: 'dashboard.usage.previewJourneys', params: {},
+  });
+  // Welcome day 0 is language-less: every language is covered.
+  U_LANGS.forEach((L) => assert.equal(previewGlyph(row, L).enabled, true, L));
+  // Only an `es` SKU automation and a `pt` step: SKU does not enable; pt covers nothing.
+  const u = langUsage(false);
+  u.series.welcome.steps[0] = { ...u.series.welcome.steps[0], ...langLeafObj([]) };
+  u.series.welcome.steps[1] = { ...u.series.welcome.steps[1], ...langLeafObj([]) };
+  u.series.postPurchase.steps[2] = { ...u.series.postPurchase.steps[2], ...langLeafObj([]) };
+  u.reengagement.steps[0] = { ...u.reengagement.steps[0], ...langLeafObj([]) };
+  const skuOnly = shapeRows([{ brand: 'ruze', usage: u }])[0];
+  assert.equal(previewGlyph(skuOnly, 'es').enabled, false);
+  assert.deepEqual(previewGlyph(skuOnly, 'es'), {
+    enabled: false, to: null, titleKey: 'dashboard.usage.previewNoneLang', params: { lang: 'ES' },
+  });
+  assert.equal(previewGlyph(skuOnly, 'en').params.lang, 'EN+');
+  // Under All the pt draft counts (any counted entry).
+  assert.equal(previewGlyph(skuOnly, 'all').enabled, true);
+  u.series.welcome.steps[2] = { ...u.series.welcome.steps[2], ...langLeafObj([]) };
+  assert.deepEqual(previewGlyph(shapeRows([{ brand: 'ruze', usage: u }])[0], 'all'), {
+    enabled: false, to: null, titleKey: 'dashboard.usage.previewNone', params: {},
+  });
+  // A doc without `counted` is greyed; a row without usage too.
+  assert.equal(previewGlyph(langRow(true), 'all').enabled, false);
+  assert.equal(previewGlyph(shapeRows([{ brand: 'ruze' }])[0], 'all').enabled, false);
+  assert.equal(previewGlyph(null, 'all').enabled, false);
+  // Never a sortable, circle or section field.
+  ['preview', 'glyph', 'previewGlyph'].forEach((f) => {
+    assert.equal(SORT_FIELDS.includes(f), false);
+    assert.equal(CIRCLE_FIELDS.includes(f), false);
+    assert.equal(SECTIONS.some((s) => s.fields.includes(f)), false);
+  });
+  assert.equal(bodyColumns().length, SECTIONS.flatMap((s) => s.fields).length);
+  // The i18n keys exist.
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['dashboard.usage.previewJourneys', 'dashboard.usage.previewNone', 'dashboard.usage.previewNoneLang',
+    'dashboard.usage.langCounted', 'dashboard.usage.langCountedEn', 'dashboard.usage.langNotApplicable'].forEach((k) => assert.equal(typeof en[k], 'string', k));
+});
+
+test('USAGE-PREVIEW-LANG I7: LANG_NA_FIELDS', () => {
+  assert.deepEqual([...LANG_NA_FIELDS], ['score', 'cadence', 'lastBroadcast', 'attribution', 'sunset', 'managePreferences']);
+  assert.deepEqual([...LANG_NA_SECTIONS], ['broadcasts', 'configurations']);
+  // Marked only under a language ≠ all.
+  [...LANG_NA_FIELDS, ...LANG_NA_SECTIONS].forEach((k) => {
+    assert.equal(langNotApplicable(k, 'all'), false, k);
+    assert.equal(langNotApplicable(k, 'other'), false, k);
+    U_LANGS.forEach((L) => assert.equal(langNotApplicable(k, L), true, `${k} ${L}`));
+  });
+  // Nothing else is: the circles, the Skipped leaves, Brand, the other sections.
+  const others = [...SORT_FIELDS, ...SECTIONS.map((s) => s.key)].filter((k) => !LANG_NA_FIELDS.includes(k) && !LANG_NA_SECTIONS.includes(k));
+  others.forEach((k) => U_LANGS.forEach((L) => assert.equal(langNotApplicable(k, L), false, `${k} ${L}`)));
+  // Every marked field and section exists.
+  LANG_NA_FIELDS.forEach((f) => assert.ok(SORT_FIELDS.includes(f), f));
+  LANG_NA_SECTIONS.forEach((s) => assert.ok(SECTIONS.some((x) => x.key === s), s));
+});
+
+test('USAGE-PREVIEW-LANG I10: the Usage pane has no Preview button and no F9 handler', () => {
+  const src = readFileSync(new URL('./components/BrandUsage.vue', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /F9/);
+  assert.doesNotMatch(src, /usage-preview/);
+  assert.doesNotMatch(src, /keydown/);
 });

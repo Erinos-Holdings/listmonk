@@ -29,7 +29,7 @@
                 <td :colspan="loyalty.cells.length" class="bu-lr-title" :class="lrTitlePad">
                   <span class="bu-lr-title-text" :style="titleShift">{{ $t('dashboard.usage.loyaltyRewards') }}</span>
                 </td>
-                <td v-if="loyalty.tail" :colspan="loyalty.tail" />
+                <td :colspan="loyalty.tail + 1" />
               </tr>
               <tr class="bu-lr">
                 <td :colspan="loyalty.lead" />
@@ -37,7 +37,7 @@
                   :class="padClass(lc.col)">
                   <span :style="li === 0 ? enShift : null">{{ lc.lang.toUpperCase() }}</span>
                 </td>
-                <td v-if="loyalty.tail" :colspan="loyalty.tail" />
+                <td :colspan="loyalty.tail + 1" />
               </tr>
               <tr v-for="(m, mi) in loyaltyMonths" :key="m.key" class="bu-lr bu-lr-month"
                 :class="{ 'bu-zma': parentRow.zma, 'bu-lr-last': mi === loyaltyMonths.length - 1 }"
@@ -49,11 +49,12 @@
                     :style="li === 0 ? enShift : null" :title="`${lc.lang.toUpperCase()} · ${m.label}`"
                     :aria-label="`${lc.lang.toUpperCase()} ${m.label}: ${circleAria(ci)}`">{{ ci.n }}</span>
                 </td>
-                <td v-if="loyalty.tail" :colspan="loyalty.tail" />
+                <td :colspan="loyalty.tail + 1" />
               </tr>
             </template>
-            <brand-usage-row :row="parentRow" :columns="columns" :sort-field="usage.sort.field" class="bu-parent" />
-            <tr class="bu-parent-gap"><td :colspan="2 + columns.length" /></tr>
+            <brand-usage-row :row="parentRow" :columns="columns" :sort-field="usage.sort.field" :lang="langEffective"
+              class="bu-parent" />
+            <tr class="bu-parent-gap"><td :colspan="spanAll" /></tr>
           </template>
           <!-- 2026-10-31 polish 2: every header cell carries the same --bu-line-pad sides as the
                body cells of its column(s) (brandUsage.mjs::headerLayout padLeft/padRight, the
@@ -61,16 +62,20 @@
           <tr class="bu-groups">
             <th colspan="2" class="bu-pad-r" />
             <th v-for="s in header.row1" :key="s.key" :colspan="s.span"
-              :class="['bu-group', 'bu-start', `bu-band-${s.band}`, padClass(s)]">
+              :class="['bu-group', 'bu-start', `bu-band-${s.band}`, padClass(s), { 'bu-lang-na': langNa(s.key) }]"
+              :title="langNa(s.key) ? $t('dashboard.usage.langNotApplicable') : null">
               {{ $t(s.label) }}
             </th>
+            <!-- USAGE-PREVIEW-LANG-SPEC D2: the preview glyph column's header -- empty, outside the
+                 sections (no band, no rule), spanning the three header rows. -->
+            <th rowspan="3" class="bu-preview-head" data-cy="usage-glyph-head" />
           </tr>
           <!-- DASHBOARDS-POLISH3-SPEC D4/D5 -- brandUsage.mjs::headerLayout: plain leaves span the
                two lower header rows; a sub-group (No-purchase series, Post-purchase series, Skipped)
                puts its label over its leaves (Day 0 | 2d | 5d; Day 0 | 5d | 14d | 30d --
                LIFECYCLE-SERIES-SPEC S9, each leaf's hover its D5 description; FR ES DE IT). -->
           <tr>
-            <th rowspan="2" class="bu-head" :class="buTh('score')" :title="$t('dashboard.usage.scoreHelp')"
+            <th rowspan="2" class="bu-head" :class="[buTh('score'), { 'bu-lang-na': langNa('score') }]" :title="naHover('score', $t('dashboard.usage.scoreHelp'))"
               :aria-sort="buAria('score')" @click="onSort('score')">
               {{ $t('dashboard.usage.score') }}<span class="bm-arrow">{{ buArrow('score') }}</span>
             </th>
@@ -85,7 +90,7 @@
                 {{ $t(c.label) }}
               </th>
               <th v-else :key="c.field" rowspan="2" class="has-text-centered bu-head bu-leafhead"
-                :class="[buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide }]" :title="hover(c.field)"
+                :class="[buTh(c.field), `bu-band-${c.band}`, padClass(c), { 'bu-start': c.first, 'bu-substart': c.divide, 'bu-lang-na': langNa(c.field) }]" :title="hover(c.field)"
                 :aria-sort="buAria(c.field)" @click="onSort(c.field)">
                 {{ label(c.field) }}<span class="bm-arrow">{{ buArrow(c.field) }}</span>
               </th>
@@ -102,9 +107,9 @@
         </thead>
         <tbody>
           <brand-usage-row v-for="row in tableRows" :key="row.brand" :row="row" :columns="columns"
-            :sort-field="usage.sort.field" />
+            :sort-field="usage.sort.field" :lang="langEffective" />
           <tr v-if="!loading && !tableRows.length && !parentSelected">
-            <td :colspan="2 + columns.length">
+            <td :colspan="spanAll">
               <p class="has-text-grey">{{ $t('globals.messages.emptyState') }}</p>
             </td>
           </tr>
@@ -127,16 +132,8 @@
          texts, brandUsage.mjs::seriesGuide). 2026-10-31 polish: the three series side by side in
          left-justified list-box columns (brandUsage.mjs::guideColumnsFit), no longer aligned to the
          table's line; stacked when the width lacks the room. -->
-    <!-- Fork (journey preview, integrations JOURNEY-PREVIEW-SPEC D2) -- the campaign editor's own
-         Preview button (Editor.vue), right-aligned above the guide: click or F9 (bound while this pane
-         is mounted) opens the journey preview page, carrying the global selector's brand when it is
-         one brand (journeyPreview.mjs::usageTarget). -->
-    <div class="bu-preview has-text-right" :style="guideSplit && fitWidthPx ? { width: `${fitWidthPx}px` } : null">
-      <b-button @click="onPreview" type="is-primary" icon-left="file-find-outline" data-cy="usage-preview"
-        aria-keyshortcuts="F9">
-        <span class="has-kbd">{{ $t('campaigns.preview') }} <span class="kbd">F9</span></span>
-      </b-button>
-    </div>
+    <!-- Integrations USAGE-PREVIEW-LANG-SPEC D1: the journey preview opens from each row's glyph
+         (BrandUsageRow.vue, the far-right column); the pane has no Preview button. -->
     <div ref="guide" class="bu-guide" :class="{ 'bu-guide-split': guideSplit }"
       :style="guideSplit ? { '--bu-guide-steps': guideSteps, width: fitWidthPx ? `${fitWidthPx}px` : null } : null"
       data-cy="usage-guide">
@@ -297,7 +294,7 @@ import { mapGetters } from 'vuex';
 import { sessionStore } from '../brandMatrix.mjs'; // eslint-disable-line import/extensions
 import {
   GUIDE_COLUMN_REM, GUIDE_SERIES, bodyColumns, circleName, clickSort, columnMeta, computedAtText, guideColumnsFit, headerLayout, hoverText, linePad, pageWidth,
-  loadState, saveState, seriesGuide, shapeRows, sortRows,
+  langNotApplicable, loadState, saveState, seriesGuide, shapeRows, sortRows,
   LOYALTY_PLACEHOLDER, loyaltyLayout, loyaltyMonths, loyaltyShift, splitParent,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import { PARENT_BRAND } from '../brandScope.mjs'; // eslint-disable-line import/extensions
@@ -307,7 +304,6 @@ import {
   historyOf as decisionHistory, isStale, itemNumber, publishedText, replaceItem, selectedChoice, showControls, stateLine,
   tableOf, textLines, opensParagraph,
 } from '../usageDecisions.mjs'; // eslint-disable-line import/extensions
-import { usageTarget } from '../journeyPreview.mjs'; // eslint-disable-line import/extensions
 import brandScopeMixin from '../brandScopeMixin';
 
 export default Vue.extend({
@@ -360,7 +356,13 @@ export default Vue.extend({
       const rows = shapeRows(this.apiRows, {
         brands: this.brandRows, launch: this.launch, lists: this.$store.state.lists, lang: this.langEffective,
       });
-      return sortRows(splitParent(rows).rest, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en');
+      // USAGE-PREVIEW-LANG-SPEC D4 -- a circle column sorts by its langCounts[L] state under a language.
+      return sortRows(splitParent(rows).rest, this.usage.sort, (this.$i18n && this.$i18n.locale) || 'en', this.langEffective);
+    },
+
+    // Every column: Score, Brand, the section leaves and the preview glyph (USAGE-PREVIEW-LANG D2).
+    spanAll() {
+      return 3 + this.columns.length;
     },
 
     // The parent brand's row, whatever the launch filter -- only under All brands or with the parent
@@ -606,7 +608,20 @@ export default Vue.extend({
     // LIFECYCLE-DOCS-SPEC D21: a leaf header's hover -- the translated help, then (an approximate
     // Post-purchase step) a newline and the real clock (brandUsage.mjs::hoverText).
     hover(field) {
-      return hoverText(columnMeta(field), (k, p) => this.$t(k, p));
+      return this.naHover(field, hoverText(columnMeta(field), (k, p) => this.$t(k, p)));
+    },
+
+    // USAGE-PREVIEW-LANG-SPEC D5 -- a brand-wide header under a language (brandUsage.mjs::LANG_NA_FIELDS).
+    langNa(key) {
+      return langNotApplicable(key, this.langEffective);
+    },
+
+    // D5 -- the header's hover, with the "All languages" line when it is marked.
+    naHover(key, text) {
+      if (!this.langNa(key)) {
+        return text || null;
+      }
+      return [text, this.$t('dashboard.usage.langNotApplicable')].filter(Boolean).join('\n');
     },
 
     // The Loyalty placeholder circles' accessible name (the rows' own live in BrandUsageRow).
@@ -721,18 +736,6 @@ export default Vue.extend({
       this.$nextTick(() => this.measureGuide());
     },
 
-    // JOURNEY-PREVIEW-SPEC D2 -- the Preview button and its F9 shortcut (Editor.vue's pattern).
-    onPreview() {
-      this.$router.push(usageTarget(this.brandSelection));
-    },
-
-    onKeyboardShortcut(e) {
-      if (e.key === 'F9') {
-        this.onPreview();
-        e.preventDefault();
-      }
-    },
-
     buAria(field) {
       if (!this.buSorted(field)) {
         return null;
@@ -765,7 +768,6 @@ export default Vue.extend({
   destroyed() {
     this.$root.$off('page.refresh', this.fetchRows);
     window.removeEventListener('resize', this.queueMeasure);
-    window.removeEventListener('keydown', this.onKeyboardShortcut);
     if (this.guideObserver) {
       this.guideObserver.disconnect();
     }
@@ -775,7 +777,6 @@ export default Vue.extend({
     this.afterListsLoaded(() => this.fetchRows());
     this.fetchDecisions();
     window.addEventListener('resize', this.queueMeasure);
-    window.addEventListener('keydown', this.onKeyboardShortcut);
     // A pane shown after mount (a hidden tab) or a resized table re-measures too.
     if (typeof ResizeObserver !== 'undefined') {
       this.guideObserver = new ResizeObserver(() => this.queueMeasure());

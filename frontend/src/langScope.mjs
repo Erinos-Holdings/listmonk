@@ -117,7 +117,9 @@ export const LANG_APPLICABILITY = Object.freeze({
       health: entry('none', 'naming.langApp.brandLevel'),
     }),
   }),
-  journeyPreview: NONE,
+  // Integrations USAGE-PREVIEW-LANG-SPEC D4: the step previews follow the selection (stored
+  // `covers` -- the language plus language-less automations; never an English fallback).
+  journeyPreview: entry('all', 'naming.langApp.journeyPreview'),
   brand: entry('none', 'naming.langApp.brandLevel'),
   subscribers: Object.freeze({ subscribers: true }),
   subscribers_list: Object.freeze({ subscribers: true }),

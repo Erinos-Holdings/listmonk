@@ -346,7 +346,17 @@ test('applicability table', () => {
   ['campaigns', 'templates'].forEach((r) => assert.equal(st(r), 'all'));
   ['dashboard', 'lists', 'list'].forEach((r) => assert.equal(st(r), 'partial'));
   ['media', 'import', 'bounces', 'forms', 'settings', 'users', 'userRoles', 'listRoles', 'logs', 'maintenance',
-    'userProfile', 'campaign', 'campaignReview', 'journeyPreview', '404_page', 'brand'].forEach((r) => assert.equal(st(r), 'none', r));
+    'userProfile', 'campaign', 'campaignReview', '404_page', 'brand'].forEach((r) => assert.equal(st(r), 'none', r));
+  // Integrations USAGE-PREVIEW-LANG-SPEC I9: the journey preview follows the selection (all); the
+  // Usage pane stays partial (its circles and Skipped narrow, not the score or settings).
+  assert.deepEqual(langApplicability('journeyPreview'), { state: 'all', desc: 'naming.langApp.journeyPreview' });
+  assert.equal(langApplicability('brands', { pane: 'brands:usage' }).state, 'partial');
+  const enI9 = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['naming.langApp.journeyPreview', 'naming.langApp.brandsUsage'].forEach((k) => {
+    assert.ok(enI9[k], k);
+    assert.ok(enI9[k].replace('{lang}', 'EN+').length <= 60, k);
+  });
+  assert.match(enI9['naming.langApp.brandsUsage'], /circles and Skipped counts/i);
   // An unknown route is none.
   assert.equal(st('nope'), 'none');
   assert.equal(st(undefined), 'none');

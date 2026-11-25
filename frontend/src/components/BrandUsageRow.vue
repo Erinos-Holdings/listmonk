@@ -52,23 +52,45 @@
         <span>{{ b.glyph }}</span>
       </component>
     </td>
+    <!-- Integrations USAGE-PREVIEW-LANG-SPEC D2: the preview glyph, far right, outside the sections
+         (no band, no rule) -- enabled when the brand has a journey campaign the circles count that
+         covers the selected language (brandUsage.mjs::previewGlyph), greyed and not clickable
+         otherwise. -->
+    <td class="has-text-centered bu-preview-cell">
+      <router-link v-if="glyph.enabled" :to="glyph.to" :title="$t(glyph.titleKey, glyph.params)"
+        :aria-label="$t(glyph.titleKey, glyph.params)" :data-cy="`usage-preview-${row.brand}`">
+        <b-icon icon="file-find-outline" size="is-small" />
+      </router-link>
+      <span v-else class="has-text-grey-light" aria-disabled="true" :title="$t(glyph.titleKey, glyph.params)"
+        :aria-label="$t(glyph.titleKey, glyph.params)" :data-cy="`usage-preview-${row.brand}`">
+        <b-icon icon="file-find-outline" size="is-small" />
+      </span>
+    </td>
   </tr>
 </template>
 
 <script>
 import Vue from 'vue';
 import {
-  SKIPPED_FIELDS, cell as cellOf, cellBadges, cellLink, circleLink, circleName, linkTip,
+  SKIPPED_FIELDS, cell as cellOf, cellBadges, cellLink, circleLink, circleName, linkTip, previewGlyph,
 } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 
 export default Vue.extend({
   name: 'BrandUsageRow',
 
   props: {
-    // A shapeRows row, the body columns (bodyColumns()) and the sorted field.
+    // A shapeRows row, the body columns (bodyColumns()) and the sorted field; `lang` the effective
+    // language (USAGE-PREVIEW-LANG-SPEC D4: the circles; D2: the preview glyph).
     row: { type: Object, required: true },
     columns: { type: Array, required: true },
     sortField: { type: String, default: '' },
+    lang: { type: String, default: 'all' },
+  },
+
+  computed: {
+    glyph() {
+      return previewGlyph(this.row, this.lang);
+    },
   },
 
   methods: {
@@ -77,7 +99,7 @@ export default Vue.extend({
     },
 
     cell(field) {
-      return cellOf(this.row, field, this.t);
+      return cellOf(this.row, field, this.t, this.lang);
     },
 
     badges(field) {
@@ -89,7 +111,7 @@ export default Vue.extend({
     },
 
     circleTo(field, color) {
-      return circleLink(this.row, field, color);
+      return circleLink(this.row, field, color, this.lang);
     },
 
     // Each circle's own accessible name (its part, not the whole cell's tooltip). A Re-engagement

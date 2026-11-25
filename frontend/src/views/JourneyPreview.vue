@@ -1,11 +1,13 @@
 <template>
-  <!-- Fork (journey preview, integrations listmonk/JOURNEY-PREVIEW-SPEC D3). One brand's journey step
-       previews in the journey guide's layout (the Usage pane's guide: the three series in GUIDE_SERIES
-       order, their titles/subtitles, each step's Day bubble and title), each step's campaign rendered
-       at the email's 600 px canvas -- scaled down to the column when narrower -- across the full
-       width of the page. A step preview is a campaign tagged journey:<family>:<day> (D1); the grouping
-       is journeyPreview.mjs. Read-only: no server change (D4); the campaigns and lists reads apply the
-       user's list permissions as everywhere else. -->
+  <!-- Fork (journey preview, integrations listmonk/JOURNEY-PREVIEW-SPEC D3; source and language rule
+       USAGE-PREVIEW-LANG-SPEC D3/D4). One brand's journey step previews in the journey guide's
+       layout (the Usage pane's guide: the three series in GUIDE_SERIES order, their titles/subtitles,
+       each step's Day bubble and title), each step's campaign rendered at the email's 600 px canvas --
+       scaled down to the column when narrower -- across the full width of the page. A step's
+       previews are exactly the automations the Brands > Usage circles count: the stored `counted`
+       entries of the brand's usage doc (GET /api/dashboard/brand-matrix), their campaigns read once
+       by id; the grouping, the status filter and the language pick are journeyPreview.mjs.
+       Read-only: no server change; the reads apply the user's list permissions as everywhere else. -->
   <section class="journey-preview" data-cy="journey-preview">
     <header class="columns page-header">
       <div class="column">
@@ -14,6 +16,13 @@
           / {{ $t('journeyPreview.title') }}
           <span v-if="brand"> / {{ labelOf(brand) }}</span>
         </h1>
+      </div>
+      <div v-if="brandOptions.length" class="column is-narrow">
+        <b-field :label="$t('journeyPreview.status')" label-position="on-border">
+          <b-select v-model="status" data-cy="journey-status">
+            <option v-for="f in statusFilters" :key="f.value" :value="f.value">{{ $t(f.label) }}</option>
+          </b-select>
+        </b-field>
       </div>
       <div v-if="brandOptions.length" class="column is-narrow">
         <b-field :label="$t('journeyPreview.brand')" label-position="on-border">
@@ -43,7 +52,7 @@
               </span>
               <p class="bu-guide-step-title">{{ s.primary }}<span v-if="s.secondary" class="bu-guide-step-sub">{{ s.secondary }}</span></p>
             </div>
-            <template v-if="s.preview">
+            <template v-if="s.preview && s.preview.campaign">
               <p class="jp-subject">
                 <strong>{{ s.preview.campaign.subject }}</strong>
                 <template v-if="preheaderOf(s.preview.campaign)"> — {{ preheaderOf(s.preview.campaign) }}</template>
@@ -58,6 +67,10 @@
                   {{ s.preview.campaign.name }}
                 </router-link>
               </p>
+              <!-- USAGE-PREVIEW-LANG-SPEC D4: under All, the step's other languages. -->
+              <p v-if="s.preview.otherLangs" class="jp-meta" data-cy="journey-other-langs">
+                {{ $t('journeyPreview.otherLangs', { n: s.preview.otherLangs }) }}
+              </p>
               <p v-if="s.preview.others" class="jp-meta has-text-warning-dark">
                 {{ $t('journeyPreview.others', { n: s.preview.others }) }}
               </p>
@@ -69,8 +82,14 @@
                 </div>
               </div>
             </template>
-            <!-- No campaign: the guide's own description, so the page still reads as the guide. -->
+            <!-- No campaign: the guide's own description, so the page still reads as the guide.
+                 D4: under a language with entries but none covering it, "None in this language"
+                 above it -- never an English fallback. -->
             <div v-else class="jp-placeholder" :title="$t('journeyPreview.noCampaign')">
+              <p v-if="s.preview && s.preview.noneInLang" class="jp-meta has-text-weight-semibold"
+                data-cy="journey-none-in-lang">
+                {{ $t('journeyPreview.noneInLang') }}
+              </p>
               <p v-if="s.quote" class="bu-guide-quote">“{{ s.quote }}”</p>
               <p class="bu-guide-body">{{ s.body }}</p>
             </div>
@@ -83,10 +102,11 @@
 
 <script>
 import Vue from 'vue';
+import { mapGetters } from 'vuex';
 import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { guideColumnsFit } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
-  FRAME_HEIGHT, FRAME_WIDTH, JOURNEY_TAG, frameScale, journeyColumns, pickBrand, stepPreviews,
+  FRAME_HEIGHT, FRAME_WIDTH, STATUS_FILTERS, frameScale, journeyColumns, pickBrand, previewIds, usageBrands,
 } from '../journeyPreview.mjs'; // eslint-disable-line import/extensions
 import { uris } from '../constants';
 
@@ -94,7 +114,13 @@ export default Vue.extend({
   data() {
     return {
       loading: false,
-      previews: { brands: [], byBrand: {} },
+      // GET /api/dashboard/brand-matrix rows (the user's permitted brands) and the selected brand's
+      // counted campaigns by id.
+      rows: [],
+      campaignsById: new Map(),
+      // USAGE-PREVIEW-LANG D3: the status dropdown -- local state, default All, not in the query.
+      status: 'all',
+      statusFilters: STATUS_FILTERS,
       // The three series side by side (guideColumnsFit) or stacked; the measured column width.
       split: true,
       columnWidth: 0,
@@ -104,6 +130,8 @@ export default Vue.extend({
   },
 
   computed: {
+    ...mapGetters(['langEffective']),
+
     brand() {
       // Stage 4 F4: the default is the picker's first option (label order), not the first slug.
       return pickBrand(this.brandOptions.map((b) => b.slug), this.$route.query.brand);
@@ -111,13 +139,18 @@ export default Vue.extend({
 
     brandOptions() {
       const rows = this.$store.state.brandRows;
-      return this.previews.brands
+      return usageBrands(this.rows)
         .map((slug) => ({ slug, label: brandLabelOf(slug, rows) }))
         .sort((a, b) => a.label.localeCompare(b.label, 'en', { sensitivity: 'base' }) || a.slug.localeCompare(b.slug));
     },
 
+    usage() {
+      const r = this.rows.find((x) => x && x.brand === this.brand);
+      return r ? r.usage : null;
+    },
+
     columns() {
-      return journeyColumns(this.previews, this.brand, (k, p) => this.$t(k, p));
+      return journeyColumns(this.usage, this.campaignsById, { lang: this.langEffective, status: this.status }, (k, p) => this.$t(k, p));
     },
 
     scale() {
@@ -160,13 +193,20 @@ export default Vue.extend({
       }
     },
 
+    // D3: the usage docs, then the selected brand's counted campaigns in one read (subject,
+    // attribs, tags, updated_at, name). An id the read does not return is dropped by stepCell.
     fetchAll() {
       this.loading = true;
-      Promise.all([
-        this.$api.getCampaigns({ tag: JOURNEY_TAG, per_page: 'all', no_body: true }),
-        this.$api.queryLists({ per_page: 'all', minimal: true }),
-      ]).then(([camps, lists]) => {
-        this.previews = stepPreviews(camps && camps.results, Array.isArray(lists) ? lists : (lists && lists.results));
+      this.$api.getDashboardBrandMatrix({}).then((data) => {
+        this.rows = data && Array.isArray(data.rows) ? data.rows : [];
+        const ids = previewIds(this.usage);
+        if (!ids.length) {
+          return null;
+        }
+        return this.$api.getCampaigns({ id: ids, per_page: 'all', no_body: true }).then((camps) => {
+          const results = camps && Array.isArray(camps.results) ? camps.results : [];
+          this.campaignsById = new Map(results.filter((c) => c && c.id != null).map((c) => [c.id, c]));
+        });
       }).finally(() => {
         this.loading = false;
         this.queueMeasure();
@@ -188,6 +228,13 @@ export default Vue.extend({
 
     queueMeasure() {
       this.$nextTick(() => this.measure());
+    },
+  },
+
+  watch: {
+    // A filter or language change shows other campaigns: re-measure their boxes.
+    columns() {
+      this.queueMeasure();
     },
   },
 
