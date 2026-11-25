@@ -1224,7 +1224,7 @@
     "lists.skuTableBuyers": "Buyers",
     "lists.skuTableOptedIn": "Opted in",
     "lists.skuTableRange": "{from}–180 days ago",
-    "lists.skuTableNote": "Next send: the daily run on {time}.",
+    "lists.skuTableNote": "Next send: the daily run on {time}. Opted in leaves out anyone already emailed for that purchase.",
     "lists.skuCountAssumed": "No automation is running on this list yet — counted as if one reached every language.",
     "lists.skuCountUnavailable": "Count unavailable right now.",
     "lists.skuCountNotConfigured": "The SKU count is not configured on this server (lists.sku_count_url is not set).",

@@ -171,7 +171,7 @@ test('I11: the display lines per response case', () => {
       days: 1, bought: 1396, joins: 166, entered: false,
     },
     {
-      days: 45, bought: 1027, joins: 80, entered: true,
+      days: 90, bought: 687, joins: 5, entered: true, // the entered row IS due (same plan)
     },
   ];
   const withTable = { ...due, table };
@@ -183,7 +183,7 @@ test('I11: the display lines per response case', () => {
         days: 1, bought: 1396, joins: 166, entered: false,
       },
       {
-        days: 45, bought: 1027, joins: 80, entered: true,
+        days: 90, bought: 687, joins: 5, entered: true,
       },
     ],
   });
