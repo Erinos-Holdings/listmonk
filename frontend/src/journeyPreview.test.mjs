@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FRAME_WIDTH, STATUS_FILTERS, frameScale, isSystemGenerated, journeyColumns, parseJourneyTag, pickBrand, previewIds,
+  FRAME_WIDTH, STATUS_FILTERS, frameScale, isSystemGenerated, journeyColumns, parseJourneyTag, previewIds,
   previewTarget, statusMatches, stepCell, stepEntries, usageBrands,
 } from './journeyPreview.mjs'; // eslint-disable-line import/extensions
 import { GUIDE_SERIES, guideDays, seriesGuide } from './brandUsage.mjs'; // eslint-disable-line import/extensions
@@ -200,13 +200,10 @@ test('journeyColumns attaches each step\'s cell under the language and status', 
   assert.deepEqual(filled({ status: 'paused' }), [[POST, 14, 7]]);
 });
 
-test('helpers: usageBrands, pickBrand, frameScale, previewTarget', () => {
+test('helpers: usageBrands, frameScale, previewTarget', () => {
   assert.deepEqual(usageBrands([{ brand: 'ruze', usage: {} }, { brand: 'x', usage: null }, { brand: '', usage: {} }, null, { brand: 'tg', usage: { v: 1 } }]), ['ruze', 'tg']);
-  assert.equal(pickBrand(['a', 'b'], 'b'), 'b');
-  assert.equal(pickBrand(['a', 'b'], 'z'), 'a');
-  assert.equal(pickBrand([], 'a'), null);
   assert.equal(frameScale(FRAME_WIDTH * 2), 1);
   assert.equal(frameScale(300), 300 / FRAME_WIDTH);
   assert.equal(frameScale(0), 1);
-  assert.deepEqual(previewTarget('ruze'), { name: 'journeyPreview', query: { brand: 'ruze' } });
+  assert.deepEqual(previewTarget('ruze'), { name: 'journeyPreview', hash: '#journey-brand-ruze' });
 });

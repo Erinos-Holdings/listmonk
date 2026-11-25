@@ -1,6 +1,7 @@
 <template>
   <!-- Fork (journey preview, integrations listmonk/JOURNEY-PREVIEW-SPEC D3; source and language rule
-       USAGE-PREVIEW-LANG-SPEC D3/D4). One brand's journey step previews in the journey guide's
+       USAGE-PREVIEW-LANG-SPEC D3/D4). Each brand's journey step previews (every brand of the global
+       brand selection, stacked -- the page has no brand picker of its own) in the journey guide's
        layout (the Usage pane's guide: the three series in GUIDE_SERIES order, their titles/subtitles,
        each step's Day bubble and title), each step's campaign rendered at the email's 600 px canvas --
        scaled down to the column when narrower -- across the full width of the page. A step's
@@ -14,20 +15,13 @@
         <h1 class="title is-4 mb-2">
           <router-link :to="{ name: 'brands' }">{{ $t('brands.title') }}</router-link>
           / {{ $t('journeyPreview.title') }}
-          <span v-if="brand"> / {{ labelOf(brand) }}</span>
+          <span v-if="sections.length === 1"> / {{ sections[0].label }}</span>
         </h1>
       </div>
-      <div v-if="brandOptions.length" class="column is-narrow">
+      <div v-if="sections.length" class="column is-narrow">
         <b-field :label="$t('journeyPreview.status')" label-position="on-border">
           <b-select v-model="status" data-cy="journey-status">
             <option v-for="f in statusFilters" :key="f.value" :value="f.value">{{ $t(f.label) }}</option>
-          </b-select>
-        </b-field>
-      </div>
-      <div v-if="brandOptions.length" class="column is-narrow">
-        <b-field :label="$t('journeyPreview.brand')" label-position="on-border">
-          <b-select :value="brand" data-cy="journey-brand" @input="onBrand">
-            <option v-for="b in brandOptions" :key="b.slug" :value="b.slug">{{ b.label }}</option>
           </b-select>
         </b-field>
       </div>
@@ -35,10 +29,15 @@
 
     <b-loading v-if="loading" active :is-full-page="false" />
 
-    <p v-if="!loading && !brand" class="has-text-grey" data-cy="journey-empty">{{ $t('journeyPreview.empty') }}</p>
+    <p v-if="!loading && !sections.length" class="has-text-grey" data-cy="journey-empty">{{ $t('journeyPreview.empty') }}</p>
 
-    <div v-else-if="brand" class="jp-columns" :class="{ 'jp-split': split }" data-cy="journey-columns">
-      <div v-for="g in columns" :key="g.family" :class="['jp-series', `jp-${g.family}`]"
+    <!-- Every brand of the global brand selection (and the navbar launch filter), stacked; the
+         Usage glyph links to a brand's section by its anchor. -->
+    <section v-for="b in sections" :id="`journey-brand-${b.slug}`" :key="b.slug" class="jp-brand"
+      :data-cy="`journey-brand-${b.slug}`">
+    <h2 v-if="sections.length > 1" class="title is-5 jp-brand-title">{{ b.label }}</h2>
+    <div class="jp-columns" :class="{ 'jp-split': split }" data-cy="journey-columns">
+      <div v-for="g in b.columns" :key="g.family" :class="['jp-series', `jp-${g.family}`]"
         :data-cy="`journey-${g.family}`">
         <div class="bu-guide-head">
           <h4 class="bu-guide-title">{{ $t(g.title) }}</h4>
@@ -97,16 +96,17 @@
         </ol>
       </div>
     </div>
+    </section>
   </section>
 </template>
 
 <script>
 import Vue from 'vue';
 import { mapGetters } from 'vuex';
-import { brandLabelOf } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { brandLabelOf, filterBrandRows, filterRowsByLaunch } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import { guideColumnsFit } from '../brandUsage.mjs'; // eslint-disable-line import/extensions
 import {
-  FRAME_HEIGHT, FRAME_WIDTH, STATUS_FILTERS, frameScale, journeyColumns, pickBrand, previewIds, usageBrands,
+  FRAME_HEIGHT, FRAME_WIDTH, STATUS_FILTERS, frameScale, journeyColumns, previewIds, usageBrands,
 } from '../journeyPreview.mjs'; // eslint-disable-line import/extensions
 import { uris } from '../constants';
 
@@ -114,8 +114,8 @@ export default Vue.extend({
   data() {
     return {
       loading: false,
-      // GET /api/dashboard/brand-matrix rows (the user's permitted brands) and the selected brand's
-      // counted campaigns by id.
+      // GET /api/dashboard/brand-matrix rows (the user's permitted brands) and every brand's
+      // counted campaigns by id (read once, so a brand-selector change needs no re-read).
       rows: [],
       campaignsById: new Map(),
       // USAGE-PREVIEW-LANG D3: the status dropdown -- local state, default All, not in the query.
@@ -130,27 +130,21 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapGetters(['langEffective']),
+    ...mapGetters(['langEffective', 'brandSelection', 'launch', 'brandHealth']),
 
-    brand() {
-      // Stage 4 F4: the default is the picker's first option (label order), not the first slug.
-      return pickBrand(this.brandOptions.map((b) => b.slug), this.$route.query.brand);
-    },
-
-    brandOptions() {
-      const rows = this.$store.state.brandRows;
-      return usageBrands(this.rows)
-        .map((slug) => ({ slug, label: brandLabelOf(slug, rows) }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'en', { sensitivity: 'base' }) || a.slug.localeCompare(b.slug));
-    },
-
-    usage() {
-      const r = this.rows.find((x) => x && x.brand === this.brand);
-      return r ? r.usage : null;
-    },
-
-    columns() {
-      return journeyColumns(this.usage, this.campaignsById, { lang: this.langEffective, status: this.status }, (k, p) => this.$t(k, p));
+    // The brands shown: those with a usage doc, narrowed by the global brand selection and the
+    // launch filter exactly as the Brands page's tables are; sorted by label.
+    sections() {
+      const labels = this.$store.state.brandRows;
+      const withUsage = new Set(usageBrands(this.rows));
+      const scoped = filterBrandRows(this.rows.filter((r) => r && withUsage.has(r.brand)), this.brandSelection);
+      return filterRowsByLaunch(scoped, this.launch, (r) => r.brand, this.brandHealth)
+        .map((r) => ({ slug: r.brand, label: brandLabelOf(r.brand, labels), usage: r.usage }))
+        .sort((x, y) => x.label.localeCompare(y.label, 'en', { sensitivity: 'base' }) || x.slug.localeCompare(y.slug))
+        .map((x) => ({
+          ...x,
+          columns: journeyColumns(x.usage, this.campaignsById, { lang: this.langEffective, status: this.status }, (k, p) => this.$t(k, p)),
+        }));
     },
 
     scale() {
@@ -168,10 +162,6 @@ export default Vue.extend({
   },
 
   methods: {
-    labelOf(slug) {
-      return brandLabelOf(slug, this.$store.state.brandRows);
-    },
-
     preheaderOf(c) {
       return (c && c.attribs && typeof c.attribs.preheader === 'string') ? c.attribs.preheader : '';
     },
@@ -185,27 +175,13 @@ export default Vue.extend({
       return uris.previewCampaign.replace(':id', id);
     },
 
-    // Changing the brand rewrites the query (the route is keyed on its full path, so the page
-    // re-mounts and re-fetches -- the same reads, cheap).
-    onBrand(slug) {
-      if (slug !== this.$route.query.brand) {
-        this.$router.replace({ name: 'journeyPreview', query: { brand: slug } });
-      }
-    },
-
-    // D3: the usage docs, then the selected brand's counted campaigns in one read (subject,
-    // attribs, tags, updated_at, name). An id the read does not return is dropped by stepCell.
+    // D3: the usage docs, then every brand's counted campaigns in one read (subject, attribs,
+    // tags, updated_at, name). An id the read does not return is dropped by stepCell.
     fetchAll() {
       this.loading = true;
       this.$api.getDashboardBrandMatrix({}).then((data) => {
         this.rows = data && Array.isArray(data.rows) ? data.rows : [];
-        // Stage 4 F3: no valid ?brand= -- put the picked brand into the query instead of reading for
-        // it (the route is keyed on its full path: the page re-mounts with the brand fixed).
-        if (this.brand && this.brand !== this.$route.query.brand) {
-          this.$router.replace({ name: 'journeyPreview', query: { brand: this.brand } });
-          return null;
-        }
-        const ids = previewIds(this.usage);
+        const ids = [...new Set(this.rows.flatMap((r) => (r && r.usage ? previewIds(r.usage) : [])))];
         if (!ids.length) {
           return null;
         }
@@ -216,6 +192,13 @@ export default Vue.extend({
       }).finally(() => {
         this.loading = false;
         this.queueMeasure();
+        // The Usage glyph's anchor: the section exists only now.
+        this.$nextTick(() => {
+          const el = this.$route.hash && document.getElementById(this.$route.hash.slice(1));
+          if (el) {
+            el.scrollIntoView();
+          }
+        });
       });
     },
 
@@ -238,8 +221,8 @@ export default Vue.extend({
   },
 
   watch: {
-    // A filter or language change shows other campaigns: re-measure their boxes.
-    columns() {
+    // A filter, language or brand change shows other campaigns: re-measure their boxes.
+    sections() {
       this.queueMeasure();
     },
   },

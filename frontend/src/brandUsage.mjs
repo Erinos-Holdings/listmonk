@@ -1576,7 +1576,7 @@ export function langNotApplicable(key, lang) {
 // brand. Defined here and re-exported by journeyPreview.mjs (which imports this module -- one
 // direction, no import cycle).
 export function previewTarget(slug) {
-  return { name: 'journeyPreview', query: { brand: slug } };
+  return { name: 'journeyPreview', hash: `#journey-brand-${slug}` };
 }
 
 // D2 -- the three series the preview page renders (not SKU: the page has no SKU column).

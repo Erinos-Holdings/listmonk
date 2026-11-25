@@ -1624,7 +1624,7 @@ test('USAGE-PREVIEW-LANG I6: previewGlyph', () => {
   const row = langRow(false);
   const on = previewGlyph(row, 'all');
   assert.deepEqual(on, {
-    enabled: true, to: { name: 'journeyPreview', query: { brand: 'ruze' } }, titleKey: 'dashboard.usage.previewJourneys', params: {},
+    enabled: true, to: { name: 'journeyPreview', hash: '#journey-brand-ruze' }, titleKey: 'dashboard.usage.previewJourneys', params: {},
   });
   // Welcome day 0 is language-less: every language is covered.
   U_LANGS.forEach((L) => assert.equal(previewGlyph(row, L).enabled, true, L));

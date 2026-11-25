@@ -201,15 +201,6 @@ export function usageBrands(rows) {
     .map((r) => r.brand);
 }
 
-// pickBrand: the query's brand when it is offered, else the first, null when there is none.
-export function pickBrand(brands, wanted) {
-  const list = Array.isArray(brands) ? brands : [];
-  if (wanted && list.includes(wanted)) {
-    return wanted;
-  }
-  return list.length ? list[0] : null;
-}
-
 // frameScale: the CSS scale that fits the FRAME_WIDTH canvas into a column `width` px wide (never
 // enlarged); 1 for an unmeasured width.
 export function frameScale(width) {

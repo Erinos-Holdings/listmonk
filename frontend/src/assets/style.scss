@@ -1257,6 +1257,11 @@ section.dashboard (which reopens after them). */
         padding-left: 0.25em;
         padding-right: 0.25em;
       }
+      /* A row-hover band dark enough to follow across the wide table (the brand name sits far left
+         of the preview glyph); Bulma's #fafafa was barely visible. */
+      &.is-hoverable tbody tr:not(.is-selected):hover {
+        background-color: rgba(0, 0, 0, 0.09);
+      }
     }
     th.bm-sort {
       cursor: pointer;
@@ -1641,6 +1646,13 @@ section.dashboard (which reopens after them). */
   iframe, CSS-scaled to the column (the wrapper takes the scaled box), fixed height with its own
   scroll. */
   .journey-preview {
+    /* One section per brand of the global selection; a heading only when several. */
+    .jp-brand + .jp-brand {
+      margin-top: 3rem;
+    }
+    .jp-brand-title {
+      margin-bottom: 1rem;
+    }
     .jp-columns {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
