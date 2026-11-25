@@ -406,11 +406,13 @@
                   </div>
                   <div class="column">
                     <!-- integrations SKU-JOURNEYS-SPEC D9: labelled by the target list's entry trigger
-                    (campaignListUx.mjs::delayField); on a sweep-filled list shown at 0 and locked. -->
+                    (campaignListUx.mjs::delayField); on a sweep-filled list a read-only line naming the
+                    list's own timing, in every campaign status. -->
                     <b-field v-if="delayUx.show" :label="$t(delayUx.labelKey)" class="evergreen-delay"
                       data-cy="evergreen-delay" :message="$t(delayUx.helpKey)">
-                      <b-numberinput v-if="delayUx.locked" :value="0" :min="0" :max="0" disabled
-                        controls-position="compact" />
+                      <p v-if="delayUx.readOnly" class="evergreen-timing" data-cy="evergreen-timing">
+                        {{ $t(delayUx.timingKey, { n: delayUx.days }) }}
+                      </p>
                       <b-numberinput v-else v-model="form.sendDelayDays" :min="0" :max="365" :disabled="!canEdit"
                         controls-position="compact" />
                     </b-field>

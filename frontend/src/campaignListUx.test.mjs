@@ -45,19 +45,32 @@ test('I18: the delay label and help per target-list kind; SKU journeys are the s
     return ux.delayField({ selected: pick(row), options: opts, matrix: m });
   };
   assert.deepEqual(field(NEWS), {
-    show: true, locked: false, labelKey: 'campaigns.evergreenDelaySignup', helpKey: 'campaigns.evergreenDelayHelpNewsletter',
+    show: true, readOnly: false, labelKey: 'campaigns.evergreenDelaySignup', helpKey: 'campaigns.evergreenDelayHelpNewsletter',
   });
   assert.deepEqual(field(FIRST), {
-    show: true, locked: false, labelKey: 'campaigns.evergreenDelayFirstOrder', helpKey: 'campaigns.evergreenDelayHelp',
+    show: true, readOnly: false, labelKey: 'campaigns.evergreenDelayFirstOrder', helpKey: 'campaigns.evergreenDelayHelp',
   });
   assert.deepEqual(field(SKUS), {
-    show: true, locked: false, labelKey: 'campaigns.evergreenDelayPurchase', helpKey: 'campaigns.evergreenDelayHelp',
+    show: true, readOnly: false, labelKey: 'campaigns.evergreenDelayPurchase', helpKey: 'campaigns.evergreenDelayHelp',
   });
-  [NP, PP, REP, FSKU].forEach((row) => assert.deepEqual(field(row), {
-    show: true, locked: true, labelKey: 'campaigns.evergreenDelay', helpKey: 'campaigns.evergreenDelayStepHelp',
-  }, row.name));
+  // A sweep-filled list has no delay setting: a read-only line naming the list's own timing.
+  const timing = (timingKey, days) => ({
+    show: true, readOnly: true, labelKey: 'campaigns.evergreenTiming', helpKey: 'campaigns.evergreenDelayStepHelp', timingKey, days,
+  });
+  assert.deepEqual(field(REP), timing('campaigns.evergreenTimingReplenish', 90));
+  assert.deepEqual(field(FSKU), timing('campaigns.evergreenTimingFirstSku', 30));
+  assert.deepEqual(field(NP), timing('campaigns.evergreenTimingNoPurchase', 7));
+  assert.deepEqual(field(PP), timing('campaigns.evergreenTimingPostPurchase', 14));
+  // ...in every campaign status: a running automation (the form not editable) reads the same.
+  [REP, NP].forEach((row) => {
+    const sel = selectionClasses(pick(row), opts);
+    const m = journeyMatrix({
+      editable: false, evergreenEnabled: true, row: selectionRow(sel), evergreen: true,
+    });
+    assert.equal(ux.delayField({ selected: pick(row), options: opts, matrix: m }).readOnly, true, row.name);
+  });
   assert.deepEqual(field(PRIV), {
-    show: true, locked: false, labelKey: 'campaigns.evergreenDelay', helpKey: 'campaigns.evergreenDelayHelp',
+    show: true, readOnly: false, labelKey: 'campaigns.evergreenDelay', helpKey: 'campaigns.evergreenDelayHelp',
   });
   // A step list's payload delay is 0 whatever the field held.
   const m = journeyMatrix({ ...E, row: CLASS_NO_PURCHASE, evergreen: true });

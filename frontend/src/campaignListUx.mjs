@@ -8,6 +8,7 @@
 
 import {
   storedTrigger, triggerOption, isSweepFilledTrigger, TRIGGER_FIRST_ORDER, TRIGGER_SKUS, TRIGGER_NONE,
+  TRIGGER_NO_PURCHASE, TRIGGER_POST_PURCHASE, TRIGGER_REPLENISH, TRIGGER_FIRST_SKU,
   systemHiddenOf, journeyLockedOf,
 } from './listTrigger.mjs'; // eslint-disable-line import/extensions
 
@@ -44,31 +45,48 @@ export function listJourneyClass(list) {
   return CLASS_NONE;
 }
 
+// The read-only timing line on a sweep-filled list, per entry-trigger kind ({n} = the list's days).
+const TIMING_KEYS = Object.freeze({
+  [TRIGGER_REPLENISH]: 'campaigns.evergreenTimingReplenish',
+  [TRIGGER_FIRST_SKU]: 'campaigns.evergreenTimingFirstSku',
+  [TRIGGER_NO_PURCHASE]: 'campaigns.evergreenTimingNoPurchase',
+  [TRIGGER_POST_PURCHASE]: 'campaigns.evergreenTimingPostPurchase',
+});
+
 // Fork (integrations SKU-JOURNEYS-SPEC D9) -- the delay field's label and help, by the target list's
 // entry trigger: a newsletter (public, no trigger) "Days after signup" (with the newsletter hold
-// note); first_order "Days after first order"; the legacy skus "Days after purchase"; a sweep-filled
-// list (a series step or a SKU journey) -- the field shown at 0 and locked, "This list's own day
-// setting decides when it sends" (the matrix's zeroDelay); any other list "Days after joining this
-// list". `selected` is the selection ({id, name}), `options` the list rows, `matrix` journeyMatrix's
-// answer. show is false wherever the matrix shows no delay and forces none.
+// note); first_order "Days after first order"; the legacy skus "Days after purchase"; any other list
+// "Days after joining this list". A sweep-filled list (a series step or a SKU journey) has NO delay
+// setting: its timing is the list's own entry trigger, so the field is replaced by a read-only line
+// naming that timing ("90 days after the most recent purchase of this list's SKUs") -- in every
+// campaign status, editable or not (readOnly; timingKey + days; the payload still sends 0 through the
+// matrix's zeroDelay). `selected` is the selection ({id, name}), `options` the list rows, `matrix`
+// journeyMatrix's answer. show is false wherever the matrix shows no delay and forces none.
 export function delayField({
   selected, options, matrix,
 }) {
   const m = matrix || {};
-  if (m.zeroDelay) {
+  const sel = Array.isArray(selected) ? selected : [];
+  const opts = Array.isArray(options) ? options : [];
+  const row = sel.length === 1 ? opts.find((o) => o && o.id === sel[0].id) : null;
+  const trig = row ? storedTrigger(row) : null;
+  const opt = row ? triggerOption(trig) : TRIGGER_NONE;
+  if ((m.zeroDelay || m.showDelay) && (m.zeroDelay || isSweepFilledTrigger(opt))) {
+    const days = trig && Number.isInteger(trig.days) ? trig.days : null;
     return {
-      show: true, locked: true, labelKey: 'campaigns.evergreenDelay', helpKey: 'campaigns.evergreenDelayStepHelp',
+      show: true,
+      readOnly: true,
+      labelKey: 'campaigns.evergreenTiming',
+      helpKey: 'campaigns.evergreenDelayStepHelp',
+      timingKey: (days !== null && TIMING_KEYS[opt]) || 'campaigns.evergreenTimingList',
+      days,
     };
   }
   if (!m.showDelay) {
     return {
-      show: false, locked: false, labelKey: '', helpKey: '',
+      show: false, readOnly: false, labelKey: '', helpKey: '',
     };
   }
-  const sel = Array.isArray(selected) ? selected : [];
-  const opts = Array.isArray(options) ? options : [];
-  const row = sel.length === 1 ? opts.find((o) => o && o.id === sel[0].id) : null;
-  const opt = row ? triggerOption(storedTrigger(row)) : TRIGGER_NONE;
   let labelKey = 'campaigns.evergreenDelay';
   let helpKey = 'campaigns.evergreenDelayHelp';
   if (opt === TRIGGER_FIRST_ORDER) labelKey = 'campaigns.evergreenDelayFirstOrder';
@@ -78,7 +96,7 @@ export function delayField({
     helpKey = 'campaigns.evergreenDelayHelpNewsletter';
   }
   return {
-    show: true, locked: false, labelKey, helpKey,
+    show: true, readOnly: false, labelKey, helpKey,
   };
 }
 
