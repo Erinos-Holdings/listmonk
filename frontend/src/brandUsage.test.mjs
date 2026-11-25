@@ -163,17 +163,18 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
     ['broadcasts', ['cadence', 'lastBroadcast']],
     ['journeys', [...W, ...P, ...R, 'sku']],
     ['languages', ['skipped:fr', 'skipped:es', 'skipped:de', 'skipped:it']],
-    ['configurations', ['attribution', 'sunset']],
+    // USAGE-MANPRF-SPEC I3: ShpLnk | Sunset | ManPrf, in that order.
+    ['configurations', ['attribution', 'sunset', 'managePreferences']],
   ]);
   assert.deepEqual(SORT_FIELDS, [
     'score', 'brand', 'cadence', 'lastBroadcast', ...W, ...P, ...R, 'sku',
-    'skipped:fr', 'skipped:es', 'skipped:de', 'skipped:it', 'attribution', 'sunset',
+    'skipped:fr', 'skipped:es', 'skipped:de', 'skipped:it', 'attribution', 'sunset', 'managePreferences',
   ]);
   assert.deepEqual(CIRCLE_FIELDS, [...W, ...P, ...R, 'sku']);
   // The header: plain leaves in row 2 (rowspan 2), the sub-group labels over their leaves in row 3.
   const h = headerLayout();
   assert.deepEqual(h.row2.map((c) => (c.kind === 'group' ? `[${c.key}:${c.span}]` : c.field)), [
-    'cadence', 'lastBroadcast', '[welcome:3]', '[postPurchase:4]', '[reengagement:4]', 'sku', '[skipped:4]', 'attribution', 'sunset',
+    'cadence', 'lastBroadcast', '[welcome:3]', '[postPurchase:4]', '[reengagement:4]', 'sku', '[skipped:4]', 'attribution', 'sunset', 'managePreferences',
   ]);
   // G5 round 2: every group label takes the single-row headers' font size (small: false).
   assert.deepEqual(h.row2.filter((c) => c.kind === 'group').map((c) => [c.label, c.band, c.first, c.small]), [
@@ -194,11 +195,11 @@ test('S9 / POLISH3 D5: columns -- Score, Brand, then Broadcasts / Journeys (two 
   // leaf is centred.
   const pads = (c) => `${c.padLeft ? 'L' : '-'}${c.padRight ? 'R' : '-'}`;
   assert.deepEqual(h.row1.map((c) => [c.key, c.span, c.band, pads(c)]), [
-    ['broadcasts', 2, 'grey', 'LR'], ['journeys', 12, 'white', 'LR'], ['languages', 4, 'grey', 'LR'], ['configurations', 2, 'white', 'L-'],
+    ['broadcasts', 2, 'grey', 'LR'], ['journeys', 12, 'white', 'LR'], ['languages', 4, 'grey', 'LR'], ['configurations', 3, 'white', 'L-'],
   ]);
   assert.deepEqual(h.row2.map((c) => [c.kind === 'group' ? `[${c.key}]` : c.field, pads(c)]), [
     ['cadence', 'L-'], ['lastBroadcast', '-R'], ['[welcome]', 'LR'], ['[postPurchase]', 'LR'], ['[reengagement]', 'LR'], ['sku', 'LR'],
-    ['[skipped]', 'LR'], ['attribution', 'L-'], ['sunset', '--'],
+    ['[skipped]', 'LR'], ['attribution', 'L-'], ['sunset', '--'], ['managePreferences', '--'],
   ]);
   assert.deepEqual(h.row3.map((c) => [c.field, pads(c)]), [
     ['welcome:0', 'L-'], ['welcome:2', '--'], ['welcome:5', '-R'],
@@ -1404,4 +1405,42 @@ test('D9 / W3 / W6: the ⚠ for an invalid row on a leaf; a red 0 links its trig
   const unstarted = shaped({ state: 'none', counts: C(0, 0, 0), rows: [r(58, [camp(4, 'finished')]), r(59, [], 'bad')] });
   assert.deepEqual(cell(unstarted, 'welcome:5', t).circles.map((c) => c.color), ['red']);
   assert.deepEqual(circleLink(unstarted, 'welcome:5', 'red'), { list_id: ['58'], evergreen: 'all' });
+});
+
+// Integrations USAGE-MANPRF-SPEC I3: the Manage Preferences boolean renders and sorts exactly as
+// sunset does for the same value; a document without the key (written before the Lambda release)
+// renders and sorts as a missing `sunset` does and never throws. Unscored: not a score part.
+test('USAGE-MANPRF I3: managePreferences renders and sorts through the sunset arms, a missing key included', () => {
+  const row = (u) => shapeRows([{ brand: 'x', usage: u }])[0];
+  [true, false].forEach((v) => {
+    const r = row(usage({ sunset: v, managePreferences: v }));
+    assert.deepEqual(cell(r, 'managePreferences', t), cell(r, 'sunset', t), String(v));
+    assert.equal(sortValue(r, 'managePreferences'), sortValue(r, 'sunset'), String(v));
+  });
+  // A document without the key (written before the Lambda release) takes the family's own
+  // missing-key cell and sort -- exactly what a missing `sunset` takes; no rule of its own.
+  const old = row({ ...usage({}), sunset: undefined });
+  assert.equal('managePreferences' in old.usage, false);
+  assert.deepEqual(cell(old, 'managePreferences', t), cell(old, 'sunset', t));
+  assert.equal(sortValue(old, 'managePreferences'), sortValue(old, 'sunset'));
+  // No usage at all still reads '—' / unsortable, like every other column.
+  const nodoc = shapeRows(api).find((x) => x.brand === 'nodoc');
+  assert.equal(sortValue(nodoc, 'managePreferences'), null);
+  assert.doesNotThrow(() => cell(nodoc, 'managePreferences', t));
+  // Sortable, desc first like the other Configurations columns; not a score part.
+  assert.deepEqual(clickSort({ field: 'score', order: 'desc' }, 'managePreferences'), { field: 'managePreferences', order: 'desc' });
+  assert.equal(SCORE_PARTS.some((p) => p.key === 'managePreferences'), false);
+});
+
+// Integrations USAGE-MANPRF-SPEC I4 (agreement): every Configurations column's label and help key
+// exists in en.json; the literal words are gate G4 (a browser read).
+test('USAGE-MANPRF I4: each Configurations field has its label and help keys in en.json', () => {
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  const conf = SECTIONS.find((s) => s.key === 'configurations');
+  assert.deepEqual(conf.fields, ['attribution', 'sunset', 'managePreferences']);
+  conf.fields.forEach((f) => {
+    const m = columnMeta(f);
+    assert.equal(typeof en[m.label], 'string', m.label);
+    assert.equal(typeof en[m.help], 'string', m.help);
+  });
 });

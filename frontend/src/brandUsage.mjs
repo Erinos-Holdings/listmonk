@@ -1,7 +1,8 @@
 // Fork (brand usage, integrations listmonk/BRAND-USAGE-SPEC D2/D7; BRAND-USAGE-V2-SPEC D1-D5). The
 // pure half of the Dashboard's Brand Usage pane: row shaping (display name, launch filter -- the
 // Brand Matrix's rows, off the SAME fetch), the column/section layout, the cell mapping (Score
-// text + breakdown, the stoplight circles, ✓/✗ booleans, Last broadcast and Cadence), the circle
+// text + breakdown, the stoplight circles, the Configurations ✓/✗ booleans -- shop links, sunset and
+// the unscored Manage Preferences fact, USAGE-MANPRF-SPEC D3 --, Last broadcast and Cadence), the circle
 // links, the Mountain-time note, the sort (clickSort -- the matrix's pattern) and the per-session
 // persistence wrapper. No Vue, no DOM; tested by brandUsage.test.mjs (yarn test).
 //
@@ -294,7 +295,9 @@ export const SECTIONS = Object.freeze([
     // G5 round 2: Skipped subscribers shares the header font size with No purchase (small: false).
     group('skipped', 'dashboard.usage.skipped', 'dashboard.usage.skippedHelp', SKIPPED_FIELDS),
   ]),
-  section('configurations', 'dashboard.usage.sectionConfigurations', ['attribution', 'sunset']),
+  // USAGE-MANPRF-SPEC D3: the Configurations booleans -- shop links, sunset and (unscored) the
+  // Manage Preferences page's registry `manageable` (the lib's stored usage.managePreferences).
+  section('configurations', 'dashboard.usage.sectionConfigurations', ['attribution', 'sunset', 'managePreferences']),
 ]);
 
 // Every sortable column, in display order.
@@ -448,6 +451,7 @@ const COLUMN_META = Object.freeze({
   sku: { label: 'dashboard.usage.sku', help: 'dashboard.usage.skuHelp' },
   attribution: { label: 'dashboard.usage.attribution', help: 'dashboard.usage.attributionHelp' },
   sunset: { label: 'dashboard.usage.sunset', help: 'dashboard.usage.sunsetHelp' },
+  managePreferences: { label: 'dashboard.usage.managePreferences', help: 'dashboard.usage.managePreferencesHelp' },
 });
 
 export function columnMeta(field) {
@@ -1252,7 +1256,8 @@ export function cell(row, field, t = (k) => k) {
       };
     }
     case 'sunset':
-    case 'attribution': {
+    case 'attribution':
+    case 'managePreferences': {
       const c = boolCell(u[field]);
       return {
         text: c.glyph, cls: c.cls, tooltip: '', circles: [],
@@ -1377,6 +1382,7 @@ export function sortValue(row, field) {
     }
     case 'sunset':
     case 'attribution':
+    case 'managePreferences':
       if (typeof u[field] !== 'boolean') {
         return null;
       }
