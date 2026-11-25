@@ -147,7 +147,9 @@ export function countLines(st, { brandName = '' } = {}) {
       });
     });
   });
-  if (r.due) {
+  // With the threshold table (countTable) the table carries the due count; the two red lines below
+  // are the fallback for a count service that predates it.
+  if (r.due && !(Array.isArray(r.table) && r.table.length)) {
     // Two red lines (the user, 2026-11-25): "**N due at the next daily run** (time)", then
     // "Bought from–to days ago". `tail` is the line's un-bolded remainder.
     const to = (r.due.by_age || []).reduce((m, b) => Math.max(m, b.to_days), r.due.days);
@@ -161,6 +163,22 @@ export function countLines(st, { brandName = '' } = {}) {
   }
   if (r.assumed_all_languages) out.push({ key: 'lists.skuCountAssumed', params: {}, kind: 'plain' });
   return out;
+}
+
+// countTable is the threshold table under the days field (D6, the user 2026-11-25): one row per
+// threshold the count service returns (1, 30, 60, 90 and the entered days, sorted), the entered row
+// marked; null when the state has no table (no days entered, counting, an error, an older service).
+// `time` is the next daily run, shown under the table.
+export function countTable(st) {
+  if (!st || st.state !== 'done') return null;
+  const r = st.response || {};
+  if (!Array.isArray(r.table) || r.table.length === 0) return null;
+  return {
+    time: r.next_run_at,
+    rows: r.table.map((t) => ({
+      days: t.days, bought: t.bought, optedIn: t.opted_in, optedInAfter: t.opted_in_after, joins: t.joins, entered: !!t.entered,
+    })),
+  };
 }
 
 // replaceSku replaces the SKU line `from` (compared trimmed, lower-cased) with `to` in the text.

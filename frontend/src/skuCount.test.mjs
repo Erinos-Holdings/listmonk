@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   SKU_COUNT_DEBOUNCE_MS, skuCountRequest, storedCountRequest, requestKey, createSkuCounter, countLines, replaceSku,
-  confirmOf, errorOf,
+  confirmOf, errorOf, countTable,
 } from './skuCount.mjs'; // eslint-disable-line import/extensions
 
 const RESP = {
@@ -163,6 +163,32 @@ test('I11: the display lines per response case', () => {
   const due60 = { ...due.due, days: 60, by_age: [{ from_days: 60, to_days: 90, joins: 1 }, { from_days: 150, to_days: 180, joins: 0 }] };
   const d60 = countLines({ state: 'done', response: { ...due, due: due60 } });
   assert.deepEqual([d60[1].params.from, d60[1].params.to], [60, 180]);
+  assert.equal(countTable({ state: 'done', response: due }), null); // an older service: lines only
+
+  // With the threshold table the table carries the due count: no red lines, the rows mapped in order.
+  const table = [
+    {
+      days: 1, bought: 1396, opted_in: 166, opted_in_after: 88, joins: 78, entered: false,
+    },
+    {
+      days: 45, bought: 1000, opted_in: 80, opted_in_after: 60, joins: 20, entered: true,
+    },
+  ];
+  const withTable = { ...due, table };
+  assert.deepEqual(keys(countLines({ state: 'done', response: withTable })), []);
+  assert.deepEqual(countTable({ state: 'done', response: withTable }), {
+    time: '2026-11-25T15:10:00.000Z',
+    rows: [
+      {
+        days: 1, bought: 1396, optedIn: 166, optedInAfter: 88, joins: 78, entered: false,
+      },
+      {
+        days: 45, bought: 1000, optedIn: 80, optedInAfter: 60, joins: 20, entered: true,
+      },
+    ],
+  });
+  assert.equal(countTable({ state: 'counting' }), null);
+  assert.equal(countTable({ state: 'done', response: RESP }), null); // no days: no table
 
   // Assumed languages.
   assert.deepEqual(keys(countLines({ state: 'done', response: { ...RESP, assumed_all_languages: true } })), ['lists.skuCountWindow', 'lists.skuCountAssumed']);
@@ -250,6 +276,9 @@ test('every key the count and the confirm render exists in en.json; the D8 previ
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   ['lists.skuCountCounting', 'lists.skuCountWindow', 'lists.skuCountNoBuyers', 'lists.skuCountNotBrand', 'lists.skuCountSuggest',
     'lists.skuCountSuggestNoTitle', 'lists.skuCountDue', 'lists.skuCountDueAt', 'lists.skuCountDueBought', 'lists.skuCountAssumed',
+    'lists.skuTableDays', 'lists.skuTableDays2', 'lists.skuTableBought', 'lists.skuTableBought2', 'lists.skuTableOptedIn',
+    'lists.skuTableOptedIn2', 'lists.skuTableAfter', 'lists.skuTableAfter2', 'lists.skuTableJoins', 'lists.skuTableJoins2',
+    'lists.skuTableNote',
     'lists.skuCountUnavailable', 'lists.skuCountNotConfigured', 'lists.skuCountInvalid', 'lists.skuCountNoBrand',
     'lists.skuCountConfirm', 'lists.skuCountConfirmNoCount', 'lists.skuCountConfirmNotCounted', 'lists.skuCountConfirmUnreadable',
   ].forEach((k) => assert.equal(typeof en[k], 'string', k));

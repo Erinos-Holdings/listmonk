@@ -125,6 +125,16 @@ type skuCountDue struct {
 	Consent map[string]int `json:"consent"`
 }
 
+// skuCountRow is one row of the form's threshold table (D6, 2026-11-25): counts and a flag only.
+type skuCountRow struct {
+	Days         int  `json:"days"`
+	Bought       int  `json:"bought"`
+	OptedIn      int  `json:"opted_in"`
+	OptedInAfter int  `json:"opted_in_after"`
+	Joins        int  `json:"joins"`
+	Entered      bool `json:"entered"`
+}
+
 type skuCountResp struct {
 	AsOf                string         `json:"as_of"`
 	NextRunAt           string         `json:"next_run_at"`
@@ -133,6 +143,7 @@ type skuCountResp struct {
 	Skus                []skuCountSku  `json:"skus"`
 	Window              *skuCountBlock `json:"window"`
 	Due                 *skuCountDue   `json:"due"`
+	Table               []skuCountRow  `json:"table"`
 }
 
 // skuCountKeyRe is the shape of a count map's key (a skip or consent reason, a language): never an

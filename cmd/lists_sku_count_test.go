@@ -33,7 +33,9 @@ const skuCountReply = `{"as_of":"2026-11-25T14:00:00.000Z","next_run_at":"2026-1
 	`"skus":[{"sku":"joybelle-brushonglue","brand_sku":true,"buyers":1425,"suggestions":[]},` +
 	`{"sku":"jb-11009-01","brand_sku":false,"buyers":null,"suggestions":[{"sku":"JoyBelle-BrushOnGlue","brand_sku":"JB-11009-01","title":"Brush-On Nail Glue"}]}],` +
 	`"window":{"buyers":1425,"eligible":168,"skips":{"consent":1200,"outside-window":0},"consent":{"not-subscribed":1100}},` +
-	`"due":{"days":90,"joins":5,"by_age":[{"from_days":90,"to_days":120,"joins":5}],"by_lang":{"en":5},"skips":{"not-due":160},"consent":{}}}`
+	`"due":{"days":90,"joins":5,"by_age":[{"from_days":90,"to_days":120,"joins":5}],"by_lang":{"en":5},"skips":{"not-due":160},"consent":{}},` +
+	`"table":[{"days":1,"bought":1396,"opted_in":166,"opted_in_after":88,"joins":78,"entered":false},` +
+	`{"days":90,"bought":687,"opted_in":43,"opted_in_after":38,"joins":5,"entered":true}]}`
 
 type fakeSkuLookups struct {
 	lists  map[int]models.List
@@ -230,6 +232,7 @@ func TestSkuCountReMarshal(t *testing.T) {
 		`"buyers":1425,"suggestions"`, `"buyers":1425,"emails":["leak@example.test"],"suggestions"`,
 		`"skips":{"consent":1200,`, `"skips":{"leak@example.test":1,"consent":1200,`,
 		`"by_lang":{"en":5}`, `"by_lang":{"en":5,"Leak@Example.test":2},"ids":[7]`,
+		`"opted_in_after":38,`, `"opted_in_after":38,"email":"leak@example.test",`,
 	).Replace(skuCountReply)
 	a := skuTestApp(t, f)
 	code, out := skuCall(t, a, newFakeSkuLookups(), skuManager, skuBody106)
@@ -247,7 +250,8 @@ func TestSkuCountReMarshal(t *testing.T) {
 	}
 	d := got.Data
 	if d.Due == nil || d.Due.Joins != 5 || d.Window == nil || d.Window.Eligible != 168 || d.Window.Skips["consent"] != 1200 ||
-		len(d.Skus) != 2 || d.Skus[1].Buyers != nil || d.Skus[1].Suggestions[0].BrandSku != "JB-11009-01" || !d.AssumedAllLanguages {
+		len(d.Skus) != 2 || d.Skus[1].Buyers != nil || d.Skus[1].Suggestions[0].BrandSku != "JB-11009-01" || !d.AssumedAllLanguages ||
+		len(d.Table) != 2 || d.Table[1] != (skuCountRow{Days: 90, Bought: 687, OptedIn: 43, OptedInAfter: 38, Joins: 5, Entered: true}) {
 		t.Fatalf("counts lost in the re-marshal: %+v", d)
 	}
 	// The whole key set of the answer is D1's.
@@ -257,7 +261,7 @@ func TestSkuCountReMarshal(t *testing.T) {
 	for k := range m["data"].(map[string]any) {
 		keys = append(keys, k)
 	}
-	if len(keys) != 7 {
+	if len(keys) != 8 {
 		t.Fatalf("response keys %v", keys)
 	}
 }

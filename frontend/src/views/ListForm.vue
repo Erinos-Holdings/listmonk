@@ -177,7 +177,7 @@
                 </b-field>
                 <!-- SKU-LIVE-COUNT-SPEC D6: the live count under the days field (skuCount.mjs), 500 ms
                 after the last change; never blocks saving. -->
-                <div v-if="skuCountLines.length" :key="`count-${k.value}`" class="sku-count mb-3" data-cy="list-sku-count">
+                <div v-if="skuCountLines.length || skuCountTable" :key="`count-${k.value}`" class="sku-count mb-3" data-cy="list-sku-count">
                   <p v-for="(l, i) in skuCountLines" :key="i"
                     :class="['help', { 'is-danger': l.kind === 'danger' || l.kind === 'due', 'has-text-weight-semibold': l.kind === 'strong' }]">
                     <a v-if="l.kind === 'suggest' && !readOnly" href="#" data-cy="list-sku-count-suggest"
@@ -189,6 +189,32 @@
                       {{ countLineText(l) }}
                     </template>
                   </p>
+                  <!-- The threshold table (D6, 2026-11-25): the entered days' row highlighted, in red. -->
+                  <template v-if="skuCountTable">
+                    <table class="sku-count-table" data-cy="list-sku-count-table">
+                      <thead>
+                        <tr>
+                          <th>{{ $t('lists.skuTableDays') }}<br>{{ $t('lists.skuTableDays2') }}</th>
+                          <th>{{ $t('lists.skuTableBought') }}<br>{{ $t('lists.skuTableBought2') }}</th>
+                          <th>{{ $t('lists.skuTableOptedIn') }}<br>{{ $t('lists.skuTableOptedIn2') }}</th>
+                          <th>{{ $t('lists.skuTableAfter') }}<br>{{ $t('lists.skuTableAfter2') }}</th>
+                          <th>{{ $t('lists.skuTableJoins') }}<br>{{ $t('lists.skuTableJoins2') }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="t in skuCountTable.rows" :key="t.days" :class="{ 'is-entered': t.entered }">
+                          <td>{{ t.days }}</td>
+                          <td>{{ $utils.formatNumber(t.bought) }}</td>
+                          <td>{{ $utils.formatNumber(t.optedIn) }}</td>
+                          <td>{{ $utils.formatNumber(t.optedInAfter) }}</td>
+                          <td>{{ $utils.formatNumber(t.joins) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <p class="help">
+                      {{ $t('lists.skuTableNote', { time: $utils.niceDate(skuCountTable.time, true) }) }}
+                    </p>
+                  </template>
                 </div>
               </template>
             </template>
@@ -315,7 +341,7 @@ import {
   triggerChangeTurnsOff, isSkuJourneyTrigger, legacySkusOffered,
 } from '../listTrigger.mjs'; // eslint-disable-line import/extensions
 import {
-  confirmOf, countLines, createSkuCounter, replaceSku, skuCountRequest, storedCountRequest,
+  confirmOf, countLines, countTable, createSkuCounter, replaceSku, skuCountRequest, storedCountRequest,
 } from '../skuCount.mjs'; // eslint-disable-line import/extensions
 import { formBrandDefault } from '../brandScope.mjs'; // eslint-disable-line import/extensions
 import {
@@ -669,6 +695,10 @@ export default Vue.extend({
     skuCountLines() {
       const b = this.chosenBrand;
       return countLines(this.skuCountState, { brandName: b ? (b.display_name || b.slug) : (this.brand || '') });
+    },
+
+    skuCountTable() {
+      return countTable(this.skuCountState);
     },
 
     // The badge from the STORED trigger and trigger_sync (null = no trigger, no badge).

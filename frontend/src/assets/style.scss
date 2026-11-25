@@ -201,6 +201,42 @@ $trigger-label-indent: calc(2rem - 1px);
 
   .help {
     font-size: 0.875rem;
+
+    &:not(.is-danger) {
+      color: $black;
+    }
+  }
+
+  // The threshold table: black, the entered days' row on a light red bar in red.
+  .sku-count-table {
+    font-size: 0.875rem;
+    color: $black;
+    margin-bottom: 0.25rem;
+
+    th,
+    td {
+      padding: 0.15rem 0.75rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th {
+      font-weight: 600;
+      line-height: 1.2;
+      vertical-align: bottom;
+      border-bottom: 1px solid $grey-lighter;
+    }
+
+    th:first-child,
+    td:first-child {
+      text-align: center;
+    }
+
+    tr.is-entered td {
+      background: rgba($danger, 0.1);
+      color: $danger;
+      font-weight: 600;
+    }
   }
 }
 
