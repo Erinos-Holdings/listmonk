@@ -168,10 +168,10 @@ test('I11: the display lines per response case', () => {
   // With the threshold table the table carries the due count: no red lines, the rows mapped in order.
   const table = [
     {
-      days: 1, bought: 1396, opted_in: 166, opted_in_after: 88, joins: 78, entered: false,
+      days: 1, bought: 1396, joins: 166, entered: false,
     },
     {
-      days: 45, bought: 1000, opted_in: 80, opted_in_after: 60, joins: 20, entered: true,
+      days: 45, bought: 1027, joins: 80, entered: true,
     },
   ];
   const withTable = { ...due, table };
@@ -180,10 +180,10 @@ test('I11: the display lines per response case', () => {
     time: '2026-11-25T15:10:00.000Z',
     rows: [
       {
-        days: 1, bought: 1396, optedIn: 166, optedInAfter: 88, joins: 78, entered: false,
+        days: 1, bought: 1396, joins: 166, entered: false,
       },
       {
-        days: 45, bought: 1000, optedIn: 80, optedInAfter: 60, joins: 20, entered: true,
+        days: 45, bought: 1027, joins: 80, entered: true,
       },
     ],
   });
@@ -276,8 +276,7 @@ test('every key the count and the confirm render exists in en.json; the D8 previ
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   ['lists.skuCountCounting', 'lists.skuCountWindow', 'lists.skuCountNoBuyers', 'lists.skuCountNotBrand', 'lists.skuCountSuggest',
     'lists.skuCountSuggestNoTitle', 'lists.skuCountDue', 'lists.skuCountDueAt', 'lists.skuCountDueBought', 'lists.skuCountAssumed',
-    'lists.skuTableDays', 'lists.skuTableDays2', 'lists.skuTableBought', 'lists.skuTableBought2', 'lists.skuTableOptedIn',
-    'lists.skuTableOptedIn2', 'lists.skuTableAfter', 'lists.skuTableAfter2', 'lists.skuTableJoins', 'lists.skuTableJoins2',
+    'lists.skuTableBought', 'lists.skuTableBuyers', 'lists.skuTableOptedIn', 'lists.skuTableRange',
     'lists.skuTableNote',
     'lists.skuCountUnavailable', 'lists.skuCountNotConfigured', 'lists.skuCountInvalid', 'lists.skuCountNoBrand',
     'lists.skuCountConfirm', 'lists.skuCountConfirmNoCount', 'lists.skuCountConfirmNotCounted', 'lists.skuCountConfirmUnreadable',

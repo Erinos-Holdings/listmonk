@@ -127,12 +127,10 @@ type skuCountDue struct {
 
 // skuCountRow is one row of the form's threshold table (D6, 2026-11-25): counts and a flag only.
 type skuCountRow struct {
-	Days         int  `json:"days"`
-	Bought       int  `json:"bought"`
-	OptedIn      int  `json:"opted_in"`
-	OptedInAfter int  `json:"opted_in_after"`
-	Joins        int  `json:"joins"`
-	Entered      bool `json:"entered"`
+	Days    int  `json:"days"`
+	Bought  int  `json:"bought"`
+	Joins   int  `json:"joins"`
+	Entered bool `json:"entered"`
 }
 
 type skuCountResp struct {

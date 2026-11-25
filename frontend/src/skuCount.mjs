@@ -167,7 +167,9 @@ export function countLines(st, { brandName = '' } = {}) {
 
 // countTable is the threshold table under the days field (D6, the user 2026-11-25): one row per
 // threshold the count service returns (1, 30, 60, 90 and the entered days, sorted), the entered row
-// marked; null when the state has no table (no days entered, counting, an error, an older service).
+// marked: the row's range (days–180 days ago), its buyers and its joins (shown as "Opted in" -- consent
+// is checked at the run); null when the state has no table (no days entered, counting, an error, an
+// older service).
 // `time` is the next daily run, shown under the table.
 export function countTable(st) {
   if (!st || st.state !== 'done') return null;
@@ -176,7 +178,7 @@ export function countTable(st) {
   return {
     time: r.next_run_at,
     rows: r.table.map((t) => ({
-      days: t.days, bought: t.bought, optedIn: t.opted_in, optedInAfter: t.opted_in_after, joins: t.joins, entered: !!t.entered,
+      days: t.days, bought: t.bought, joins: t.joins, entered: !!t.entered,
     })),
   };
 }

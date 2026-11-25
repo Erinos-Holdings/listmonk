@@ -229,7 +229,8 @@ $trigger-label-indent: calc(2rem - 1px);
 
     th:first-child,
     td:first-child {
-      text-align: center;
+      text-align: left;
+      padding-left: 0;
     }
 
     tr.is-entered td {

@@ -194,19 +194,15 @@
                     <table class="sku-count-table" data-cy="list-sku-count-table">
                       <thead>
                         <tr>
-                          <th>{{ $t('lists.skuTableDays') }}<br>{{ $t('lists.skuTableDays2') }}</th>
-                          <th>{{ $t('lists.skuTableBought') }}<br>{{ $t('lists.skuTableBought2') }}</th>
-                          <th>{{ $t('lists.skuTableOptedIn') }}<br>{{ $t('lists.skuTableOptedIn2') }}</th>
-                          <th>{{ $t('lists.skuTableAfter') }}<br>{{ $t('lists.skuTableAfter2') }}</th>
-                          <th>{{ $t('lists.skuTableJoins') }}<br>{{ $t('lists.skuTableJoins2') }}</th>
+                          <th>{{ $t('lists.skuTableBought') }}</th>
+                          <th>{{ $t('lists.skuTableBuyers') }}</th>
+                          <th>{{ $t('lists.skuTableOptedIn') }}</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr v-for="t in skuCountTable.rows" :key="t.days" :class="{ 'is-entered': t.entered }">
-                          <td>{{ t.days }}</td>
+                          <td>{{ $t('lists.skuTableRange', { from: t.days }) }}</td>
                           <td>{{ $utils.formatNumber(t.bought) }}</td>
-                          <td>{{ $utils.formatNumber(t.optedIn) }}</td>
-                          <td>{{ $utils.formatNumber(t.optedInAfter) }}</td>
                           <td>{{ $utils.formatNumber(t.joins) }}</td>
                         </tr>
                       </tbody>
