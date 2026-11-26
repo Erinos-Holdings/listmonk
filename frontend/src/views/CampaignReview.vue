@@ -193,7 +193,7 @@
         <b-collapse v-if="s.key === 'alts'" :key="s.key" :open="false" class="review-section" data-cy="section-alts">
           <template #trigger="props">
             <h5 class="title is-5 is-clickable aux-head">
-              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'" />
               {{ $t('campaigns.review.sectionAltTags') }} <b-tag type="is-success">{{ altTags.total }}</b-tag>
             </h5>
           </template>
@@ -212,7 +212,7 @@
         <b-collapse v-else-if="s.key === 'passed'" :key="s.key" :open="false" class="review-section" data-cy="section-passed">
           <template #trigger="props">
             <h5 class="title is-5 is-clickable aux-head">
-              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'" />
               {{ $t('campaigns.review.sectionPassed') }} <b-tag type="is-success">{{ passed.length }}</b-tag>
             </h5>
           </template>
@@ -230,7 +230,7 @@
         <b-collapse v-else-if="s.key === 'context'" :key="s.key" :open="s.open" class="review-section" data-cy="section-context">
           <template #trigger="props">
             <h5 class="title is-5 is-clickable aux-head">
-              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'" />
               {{ $t('campaigns.review.sectionContext') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
             </h5>
           </template>
@@ -254,7 +254,7 @@
         <b-collapse v-else-if="s.key === 'structure'" :key="s.key" :open="s.open" class="review-section" data-cy="section-structure">
           <template #trigger="props">
             <h5 class="title is-5 is-clickable aux-head">
-              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'" />
               {{ $t('campaigns.review.sectionStructure') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
             </h5>
           </template>
@@ -282,7 +282,7 @@
           <b-collapse :open="false" class="mt-2" data-cy="structure-detail">
             <template #trigger="props">
               <a class="is-clickable aux-head">
-                <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+                <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'" />
                 {{ $t('campaigns.review.structureWhat') }}
               </a>
             </template>
@@ -349,7 +349,7 @@
         <b-collapse v-else-if="s.key === 'provenance'" :key="s.key" :open="s.open" class="review-section" data-cy="section-provenance">
           <template #trigger="props">
             <h5 class="title is-5 is-clickable aux-head">
-              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'"><b-icon :icon="props.open ? 'minus' : 'plus'" size="is-small" /></button>
+              <button type="button" class="expand-btn" :aria-expanded="props.open ? 'true' : 'false'" />
               {{ $t('campaigns.review.sectionProvenance') }} <b-tag :type="s.pillType" class="ml-2">{{ s.pill }}</b-tag>
             </h5>
           </template>
@@ -1287,39 +1287,10 @@ export default Vue.extend({
   vertical-align: middle;
   margin-right: 0.15rem;
 }
-/* The lists page's +/- expand glyph (style.scss scopes it to section.lists, so copied here). */
 .aux-head {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-}
-.expand-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  border: 1px solid #b5b5b5; /* $grey-light */
-  border-radius: 3px;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  color: #7a7a7a; /* $grey */
-  line-height: 1;
-  vertical-align: middle;
-  flex: none;
-}
-.expand-btn:hover {
-  border-color: #0055d4; /* $primary */
-  color: #0055d4;
-}
-/* The .icon box (BIcon's root — reachable by scoped CSS) fills the button; the +/- glyph INSIDE
-   it (i::before) is centred by the global .expand-btn rule in style.scss, which scoped CSS cannot
-   reach (the <i> is nested in the child component). */
-.expand-btn .icon {
-  width: 100%;
-  height: 100%;
-  font-size: 0.7rem;
 }
 /* The reference: the thumbnail is the click-through, the editor's block-number badge on its
    top-right corner at the badge's FIXED size (EditorBlockWrapper.tsx) -- never scaled. */

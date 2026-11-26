@@ -72,8 +72,8 @@
           <tr class="bm-groups">
             <!-- The user, 2026-11-21: SKIPPED is a group in this row beside CONVERSIONS (light red,
                  campaignMatrix.mjs::leftGroupHeaders -- spans derived from the columns). Its
-                 expand/collapse box (the standard .expand-btn plus/minus, as on the Lists grid) sits
-                 LEFT of the label, away from the sub-header's sort arrow. SIXTY-DAY-OPENS-SPEC D5:
+                 expand/collapse box (the standard .expand-btn, as on the Lists grid) is pinned to the
+                 group's LEFT edge so it stays put as the sub-columns open. SIXTY-DAY-OPENS-SPEC D5:
                  component state, collapsed on every load; collapsed, the table is as wide as before. -->
             <th v-for="(g, i) in leftGroupCols" :key="`l${i}`" :colspan="g.span" :class="g.cls"
               :data-cy="g.expand ? 'cm-group-skipped' : null">
@@ -81,9 +81,7 @@
                 <button type="button" class="expand-btn cm-skip-box" data-cy="cm-skipped-expand"
                   :title="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
                   :aria-label="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
-                  :aria-expanded="skippedExpanded ? 'true' : 'false'" @click.stop="toggleSkipped">
-                  <b-icon :icon="skippedExpanded ? 'minus' : 'plus'" size="is-small" />
-                </button>{{ $t(g.label) }}
+                  :aria-expanded="skippedExpanded ? 'true' : 'false'" @click.stop="toggleSkipped" />{{ $t(g.label) }}
               </template>
             </th>
             <th v-for="(g, i) in groupCols" :key="i" :colspan="g.span" :class="g.cls">{{ groupLabel(g) }}</th>
@@ -91,7 +89,8 @@
           <tr>
             <th v-for="c in leftCols" :key="c.field"
               :class="[bmTh(c.field), c.group || null, {
-                'has-text-right': c.field === 'sent' || c.field === 'skipped' || isReason(c.field), 'has-text-centered': c.field === 'lang',
+                'has-text-right': c.field === 'sent' || c.field === 'skipped' || isReason(c.field),
+                'has-text-centered': c.field === 'lang' || c.field === 'promo_step',
               }]"
               :title="c.help ? $t(c.help) : null"
               :aria-sort="bmAria(c.field)" @click="onSort(c.field)" :data-cy="`cm-head-${c.field}`">
@@ -119,9 +118,7 @@
                   <button type="button" class="expand-btn" :data-cy="`cm-group-toggle-${row.rowKey}`"
                     :aria-expanded="row.expanded ? 'true' : 'false'"
                     :aria-label="$t(row.expanded ? 'campaigns.group.collapse' : 'campaigns.group.expand')"
-                    @click.stop="toggleGroup(row.rowKey)">
-                    <b-icon :icon="row.expanded ? 'minus' : 'plus'" size="is-small" />
-                  </button>
+                    @click.stop="toggleGroup(row.rowKey)" />
                   <span :title="nameOf(row).title">{{ nameOf(row).text }}</span>
                 </template>
                 <!-- D3: the campaign's own Campaign pane (the remount the URL change causes is intended).
@@ -135,7 +132,8 @@
 </router-link>
               </td>
               <!-- PROMO-SERIES-SPEC D7: the promo Code and Step (blank for a journey and the totals row). -->
-              <td v-else-if="c.field === 'promo_code' || c.field === 'promo_step'" :key="c.field" :class="bmTd(c.field)"
+              <td v-else-if="c.field === 'promo_code' || c.field === 'promo_step'" :key="c.field"
+                :class="[bmTd(c.field), { 'has-text-centered': c.field === 'promo_step' }]"
                 :data-cy="`cm-${c.field}-${row.totals ? 'totals' : row.id}`">
                 {{ promoOf(row, c.field) }}
               </td>

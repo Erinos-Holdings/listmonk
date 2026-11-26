@@ -94,16 +94,12 @@
         <template #header>
           <button type="button" class="expand-btn" data-cy="btn-expand-all"
             :aria-label="$t('lists.grid.expandAll')" :aria-expanded="allExpanded ? 'true' : 'false'"
-            @click.stop="toggleExpandAll">
-            <b-icon :icon="allExpanded ? 'minus' : 'plus'" size="is-small" />
-          </button>
+            @click.stop="toggleExpandAll" />
         </template>
         <template #default="props">
           <button type="button" class="expand-btn" data-cy="btn-expand"
             :aria-label="$t('lists.grid.expandRow', { name: props.row.name })"
-            :aria-expanded="expanded[props.row.id] ? 'true' : 'false'" @click.stop="toggleExpand(props.row.id)">
-            <b-icon :icon="expanded[props.row.id] ? 'minus' : 'plus'" size="is-small" />
-          </button>
+            :aria-expanded="expanded[props.row.id] ? 'true' : 'false'" @click.stop="toggleExpand(props.row.id)" />
         </template>
       </b-table-column>
 

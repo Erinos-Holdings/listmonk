@@ -41,14 +41,11 @@
                 subscriptions of the PUBLIC lists in scope (each brand's master opt-in list), summed,
                 with the Lists grid's segments. Collapsed = the segment lines; expanded = a segment x
                 send-language table whose columns are the Lists grid's lines rule (gridLines.mjs).
-                Sticky per browser. Numbers link nowhere (N1). The fontello subset has plus/minus,
-                no *-box-outline, so the box is drawn in CSS as on the Lists grid. -->
+                Sticky per browser. Numbers link nowhere (N1). -->
                 <button type="button" class="expand-btn subs-expand" data-cy="subscribers-expand"
                   :title="subsExpanded ? $t('dashboard.subsCollapse') : $t('dashboard.subsExpand')"
                   :aria-label="subsExpanded ? $t('dashboard.subsCollapse') : $t('dashboard.subsExpand')"
-                  :aria-expanded="subsExpanded ? 'true' : 'false'" @click="toggleSubs">
-                  <b-icon :icon="subsExpanded ? 'minus' : 'plus'" size="is-small" />
-                </button>
+                  :aria-expanded="subsExpanded ? 'true' : 'false'" @click="toggleSubs" />
                 <div class="columns is-mobile">
                   <div class="column is-6">
                     <!-- Fork (brand matrix, BRAND-MATRIX-SPEC D9) -- comma-separated, never k/m. -->

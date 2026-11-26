@@ -174,10 +174,10 @@
       <span class="has-text-weight-bold" :title="$t('campaigns.skippedHelp')">{{ $t('campaigns.skipped') }}</span>
       <!-- Integrations SIXTY-DAY-OPENS-SPEC D5 -- the Matrix's glyph: expanded, each campaign's figure
            is followed by its three reason counts (component state, collapsed on every load). -->
-      <a href="#" class="ml-1" data-cy="analytics-skipped-expand"
+      <button type="button" class="expand-btn ml-1" data-cy="analytics-skipped-expand"
         :title="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
         :aria-label="$t(skippedExpanded ? 'analytics.matrix.skippedCollapse' : 'analytics.matrix.skippedExpand')"
-        :aria-expanded="skippedExpanded ? 'true' : 'false'" @click.prevent="skippedExpanded = !skippedExpanded">{{ skippedExpanded ? '−' : '+' }}</a>
+        :aria-expanded="skippedExpanded ? 'true' : 'false'" @click="skippedExpanded = !skippedExpanded" />
       <span v-for="s in skippedRows" :key="s.id" class="ml-3" :data-cy="`analytics-skipped-${s.id}`">{{ s.name }}: {{ s.text }}<template
         v-if="s.reasons"> (<span v-for="(r, i) in s.reasons" :key="r.field" :title="$t(`${r.label}Help`)">{{ i ? ', ' : '' }}{{ $t(r.label) }} {{ r.text }}</span>)</template></span>
     </p>

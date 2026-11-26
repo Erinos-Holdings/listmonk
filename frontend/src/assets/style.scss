@@ -84,28 +84,41 @@ ul.no {
   position: relative;
 }
 
-/* Fork: centre the glyph inside an .expand-btn's icon (the +/- expand/collapse boxes on the
-   lists grid and in the campaign-review window). Buefy's BIcon renders
-   <span class="icon"><i class="mdi-…"/></span>, with the glyph on i::before. The glyph is drawn
-   centred within its own em box (verified from the fontello metrics: plus/minus centre at
-   x=500 of a 1000 advance and y=350, the ascent/descent midpoint). It still seated high-left
-   because the <i> is inline: its inline-block ::before carries the font's descender strut, so
-   the <i>'s box gains phantom space below the baseline and align-items:center then lifts the
-   glyph. Making the <i> a flex container drops the inline strut and centres the ::before in both
-   axes. This MUST be global, not in a page's scoped block: Vue scoped CSS reaches the .icon
-   (BIcon's root) but not the <i> nested inside the child component. Per-page .icon sizing
-   (section.lists and CampaignReview.vue) is unaffected. */
-.expand-btn .icon i {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-.expand-btn .icon i::before {
-  margin: 0;
-  width: auto;
-  line-height: 1;
+/* Fork: THE +/- expand/collapse box, the one definition for every page. The button is EMPTY:
+   frame AND sign are ONE vector image (a mask filled with currentColor), so they scale and round
+   to screen pixels together and the sign stays centred at any zoom. Never put an icon, font glyph
+   or text inside, and never draw the frame as a CSS border: separately rounded parts drift apart.
+   aria-expanded="true" shows the minus. A page adds placement only (position, margin,
+   background-color), never size or glyph rules. */
+$expand-frame: "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none' stroke='black'%3E%3Crect x='.5' y='.5' width='17' height='17' rx='2.5' stroke-opacity='.55'/%3E";
+
+.expand-btn {
+  display: inline-block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: $grey;
+  cursor: pointer;
+  vertical-align: middle;
+
+  &::before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: currentColor;
+    mask: url("data:image/svg+xml,#{$expand-frame}%3Cpath stroke-width='2' d='M5 9h8M9 5v8'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  }
+  &[aria-expanded="true"]::before {
+    mask-image: url("data:image/svg+xml,#{$expand-frame}%3Cpath stroke-width='2' d='M5 9h8'/%3E%3C/svg%3E");
+  }
+  &:hover {
+    color: $primary;
+  }
 }
 
 .content pre {
@@ -1188,32 +1201,26 @@ section.dashboard (which reopens after them). */
     thead th.bm-skip {
       background-color: rgba(241, 70, 104, 0.14);
     }
-    /* Its expand/collapse box, left of the group label: the Lists grid's +/- box (the standard
-    .expand-btn; the glyph centring is the global rule at the top of this file). */
+    /* Its expand/collapse box (the global .expand-btn) is pinned to the group's LEFT edge, open
+    or closed: a centred header would move the box as the sub-columns appear. */
+    tr.bm-groups th.bm-group.bm-skip {
+      text-align: left;
+      white-space: nowrap;
+    }
     .expand-btn.cm-skip-box {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 1.15rem;
-      height: 1.15rem;
       margin-right: 0.4rem;
-      padding: 0;
-      border: 1px solid $grey-light;
-      border-radius: 3px;
-      background: $white;
-      color: $grey;
-      line-height: 1;
-      vertical-align: middle;
-      cursor: pointer;
+      background-color: $white;
+    }
+    /* A centred header (Step, Lang) centres its LABEL over the values: the sort arrow takes no
+    width, or its reserved 1em pushes the label left of the cells beneath. */
+    th.bm-sort.has-text-centered {
+      position: relative;
 
-      .icon {
-        width: 1rem;
-        height: 1rem;
-        font-size: 0.7rem;
-      }
-      &:hover {
-        border-color: $primary;
-        color: $primary;
+      .bm-arrow {
+        position: absolute;
+        min-width: 0;
+        padding-left: 0;
+        margin-left: 2px;
       }
     }
     th.bm-sorted, td.bm-sorted {
@@ -2015,8 +2022,8 @@ section.dashboard {
   }
 
   /* Fork (dashboard counts, integrations DASHBOARD-COUNTS-SPEC D3). The Subscribers container's
-  +/- toggle at its top right (the Lists grid's boxed glyph -- the fontello subset has plus and
-  minus, no *-box-outline), and the expanded segment x language table. */
+  +/- toggle (the global .expand-btn) at its top right, and the expanded segment x language
+  table. */
   article[data-cy=subscribers] {
     position: relative;
   }
@@ -2025,27 +2032,6 @@ section.dashboard {
     top: 10px;
     right: 10px;
     z-index: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.15rem;
-    height: 1.15rem;
-    border: 1px solid $grey-light;
-    border-radius: 3px;
-    background: none;
-    padding: 0;
-    cursor: pointer;
-    color: $grey;
-    line-height: 1;
-
-    .icon {
-      width: 1rem;
-      height: 1rem;
-      font-size: 0.7rem;
-    }
-    &:hover {
-      border-color: $primary;
-    }
   }
   .subs-grid {
     margin: 0 30px 20px 30px;
@@ -2080,10 +2066,8 @@ section.lists {
   /* Fork (list collapse, LIST-COLLAPSE-SPEC C1/C2/C5/C6). The expand chevrons, the collapsed
   row's Other alarm marker, and one tag per line in the Name and Type cells so both columns can
   shrink to their widest single tag. */
-  /* Header and row glyphs share one centre line: same padding on th and td, both centred.
-  Two Buefy header rules fight that: .th-wrap is a space-between flex box, and
-  `.b-table .table th .th-wrap .icon` gives any header icon margin-left 0.5rem + font-size 1rem
-  (the indent). Both are overridden below; the second needs the long selector to out-rank it. */
+  /* Header and row boxes share one centre line: same padding on th and td, both centred
+  (Buefy's .th-wrap is a space-between flex box, overridden below). */
   th.cy-expand, td.expand-cell {
     width: 2.5rem;
     padding-left: 0.5rem;
@@ -2093,57 +2077,21 @@ section.lists {
   th.cy-expand .th-wrap {
     justify-content: center;
   }
-  th.cy-expand .th-wrap .expand-btn .icon {
-    margin: 0;
-    font-size: 0.7rem;
-  }
   /* Cells are top-aligned: nudge the row glyph down onto the list name's centre line (a 24px
   line box against an ~18px glyph). Tune by eye. */
   td.expand-cell .expand-btn {
     margin-top: 0.15rem;
   }
 
-  /* The +/- expand glyph: a small rounded box. */
-  .expand-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.15rem;
-    height: 1.15rem;
-    border: 1px solid $grey-light;
-    border-radius: 3px;
-
-    .icon {
-      width: 1rem;
-      height: 1rem;
-      font-size: 0.7rem;
-    }
-    &:hover {
-      border-color: $primary;
-    }
-  }
-
-  .expand-btn, .grid-other-marker {
+  .grid-other-marker {
     background: none;
+    border: 0;
     padding: 0;
     cursor: pointer;
-    color: $grey;
+    color: $warning-dark;
     line-height: 1;
     vertical-align: middle;
-
-    &:hover {
-      color: $primary;
-    }
-  }
-
-  .grid-other-marker {
-    border: 0;
-    color: $warning-dark;
     margin-left: 0.25rem;
-
-    &:hover {
-      color: $warning-dark;
-    }
   }
 
   /* A column flex keeps Bulma's pill (inline-flex, centred, 2em) and puts one per line. The cap
