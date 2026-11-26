@@ -359,8 +359,8 @@
                 <thead>
                   <tr>
                     <th>{{ $t('analytics.clientsTier') }}</th>
-                    <th class="has-text-right">{{ $t('dashboard.clientsViewEvents') }}<span class="cl-share is-size-7" /></th>
-                    <th class="has-text-right">{{ $t('dashboard.clientsClickEvents') }}<span class="cl-share is-size-7" /></th>
+                    <th>{{ $t('dashboard.clientsViewEvents') }}</th>
+                    <th>{{ $t('dashboard.clientsClickEvents') }}</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -679,6 +679,33 @@ body.is-noscroll {
   display: none;
 }
 
+/* Fork: EVERY column header is centred over its column, on every admin table, whatever its cells
+do. The one rule: the id outranks the has-text-* helpers on a th. A sort arrow (Buefy's is already
+absolute; the hand-built tables' .bm-arrow here) takes no width, or it pushes the label off
+centre. Never align a column header in a page's own rules. */
+#app, .modal {
+  table thead th {
+    text-align: center !important;
+
+    .th-wrap {
+      justify-content: center;
+      width: 100%;
+      text-align: center;
+    }
+    /* Room for Buefy's arrow, equal on both sides so a narrow column's label stays centred and
+    clear of it. */
+    &.is-sortable .th-wrap {
+      padding: 0 1.25rem;
+    }
+    .bm-arrow {
+      position: absolute;
+      min-width: 0;
+      padding-left: 0;
+      margin-left: 2px;
+    }
+  }
+}
+
 
 /* Table */
 .b-table .level-left {
@@ -1114,11 +1141,6 @@ carries a third, Combined). */
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
-  /* b-table draws its own numeric header (label + sort arrow, right-aligned in .th-wrap, which
-  carries is-numeric): the same slot as right padding puts that label over the counts too. */
-  .th-wrap.is-numeric {
-    padding-right: 3.75rem;
-  }
   /* Fork (integrations GMAIL-GAP-SPEC D6) -- Campaign Analytics' trust-tier rows, trailing data
   rows of the Email clients table: a top rule over the first, muted italic text. */
   tr.client-tier-row td {
@@ -1201,27 +1223,20 @@ section.dashboard (which reopens after them). */
     thead th.bm-skip {
       background-color: rgba(241, 70, 104, 0.14);
     }
-    /* Its expand/collapse box (the global .expand-btn) is pinned to the group's LEFT edge, open
-    or closed: a centred header would move the box as the sub-columns appear. */
+    /* The group label stays centred; its expand/collapse box (the global .expand-btn) is pinned
+    to the group's LEFT edge, open or closed. The equal side padding reserves the box's room
+    (4px + 18px + 6px) without pushing the label off centre. */
     tr.bm-groups th.bm-group.bm-skip {
-      text-align: left;
+      position: relative;
+      padding-left: 28px;
+      padding-right: 28px;
       white-space: nowrap;
     }
     .expand-btn.cm-skip-box {
-      margin-right: 0.4rem;
+      position: absolute;
+      left: 4px;
+      top: calc(50% - 9px);
       background-color: $white;
-    }
-    /* A centred header (Step, Lang) centres its LABEL over the values: the sort arrow takes no
-    width, or its reserved 1em pushes the label left of the cells beneath. */
-    th.bm-sort.has-text-centered {
-      position: relative;
-
-      .bm-arrow {
-        position: absolute;
-        min-width: 0;
-        padding-left: 0;
-        margin-left: 2px;
-      }
     }
     th.bm-sorted, td.bm-sorted {
       background-image: linear-gradient(rgba(54, 54, 54, 0.07), rgba(54, 54, 54, 0.07));
@@ -1338,12 +1353,7 @@ section.dashboard (which reopens after them). */
     /* POLISH3 D4/D5 + G5 feedback (two rounds): every header is centered over its column(s). The
     single-row headers (rowspan 2) and BOTH sub-group labels (No purchase, Skipped subscribers)
     share the header font size on the same line -- the top of the second header row -- with the
-    leaves (3d 7d 15d, FR ES DE IT) beneath in the small font. The leaf headers' sort arrow is
-    absolutely positioned: its reserved 1em inline width pushed two-character labels visibly left
-    of center (G5 round 2). */
-    thead th {
-      text-align: center;
-    }
+    leaves (3d 7d 15d, FR ES DE IT) beneath in the small font. Centring is the global header rule. */
     th.bu-head {
       vertical-align: top;
     }
@@ -1352,29 +1362,11 @@ section.dashboard (which reopens after them). */
     }
     th.bu-small {
       font-size: 0.8rem;
-      position: relative;
-      .bm-arrow {
-        position: absolute;
-        min-width: 0;
-        padding-left: 0;
-        margin-left: 2px;
-      }
     }
     /* The in-section rule (headerLayout's groupStart / divide): through the header and, since
     2026-10-30, every body row -- the No-purchase | Post-purchase and Post-purchase | SKU lines. */
     th.bu-substart, td.bu-substart {
       border-left: 1px solid #dbdee2;
-    }
-    /* A single-column header (rowspan 2, e.g. SKU) centers its label: the sort arrow takes no
-    width (the bu-small leaves' rule), so it no longer pushes the label left of center. */
-    th.bu-leafhead {
-      position: relative;
-      .bm-arrow {
-        position: absolute;
-        min-width: 0;
-        padding-left: 0;
-        margin-left: 2px;
-      }
     }
     .bu-warn {
       cursor: help;
@@ -2066,16 +2058,12 @@ section.lists {
   /* Fork (list collapse, LIST-COLLAPSE-SPEC C1/C2/C5/C6). The expand chevrons, the collapsed
   row's Other alarm marker, and one tag per line in the Name and Type cells so both columns can
   shrink to their widest single tag. */
-  /* Header and row boxes share one centre line: same padding on th and td, both centred
-  (Buefy's .th-wrap is a space-between flex box, overridden below). */
+  /* Header and row boxes share one centre line: same padding on th and td, both centred. */
   th.cy-expand, td.expand-cell {
     width: 2.5rem;
     padding-left: 0.5rem;
     padding-right: 0;
     text-align: center;
-  }
-  th.cy-expand .th-wrap {
-    justify-content: center;
   }
   /* Cells are top-aligned: nudge the row glyph down onto the list name's centre line (a 24px
   line box against an ~18px glyph). Tune by eye. */
