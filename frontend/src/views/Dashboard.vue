@@ -259,9 +259,9 @@
           </div>
 
           <!-- Fork (campaign conversions, CAMPAIGN-CONVERSIONS-SPEC D11 follow-up): Clicks bars and
-               the Matched conversions line by Mountain purchase day on the same window, $ by default
-               (the $|# toggle switches to orders) and an optional light Tracked fill beneath the
-               line (clicksConversionsChart.mjs). Nothing renders until a conversions doc exists. -->
+               the Tracked conversions line by Mountain purchase day on the same window, $ by default
+               (the $|# toggle switches to orders) and the Matched fill beneath the line (Show
+               Matched, on by default) (clicksConversionsChart.mjs). Nothing renders until a conversions doc exists. -->
           <div v-if="clicksConversionsChart.datasets" class="tile is-parent relative">
             <b-loading v-if="isChartsLoading" active :is-full-page="false" />
             <article class="tile is-child notification charts" data-cy="clicks-conversions">
@@ -280,9 +280,9 @@
                       #
                     </b-radio-button>
                   </b-field>
-                  <b-checkbox v-model="conv.showTracked" size="is-small" data-cy="conversions-show-tracked"
+                  <b-checkbox v-model="conv.showMatched" size="is-small" data-cy="conversions-show-matched"
                     @input="onConvToggle">
-                    {{ $t('dashboard.conversionsChart.showTracked') }}
+                    {{ $t('dashboard.conversionsChart.showMatched') }}
                   </b-checkbox>
                 </div>
               </div>
@@ -457,8 +457,8 @@ export default Vue.extend({
       chartToday: null,
       chartPlugins: Object.freeze([todayOutline]), // frozen: Vue never observes the plugin
       // Fork (campaign conversions, the Clicks + conversions chart) -- the fetched daily series and
-      // the chart's $|# unit and Show Tracked overlay, per browser session
-      // (sessionStorage key dashboard.conversionsChart; a fresh session is $ with Tracked off).
+      // the chart's $|# unit and Show Matched overlay, per browser session
+      // (sessionStorage key dashboard.conversionsChart; a fresh session is $ with Matched shown).
       chartClicks: [],
       chartConversions: [],
       // GLOBAL-LANG-SPEC D5 -- the charts response's sends_source ('ses' | 'listmonk').
@@ -704,7 +704,7 @@ export default Vue.extend({
         matchedLabel: this.$t('analytics.conversions.matched'),
         trackedLabel: this.$t('analytics.conversions.tracked'),
         unit: this.conv.unit,
-        showTracked: this.conv.showTracked,
+        showMatched: this.conv.showMatched,
         today: this.chartToday,
       });
     },
