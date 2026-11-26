@@ -653,7 +653,8 @@ test('I5: splitAccepted -- an accept on an acceptable:false item stays open (the
 
 test('D3: the window -- the three sections are built from open, a fourth Accepted section from accepted', () => {
   const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
-  assert.match(src, /splitAccepted\(this\.entries, this\.latest\)/);
+  // integrations LOGO-APPROVAL-SPEC D10: through logoAwareSplit (a D3.5 approval card stays open).
+  assert.match(src, /logoAwareSplit\(this\.entries, this\.latest, splitAccepted, this\.brandRows\)/);
   assert.match(src, /campaigns\.review\.sectionAccepted/);
   const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
   assert.match(tpl, /data-cy="tag-accepted"/);

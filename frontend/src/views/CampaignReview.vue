@@ -122,6 +122,27 @@
             <!-- integrations EDITOR-SYNC-SPEC D3: the Accepted section's card says it is decided. -->
             <b-tag v-if="sec.key === 'accepted'" type="is-success" class="ml-1" data-cy="tag-accepted">{{ $t('campaigns.review.sectionAccepted') }}</b-tag>
           </div>
+          <!-- integrations LOGO-APPROVAL-SPEC D10: a D3.5 candidate logo (logoApproval.mjs logoCardState
+               `card`) shows the approval question IN PLACE of the todo and its buttons; Yes/No post at
+               once (a brand write, not a staged disposition). Disabled without brands:logos. -->
+          <div v-if="logoCardOf(e)" class="logo-card" data-cy="logo-card">
+            <img :src="logoCardOf(e).url" alt="" class="evidence-thumb logo-card-thumb" />
+            <p class="todo">{{ logoQuestionOf(logoCardOf(e)) }}</p>
+            <div class="buttons mt-2">
+              <b-tooltip :active="!canLogos" :label="$t('campaigns.review.logoNoPermission')" type="is-dark" multilined>
+                <b-button size="is-small" type="is-primary" data-cy="btn-logo-yes" :disabled="!canLogos" :loading="logoBusy"
+                  @click="postLogo(e, true)">
+                  {{ $t('campaigns.review.logoYes') }}
+                </b-button>
+              </b-tooltip>
+              <b-tooltip :active="!canLogos" :label="$t('campaigns.review.logoNoPermission')" type="is-dark" multilined>
+                <b-button size="is-small" data-cy="btn-logo-no" :disabled="!canLogos" :loading="logoBusy" @click="postLogo(e, false)">
+                  {{ $t('campaigns.review.logoNo') }}
+                </b-button>
+              </b-tooltip>
+            </div>
+          </div>
+          <template v-if="!logoCardOf(e)">
           <p class="todo">{{ e.finding.todo }}</p>
           <!-- Polish pass 2: the exact replacement text alone (report `proposal`), with Copy. -->
           <div v-if="e.finding.proposal" class="proposal" data-cy="review-proposal">
@@ -131,6 +152,7 @@
               <b-icon icon="file-multiple-outline" size="is-small" />
             </button>
           </div>
+          </template>
           <!-- REVIEW-NAVIGATION-SPEC §4.3: the standards links (https only). -->
           <p v-if="links(e.item).length" class="is-size-7 standards" data-cy="review-standards">
             <span class="has-text-grey">{{ $t('campaigns.review.standard') }}:</span>
@@ -159,7 +181,9 @@
             {{ acknowledgedLine(decided(e.key)) }}
           </p>
           <p v-else-if="decided(e.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(e.key)) }}</p>
-          <!-- REVIEW-CONVENTIONS-SPEC D5.2: a suggestion card has no buttons -- the section's one button decides. -->
+          <!-- REVIEW-CONVENTIONS-SPEC D5.2: a suggestion card has no buttons -- the section's one button decides.
+               LOGO-APPROVAL-SPEC D10: nor does a logo approval card (its Yes/No are above). -->
+          <template v-if="!logoCardOf(e)">
           <div v-if="sec.key !== 'suggestions'" class="buttons mt-2">
             <!-- integrations REVIEW-TRIM-2-SPEC D9: a finding with nothing to replace keeps the button
                  disabled; its tooltip says why in one line (the planner's reason, else the todo). -->
@@ -187,6 +211,7 @@
               {{ e.finding.severity === 'high' ? $t('campaigns.review.acknowledge') : $t('campaigns.review.acceptRisk') }}
             </b-button>
           </div>
+          </template>
         </div>
         <!-- integrations REVIEW-CONVENTIONS-SPEC D5.3: the Suggestions section's ONE button, below its
              cards, while any suggestion is unrecorded: it stages `accept` on every undecided
@@ -236,7 +261,9 @@
             <li v-for="i in passed" :key="i.id">
               <b-icon v-if="i.tier === 'A'" icon="creation" size="is-small" class="passed-ai" data-cy="passed-ai" />
               <strong>{{ i.id }}</strong> {{ i.title }} —
-              <template v-if="i.verdict === 'n/a'">n/a: {{ i.reason }}</template>
+              <!-- LOGO-APPROVAL-SPEC D10: a D3.5 whose candidate is now approved. -->
+              <template v-if="i.approvedLogo">{{ $t('campaigns.review.logoApproved', { url: i.approvedLogo }) }}</template>
+              <template v-else-if="i.verdict === 'n/a'">n/a: {{ i.reason }}</template>
               <template v-else>{{ $t('campaigns.review.examined', { n: i.examined || 0 }) }}</template>
             </li>
           </ul>
@@ -442,6 +469,9 @@ import {
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
+  LOGO_PERMISSION, brandRowFor, logoAction, logoAwareSplit, logoCardState, logoQuestion, withApprovedLogo,
+} from '../logoApproval.mjs'; // eslint-disable-line import/extensions
+import {
   ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, RUN_FALLBACK_MS, acceptAck, acceptOpener, acceptRun, afterAckWait, clickDecision, fallbackUrl,
   fallbackWindowName, isFinalResult, newToken, referenceLine, resultToast, runBaseFromQuery, runFromQuery, runView, selectMessage, standardLinks,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
@@ -472,6 +502,12 @@ export default Vue.extend({
       runBaseJob: runBaseFromQuery(this.$route.query),
       runFailed: false,
       runElapsed: 0,
+      // integrations LOGO-APPROVAL-SPEC D10: the brands rows (GET /api/brands, read when a report
+      // opens; null = not read or the read failed -> empty lists), the report they were read for,
+      // and a logo POST in flight. Each POST's response replaces its row.
+      brandRows: null,
+      brandRowsFor: null,
+      logoBusy: false,
     };
   },
 
@@ -593,11 +629,15 @@ export default Vue.extend({
         };
         return [starting, ...(this.altsStepRow ? [this.altsStepRow] : [])];
       }
+      // LOGO-APPROVAL-SPEC D10: an approved D3.5 leaves the advisory counts too -- the report's rows
+      // read viewItems, and the deterministic row's progress D3.5 (written before the candidates)
+      // is read as the shown one.
+      const approvedD35 = this.viewItems.find((i) => i && i.id === 'D3.5' && i.approvedLogo);
       const rows = this.checklistPhase ? checklist({
         progress: this.checklistProgress,
-        report: this.report,
+        report: this.viewReport,
         phase: this.checklistPhase,
-        sectionsOf: sectionCounts,
+        sectionsOf: approvedD35 ? (items) => sectionCounts(items.map((i) => (i && i.id === 'D3.5' ? approvedD35 : i))) : sectionCounts,
         t: (k, p) => this.$t(k, p),
       }) : [];
       return withAltsStep(this.altsStepRow, rows);
@@ -625,12 +665,27 @@ export default Vue.extend({
       return out;
     },
 
+    // integrations LOGO-APPROVAL-SPEC D10: the report's items as shown -- a D3.5 whose candidate is
+    // already approved for the brand reads as passed (logoApproval.mjs withApprovedLogo); the entries,
+    // Passed and the checklist's counts all read these.
+    viewItems() {
+      return this.report ? withApprovedLogo(this.report.items, this.brandRows) : [];
+    },
+
+    viewReport() {
+      return this.report ? { ...this.report, items: this.viewItems } : null;
+    },
+
+    canLogos() {
+      return this.$can(LOGO_PERMISSION);
+    },
+
     entries() {
       if (!this.report) {
         return [];
       }
       const out = [];
-      this.report.items.forEach((item) => {
+      this.viewItems.forEach((item) => {
         if (item.verdict === 'pass' || item.verdict === 'n/a') {
           return;
         }
@@ -646,7 +701,8 @@ export default Vue.extend({
     // (reviewChecklist.mjs splitAccepted) leaves the three sections for a fourth, Accepted, after
     // them; a staged choice moves nothing until the save's reload records it.
     sections() {
-      const { open, accepted } = splitAccepted(this.entries, this.latest);
+      // LOGO-APPROVAL-SPEC D10 (stage 2 F10): a D3.5 approval card stays in Advisory whatever its key's disposition.
+      const { open, accepted } = logoAwareSplit(this.entries, this.latest, splitAccepted, this.brandRows);
       const out = this.sectionList(open);
       if (accepted.length) {
         out.push({ key: 'accepted', label: this.$t('campaigns.review.sectionAccepted'), entries: accepted });
@@ -655,7 +711,7 @@ export default Vue.extend({
     },
 
     passed() {
-      return this.report ? this.report.items.filter((i) => i.verdict === 'pass' || i.verdict === 'n/a') : [];
+      return this.viewItems.filter((i) => i.verdict === 'pass' || i.verdict === 'n/a');
     },
 
     // D4.2's coverage (INSPECT-SCOPE-SPEC §2.5), or null → the legacy Structure section.
@@ -751,6 +807,8 @@ export default Vue.extend({
         if (first && this.run && this.runBaseJob === undefined) {
           this.runBaseJob = (d && d.review && d.review.job_id) || null;
         }
+        // integrations LOGO-APPROVAL-SPEC D10: read the brands rows when a report opens.
+        this.loadBrandRows();
         this.schedulePoll();
       }).catch(() => this.schedulePoll());
     },
@@ -759,6 +817,54 @@ export default Vue.extend({
     schedulePoll() {
       clearTimeout(this.pollID);
       this.pollID = setTimeout(this.load, this.isRunning || this.runStarting ? 2000 : 5000);
+    },
+
+    // integrations LOGO-APPROVAL-SPEC D10: GET /api/brands once per shown report (quiet: a failure
+    // leaves the rows null, read as empty lists -- the card then offers the first candidate).
+    loadBrandRows() {
+      const job = this.report ? this.report.jobId : null;
+      if (!job || this.brandRowsFor === job) {
+        return;
+      }
+      this.brandRowsFor = job;
+      this.$api.getBrands(true).then((rows) => {
+        if (this.brandRowsFor === job) {
+          this.brandRows = Array.isArray(rows) ? rows : null;
+        }
+      }).catch(() => {});
+    },
+
+    // The candidate a D3.5 entry's approval card offers, or null (logoApproval.mjs logoCardState).
+    logoCardOf(e) {
+      if (!e || !e.item || e.item.id !== 'D3.5') {
+        return null;
+      }
+      const s = logoCardState(e.item, brandRowFor(e.item, this.brandRows));
+      return s.state === 'card' ? s.candidate : null;
+    },
+
+    logoQuestionOf(candidate) {
+      return logoQuestion(candidate, (k, p) => this.$t(k, p));
+    },
+
+    // Yes approves, No rejects -- posted at once; the response row replaces the window's copy, so Yes
+    // clears D3.5 at once and No shows the next candidate or today's warning. An error shows the
+    // server's message and leaves the card.
+    postLogo(e, yes) {
+      const cand = this.logoCardOf(e);
+      if (!cand || !this.canLogos || this.logoBusy) {
+        return;
+      }
+      this.logoBusy = true;
+      this.$api.postBrandLogo(e.item.brand, cand.url, logoAction(yes)).then((row) => {
+        const rows = Array.isArray(this.brandRows) ? this.brandRows.filter((r) => r && r.slug !== row.slug) : [];
+        this.brandRows = [...rows, row];
+      }).catch((err) => {
+        const msg = (err && err.response && err.response.data && err.response.data.message) || String((err && err.message) || err);
+        this.$utils.toast(msg, 'is-danger');
+      }).finally(() => {
+        this.logoBusy = false;
+      });
     },
 
     // REVIEW-TRIM-2-SPEC D9: the disabled Fix-for-me button's one line -- the planner's reason, else the todo.
@@ -1236,6 +1342,13 @@ export default Vue.extend({
 .evidence-thumb {
   max-height: 80px;
   vertical-align: middle;
+}
+/* integrations LOGO-APPROVAL-SPEC D10: the candidate logo's thumbnail above the question. */
+.logo-card-thumb {
+  display: block;
+  max-width: 100%;
+  margin: 0.4rem 0;
+  border: 1px solid #ddd;
 }
 /* REVIEW-NAVIGATION-SPEC §4.6: the live checklist, pinned at the top. */
 .review-checklist {

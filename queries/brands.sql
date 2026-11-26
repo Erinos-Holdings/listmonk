@@ -59,10 +59,29 @@ SELECT doc FROM brand_health WHERE brand = $1 AND day > (CURRENT_DATE - $2::INT)
 -- import preset. Every rule on the values is models.BrandProblem.
 
 -- name: get-brands
-SELECT slug, from_email, site, personas, created_at, updated_at FROM brands ORDER BY slug;
+SELECT slug, from_email, site, personas, logos_approved, logos_rejected, created_at, updated_at FROM brands ORDER BY slug;
 
 -- name: get-brand
-SELECT slug, from_email, site, personas, created_at, updated_at FROM brands WHERE slug = $1;
+SELECT slug, from_email, site, personas, logos_approved, logos_rejected, created_at, updated_at FROM brands WHERE slug = $1;
+
+-- name: update-brand-logos
+-- Fork (approved brand logos, integrations LOGO-APPROVAL-SPEC D5). The ONE writer of logos_approved
+-- and logos_rejected, one atomic statement per call. $2 is the url (validated by the handler with
+-- models.LogoURLProblem), $3 the action -- approve (out of rejected, appended to approved if absent),
+-- reject (out of approved, appended to rejected if absent), remove (out of both). Entries keep
+-- insertion order, so the lists stay disjoint and duplicate-free under any sequence. Zero rows means
+-- no such slug.
+UPDATE brands SET
+    logos_approved = CASE
+        WHEN $3::TEXT = 'approve' THEN
+            CASE WHEN $2::TEXT = ANY(logos_approved) THEN logos_approved ELSE ARRAY_APPEND(logos_approved, $2::TEXT) END
+        ELSE ARRAY_REMOVE(logos_approved, $2::TEXT) END,
+    logos_rejected = CASE
+        WHEN $3::TEXT = 'reject' THEN
+            CASE WHEN $2::TEXT = ANY(logos_rejected) THEN logos_rejected ELSE ARRAY_APPEND(logos_rejected, $2::TEXT) END
+        ELSE ARRAY_REMOVE(logos_rejected, $2::TEXT) END,
+    updated_at = NOW()
+    WHERE slug = $1 AND $3::TEXT IN ('approve', 'reject', 'remove') RETURNING slug;
 
 -- name: update-brand-personas
 -- Fork (persona From, integrations PERSONA-FROM-SPEC D4). Full-set replacement of a brand's

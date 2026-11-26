@@ -131,6 +131,8 @@ func TestSuperAdminHoldsEveryPermission(t *testing.T) {
 		{"v6.2.36", func() error { return V6_2_36(h.db, nil, nil, lo) }},
 		// Fork (SMS Admin, integrations SMS-LINKS-ADMIN-SPEC D11) -- sms:manage.
 		{"v6.2.44", func() error { return V6_2_44(h.db, nil, nil, lo) }},
+		// Fork (approved brand logos, integrations LOGO-APPROVAL-SPEC D4) -- brands:logos.
+		{"v6.2.47", func() error { return V6_2_47(h.db, nil, nil, lo) }},
 	}
 	for _, g := range granting {
 		if err := g.run(); err != nil {

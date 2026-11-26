@@ -88,6 +88,10 @@ const (
 	// series item on Brands > Usage. Read directly from PermissionsMap by cmd/usage_decisions.go's
 	// canDecide (never HasPerm): Super Admin and API users are refused even holding it.
 	PermBrandsDecide = "brands:decide"
+	// Fork (approved brand logos, integrations LOGO-APPROVAL-SPEC D4) -- approve, reject or remove a
+	// file on a brand's approved / rejected logo lists (POST /api/brands/:slug/logos). Grants that and
+	// nothing else; it is NOT brands:manage and no route checks one for the other.
+	PermBrandsLogos = "brands:logos"
 
 	// Fork (list join triggers, LIST-JOIN-TRIGGER-SPEC D5) -- set or change a list's transactional
 	// flag, and change the join trigger or brand of a list whose stored flag is true.

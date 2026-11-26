@@ -399,3 +399,44 @@ func (a *App) PutBrandPersonas(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, okResp{out})
 }
+
+// Fork (approved brand logos, integrations LOGO-APPROVAL-SPEC D5). A brand's approved and rejected
+// logo files, read by the campaign review's D3.5 (an approved file passes it) and the Inspect
+// window's approval card (a rejected file is never offered again). Registered under brands:logos
+// alone. The one rule on an entry is models.LogoURLProblem; the one writer the update-brand-logos
+// query (one atomic statement).
+
+// brandLogoActions are the actions PostBrandLogos accepts.
+var brandLogoActions = map[string]bool{models.BrandLogoApprove: true, models.BrandLogoReject: true, models.BrandLogoRemove: true}
+
+// PostBrandLogos applies one logo action. Body: {"url": "<url>", "action": "approve" | "reject" |
+// "remove"}. The url is trimmed then validated (400); an unknown action is 400; an unknown slug 404.
+// approve moves the url out of the rejected list and appends it to the approved list if absent;
+// reject the reverse; remove takes it out of both (200 even when it was in neither). Returns the
+// whole brand row.
+func (a *App) PostBrandLogos(c echo.Context) error {
+	var req struct {
+		URL    string `json:"url"`
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.invalidFields", "name", "logo"))
+	}
+	u := strings.TrimSpace(req.URL)
+	if key := models.LogoURLProblem(u); key != "" {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts(key, "max", strconv.Itoa(models.BrandLogoURLMax)))
+	}
+	if !brandLogoActions[req.Action] {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("brands.logoActionInvalid", "action", req.Action))
+	}
+
+	slug := c.Param("slug")
+	out, found, err := a.core.UpdateBrandLogos(slug, u, req.Action)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("globals.messages.notFound", "name", slug))
+	}
+	return c.JSON(http.StatusOK, okResp{out})
+}

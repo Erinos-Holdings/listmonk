@@ -15,7 +15,8 @@
         [
             "brands:get",
             "brands:manage",
-            "brands:decide"
+            "brands:decide",
+            "brands:logos"
         ]
     },
     {

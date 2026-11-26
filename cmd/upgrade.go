@@ -137,6 +137,8 @@ var migList = []migFunc{
 	{"v6.2.45", migrations.V6_2_45},
 	// Fork migration (erinos): the 60-day engaged count's speed -- idx_campaign_smart_skips_sub on campaign_smart_skips (subscriber_id, campaign_id), the index brand_silent_skips' per-member probe needs (the primary key leads with campaign_id); no result changes (SILENT-PREVIEW-SPEED-SPEC D1) — see internal/migrations/v6.2.46.go.
 	{"v6.2.46", migrations.V6_2_46},
+	// Fork migration (erinos): approved brand logos -- brands.logos_approved and brands.logos_rejected (TEXT[] NOT NULL DEFAULT '{}'; the campaign review's D3.5 reads them, their one writer is POST /api/brands/:slug/logos) and brands:logos granted to roles 1, 2, 3, 11 and 21 (integrations LOGO-APPROVAL-SPEC D3/D4) — see internal/migrations/v6.2.47.go.
+	{"v6.2.47", migrations.V6_2_47},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files

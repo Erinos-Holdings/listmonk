@@ -783,6 +783,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_brands_slug_lower ON brands (LOWER(slug));
 -- PERSONA-FROM-SPEC D1). A separate statement so the v6.2.20 mirror above stays byte-equal to its
 -- migration; mirrored in internal/migrations/v6.2.21.go.
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS personas TEXT[] NOT NULL DEFAULT '{}';
+-- Fork (approved brand logos): the files a brand's Marketing approved or rejected as its logo for the
+-- campaign review's D3.5 (v6.2.47, integrations LOGO-APPROVAL-SPEC D3). Their one writer is the
+-- update-brand-logos query; mirrored in internal/migrations/v6.2.47.go.
+ALTER TABLE brands ADD COLUMN IF NOT EXISTS logos_approved TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE brands ADD COLUMN IF NOT EXISTS logos_rejected TEXT[] NOT NULL DEFAULT '{}';
 
 -- Fork (sunset v2, SUNSET-V2-SPEC §4.1): the re-engagement queue countdown on lists, and the hold
 -- release trigger that keeps a FINAL hold (meta.hold.final_at) unless the transaction set

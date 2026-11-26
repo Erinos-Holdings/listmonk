@@ -308,6 +308,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// brand route (the slug `health` is reserved).
 		g.GET("/api/brands/:slug/personas", pm(a.GetBrandPersonas, "lists:manage_all"))
 		g.PUT("/api/brands/:slug/personas", pm(a.PutBrandPersonas, "lists:manage_all"))
+		// Fork (approved brand logos) -- LOGO-APPROVAL-SPEC D5 (brands.go). The ONE writer of a brand's
+		// approved / rejected logo lists, under brands:logos alone (never brands:manage). After the
+		// static /api/brands/health routes, so a `health` slug is never a row (404).
+		g.POST("/api/brands/:slug/logos", pm(a.PostBrandLogos, "brands:logos"))
 		// Fork (system health) -- SES-HEALTH-SPEC D6 (system_health.go). No new permission:
 		// whoever may read Brands may read the system rows; the brand-health writer writes them.
 		g.GET("/api/system/health/:kind", pm(a.GetSystemHealthHistory, "brands:get"))

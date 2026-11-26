@@ -354,6 +354,16 @@ export const putBrandPersonas = (slug, personas) => http.put(
   { camelCase: false },
 );
 
+// Fork (approved brand logos, integrations LOGO-APPROVAL-SPEC D5). One logo action on a brand's
+// approved / rejected lists (brands:logos): action approve | reject | remove. Returns the whole brand
+// row (snake_case kept: logoApproval.mjs reads logos_approved / logos_rejected). disableToast: the
+// caller shows the server's message itself and keeps its card.
+export const postBrandLogo = (slug, url, action) => http.post(
+  `/api/brands/${encodeURIComponent(slug)}/logos`,
+  { url, action },
+  { camelCase: false, disableToast: true },
+);
+
 // Fork (usage decisions, integrations USAGE-DECISIONS-SPEC D4/D5) -- the lifecycle decision record
 // under Brands > Usage. The GET never toasts (a reader without the section simply sees none); the
 // POST passes disableToast, so the pane toasts every refusal itself (one toast), and on a 409

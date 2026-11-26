@@ -36,6 +36,30 @@ func fillBrand(b *models.Brand) {
 	if b.Personas == nil {
 		b.Personas = pq.StringArray{}
 	}
+	// Fork (approved brand logos, LOGO-APPROVAL-SPEC D3): JSON `[]`, never null.
+	if b.LogosApproved == nil {
+		b.LogosApproved = pq.StringArray{}
+	}
+	if b.LogosRejected == nil {
+		b.LogosRejected = pq.StringArray{}
+	}
+}
+
+// UpdateBrandLogos applies one logo action (models.BrandLogo*) to a brand row's approved and rejected
+// lists in one atomic statement -- the ONE writer of either column (LOGO-APPROVAL-SPEC D5) -- and
+// returns the row. The url is validated by the caller (models.LogoURLProblem). found is false when no
+// row has this slug.
+func (c *Core) UpdateBrandLogos(slug, url, action string) (models.Brand, bool, error) {
+	var out string
+	if err := c.q.UpdateBrandLogos.Get(&out, slug, url, action); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.Brand{}, false, nil
+		}
+		c.log.Printf("error updating brand logos: %v", err)
+		return models.Brand{}, false, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "brand", "error", pqErrMsg(err)))
+	}
+	return c.GetBrand(out)
 }
 
 // UpdateBrandPersonas replaces a brand row's persona set (validated by the caller) and returns

@@ -405,6 +405,31 @@
             </ul>
             <p v-else class="is-size-7 has-text-grey">{{ $t('brands.noLists') }}</p>
           </div>
+
+          <!-- Fork (approved brand logos, integrations LOGO-APPROVAL-SPEC D6) -- the undo for the Inspect
+          window's approval card: the brand row's approved and rejected logo files (GET /api/brands),
+          each with Remove (POST /api/brands/:slug/logos remove), enabled only for brands:logos. Each
+          POST's response replaces the row. -->
+          <div class="box" data-cy="brand-logos">
+            <h3 class="title is-6">{{ $t('brands.logos.title') }}</h3>
+            <p class="is-size-7 has-text-grey mb-2">{{ $t('brands.logos.intro') }}</p>
+            <div v-for="g in logoGroups" :key="g.key" class="mb-3" :data-cy="`brand-logos-${g.key}`">
+              <h4 class="title is-7 mb-1">{{ $t(`brands.logos.${g.key}`) }}</h4>
+              <ul v-if="g.urls.length" class="is-size-7 logo-list">
+                <li v-for="u in g.urls" :key="u" class="logo-row">
+                  <img :src="u" alt="" class="logo-thumb" />
+                  <span class="logo-url">{{ u }}</span>
+                  <b-tooltip :active="!$can('brands:logos')" :label="$t('brands.logos.noPermission')" type="is-dark" multilined>
+                    <b-button size="is-small" data-cy="btn-logo-remove" :disabled="!$can('brands:logos') || logoBusy"
+                      @click="removeLogo(u)">
+                      {{ $t('brands.logos.remove') }}
+                    </b-button>
+                  </b-tooltip>
+                </li>
+              </ul>
+              <p v-else class="is-size-7 has-text-grey">{{ $t(g.key === 'approved' ? 'brands.logos.noApproved' : 'brands.logos.noRejected') }}</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -428,6 +453,7 @@ import {
   compareDay, compareStatus, compareText, sortRows,
 } from '../health-sort';
 import { campaignLinkable, filterBrandRows, filterRowsByLaunch } from '../brandScope.mjs'; // eslint-disable-line import/extensions
+import { brandLists } from '../logoApproval.mjs'; // eslint-disable-line import/extensions
 
 // Fork (SES health, SES-HEALTH-SPEC D4/M4): `ses` is the sixth input; rows written before it
 // existed lack it and render the unknown chip.
@@ -508,6 +534,8 @@ export default Vue.extend({
       pane: initialBrandsPane(readPane(sessionStore(window), BRANDS_PANE_PREF)),
       // BRAND-PICKER-SPEC D7: the brands rows (GET /api/brands), by slug.
       brandRows: {},
+      // LOGO-APPROVAL-SPEC D6: a logo Remove in flight.
+      logoBusy: false,
       history: [],
       inputKeys: INPUT_KEYS,
       // BRANDS-UX-SPEC D3/M6: the view owns the sort (Buefy's backend-sorting never sorts and
@@ -550,6 +578,13 @@ export default Vue.extend({
         comparators[`input-${k}`] = (a, b, o) => compareStatus(this.inputOf(a, k).status, this.inputOf(b, k).status, o);
       });
       return sortRows(rows, this.sort.field, this.sort.order, this.nameOf, comparators);
+    },
+
+    // Fork (approved brand logos, LOGO-APPROVAL-SPEC D6) -- the detail page's Logos box: the brand
+    // row's approved and rejected files (logoApproval.mjs brandLists; no row = empty lists).
+    logoGroups() {
+      const { approved, rejected } = brandLists(this.brandParam ? this.brandRows[this.brandParam] : null);
+      return [{ key: 'approved', urls: approved }, { key: 'rejected', urls: rejected }];
     },
 
     factRows() {
@@ -620,6 +655,24 @@ export default Vue.extend({
 
     brandRowOf(row) {
       return (row && this.brandRows[row.brand]) || null;
+    },
+
+    // LOGO-APPROVAL-SPEC D6: Remove takes the file off both lists; the response row replaces ours.
+    // A refusal toasts the server's message (the call passes disableToast).
+    removeLogo(url) {
+      const slug = this.brandParam;
+      if (!slug || !this.$can('brands:logos') || this.logoBusy) {
+        return;
+      }
+      this.logoBusy = true;
+      this.$api.postBrandLogo(slug, url, 'remove').then((row) => {
+        this.brandRows = { ...this.brandRows, [row.slug]: row };
+      }).catch((err) => {
+        const msg = (err && err.response && err.response.data && err.response.data.message) || String((err && err.message) || err);
+        this.$utils.toast(msg, 'is-danger');
+      }).finally(() => {
+        this.logoBusy = false;
+      });
     },
 
     nameOf(row) {
@@ -872,6 +925,21 @@ export default Vue.extend({
 
 <style lang="scss">
 .brands {
+  // Fork (approved brand logos, LOGO-APPROVAL-SPEC D6): thumbnails at most 48 px high.
+  .logo-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .logo-thumb {
+    max-height: 48px;
+    max-width: 160px;
+  }
+  .logo-url {
+    word-break: break-all;
+    flex: 1;
+  }
   .status-strip {
     display: flex;
     flex-wrap: wrap;

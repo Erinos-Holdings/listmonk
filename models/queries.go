@@ -253,6 +253,9 @@ type Queries struct {
 	// Fork (persona From) -- queries/brands.sql, PERSONA-FROM-SPEC D4.
 	UpdateBrandPersonas      *sqlx.Stmt `query:"update-brand-personas"`
 	GetCampaignsCarryingFrom *sqlx.Stmt `query:"get-campaigns-carrying-from"`
+	// Fork (approved brand logos) -- queries/brands.sql, LOGO-APPROVAL-SPEC D5: the ONE writer of
+	// brands.logos_approved / logos_rejected.
+	UpdateBrandLogos *sqlx.Stmt `query:"update-brand-logos"`
 	// Fork (usage decisions) -- queries/brands.sql, USAGE-DECISIONS-SPEC D4. An INSERT and a SELECT
 	// only: the table is append-only (TestNoMutatingQueries, and the v6.2.29 trigger).
 	InsertUsageDecision *sqlx.Stmt `query:"insert-usage-decision"`
