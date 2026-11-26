@@ -177,6 +177,10 @@
             type="is-dark" multilined position="is-left" append-to-body>
             <span class="audience-switch-label" tabindex="0">{{ $t('campaigns.silentSkip') }}</span>
           </b-tooltip>
+          <!-- User 2026-11-26: the live preview takes seconds, so a blue spinner right after the label
+               says the count is still coming (silentPreviewLoading). -->
+          <span v-if="silentPreviewLoading && silentPreviewKey" class="audience-switch-spinner" data-cy="silent-skip-loading"
+            aria-hidden="true" />
           <!-- Promo series (PROMO-SERIES-SPEC D6): a user click marks the switch touched for this page
                session, so a later Step change never overrides it. -->
           <b-switch v-model="form.silentSkip" size="is-small" type="is-success" :disabled="!silentSkipEditable"
@@ -907,6 +911,9 @@ export default Vue.extend({
       // yahoo}) for the loaded campaign, or null; and the id it belongs to.
       silentPreview: null,
       silentPreviewFor: null,
+      // User 2026-11-26: true while the live preview's request for silentPreviewFor is in flight (the
+      // spinner also needs a live silentPreviewKey, so switching off hides it at once).
+      silentPreviewLoading: false,
       // Fork (promo series, PROMO-SERIES-SPEC D5/D6) -- the group's live preview ({orders, skipped,
       // stale}) and its key; whether the user clicked the 60-day engaged switch this page session.
       promoPreview: null,
@@ -3542,12 +3549,17 @@ export default Vue.extend({
         }
         this.silentPreviewFor = key;
         this.silentPreview = null;
+        this.silentPreviewLoading = true;
         const { id } = this.data;
         this.$api.getCampaignSilentAudience(id).then((r) => {
           if (this.silentPreviewFor === key && r) {
             this.silentPreview = { skipped: Number(r.skipped) || 0, gmail: Number(r.gmail) || 0, yahoo: Number(r.yahoo) || 0 };
           }
-        }).catch(() => {});
+        }).catch(() => {}).finally(() => {
+          if (this.silentPreviewFor === key) {
+            this.silentPreviewLoading = false;
+          }
+        });
       },
     },
 

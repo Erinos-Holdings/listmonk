@@ -247,6 +247,18 @@ test('both switches render: Smart Sending first, 60-day engaged directly under i
   assert.doesNotMatch(block('.audience-switch'), /position:/);
 });
 
+// User 2026-11-26: a blue spinner right after the 60-day label while its live preview is in flight.
+test('the 60-day row shows a spinner after its label while the preview loads', () => {
+  const view = readFileSync(new URL('./views/Campaign.vue', import.meta.url), 'utf8');
+  const row = view.slice(view.indexOf('data-cy="btn-silent-skip"'), view.indexOf('</div>', view.indexOf('data-cy="btn-silent-skip"')));
+  const label = row.indexOf("$t('campaigns.silentSkip')");
+  const spin = row.indexOf('data-cy="silent-skip-loading"');
+  assert.ok(label > 0 && spin > label && spin < row.indexOf('<b-switch'), 'label, spinner, switch -- in that order');
+  assert.match(row, /v-if="silentPreviewLoading && silentPreviewKey"/);
+  // The flag is cleared when the request settles, failure included.
+  assert.match(view, /\.catch\(\(\) => \{\}\)\.finally\(\(\) => \{\s*if \(this\.silentPreviewFor === key\) \{\s*this\.silentPreviewLoading = false;/);
+});
+
 test('the 60-day switch is labelled "60-day engaged" everywhere it is shown', () => {
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   assert.equal(en['campaigns.silentSkip'], '60-day engaged');

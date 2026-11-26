@@ -1327,6 +1327,12 @@ CREATE OR REPLACE FUNCTION brand_opted_in(p_subscriber_id INT, p_list_id INT) RE
     FROM brand_opt_in_rule(p_list_id) r;
 $$ LANGUAGE sql STABLE;
 
+-- Fork (the 60-day engaged count's speed, integrations listmonk/SILENT-PREVIEW-SPEED-SPEC D1):
+-- campaign_smart_skips is probed by subscriber (brand_silent_skips' per-member NOT EXISTS), and its
+-- primary key leads with campaign_id. Mirrored in internal/migrations/v6.2.46.go (keep the two
+-- identical; v6_2_46_db_test.go asserts it verbatim).
+CREATE INDEX IF NOT EXISTS idx_campaign_smart_skips_sub ON campaign_smart_skips (subscriber_id, campaign_id);
+
 -- Fork (naming standard, integrations listmonk/NAMING-STANDARD-SPEC D10 §4.1): a renamed record's
 -- ORIGINAL name (campaign, list or template), written by the rename endpoints and the name-changing
 -- update paths, read as the API rows' former_name and by core.CurrentReview. No foreign key (three

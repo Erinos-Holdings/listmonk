@@ -63,6 +63,10 @@ func TestSmartSendingMigration_V6_2_31(t *testing.T) {
 	if err := V6_2_40(h.db, nil, nil, lo); err != nil {
 		t.Fatalf("V6_2_40 after V6_2_32: %v", err)
 	}
+	// Fork (60-day engaged speed) -- v6.2.46 adds idx_campaign_smart_skips_sub (SILENT-PREVIEW-SPEED-SPEC D1).
+	if err := V6_2_46(h.db, nil, nil, lo); err != nil {
+		t.Fatalf("V6_2_46 after V6_2_40: %v", err)
+	}
 	if got := h.smartSendingShape(); got != fresh {
 		t.Fatalf("migration shape differs from schema.sql\n migration %s\n schema    %s", got, fresh)
 	}

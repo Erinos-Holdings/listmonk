@@ -135,6 +135,8 @@ var migList = []migFunc{
 	{"v6.2.44", migrations.V6_2_44},
 	// Fork migration (erinos): the automation main-list rule -- brand_opted_in(subscriber, list) (a confirmed row on the brand's main list, brand_master_list_id; the main list, reengage queues, transactional and untagged lists exempt; no single main list fails closed), read by next-evergreen-subscribers (integrations SKU-JOURNEYS-SPEC D1) — see internal/migrations/v6.2.45.go.
 	{"v6.2.45", migrations.V6_2_45},
+	// Fork migration (erinos): the 60-day engaged count's speed -- idx_campaign_smart_skips_sub on campaign_smart_skips (subscriber_id, campaign_id), the index brand_silent_skips' per-member probe needs (the primary key leads with campaign_id); no result changes (SILENT-PREVIEW-SPEED-SPEC D1) — see internal/migrations/v6.2.46.go.
+	{"v6.2.46", migrations.V6_2_46},
 }
 
 // upgrade upgrades the database to the current version by running SQL migration files
