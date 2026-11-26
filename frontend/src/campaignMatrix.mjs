@@ -120,11 +120,11 @@ export function leftColumns(showBrand = true, showLang = false, expanded = false
     { field: 'date', label: 'analytics.matrix.started' },
     { field: 'brand', label: 'dashboard.matrix.brand' },
     { field: 'name', label: 'analytics.matrix.campaign' },
-    // The user, 2026-11-21: Campaign | Lang | Code | Step (PROMO-SERIES-SPEC D7's Code and Step,
-    // blank for a journey and the totals row, now follow Lang).
+    // The user, 2026-11-21: Campaign | Lang | Step | Code (PROMO-SERIES-SPEC D7's Code and Step,
+    // blank for a journey and the totals row, follow Lang; Step before Code since 2026-11-25).
     { field: 'lang', label: 'analytics.matrix.lang' },
-    { field: 'promo_code', label: 'analytics.matrix.promoCode' },
     { field: 'promo_step', label: 'analytics.matrix.promoStep' },
+    { field: 'promo_code', label: 'analytics.matrix.promoCode' },
     { field: 'sent', label: 'dashboard.matrix.sent' },
     // The user, 2026-11-21: SKIPPED is a group in the top row (leftGroupHeaders), light red
     // (`bm-skip`); its first column's sub-header reads "Total", the reasons follow when expanded.

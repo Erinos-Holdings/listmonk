@@ -274,16 +274,16 @@
         <span v-if="props.row.group" data-cy="group-lang">{{ groupLangText(props.row) }}</span>
         <span v-else data-cy="campaign-lang" :title="langChipTitle(props.row)">{{ langText(props.row) }}</span>
       </b-table-column>
-      <!-- Fork (promo series, integrations PROMO-SERIES-SPEC D7) -- Code and Step, from the served
+      <!-- Fork (promo series, integrations PROMO-SERIES-SPEC D7) -- Step and Code, from the served
            fields; blank for a journey (promoSeries.mjs::promoCells). Columns only. Campaign mode
            (D8/D9): a series row its Code, a set row its Step when every member agrees. -->
-      <b-table-column v-slot="props" field="promo_code" :label="$t('campaigns.promoCode')" width="7%">
-        <span v-if="props.row.group" data-cy="group-promo-code">{{ props.row.code }}</span>
-        <span v-else data-cy="campaign-promo-code">{{ promoCellsOf(props.row).code }}</span>
-      </b-table-column>
       <b-table-column v-slot="props" field="promo_step" :label="$t('campaigns.promoStepShort')" width="4%" centered>
         <span v-if="props.row.group" data-cy="group-promo-step">{{ props.row.step === null ? '' : props.row.step }}</span>
         <span v-else data-cy="campaign-promo-step">{{ promoCellsOf(props.row).step }}</span>
+      </b-table-column>
+      <b-table-column v-slot="props" field="promo_code" :label="$t('campaigns.promoCode')" width="7%">
+        <span v-if="props.row.group" data-cy="group-promo-code">{{ props.row.code }}</span>
+        <span v-else data-cy="campaign-promo-code">{{ promoCellsOf(props.row).code }}</span>
       </b-table-column>
       <b-table-column v-slot="props" cell-class="lists" field="lists" :label="$t('globals.terms.lists')" width="15%">
         <ul>

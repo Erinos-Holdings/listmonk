@@ -733,12 +733,12 @@ test('groupHeaders agree with midColumns', () => {
 // Polish 2026-11-14: Status far left, Started (the date field), Brand, Campaign, Lang (All only).
 // Integrations PROMO-SERIES-SPEC D7 as re-ordered by the user 2026-11-21: Campaign | Lang | Code | Step.
 test('leftColumns order', () => {
-  assert.deepEqual(leftColumns(true, true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'lang', 'promo_code', 'promo_step', 'sent', 'skipped']);
-  assert.deepEqual(leftColumns(true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'promo_code', 'promo_step', 'sent', 'skipped']);
-  assert.deepEqual(leftColumns(false, true).map((c) => c.field), ['status', 'date', 'name', 'lang', 'promo_code', 'promo_step', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(true, true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'lang', 'promo_step', 'promo_code', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(true).map((c) => c.field), ['status', 'date', 'brand', 'name', 'promo_step', 'promo_code', 'sent', 'skipped']);
+  assert.deepEqual(leftColumns(false, true).map((c) => c.field), ['status', 'date', 'name', 'lang', 'promo_step', 'promo_code', 'sent', 'skipped']);
   assert.equal(leftColumns(true).find((c) => c.field === 'date').label, 'analytics.matrix.started');
   const first = leftColumns(true, true).map((c) => clickSort({ field: 'views', order: 'desc' }, c.field).order);
-  assert.deepEqual(first, ['asc', 'desc', 'asc', 'asc', 'asc', 'asc', 'desc', 'desc', 'desc']);
+  assert.deepEqual(first, ['asc', 'desc', 'asc', 'asc', 'asc', 'desc', 'asc', 'desc', 'desc']);
 });
 
 // The user, 2026-11-21: SKIPPED is a group in the top row (beside CONVERSIONS), its first column's
@@ -892,7 +892,7 @@ test('matrix views wiring', () => {
 // PROMO-SERIES-SPEC T14: collapsed, the Skipped section is one column (as before); expanded adds
 // exactly FOUR reasons -- Purchased after 60-day engaged.
 test('SIXTY-DAY-OPENS D5 / PROMO-SERIES T14: collapsed columns are today\'s; expanded adds exactly the four reasons right of Skipped', () => {
-  const today = ['status', 'date', 'brand', 'name', 'lang', 'promo_code', 'promo_step', 'sent', 'skipped'];
+  const today = ['status', 'date', 'brand', 'name', 'lang', 'promo_step', 'promo_code', 'sent', 'skipped'];
   assert.deepEqual(leftColumns(true, true).map((c) => c.field), today);
   assert.deepEqual(leftColumns(true, true, false).map((c) => c.field), today);
   const exp = leftColumns(true, true, true).map((c) => c.field);
