@@ -507,6 +507,8 @@ export default Vue.extend({
       // and a logo POST in flight. Each POST's response replaces its row.
       brandRows: null,
       brandRowsFor: null,
+      // The job whose rows brandRows holds (a GET's or a POST's) -- a later GET never overwrites them.
+      brandRowsHeldFor: null,
       logoBusy: false,
     };
   },
@@ -828,10 +830,18 @@ export default Vue.extend({
       }
       this.brandRowsFor = job;
       this.$api.getBrands(true).then((rows) => {
-        if (this.brandRowsFor === job) {
+        // Stage 4 R3 (a): never overwrite rows already held for this job (a Yes/No POST's response
+        // may have landed first); the job guard drops a stale answer.
+        if (this.brandRowsFor === job && this.brandRowsHeldFor !== job) {
           this.brandRows = Array.isArray(rows) ? rows : null;
+          this.brandRowsHeldFor = Array.isArray(rows) ? job : null;
         }
-      }).catch(() => {});
+      }).catch(() => {
+        // Stage 4 R3 (b): a failed read is retried on a later poll.
+        if (this.brandRowsFor === job) {
+          this.brandRowsFor = null;
+        }
+      });
     },
 
     // The candidate a D3.5 entry's approval card offers, or null (logoApproval.mjs logoCardState).
@@ -859,6 +869,7 @@ export default Vue.extend({
       this.$api.postBrandLogo(e.item.brand, cand.url, logoAction(yes)).then((row) => {
         const rows = Array.isArray(this.brandRows) ? this.brandRows.filter((r) => r && r.slug !== row.slug) : [];
         this.brandRows = [...rows, row];
+        this.brandRowsHeldFor = this.report ? this.report.jobId : null;
       }).catch((err) => {
         const msg = (err && err.response && err.response.data && err.response.data.message) || String((err && err.message) || err);
         this.$utils.toast(msg, 'is-danger');

@@ -63,11 +63,10 @@ test('a null row (a failed read) or an older fork row reads as empty lists', () 
   assert.deepEqual(logoCardState(d35(), undefined).state, 'card');
 });
 
-test('brandRowFor: the item brand, from an array or an object by slug; none → null', () => {
+test('brandRowFor: the item brand from the rows array; none → null', () => {
   const r = row([A]);
   assert.equal(brandRowFor(d35(), [r]), r);
-  assert.equal(brandRowFor(d35(), { curated: r }), r);
-  assert.equal(brandRowFor(d35(), { ruze: r }), null);
+  assert.equal(brandRowFor(d35(), [{ ...r, slug: 'ruze' }]), null);
   assert.equal(brandRowFor({ ...d35(), brand: undefined }, [r]), null);
   assert.equal(brandRowFor(d35(), null), null);
 });
@@ -75,13 +74,13 @@ test('brandRowFor: the item brand, from an array or an object by slug; none → 
 test('an approved D3.5 leaves the advisory entries and the checklist count, and is listed under Passed', () => {
   const items = [d35(), other];
   assert.equal(sectionCounts(items).advisory, 2);
-  const shown = withApprovedLogo(items, { curated: row([A]) });
+  const shown = withApprovedLogo(items, [row([A])]);
   assert.equal(sectionCounts(shown).advisory, 1);
   assert.deepEqual(openEntries(shown).map((e) => e.item.id), ['D3.4']);
   const passed = shown.filter((i) => i.verdict === 'pass' || i.verdict === 'n/a');
   assert.deepEqual(passed.map((i) => [i.id, i.approvedLogo, i.findings.length]), [['D3.5', A, 0]]);
   // Not approved: the items are returned as they are.
-  const same = withApprovedLogo(items, { curated: row() });
+  const same = withApprovedLogo(items, [row()]);
   assert.equal(same[0], items[0]);
   assert.equal(same[1], items[1]);
   assert.equal(sectionCounts(same).advisory, 2);
@@ -90,14 +89,14 @@ test('an approved D3.5 leaves the advisory entries and the checklist count, and 
 test('a D3.5 key already accepted still shows the card in Advisory; a warn D3.5 accepted moves to Accepted', () => {
   const entries = openEntries([d35(), other]);
   const latest = { 'D3.5#3501c1849f38fc88': { item_key: 'D3.5#3501c1849f38fc88', action: 'accept' }, 'D3.4#x': { item_key: 'D3.4#x', action: 'accept' } };
-  const rows = { curated: row() };
+  const rows = [row()];
   assert.equal(isLogoCard(entries[0], rows), true);
   const { open, accepted } = logoAwareSplit(entries, latest, splitAccepted, rows);
   assert.deepEqual(open.map((e) => e.item.id), ['D3.5']);
   assert.equal(open[0].section, 'advisory');
   assert.deepEqual(accepted.map((e) => e.item.id), ['D3.4']);
   // Today's warn (every candidate rejected): the ordinary Accepted rule applies.
-  const warnRows = { curated: row([], [A, B]) };
+  const warnRows = [row([], [A, B])];
   const w = logoAwareSplit(entries, latest, splitAccepted, warnRows);
   assert.deepEqual(w.open.map((e) => e.item.id), []);
   assert.deepEqual(w.accepted.map((e) => e.item.id), ['D3.5', 'D3.4']);

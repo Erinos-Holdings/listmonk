@@ -105,8 +105,8 @@ func TestBrandLogosMigration_V6_2_47(t *testing.T) {
 		}
 	}
 	check(1)
-	if len(brandLogosGrantRoles) != 5 || brandLogosGrantRoles[3] != 11 || !strings.Contains(brandLogosGrantDDL, "IN (1, 2, 3, 11, 21)") {
-		t.Fatalf("the grant list drifted: %v / %s", brandLogosGrantRoles, brandLogosGrantDDL)
+	if !strings.Contains(brandLogosGrantDDL, "IN (1, 2, 3, 11, 21)") {
+		t.Fatalf("the grant list drifted: %s", brandLogosGrantDDL)
 	}
 
 	// Idempotent: a second run is no error, keeps lists written since and grants nothing twice.

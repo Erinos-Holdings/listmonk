@@ -19,12 +19,11 @@ export function brandLists(brandRow) {
   return { approved: strings(row.logos_approved), rejected: strings(row.logos_rejected) };
 }
 
-// The brands row of an item's brand from the window's rows (an array of rows, or an object by slug).
+// The brands row of an item's brand from the window's rows (the GET /api/brands array; null = none).
 export function brandRowFor(item, rows) {
   const slug = item && typeof item.brand === 'string' ? item.brand : '';
-  if (!slug || !rows) return null;
-  if (Array.isArray(rows)) return rows.find((r) => r && r.slug === slug) || null;
-  return Object.prototype.hasOwnProperty.call(rows, slug) ? rows[slug] : null;
+  if (!slug || !Array.isArray(rows)) return null;
+  return rows.find((r) => r && r.slug === slug) || null;
 }
 
 const candidatesOf = (item) => (item && Array.isArray(item.logoCandidates) ? item.logoCandidates : [])

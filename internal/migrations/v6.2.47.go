@@ -51,9 +51,6 @@ ALTER TABLE brands ADD COLUMN IF NOT EXISTS logos_approved TEXT[] NOT NULL DEFAU
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS logos_rejected TEXT[] NOT NULL DEFAULT '{}';
 `
 
-// brandLogosGrantRoles are the role ids v6.2.47 grants brands:logos to (LOGO-APPROVAL-SPEC D4).
-var brandLogosGrantRoles = []int{1, 2, 3, 11, 21}
-
 // brandLogosGrantDDL is the v6.2.14 grant pattern over the D4 role ids. A fresh install needs
 // nothing: schema.sql carries no role rows, and cmd/install.go grants role 1 every permission of
 // permissions.json.
