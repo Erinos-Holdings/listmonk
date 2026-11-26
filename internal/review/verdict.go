@@ -85,9 +85,12 @@ func LatestDispositions(ds []models.ReviewDisposition) map[string]models.ReviewD
 //   - a D item with verdict fail blocks unless the latest disposition for each of its finding keys
 //     is accept -- and blocks regardless when the item is acceptable:false;
 //   - an A finding with severity critical or high blocks unless accepted ("acknowledged", D9);
+//   - an A finding with severity low (integrations REVIEW-CONVENTIONS-SPEC D5.4: the window's
+//     Suggestions section) blocks unless accepted, exactly as critical and high -- its one
+//     acknowledgement is the window's Acknowledge suggestions;
 //   - ai.status other than ok (unavailable, partial) blocks unless the pseudo-key A is accepted;
-//   - fixme never satisfies; warn, medium, low, n/a, the legacy R pseudo-key and context lines
-//     never block;
+//   - fixme never satisfies; warn, medium, n/a, the legacy R pseudo-key and context lines never
+//     block;
 //   - an unverified rendering structure blocks: D4.2 fails (acceptable) with ONE finding keyed
 //     R#<hash> (INSPECT-SCOPE-SPEC S7/S14) -- the D rule above, nothing special-cased here;
 //   - keys are <id>#<fingerprint> (R#<hash> for D4.2), so a disposition on D2.3#fp1 never
@@ -129,7 +132,7 @@ func Verdict(report json.RawMessage, dispositions []models.ReviewDisposition) Ve
 			}
 		case "A":
 			for _, f := range it.Findings {
-				if f.Severity != "critical" && f.Severity != "high" {
+				if f.Severity != "critical" && f.Severity != "high" && f.Severity != "low" {
 					continue
 				}
 				if !accepted(f.Key) {

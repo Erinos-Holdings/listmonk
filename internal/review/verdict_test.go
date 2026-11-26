@@ -88,17 +88,46 @@ func TestVerdictNotAcceptable(t *testing.T) {
 	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp("D2.7#fp", "accept", 1)}), VerdictBlocked, 1)
 }
 
+// Integrations REVIEW-CONVENTIONS-SPEC I13: the A `low` case moved to TestVerdictALowBlocks; warn,
+// n/a and medium stay non-blocking.
 func TestVerdictNonBlocking(t *testing.T) {
 	r := rep("complete", "ok",
 		d("D1.4b", "warn", true, "D1.4b#x"),
 		d("D2.14", "n/a", true),
 		d("D1.1", "pass", false),
 		a("A2.1", tFinding{Key: "A2.1#m", Severity: "medium"}),
-		a("A6.2", tFinding{Key: "A6.2#l", Severity: "low"}),
 	)
 	mustVerdict(t, Verdict(r, nil), VerdictPass, 0)
 	// R is advisory: a declined offer never blocks, an absent one neither.
 	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp(KeyR, "accept", 1)}), VerdictPass, 0)
+}
+
+// Integrations REVIEW-CONVENTIONS-SPEC I10 / D5.4: an A `low` finding (the Suggestions section)
+// blocks until accepted, exactly as critical and high; fixme never satisfies; medium/warn still
+// never block; a report with no `low` finding has the same verdict as before.
+func TestVerdictALowBlocks(t *testing.T) {
+	r := rep("complete", "ok", a("A4.7", tFinding{Key: "A4.7#s1", Severity: "low"}, tFinding{Key: "A4.7#s2", Severity: "low"}))
+	got := Verdict(r, nil)
+	mustVerdict(t, got, VerdictBlocked, 2)
+	if got.Blockers[0].Key != "A4.7#s1" || got.Blockers[0].ID != "A4.7" || got.Blockers[0].Reason != "A4.7 low finding" {
+		t.Fatalf("blocker = %+v", got.Blockers[0])
+	}
+	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp("A4.7#s1", "accept", 1)}), VerdictBlocked, 1)
+	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp("A4.7#s1", "accept", 1), disp("A4.7#s2", "fixme", 2)}), VerdictBlocked, 1)
+	mustVerdict(t, Verdict(r, []models.ReviewDisposition{disp("A4.7#s1", "accept", 1), disp("A4.7#s2", "accept", 2)}), VerdictPass, 0)
+
+	// Beside a medium and a warn: only the low blocks.
+	mixed := rep("complete", "ok",
+		d("D1.4b", "warn", true, "D1.4b#x"),
+		a("A2.1", tFinding{Key: "A2.1#m", Severity: "medium"}),
+		a("A4.7", tFinding{Key: "A4.7#s", Severity: "low"}),
+	)
+	mustVerdict(t, Verdict(mixed, nil), VerdictBlocked, 1)
+	mustVerdict(t, Verdict(mixed, []models.ReviewDisposition{disp("A4.7#s", "accept", 1)}), VerdictPass, 0)
+
+	// No low finding: unchanged from before.
+	noLow := rep("complete", "ok", d("D1.4b", "warn", true, "D1.4b#x"), a("A2.1", tFinding{Key: "A2.1#m", Severity: "medium"}))
+	mustVerdict(t, Verdict(noLow, nil), VerdictPass, 0)
 }
 
 func TestVerdictACriticalHigh(t *testing.T) {

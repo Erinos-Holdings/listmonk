@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import * as checklistModule from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import {
   STAGES, acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isContextConcern, isReviewDone, openEntries,
-  sectionCounts, sectionOf, splitAccepted, structureAcknowledgeLabel, withAltsStep,
+  sectionCounts, sectionOf, splitAccepted, structureAcknowledgeLabel, suggestionAcknowledgements, withAltsStep,
 } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 
 const t = (k, p) => (p ? `${k} ${JSON.stringify(p)}` : k);
@@ -46,8 +46,13 @@ test('the section rule, and the structure key excluded from entries and counts',
   assert.equal(sectionOf({ tier: 'A' }, { severity: 'high' }), 'acknowledge');
   assert.equal(sectionOf({ tier: 'A' }, { severity: 'medium' }), 'advisory');
   assert.ok(openEntries(DITEMS).every((e) => !e.key.startsWith('R')));
-  assert.deepEqual(sectionCounts(DITEMS), { blockers: 2, acknowledge: 0, advisory: 1 });
-  assert.deepEqual(sectionCounts(REPORT.items), { blockers: 3, acknowledge: 1, advisory: 2 });
+  // integrations REVIEW-CONVENTIONS-SPEC D5.7: the counts carry `suggestions` (0 here -- no A low).
+  assert.deepEqual(sectionCounts(DITEMS), {
+    blockers: 2, acknowledge: 0, advisory: 1, suggestions: 0,
+  });
+  assert.deepEqual(sectionCounts(REPORT.items), {
+    blockers: 3, acknowledge: 1, advisory: 2, suggestions: 0,
+  });
 });
 
 // integrations REVIEW-TRIM-2-SPEC D1: the current Lambda's progress -- no `screenshots` stage or key,
@@ -124,7 +129,7 @@ test('§4.6: complete -> every row checked, the writing row counts the report wi
     t,
   });
   assert.ok(r.every((x) => x.checked && !x.spinner));
-  assert.equal(r[4].label, `${K}writingDone {"b":3,"ack":1,"adv":2}`);
+  assert.equal(r[4].label, `${K}writingDone {"b":3,"ack":1,"adv":2,"sug":0}`);
   assert.equal(r[1].label, `${K}deterministicDone {"checks":55,"b":2,"a":1}`);
 });
 
@@ -159,7 +164,7 @@ test('I14: an older Lambda\'s {stage, at} (and no progress at all) renders, neve
   assert.equal(done[1].label, `${K}deterministicDone {"checks":5,"b":2,"a":1}`);
   assert.equal(done[2].label, `${K}screenshotsDone {"n":4}`);
   assert.equal(done[3].label, `${K}aiDone {"calls":4}`);
-  assert.equal(done[4].label, `${K}writingDone {"b":3,"ack":1,"adv":2}`);
+  assert.equal(done[4].label, `${K}writingDone {"b":3,"ack":1,"adv":2,"sug":0}`);
   assert.equal(checklist({
     progress: null, report: { items: 'nope' }, phase: 'complete', t,
   }).length, 4);
@@ -653,4 +658,92 @@ test('D3: the window -- the three sections are built from open, a fourth Accepte
   const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
   assert.match(tpl, /data-cy="tag-accepted"/);
   assert.match(tpl, /:disabled="sec\.key === 'accepted'"/);
+});
+
+// ------------------------------------------------------------------ integrations
+// REVIEW-CONVENTIONS-SPEC I9 / I11 -- the Suggestions section (A findings of severity low).
+const SUG_REPORT = {
+  items: [...REPORT.items, A('A4.7', 'low'), A('A6.2', 'low')],
+  ai: { status: 'ok', calls: [{}, {}, {}] },
+};
+
+test('I9: sectionOf -- A low is a suggestion; every other mapping unchanged; D never a suggestion', () => {
+  assert.equal(sectionOf({ tier: 'A' }, { severity: 'low' }), 'suggestions');
+  assert.equal(sectionOf({ tier: 'A' }, { severity: 'critical' }), 'blockers');
+  assert.equal(sectionOf({ tier: 'A' }, { severity: 'high' }), 'acknowledge');
+  assert.equal(sectionOf({ tier: 'A' }, { severity: 'medium' }), 'advisory');
+  assert.equal(sectionOf({ tier: 'A' }, {}), 'advisory');
+  ['warn', 'n/a', 'pass'].forEach((verdict) => assert.equal(sectionOf({ tier: 'D', verdict }, { severity: 'low' }), 'advisory'));
+  assert.equal(sectionOf({ tier: 'D', verdict: 'fail' }, { severity: 'low' }), 'blockers');
+});
+
+test('I9: sectionCounts counts suggestions; the writing-done line carries {sug}', () => {
+  assert.deepEqual(sectionCounts(SUG_REPORT.items), {
+    blockers: 3, acknowledge: 1, advisory: 2, suggestions: 2,
+  });
+  const r = checklist({
+    progress: { stage: 'writing', at: 'x' }, report: SUG_REPORT, phase: 'complete', t,
+  });
+  assert.equal(r[r.length - 1].label, `${K}writingDone {"b":3,"ack":1,"adv":2,"sug":2}`);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.match(en['campaigns.review.checklist.writingDone'], /\{sug\} Suggestions$/);
+  assert.equal(en['campaigns.review.sectionSuggestions'], 'Suggestions');
+  assert.equal(en['campaigns.review.acknowledgeSuggestions'], 'Acknowledge suggestions');
+  assert.match(en['campaigns.review.acknowledgedBy'], /^Acknowledged by \{user\}, \{date\}$/);
+});
+
+test('I9: isReviewDone is false while a suggestion is undecided and true once decided', () => {
+  const entries = openEntries(SUG_REPORT.items);
+  const keysOf = (section) => entries.filter((x) => x.section === section).map((x) => x.key);
+  const gating = [...keysOf('blockers'), ...keysOf('acknowledge')];
+  const sug = keysOf('suggestions');
+  assert.deepEqual(sug, ['A4.7#0', 'A6.2#0']);
+  const done = (decidedKeys) => isReviewDone({
+    report: SUG_REPORT, verdict: 'blocked', entries, decided: (k) => decidedKeys.includes(k),
+  });
+  assert.equal(done(gating), false, 'an undecided suggestion holds Done');
+  assert.equal(done([...gating, sug[0]]), false);
+  assert.equal(done([...gating, ...sug]), true);
+  // Advisory still never gates.
+  assert.ok(keysOf('advisory').length > 0);
+});
+
+test('I9: an acknowledged suggestion is NOT moved to Accepted (splitAccepted); another A accept still is', () => {
+  const entries = openEntries(SUG_REPORT.items);
+  const latest = {
+    'A4.7#0': { action: 'accept', username: 'kay' },
+    'A2.4#0': { action: 'accept', username: 'kay' },
+  };
+  const { open, accepted } = splitAccepted(entries, latest);
+  assert.ok(open.some((e) => e.key === 'A4.7#0'));
+  assert.deepEqual(accepted.map((e) => e.key), ['A2.4#0']);
+});
+
+test('I11: Acknowledge suggestions stages accept for exactly the undecided suggestion keys', () => {
+  const entries = openEntries(SUG_REPORT.items);
+  const all = suggestionAcknowledgements(entries, () => false);
+  assert.deepEqual(all, [
+    { key: 'A4.7#0', rubric_id: 'A4.7', action: 'accept' },
+    { key: 'A6.2#0', rubric_id: 'A6.2', action: 'accept' },
+  ]);
+  // Never an advisory, blocker or acknowledge key.
+  const sections = new Map(entries.map((e) => [e.key, e.section]));
+  assert.ok(all.every((s) => sections.get(s.key) === 'suggestions'));
+  // A decided suggestion is not staged again.
+  assert.deepEqual(suggestionAcknowledgements(entries, (k) => k === 'A4.7#0').map((s) => s.key), ['A6.2#0']);
+  assert.deepEqual(suggestionAcknowledgements(entries, () => true), []);
+  // No suggestion: nothing.
+  assert.deepEqual(suggestionAcknowledgements(openEntries(REPORT.items), () => false), []);
+  assert.deepEqual(suggestionAcknowledgements(null), []);
+});
+
+test('D5: the window -- a fourth Suggestions section with no per-card buttons and one Acknowledge suggestions button', () => {
+  const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
+  assert.match(src, /key: 'suggestions', label: this\.\$t\('campaigns\.review\.sectionSuggestions'\)/);
+  assert.match(tpl, /<div v-if="sec\.key !== 'suggestions'" class="buttons mt-2">/);
+  assert.match(tpl, /v-if="sec\.key === 'suggestions' && suggestionsOpen\.length"/);
+  assert.match(tpl, /data-cy="btn-acknowledge-suggestions"/);
+  assert.match(tpl, /data-cy="review-acknowledged"/);
+  assert.match(src, /suggestionAcknowledgements\(this\.entries/);
 });

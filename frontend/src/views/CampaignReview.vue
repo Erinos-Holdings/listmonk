@@ -153,8 +153,14 @@
           <p v-else-if="reference(e.finding).kind === 'plain'" class="is-size-7" data-cy="review-where">
             <span class="has-text-grey">{{ $t('campaigns.review.location') }}:</span> {{ reference(e.finding).text }}
           </p>
-          <p v-if="decided(e.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(e.key)) }}</p>
-          <div class="buttons mt-2">
+          <!-- integrations REVIEW-CONVENTIONS-SPEC D5.6: an acknowledged suggestion says so and stays here. -->
+          <p v-if="sec.key === 'suggestions' && decided(e.key) && decided(e.key).action === 'accept'" class="is-size-7 has-text-grey"
+            data-cy="review-acknowledged">
+            {{ acknowledgedLine(decided(e.key)) }}
+          </p>
+          <p v-else-if="decided(e.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(e.key)) }}</p>
+          <!-- REVIEW-CONVENTIONS-SPEC D5.2: a suggestion card has no buttons -- the section's one button decides. -->
+          <div v-if="sec.key !== 'suggestions'" class="buttons mt-2">
             <!-- integrations REVIEW-TRIM-2-SPEC D9: a finding with nothing to replace keeps the button
                  disabled; its tooltip says why in one line (the planner's reason, else the todo). -->
             <b-tooltip :active="!e.finding.fix" :label="fixTooltip(e)" type="is-dark" multilined>
@@ -181,6 +187,15 @@
               {{ e.finding.severity === 'high' ? $t('campaigns.review.acknowledge') : $t('campaigns.review.acceptRisk') }}
             </b-button>
           </div>
+        </div>
+        <!-- integrations REVIEW-CONVENTIONS-SPEC D5.3: the Suggestions section's ONE button, below its
+             cards, while any suggestion is unrecorded: it stages `accept` on every undecided
+             suggestion key (reviewChecklist.mjs suggestionAcknowledgements); Save records them. -->
+        <div v-if="sec.key === 'suggestions' && suggestionsOpen.length" class="buttons mt-2">
+          <b-button size="is-small" data-cy="btn-acknowledge-suggestions"
+            :type="suggestionsStaged ? 'is-primary' : ''" @click="acknowledgeSuggestions">
+            {{ $t('campaigns.review.acknowledgeSuggestions') }}
+          </b-button>
         </div>
       </section>
 
@@ -423,7 +438,7 @@ import {
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 import {
   acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isReviewDone, sectionCounts, sectionOf,
-  splitAccepted, structureAcknowledgeLabel, withAltsStep,
+  splitAccepted, structureAcknowledgeLabel, suggestionAcknowledgements, withAltsStep,
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
@@ -679,6 +694,18 @@ export default Vue.extend({
       return Object.values(this.staged).filter((s) => s.action === 'fixed' && s.fix);
     },
 
+    // integrations REVIEW-CONVENTIONS-SPEC D5.3: the suggestions with no RECORDED disposition -- the
+    // Acknowledge suggestions button shows while there is one.
+    suggestionsOpen() {
+      return suggestionAcknowledgements(this.entries, (key) => !!this.latest[key]);
+    },
+
+    // Every unrecorded suggestion is staged `accept` (the button reads as staged, is-primary).
+    suggestionsStaged() {
+      return this.suggestionsOpen.length > 0
+        && this.suggestionsOpen.every((s) => !!this.staged[s.key] && this.staged[s.key].action === 'accept');
+    },
+
     // REVIEW-TRIM-SPEC D6: "Acknowledge (author fix expected)" when nothing can be rendered.
     structureAckLabel() {
       return structureAcknowledgeLabel(this.structure && this.structure.coverage);
@@ -791,13 +818,35 @@ export default Vue.extend({
 
     // Entries -> the three sections (reviewChecklist.mjs `sectionOf`), empty sections dropped.
     sectionList(entries) {
-      const by = { blockers: [], acknowledge: [], advisory: [] };
+      const by = {
+        blockers: [], acknowledge: [], advisory: [], suggestions: [],
+      };
       entries.forEach((e) => by[sectionOf(e.item, e.finding)].push(e));
       return [
         { key: 'blockers', label: this.$t('campaigns.review.sectionBlockers'), entries: by.blockers },
         { key: 'acknowledge', label: this.$t('campaigns.review.sectionAcknowledge'), entries: by.acknowledge },
         { key: 'advisory', label: this.$t('campaigns.review.sectionAdvisory'), entries: by.advisory },
+        // integrations REVIEW-CONVENTIONS-SPEC D5: the fourth section, below Advisory, always open.
+        { key: 'suggestions', label: this.$t('campaigns.review.sectionSuggestions'), entries: by.suggestions },
       ].filter((s) => s.entries.length);
+    },
+
+    // REVIEW-CONVENTIONS-SPEC D5.6: "Acknowledged by <user>, <time>" on a suggestion card.
+    acknowledgedLine(d) {
+      return this.$t('campaigns.review.acknowledgedBy', { user: d.username || '?', date: this.$utils.niceDate(d.created_at, true) });
+    },
+
+    // REVIEW-CONVENTIONS-SPEC D5.3: Acknowledge suggestions stages `accept` on every undecided
+    // suggestion key (reviewChecklist.mjs suggestionAcknowledgements); a second click while all of
+    // them are staged un-stages them, like every other staged button.
+    acknowledgeSuggestions() {
+      if (this.suggestionsStaged) {
+        this.suggestionsOpen.forEach((s) => this.$delete(this.staged, s.key));
+        return;
+      }
+      const stagedAccept = (key) => !!this.staged[key] && this.staged[key].action === 'accept';
+      suggestionAcknowledgements(this.entries, (key) => !!this.latest[key] || stagedAccept(key))
+        .forEach((s) => this.$set(this.staged, s.key, s));
     },
 
     // REVIEW-NAVIGATION-SPEC §4.1-§4.3 (reviewNavigate.mjs): the reference (the thumbnail or badge

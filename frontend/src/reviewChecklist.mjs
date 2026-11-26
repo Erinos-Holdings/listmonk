@@ -18,14 +18,28 @@ export const STAGES = ['reading', 'deterministic', 'screenshots', 'ai', 'writing
 const has = (o, k) => !!o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
 
 // The window's section rule for one finding of one item: a D fail is a blocker, any other D
-// verdict advisory; an A critical a blocker, an A high needs acknowledgement, the rest advisory.
+// verdict advisory; an A critical a blocker, an A high needs acknowledgement, an A low a suggestion
+// (integrations REVIEW-CONVENTIONS-SPEC D5.1 -- D items never map there), the rest advisory.
 export function sectionOf(item, finding) {
   if (item.tier === 'D') {
     return item.verdict === 'fail' ? 'blockers' : 'advisory';
   }
   if (finding.severity === 'critical') return 'blockers';
   if (finding.severity === 'high') return 'acknowledge';
+  if (finding.severity === 'low') return 'suggestions';
   return 'advisory';
+}
+
+// Integrations REVIEW-CONVENTIONS-SPEC D5.3 / I11 -- the Suggestions section's ONE button,
+// Acknowledge suggestions, pure: the `accept` dispositions it stages -- one per suggestion entry
+// (`sectionOf` = suggestions) that `decided(key)` says is undecided, and never any other section's
+// key. `entries` are `{key, item, finding}`; the window's existing save path records them (the same
+// disposition record and endpoint as Accept risk -- no new state).
+export function suggestionAcknowledgements(entries, decided) {
+  const isDecided = typeof decided === 'function' ? decided : () => false;
+  return (Array.isArray(entries) ? entries : [])
+    .filter((e) => e && e.item && e.finding && sectionOf(e.item, e.finding) === 'suggestions' && !isDecided(e.key))
+    .map((e) => ({ key: e.key, rubric_id: e.item.id, action: 'accept' }));
 }
 
 // Integrations REVIEW-TRIM-SPEC D3: the campaign-context rule (D7.1) is retired -- context lines
@@ -53,14 +67,17 @@ export function openEntries(items) {
 // hashes -- the server's LatestDispositions rule) is `accept`, except an `acceptable:false` item,
 // which the verdict blocks whatever its dispositions and so stays a visible blocker (S6); `open`
 // holds the rest. Order is preserved in both. A staged choice is not read here: a card moves only
-// when the save's reload brings the recorded disposition.
+// when the save's reload brings the recorded disposition. Integrations REVIEW-CONVENTIONS-SPEC D5.6:
+// an acknowledged SUGGESTION stays open -- in the Suggestions section, seen every time -- and is
+// never moved to Accepted.
 export function splitAccepted(entries, latest) {
   const open = [];
   const accepted = [];
   const byKey = (latest && typeof latest === 'object') ? latest : {};
   (Array.isArray(entries) ? entries : []).forEach((e) => {
     const d = e && Object.prototype.hasOwnProperty.call(byKey, e.key) ? byKey[e.key] : null;
-    if (d && d.action === 'accept' && !(e.item && e.item.acceptable === false)) {
+    const suggestion = !!(e && e.item && e.finding) && sectionOf(e.item, e.finding) === 'suggestions';
+    if (d && d.action === 'accept' && !suggestion && !(e.item && e.item.acceptable === false)) {
       accepted.push(e);
     } else {
       open.push(e);
@@ -72,9 +89,10 @@ export function splitAccepted(entries, latest) {
 // Integrations REVIEW-TRIM-SPEC D8 -- the Done rule, pure: Done when the verdict is pass, or when
 // every BLOCKER and NEEDS-ACKNOWLEDGEMENT entry is decided (recorded or staged), plus -- for a
 // structure admin (`structureAcknowledge`) -- D4.2's structure finding (excluded from `entries`; its
-// Acknowledge lives in the Structure section). Advisory entries never gate Done (warn, medium and
-// low never blocked the server verdict either). `decided(key)` is the window's recorded-or-staged
-// check; `entries` are `{key, item, finding}`.
+// Acknowledge lives in the Structure section). Advisory entries never gate Done (warn and medium
+// never block the server verdict either). Integrations REVIEW-CONVENTIONS-SPEC D5.4: SUGGESTION
+// entries (A low) gate Done like the blockers -- every one decided -- as the server verdict blocks
+// them. `decided(key)` is the window's recorded-or-staged check; `entries` are `{key, item, finding}`.
 export function isReviewDone({
   running = false, report, verdict, entries, decided, structureAcknowledge = false, structureKey = null,
 }) {
@@ -109,9 +127,12 @@ export function acceptState(item, can) {
   return 'ok';
 }
 
-// { blockers, acknowledge, advisory } counts over `items`.
+// { blockers, acknowledge, advisory, suggestions } counts over `items` (suggestions:
+// integrations REVIEW-CONVENTIONS-SPEC D5.7).
 export function sectionCounts(items) {
-  const n = { blockers: 0, acknowledge: 0, advisory: 0 };
+  const n = {
+    blockers: 0, acknowledge: 0, advisory: 0, suggestions: 0,
+  };
   openEntries(items).forEach((e) => { n[e.section] += 1; });
   return n;
 }
@@ -187,7 +208,10 @@ export function checklist({
   }
   if (rep) {
     const c = sectionsOf(rep.items);
-    done.writing = tr('writingDone', { b: c.blockers, ack: c.acknowledge, adv: c.advisory });
+    // REVIEW-CONVENTIONS-SPEC D5.7: the writing-done line adds `{sug} Suggestions` (0 from an older sectionsOf).
+    done.writing = tr('writingDone', {
+      b: c.blockers, ack: c.acknowledge, adv: c.advisory, sug: c.suggestions || 0,
+    });
   }
 
   // REVIEW-TRIM-2-SPEC D1: the Screenshots row only for a progress or report that carries the key.
