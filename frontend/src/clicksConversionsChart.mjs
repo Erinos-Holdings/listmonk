@@ -90,29 +90,41 @@ export function shapeClicksConversions(clicks, conversions, {
   return { labels: dates.map(labelOf), dates, datasets };
 }
 
-// The right axis maximum: exactly twice the highest Matched value, unrounded, so the Matched peak
-// sits at half the chart's height in $ and in # alike and under the click bars. Matched whether or
-// not it is drawn, so the toggle never rescales the axis (a rare Tracked day above Matched still
-// fits: Tracked <= 2 x Matched). undefined (chart.js picks) when every Matched value is zero.
-export function conversionsAxisMax(conversions, { unit = 'usd' } = {}) {
-  const top = Math.max(0, ...(conversions || []).map((d) => pick(d, 'matched', unit)));
+// The right axis maximum: exactly twice the highest value of the TOP drawn series, unrounded, so
+// its peak sits at half the chart's height in $ and in # alike, under the click bars -- Matched
+// while it is shown, Tracked when it is not. undefined (chart.js picks) when that series is all zero.
+export function conversionsAxisMax(conversions, { unit = 'usd', showMatched = true } = {}) {
+  const measure = showMatched ? 'matched' : 'tracked';
+  const top = Math.max(0, ...(conversions || []).map((d) => pick(d, measure, unit)));
   return top > 0 ? top * 2 : undefined;
 }
 
-// tooltipLines is the four values for one day, for the tooltip footer -- always all four, so the
-// overlay and the toggle only ever change what is drawn, never what can be read.
-export function tooltipLines(day, { matchedLabel, trackedLabel, ordersLabel }) {
-  const line = (label, measure) => `${label}: ${formatUsd(pick(day, measure, 'usd'))} · ${num(day && day[measure] && day[measure].orders).toLocaleString('en-US')} ${ordersLabel}`;
-  return day ? [line(matchedLabel, 'matched'), line(trackedLabel, 'tracked')] : [];
+// tooltipLabel is one tooltip body line, as the Sends + clicks chart shows them: the series' label
+// and its value for the day -- Clicks a count, Tracked and Matched in the chart's unit ($ whole
+// dollars, or orders).
+export function tooltipLabel(item, unit = 'usd') {
+  const v = num(item && item.raw);
+  const isBar = item && item.dataset && item.dataset.type === 'bar';
+  const text = !isBar && unit === 'usd' ? formatUsd(v) : v.toLocaleString('en-US');
+  return `${item && item.dataset ? item.dataset.label : ''}: ${text}`;
 }
 
+// The body order, top to bottom: Clicks, then Matched (when shown), then Tracked.
+const TOOLTIP_RANK = { bar: 0, fill: 1, line: 2 };
+const rankOf = (item) => {
+  const d = (item && item.dataset) || {};
+  if (d.type === 'bar') {
+    return TOOLTIP_RANK.bar;
+  }
+  return d.fill ? TOOLTIP_RANK.fill : TOOLTIP_RANK.line;
+};
+
 // The chart.js options merged over the line defaults: no legend, Clicks on the left axis, the
-// conversions axis on the right in dollars or orders, one index tooltip whose body lists Clicks and
-// whose footer lists all four conversion values for the day (byDate: date -> conversions row), and
-// whose title marks today (todayTitle, todayFormat = the "today so far" string).
+// conversions axis on the right in dollars or orders, one index tooltip listing every drawn series
+// for the day (Clicks, Matched when shown, Tracked), whose title marks today (todayTitle,
+// todayFormat = the "today so far" string).
 export function clicksConversionsOptions({
-  clicksLabel, axisLabel, unit = 'usd', convMax, dates = [], byDate = new Map(), matchedLabel, trackedLabel, ordersLabel,
-  today, todayFormat = (l) => l,
+  clicksLabel, axisLabel, unit = 'usd', convMax, dates = [], today, todayFormat = (l) => l,
 }) {
   const axis = (position, title, color, extra) => ({
     position,
@@ -128,11 +140,10 @@ export function clicksConversionsOptions({
     plugins: {
       legend: { display: false },
       tooltip: {
-        // The conversion lines are in the footer; the body keeps Clicks only.
-        filter: (item) => item.dataset && item.dataset.type === 'bar',
+        itemSort: (a, b) => rankOf(a) - rankOf(b),
         callbacks: {
           title: (items) => todayTitle(items, { dates, today, format: todayFormat }),
-          footer: (items) => (items.length ? tooltipLines(byDate.get(dates[items[0].dataIndex]), { matchedLabel, trackedLabel, ordersLabel }) : []),
+          label: (item) => tooltipLabel(item, unit),
         },
       },
     },

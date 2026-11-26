@@ -716,10 +716,6 @@ export default Vue.extend({
         unit: this.conv.unit,
         convMax: conversionsAxisMax(this.chartConversions, this.conv),
         dates: this.clicksConversionsChart.dates || [],
-        byDate: new Map(this.chartConversions.map((d) => [d.date, d])),
-        matchedLabel: this.$t('analytics.conversions.matched'),
-        trackedLabel: this.$t('analytics.conversions.tracked'),
-        ordersLabel: this.$t('dashboard.conversionsChart.ordersUnit'),
         today: this.chartToday,
         todayFormat: this.todayFormat,
       });

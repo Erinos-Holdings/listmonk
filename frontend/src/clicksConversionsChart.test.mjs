@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  shapeClicksConversions, conversionsAxisMax, clicksConversionsOptions, tooltipLines, normalizeConvState,
+  shapeClicksConversions, conversionsAxisMax, clicksConversionsOptions, normalizeConvState,
   loadConvState, saveConvState, CLICKS_FILL, CONV_COLOR, MATCHED_FILL, CONV_STORAGE_KEY,
 } from './clicksConversionsChart.mjs'; // eslint-disable-line import/extensions
 import { CLICKS_COLOR, withAlpha, TODAY_POINT_RADIUS } from './sendsClicksChart.mjs'; // eslint-disable-line import/extensions
@@ -46,33 +46,27 @@ test('a day only clicks has is a gap (null) on the conversion line, never 0', ()
   assert.deepEqual(byLabel(out, 'Tracked').data, [40, 0, null]);
 });
 
-test('the right axis max is exactly twice the Matched peak, in $ and #, whatever is shown', () => {
-  assert.equal(conversionsAxisMax(conv), 241); // the peak, 120.5, sits at 50%
+test('the right axis max is exactly twice the top drawn series peak: Matched when shown, else Tracked', () => {
+  assert.equal(conversionsAxisMax(conv), 241); // Matched peak 120.5 sits at 50%
   assert.equal(conversionsAxisMax(conv, { unit: 'orders' }), 6);
-  const spike = [day('2026-10-21', [9, 900], [3, 120])];
-  assert.equal(conversionsAxisMax(spike), 240); // Tracked never moves the scale
-  assert.equal(conversionsAxisMax(spike, { showMatched: false }), 240);
+  assert.equal(conversionsAxisMax(conv, { showMatched: false }), 80); // Tracked peak 40
+  assert.equal(conversionsAxisMax(conv, { unit: 'orders', showMatched: false }), 2);
+  assert.equal(conversionsAxisMax([day('2026-10-21', [0, 0], [3, 120])], { showMatched: false }), undefined);
   assert.equal(conversionsAxisMax([day('2026-10-21', [0, 0], [0, 0])]), undefined);
 });
 
-test('the tooltip always lists all four values, whatever is toggled; whole dollars', () => {
-  assert.deepEqual(
-    tooltipLines(conv[0], { matchedLabel: 'Matched', trackedLabel: 'Tracked', ordersLabel: 'orders' }),
-    ['Matched: $121 · 3 orders', 'Tracked: $40 · 1 orders'],
-  );
-  assert.deepEqual(tooltipLines(undefined, {}), []);
-  const opts = clicksConversionsOptions({
-    clicksLabel: 'Clicks',
-    axisLabel: 'Sales',
-    dates: ['2026-10-21'],
-    byDate: new Map([['2026-10-21', conv[0]]]),
-    matchedLabel: 'Matched',
-    trackedLabel: 'Tracked',
-    ordersLabel: 'orders',
-  });
-  assert.equal(opts.plugins.tooltip.callbacks.footer([{ dataIndex: 0 }]).length, 2);
-  assert.equal(opts.plugins.tooltip.filter({ dataset: { type: 'line' } }), false);
-  assert.equal(opts.plugins.tooltip.filter({ dataset: { type: 'bar' } }), true);
+test('the tooltip lists every drawn series (Clicks, Matched, Tracked) in the chart unit', () => {
+  const out = shapeClicksConversions(clicks, conv, labels);
+  const item = (l, raw) => ({ dataset: byLabel(out, l), raw });
+  const opts = clicksConversionsOptions({ clicksLabel: 'Clicks', axisLabel: 'Sales', dates: ['2026-10-21'] });
+  const { label } = opts.plugins.tooltip.callbacks;
+  assert.equal(opts.plugins.tooltip.filter, undefined);
+  const lines = [label(item('Clicks', 1207)), label(item('Matched', 120.5)), label(item('Tracked', 40))];
+  assert.deepEqual(lines, ['Clicks: 1,207', 'Matched: $121', 'Tracked: $40']);
+  const items = [item('Tracked', 40), item('Clicks', 207), item('Matched', 120.5)];
+  assert.deepEqual([...items].sort(opts.plugins.tooltip.itemSort).map((i) => i.dataset.label), ['Clicks', 'Matched', 'Tracked']);
+  const orders = clicksConversionsOptions({ clicksLabel: 'Clicks', axisLabel: 'Orders', unit: 'orders' });
+  assert.equal(orders.plugins.tooltip.callbacks.label(item('Matched', 3)), 'Matched: 3');
   assert.equal(opts.scales.y1.ticks.callback(12509.38), '$12,509');
 });
 
