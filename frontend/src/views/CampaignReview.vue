@@ -697,7 +697,9 @@ export default Vue.extend({
     // integrations REVIEW-CONVENTIONS-SPEC D5.3: the suggestions with no RECORDED disposition -- the
     // Acknowledge suggestions button shows while there is one.
     suggestionsOpen() {
-      return suggestionAcknowledgements(this.entries, (key) => !!this.latest[key]);
+      // Stage 4 F2: only a recorded `accept` satisfies the verdict -- a fixme/fixed row (an older fork's
+      // Advisory card) leaves the suggestion open.
+      return suggestionAcknowledgements(this.entries, (key) => this.recordedAccept(key));
     },
 
     // Every unrecorded suggestion is staged `accept` (the button reads as staged, is-primary).
@@ -845,8 +847,13 @@ export default Vue.extend({
         return;
       }
       const stagedAccept = (key) => !!this.staged[key] && this.staged[key].action === 'accept';
-      suggestionAcknowledgements(this.entries, (key) => !!this.latest[key] || stagedAccept(key))
+      suggestionAcknowledgements(this.entries, (key) => this.recordedAccept(key) || stagedAccept(key))
         .forEach((s) => this.$set(this.staged, s.key, s));
+    },
+
+    // Stage 4 F2: whether the latest recorded disposition for a key is `accept`.
+    recordedAccept(key) {
+      return !!this.latest[key] && this.latest[key].action === 'accept';
     },
 
     // REVIEW-NAVIGATION-SPEC §4.1-§4.3 (reviewNavigate.mjs): the reference (the thumbnail or badge
