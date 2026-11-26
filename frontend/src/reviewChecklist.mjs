@@ -1,12 +1,12 @@
 // Fork (review navigation, integrations REVIEW-NAVIGATION-SPEC §4.6) -- the Inspect window's live
 // checklist, pure half: the five rows from the review Lambda's cumulative progress (§3.2:
-// `checks`, then the D `items`, then `screenshots`, then `ai`) and the report; the section rule the
-// window's lists and the rows' counts share; and the read-only early findings.
+// `checks`, `questions`, then `ai`) and the report; and the section rule the window's lists and the
+// rows' counts share.
 //
 // The progress contract is additive (I14): an older Lambda's `{stage, at}` renders the rows with
-// their pending labels and the final counts -- never an error. Nothing here can stage a
-// disposition: the early list is built from `progress.items` and every entry is `decidable: false`
-// (I5); the window's `entries` reads the report only.
+// their pending labels and the final counts -- never an error. Integrations REVIEW-SETTLED-SPEC D5:
+// no finding is shown while a review runs -- the early findings are retired, a `progress.items` is
+// ignored, and the window's `entries` reads the report only.
 import { isStructureKey } from './structureBrief.mjs'; // eslint-disable-line import/extensions
 
 // integrations REVIEW-TRIM-2-SPEC D1 (Stage 2 F12): the Lambda no longer has a `screenshots` stage.
@@ -141,9 +141,8 @@ const dItems = (items) => (Array.isArray(items) ? items.filter((i) => i && i.tie
 
 // The rows. `phase` is `running` (the current row spins), `complete` (every row done) or `halted`
 // (failed/stale: the rows stay as at the last PATCH, nothing spins). `t(key, params)` is i18n.
-// `sectionsOf` (default sectionCounts) is the window's own section rule.
 export function checklist({
-  progress, report, phase = 'running', sectionsOf = sectionCounts, t,
+  progress, report, phase = 'running', t,
 }) {
   const p = (progress && typeof progress === 'object') ? progress : {};
   const rep = phase === 'complete' && report && Array.isArray(report.items) ? report : null;
@@ -151,14 +150,10 @@ export function checklist({
   const current = phase === 'complete' ? STAGES.length : Math.max(at, 0);
   const tr = (k, params) => t(`campaigns.review.checklist.${k}`, params);
 
-  // The deterministic row: its counts from progress.items (the window's rule), else the report's D
-  // items (a completed review of an older Lambda -- the same keys, I4).
-  let ditems = null;
-  if (Array.isArray(p.items)) {
-    ditems = dItems(p.items);
-  } else if (rep) {
-    ditems = dItems(rep.items);
-  }
+  // Integrations REVIEW-SETTLED-SPEC D5 / I6: the deterministic row's Blocker/Advisory counts come
+  // from the REPORT's D items only, once the review is complete; a `progress.items` (an older Lambda,
+  // or a row written before that release) is ignored for display.
+  const ditems = rep ? dItems(rep.items) : null;
   let checks = null;
   if (Number.isInteger(p.checks)) {
     checks = p.checks;
@@ -195,8 +190,11 @@ export function checklist({
     writing: null,
   };
   if (ditems && checks !== null) {
-    const c = sectionsOf(ditems);
+    const c = sectionCounts(ditems);
     done.deterministic = tr('deterministicDone', { checks, b: c.blockers, a: c.advisory });
+  } else if (checks !== null) {
+    // Running or halted: the count alone -- no finding is shown before the report.
+    done.deterministic = tr('deterministicCount', { checks });
   }
   if (shots !== null) {
     done.screenshots = shots === 0 ? tr('screenshotsNone') : tr('screenshotsDone', { n: shots });
@@ -207,10 +205,10 @@ export function checklist({
     else done.ai = tr('aiDone', { calls: ai.calls });
   }
   if (rep) {
-    const c = sectionsOf(rep.items);
-    // REVIEW-CONVENTIONS-SPEC D5.7: the writing-done line adds `{sug} Suggestions` (0 from an older sectionsOf).
+    const c = sectionCounts(rep.items);
+    // REVIEW-CONVENTIONS-SPEC D5.7: the writing-done line adds `{sug} Suggestions`.
     done.writing = tr('writingDone', {
-      b: c.blockers, ack: c.acknowledge, adv: c.advisory, sug: c.suggestions || 0,
+      b: c.blockers, ack: c.acknowledge, adv: c.advisory, sug: c.suggestions,
     });
   }
 
@@ -327,16 +325,6 @@ export function auxLayout(aux, hasAlts) {
   const notOk = list.filter((s) => s.status !== 'ok');
   const ok = list.filter((s) => s.status === 'ok');
   return [...notOk, ...(hasAlts ? [{ key: 'alts' }] : []), { key: 'passed' }, ...ok];
-}
-
-// The read-only early findings: once progress carries the D items (REVIEW-TRIM-2-SPEC D1: keyed on
-// the items being present, not on a stage index -- the Lambda sends them on its `ai` PATCH, an older
-// one on `screenshots`), while the review runs, the D items by section. Every entry is
-// `decidable: false` -- no button renders and nothing can be staged against it. The report replaces
-// them when it arrives (phase `complete` -> none).
-export function earlyEntries({ progress, phase = 'running' }) {
-  if (phase !== 'running' || !progress || !Array.isArray(progress.items)) return [];
-  return openEntries(dItems(progress.items)).map((e) => ({ ...e, decidable: false }));
 }
 
 // ------------------------------------------------------------------ the auxiliary sections

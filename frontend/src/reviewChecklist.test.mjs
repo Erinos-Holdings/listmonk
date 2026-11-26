@@ -1,13 +1,13 @@
-// Fork (review navigation) -- integrations REVIEW-NAVIGATION-SPEC I5 (the early list is
-// read-only by construction: every entry `decidable: false`, and only progress items are in it)
-// and I14 (the progress contract is cumulative and additive: an older Lambda's `{stage, at}`
-// renders without error), plus the §4.6 rows and the structure-key exclusion.
+// Fork (review navigation) -- integrations REVIEW-NAVIGATION-SPEC I14 (the progress contract is
+// cumulative and additive: an older Lambda's `{stage, at}` renders without error), REVIEW-SETTLED-SPEC
+// I6 (no finding and no Blocker/Advisory count before the report), plus the §4.6 rows and the
+// structure-key exclusion.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as checklistModule from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import {
-  STAGES, acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isContextConcern, isReviewDone, openEntries,
+  STAGES, acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, isContextConcern, isReviewDone, openEntries,
   sectionCounts, sectionOf, splitAccepted, structureAcknowledgeLabel, suggestionAcknowledgements, withAltsStep,
 } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 
@@ -56,7 +56,8 @@ test('the section rule, and the structure key excluded from entries and counts',
 });
 
 // integrations REVIEW-TRIM-2-SPEC D1: the current Lambda's progress -- no `screenshots` stage or key,
-// so no Screenshots row; the D items arrive on the `ai` PATCH.
+// so no Screenshots row. REVIEW-SETTLED-SPEC D5: a done rule-check row reads its count alone while
+// the review runs, even when an older Lambda's progress carries the D items.
 test('§4.6: the rows fill in stage by stage, from the cumulative progress (no Screenshots row)', () => {
   const rows = (progress) => checklist({
     progress, report: null, phase: 'running', t,
@@ -75,7 +76,7 @@ test('§4.6: the rows fill in stage by stage, from the cumulative progress (no S
   });
   assert.deepEqual(r.map((x) => x.state), ['done', 'done', 'current', 'pending']);
   assert.equal(r[1].checked, true);
-  assert.equal(r[1].label, `${K}deterministicDone {"checks":55,"b":2,"a":1}`);
+  assert.equal(r[1].label, `${K}deterministicCount {"checks":55}`);
   r = rows({
     stage: 'writing', at: 'x', checks: 55, items: DITEMS, ai: { calls: 3, status: 'ok' },
   });
@@ -133,14 +134,28 @@ test('§4.6: complete -> every row checked, the writing row counts the report wi
   assert.equal(r[1].label, `${K}deterministicDone {"checks":55,"b":2,"a":1}`);
 });
 
-test('a sectionsOf passed in is the one used (the window\'s own rule)', () => {
-  const r = checklist({
-    progress: { stage: 'screenshots', items: DITEMS, checks: 5 },
-    phase: 'running',
-    sectionsOf: () => ({ blockers: 9, acknowledge: 8, advisory: 7 }),
-    t,
+// Integrations REVIEW-SETTLED-SPEC I6: running or halted, the done rule-check row reads
+// `deterministicCount` even with `progress.items` present; complete, its counts are the REPORT's D
+// items, never `progress.items`.
+test('I6: no Blocker/Advisory count before the report; complete counts the report, not progress.items', () => {
+  const progress = {
+    stage: 'ai', at: 'x', checks: 55, items: DITEMS,
+  };
+  ['running', 'halted'].forEach((phase) => {
+    const r = checklist({
+      progress, report: REPORT, phase, t,
+    });
+    assert.equal(r.find((x) => x.key === 'deterministic').label, `${K}deterministicCount {"checks":55}`, phase);
+    assert.ok(r.every((x) => !/Blockers|"b":/.test(x.label)), phase);
   });
-  assert.equal(r[1].label, `${K}deterministicDone {"checks":5,"b":9,"a":7}`);
+  // Complete: progress.items says 2 blockers, 1 advisory; the report's D items one advisory only.
+  const report = { ...REPORT, items: [D('D1.1', 'pass'), D('D4.6', 'warn', [f('D4.6', 1)]), A('A2.4', 'high')] };
+  const done = checklist({
+    progress, report, phase: 'complete', t,
+  });
+  assert.equal(done.find((x) => x.key === 'deterministic').label, `${K}deterministicDone {"checks":55,"b":0,"a":1}`);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.equal(en[`${K}deterministicCount`], '{checks} checks');
 });
 
 test('I14: an older Lambda\'s {stage, at} (and no progress at all) renders, never throws', () => {
@@ -178,30 +193,16 @@ test('halted (failed/stale): the rows stay as at the last PATCH and nothing spin
   assert.ok(r.every((x) => !x.spinner));
 });
 
-// REVIEW-TRIM-2-SPEC D1 (Stage 2 F12): the early list keys on the D items being present, not on a
-// stage index (the current Lambda sends them on `ai`, an older one on `screenshots`).
-test('I5: the early list is the progress D items only, once they are present, every entry undecidable', () => {
-  assert.deepEqual(earlyEntries({ progress: { stage: 'deterministic' }, phase: 'running' }), []);
-  assert.equal(earlyEntries({ progress: { stage: 'ai', items: DITEMS }, phase: 'running' }).length, 3);
-  const early = earlyEntries({ progress: { stage: 'screenshots', items: [...DITEMS, A('A1.1', 'critical')] }, phase: 'running' });
-  assert.deepEqual(early.map((e) => e.key), ['D2.4#1', 'D2.4#2', 'D4.6#1'], 'D only, structure key excluded');
-  assert.ok(early.every((e) => e.decidable === false));
-  assert.deepEqual(early.map((e) => e.section), ['blockers', 'blockers', 'advisory']);
-  assert.deepEqual(earlyEntries({ progress: { stage: 'ai', items: DITEMS }, phase: 'complete' }), [], 'the report replaces them');
-  assert.deepEqual(earlyEntries({ progress: { stage: 'ai' }, phase: 'running' }), [], 'an older Lambda');
-  assert.deepEqual(earlyEntries({ progress: null }), []);
-});
-
-test('I5: the window stages only report entries -- its `entries` reads the report, the early list is separate', () => {
+// REVIEW-SETTLED-SPEC D5 / I6: the window builds no findings while a review runs -- its `entries`
+// reads the report only, and the early findings (their block, computed and export) are gone.
+test('I6: the window\'s findings come from the report only; no early findings', () => {
   const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
   const entries = /entries\(\) \{([\s\S]*?)\n {4}\},/.exec(src);
   assert.ok(entries, 'CampaignReview.vue has an entries() computed');
   assert.match(entries[1], /this\.report/);
   assert.doesNotMatch(entries[1], /progress/);
-  // The early findings render without any of the three buttons.
-  const early = /<!-- EARLY FINDINGS -->([\s\S]*?)<!-- \/EARLY FINDINGS -->/.exec(src);
-  assert.ok(early, 'the early findings block is marked');
-  assert.doesNotMatch(early[1], /btn-fix-for-me|btn-ill-fix-it|btn-accept|stage\(/);
+  assert.doesNotMatch(src, /EARLY FINDINGS|earlySections|earlyEntries|is-early/);
+  assert.equal(checklistModule.earlyEntries, undefined);
 });
 
 // ------------------------------------------------------------------ polish pass (2026-10-06)
@@ -279,24 +280,19 @@ test('the item templates: no Evidence line; every btn-goto-block is an <a> wrapp
   const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
   const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
   assert.doesNotMatch(tpl, /campaigns\.review\.evidence/);
-  const early = /<!-- EARLY FINDINGS -->([\s\S]*?)<!-- \/EARLY FINDINGS -->/.exec(tpl)[1];
   const reportList = /<section v-for="sec in sections"([\s\S]*?)<\/section>/.exec(tpl)[1];
   // A called-out finding's card shows the rule's failure title (an older report falls back to title);
   // the Passed list keeps the title.
-  [early, reportList].forEach((part) => {
-    assert.match(part, /\{\{ e\.item\.failTitle \|\| e\.item\.title \}\}/);
-    assert.doesNotMatch(part.replace(/e\.item\.failTitle \|\| e\.item\.title/g, ''), /e\.item\.title/);
-  });
+  assert.match(reportList, /\{\{ e\.item\.failTitle \|\| e\.item\.title \}\}/);
+  assert.doesNotMatch(reportList.replace(/e\.item\.failTitle \|\| e\.item\.title/g, ''), /e\.item\.title/);
   const passedList = /<ul class="passed-list[\s\S]*?<\/ul>/.exec(tpl)[0];
   assert.match(passedList, /\{\{ i\.title \}\}/);
   assert.doesNotMatch(passedList, /failTitle/);
-  [early, reportList].forEach((part) => {
-    const anchors = [...part.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].filter((m) => /btn-goto-block/.test(m[1]));
-    assert.equal(anchors.length, 2, 'one image link and one badge link per item template');
-    anchors.forEach((m) => assert.ok(/<img\b/.test(m[2]) || /class="where-badge"/.test(m[1]), m[0]));
-    // btn-goto-block appears nowhere but on those anchors.
-    assert.equal((part.match(/btn-goto-block/g) || []).length, anchors.length);
-  });
+  const anchors = [...reportList.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].filter((m) => /btn-goto-block/.test(m[1]));
+  assert.equal(anchors.length, 2, 'one image link and one badge link per item template');
+  anchors.forEach((m) => assert.ok(/<img\b/.test(m[2]) || /class="where-badge"/.test(m[1]), m[0]));
+  // btn-goto-block appears nowhere but on those anchors.
+  assert.equal((reportList.match(/btn-goto-block/g) || []).length, anchors.length);
 });
 
 // ------------------------------------------------------------------ polish pass 2 (2026-10-06)
@@ -403,24 +399,21 @@ test('D7: acceptState -- cannot, override (a permission the user lacks), ok; the
   assert.equal(en['campaigns.review.overrideAdminOnly'], 'Only a review admin (campaigns:review_structure) can override a missing shop-link attribution.');
 });
 
-test('the window: a proposal box with Copy in both card templates; the context list at card size; AI glyphs in Passed', () => {
+test('the window: a proposal box with Copy in the card template; the context list at card size; AI glyphs in Passed', () => {
   const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
   const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
-  const early = /<!-- EARLY FINDINGS -->([\s\S]*?)<!-- \/EARLY FINDINGS -->/.exec(tpl)[1];
   const reportList = /<section v-for="sec in sections"([\s\S]*?)<\/section>/.exec(tpl)[1];
-  [early, reportList].forEach((part) => {
-    const box = /<div v-if="e\.finding\.proposal" class="proposal"[\s\S]*?<\/div>/.exec(part);
-    assert.ok(box, 'a proposal box');
-    assert.match(box[0], /\{\{ e\.finding\.proposal \}\}/);
-    assert.match(box[0], /btn-copy-proposal[\s\S]*copyText\(e\.finding\.proposal\)/);
-    // An icon-only Copy (no text label), named for screen readers and on hover.
-    const copy = /<button type="button" class="proposal-copy"[\s\S]*?<\/button>/.exec(box[0]);
-    assert.ok(copy, 'an icon-only button.proposal-copy');
-    assert.match(copy[0], /:aria-label="\$t\('campaigns\.review\.copyProposal'\)"/);
-    assert.match(copy[0], /:title="\$t\('campaigns\.review\.copyProposal'\)"/);
-    assert.match(copy[0], /<b-icon icon="file-multiple-outline" size="is-small" \/>/);
-    assert.doesNotMatch(copy[0], /structureCopy/);
-  });
+  const box = /<div v-if="e\.finding\.proposal" class="proposal"[\s\S]*?<\/div>/.exec(reportList);
+  assert.ok(box, 'a proposal box');
+  assert.match(box[0], /\{\{ e\.finding\.proposal \}\}/);
+  assert.match(box[0], /btn-copy-proposal[\s\S]*copyText\(e\.finding\.proposal\)/);
+  // An icon-only Copy (no text label), named for screen readers and on hover.
+  const copy = /<button type="button" class="proposal-copy"[\s\S]*?<\/button>/.exec(box[0]);
+  assert.ok(copy, 'an icon-only button.proposal-copy');
+  assert.match(copy[0], /:aria-label="\$t\('campaigns\.review\.copyProposal'\)"/);
+  assert.match(copy[0], /:title="\$t\('campaigns\.review\.copyProposal'\)"/);
+  assert.match(copy[0], /<b-icon icon="file-multiple-outline" size="is-small" \/>/);
+  assert.doesNotMatch(copy[0], /structureCopy/);
   // Fix for me: light green when a fix exists (fixType), disabled without one; "I fixed it" by its key.
   assert.match(reportList, /:disabled="!e\.finding\.fix" data-cy="btn-fix-for-me"\s+:type="fixType\(e\)"/);
   const context = /data-cy="section-context"([\s\S]*?)<\/b-collapse>/.exec(tpl)[1];

@@ -57,49 +57,8 @@
       {{ $t('campaigns.review.edited') }}
     </b-message>
 
-    <!-- EARLY FINDINGS -->
-    <!-- §4.6: the rule-check findings from progress.items while the review runs -- read-only (no
-         buttons, nothing can be staged against them, I5). The report replaces them. -->
-    <template v-if="isRunning && earlySections.length">
-      <section v-for="sec in earlySections" :key="`early-${sec.key}`" class="review-section" :data-cy="`early-${sec.key}`">
-        <h5 class="title is-5">{{ sec.label }} <span class="tag">{{ sec.entries.length }}</span></h5>
-        <div v-for="e in sec.entries" :key="`early-${e.key}`" class="review-item box is-early" :data-cy="`early-item-${e.item.id}`">
-          <div class="item-head">
-            <strong>{{ e.item.id }}</strong> {{ e.item.failTitle || e.item.title }}
-            <b-tag :type="tagType(e)" class="ml-2">{{ e.finding.severity || e.item.verdict }}</b-tag>
-          </div>
-          <p class="todo">{{ e.finding.todo }}</p>
-          <div v-if="e.finding.proposal" class="proposal" data-cy="review-proposal">
-            <p class="proposal-text">{{ e.finding.proposal }}</p>
-            <button type="button" class="proposal-copy" data-cy="btn-copy-proposal" :aria-label="$t('campaigns.review.copyProposal')"
-              :title="$t('campaigns.review.copyProposal')" @click="copyText(e.finding.proposal)">
-              <b-icon icon="file-multiple-outline" size="is-small" />
-            </button>
-          </div>
-          <p v-if="links(e.item).length" class="is-size-7 standards">
-            <span class="has-text-grey">{{ $t('campaigns.review.standard') }}:</span>
-            <span v-for="(r, n) in links(e.item)" :key="`l-${n}`"><a :href="r.url" target="_blank"
-              rel="noopener noreferrer">{{ r.label }}</a><span v-if="n < links(e.item).length - 1">, </span></span>
-          </p>
-          <p v-if="reference(e.finding).kind === 'image'" class="where-line">
-            <a href="#" class="where-thumb" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
-              @click.prevent="gotoBlock(reference(e.finding).blockId)"><img :src="reference(e.finding).image" alt="" class="evidence-thumb" /><span
-                class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
-          </p>
-          <p v-else-if="reference(e.finding).kind === 'badge'" class="is-size-7 where-line">
-            <a href="#" class="where-badge" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
-              @click.prevent="gotoBlock(reference(e.finding).blockId)"><span class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
-            {{ reference(e.finding).text }}
-          </p>
-          <p v-else-if="reference(e.finding).kind === 'plain'" class="is-size-7">
-            <span class="has-text-grey">{{ $t('campaigns.review.location') }}:</span> {{ reference(e.finding).text }}
-          </p>
-          <p class="is-size-7 has-text-grey">{{ $t('campaigns.review.decideLater') }}</p>
-        </div>
-      </section>
-    </template>
-    <!-- /EARLY FINDINGS -->
-
+    <!-- integrations REVIEW-SETTLED-SPEC D5: while a review runs only the checklist rows show -- the
+         findings appear together with the report. -->
     <template v-if="report && !isRunning && !runStarting">
       <!-- AI unavailable / partial: the user override (pseudo-key A). -->
       <b-message v-if="report.ai && report.ai.status !== 'ok'" type="is-warning" data-cy="review-ai">
@@ -464,7 +423,7 @@ import {
   buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 import {
-  acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, earlyEntries, isReviewDone, sectionCounts, sectionOf,
+  acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, isReviewDone, sectionOf,
   splitAccepted, structureAcknowledgeLabel, suggestionAcknowledgements, withAltsStep,
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
@@ -631,15 +590,12 @@ export default Vue.extend({
         };
         return [starting, ...(this.altsStepRow ? [this.altsStepRow] : [])];
       }
-      // LOGO-APPROVAL-SPEC D10: an approved D3.5 leaves the advisory counts too -- the report's rows
-      // read viewItems, and the deterministic row's progress D3.5 (written before the candidates)
-      // is read as the shown one.
-      const approvedD35 = this.viewItems.find((i) => i && i.id === 'D3.5' && i.approvedLogo);
+      // LOGO-APPROVAL-SPEC D10: an approved D3.5 leaves the advisory counts too -- the rows read
+      // viewReport (the approved-logo view); REVIEW-SETTLED-SPEC D5: never the progress items.
       const rows = this.checklistPhase ? checklist({
         progress: this.checklistProgress,
         report: this.viewReport,
         phase: this.checklistPhase,
-        sectionsOf: approvedD35 ? (items) => sectionCounts(items.map((i) => (i && i.id === 'D3.5' ? approvedD35 : i))) : sectionCounts,
         t: (k, p) => this.$t(k, p),
       }) : [];
       return withAltsStep(this.altsStepRow, rows);
@@ -648,12 +604,6 @@ export default Vue.extend({
     // ALT-AUTOGEN-SPEC A1.2: the "Alt tags" section (null without report.alts or images in scope).
     altTags() {
       return altsSection(this.report, (k, p) => this.$t(k, p));
-    },
-
-    // §4.6: the D items of a running review, read-only, in the same sections.
-    earlySections() {
-      const early = earlyEntries({ progress: this.row && this.row.progress, phase: this.isRunning ? 'running' : 'done' });
-      return this.sectionList(early);
     },
 
     // Latest disposition per key (the log is newest first).
@@ -1395,9 +1345,6 @@ export default Vue.extend({
 }
 @keyframes checklist-spin {
   to { transform: rotate(360deg); }
-}
-.review-item.is-early {
-  opacity: 0.9;
 }
 /* Polish pass 2 (2026-10-06): a pending/current checklist row's empty grey circle. */
 .checklist-circle {
