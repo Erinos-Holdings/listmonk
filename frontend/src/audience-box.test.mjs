@@ -255,7 +255,9 @@ test('the 60-day row shows a spinner after its label while the preview loads', (
   const spin = row.indexOf('data-cy="silent-skip-loading"');
   assert.ok(label > 0 && spin > label && spin < row.indexOf('<b-switch'), 'label, spinner, switch -- in that order');
   assert.match(row, /v-if="silentPreviewLoading && silentPreviewKey"/);
-  // The flag is cleared when the request settles, failure included.
+  // The flag is raised when the watcher starts a request (Stage 4 F1) ...
+  assert.match(view, /this\.silentPreview = null;\s*this\.silentPreviewLoading = true;/);
+  // ... and cleared when the request settles, failure included.
   assert.match(view, /\.catch\(\(\) => \{\}\)\.finally\(\(\) => \{\s*if \(this\.silentPreviewFor === key\) \{\s*this\.silentPreviewLoading = false;/);
 });
 
