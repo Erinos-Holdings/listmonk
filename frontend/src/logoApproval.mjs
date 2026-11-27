@@ -73,13 +73,13 @@ export function logoAwareSplit(entries, latest, split, rows) {
   return { open: list.filter((e) => isLogoCard(e, rows) || openSet.has(e)), accepted };
 }
 
-// The card's question (an i18n call): "This section N image appears…" (integrations
-// REVIEW-LOCATIONS-SPEC D5: no `{url}` -- the thumbnail shows the file); a candidate without `n`
-// keeps "<url> — This image appears…" (the NoBlock key, beside today's bare picture). `t(key,
-// params)` is the window's $t.
-export function logoQuestion(candidate, t) {
+// The card's question (an i18n call): "This section N image appears…" when the card shows the file
+// as the standard thumbnail (`thumb`; integrations REVIEW-LOCATIONS-SPEC D5: no `{url}`); otherwise
+// "<url> — This image appears…" (the NoBlock key, beside the bare picture -- Stage 4 F1: a file the
+// thumbnail cannot show is never approved without its URL). `t(key, params)` is the window's $t.
+export function logoQuestion(candidate, t, thumb = false) {
   const c = candidate || {};
-  return Number.isInteger(c.n)
+  return thumb && Number.isInteger(c.n)
     ? t('campaigns.review.logoQuestion', { n: c.n })
     : t('campaigns.review.logoQuestionNoBlock', { url: c.url });
 }

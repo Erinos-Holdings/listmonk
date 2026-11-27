@@ -108,7 +108,9 @@ test('a D3.5 key already accepted still shows the card in Advisory; a warn D3.5 
 test('the question: with n "section N", without n the NoBlock form; Yes approves, No rejects', () => {
   const t = (k, p) => `${k}|${JSON.stringify(p)}`;
   // integrations REVIEW-LOCATIONS-SPEC D5: the section-N sentence drops {url} (the thumbnail shows it).
-  assert.equal(logoQuestion({ url: A, n: 2 }, t), `campaigns.review.logoQuestion|${JSON.stringify({ n: 2 })}`);
+  assert.equal(logoQuestion({ url: A, n: 2 }, t, true), `campaigns.review.logoQuestion|${JSON.stringify({ n: 2 })}`);
+  // Stage 4 F1: without the standard thumbnail the sentence carries the URL.
+  assert.equal(logoQuestion({ url: A, n: 2 }, t), `campaigns.review.logoQuestionNoBlock|${JSON.stringify({ url: A })}`);
   assert.equal(logoQuestion({ url: C, location: 'img[0]' }, t), `campaigns.review.logoQuestionNoBlock|${JSON.stringify({ url: C })}`);
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   assert.ok(!en['campaigns.review.logoQuestion'].includes('{url}'));
@@ -138,7 +140,13 @@ test('REVIEW-LOCATIONS-SPEC I7: the logo card reference -- thumbnail + square fr
   assert.equal(logoReference({
     url: B, location: 'block:block-9', n: 4, where: htmlWhere,
   }, ORIGIN).kind, 'image', 'an Html block alike');
-  assert.equal(logoReference({ url: 'https://cdn.example/x.png', location: 'block:block-9', where: htmlWhere }, ORIGIN).kind, 'badge', 'an off-host file: the square alone');
+  // Stage 4 F1: an off-host file gets the square (badge), and the card still shows the file and its URL.
+  const offHost = {
+    url: 'https://cdn.example/x.png', location: 'block:block-9', n: 4, where: htmlWhere,
+  };
+  assert.equal(logoReference(offHost, ORIGIN).kind, 'badge', 'an off-host file: the square');
+  const tq = (k, p) => `${k}|${JSON.stringify(p)}`;
+  assert.equal(logoQuestion(offHost, tq, false), `campaigns.review.logoQuestionNoBlock|${JSON.stringify({ url: offHost.url })}`, 'the badge card\'s sentence names the URL');
   assert.equal(logoReference({ url: C, location: 'img[0]' }, ORIGIN), null, 'no where: today\'s bare picture');
   assert.equal(logoReference({ url: C, where: { ...htmlWhere, block: 'nope' } }, ORIGIN), null, 'an invalid block id');
   const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
@@ -146,7 +154,10 @@ test('REVIEW-LOCATIONS-SPEC I7: the logo card reference -- thumbnail + square fr
   const card = /<div v-if="logoCardOf\(e\)" class="logo-card"[\s\S]*?<\/div>\s*<\/div>/.exec(tpl)[0];
   assert.match(card, /<p v-if="logoRefOf\(e\)"[\s\S]*data-cy="btn-goto-block"[\s\S]*@click\.prevent="goto\(logoRefOf\(e\)\.blockId\)"/);
   assert.match(card, /class="lm-structure-number">\{\{ logoRefOf\(e\)\.n \}\}/);
-  assert.match(card, /<img v-else :src="logoCardOf\(e\)\.url"/);
+  // The bare picture shows whenever the reference is not the standard thumbnail (none, or a badge).
+  assert.match(card, /<img v-if="!logoThumbOf\(e\)" :src="logoCardOf\(e\)\.url" alt="" class="evidence-thumb logo-card-thumb"/);
+  assert.match(card, /logoQuestionOf\(logoCardOf\(e\), logoThumbOf\(e\)\)/);
+  assert.match(src, /logoThumbOf\(e\) \{\s*const r = this\.logoRefOf\(e\);\s*return !!r && r\.kind === 'image';/);
   // No Location line under a card that shows its own thumbnail.
   assert.match(tpl, /<template v-if="!logoRefOf\(e\)">\s*<p v-if="reference\(e\.finding\)\.kind === 'image'"/);
 });

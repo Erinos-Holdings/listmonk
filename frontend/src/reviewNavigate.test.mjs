@@ -242,7 +242,12 @@ test('REVIEW-LOCATIONS-SPEC I2: a location maps to its target, the campaign link
     assert.deepEqual(r.labels, TARGETS[target].labels, loc);
   });
   // Plain: malformed patterns, an unknown word, template:<id>, empty.
-  ['list:abc', 'campaign:0', 'campaign:x', 'template:12', 'nothing here', '', '   ', 'I4'].forEach((loc) => {
+  // Stage 4 F3: only unambiguous nouns match as a free-text word; `from`, `status`, `button`, `data`,
+  // `preview` match only as exact tokens (exact `from` -> Campaign › Sender, in the cases above).
+  assert.deepEqual(locationRef('from'), { target: 'from' });
+  assert.deepEqual(TARGETS.from.labels, ['globals.terms.campaign', 'campaigns.review.field.sender']);
+  ['list:abc', 'campaign:0', 'campaign:x', 'template:12', 'nothing here', '', '   ', 'I4',
+    'text copied from the hero', 'the status page', 'the CTA button', 'data attributes', 'preview text'].forEach((loc) => {
     assert.equal(locationRef(loc), null, loc);
   });
   assert.deepEqual(referenceLine({ location: 'list:abc', locationPlain: 'The list' }, ORIGIN), { kind: 'plain', text: 'The list' });

@@ -124,8 +124,10 @@ const TOKENS = Object.freeze({
     'clip', 'data', 'cid', 'embed', 'unsized', 'button', 'footer'].map((k) => [k, 'content'])),
 });
 
-// The bare tokens a free-text location's FIRST matching word maps by.
-const WORD_TOKENS = new Set(Object.keys(TOKENS).filter((k) => /^[a-z_]+$/.test(k)));
+// The words a free-text location's FIRST matching word maps by -- unambiguous nouns only (Stage 4
+// F3): `from`, `status`, `data`, `button`, `preview`, … match only as exact tokens, so "text copied
+// from the hero" stays plain.
+const WORD_TOKENS = new Set(['subject', 'preheader', 'lists', 'body', 'footer', 'content', 'images', 'logo', 'structure', 'audience', 'pixel']);
 
 // Token patterns, tried in order; `campaign` is the other-campaign link, `plain` stays plain.
 const PATTERNS = [

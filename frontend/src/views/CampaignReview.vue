@@ -86,7 +86,8 @@
                once (a brand write, not a staged disposition). Disabled without brands:logos. -->
           <!-- integrations REVIEW-LOCATIONS-SPEC D5: a candidate with a block `where` shows the standard
                thumbnail + numbered square, linked to its block (logoApproval.mjs logoReference); without
-               one, today's bare picture. -->
+               one, today's bare picture. Stage 4 F1: a `badge` reference (a file that is not this host's
+               upload) keeps the bare picture and the sentence with its URL -- never approved unseen. -->
           <div v-if="logoCardOf(e)" class="logo-card" data-cy="logo-card">
             <p v-if="logoRefOf(e)" class="where-line" data-cy="logo-card-where">
               <a href="#" :class="logoRefOf(e).kind === 'image' ? 'where-thumb' : 'where-badge'" data-cy="btn-goto-block"
@@ -94,8 +95,8 @@
                 @click.prevent="goto(logoRefOf(e).blockId)"><img v-if="logoRefOf(e).kind === 'image'" :src="logoRefOf(e).image" alt=""
                   class="evidence-thumb" /><span class="lm-structure-number">{{ logoRefOf(e).n }}</span></a>
             </p>
-            <img v-else :src="logoCardOf(e).url" alt="" class="evidence-thumb logo-card-thumb" />
-            <p class="todo">{{ logoQuestionOf(logoCardOf(e)) }}</p>
+            <img v-if="!logoThumbOf(e)" :src="logoCardOf(e).url" alt="" class="evidence-thumb logo-card-thumb" />
+            <p class="todo">{{ logoQuestionOf(logoCardOf(e), logoThumbOf(e)) }}</p>
             <div class="buttons mt-2">
               <b-tooltip :active="!canLogos" :label="$t('campaigns.review.logoNoPermission')" type="is-dark" multilined>
                 <b-button size="is-small" type="is-primary" data-cy="btn-logo-yes" :disabled="!canLogos" :loading="logoBusy"
@@ -805,14 +806,20 @@ export default Vue.extend({
       return s.state === 'card' ? s.candidate : null;
     },
 
-    logoQuestionOf(candidate) {
-      return logoQuestion(candidate, (k, p) => this.$t(k, p));
+    logoQuestionOf(candidate, thumb) {
+      return logoQuestion(candidate, (k, p) => this.$t(k, p), thumb);
     },
 
     // integrations REVIEW-LOCATIONS-SPEC D5: the logo card's thumbnail + square, or null (logoApproval.mjs).
     logoRefOf(e) {
       const cand = this.logoCardOf(e);
       return cand ? logoReference(cand, window.location.origin) : null;
+    },
+
+    // Stage 4 F1: whether the card shows the file as the standard thumbnail (else the bare picture + URL).
+    logoThumbOf(e) {
+      const r = this.logoRefOf(e);
+      return !!r && r.kind === 'image';
     },
 
     // Yes approves, No rejects -- posted at once; the response row replaces the window's copy, so Yes

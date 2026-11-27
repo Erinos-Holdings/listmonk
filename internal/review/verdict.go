@@ -86,8 +86,8 @@ func LatestDispositions(ds []models.ReviewDisposition) map[string]models.ReviewD
 //     is accept -- and blocks regardless when the item is acceptable:false;
 //   - an A finding with severity critical or high blocks unless accepted ("acknowledged", D9);
 //   - an A finding with severity low (integrations REVIEW-CONVENTIONS-SPEC D5.4: the window's
-//     Suggestions section) blocks unless accepted, exactly as critical and high -- its one
-//     acknowledgement is the window's Acknowledge suggestions;
+//     Suggestions section) blocks unless accepted, exactly as critical and high -- each
+//     suggestion's own row (Acknowledge) decides it (integrations REVIEW-LOCATIONS-SPEC D4);
 //   - ai.status other than ok (unavailable, partial) blocks unless the pseudo-key A is accepted;
 //   - fixme never satisfies; warn, medium, n/a, the legacy R pseudo-key and context lines never
 //     block;
