@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as checklistModule from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import {
-  STAGES, acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, isContextConcern, isReviewDone, openEntries,
-  sectionCounts, sectionOf, splitAccepted, structureAcknowledgeLabel, suggestionAcknowledgements, withAltsStep,
+  STAGES, acceptButton, acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, isContextConcern, isReviewDone, openEntries,
+  sectionCounts, sectionOf, splitAccepted, structureAcknowledgeLabel, withAltsStep,
 } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 
 const t = (k, p) => (p ? `${k} ${JSON.stringify(p)}` : k);
@@ -289,7 +289,8 @@ test('the item templates: no Evidence line; every btn-goto-block is an <a> wrapp
   assert.match(passedList, /\{\{ i\.title \}\}/);
   assert.doesNotMatch(passedList, /failTitle/);
   const anchors = [...reportList.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].filter((m) => /btn-goto-block/.test(m[1]));
-  assert.equal(anchors.length, 2, 'one image link and one badge link per item template');
+  // integrations REVIEW-LOCATIONS-SPEC D5: plus the logo card's thumbnail/square link.
+  assert.equal(anchors.length, 3, 'one image link and one badge link per item template, and the logo card\'s');
   anchors.forEach((m) => assert.ok(/<img\b/.test(m[2]) || /class="where-badge"/.test(m[1]), m[0]));
   // btn-goto-block appears nowhere but on those anchors.
   assert.equal((reportList.match(/btn-goto-block/g) || []).length, anchors.length);
@@ -651,7 +652,9 @@ test('D3: the window -- the three sections are built from open, a fourth Accepte
   assert.match(src, /campaigns\.review\.sectionAccepted/);
   const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
   assert.match(tpl, /data-cy="tag-accepted"/);
-  assert.match(tpl, /:disabled="sec\.key === 'accepted'"/);
+  // integrations REVIEW-LOCATIONS-SPEC D4: the Accepted section's disabled rule lives in acceptButton.
+  assert.match(tpl, /:disabled="acceptButtonOf\(sec, e\)\.disabled"/);
+  assert.equal(acceptButton({ section: 'accepted', severity: 'medium' }).disabled, true);
 });
 
 // ------------------------------------------------------------------ integrations
@@ -682,7 +685,8 @@ test('I9: sectionCounts counts suggestions; the writing-done line carries {sug}'
   const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
   assert.match(en['campaigns.review.checklist.writingDone'], /\{sug\} Suggestions$/);
   assert.equal(en['campaigns.review.sectionSuggestions'], 'Suggestions');
-  assert.equal(en['campaigns.review.acknowledgeSuggestions'], 'Acknowledge suggestions');
+  // integrations REVIEW-LOCATIONS-SPEC D4: the section button's key is deleted.
+  assert.equal(en['campaigns.review.acknowledgeSuggestions'], undefined);
   assert.match(en['campaigns.review.acknowledgedBy'], /^Acknowledged by \{user\}, \{date\}$/);
 });
 
@@ -713,31 +717,45 @@ test('I9: an acknowledged suggestion is NOT moved to Accepted (splitAccepted); a
   assert.deepEqual(accepted.map((e) => e.key), ['A2.4#0']);
 });
 
-test('I11: Acknowledge suggestions stages accept for exactly the undecided suggestion keys', () => {
+// integrations REVIEW-LOCATIONS-SPEC I6 (D4): a suggestion card has the standard row -- Fix for me
+// (always shown, disabled without a fix), I fixed it, and Acknowledge, disabled once its latest
+// recorded disposition is `accept`; an acknowledged suggestion stays in Suggestions (D5.6, the
+// splitAccepted case above); no section-level button remains; Done waits for every suggestion (the
+// isReviewDone case above).
+test('REVIEW-LOCATIONS-SPEC I6: the third button -- Acknowledge on a suggestion, disabled once recorded accept', () => {
+  assert.deepEqual(acceptButton({ section: 'suggestions', severity: 'low' }), { label: 'campaigns.review.acknowledge', disabled: false });
+  assert.deepEqual(acceptButton({ section: 'suggestions', severity: 'low', latestAction: 'fixme' }), { label: 'campaigns.review.acknowledge', disabled: false });
+  assert.deepEqual(acceptButton({ section: 'suggestions', severity: 'low', latestAction: 'accept' }), { label: 'campaigns.review.acknowledge', disabled: true });
+  // Every other card as before: an A high reads Acknowledge, the rest Accept risk; Accepted disables it.
+  assert.deepEqual(acceptButton({ section: 'acknowledge', severity: 'high' }), { label: 'campaigns.review.acknowledge', disabled: false });
+  assert.deepEqual(acceptButton({ section: 'advisory', severity: 'medium', latestAction: 'accept' }), { label: 'campaigns.review.acceptRisk', disabled: false });
+  assert.deepEqual(acceptButton({ section: 'accepted', severity: 'high' }), { label: 'campaigns.review.acknowledge', disabled: true });
+  // An acknowledged suggestion stays in Suggestions and Done still waits for every suggestion.
   const entries = openEntries(SUG_REPORT.items);
-  const all = suggestionAcknowledgements(entries, () => false);
-  assert.deepEqual(all, [
-    { key: 'A4.7#0', rubric_id: 'A4.7', action: 'accept' },
-    { key: 'A6.2#0', rubric_id: 'A6.2', action: 'accept' },
-  ]);
-  // Never an advisory, blocker or acknowledge key.
-  const sections = new Map(entries.map((e) => [e.key, e.section]));
-  assert.ok(all.every((s) => sections.get(s.key) === 'suggestions'));
-  // A decided suggestion is not staged again.
-  assert.deepEqual(suggestionAcknowledgements(entries, (k) => k === 'A4.7#0').map((s) => s.key), ['A6.2#0']);
-  assert.deepEqual(suggestionAcknowledgements(entries, () => true), []);
-  // No suggestion: nothing.
-  assert.deepEqual(suggestionAcknowledgements(openEntries(REPORT.items), () => false), []);
-  assert.deepEqual(suggestionAcknowledgements(null), []);
+  const { open } = splitAccepted(entries, { 'A4.7#0': { action: 'accept' }, 'A6.2#0': { action: 'accept' } });
+  assert.deepEqual(open.filter((e) => e.section === 'suggestions').map((e) => e.key), ['A4.7#0', 'A6.2#0']);
+  const gating = entries.filter((e) => e.section === 'blockers' || e.section === 'acknowledge').map((e) => e.key);
+  assert.equal(isReviewDone({
+    report: SUG_REPORT, verdict: 'blocked', entries, decided: (k) => [...gating, 'A4.7#0'].includes(k),
+  }), false, 'one suggestion undecided holds Done');
 });
 
-test('D5: the window -- a fourth Suggestions section with no per-card buttons and one Acknowledge suggestions button', () => {
+test('REVIEW-LOCATIONS-SPEC I6: the window -- the standard row on every card, no section-level acknowledge button', () => {
   const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
   const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
   assert.match(src, /key: 'suggestions', label: this\.\$t\('campaigns\.review\.sectionSuggestions'\)/);
-  assert.match(tpl, /<div v-if="sec\.key !== 'suggestions'" class="buttons mt-2">/);
-  assert.match(tpl, /v-if="sec\.key === 'suggestions' && suggestionsOpen\.length"/);
-  assert.match(tpl, /data-cy="btn-acknowledge-suggestions"/);
+  // The row is not conditioned on the section any more.
+  assert.match(tpl, /<template v-if="!logoCardOf\(e\)">\s*<div class="buttons mt-2">/);
+  assert.doesNotMatch(tpl, /sec\.key !== 'suggestions'/);
+  // Fix for me always shown, disabled without a fix; I fixed it; the third button from acceptButton.
+  assert.match(tpl, /:disabled="!e\.finding\.fix" data-cy="btn-fix-for-me"/);
+  assert.match(tpl, /data-cy="btn-ill-fix-it"/);
+  assert.match(tpl, /data-cy="btn-accept"[\s\S]*?\{\{ \$t\(acceptButtonOf\(sec, e\)\.label\) \}\}/);
+  assert.match(src, /acceptButton\(\{ section: sec\.key, severity: e\.finding\.severity, latestAction: this\.decidedAction\(e\.key\) \}\)/);
   assert.match(tpl, /data-cy="review-acknowledged"/);
-  assert.match(src, /suggestionAcknowledgements\(this\.entries/);
+  // The section button and its helpers are gone.
+  ['btn-acknowledge-suggestions', 'suggestionsOpen', 'suggestionsStaged', 'acknowledgeSuggestions', 'suggestionAcknowledgements'].forEach((s) => {
+    assert.ok(!src.includes(s), s);
+  });
+  assert.equal(checklistModule.suggestionAcknowledgements, undefined);
 });

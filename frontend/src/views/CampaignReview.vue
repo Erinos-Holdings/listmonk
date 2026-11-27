@@ -84,8 +84,17 @@
           <!-- integrations LOGO-APPROVAL-SPEC D10: a D3.5 candidate logo (logoApproval.mjs logoCardState
                `card`) shows the approval question IN PLACE of the todo and its buttons; Yes/No post at
                once (a brand write, not a staged disposition). Disabled without brands:logos. -->
+          <!-- integrations REVIEW-LOCATIONS-SPEC D5: a candidate with a block `where` shows the standard
+               thumbnail + numbered square, linked to its block (logoApproval.mjs logoReference); without
+               one, today's bare picture. -->
           <div v-if="logoCardOf(e)" class="logo-card" data-cy="logo-card">
-            <img :src="logoCardOf(e).url" alt="" class="evidence-thumb logo-card-thumb" />
+            <p v-if="logoRefOf(e)" class="where-line" data-cy="logo-card-where">
+              <a href="#" :class="logoRefOf(e).kind === 'image' ? 'where-thumb' : 'where-badge'" data-cy="btn-goto-block"
+                :aria-label="$t('campaigns.review.gotoBlock', { n: logoRefOf(e).n })"
+                @click.prevent="goto(logoRefOf(e).blockId)"><img v-if="logoRefOf(e).kind === 'image'" :src="logoRefOf(e).image" alt=""
+                  class="evidence-thumb" /><span class="lm-structure-number">{{ logoRefOf(e).n }}</span></a>
+            </p>
+            <img v-else :src="logoCardOf(e).url" alt="" class="evidence-thumb logo-card-thumb" />
             <p class="todo">{{ logoQuestionOf(logoCardOf(e)) }}</p>
             <div class="buttons mt-2">
               <b-tooltip :active="!canLogos" :label="$t('campaigns.review.logoNoPermission')" type="is-dark" multilined>
@@ -120,30 +129,44 @@
           </p>
           <!-- The reference (reviewNavigate.mjs referenceLine): the thumbnail IS the click-through,
                with the editor's block-number badge on its corner; a badge alone when there is no
-               image; plain Location text for an official footer or no `where`. -->
+               image (an official footer included); integrations REVIEW-LOCATIONS-SPEC D2/D3:
+               "Location: <Tab> › <Field>" / "Location: Content" as the link, "Location: Campaign <id>"
+               in a new tab; plain Location text otherwise. None under a logo card's own thumbnail (D5). -->
+          <template v-if="!logoRefOf(e)">
           <p v-if="reference(e.finding).kind === 'image'" class="where-line" data-cy="review-where">
             <a href="#" class="where-thumb" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
-              @click.prevent="gotoBlock(reference(e.finding).blockId)"><img :src="reference(e.finding).image" alt="" class="evidence-thumb" /><span
+              @click.prevent="goto(reference(e.finding).blockId)"><img :src="reference(e.finding).image" alt="" class="evidence-thumb" /><span
                 class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
           </p>
           <p v-else-if="reference(e.finding).kind === 'badge'" class="is-size-7 where-line" data-cy="review-where">
             <a href="#" class="where-badge" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"
-              @click.prevent="gotoBlock(reference(e.finding).blockId)"><span class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
+              @click.prevent="goto(reference(e.finding).blockId)"><span class="lm-structure-number">{{ reference(e.finding).n }}</span></a>
             {{ reference(e.finding).text }}
+          </p>
+          <p v-else-if="reference(e.finding).kind === 'field'" class="is-size-7" data-cy="review-where">
+            <span class="has-text-grey">{{ $t('campaigns.review.location') }}:</span>
+            <a href="#" data-cy="btn-goto-field" :aria-label="$t('campaigns.review.gotoField', { field: fieldText(reference(e.finding)) })"
+              @click.prevent="goto(null, reference(e.finding).target)">{{ fieldText(reference(e.finding)) }}</a>
+          </p>
+          <p v-else-if="reference(e.finding).kind === 'campaign'" class="is-size-7" data-cy="review-where">
+            <span class="has-text-grey">{{ $t('campaigns.review.location') }}:</span>
+            <a :href="campaignHref(reference(e.finding).campaignId)" target="_blank" rel="noopener" data-cy="review-campaign-link">{{
+              $tc('globals.terms.campaign', 1) }} {{ reference(e.finding).campaignId }}</a>
           </p>
           <p v-else-if="reference(e.finding).kind === 'plain'" class="is-size-7" data-cy="review-where">
             <span class="has-text-grey">{{ $t('campaigns.review.location') }}:</span> {{ reference(e.finding).text }}
           </p>
+          </template>
           <!-- integrations REVIEW-CONVENTIONS-SPEC D5.6: an acknowledged suggestion says so and stays here. -->
           <p v-if="sec.key === 'suggestions' && decided(e.key) && decided(e.key).action === 'accept'" class="is-size-7 has-text-grey"
             data-cy="review-acknowledged">
             {{ acknowledgedLine(decided(e.key)) }}
           </p>
           <p v-else-if="decided(e.key)" class="is-size-7 has-text-grey">{{ decidedLine(decided(e.key)) }}</p>
-          <!-- REVIEW-CONVENTIONS-SPEC D5.2: a suggestion card has no buttons -- the section's one button decides.
-               LOGO-APPROVAL-SPEC D10: nor does a logo approval card (its Yes/No are above). -->
+          <!-- integrations REVIEW-LOCATIONS-SPEC D4: every card, a suggestion included, has the standard row.
+               LOGO-APPROVAL-SPEC D10: a logo approval card has none (its Yes/No are above). -->
           <template v-if="!logoCardOf(e)">
-          <div v-if="sec.key !== 'suggestions'" class="buttons mt-2">
+          <div class="buttons mt-2">
             <!-- integrations REVIEW-TRIM-2-SPEC D9: a finding with nothing to replace keeps the button
                  disabled; its tooltip says why in one line (the planner's reason, else the todo). -->
             <b-tooltip :active="!e.finding.fix" :label="fixTooltip(e)" type="is-dark" multilined>
@@ -164,22 +187,15 @@
             <b-tooltip v-else-if="acceptStateOf(e.item) === 'override'" :label="$t('campaigns.review.overrideAdminOnly')" type="is-dark" multilined>
               <b-button size="is-small" disabled data-cy="btn-accept-override">{{ $t('campaigns.review.acceptRisk') }}</b-button>
             </b-tooltip>
-            <!-- EDITOR-SYNC-SPEC D3: already accepted -- Fix for me and I fixed it stay live, Accept is disabled. -->
+            <!-- EDITOR-SYNC-SPEC D3: already accepted -- Fix for me and I fixed it stay live, Accept is disabled.
+                 REVIEW-LOCATIONS-SPEC D4: on a suggestion it reads Acknowledge, disabled once recorded `accept`
+                 (reviewChecklist.mjs acceptButton). -->
             <b-button v-else size="is-small" data-cy="btn-accept" :type="stagedAction(e.key) === 'accept' ? 'is-primary' : ''"
-              :disabled="sec.key === 'accepted'" @click="stage(e.key, e.item.id, 'accept')">
-              {{ e.finding.severity === 'high' ? $t('campaigns.review.acknowledge') : $t('campaigns.review.acceptRisk') }}
+              :disabled="acceptButtonOf(sec, e).disabled" @click="stage(e.key, e.item.id, 'accept')">
+              {{ $t(acceptButtonOf(sec, e).label) }}
             </b-button>
           </div>
           </template>
-        </div>
-        <!-- integrations REVIEW-CONVENTIONS-SPEC D5.3: the Suggestions section's ONE button, below its
-             cards, while any suggestion is unrecorded: it stages `accept` on every undecided
-             suggestion key (reviewChecklist.mjs suggestionAcknowledgements); Save records them. -->
-        <div v-if="sec.key === 'suggestions' && suggestionsOpen.length" class="buttons mt-2">
-          <b-button size="is-small" data-cy="btn-acknowledge-suggestions"
-            :type="suggestionsStaged ? 'is-primary' : ''" @click="acknowledgeSuggestions">
-            {{ $t('campaigns.review.acknowledgeSuggestions') }}
-          </b-button>
         </div>
       </section>
 
@@ -423,15 +439,15 @@ import {
   buildStructureBrief, isStructureKey, structureButtons, structureOf, STRUCTURE_PERMISSION,
 } from '../structureBrief.mjs'; // eslint-disable-line import/extensions
 import {
-  acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, isReviewDone, sectionOf,
-  splitAccepted, structureAcknowledgeLabel, suggestionAcknowledgements, withAltsStep,
+  acceptButton, acceptState, altsSection, altsStep, auxLayout, auxSections, checklist, isReviewDone, sectionOf,
+  splitAccepted, structureAcknowledgeLabel, withAltsStep,
 } from '../reviewChecklist.mjs'; // eslint-disable-line import/extensions
 import { contextRows } from '../contextAdvice.mjs'; // eslint-disable-line import/extensions
 import {
-  LOGO_PERMISSION, brandRowFor, logoAction, logoAwareSplit, logoCardState, logoQuestion, withApprovedLogo,
+  LOGO_PERMISSION, brandRowFor, logoAction, logoAwareSplit, logoCardState, logoQuestion, logoReference, withApprovedLogo,
 } from '../logoApproval.mjs'; // eslint-disable-line import/extensions
 import {
-  ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, RUN_FALLBACK_MS, acceptAck, acceptOpener, acceptRun, afterAckWait, clickDecision, fallbackUrl,
+  ACK_TIMEOUT_MS, RESULT_TIMEOUT_MS, RUN_FALLBACK_MS, acceptAck, acceptOpener, acceptRun, afterAckWait, campaignUrl, clickDecision, fallbackUrl,
   fallbackWindowName, isFinalResult, newToken, referenceLine, resultToast, runBaseFromQuery, runFromQuery, runView, selectMessage, standardLinks,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
@@ -702,20 +718,6 @@ export default Vue.extend({
       return Object.values(this.staged).filter((s) => s.action === 'fixed' && s.fix);
     },
 
-    // integrations REVIEW-CONVENTIONS-SPEC D5.3: the suggestions with no RECORDED disposition -- the
-    // Acknowledge suggestions button shows while there is one.
-    suggestionsOpen() {
-      // Stage 4 F2: only a recorded `accept` satisfies the verdict -- a fixme/fixed row (an older fork's
-      // Advisory card) leaves the suggestion open.
-      return suggestionAcknowledgements(this.entries, (key) => this.recordedAccept(key));
-    },
-
-    // Every unrecorded suggestion is staged `accept` (the button reads as staged, is-primary).
-    suggestionsStaged() {
-      return this.suggestionsOpen.length > 0
-        && this.suggestionsOpen.every((s) => !!this.staged[s.key] && this.staged[s.key].action === 'accept');
-    },
-
     // REVIEW-TRIM-SPEC D6: "Acknowledge (author fix expected)" when nothing can be rendered.
     structureAckLabel() {
       return structureAcknowledgeLabel(this.structure && this.structure.coverage);
@@ -805,6 +807,12 @@ export default Vue.extend({
 
     logoQuestionOf(candidate) {
       return logoQuestion(candidate, (k, p) => this.$t(k, p));
+    },
+
+    // integrations REVIEW-LOCATIONS-SPEC D5: the logo card's thumbnail + square, or null (logoApproval.mjs).
+    logoRefOf(e) {
+      const cand = this.logoCardOf(e);
+      return cand ? logoReference(cand, window.location.origin) : null;
     },
 
     // Yes approves, No rejects -- posted at once; the response row replaces the window's copy, so Yes
@@ -905,22 +913,10 @@ export default Vue.extend({
       return this.$t('campaigns.review.acknowledgedBy', { user: d.username || '?', date: this.$utils.niceDate(d.created_at, true) });
     },
 
-    // REVIEW-CONVENTIONS-SPEC D5.3: Acknowledge suggestions stages `accept` on every undecided
-    // suggestion key (reviewChecklist.mjs suggestionAcknowledgements); a second click while all of
-    // them are staged un-stages them, like every other staged button.
-    acknowledgeSuggestions() {
-      if (this.suggestionsStaged) {
-        this.suggestionsOpen.forEach((s) => this.$delete(this.staged, s.key));
-        return;
-      }
-      const stagedAccept = (key) => !!this.staged[key] && this.staged[key].action === 'accept';
-      suggestionAcknowledgements(this.entries, (key) => this.recordedAccept(key) || stagedAccept(key))
-        .forEach((s) => this.$set(this.staged, s.key, s));
-    },
-
-    // Stage 4 F2: whether the latest recorded disposition for a key is `accept`.
-    recordedAccept(key) {
-      return !!this.latest[key] && this.latest[key].action === 'accept';
+    // integrations REVIEW-LOCATIONS-SPEC D4 (reviewChecklist.mjs acceptButton): the third button's
+    // label key and disabled state.
+    acceptButtonOf(sec, e) {
+      return acceptButton({ section: sec.key, severity: e.finding.severity, latestAction: this.decidedAction(e.key) });
     },
 
     // REVIEW-NAVIGATION-SPEC §4.1-§4.3 (reviewNavigate.mjs): the reference (the thumbnail or badge
@@ -928,6 +924,15 @@ export default Vue.extend({
     // links. The window never re-derives a name.
     reference(finding) {
       return referenceLine(finding, window.location.origin);
+    },
+
+    // REVIEW-LOCATIONS-SPEC D2/D3: a `field` reference's "Tab › Field" text.
+    fieldText(ref) {
+      return (ref.labels || []).map((k) => this.$tc(k, 1)).join(' › ');
+    },
+
+    campaignHref(campaignId) {
+      return campaignUrl(this.$router.options.base || '', campaignId);
     },
 
     links(item) {
@@ -940,43 +945,44 @@ export default Vue.extend({
     },
 
     // §4.5 click-through: post to a reachable opener and wait 1,500 ms for `received`; otherwise
-    // open the campaign's content page in a new tab, selecting on load.
-    gotoBlock(blockId) {
+    // open the campaign's content page in a new tab, selecting on load. REVIEW-LOCATIONS-SPEC D6: a
+    // block id OR a field/tab target (`place`), exactly one.
+    goto(blockId, place = null) {
       const opener = this.openerWindow();
       const { origin } = window.location;
       const decision = clickDecision({
-        opener, ourOrigin: origin, campaignId: this.id, blockId,
+        opener, ourOrigin: origin, campaignId: this.id, blockId, target: place,
       });
       if (decision === 'ignore') {
         return;
       }
       this.clearNav();
       if (decision === 'newTab') {
-        this.openFallback(blockId);
+        this.openFallback(blockId, place);
         return;
       }
       const token = newToken();
       const nav = {
-        token, target: opener, blockId, received: false, ackTimer: null, resultTimer: null,
+        token, target: opener, blockId, field: !!place, received: false, ackTimer: null, resultTimer: null,
       };
       this.nav = nav;
       try {
-        opener.postMessage(selectMessage(this.id, blockId, token), origin);
+        opener.postMessage(selectMessage(this.id, blockId, token, place), origin);
       } catch (e) {
         this.clearNav();
-        this.openFallback(blockId);
+        this.openFallback(blockId, place);
         return;
       }
       nav.ackTimer = setTimeout(() => {
         if (this.nav === nav && afterAckWait(nav.received ? 'received' : null) === 'newTab') {
           this.clearNav();
-          this.openFallback(blockId);
+          this.openFallback(blockId, place);
         }
       }, ACK_TIMEOUT_MS);
     },
 
-    openFallback(blockId) {
-      const url = fallbackUrl(this.$router.options.base || '', this.id, blockId);
+    openFallback(blockId, place = null) {
+      const url = fallbackUrl(this.$router.options.base || '', this.id, blockId, place);
       if (url) {
         // A named window: a second fallback navigates the first tab rather than opening another.
         // The page it mounts hands itself back as this window's editor (Campaign.vue mounted).
@@ -996,7 +1002,7 @@ export default Vue.extend({
     },
 
     finishNav(result) {
-      const key = resultToast(result);
+      const key = resultToast(result, !!(this.nav && this.nav.field));
       this.clearNav();
       if (key) {
         this.$utils.toast(this.$t(key), result === 'selected' ? 'is-success' : 'is-warning');

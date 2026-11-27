@@ -11,7 +11,7 @@ import {
   acceptAck, acceptOpener, acceptSelect, ackMessage, afterAckWait, campaignLocation, clickDecision,
   fallbackUrl, fallbackWindowName, isFinalResult, isImageUrl, isValidBlockId, newToken, openerMessage, openerReachable,
   pushFailureResult, receiverRoute, referenceLine, resultToast, selectFromQuery, selectMessage,
-  standardLinks, thumbnailUrl,
+  standardLinks, thumbnailUrl, TARGETS, campaignUrl, focusControl, isValidTarget, locationRef, sameRef, targetOf,
 } from './reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
 const ORIGIN = 'https://email.curatedfor.you';
@@ -32,7 +32,7 @@ test('block ids: the builder forms only', () => {
 test('message shapes', () => {
   assert.deepEqual(openerMessage(7), { type: MSG_OPENER, campaignId: 7 });
   assert.deepEqual(selectMessage(7, 'block-1', 'tk'), {
-    type: MSG_SELECT, campaignId: 7, blockId: 'block-1', token: 'tk',
+    type: MSG_SELECT, campaignId: 7, blockId: 'block-1', target: null, token: 'tk',
   });
   assert.deepEqual(ackMessage('tk', 'received'), { type: MSG_ACK, token: 'tk', result: 'received' });
   assert.notEqual(newToken(), newToken());
@@ -46,7 +46,9 @@ test('I6: the receiver accepts only our origin, a top-level other window, the ty
   const ok = {
     origin: ORIGIN, ourOrigin: ORIGIN, source, self, data, routeName: 'campaigns',
   };
-  assert.deepEqual(acceptSelect(ok), { campaignId: 7, blockId: 'block-1', token: 'tk' });
+  assert.deepEqual(acceptSelect(ok), {
+    campaignId: 7, blockId: 'block-1', target: null, token: 'tk',
+  });
   assert.equal(acceptSelect({ ...ok, origin: 'https://evil.example' }), null, 'another origin');
   assert.equal(acceptSelect({ ...ok, origin: 'null' }), null, 'an opaque origin');
   assert.equal(acceptSelect({ ...ok, data: { ...data, type: undefined } }), null, 'no type');
@@ -147,7 +149,7 @@ test('the new-tab URL: the content page selecting on load; nothing for an invali
   assert.equal(fallbackUrl('/admin', 7, SCRIPT_URL), null);
   assert.equal(fallbackUrl('/admin', -1, 'block-1'), null);
   assert.equal(fallbackWindowName(7), 'lm-review-editor-7');
-  assert.equal(selectFromQuery({ select: 'block-1' }), 'block-1');
+  assert.deepEqual(selectFromQuery({ select: 'block-1' }), { blockId: 'block-1', target: null });
   assert.equal(selectFromQuery({ select: 'block-"]' }), null);
   assert.equal(selectFromQuery({ select: ['block-1', 'block-2'] }), null);
   assert.equal(selectFromQuery({}), null);
@@ -181,8 +183,9 @@ test('the reference: image -- where.image first, else an image evidence; this ho
 });
 
 test('the reference: plain and none', () => {
-  assert.deepEqual(referenceLine({ locationPlain: 'The subject', location: 'subject' }, ORIGIN), { kind: 'plain', text: 'The subject' });
-  assert.deepEqual(referenceLine({ location: 'subject' }, ORIGIN), { kind: 'plain', text: 'subject' }, 'an older report');
+  // A location that maps to no target (REVIEW-LOCATIONS-SPEC D3: `template:<id>` stays plain).
+  assert.deepEqual(referenceLine({ locationPlain: 'Template 12', location: 'template:12' }, ORIGIN), { kind: 'plain', text: 'Template 12' });
+  assert.deepEqual(referenceLine({ location: 'template:12' }, ORIGIN), { kind: 'plain', text: 'template:12' }, 'an older report');
   assert.deepEqual(referenceLine({}, ORIGIN), { kind: 'none', text: '' });
   assert.deepEqual(referenceLine(null, ORIGIN), { kind: 'none', text: '' });
   const bad = referenceLine({
@@ -194,17 +197,188 @@ test('the reference: plain and none', () => {
   assert.equal(bad.blockId, null);
 });
 
-test('I9: a block inside an official footer is never a link', () => {
+// integrations REVIEW-LOCATIONS-SPEC I1 (D1, superseding REVIEW-NAVIGATION-SPEC I9): every block
+// `where` is linkable, the official footer included -- a badge (no thumbnail), its label kept.
+test('REVIEW-LOCATIONS-SPEC I1: an official footer block is a badge link', () => {
   const r = referenceLine({
     where: {
       block: 'block-official-brand', n: 13, label: 'official footer', type: 'OfficialFooter', image: `${ORIGIN}/uploads/logo.png`,
     },
     evidence: `${ORIGIN}/uploads/logo.png`,
   }, ORIGIN);
-  assert.equal(r.kind, 'plain');
-  assert.equal(r.blockId, null);
-  assert.equal(r.image, undefined);
-  assert.equal(r.text, 'the official footer (block 13)');
+  assert.deepEqual(r, {
+    kind: 'badge', text: 'the official footer', n: 13, blockId: 'block-official-brand',
+  });
+  ['Image', 'Text', 'Button', 'Html', 'OfficialFooter'].forEach((type) => {
+    const k = referenceLine({
+      where: {
+        block: 'block-1', n: 1, label: 'x', type,
+      },
+    }, ORIGIN).kind;
+    assert.ok(k === 'image' || k === 'badge', type);
+  });
+});
+
+// integrations REVIEW-LOCATIONS-SPEC I2 (D2/D3): every token and pattern maps to its target; the A
+// free-text rule; malformed patterns, unknown words and empty locations stay plain; campaign:<id>.
+test('REVIEW-LOCATIONS-SPEC I2: a location maps to its target, the campaign link, or plain', () => {
+  const cases = [
+    ['subject', 'subject'], ['preheader', 'preheader'], ['attribs.preheader', 'preheader'],
+    ['lists', 'lists'], ['list:12', 'lists'], ['from', 'from'], ['attribs.lang', 'lang'], ['<html lang>', 'lang'],
+    ['send_at', 'send_at'], ['send_delay_secs', 'send_delay'], ['status', 'campaign'], ['header:List-Unsubscribe', 'headers'],
+    ['archive_meta', 'archive_meta'], ['archive_slug', 'archive_slug'],
+    ...['body', 'body_source', 'content', 'preview', 'structure', 'images', 'audience', 'pixel', 'logo',
+      'clip', 'data', 'cid', 'embed', 'unsized', 'button', 'footer', 'footer:brand', 'a[3]', 'img[0]', 'preview img[2]',
+      'https://example.com/x?y=1', 'email.curatedfor.you'].map((t) => [t, 'content']),
+    // A findings: free text, a leading input label dropped, the first vocabulary word.
+    ['I4 body text', 'content'], ['I2b subject', 'subject'], ['subject line', 'subject'], [' Subject ', 'subject'],
+    ['the preheader text', 'preheader'], ['Footer:Brand', 'content'],
+  ];
+  cases.forEach(([loc, target]) => {
+    assert.deepEqual(locationRef(loc), { target }, loc);
+    const r = referenceLine({ location: loc, locationPlain: 'plain words' }, ORIGIN);
+    assert.equal(r.kind, 'field', loc);
+    assert.equal(r.target, target, loc);
+    assert.deepEqual(r.labels, TARGETS[target].labels, loc);
+  });
+  // Plain: malformed patterns, an unknown word, template:<id>, empty.
+  ['list:abc', 'campaign:0', 'campaign:x', 'template:12', 'nothing here', '', '   ', 'I4'].forEach((loc) => {
+    assert.equal(locationRef(loc), null, loc);
+  });
+  assert.deepEqual(referenceLine({ location: 'list:abc', locationPlain: 'The list' }, ORIGIN), { kind: 'plain', text: 'The list' });
+  assert.deepEqual(referenceLine({ location: 'unknown thing' }, ORIGIN), { kind: 'plain', text: 'unknown thing' });
+  assert.equal(locationRef(null), null);
+  // campaign:<digits> -> the other campaign, a new-tab link built like fallbackUrl.
+  assert.deepEqual(locationRef('campaign:463'), { campaignId: 463 });
+  assert.deepEqual(referenceLine({ location: 'campaign:463' }, ORIGIN), { kind: 'campaign', campaignId: 463 });
+  assert.equal(campaignUrl('/admin/', 463), '/admin/campaigns/463');
+  assert.equal(campaignUrl('/admin', 0), null);
+  // A block `where` wins over the location.
+  assert.equal(referenceLine({
+    where: {
+      block: 'block-1', n: 1, label: 'x', type: 'Text',
+    },
+    location: 'subject',
+  }, ORIGIN).kind, 'badge');
+  // The window renders it as "Location: <Tab> › <Field>" as the link, and the campaign link in a new tab.
+  const win = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  assert.match(win, /data-cy="btn-goto-field"[\s\S]*?@click\.prevent="goto\(null, reference\(e\.finding\)\.target\)"/);
+  assert.match(win, /:href="campaignHref\(reference\(e\.finding\)\.campaignId\)" target="_blank" rel="noopener"/);
+  assert.match(win, /\.map\(\(k\) => this\.\$tc\(k, 1\)\)\.join\(' › '\)/);
+});
+
+// integrations REVIEW-LOCATIONS-SPEC I3 (D6): a target round-trips through every block-keyed step;
+// exactly one of block id / target; a target outside the list is rejected.
+test('REVIEW-LOCATIONS-SPEC I3: a target through clickDecision, selectMessage, acceptSelect, campaignLocation, fallbackUrl, selectFromQuery', () => {
+  const opener = topWin();
+  assert.equal(clickDecision({
+    opener, ourOrigin: ORIGIN, campaignId: 7, target: 'subject',
+  }), 'post');
+  assert.equal(clickDecision({
+    opener, ourOrigin: ORIGIN, campaignId: 7, blockId: null, target: 'content',
+  }), 'post');
+  assert.equal(clickDecision({
+    opener, ourOrigin: ORIGIN, campaignId: 7, target: 'nope',
+  }), 'ignore', 'a target outside the list');
+  assert.equal(clickDecision({
+    opener, ourOrigin: ORIGIN, campaignId: 7, blockId: 'block-1', target: 'subject',
+  }), 'ignore', 'both');
+  assert.equal(clickDecision({ opener, ourOrigin: ORIGIN, campaignId: 7 }), 'ignore', 'neither');
+  const msg = selectMessage(7, null, 'tk', 'preheader');
+  assert.deepEqual(msg, {
+    type: MSG_SELECT, campaignId: 7, blockId: null, target: 'preheader', token: 'tk',
+  });
+  const ok = {
+    origin: ORIGIN, ourOrigin: ORIGIN, source: topWin(), self: topWin(), data: msg, routeName: 'campaigns',
+  };
+  assert.deepEqual(acceptSelect(ok), {
+    campaignId: 7, blockId: null, target: 'preheader', token: 'tk',
+  });
+  assert.equal(acceptSelect({ ...ok, data: { ...msg, target: 'toString' } }), null, 'an inherited name is no target');
+  assert.equal(acceptSelect({ ...ok, data: { ...msg, blockId: 'block-1' } }), null, 'both');
+  assert.equal(acceptSelect({ ...ok, data: { ...msg, target: null } }), null, 'neither');
+  assert.deepEqual(campaignLocation(7, null, 'subject'), {
+    name: 'campaign', params: { id: '7' }, query: { target: 'subject' }, hash: '#campaign',
+  });
+  assert.deepEqual(campaignLocation(7, null, 'archive_slug').hash, '#archive');
+  assert.deepEqual(campaignLocation(7, null, 'content').hash, '#content');
+  assert.equal(fallbackUrl('/admin', 7, null, 'archive_meta'), '/admin/campaigns/7?target=archive_meta#archive');
+  assert.equal(fallbackUrl('/admin', 7, null, 'nope'), null);
+  assert.equal(fallbackUrl('/admin', 7, 'block-1', 'subject'), null, 'both');
+  assert.deepEqual(selectFromQuery({ target: 'lists' }), { blockId: null, target: 'lists' });
+  assert.equal(selectFromQuery({ target: 'nope' }), null);
+  assert.equal(selectFromQuery({ target: 'lists', select: 'block-1' }), null, 'both');
+  // The result correlation (App.vue onReviewSelectResult).
+  assert.equal(sameRef({ blockId: null, target: 'subject' }, { blockId: null, target: 'subject' }), true);
+  assert.equal(sameRef({ target: 'subject' }, { blockId: null, target: 'preheader' }), false);
+  assert.equal(sameRef({ blockId: 'block-1' }, { blockId: 'block-1', target: null }), true);
+  assert.equal(sameRef({ blockId: 'block-1' }, { blockId: null, target: 'subject' }), false);
+  // The field toasts.
+  assert.equal(resultToast('selected', true), 'campaigns.review.nav.field.selected');
+  assert.equal(resultToast('unknown', true), 'campaigns.review.nav.field.unknown');
+  assert.equal(resultToast('received', true), null);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  ['selected', 'declined', 'unknown'].forEach((r) => assert.ok(en[`campaigns.review.nav.field.${r}`], r));
+  assert.match(en['campaigns.review.gotoField'], /\{field\}/);
+  // Every target's labels exist.
+  Object.values(TARGETS).forEach((t) => t.labels.forEach((k) => assert.ok(en[k], k)));
+  // The receiver and the page carry the target (App.vue, Campaign.vue).
+  const app = readFileSync(new URL('./App.vue', import.meta.url), 'utf8');
+  assert.match(app, /campaignLocation\(req\.campaignId, req\.blockId, req\.target\)/);
+  assert.match(app, /blockId: req\.blockId, target: req\.target \}\)/);
+  assert.match(app, /!sameRef\(r, p\)/);
+  const page = readFileSync(new URL('./views/Campaign.vue', import.meta.url), 'utf8');
+  assert.match(page, /const tab = ref\.target \? targetOf\(ref\.target\)\.tab : 'content';/);
+  assert.match(page, /'review\.select-result', \{ campaignId: this\.data\.id, \.\.\.ref, result \}/);
+  // The fallback tab adopts itself for a target as for a block (selectOnLoad holds either).
+  assert.match(page, /if \(this\.selectOnLoad && openerReachable\(window\.opener/);
+});
+
+// integrations REVIEW-LOCATIONS-SPEC I4: each target resolves to {tab, selector}, the selector one
+// the campaign page already has (name= / data-cy / class); focusControl scrolls and focuses, and never
+// fails on an absent or disabled control.
+test('REVIEW-LOCATIONS-SPEC I4: targets resolve to an existing tab and selector; focusControl', () => {
+  const page = readFileSync(new URL('./views/Campaign.vue', import.meta.url), 'utf8');
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(page)[1];
+  const listSel = readFileSync(new URL('./components/ListSelector.vue', import.meta.url), 'utf8');
+  Object.keys(TARGETS).forEach((id) => {
+    const t = targetOf(id);
+    assert.ok(isValidTarget(id), id);
+    assert.ok(['campaign', 'content', 'archive'].includes(t.tab), id);
+    assert.match(tpl, new RegExp(`value="${t.tab}"`), `${id}: the tab exists`);
+    if (t.selector === null) return;
+    const attr = /^\[(name|data-cy)="([^"]+)"\]$/.exec(t.selector);
+    if (attr) {
+      assert.ok(tpl.includes(`${attr[1]}="${attr[2]}"`), `${id}: ${t.selector} exists on the page`);
+    } else {
+      assert.equal(t.selector, '.list-selector');
+      assert.match(listSel, /class="field list-selector"/);
+    }
+  });
+  assert.deepEqual(targetOf('subject'), { tab: 'campaign', selector: '[name="subject"]' });
+  assert.deepEqual(targetOf('content'), { tab: 'content', selector: null });
+  assert.equal(targetOf('nope'), null);
+  assert.equal(isValidTarget('hasOwnProperty'), false);
+  // focusControl: a fake DOM.
+  const calls = [];
+  const input = (disabled = false) => ({
+    disabled, matches: (s) => s === 'input, select, textarea', focus: () => calls.push('focus'),
+  });
+  const wrap = (ctl) => ({
+    scrollIntoView: () => calls.push('scroll'), matches: () => false, querySelector: () => ctl,
+  });
+  const root = (el) => ({ querySelector: () => el });
+  assert.equal(focusControl(root(wrap(input())), '[name="x"]'), true);
+  assert.deepEqual(calls.splice(0), ['scroll', 'focus']);
+  assert.equal(focusControl(root(wrap(input(true))), '[name="x"]'), false, 'disabled: scrolled, not focused');
+  assert.deepEqual(calls.splice(0), ['scroll']);
+  assert.equal(focusControl(root(null), '[name="x"]'), false, 'absent: nothing');
+  assert.equal(focusControl(root(wrap(input())), null), false, 'a tab-only target');
+  assert.deepEqual(calls, []);
+  // The page: the tab through onTab, never a router push; `selected` either way.
+  assert.match(page, /selectReviewTarget\(target\) \{[\s\S]*?this\.onTab\(t\.tab\);[\s\S]*?focusControl\(this\.\$el, t\.selector\);\s*resolve\('selected'\);/);
+  const fn = /selectReviewTarget\(target\) \{[\s\S]*?\n {4}\},/.exec(page)[0];
+  assert.doesNotMatch(fn, /\$router\.(push|replace)/);
 });
 
 test('I10: thumbnails only from this host\'s /uploads/, a raster extension, never repeated', () => {

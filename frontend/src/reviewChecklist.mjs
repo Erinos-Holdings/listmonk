@@ -30,16 +30,17 @@ export function sectionOf(item, finding) {
   return 'advisory';
 }
 
-// Integrations REVIEW-CONVENTIONS-SPEC D5.3 / I11 -- the Suggestions section's ONE button,
-// Acknowledge suggestions, pure: the `accept` dispositions it stages -- one per suggestion entry
-// (`sectionOf` = suggestions) that `decided(key)` says is undecided, and never any other section's
-// key. `entries` are `{key, item, finding}`; the window's existing save path records them (the same
-// disposition record and endpoint as Accept risk -- no new state).
-export function suggestionAcknowledgements(entries, decided) {
-  const isDecided = typeof decided === 'function' ? decided : () => false;
-  return (Array.isArray(entries) ? entries : [])
-    .filter((e) => e && e.item && e.finding && sectionOf(e.item, e.finding) === 'suggestions' && !isDecided(e.key))
-    .map((e) => ({ key: e.key, rubric_id: e.item.id, action: 'accept' }));
+// Integrations REVIEW-LOCATIONS-SPEC D4 (superseding REVIEW-CONVENTIONS-SPEC D5.2/D5.3): a
+// suggestion card has the standard row (Fix for me | I fixed it | the third button). The third
+// button's i18n key and whether it is disabled: on a suggestion it reads Acknowledge and is disabled
+// once the latest RECORDED disposition is `accept` (the card stays in Suggestions, D5.6); an A high
+// reads Acknowledge, everything else Accept risk; in the Accepted section it is disabled.
+export function acceptButton({ section, severity, latestAction }) {
+  const suggestion = section === 'suggestions';
+  return {
+    label: suggestion || severity === 'high' ? 'campaigns.review.acknowledge' : 'campaigns.review.acceptRisk',
+    disabled: section === 'accepted' || (suggestion && latestAction === 'accept'),
+  };
 }
 
 // Integrations REVIEW-TRIM-SPEC D3: the campaign-context rule (D7.1) is retired -- context lines

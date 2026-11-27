@@ -143,7 +143,7 @@ import Vue from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import { NavigationFailureType, isNavigationFailure } from 'vue-router';
 import {
-  RESULT_TIMEOUT_MS, acceptSelect, ackMessage, campaignLocation, isFinalResult, pushFailureResult, receiverRoute,
+  RESULT_TIMEOUT_MS, acceptSelect, ackMessage, campaignLocation, isFinalResult, pushFailureResult, receiverRoute, sameRef,
 } from './reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import { clearAllDrafts } from './drafts';
 import { uris } from './constants';
@@ -321,27 +321,28 @@ export default Vue.extend({
       if (this.reviewPending) {
         clearTimeout(this.reviewPending.timer);
       }
+      // integrations REVIEW-LOCATIONS-SPEC D6: a block id OR a field/tab target, exactly one.
       const pending = {
-        source: ev.source, token: req.token, campaignId: req.campaignId, blockId: req.blockId, startedAt: Date.now(), timer: null,
+        source: ev.source, token: req.token, campaignId: req.campaignId, blockId: req.blockId, target: req.target, startedAt: Date.now(), timer: null,
       };
       pending.timer = setTimeout(() => this.replyReview(pending, 'unknown'), RESULT_TIMEOUT_MS);
       this.reviewPending = pending;
 
       if (receiverRoute({ routeName: this.$route.name, routeId: this.$route.params.id, campaignId: req.campaignId }) === 'emit') {
-        this.$events.$emit('review.select', { campaignId: req.campaignId, blockId: req.blockId });
+        this.$events.$emit('review.select', { campaignId: req.campaignId, blockId: req.blockId, target: req.target });
         return;
       }
       // Another route: navigate. The campaign page's leave guard may decline (Cancel settles the
       // navigation with next(false), so the push rejects); a resolved push mounts a campaign page
       // that selects from the query and emits the result.
-      this.$router.push(campaignLocation(req.campaignId, req.blockId)).catch((err) => {
+      this.$router.push(campaignLocation(req.campaignId, req.blockId, req.target)).catch((err) => {
         this.replyReview(pending, pushFailureResult(err, (e) => isNavigationFailure(e, NavigationFailureType.aborted)));
       });
     },
 
     onReviewSelectResult(r) {
       const p = this.reviewPending;
-      if (!p || !r || r.blockId !== p.blockId || (r.campaignId !== undefined && r.campaignId !== p.campaignId)) {
+      if (!p || !sameRef(r, p) || (r.campaignId !== undefined && r.campaignId !== p.campaignId)) {
         return;
       }
       if (isFinalResult(r.result)) {

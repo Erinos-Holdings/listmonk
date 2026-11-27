@@ -3,10 +3,12 @@
 // /api/brands -- `approved` (one of the review's candidate files is already on the approved list:
 // the item leaves Advisory and is listed under Passed), `card` (the first candidate on neither list:
 // the Yes/No question in place of the todo), or `warn` (today's D3.5 card, unchanged). The review
-// Lambda writes `logoCandidates` (each {url, location, n?}, `n` the editor's block number) and
+// Lambda writes `logoCandidates` (each {url, location, n?, where?}, `n` the editor's block number,
+// `where` its block -- REVIEW-LOCATIONS-SPEC D5) and
 // `brand` on the D3.5 item; the window prints `n`, never computes it. A missing row (a failed read)
 // reads as empty lists. Cards decide nothing about Done: D3.5 is advisory in every state.
 // No Vue, no store; tested by logoApproval.test.mjs (node --test).
+import { referenceLine } from './reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
 export const LOGO_ITEM = 'D3.5';
 export const LOGO_PERMISSION = 'brands:logos';
@@ -71,13 +73,28 @@ export function logoAwareSplit(entries, latest, split, rows) {
   return { open: list.filter((e) => isLogoCard(e, rows) || openSet.has(e)), accepted };
 }
 
-// The card's question (an i18n call): "<url> — This section N image appears…"; a candidate without
-// `n` drops "section N " (the NoBlock key). `t(key, params)` is the window's $t.
+// The card's question (an i18n call): "This section N image appears…" (integrations
+// REVIEW-LOCATIONS-SPEC D5: no `{url}` -- the thumbnail shows the file); a candidate without `n`
+// keeps "<url> — This image appears…" (the NoBlock key, beside today's bare picture). `t(key,
+// params)` is the window's $t.
 export function logoQuestion(candidate, t) {
   const c = candidate || {};
   return Number.isInteger(c.n)
-    ? t('campaigns.review.logoQuestion', { url: c.url, n: c.n })
+    ? t('campaigns.review.logoQuestion', { n: c.n })
     : t('campaigns.review.logoQuestionNoBlock', { url: c.url });
+}
+
+// REVIEW-LOCATIONS-SPEC D5: the card's reference for a candidate whose `where` holds a valid block --
+// the standard thumbnail + numbered square (reviewNavigate.mjs referenceLine over the candidate's OWN
+// url, so only this host's uploads render as an image; else the square alone), linked to the block,
+// Image or Html block alike. null without a linkable `where` (an HTML campaign's img[k], an older
+// report): the card keeps today's bare picture.
+export function logoReference(candidate, origin) {
+  const w = candidate && candidate.where;
+  if (!w || typeof w !== 'object') return null;
+  const { image: _own, ...where } = w;
+  const r = referenceLine({ where, evidence: candidate.url }, origin);
+  return r.kind === 'image' || r.kind === 'badge' ? r : null;
 }
 
 // The action a card button posts: Yes approves, No rejects.

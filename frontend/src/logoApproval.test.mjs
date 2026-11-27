@@ -4,8 +4,9 @@
 // Passed); a D3.5 key already accepted still shows the card in Advisory.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-  LOGO_PERMISSION, brandLists, brandRowFor, isLogoCard, logoAction, logoAwareSplit, logoCardState, logoQuestion, withApprovedLogo,
+  LOGO_PERMISSION, brandLists, brandRowFor, isLogoCard, logoAction, logoAwareSplit, logoCardState, logoQuestion, logoReference, withApprovedLogo,
 } from './logoApproval.mjs'; // eslint-disable-line import/extensions
 import { openEntries, sectionCounts, splitAccepted } from './reviewChecklist.mjs'; // eslint-disable-line import/extensions
 
@@ -106,9 +107,46 @@ test('a D3.5 key already accepted still shows the card in Advisory; a warn D3.5 
 
 test('the question: with n "section N", without n the NoBlock form; Yes approves, No rejects', () => {
   const t = (k, p) => `${k}|${JSON.stringify(p)}`;
-  assert.equal(logoQuestion({ url: A, n: 2 }, t), `campaigns.review.logoQuestion|${JSON.stringify({ url: A, n: 2 })}`);
+  // integrations REVIEW-LOCATIONS-SPEC D5: the section-N sentence drops {url} (the thumbnail shows it).
+  assert.equal(logoQuestion({ url: A, n: 2 }, t), `campaigns.review.logoQuestion|${JSON.stringify({ n: 2 })}`);
   assert.equal(logoQuestion({ url: C, location: 'img[0]' }, t), `campaigns.review.logoQuestionNoBlock|${JSON.stringify({ url: C })}`);
+  const en = JSON.parse(readFileSync(new URL('../../i18n/en.json', import.meta.url), 'utf8'));
+  assert.ok(!en['campaigns.review.logoQuestion'].includes('{url}'));
+  assert.match(en['campaigns.review.logoQuestion'], /section \{n\}/);
   assert.equal(logoAction(true), 'approve');
   assert.equal(logoAction(false), 'reject');
   assert.equal(LOGO_PERMISSION, 'brands:logos');
+});
+
+// integrations REVIEW-LOCATIONS-SPEC I7 (D5): a candidate whose `where` holds a valid block renders as
+// the standard image reference with the square (its OWN url, this host's uploads only; else the
+// square alone), Image or Html block alike, linked to the block; no `where` -> null (today's bare
+// picture). The card shows no "Location:" line under its own thumbnail.
+test('REVIEW-LOCATIONS-SPEC I7: the logo card reference -- thumbnail + square from where, no Location line', () => {
+  const ORIGIN = 'https://email.curatedfor.you';
+  const imageWhere = {
+    block: 'block-17', n: 2, label: 'image "Logo"', type: 'Image', image: `${ORIGIN}/uploads/other.png`,
+  };
+  assert.deepEqual(logoReference({
+    url: A, location: 'block:block-17', n: 2, where: imageWhere,
+  }, ORIGIN), {
+    kind: 'image', text: 'the image "Logo"', n: 2, blockId: 'block-17', image: A,
+  }, 'the candidate\'s own url, not where.image');
+  const htmlWhere = {
+    block: 'block-9', n: 4, label: 'HTML block', type: 'Html',
+  };
+  assert.equal(logoReference({
+    url: B, location: 'block:block-9', n: 4, where: htmlWhere,
+  }, ORIGIN).kind, 'image', 'an Html block alike');
+  assert.equal(logoReference({ url: 'https://cdn.example/x.png', location: 'block:block-9', where: htmlWhere }, ORIGIN).kind, 'badge', 'an off-host file: the square alone');
+  assert.equal(logoReference({ url: C, location: 'img[0]' }, ORIGIN), null, 'no where: today\'s bare picture');
+  assert.equal(logoReference({ url: C, where: { ...htmlWhere, block: 'nope' } }, ORIGIN), null, 'an invalid block id');
+  const src = readFileSync(new URL('./views/CampaignReview.vue', import.meta.url), 'utf8');
+  const tpl = /<template>([\s\S]*)<\/template>\s*<script>/.exec(src)[1];
+  const card = /<div v-if="logoCardOf\(e\)" class="logo-card"[\s\S]*?<\/div>\s*<\/div>/.exec(tpl)[0];
+  assert.match(card, /<p v-if="logoRefOf\(e\)"[\s\S]*data-cy="btn-goto-block"[\s\S]*@click\.prevent="goto\(logoRefOf\(e\)\.blockId\)"/);
+  assert.match(card, /class="lm-structure-number">\{\{ logoRefOf\(e\)\.n \}\}/);
+  assert.match(card, /<img v-else :src="logoCardOf\(e\)\.url"/);
+  // No Location line under a card that shows its own thumbnail.
+  assert.match(tpl, /<template v-if="!logoRefOf\(e\)">\s*<p v-if="reference\(e\.finding\)\.kind === 'image'"/);
 });

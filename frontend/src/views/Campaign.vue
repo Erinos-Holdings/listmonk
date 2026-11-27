@@ -743,7 +743,8 @@ import {
   promoFormOf, promoNotes, purchasedArg, applyStepChange, settleForFold, silentSkipForFold,
 } from '../promoSeries.mjs'; // eslint-disable-line import/extensions
 import {
-  OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, isValidBlockId, newToken, openerMessage, openerReachable, runMessage, selectFromQuery,
+  OPENER_POST_SCHEDULE_MS, SELECT_POLL_CAP_MS, SELECT_POLL_MS, focusControl, isValidBlockId, newToken, openerMessage, openerReachable, runMessage,
+  selectFromQuery, targetOf,
 } from '../reviewNavigate.mjs'; // eslint-disable-line import/extensions
 import { altsMessage, generateAndApply } from '../altGenerate.mjs'; // eslint-disable-line import/extensions
 import { createAltInsert } from '../altInsert.mjs'; // eslint-disable-line import/extensions
@@ -941,7 +942,8 @@ export default Vue.extend({
 
       // Fork (review navigation, integrations REVIEW-NAVIGATION-SPEC §4.5) -- a valid `?select=`
       // read ONCE at mount (never re-read from $route.query: history.replaceState does not clear
-      // it), consumed when the editor has loaded; and the deep-link select poll.
+      // it), consumed when the editor has loaded; and the deep-link select poll. REVIEW-LOCATIONS-SPEC
+      // D6: `{blockId, target}` (a `?select=` block or a `?target=` field/tab), or null.
       selectOnLoad: selectFromQuery(this.$route.query),
       selectPollID: null,
 
@@ -2612,6 +2614,30 @@ export default Vue.extend({
       });
     },
 
+    // integrations REVIEW-LOCATIONS-SPEC D2/D6: bring a field (or a tab) forward -- the tab through
+    // onTab (never a router push), then the control scrolled into view and focused when it exists and
+    // is enabled (reviewNavigate.mjs focusControl). An absent or disabled control never fails:
+    // `selected` either way; `unknown` only for a target outside the list.
+    selectReviewTarget(target) {
+      const t = targetOf(target);
+      if (!t) {
+        return Promise.resolve('unknown');
+      }
+      this.activeTab = t.tab;
+      this.onTab(t.tab);
+      return new Promise((resolve) => {
+        this.$nextTick(() => setTimeout(() => {
+          focusControl(this.$el, t.selector);
+          resolve('selected');
+        }, 0));
+      });
+    },
+
+    // A {blockId, target} request: the block path or the field path.
+    selectReviewRef(ref, poll) {
+      return ref.target ? this.selectReviewTarget(ref.target) : this.selectReviewBlock(ref.blockId, poll);
+    },
+
     // The receiver (App.vue) found this page showing the referenced campaign. Polls the builder
     // like the deep-link path (250 ms, up to 10 s): the builder may still be mounting.
     onReviewSelect(req) {
@@ -2619,24 +2645,26 @@ export default Vue.extend({
         return;
       }
       clearTimeout(this.selectPollID);
-      this.selectReviewBlock(req.blockId, true).then((result) => {
-        this.$events.$emit('review.select-result', { campaignId: this.data.id, blockId: req.blockId, result });
+      const ref = { blockId: req.blockId || null, target: req.target || null };
+      this.selectReviewRef(ref, true).then((result) => {
+        this.$events.$emit('review.select-result', { campaignId: this.data.id, ...ref, result });
       });
     },
 
-    // A page mounted with `?select=` (the receiver's navigation, or the Inspect window's new-tab
-    // fallback): consume it once, clean the URL without the router, poll the builder (it mounts on
-    // a timer), then report the result.
+    // A page mounted with `?select=` / `?target=` (the receiver's navigation, or the Inspect window's
+    // new-tab fallback): consume it once, clean the URL without the router (a target keeps its tab's
+    // hash, a block `#content`), poll the builder (it mounts on a timer), then report the result.
     consumeSelectOnLoad() {
-      const blockId = this.selectOnLoad;
-      if (!blockId) {
+      const ref = this.selectOnLoad;
+      if (!ref) {
         return;
       }
       this.selectOnLoad = null;
       const { pathname } = window.location;
-      window.history.replaceState({}, '', `${pathname}#content`);
-      this.selectReviewBlock(blockId, true).then((result) => {
-        this.$events.$emit('review.select-result', { campaignId: this.data.id, blockId, result });
+      const tab = ref.target ? targetOf(ref.target).tab : 'content';
+      window.history.replaceState({}, '', `${pathname}#${tab}`);
+      this.selectReviewRef(ref, true).then((result) => {
+        this.$events.$emit('review.select-result', { campaignId: this.data.id, ...ref, result });
       });
     },
 
@@ -3811,7 +3839,7 @@ export default Vue.extend({
     this.$events.$on('review.select', this.onReviewSelect);
 
     // Fork (review navigation, 2026-10-11): a page the Inspect window opened as its new-tab
-    // fallback (`?select=`, window.opener = that window) tells it that THIS tab is now its
+    // fallback (`?select=` or, REVIEW-LOCATIONS-SPEC D6, `?target=`; window.opener = that window) tells it that THIS tab is now its
     // editor, so the next click selects here instead of opening another tab (the admin tab
     // that clicked Inspect was closed, discarded by the browser, or navigated away). The
     // campaign is not loaded yet at mount: the id comes from the route.

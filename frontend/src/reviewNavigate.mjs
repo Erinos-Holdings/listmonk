@@ -6,7 +6,8 @@
 //
 // Protocol (same origin only; every message is posted with targetOrigin = our origin):
 //   campaign page -> Inspect window   {type: 'lm-review:opener', campaignId}        on every Inspect click
-//   Inspect window -> opener          {type: 'lm-review:select', campaignId, blockId, token}
+//   Inspect window -> opener          {type: 'lm-review:select', campaignId, blockId, target, token}
+//                                     (integrations REVIEW-LOCATIONS-SPEC D6: exactly one of blockId / target)
 //   opener -> Inspect window          {type: 'lm-review:ack', token, result: 'received'}   at once
 //   opener -> Inspect window          {type: 'lm-review:ack', token, result: 'selected'|'declined'|'unknown'}
 // No `received` within ACK_TIMEOUT_MS -> the window opens the campaign's content page in a new tab
@@ -47,15 +48,133 @@ export function isPositiveInt(n) {
   return Number.isInteger(n) && n > 0;
 }
 
+// integrations REVIEW-LOCATIONS-SPEC D2/D3/D6 (I4): the closed list of field/tab targets -- the ONE
+// home of the field vocabulary. Each target is the campaign page's tab, the control's EXISTING
+// selector (a `name=`, `data-cy` or class already on the page; null = the tab only) and the label
+// keys the window joins with " › " (each read with $tc(k, 1): the page's own keys where it has one).
+export const TARGETS = Object.freeze({
+  subject: { tab: 'campaign', selector: '[name="subject"]', labels: ['globals.terms.campaign', 'campaigns.subject'] },
+  preheader: { tab: 'campaign', selector: '[name="preheader"]', labels: ['globals.terms.campaign', 'campaigns.preheader'] },
+  lists: { tab: 'campaign', selector: '.list-selector', labels: ['globals.terms.campaign', 'globals.terms.lists'] },
+  from: { tab: 'campaign', selector: '[name="from_email"]', labels: ['globals.terms.campaign', 'campaigns.review.field.sender'] },
+  lang: { tab: 'campaign', selector: '[name="lang"]', labels: ['globals.terms.campaign', 'campaigns.lang'] },
+  send_at: { tab: 'campaign', selector: '[data-cy="send_at"]', labels: ['globals.terms.campaign', 'campaigns.sendLater'] },
+  send_delay: { tab: 'campaign', selector: '[data-cy="evergreen-delay"]', labels: ['globals.terms.campaign', 'campaigns.review.field.delay'] },
+  campaign: { tab: 'campaign', selector: null, labels: ['globals.terms.campaign'] },
+  headers: { tab: 'campaign', selector: '[name="headers"]', labels: ['globals.terms.campaign', 'campaigns.review.field.headers'] },
+  archive_meta: { tab: 'archive', selector: '[name="archive_meta"]', labels: ['campaigns.archive', 'campaigns.archiveMeta'] },
+  archive_slug: { tab: 'archive', selector: '[name="archive_slug"]', labels: ['campaigns.archive', 'campaigns.archiveSlug'] },
+  content: { tab: 'content', selector: null, labels: ['campaigns.content'] },
+});
+
+export function isValidTarget(t) {
+  return typeof t === 'string' && Object.prototype.hasOwnProperty.call(TARGETS, t);
+}
+
+// A target's {tab, selector} (I4), or null.
+export function targetOf(t) {
+  return isValidTarget(t) ? { tab: TARGETS[t].tab, selector: TARGETS[t].selector } : null;
+}
+
+// D6: a request names exactly one place -- a valid block id OR a valid target, the other absent.
+// Returns {blockId, target} (the absent one null), or null.
+export function navRef(blockId, target) {
+  const noBlock = blockId === undefined || blockId === null;
+  const noTarget = target === undefined || target === null;
+  if (!noBlock && noTarget && isValidBlockId(blockId)) return { blockId, target: null };
+  if (noBlock && !noTarget && isValidTarget(target)) return { blockId: null, target };
+  return null;
+}
+
+// Whether a select result answers a request: the same block id or the same target.
+export function sameRef(a, b) {
+  return !!a && !!b && (a.blockId || null) === (b.blockId || null) && (a.target || null) === (b.target || null);
+}
+
+// The campaign page's field focus (DOM, called after the tab switch): scroll the control's wrapper
+// into view when it exists and focus the control when it is enabled. Never fails -- an absent or
+// disabled control leaves the tab switch alone. Returns whether a control took focus.
+export function focusControl(root, selector) {
+  const el = root && selector ? root.querySelector(selector) : null;
+  if (!el) return false;
+  if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
+  const ctl = typeof el.matches === 'function' && el.matches('input, select, textarea') ? el : el.querySelector('input, select, textarea');
+  if (!ctl || ctl.disabled || typeof ctl.focus !== 'function') return false;
+  ctl.focus({ preventScroll: true });
+  return true;
+}
+
+// ------------------------------------------------------------------ a finding's location (D2/D3)
+
+// Exact tokens -> target.
+const TOKENS = Object.freeze({
+  subject: 'subject',
+  preheader: 'preheader',
+  'attribs.preheader': 'preheader',
+  lists: 'lists',
+  from: 'from',
+  'attribs.lang': 'lang',
+  '<html lang>': 'lang',
+  send_at: 'send_at',
+  send_delay_secs: 'send_delay',
+  status: 'campaign',
+  archive_meta: 'archive_meta',
+  archive_slug: 'archive_slug',
+  ...Object.fromEntries(['body', 'body_source', 'content', 'preview', 'structure', 'images', 'audience', 'pixel', 'logo',
+    'clip', 'data', 'cid', 'embed', 'unsized', 'button', 'footer'].map((k) => [k, 'content'])),
+});
+
+// The bare tokens a free-text location's FIRST matching word maps by.
+const WORD_TOKENS = new Set(Object.keys(TOKENS).filter((k) => /^[a-z_]+$/.test(k)));
+
+// Token patterns, tried in order; `campaign` is the other-campaign link, `plain` stays plain.
+const PATTERNS = [
+  [/^list:\d+$/, 'lists'],
+  [/^header:\S+$/, 'headers'],
+  [/^footer:\S+$/, 'content'],
+  [/^(?:preview )?(?:a|img)\[\d+\]$/, 'content'],
+  [/^https?:\/\/\S+$/, 'content'],
+];
+// A string shaped like a pattern that failed one (list:abc, campaign:0, template:<id>): plain.
+const PATTERN_SHAPED = /^(?:(?:list|header|campaign|footer|template):|(?:preview )?(?:a|img)\[)/;
+// A host (D5.2) -- tried after the exact tokens, so `attribs.lang` never reads as one.
+const HOST = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
+
+// D2's matching rule (D and A findings alike): {target} | {campaignId} | null (plain).
+export function locationRef(location) {
+  if (typeof location !== 'string') return null;
+  const s = location.trim().toLowerCase().replace(/^i\d+b? /, '');
+  if (!s) return null;
+  if (Object.prototype.hasOwnProperty.call(TOKENS, s)) return { target: TOKENS[s] };
+  const camp = /^campaign:(\d+)$/.exec(s);
+  if (camp) {
+    const id = Number(camp[1]);
+    return isPositiveInt(id) ? { campaignId: id } : null;
+  }
+  const p = PATTERNS.find(([re]) => re.test(s));
+  if (p) return { target: p[1] };
+  if (PATTERN_SHAPED.test(s)) return null;
+  if (HOST.test(s)) return { target: 'content' };
+  const word = s.split(/[^a-z0-9_]+/).find((w) => WORD_TOKENS.has(w));
+  return word ? { target: TOKENS[word] } : null;
+}
+
+// D3: the other campaign's page (opened in a new tab), built like fallbackUrl; null for a bad id.
+export function campaignUrl(base, campaignId) {
+  if (!isPositiveInt(campaignId)) return null;
+  return `${String(base || '').replace(/\/+$/, '')}/campaigns/${campaignId}`;
+}
+
 // ------------------------------------------------------------------ message shapes
 
 export function openerMessage(campaignId) {
   return { type: MSG_OPENER, campaignId };
 }
 
-export function selectMessage(campaignId, blockId, token) {
+// REVIEW-LOCATIONS-SPEC D6: `target` beside `blockId`, exactly one of them set (the other null).
+export function selectMessage(campaignId, blockId, token, target = null) {
   return {
-    type: MSG_SELECT, campaignId, blockId, token,
+    type: MSG_SELECT, campaignId, blockId: blockId || null, target: target || null, token,
   };
 }
 
@@ -74,6 +193,7 @@ export function newToken(rand = Math.random) {
 // origin; a top-level source (never a frame -- the builder iframe renders author Html blocks), not
 // this window; the type; a positive integer campaign id; a valid block id; a token string; and the
 // receiver is not itself the Inspect window (its route is not `campaignReview`).
+// REVIEW-LOCATIONS-SPEC D6: a valid block id OR a valid target, exactly one (navRef).
 export function acceptSelect({
   origin, ourOrigin, source, self, data, routeName,
 }) {
@@ -88,9 +208,10 @@ export function acceptSelect({
   if (!topLevel) return null;
   if (!data || typeof data !== 'object' || data.type !== MSG_SELECT) return null;
   if (routeName === 'campaignReview') return null;
-  if (!isPositiveInt(data.campaignId) || !isValidBlockId(data.blockId)) return null;
+  const ref = navRef(data.blockId, data.target);
+  if (!isPositiveInt(data.campaignId) || !ref) return null;
   if (typeof data.token !== 'string' || !data.token) return null;
-  return { campaignId: data.campaignId, blockId: data.blockId, token: data.token };
+  return { campaignId: data.campaignId, ...ref, token: data.token };
 }
 
 // Where the receiver sends a request: the current campaign page selects in place (an event, never
@@ -100,8 +221,15 @@ export function receiverRoute({ routeName, routeId, campaignId }) {
   return routeName === 'campaign' && String(routeId) === String(campaignId) ? 'emit' : 'push';
 }
 
-// The router location for a navigating request.
-export function campaignLocation(campaignId, blockId) {
+// The router location for a navigating request: a block -> `#content` + `?select=`; a target (D6)
+// -> its tab's hash + `?target=`.
+export function campaignLocation(campaignId, blockId, target = null) {
+  const t = targetOf(target);
+  if (t && !blockId) {
+    return {
+      name: 'campaign', params: { id: String(campaignId) }, query: { target }, hash: `#${t.tab}`,
+    };
+  }
   return {
     name: 'campaign', params: { id: String(campaignId) }, query: { select: blockId }, hash: '#content',
   };
@@ -156,12 +284,12 @@ export function acceptAck({
   return RESULTS.includes(data.result) ? data.result : null;
 }
 
-// The click's first step: `ignore` (an invalid block id or campaign id -- nothing happens), `post`
-// to a reachable opener, or `newTab`.
+// The click's first step: `ignore` (an invalid campaign id, or not exactly one valid block id /
+// target -- nothing happens), `post` to a reachable opener, or `newTab`.
 export function clickDecision({
-  opener, ourOrigin, campaignId, blockId,
+  opener, ourOrigin, campaignId, blockId, target,
 }) {
-  if (!isPositiveInt(campaignId) || !isValidBlockId(blockId)) return 'ignore';
+  if (!isPositiveInt(campaignId) || !navRef(blockId, target)) return 'ignore';
   return openerReachable(opener, ourOrigin) ? 'post' : 'newTab';
 }
 
@@ -170,13 +298,10 @@ export function afterAckWait(result) {
   return result === 'received' ? 'wait' : 'newTab';
 }
 
-// The toast for a final result (an i18n key), or null.
-export function resultToast(result) {
-  return {
-    selected: 'campaigns.review.nav.selected',
-    declined: 'campaigns.review.nav.declined',
-    unknown: 'campaigns.review.nav.unknown',
-  }[result] || null;
+// The toast for a final result (an i18n key), or null. `field` (D6): a target's result, field wording.
+export function resultToast(result, field = false) {
+  if (!FINAL_RESULTS.includes(result)) return null;
+  return field ? `campaigns.review.nav.field.${result}` : `campaigns.review.nav.${result}`;
 }
 
 export function isFinalResult(result) {
@@ -184,10 +309,12 @@ export function isFinalResult(result) {
 }
 
 // The new-tab fallback: the campaign's content page, selecting on load. `base` is the router base
-// (`/admin`). null for an invalid id (never navigated).
-export function fallbackUrl(base, campaignId, blockId) {
-  if (!isPositiveInt(campaignId) || !isValidBlockId(blockId)) return null;
+// (`/admin`). null for an invalid id (never navigated). A target (D6): its tab, `?target=`.
+export function fallbackUrl(base, campaignId, blockId, target = null) {
+  const ref = navRef(blockId, target);
+  if (!isPositiveInt(campaignId) || !ref) return null;
   const b = String(base || '').replace(/\/+$/, '');
+  if (ref.target) return `${b}/campaigns/${campaignId}?target=${ref.target}#${TARGETS[ref.target].tab}`;
   return `${b}/campaigns/${campaignId}?select=${encodeURIComponent(blockId)}#content`;
 }
 
@@ -197,10 +324,11 @@ export function fallbackWindowName(campaignId) {
   return `lm-review-editor-${campaignId}`;
 }
 
-// The campaign page's one-time read of `?select=` (a valid id or null).
+// The campaign page's one-time read of `?select=` / `?target=` (D6): {blockId, target} with exactly
+// one valid, or null.
 export function selectFromQuery(query) {
-  const v = query && query.select;
-  return isValidBlockId(v) ? v : null;
+  const q = query || {};
+  return navRef(q.select, q.target);
 }
 
 // ------------------------------------------------------------------ the Inspect run (integrations
@@ -299,18 +427,21 @@ export function isImageUrl(origin, s) {
 //              (this host's uploads); the window renders the image with the block-number badge
 //              over its top-right corner, the whole thing the link;
 //   `badge` -- a linkable `where` with no image: the number badge alone is the link, then the label;
-//   `plain` -- an official-footer `where` ("the official footer (block <n>)", no link -- it is
-//              compiled from a template and has nothing to select), an id that fails validation,
-//              or no `where`: `locationPlain`, else the raw `location` (an older report);
+//   `field`  -- integrations REVIEW-LOCATIONS-SPEC D2/D3: no block `where`, and the `location`
+//              maps to a target (locationRef): "Location: <Tab> › <Field>" (or "Content"), the
+//              text the link; `labels` are TARGETS' i18n keys;
+//   `campaign` -- `campaign:<id>` (D1.8b, D1.4c): "Location: Campaign <id>", a new-tab link;
+//   `plain` -- an id that fails validation, or a `location` that maps to nothing:
+//              `locationPlain`, else the raw `location` (an older report);
 //   `none`  -- nothing to show.
 // `text` is the label words ("the <label>") for image/badge -- the number is the badge. The window
-// never re-derives a name.
+// never re-derives a name. REVIEW-LOCATIONS-SPEC D1: an official footer's block is linkable too --
+// a badge, never a thumbnail (its block is in the document; selecting it shows where it is).
 export function referenceLine(finding, origin) {
   const f = finding || {};
   const w = f.where;
   if (w && typeof w === 'object' && typeof w.label === 'string' && Number.isInteger(w.n)) {
-    const linkable = w.type !== 'OfficialFooter' && isValidBlockId(w.block);
-    if (!linkable) {
+    if (!isValidBlockId(w.block)) {
       return {
         kind: 'plain', text: `the ${w.label} (block ${w.n})`, n: w.n, blockId: null,
       };
@@ -318,13 +449,18 @@ export function referenceLine(finding, origin) {
     const own = typeof w.image === 'string' ? w.image.trim() : '';
     const ev = typeof f.evidence === 'string' ? f.evidence.trim() : '';
     let image = null;
-    if (own && isImageUrl(origin, own)) image = own;
-    else if (ev && isImageUrl(origin, ev)) image = ev;
+    if (w.type !== 'OfficialFooter') {
+      if (own && isImageUrl(origin, own)) image = own;
+      else if (ev && isImageUrl(origin, ev)) image = ev;
+    }
     const base = {
       text: `the ${w.label}`, n: w.n, blockId: w.block,
     };
     return image ? { kind: 'image', ...base, image } : { kind: 'badge', ...base };
   }
+  const ref = locationRef(f.location);
+  if (ref && ref.target) return { kind: 'field', target: ref.target, labels: TARGETS[ref.target].labels };
+  if (ref && ref.campaignId) return { kind: 'campaign', campaignId: ref.campaignId };
   if (typeof f.locationPlain === 'string' && f.locationPlain) {
     return { kind: 'plain', text: f.locationPlain };
   }
