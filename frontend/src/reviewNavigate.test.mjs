@@ -11,7 +11,7 @@ import {
   acceptAck, acceptOpener, acceptSelect, ackMessage, afterAckWait, campaignLocation, clickDecision,
   fallbackUrl, fallbackWindowName, isFinalResult, isImageUrl, isValidBlockId, newToken, openerMessage, openerReachable,
   pushFailureResult, receiverRoute, referenceLine, resultToast, selectFromQuery, selectMessage,
-  standardLinks, thumbnailUrl, TARGETS, campaignUrl, focusControl, isValidTarget, locationRef, sameRef, targetOf,
+  standardLinks, thumbnailUrl, TARGETS, campaignUrl, focusControl, isValidTarget, locationRef, navRef, sameRef, targetOf,
 } from './reviewNavigate.mjs'; // eslint-disable-line import/extensions
 
 const ORIGIN = 'https://email.curatedfor.you';
@@ -227,12 +227,9 @@ test('REVIEW-LOCATIONS-SPEC I2: a location maps to its target, the campaign link
     ['lists', 'lists'], ['list:12', 'lists'], ['from', 'from'], ['attribs.lang', 'lang'], ['<html lang>', 'lang'],
     ['send_at', 'send_at'], ['send_delay_secs', 'send_delay'], ['status', 'campaign'], ['header:List-Unsubscribe', 'headers'],
     ['archive_meta', 'archive_meta'], ['archive_slug', 'archive_slug'],
-    ...['body', 'body_source', 'content', 'preview', 'structure', 'images', 'audience', 'pixel', 'logo',
-      'clip', 'data', 'cid', 'embed', 'unsized', 'button', 'footer', 'footer:brand', 'a[3]', 'img[0]', 'preview img[2]',
-      'https://example.com/x?y=1', 'email.curatedfor.you'].map((t) => [t, 'content']),
     // A findings: free text, a leading input label dropped, the first vocabulary word.
-    ['I4 body text', 'content'], ['I2b subject', 'subject'], ['subject line', 'subject'], [' Subject ', 'subject'],
-    ['the preheader text', 'preheader'], ['Footer:Brand', 'content'],
+    ['I2b subject', 'subject'], ['subject line', 'subject'], [' Subject ', 'subject'],
+    ['the preheader text', 'preheader'],
   ];
   cases.forEach(([loc, target]) => {
     assert.deepEqual(locationRef(loc), { target }, loc);
@@ -272,6 +269,47 @@ test('REVIEW-LOCATIONS-SPEC I2: a location maps to its target, the campaign link
   assert.match(win, /\.map\(\(k\) => this\.\$tc\(k, 1\)\)\.join\(' › '\)/);
 });
 
+// integrations REVIEW-STANCE-SPEC I2 (D2): every former Content token, pattern, host and free-text
+// content word is CONTENT -- no Location line; an unmapped A free-text location shows no line either;
+// field targets and campaign:<id> are unchanged; a `target: 'content'` message is ignored.
+test('REVIEW-STANCE-SPEC I2: content with no section shows no Location line', () => {
+  const content = ['body', 'body_source', 'content', 'preview', 'structure', 'images', 'audience', 'pixel', 'logo',
+    'clip', 'data', 'cid', 'embed', 'unsized', 'button', 'footer', 'footer:brand', 'Footer:Brand', 'a[3]', 'img[0]',
+    'preview img[2]', 'https://example.com/x?y=1', 'email.curatedfor.you', 'I4 body text', 'the footer links', 'hero images'];
+  content.forEach((loc) => {
+    assert.deepEqual(locationRef(loc), { content: true }, loc);
+    ['D2.1', 'A2.1'].forEach((id) => {
+      assert.deepEqual(referenceLine({ id, location: loc, locationPlain: 'the email\'s text' }, ORIGIN), { kind: 'none', text: '' }, `${id} ${loc}`);
+    });
+  });
+  // An A free-text location that maps to nothing: no line; a D one keeps its plain text.
+  assert.deepEqual(referenceLine({ id: 'A2.1', location: 'hero headline', locationPlain: 'hero headline' }, ORIGIN), { kind: 'none', text: '' });
+  assert.deepEqual(referenceLine({ id: 'A5.2', location: 'template:12' }, ORIGIN), { kind: 'none', text: '' });
+  assert.deepEqual(referenceLine({ id: 'D2.6c', location: 'template:12', locationPlain: 'template:12' }, ORIGIN), { kind: 'plain', text: 'template:12' });
+  // Field targets and campaign links are unchanged, A and D alike.
+  ['A1.2', 'D1.4b'].forEach((id) => {
+    assert.equal(referenceLine({ id, location: 'subject' }, ORIGIN).kind, 'field', id);
+    assert.equal(referenceLine({ id, location: 'I2b subject' }, ORIGIN).target, 'subject', id);
+    assert.deepEqual(referenceLine({ id, location: 'campaign:463' }, ORIGIN), { kind: 'campaign', campaignId: 463 }, id);
+  });
+  // A block `where` still wins.
+  assert.equal(referenceLine({
+    id: 'A2.1',
+    where: {
+      block: 'block-1795684800233', n: 12, label: 'text "x"', type: 'Text',
+    },
+    location: 'I4 body text',
+  }, ORIGIN).kind, 'badge');
+  // No `content` target: an old window's message is ignored everywhere.
+  assert.equal(isValidTarget('content'), false);
+  assert.equal(navRef(null, 'content'), null);
+  assert.equal(acceptSelect({
+    origin: ORIGIN, ourOrigin: ORIGIN, source: topWin(), self: topWin(), data: selectMessage(7, null, 'tk', 'content'), routeName: 'campaigns',
+  }), null);
+  assert.equal(fallbackUrl('/admin', 7, null, 'content'), null);
+  assert.equal(selectFromQuery({ target: 'content' }), null);
+});
+
 // integrations REVIEW-LOCATIONS-SPEC I3 (D6): a target round-trips through every block-keyed step;
 // exactly one of block id / target; a target outside the list is rejected.
 test('REVIEW-LOCATIONS-SPEC I3: a target through clickDecision, selectMessage, acceptSelect, campaignLocation, fallbackUrl, selectFromQuery', () => {
@@ -279,9 +317,10 @@ test('REVIEW-LOCATIONS-SPEC I3: a target through clickDecision, selectMessage, a
   assert.equal(clickDecision({
     opener, ourOrigin: ORIGIN, campaignId: 7, target: 'subject',
   }), 'post');
+  // integrations REVIEW-STANCE-SPEC D2 / I2: `content` is no target any more -- an old window's click is ignored.
   assert.equal(clickDecision({
     opener, ourOrigin: ORIGIN, campaignId: 7, blockId: null, target: 'content',
-  }), 'post');
+  }), 'ignore');
   assert.equal(clickDecision({
     opener, ourOrigin: ORIGIN, campaignId: 7, target: 'nope',
   }), 'ignore', 'a target outside the list');
@@ -306,7 +345,6 @@ test('REVIEW-LOCATIONS-SPEC I3: a target through clickDecision, selectMessage, a
     name: 'campaign', params: { id: '7' }, query: { target: 'subject' }, hash: '#campaign',
   });
   assert.deepEqual(campaignLocation(7, null, 'archive_slug').hash, '#archive');
-  assert.deepEqual(campaignLocation(7, null, 'content').hash, '#content');
   assert.equal(fallbackUrl('/admin', 7, null, 'archive_meta'), '/admin/campaigns/7?target=archive_meta#archive');
   assert.equal(fallbackUrl('/admin', 7, null, 'nope'), null);
   assert.equal(fallbackUrl('/admin', 7, 'block-1', 'subject'), null, 'both');
@@ -361,7 +399,7 @@ test('REVIEW-LOCATIONS-SPEC I4: targets resolve to an existing tab and selector;
     }
   });
   assert.deepEqual(targetOf('subject'), { tab: 'campaign', selector: '[name="subject"]' });
-  assert.deepEqual(targetOf('content'), { tab: 'content', selector: null });
+  assert.equal(targetOf('content'), null); // integrations REVIEW-STANCE-SPEC D2
   assert.equal(targetOf('nope'), null);
   assert.equal(isValidTarget('hasOwnProperty'), false);
   // focusControl: a fake DOM.

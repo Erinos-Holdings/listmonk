@@ -131,8 +131,9 @@
           <!-- The reference (reviewNavigate.mjs referenceLine): the thumbnail IS the click-through,
                with the editor's block-number badge on its corner; a badge alone when there is no
                image (an official footer included); integrations REVIEW-LOCATIONS-SPEC D2/D3:
-               "Location: <Tab> › <Field>" / "Location: Content" as the link, "Location: Campaign <id>"
-               in a new tab; plain Location text otherwise. None under a logo card's own thumbnail (D5). -->
+               "Location: <Tab> › <Field>" as the link, "Location: Campaign <id>" in a new tab; plain
+               Location text for any other D location; REVIEW-STANCE-SPEC D2: no line for content with
+               no block. None under a logo card's own thumbnail (D5). -->
           <template v-if="!logoRefOf(e)">
           <p v-if="reference(e.finding).kind === 'image'" class="where-line" data-cy="review-where">
             <a href="#" class="where-thumb" data-cy="btn-goto-block" :aria-label="$t('campaigns.review.gotoBlock', { n: reference(e.finding).n })"

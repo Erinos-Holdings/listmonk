@@ -64,7 +64,8 @@ export const TARGETS = Object.freeze({
   headers: { tab: 'campaign', selector: '[name="headers"]', labels: ['globals.terms.campaign', 'campaigns.review.field.headers'] },
   archive_meta: { tab: 'archive', selector: '[name="archive_meta"]', labels: ['campaigns.archive', 'campaigns.archiveMeta'] },
   archive_slug: { tab: 'archive', selector: '[name="archive_slug"]', labels: ['campaigns.archive', 'campaigns.archiveSlug'] },
-  content: { tab: 'content', selector: null, labels: ['campaigns.content'] },
+  // integrations REVIEW-STANCE-SPEC D2: no `content` target -- a content callout names its block or
+  // shows no Location line (an old window's `target: 'content'` is ignored).
 });
 
 export function isValidTarget(t) {
@@ -106,7 +107,11 @@ export function focusControl(root, selector) {
 
 // ------------------------------------------------------------------ a finding's location (D2/D3)
 
-// Exact tokens -> target.
+// integrations REVIEW-STANCE-SPEC D2: the former D3 Content tokens, patterns, hosts and words are
+// CONTENT -- a third outcome, rendered with no Location line.
+const CONTENT = 'content';
+
+// Exact tokens -> target (or CONTENT).
 const TOKENS = Object.freeze({
   subject: 'subject',
   preheader: 'preheader',
@@ -121,7 +126,7 @@ const TOKENS = Object.freeze({
   archive_meta: 'archive_meta',
   archive_slug: 'archive_slug',
   ...Object.fromEntries(['body', 'body_source', 'content', 'preview', 'structure', 'images', 'audience', 'pixel', 'logo',
-    'clip', 'data', 'cid', 'embed', 'unsized', 'button', 'footer'].map((k) => [k, 'content'])),
+    'clip', 'data', 'cid', 'embed', 'unsized', 'button', 'footer'].map((k) => [k, CONTENT])),
 });
 
 // The words a free-text location's FIRST matching word maps by -- unambiguous nouns only (Stage 4
@@ -133,32 +138,33 @@ const WORD_TOKENS = new Set(['subject', 'preheader', 'lists', 'body', 'footer', 
 const PATTERNS = [
   [/^list:\d+$/, 'lists'],
   [/^header:\S+$/, 'headers'],
-  [/^footer:\S+$/, 'content'],
-  [/^(?:preview )?(?:a|img)\[\d+\]$/, 'content'],
-  [/^https?:\/\/\S+$/, 'content'],
+  [/^footer:\S+$/, CONTENT],
+  [/^(?:preview )?(?:a|img)\[\d+\]$/, CONTENT],
+  [/^https?:\/\/\S+$/, CONTENT],
 ];
 // A string shaped like a pattern that failed one (list:abc, campaign:0, template:<id>): plain.
 const PATTERN_SHAPED = /^(?:(?:list|header|campaign|footer|template):|(?:preview )?(?:a|img)\[)/;
 // A host (D5.2) -- tried after the exact tokens, so `attribs.lang` never reads as one.
 const HOST = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
 
-// D2's matching rule (D and A findings alike): {target} | {campaignId} | null (plain).
+// D2's matching rule (D and A findings alike): {target} | {campaignId} | {content: true} | null (plain).
 export function locationRef(location) {
   if (typeof location !== 'string') return null;
   const s = location.trim().toLowerCase().replace(/^i\d+b? /, '');
   if (!s) return null;
-  if (Object.prototype.hasOwnProperty.call(TOKENS, s)) return { target: TOKENS[s] };
+  const to = (t) => (t === CONTENT ? { content: true } : { target: t });
+  if (Object.prototype.hasOwnProperty.call(TOKENS, s)) return to(TOKENS[s]);
   const camp = /^campaign:(\d+)$/.exec(s);
   if (camp) {
     const id = Number(camp[1]);
     return isPositiveInt(id) ? { campaignId: id } : null;
   }
   const p = PATTERNS.find(([re]) => re.test(s));
-  if (p) return { target: p[1] };
+  if (p) return to(p[1]);
   if (PATTERN_SHAPED.test(s)) return null;
-  if (HOST.test(s)) return { target: 'content' };
+  if (HOST.test(s)) return to(CONTENT);
   const word = s.split(/[^a-z0-9_]+/).find((w) => WORD_TOKENS.has(w));
-  return word ? { target: TOKENS[word] } : null;
+  return word ? to(TOKENS[word]) : null;
 }
 
 // D3: the other campaign's page (opened in a new tab), built like fallbackUrl; null for a bad id.
@@ -430,12 +436,14 @@ export function isImageUrl(origin, s) {
 //              over its top-right corner, the whole thing the link;
 //   `badge` -- a linkable `where` with no image: the number badge alone is the link, then the label;
 //   `field`  -- integrations REVIEW-LOCATIONS-SPEC D2/D3: no block `where`, and the `location`
-//              maps to a target (locationRef): "Location: <Tab> › <Field>" (or "Content"), the
-//              text the link; `labels` are TARGETS' i18n keys;
+//              maps to a target (locationRef): "Location: <Tab> › <Field>", the text the link;
+//              `labels` are TARGETS' i18n keys;
 //   `campaign` -- `campaign:<id>` (D1.8b, D1.4c): "Location: Campaign <id>", a new-tab link;
-//   `plain` -- an id that fails validation, or a `location` that maps to nothing:
+//   `plain` -- an id that fails validation, or a D `location` that maps to nothing:
 //              `locationPlain`, else the raw `location` (an older report);
-//   `none`  -- nothing to show.
+//   `none`  -- nothing to show: integrations REVIEW-STANCE-SPEC D2 -- a content location with no
+//              block `where` (the former "Content" tokens, patterns, hosts and words), and any A
+//              location that is no field target and no campaign link.
 // `text` is the label words ("the <label>") for image/badge -- the number is the badge. The window
 // never re-derives a name. REVIEW-LOCATIONS-SPEC D1: an official footer's block is linkable too --
 // a badge, never a thumbnail (its block is in the document; selecting it shows where it is).
@@ -463,6 +471,9 @@ export function referenceLine(finding, origin) {
   const ref = locationRef(f.location);
   if (ref && ref.target) return { kind: 'field', target: ref.target, labels: TARGETS[ref.target].labels };
   if (ref && ref.campaignId) return { kind: 'campaign', campaignId: ref.campaignId };
+  // integrations REVIEW-STANCE-SPEC D2: content with no section shows no Location line -- and so does
+  // any other A-tier location (free text such as "hero headline").
+  if ((ref && ref.content) || (typeof f.id === 'string' && f.id.startsWith('A'))) return { kind: 'none', text: '' };
   if (typeof f.locationPlain === 'string' && f.locationPlain) {
     return { kind: 'plain', text: f.locationPlain };
   }
