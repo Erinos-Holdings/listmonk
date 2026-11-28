@@ -114,7 +114,8 @@
               <div>
                 <b-field>
                   <b-input v-model="queryParams.query" name="query" expanded
-                    :placeholder="$t('campaigns.queryPlaceholder')" icon="magnify" ref="query" />
+                    :placeholder="$t('campaigns.queryPlaceholder')" icon="magnify" ref="query"
+                    :class="{ 'filter-active': !!queryParams.query }" />
                   <p class="controls">
                     <b-button native-type="submit" type="is-primary" icon-left="magnify" />
                   </p>
@@ -460,7 +461,8 @@
                 <b-icon :icon="g.icon" size="is-small" />
               </b-tooltip>
             </router-link>
-            <a v-else-if="!g.enabled" :key="g.action" href="#" data-disabled :data-cy="`group-btn-${g.action}`"
+            <a v-else-if="!g.enabled" :key="g.action" href="#" class="group-disabled" aria-disabled="true"
+              :data-cy="`group-btn-${g.action}`"
               :aria-label="$t(g.label)" @click.prevent>
               <b-tooltip :label="$t(g.tip)" type="is-dark">
                 <b-icon :icon="g.icon" size="is-small" />

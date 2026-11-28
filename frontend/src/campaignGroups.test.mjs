@@ -80,14 +80,18 @@ test('modeNote captions', () => {
   const fr = { langEffective: 'fr' };
   assert.equal(modeNote('off', 'campaigns', all), null);
   assert.equal(modeNote('off', 'dashboard', fr), null);
-  assert.equal(modeNote('groups', 'campaigns', all), 'naming.modeApp.groups');
-  assert.equal(modeNote('groups', 'campaigns', fr), 'naming.modeApp.seriesOnly');
+  // G5 amendment: the Campaigns page groups by send -- under one language nothing groups there.
+  assert.equal(modeNote('groups', 'campaigns', all), 'naming.modeApp.sends');
+  assert.equal(modeNote('groups', 'campaigns', fr), 'naming.modeApp.sendsOneLang');
+  const en = JSON.parse(read('../../i18n/en.json'));
+  ['naming.modeApp.sends', 'naming.modeApp.sendsOneLang'].forEach((k) => assert.ok(en[k], k));
   assert.equal(modeNote('groups', 'campaignAnalytics', { ...fr, pane: 'analytics:matrix' }), 'naming.modeApp.seriesOnly');
   // The picker pane is not language-filtered: the groups line under a single language.
   assert.equal(modeNote('groups', 'campaignAnalytics', { ...fr, pane: 'analytics:campaign' }), 'naming.modeApp.groups');
   // Languages off, or a subscriber-only selection: the effective selection is All.
-  assert.equal(modeNote('groups', 'campaigns', { langEffective: 'all' }), 'naming.modeApp.groups');
-  assert.equal(modeNote('groups', 'campaigns', {}), 'naming.modeApp.groups');
+  assert.equal(modeNote('groups', 'campaigns', { langEffective: 'all' }), 'naming.modeApp.sends');
+  assert.equal(modeNote('groups', 'campaigns', {}), 'naming.modeApp.sends');
+  assert.equal(modeNote('groups', 'campaignAnalytics', { ...all, pane: 'analytics:matrix' }), 'naming.modeApp.groups');
   assert.equal(modeNote('groups', 'dashboard', all), 'naming.modeApp.none');
   assert.equal(modeNote('groups', 'templates', fr), 'naming.modeApp.none');
 });
@@ -374,6 +378,12 @@ test('flattenGroups and memberRows', () => {
   assert.equal(v.complaints, 1);
   assert.deepEqual(v.statusSummary, [{ status: 'running', n: 1 }, { status: 'finished', n: 1 }]);
   assert.equal(flat[2].code, 'BF');
+  // G5 amendment: a send row (set) carrying a Code shows it with its Step.
+  const stepRow = flattenGroups([{
+    kind: 'set', brand: 'alpha', code: 'BF', step: 2, name: 'C7', ids: [7, 6], campaigns: [member(7), member(6)],
+  }])[0];
+  assert.equal(stepRow.code, 'BF');
+  assert.equal(stepRow.step, 2);
   assert.deepEqual(groupAnalyticsRoute(v), { name: 'campaignAnalytics', query: { id: [3, 1] } });
   // Group rows carry only the analytics action.
   assert.deepEqual(GROUP_ACTIONS.filter((a) => a.enabled).map((a) => a.action), ['analytics']);
@@ -432,6 +442,14 @@ test('flattenGroups and memberRows', () => {
   assert.match(page, /<button type="button" class="expand-btn"[^>]*data-cy="group-toggle"/);
   assert.ok(!page.includes('chevron-down'));
   assert.match(page, /:set="line = groupSendLine\(props\.row\)"/);
+  // G5 Step 4 -- a group row's disabled glyph keeps pointer events (upstream's [data-disabled] sets
+  // pointer-events: none, which suppressed its hover).
+  const groupActions = page.slice(page.indexOf('data-cy="group-actions"'), page.indexOf('<div v-else>', page.indexOf('data-cy="group-actions"')));
+  assert.ok(!groupActions.includes('data-disabled'));
+  assert.match(groupActions, /class="group-disabled"/);
+  const css = read('./assets/style.scss');
+  const rule = /\.actions a\.group-disabled \{([^}]*)\}/.exec(css);
+  assert.ok(rule && !rule[1].includes('pointer-events'));
   // G5 amendment -- Campaign mode skips the audience count and fills To send after the rows land.
   assert.match(page, /getCampaignGroups\(\{ \.\.\.params, no_audience: true \}\)\.then\(\(\) => \{\s*this\.fillAudiences\(\);/);
   const toggle = read('./components/CampaignModeToggle.vue');

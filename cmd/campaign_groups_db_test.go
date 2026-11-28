@@ -267,30 +267,26 @@ func TestCampaignGroupKeys(t *testing.T) {
 		t.Fatalf("bravo singleton brand %+v", g)
 	}
 
-	series := groupOf(rows, s1en)
-	if series == nil || series.Kind != "series" || series.Code == nil || !strings.EqualFold(strings.TrimSpace(*series.Code), "bf") ||
-		!reflect.DeepEqual(sortedInts(series.IDs...), sortedInts(s1en, s1fr, s2, s3a, s3b)) {
-		t.Fatalf("the BF series: %+v", series)
+	// G5 bySend: the Campaigns list's row is the SEND -- each step of the BF series is its own row
+	// (the series itself is the picker's and the Matrix's; TestAnalyticsCampaignsGrouped).
+	for _, g := range rows {
+		if g.Kind == "series" || g.Sets != nil {
+			t.Fatalf("a series row in the Campaigns list: %v", g.IDs)
+		}
 	}
-	// Series children are its sets: by step (NULL last), then newest.
-	if len(series.Sets) != 3 {
-		t.Fatalf("series sets %+v", series.Sets)
+	step1 := groupOf(rows, s1en)
+	if step1 == nil || step1.Kind != "set" || step1.Step == nil || *step1.Step != 1 || step1.Code == nil ||
+		!strings.EqualFold(strings.TrimSpace(*step1.Code), "bf") || !reflect.DeepEqual(sortedInts(step1.IDs...), sortedInts(s1en, s1fr)) {
+		t.Fatalf("BF step 1 (two languages, codes 'BF' and 'bf ') -> one set row: %v", step1 != nil && step1.Kind == "set")
 	}
-	if series.Sets[0].Step == nil || *series.Sets[0].Step != 1 || !reflect.DeepEqual(sortedInts(series.Sets[0].IDs...), sortedInts(s1en, s1fr)) {
-		t.Fatalf("step 1 set %+v", series.Sets[0])
+	if g := groupOf(rows, s2); g == nil || g.Kind != "campaign" || !reflect.DeepEqual(g.IDs, []int{s2}) {
+		t.Fatalf("BF step 2 alone -> its own campaign row")
 	}
-	if series.Sets[1].Step == nil || *series.Sets[1].Step != 2 || !reflect.DeepEqual(series.Sets[1].IDs, []int{s2}) {
-		t.Fatalf("step 2 set %+v", series.Sets[1])
+	if g := groupOf(rows, s3a); g == nil || g.Kind != "set" || g.Step != nil || !reflect.DeepEqual(sortedInts(g.IDs...), sortedInts(s3a, s3b)) {
+		t.Fatalf("one name, disagreeing steps -> one set row, no step")
 	}
-	if series.Sets[2].Step != nil || !reflect.DeepEqual(sortedInts(series.Sets[2].IDs...), sortedInts(s3a, s3b)) {
-		t.Fatalf("mixed-step set (no agreed step, last) %+v", series.Sets[2])
-	}
-	if series.Step != nil {
-		t.Fatalf("series step should be null (steps disagree): %+v", series)
-	}
-	// A different code splits: its own series of one campaign (a series is always a group row).
-	if g := groupOf(rows, other); g == nil || g.Kind != "series" || len(g.IDs) != 1 {
-		t.Fatalf("code CM: %+v", g)
+	if g := groupOf(rows, other); g == nil || g.Kind != "campaign" || len(g.IDs) != 1 {
+		t.Fatalf("code CM alone -> a campaign row")
 	}
 }
 
@@ -366,8 +362,9 @@ func TestCampaignGroupsSearchWholeGroups(t *testing.T) {
 	if g := groupOf(rows, a); g == nil || !reflect.DeepEqual(sortedInts(g.memberIDs(t)...), sortedInts(a, b, c)) {
 		t.Fatalf("whole set: %+v", g)
 	}
-	if g := groupOf(rows, s1); g == nil || !reflect.DeepEqual(sortedInts(g.memberIDs(t)...), sortedInts(s1, s2)) {
-		t.Fatalf("whole series: %+v", g)
+	// G5 amendment (bySend): the list's row is the send -- the hit's own step, never its series.
+	if g := groupOf(rows, s1); g == nil || !reflect.DeepEqual(g.memberIDs(t), []int{s1}) || groupOf(rows, s2) != nil {
+		t.Fatalf("the hit's step only: %v", g != nil && g.Kind != "")
 	}
 	// Filters other than search narrow members: the draft member drops under status=finished.
 	rows, _ = f.groupedList(t, admin, "per_page=all&query=zebra&status=finished")
@@ -394,8 +391,9 @@ func TestCampaignGroupsPaging(t *testing.T) {
 	f.add(cgCamp{name: "Bravo set", lang: "en", lists: []int{f.listA}, created: at(1)})
 	f.add(cgCamp{name: "bravo  SET", lang: "fr", lists: []int{f.listA}, created: at(9), status: "draft"})
 	f.add(cgCamp{name: "Alpha one", lists: []int{f.listA}, created: at(5), status: "paused"})
-	f.add(cgCamp{name: "Charlie", code: "BF", lists: []int{f.listA}, created: at(3)})
-	f.add(cgCamp{name: "Delta", code: "BF", lists: []int{f.listA}, created: at(7), status: "running"})
+	// One promo send in two languages (G5 bySend: a send, not a series, is the list's row).
+	f.add(cgCamp{name: "Delta", code: "BF", lang: "en", lists: []int{f.listA}, created: at(3)})
+	f.add(cgCamp{name: "Delta", code: "BF", lang: "fr", lists: []int{f.listA}, created: at(7), status: "running"})
 	f.add(cgCamp{name: "Echo", lists: []int{f.listN}, created: at(2), status: "scheduled"})
 	f.add(cgCamp{name: "Foxtrot", lists: []int{f.listB}, created: at(4), status: "cancelled"})
 
@@ -440,7 +438,7 @@ func TestCampaignGroupsPaging(t *testing.T) {
 		// name -> the name key of the row's name (the newest member's: "bravo  SET").
 		"order_by=name&order=asc":  {"Alpha one", "bravo  SET", "Delta", "Echo", "Foxtrot"},
 		"order_by=name&order=desc": {"Foxtrot", "Echo", "Delta", "bravo  SET", "Alpha one"},
-		// created_at -> the members' MAX (set 9, series 7, alpha 5, foxtrot 4, echo 2).
+		// created_at -> the members' MAX (set 9, the BF send 7, alpha 5, foxtrot 4, echo 2).
 		"order_by=created_at&order=desc": {"bravo  SET", "Delta", "Alpha one", "Foxtrot", "Echo"},
 		"order_by=created_at&order=asc":  {"Echo", "Foxtrot", "Alpha one", "Delta", "bravo  SET"},
 		"order_by=updated_at&order=asc":  {"Echo", "Foxtrot", "Alpha one", "Delta", "bravo  SET"},
@@ -541,13 +539,13 @@ func TestCampaignGroupsMatrixKeysAgree(t *testing.T) {
 		if lb != mb {
 			t.Fatalf("campaign %d: matrix brand %q, group brand %q", id, mb, lb)
 		}
+		// G5 bySend: the list never returns a series row; the matrix series is checked as the union
+		// of its steps' list rows below.
+		if g.Kind == "series" {
+			t.Fatalf("campaign %d: a series row in the Campaigns list", id)
+		}
 		if sk, ok := r["series_key"].(string); ok {
-			if g.Kind != "series" {
-				t.Fatalf("campaign %d: series_key but list kind %s", id, g.Kind)
-			}
 			seriesOf[sk] = append(seriesOf[sk], id)
-		} else if g.Kind == "series" {
-			t.Fatalf("campaign %d: in a list series, no series_key", id)
 		}
 		if sk, ok := r["set_key"].(string); ok {
 			setOf[sk] = append(setOf[sk], id)
@@ -555,44 +553,39 @@ func TestCampaignGroupsMatrixKeysAgree(t *testing.T) {
 			t.Fatalf("campaign %d: a brand but no set_key", id)
 		}
 	}
-	// Every matrix set / series is exactly one list group's matrix members.
+	// Every matrix set is exactly one list row's matrix members; every matrix series is exactly the
+	// union of its members' list rows (one per step -- G5 bySend).
 	inMatrix := map[int]bool{}
 	for _, r := range rows {
 		inMatrix[int(r["id"].(float64))] = true
 	}
-	check := func(kind string, by map[string][]int) {
-		for k, ids := range by {
-			g := groupOf(list, ids[0])
-			want := []int{}
-			if kind == "series" {
-				for _, id := range g.IDs {
-					if inMatrix[id] {
-						want = append(want, id)
-					}
-				}
-			} else {
-				// The list set containing ids[0]: a series' set, or the top-level set / campaign.
-				members := g.IDs
-				for _, s := range g.Sets {
-					for _, x := range s.IDs {
-						if x == ids[0] {
-							members = s.IDs
-						}
-					}
-				}
-				for _, id := range members {
-					if inMatrix[id] {
-						want = append(want, id)
-					}
-				}
+	rowMembers := func(ids []int) []int {
+		seen := map[*cgRow]bool{}
+		want := []int{}
+		for _, id := range ids {
+			g := groupOf(list, id)
+			if seen[g] {
+				continue
 			}
-			if !reflect.DeepEqual(sortedInts(ids...), sortedInts(want...)) {
-				t.Fatalf("%s %q: matrix %v, list %v", kind, k, sortedInts(ids...), sortedInts(want...))
+			seen[g] = true
+			for _, x := range g.IDs {
+				if inMatrix[x] {
+					want = append(want, x)
+				}
 			}
 		}
+		return want
 	}
-	check("set", setOf)
-	check("series", seriesOf)
+	for k, ids := range setOf {
+		if want := rowMembers(ids[:1]); !reflect.DeepEqual(sortedInts(ids...), sortedInts(want...)) {
+			t.Fatalf("set %q: matrix %v, list row %v", k, sortedInts(ids...), sortedInts(want...))
+		}
+	}
+	for k, ids := range seriesOf {
+		if want := rowMembers(ids); !reflect.DeepEqual(sortedInts(ids...), sortedInts(want...)) {
+			t.Fatalf("series %q: matrix %v, list rows %v", k, sortedInts(ids...), sortedInts(want...))
+		}
+	}
 	if len(seriesOf) != 1 || len(setOf) < 4 {
 		t.Fatalf("fixture shape: series %v sets %v", seriesOf, setOf)
 	}
@@ -634,8 +627,13 @@ func TestCampaignGroupsScopedUser(t *testing.T) {
 		if g := groupOf(rows, ok1); g == nil || g.Kind != "set" || len(g.Campaigns) != 2 {
 			t.Fatalf("%s: the permitted set %+v", name, g)
 		}
-		if g := groupOf(rows, sOK); g == nil || g.Kind != "series" || len(g.Campaigns) != 1 || len(g.Sets) != 1 {
-			t.Fatalf("%s: the permitted series %+v", name, g)
+		// The picker keeps series; the list's row is the send (G5 bySend): the permitted step alone.
+		wantKind, wantSets := "series", 1
+		if name == "list" {
+			wantKind, wantSets = "campaign", 0
+		}
+		if g := groupOf(rows, sOK); g == nil || g.Kind != wantKind || len(g.Campaigns) != 1 || len(g.Sets) != wantSets {
+			t.Fatalf("%s: the permitted %s, got kind %v", name, wantKind, g != nil && g.Kind == wantKind)
 		}
 	}
 
@@ -756,7 +754,23 @@ func TestAnalyticsCampaignsGrouped(t *testing.T) {
 	for _, s := range canon(list) {
 		listCanon[s] = true
 	}
-	for _, s := range canon(pick) {
+	// G5 bySend: the picker keeps series, the list returns one row per send -- a picker series is
+	// exactly its steps' list rows; every other picker row is a list row.
+	expanded := []cgRow{}
+	for _, r := range pick {
+		if r.Kind != "series" {
+			expanded = append(expanded, r)
+			continue
+		}
+		for _, s := range r.Sets {
+			kind := "campaign"
+			if len(s.IDs) > 1 {
+				kind = "set"
+			}
+			expanded = append(expanded, cgRow{Kind: kind, IDs: s.IDs})
+		}
+	}
+	for _, s := range canon(expanded) {
 		if !listCanon[s] {
 			t.Fatalf("picker group %s is not a list group", s)
 		}

@@ -488,7 +488,7 @@ func prepareQueries(qMap goyesql.Queries, db *sqlx.DB, ko *koanf.Koanf) *models.
 	// text): its nine parameters (the ninth, the get|manage lists, integrations BRAND-ROLES-SPEC D3),
 	// then the wrapper's four.
 	qMap["query-analytics-campaigns-grouped"] = &goyesql.Query{
-		Query: core.GroupedStmt(qMap["query-analytics-campaigns"].Query, 9, core.AnalyticsGroupedOrderSQL),
+		Query: core.GroupedStmt(qMap["query-analytics-campaigns"].Query, 9, core.AnalyticsGroupedOrderSQL, false), // the picker keeps series
 		Tags:  map[string]string{"name": "query-analytics-campaigns-grouped"},
 	}
 	// Review S2 -- its hit step reads the ids only: the same text as its id set.

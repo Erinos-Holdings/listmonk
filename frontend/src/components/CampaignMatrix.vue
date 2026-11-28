@@ -46,7 +46,7 @@
            sticky, like the Campaigns page's search. -->
       <b-field class="mb-0 cm-name-filter">
         <b-input v-model="nameQuery" name="name" icon="magnify" :placeholder="$t('analytics.matrix.nameFilter')"
-          data-cy="cm-name-filter" />
+          data-cy="cm-name-filter" :class="{ 'filter-active': !!nameQuery }" />
       </b-field>
       <!-- MATRIX-VIEWS-SPEC D2: the view toggle, right of the name filter; part of the session state.
            A sort on a column the new view hides falls back to Date desc (campaignMatrix.mjs::sortForView). -->

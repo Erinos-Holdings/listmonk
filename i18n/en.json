@@ -1370,6 +1370,8 @@
     "naming.modeApp.groups": "Language variants and promo series are each one row",
     "naming.modeApp.seriesOnly": "One language selected: only promo series group",
     "naming.modeApp.none": "Applies to Campaigns and Analytics only",
+    "naming.modeApp.sends": "Each send's language variants are one row",
+    "naming.modeApp.sendsOneLang": "One language selected: each campaign is its own row",
     "naming.byQueryLang": "Only subscribers whose language is {lang}.",
     "naming.warn.underscore": "Use spaces, not underscores.",
     "naming.warn.stepCode": "Leave out step codes like WE1 — the list and the journey say which step it is.",

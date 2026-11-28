@@ -45,7 +45,8 @@
           <div class="column is-6">
             <form @submit.prevent="onSearch">
               <b-field>
-                <b-input v-model="queryParams.query" name="query" expanded icon="magnify" ref="query" data-cy="query" />
+                <b-input v-model="queryParams.query" name="query" expanded icon="magnify" ref="query" data-cy="query"
+                  :class="{ 'filter-active': !!queryParams.query }" />
                 <p class="controls">
                   <b-button native-type="submit" type="is-primary" icon-left="magnify" data-cy="btn-query" />
                 </p>

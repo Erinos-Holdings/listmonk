@@ -72,8 +72,16 @@ func SeriesKeySQL(brand, code string) string {
 // (when every member agrees), name (the newest member's -- max created_at, then max id), ids (newest
 // first), sets (a series' sets as JSON -- name, step, ids -- by step NULL last, then newest; NULL
 // otherwise) and total (the top-level row count, COUNT(*) OVER ()).
-func GroupedStmt(inner string, n int, orderSQL string) string {
+//
+// bySend (G5 amendment 2026-11-27, the Campaigns list): the top-level row is the SEND -- a set, never
+// a series (one promo step's language variants go out together; a series is a reporting unit, kept
+// by the analytics picker and the Matrix). With it no row is kind series and sets is NULL.
+func GroupedStmt(inner string, n int, orderSQL string, bySend bool) string {
 	in := strings.TrimRight(strings.TrimSpace(inner), "; \n\t")
+	seriesWhen := "WHEN m.gcode IS NOT NULL THEN 's' || " + SeriesKeySQL("m.gbrand", "m.gcode")
+	if bySend {
+		seriesWhen = ""
+	}
 	brand := GroupBrandSQL("c.id")
 	code := CodeKeySQL("c")
 	name := NameKeySQL("c.name")
@@ -90,7 +98,7 @@ m AS (
 k AS (
     SELECT m.*,
         CASE WHEN m.gbrand IS NULL THEN 'c' || m.id::TEXT
-            WHEN m.gcode IS NOT NULL THEN 's' || %[5]s
+            %[5]s
             ELSE 'e' || %[6]s END AS tkey,
         CASE WHEN m.gbrand IS NULL THEN 'c' || m.id::TEXT ELSE %[6]s END AS skey
     FROM m
@@ -125,7 +133,7 @@ FROM t
 WHERE (NOT $%[9]d::BOOLEAN OR t.hit)
 ORDER BY %[10]s
 OFFSET $%[11]d::INT LIMIT (CASE WHEN $%[12]d::INT < 1 THEN NULL ELSE $%[12]d::INT END)`,
-		in, brand, code, name, SeriesKeySQL("m.gbrand", "m.gcode"), SetKeySQL("m.gbrand", "m.gcode", "m.gname"),
+		in, brand, code, name, seriesWhen, SetKeySQL("m.gbrand", "m.gcode", "m.gname"),
 		newest, n+1, n+2, orderSQL, n+3, n+4)
 }
 
@@ -176,7 +184,7 @@ func (c *Core) QueryCampaignGroups(searchStr string, statuses, tags []string, or
 	}
 
 	_, stmt := makeSearchQuery("", "created_at", SortDesc, c.q.QueryCampaigns, campQuerySortFields)
-	stmt = GroupedStmt(stmt, 12, groupOrderSQL(orderBy, order))
+	stmt = GroupedStmt(stmt, 12, groupOrderSQL(orderBy, order), true) // the Campaigns list: one row per send
 	args := append(queryCampaignsArgs(statuses, tags, "", getAll, permittedLists, evergreen, listIDs, ids, lang, 0, 0),
 		pq.Array(hits), hitOn, offset, limit)
 

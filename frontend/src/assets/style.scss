@@ -84,6 +84,16 @@ ul.no {
   position: relative;
 }
 
+/* Fork (campaign mode G5, 2026-11-27): a list page's filter field holding text has a red border --
+   page state keeps the text per session, and a forgotten filter hides rows. The one rule; each
+   filter field binds :class="{ 'filter-active': <its value> }" (pinned in filterActive.test.mjs). */
+.filter-active .input,
+.filter-active .textarea,
+.filter-active .input:focus,
+.filter-active .textarea:focus {
+  border-color: $danger;
+}
+
 /* Fork: THE +/- expand/collapse box, the one definition for every page. The button is EMPTY:
    frame AND sign are ONE vector image (a mask filled with currentColor), so they scale and round
    to screen pixels together and the sign stays centred at any zoom. Never put an icon, font glyph
@@ -598,6 +608,13 @@ body.is-noscroll {
   .actions a[data-disabled],
   .actions .icon[data-disabled] {
     pointer-events: none;
+    cursor: not-allowed;
+    color: $grey-light;
+  }
+  // Fork (campaign mode, G5 2026-11-27) -- a group row's disabled glyph looks disabled but keeps
+  // pointer events, so its hover ("Phase 2" / "Not available for a group") shows; the click is
+  // prevented in the template.
+  .actions a.group-disabled {
     cursor: not-allowed;
     color: $grey-light;
   }

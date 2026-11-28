@@ -93,10 +93,13 @@ export function modeNote(mode, routeName, { pane, langEffective } = {}) {
     return 'naming.modeApp.none';
   }
   const lang = langApplicability(routeName, { pane, selection: langEffective });
-  if (lang.state === 'all' && (langEffective || 'all') !== 'all') {
-    return 'naming.modeApp.seriesOnly';
+  const oneLang = lang.state === 'all' && (langEffective || 'all') !== 'all';
+  // G5 amendment (2026-11-27): the Campaigns page groups by send (a step's language variants), never
+  // by series -- so under one language nothing groups there.
+  if (routeName === 'campaigns') {
+    return oneLang ? 'naming.modeApp.sendsOneLang' : 'naming.modeApp.sends';
   }
-  return 'naming.modeApp.groups';
+  return oneLang ? 'naming.modeApp.seriesOnly' : 'naming.modeApp.groups';
 }
 
 // D8 -- the status summary: [{ status, n }] in STATUS_ORDER (an unknown status last, by name).
@@ -327,7 +330,8 @@ export function groupView(g) {
     key: groupKey(g),
     kind: g.kind,
     brand: typeof g.brand === 'string' ? g.brand : '',
-    code: g.kind === 'series' && typeof g.code === 'string' ? g.code : '',
+    // G5 amendment: a send row (set) is a promo step -- it shows its Code beside its Step.
+    code: (g.kind === 'series' || g.kind === 'set') && typeof g.code === 'string' ? g.code : '',
     step: g.kind === 'set' && Number.isInteger(g.step) ? g.step : null,
     name: typeof g.name === 'string' ? g.name : '',
     count: members.length,

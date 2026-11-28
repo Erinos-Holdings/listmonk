@@ -63,6 +63,7 @@
             <div>
               <b-field addons>
                 <b-input @input="onSimpleQueryInput" v-model="queryInput" expanded
+                  :class="{ 'filter-active': !!queryInput }"
                   :placeholder="$t('subscribers.queryPlaceholder')" icon="magnify" ref="query"
                   :disabled="isSearchAdvanced" data-cy="search" />
                 <p class="controls">
@@ -73,6 +74,7 @@
 
               <div v-if="isSearchAdvanced">
                 <b-input v-model="queryParams.queryExp" @keydown.native.enter="onAdvancedQueryEnter" type="textarea"
+                  :class="{ 'filter-active': !!queryParams.queryExp }"
                   ref="queryExp" placeholder="subscribers.name LIKE '%user%' or subscribers.status='blocklisted'"
                   data-cy="query" />
                 <span class="is-size-6 has-text-grey">
