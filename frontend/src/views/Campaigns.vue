@@ -216,15 +216,13 @@
       </b-table-column>
       <b-table-column v-slot="props" field="name" :label="$t('globals.fields.name')" width="25%" sortable
         header-class="cy-name">
-        <!-- Campaign mode (D9): the expand chevron, the group brand's chip (the row's returned brand;
+        <!-- Campaign mode (D9): the standard +/- box (.expand-btn), the group brand's chip (the row's returned brand;
              members keep their own chip, review R9) and the newest member's name, with the count. -->
         <div v-if="props.row.group">
           <p>
-            <a href="#" :aria-expanded="props.row.expanded ? 'true' : 'false'"
+            <button type="button" class="expand-btn" :aria-expanded="props.row.expanded ? 'true' : 'false'"
               :aria-label="$t(props.row.expanded ? 'campaigns.group.collapse' : 'campaigns.group.expand')"
-              data-cy="group-toggle" @click.prevent="toggleGroup(props.row)">
-              <b-icon :icon="props.row.expanded ? 'chevron-down' : 'chevron-right'" size="is-small" />
-            </a>
+              data-cy="group-toggle" @click.prevent="toggleGroup(props.row)" />
             <b-tag v-if="groupChip(props.row)" class="is-small brand-chip" data-cy="group-brand-chip">
               {{ groupChip(props.row) }}
             </b-tag>
@@ -1086,8 +1084,12 @@ export default Vue.extend({
       savePageState(sessionStore(window), CAMPAIGNS_PAGE, saveCampaignsPage(this.queryParams), pageContextOf(this.$store.getters));
       // Fork (campaign mode, CAMPAIGN-MODE-SPEC D5/D9) -- top-level rows (grouped=true) only in
       // Campaign mode; the ungrouped request is unchanged otherwise (G4).
+      // G5 amendment -- and, like the plain list, without the audience count: To send fills after
+      // the rows land (fillAudiences walks memberRows).
       if (this.groupMode) {
-        this.$api.getCampaignGroups(params);
+        this.$api.getCampaignGroups({ ...params, no_audience: true }).then(() => {
+          this.fillAudiences();
+        }, () => {});
         return;
       }
       // LIST-AUDIENCE-SPEED-SPEC D3 -- the plain list skips the audience count; To send is read for

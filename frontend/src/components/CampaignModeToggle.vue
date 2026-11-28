@@ -5,14 +5,14 @@
        Campaign Matrix collapse campaigns into sets and promo series. A presentation choice, never a
        permission input; the pref `campaigns.mode` ('off' | 'groups'), written only by the store's
        selectCampaignMode. On a route where it does not apply
-       (campaignGroups.mjs::MODE_APPLICABILITY none) the switch is muted; on, a grey line beside it
-       (campaignGroups.mjs::modeNote), the same text as the title. -->
+       (campaignGroups.mjs::MODE_APPLICABILITY none) the switch is muted; on, the caption
+       (campaignGroups.mjs::modeNote) is the switch's hover title only -- no line beside it (G5
+       amendment 2026-11-27). -->
   <div v-if="shown" class="campaign-mode-toggle" :class="`mode-app-${applicability}`" data-cy="campaign-mode-toggle"
     :title="noteText || $t('naming.campaignMode')">
     <b-switch v-model="value" size="is-small" data-cy="campaign-mode-switch">
       {{ $t('naming.campaignMode') }}
     </b-switch>
-    <span v-if="noteText" class="mode-note is-size-7 has-text-grey" data-cy="campaign-mode-note">{{ noteText }}</span>
   </div>
 </template>
 
@@ -70,13 +70,6 @@ export default Vue.extend({
   // D13 -- not applicable on this route: muted, still usable.
   &.mode-app-none .switch {
     opacity: 0.55;
-  }
-  .mode-note {
-    margin-left: 0.5rem;
-    max-width: 22rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 }
 </style>

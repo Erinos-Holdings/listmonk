@@ -156,8 +156,10 @@ func (a *App) GetCampaigns(c echo.Context) error {
 
 	// Fork (campaign mode, integrations CAMPAIGN-MODE-SPEC D5) -- grouped=true returns top-level rows
 	// (series, sets, campaigns) carrying their member rows; absent, the response is unchanged (I15).
+	// no_audience applies to the member rows exactly as to the ungrouped list (G5 amendment).
 	if grouped, _ := strconv.ParseBool(c.QueryParam("grouped")); grouped {
-		groups, total, err := a.core.QueryCampaignGroups(query, status, f.tags, orderBy, order, f.hasAllPerm, f.permittedLists, f.evergreen, f.listIDs, f.ids, f.lang, pg.Offset, pg.Limit)
+		noAud, _ := strconv.ParseBool(c.QueryParam("no_audience"))
+		groups, total, err := a.core.QueryCampaignGroups(query, status, f.tags, orderBy, order, f.hasAllPerm, f.permittedLists, f.evergreen, f.listIDs, f.ids, f.lang, pg.Offset, pg.Limit, noAud)
 		if err != nil {
 			return err
 		}

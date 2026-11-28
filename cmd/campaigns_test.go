@@ -343,6 +343,14 @@ func TestCampaignSearchMatchesBrand(t *testing.T) {
 		if res[0].AudiencePending != noAud || res[0].Audience.Valid == noAud {
 			t.Errorf("noAudience=%v: audience_pending %v, audience valid %v", noAud, res[0].AudiencePending, res[0].Audience.Valid)
 		}
+		// Campaign mode (G5 amendment): the grouped list's member rows take the same flag.
+		groups, _, err := h.app.core.QueryCampaignGroups("No-purchase", nil, nil, "", "", true, nil, nil, nil, nil, "", 0, 20, noAud)
+		if err != nil || len(groups) != 1 || len(groups[0].Campaigns) != 1 {
+			t.Fatalf("grouped noAudience=%v: %v, %d rows", noAud, err, len(groups))
+		}
+		if m := groups[0].Campaigns[0]; m.AudiencePending != noAud || m.Audience.Valid == noAud {
+			t.Errorf("grouped noAudience=%v: audience_pending %v, audience valid %v", noAud, m.AudiencePending, m.Audience.Valid)
+		}
 	}
 
 	// No false positive: a brand word that is neither slug nor display name.

@@ -160,7 +160,7 @@ const AnalyticsGroupedOrderSQL = "t.created_at DESC, t.maxid DESC"
 // the union of member ids, the empty search and every other filter incl. status, no paging, so each
 // member is exactly the ungrouped list's row. Returns the top-level rows (members newest first) and
 // the top-level total.
-func (c *Core) QueryCampaignGroups(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, lang string, offset, limit int) ([]models.CampaignGroup, int, error) {
+func (c *Core) QueryCampaignGroups(searchStr string, statuses, tags []string, orderBy, order string, getAll bool, permittedLists []int, evergreen *bool, listIDs, ids []int, lang string, offset, limit int, noAudience bool) ([]models.CampaignGroup, int, error) {
 	hitOn := strings.TrimSpace(searchStr) != ""
 	hits := []int{}
 	if hitOn {
@@ -196,7 +196,7 @@ func (c *Core) QueryCampaignGroups(searchStr string, statuses, tags []string, or
 			union = append(union, int(id))
 		}
 	}
-	members, _, err := c.QueryCampaigns("", statuses, tags, "created_at", SortDesc, getAll, permittedLists, evergreen, listIDs, union, lang, 0, 0, false)
+	members, _, err := c.QueryCampaigns("", statuses, tags, "created_at", SortDesc, getAll, permittedLists, evergreen, listIDs, union, lang, 0, 0, noAudience)
 	if err != nil {
 		return nil, 0, err
 	}

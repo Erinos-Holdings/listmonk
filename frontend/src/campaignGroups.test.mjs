@@ -403,6 +403,15 @@ test('flattenGroups and memberRows', () => {
   const page = read('./views/Campaigns.vue');
   assert.ok(!page.includes(':td-attrs="$utils.tdID"'));
   assert.match(page, /:td-attrs="statusTdAttrs"/);
+  // G5 amendment -- the group toggle is the standard +/- box (the icon subset has no chevron-down,
+  // so an expanded group drew nothing), and the switch shows no caption line beside it.
+  assert.match(page, /<button type="button" class="expand-btn"[^>]*data-cy="group-toggle"/);
+  assert.ok(!page.includes('chevron-down'));
+  // G5 amendment -- Campaign mode skips the audience count and fills To send after the rows land.
+  assert.match(page, /getCampaignGroups\(\{ \.\.\.params, no_audience: true \}\)\.then\(\(\) => \{\s*this\.fillAudiences\(\);/);
+  const toggle = read('./components/CampaignModeToggle.vue');
+  assert.ok(!toggle.includes('campaign-mode-note'));
+  assert.match(toggle, /:title="noteText \|\| /);
   assert.match(page, /displayedRunning\(memberRows\(this\.campaigns\.results\)\)/);
   assert.match(page, /const stale = memberRows\(this\.campaigns\.results\)\.some\(/);
   assert.match(page, /let names = memberRows\(/);
