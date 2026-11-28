@@ -10,7 +10,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import {
   GROUP_ACTIONS, MODES, MODE_APPLICABILITY, MODE_PREF, bucketMatrix, flattenGroups, flattenTree, groupAnalyticsRoute,
   groupCellTip, groupRow, groupedTableRows, langCodes, memberRows, modeApplicability, modeNote, nameKey, nodeMembers,
-  normalizeMode, pickerFill, pickerLabel, sortTree, statusSummary, statusSummaryText,
+  normalizeMode, pickerFill, pickerLabel, sortTree, statusSummary, statusSummaryText, statusTdAttrs,
 } from './campaignGroups.mjs'; // eslint-disable-line import/extensions
 import {
   cellText, gpTip, rateOf, shapeRow, sumRows, totalsRow,
@@ -394,8 +394,15 @@ test('flattenGroups and memberRows', () => {
   assert.equal(memberRows(plain), plain);
   assert.equal(flattenGroups(plain), plain);
   assert.deepEqual(memberRows(null), []);
+  // The Status cell's attributes: a group row has no id (upstream tdID threw on it -- G5, "Nothing
+  // here"); a member row keeps upstream's data-id.
+  assert.deepEqual(statusTdAttrs(flat[0]), {});
+  assert.deepEqual(statusTdAttrs(open[1]), { 'data-id': '3' });
+  // The page renders the guarded cell, never upstream's tdID on a group-capable table.
   // The page reads memberRows for the poll and the clone names.
   const page = read('./views/Campaigns.vue');
+  assert.ok(!page.includes(':td-attrs="$utils.tdID"'));
+  assert.match(page, /:td-attrs="statusTdAttrs"/);
   assert.match(page, /displayedRunning\(memberRows\(this\.campaigns\.results\)\)/);
   assert.match(page, /const stale = memberRows\(this\.campaigns\.results\)\.some\(/);
   assert.match(page, /let names = memberRows\(/);

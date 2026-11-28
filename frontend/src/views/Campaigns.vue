@@ -148,7 +148,7 @@
       </template>
 
       <b-table-column cell-class="status" field="status" :label="$t('globals.fields.status')" width="10%"
-        sortable :td-attrs="$utils.tdID" header-class="cy-status">
+        sortable :td-attrs="statusTdAttrs" header-class="cy-status">
         <!-- Fork (integrations CAMPAIGN-STATUS-FILTER-SPEC D6) -- the header is the Status filter: a
              dropdown of the statuses present under the page's filters (with counts), All first. The
              click stop sits on the dropdown ROOT (never the button: Buefy opens from a click on its
@@ -602,7 +602,7 @@ import {
   campaignFilterParams, pausedAtOf, statusCountParams, statusOptions,
 } from '../campaignStatusFilter.mjs'; // eslint-disable-line import/extensions
 import {
-  GROUP_ACTIONS, flattenGroups, groupAnalyticsRoute, memberRows, statusSummaryText,
+  GROUP_ACTIONS, flattenGroups, groupAnalyticsRoute, memberRows, statusSummaryText, statusTdAttrs,
 } from '../campaignGroups.mjs'; // eslint-disable-line import/extensions
 import {
   audienceState, failAudience, fillFromList, pendingIds,
@@ -753,6 +753,10 @@ export default Vue.extend({
 
     groupAnalyticsRoute(row) {
       return groupAnalyticsRoute(row);
+    },
+
+    statusTdAttrs(row) {
+      return statusTdAttrs(row);
     },
 
     toggleGroup(row) {

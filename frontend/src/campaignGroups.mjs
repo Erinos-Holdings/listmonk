@@ -365,6 +365,13 @@ export function flattenGroups(results, expanded = new Set()) {
   return out;
 }
 
+// The Campaigns page's Status cell attributes: upstream's utils.js tdID reads row.id, which a group
+// row (groupView: a key, no id) lacks -- it threw inside Buefy and the table read "Nothing here".
+export function statusTdAttrs(row) {
+  if (!row || row.group) return {};
+  return { 'data-id': String(row.id) };
+}
+
 // D9 (I12) -- a group row's actions: only Analytics works; the rest render disabled with their
 // hover -- Phase 2 for the status actions, Inspect and Delete, "not available" for Clone and Preview.
 export const GROUP_ACTIONS = Object.freeze([
