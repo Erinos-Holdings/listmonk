@@ -54,6 +54,14 @@ export function statusOptions(counts, selected) {
   return out;
 }
 
+// The Campaigns page's search text as sent: upstream's punctuation strip (TO_TSQUERY safety), keeping
+// the hyphen -- names open with an MM-DD-YY date, which Postgres parses as 11, -20, -26 on both
+// sides, so "11 20 26" matched nothing (CAMPAIGN-MODE G5, 2026-11-27). The list and the bulk
+// delete-by-query read this one function, so "all matching" is the displayed set.
+export function campaignSearchText(q) {
+  return String(q || '').replace(/[^\p{L}\p{N}\s-]/gu, ' ');
+}
+
 // campaignFilterParams is the filter params of GET /api/campaigns for the page state: the
 // sanitised search (always sent, as before), kind/status/id (kindStatusParams), list_id
 // (listParam: the single filter, else the route list scope, else the brand-selector scope; absent
@@ -62,7 +70,7 @@ export function statusOptions(counts, selected) {
 export function campaignFilterParams(state) {
   const s = state || {};
   const params = {
-    query: String(s.query || '').replace(/[^\p{L}\p{N}\s]/gu, ' '),
+    query: campaignSearchText(s.query),
     ...kindStatusParams({ evergreen: s.evergreen, routeStatus: s.routeStatus, routeIDs: s.routeIDs }),
   };
   const listID = listParam({ listID: s.listID, routeListIDs: s.routeListIDs, scopeListIds: s.scopeListIds });

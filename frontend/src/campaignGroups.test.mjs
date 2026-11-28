@@ -10,7 +10,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import {
   GROUP_ACTIONS, MODES, MODE_APPLICABILITY, MODE_PREF, bucketMatrix, flattenGroups, flattenTree, groupAnalyticsRoute,
   groupCellTip, groupRow, groupedTableRows, langCodes, memberRows, modeApplicability, modeNote, nameKey, nodeMembers,
-  normalizeMode, pickerFill, pickerLabel, sortTree, statusSummary, statusSummaryText, statusTdAttrs,
+  normalizeMode, pickerFill, pickerLabel, sortTree, statusSummary, statusSummaryText, statusTdAttrs, groupSendLine,
 } from './campaignGroups.mjs'; // eslint-disable-line import/extensions
 import {
   cellText, gpTip, rateOf, shapeRow, sumRows, totalsRow,
@@ -398,6 +398,30 @@ test('flattenGroups and memberRows', () => {
   // here"); a member row keeps upstream's data-id.
   assert.deepEqual(statusTdAttrs(flat[0]), {});
   assert.deepEqual(statusTdAttrs(open[1]), { 'data-id': '3' });
+  // G5 amendment -- the group send line sums what each member row shows.
+  const ts = (c) => (c.audience === undefined ? null : { count: c.audience - (c.skip || 0) });
+  const st = (c) => (c.pending ? 'pending' : null);
+  const fin = (id, sent) => ({ id, sent, toSend: sent });
+  const draft = (id, audience, extra = {}) => ({
+    id, sent: 0, toSend: 0, audience, ...extra,
+  });
+  const live = { 3: { sent: 40, toSend: 100 } };
+  const line = (rows) => {
+    const l = groupSendLine(rows, { toSendOf: ts, stateOf: st, statsOf: (c) => live[c.id] || c });
+    return [l.label, l.sent, l.total, l.state];
+  };
+  assert.deepEqual(line([fin(1, 342), fin(2, 2260)]), ['sent', 2602, 2602, null]);
+  assert.deepEqual(line([draft(1, 337), draft(2, 2010, { skip: 1 })]), ['toSend', 0, 2346, null]);
+  // Mixed: the drafts' To send joins the denominator; a running member reads the live poll.
+  const running3 = { id: 3, sent: 0, toSend: 0 };
+  assert.deepEqual(line([fin(1, 10), draft(2, 50), running3]), ['sent', 50, 160, null]);
+  assert.deepEqual(line([draft(1, 5, { pending: true }), fin(2, 9)]), ['sent', 9, 9, 'pending']);
+  assert.deepEqual(line([draft(1, 5, { pending: true })]), ['toSend', 0, 0, 'pending']);
+  // Evergreen members: Sent alone, never a denominator.
+  const ever = {
+    id: 1, evergreen: true, sent: 7, toSend: 99, audience: 3,
+  };
+  assert.deepEqual(line([ever]), ['sent', 7, null, null]);
   // The page renders the guarded cell, never upstream's tdID on a group-capable table.
   // The page reads memberRows for the poll and the clone names.
   const page = read('./views/Campaigns.vue');
@@ -407,6 +431,7 @@ test('flattenGroups and memberRows', () => {
   // so an expanded group drew nothing), and the switch shows no caption line beside it.
   assert.match(page, /<button type="button" class="expand-btn"[^>]*data-cy="group-toggle"/);
   assert.ok(!page.includes('chevron-down'));
+  assert.match(page, /:set="line = groupSendLine\(props\.row\)"/);
   // G5 amendment -- Campaign mode skips the audience count and fills To send after the rows land.
   assert.match(page, /getCampaignGroups\(\{ \.\.\.params, no_audience: true \}\)\.then\(\(\) => \{\s*this\.fillAudiences\(\);/);
   const toggle = read('./components/CampaignModeToggle.vue');

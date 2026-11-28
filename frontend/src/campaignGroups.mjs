@@ -365,6 +365,47 @@ export function flattenGroups(results, expanded = new Set()) {
   return out;
 }
 
+// G5 amendment (2026-11-27) -- a group row's send line, the sum of what each member row shows: an
+// unstarted member its To send (toSendOf(c), the live audience; "…"/"—" while its read is pending
+// or failed -- stateOf), a started member its Sent / To send (statsOf(c): the live poll's row when
+// running), an evergreen member its Sent with no denominator. label 'toSend' while nothing has
+// started (the draft row's line); total null when every member is evergreen.
+export function groupSendLine(members, { statsOf = (c) => c, toSendOf = () => null, stateOf = () => null } = {}) {
+  const rows = Array.isArray(members) ? members : [];
+  let sent = 0;
+  let total = 0;
+  let started = 0;
+  let pending = false;
+  let unknown = false;
+  rows.forEach((c) => {
+    const st = stateOf(c);
+    if (st === 'pending') {
+      pending = true;
+      return;
+    }
+    if (st === 'unknown') {
+      unknown = true;
+      return;
+    }
+    const ts = c.evergreen ? null : toSendOf(c);
+    if (ts) {
+      total += Number(ts.count) || 0;
+      return;
+    }
+    const s = statsOf(c) || c;
+    started += 1;
+    sent += Number(s.sent) || 0;
+    if (!c.evergreen) total += Number(s.toSend) || 0;
+  });
+  const allEvergreen = rows.length > 0 && rows.every((c) => c.evergreen);
+  return {
+    label: started === 0 && !allEvergreen ? 'toSend' : 'sent',
+    sent,
+    total: allEvergreen ? null : total,
+    state: (pending && 'pending') || (unknown && 'unknown') || null,
+  };
+}
+
 // The Campaigns page's Status cell attributes: upstream's utils.js tdID reads row.id, which a group
 // row (groupView: a key, no id) lacks -- it threw inside Buefy and the table read "Nothing here".
 export function statusTdAttrs(row) {

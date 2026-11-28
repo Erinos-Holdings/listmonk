@@ -1,12 +1,24 @@
 // Fork (integrations listmonk/CAMPAIGN-STATUS-FILTER-SPEC I7-I10). Run: yarn test.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-  campaignFilterParams, pausedAtOf, statusCountParams, statusOptions,
+  campaignFilterParams, campaignSearchText, pausedAtOf, statusCountParams, statusOptions,
 } from './campaignStatusFilter.mjs'; // eslint-disable-line import/extensions
 import { CAMPAIGN_STATUSES, pickStatus } from './campaignsRouteQuery.mjs'; // eslint-disable-line import/extensions
 
 const TS = '2026-11-17T10:00:00Z';
+
+// CAMPAIGN-MODE G5 (2026-11-27) -- the search keeps hyphens (dated names), still strips the
+// TO_TSQUERY-unsafe punctuation, and the list and the bulk delete-by-query read one function.
+test('campaignSearchText: hyphens kept, other punctuation stripped, one reader for list and delete', () => {
+  assert.equal(campaignSearchText('11-20-26 Holiday Nail Lineup'), '11-20-26 Holiday Nail Lineup');
+  assert.equal(campaignSearchText("it's: a&b|c!(d)"), 'it s  a b c  d ');
+  assert.equal(campaignSearchText(null), '');
+  const page = readFileSync(new URL('./views/Campaigns.vue', import.meta.url), 'utf8');
+  assert.ok(!page.includes('.replace(/[^\\p{L}\\p{N}\\s]/gu'), 'Campaigns.vue keeps no inline strip');
+  assert.match(page, /params\.query = campaignSearchText\(this\.queryParams\.query\)/);
+});
 
 test('I7: the Paused row shows only for a paused row with paused_at set', () => {
   assert.equal(pausedAtOf({ status: 'paused', pausedAt: TS }), TS);
@@ -58,6 +70,7 @@ test('I9: the statuses request carries the list request\'s filter params minus s
     ['a route id scope (kind All)', { routeIDs: [11, 12], evergreen: null }, { query: '', id: [11, 12] }],
     ['a language', { langSelection: 'fr' }, { query: '', evergreen: false, lang: 'fr' }],
     ['a search (sanitised)', { query: 'spring: sale!' }, { query: 'spring  sale ', evergreen: false }],
+    ['a dated search keeps its hyphens', { query: '11-20-26 Holiday' }, { query: '11-20-26 Holiday', evergreen: false }],
     ['Automations', { evergreen: true }, { query: '', evergreen: true }],
     ['a set status', { routeStatus: 'paused' }, { query: '', evergreen: false }],
   ];

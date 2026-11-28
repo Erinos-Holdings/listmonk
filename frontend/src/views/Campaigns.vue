@@ -332,9 +332,18 @@
              members with rates over the summed Sent (campaignRates.mjs); Views and Clicks are counted
              per campaign, and say so on hover. No audience, progress or send-rate line. -->
         <div v-if="props.row.group" class="fields stats" data-cy="group-stats">
-          <p>
-            <label for="#">{{ $t('campaigns.sent') }}</label>
-            <span>{{ $utils.formatNumber(props.row.sent) }}</span>
+          <!-- G5 amendment -- the members' send lines summed (campaignGroups.mjs::groupSendLine). -->
+          <p :set="line = groupSendLine(props.row)" data-cy="group-send-line">
+            <label for="#">{{ $t(line.label === 'toSend' ? 'campaigns.toSend' : 'campaigns.sent') }}</label>
+            <span v-if="line.state" :data-cy="`group-to-send-${line.state}`">
+              <template v-if="line.label === 'sent'">{{ $utils.formatNumber(line.sent) }} / </template>
+              {{ line.state === 'pending' ? '…' : '—' }}
+            </span>
+            <span v-else-if="line.label === 'toSend'">{{ $utils.formatNumber(line.total) }}</span>
+            <span v-else>
+              {{ $utils.formatNumber(line.sent) }}<template v-if="line.total !== null">
+                / {{ $utils.formatNumber(line.total) }}</template>
+            </span>
           </p>
           <p v-for="f in rateFields" :key="f.field" :set="cell = rateOf(props.row, f)">
             <label for="#">{{ $t(f.label) }}</label>
@@ -597,10 +606,10 @@ import {
   keptListId, loadPageState, pageContextOf, savePageState, sessionStore,
 } from '../pageState.mjs'; // eslint-disable-line import/extensions
 import {
-  campaignFilterParams, pausedAtOf, statusCountParams, statusOptions,
+  campaignFilterParams, campaignSearchText, pausedAtOf, statusCountParams, statusOptions,
 } from '../campaignStatusFilter.mjs'; // eslint-disable-line import/extensions
 import {
-  GROUP_ACTIONS, flattenGroups, groupAnalyticsRoute, memberRows, statusSummaryText, statusTdAttrs,
+  GROUP_ACTIONS, flattenGroups, groupAnalyticsRoute, groupSendLine, memberRows, statusSummaryText, statusTdAttrs,
 } from '../campaignGroups.mjs'; // eslint-disable-line import/extensions
 import {
   audienceState, failAudience, fillFromList, pendingIds,
@@ -755,6 +764,18 @@ export default Vue.extend({
 
     statusTdAttrs(row) {
       return statusTdAttrs(row);
+    },
+
+    // G5 amendment -- the group row's send line over its members (expanded or not), each read as
+    // its own row reads it: the live poll stats, the audience To send and its pending state.
+    groupSendLine(row) {
+      const ids = new Set(row.memberIds || []);
+      const members = memberRows((this.campaigns && this.campaigns.results) || []).filter((c) => ids.has(c.id));
+      return groupSendLine(members, {
+        statsOf: (c) => this.getCampaignStats(c),
+        toSendOf: (c) => toSendOf(c),
+        stateOf: (c) => audienceState(c),
+      });
     },
 
     toggleGroup(row) {
@@ -1322,7 +1343,7 @@ export default Vue.extend({
           params.id = this.bulk.checked.map((c) => c.id);
         } else {
           // 'All' is selected, delete by query.
-          params.query = this.queryParams.query.replace(/[^\p{L}\p{N}\s]/gu, ' ');
+          params.query = campaignSearchText(this.queryParams.query);
           params.all = this.bulk.all;
           // Fork (evergreen) -- scope the by-query delete to the kind shown on the page; POLISH3
           // D3: All omits the param, matching exactly the both-kinds view on screen.
